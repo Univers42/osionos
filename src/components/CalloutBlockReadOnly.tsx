@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React from 'react';
-import type { Block } from '@src/types/database';
+import type { Block } from '../types/database';
 import { CALLOUT_COLORS } from './PlaygroundPageEditorConstants';
 
 export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {

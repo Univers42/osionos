@@ -6,15 +6,15 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/08 19:04:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 
-import { EditableContent } from '@src/components/blocks/EditableContent';
-import type { Block } from '@src/types/database';
+import { EditableContent } from './blocks/EditableContent';
+import type { Block } from '../types/database';
 
 
 export const ToggleBlockEditor: React.FC<{

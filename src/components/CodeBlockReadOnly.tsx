@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React from 'react';
-import type { Block } from '@src/types/database';
+import type { Block } from '../types/database';
 
 export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
   const lang = block.language || 'plaintext';
