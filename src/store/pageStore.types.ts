@@ -6,17 +6,19 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/08 19:47:31 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import type { Block, BlockType } from '@src/types/database';
+import type { Block, BlockType } from '../types/database';
 
 /** Entry representing a page in the workspace tree. */
 export interface PageEntry {
   _id: string;
   title: string;
   icon?: string;
+  /** Cover image URL or CSS gradient. */
+  cover?: string;
   workspaceId: string;
   parentPageId?: string | null;
   databaseId?: string | null;
