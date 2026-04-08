@@ -10,18 +10,31 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from 'react';
-import type { Block } from '../types/database';
-import { CALLOUT_COLORS } from './PlaygroundPageEditorConstants';
+import React from "react";
+import type { Block } from "../types/database";
+import { CALLOUT_COLORS } from "./PlaygroundPageEditorConstants";
+import { parseInlineMarkdown } from "../lib/markengine";
 
 export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
-  const icon = block.color || '💡';
-  const colors = CALLOUT_COLORS[icon] || { bg: 'bg-[var(--color-surface-secondary)]', border: 'border-[var(--color-line)]', text: 'text-[var(--color-ink)]' };
+  const icon = block.color || "💡";
+  const colors = CALLOUT_COLORS[icon] || {
+    bg: "bg-[var(--color-surface-secondary)]",
+    border: "border-[var(--color-line)]",
+    text: "text-[var(--color-ink)]",
+  };
+  const content = block.content
+    ? { __html: parseInlineMarkdown(block.content) }
+    : null;
 
   return (
-    <div className={`flex items-start gap-3 p-3 rounded-lg border my-0.5 ${colors.bg} ${colors.border}`}>
+    <div
+      className={`flex items-start gap-3 p-3 rounded-lg border my-0.5 ${colors.bg} ${colors.border}`}
+    >
       <span className={`text-lg shrink-0 ${colors.text}`}>{icon}</span>
-      <span className={`text-sm ${colors.text} leading-relaxed py-0.5 flex-1`}>{block.content}</span>
+      <span
+        className={`text-sm ${colors.text} leading-relaxed py-0.5 flex-1`}
+        dangerouslySetInnerHTML={content ?? undefined}
+      />
     </div>
   );
 };

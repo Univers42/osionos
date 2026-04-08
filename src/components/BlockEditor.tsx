@@ -10,7 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 
 import { EditableContent } from "./blocks/EditableContent";
@@ -69,7 +75,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const langPickerRef = useRef<HTMLDivElement | null>(null);
-  const [codeContextMenu, setCodeContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [codeContextMenu, setCodeContextMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const codeContextMenuRef = useRef<HTMLDivElement | null>(null);
 
   const handleDeleteCodeBlock = () => {
@@ -81,27 +90,42 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     setShowDeleteConfirm(true);
   };
 
-  const handleLangSelect = useCallback((language: string) => {
-    updateBlock(pageId, block.id, { language });
-    setShowLangPicker(false);
-  }, [updateBlock, pageId, block.id]);
+  const handleLangSelect = useCallback(
+    (language: string) => {
+      updateBlock(pageId, block.id, { language });
+      setShowLangPicker(false);
+    },
+    [updateBlock, pageId, block.id],
+  );
 
-  const handleCodeTextareaKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const ta = e.currentTarget;
-      const { selectionStart, selectionEnd, value } = ta;
-      const indent = "    ";
-      const next = value.slice(0, selectionStart) + indent + value.slice(selectionEnd);
-      onChange(next);
-      requestAnimationFrame(() => {
-        ta.selectionStart = ta.selectionEnd = selectionStart + indent.length;
-      });
-      return;
-    }
+  const handleCodeTextareaKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+        e.preventDefault();
+        const rect = e.currentTarget.getBoundingClientRect();
+        setShowLangPicker(false);
+        setCodeContextMenu({ x: rect.left + 12, y: rect.top + 12 });
+        return;
+      }
 
-    onKeyDown(e);
-  }, [onChange, onKeyDown]);
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const ta = e.currentTarget;
+        const { selectionStart, selectionEnd, value } = ta;
+        const indent = "    ";
+        const next =
+          value.slice(0, selectionStart) + indent + value.slice(selectionEnd);
+        onChange(next);
+        requestAnimationFrame(() => {
+          ta.selectionStart = ta.selectionEnd = selectionStart + indent.length;
+        });
+        return;
+      }
+
+      onKeyDown(e);
+    },
+    [onChange, onKeyDown],
+  );
 
   const openCodeContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -113,7 +137,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     if (!showLangPicker) return;
 
     const handleOutside = (e: MouseEvent) => {
-      if (langPickerRef.current && !langPickerRef.current.contains(e.target as Node)) {
+      if (
+        langPickerRef.current &&
+        !langPickerRef.current.contains(e.target as Node)
+      ) {
         setShowLangPicker(false);
       }
     };
@@ -126,7 +153,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     if (!codeContextMenu) return;
 
     const handleMouseDown = (e: MouseEvent) => {
-      if (codeContextMenuRef.current && !codeContextMenuRef.current.contains(e.target as Node)) {
+      if (
+        codeContextMenuRef.current &&
+        !codeContextMenuRef.current.contains(e.target as Node)
+      ) {
         setCodeContextMenu(null);
       }
     };
@@ -222,8 +252,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "bulleted_list":
       return (
-        <div className="flex items-start gap-2 pl-1">
-          <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-5 text-center">
+        <div className="flex items-start gap-2 pl-3">
+          <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-ink-faint)] mt-[7px]" />
           </span>
           <div className="flex-1">
@@ -240,8 +270,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "numbered_list":
       return (
-        <div className="flex items-start gap-2 pl-1">
-          <span className="text-sm leading-relaxed py-0.5 text-[var(--color-ink-muted)] select-none shrink-0 w-5 text-center font-medium">
+        <div className="flex items-start gap-2 pl-3">
+          <span className="text-sm leading-relaxed py-0.5 text-[var(--color-ink-muted)] select-none shrink-0 w-6 text-center font-medium">
             {numberedIndex}.
           </span>
           <div className="flex-1">
@@ -276,10 +306,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "code":
       return (
-        <div
-          className="my-1 rounded-lg overflow-visible border border-[var(--color-line)] relative"
-          onContextMenu={openCodeContextMenu}
-        >
+        <div className="my-1 rounded-lg overflow-visible border border-[var(--color-line)] relative">
           <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--color-surface-secondary)] border-b border-[var(--color-line)]">
             <div ref={langPickerRef} className="relative">
               <button
@@ -315,30 +342,32 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               value={block.content}
               onChange={(e) => onChange(e.target.value)}
               onKeyDown={handleCodeTextareaKeyDown}
+              onContextMenu={openCodeContextMenu}
               placeholder="Code…"
               spellCheck={false}
               className="w-full min-h-[120px] text-[13px] leading-relaxed font-mono text-[var(--color-ink)] whitespace-pre bg-transparent outline-none resize-y"
             />
           </div>
-          {codeContextMenu && createPortal(
-            <div
-              ref={codeContextMenuRef}
-              style={{ top: codeContextMenu.y, left: codeContextMenu.x }}
-              className="fixed z-[10000] min-w-[180px] bg-[var(--color-surface-primary)] border border-[var(--color-line)] rounded-lg shadow-lg py-1"
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setCodeContextMenu(null);
-                  handleDeleteCodeBlock();
-                }}
-                className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+          {codeContextMenu &&
+            createPortal(
+              <div
+                ref={codeContextMenuRef}
+                style={{ top: codeContextMenu.y, left: codeContextMenu.x }}
+                className="fixed z-[10000] min-w-[180px] bg-[var(--color-surface-primary)] border border-[var(--color-line)] rounded-lg shadow-lg py-1"
               >
-                Delete code block
-              </button>
-            </div>,
-            document.body,
-          )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCodeContextMenu(null);
+                    handleDeleteCodeBlock();
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+                >
+                  Delete code block
+                </button>
+              </div>,
+              document.body,
+            )}
           {showDeleteConfirm &&
             createPortal(
               <>
@@ -352,8 +381,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 <dialog
                   open
                   className="fixed z-[9999] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[360px] max-w-[calc(100vw-24px)] bg-white border border-[var(--color-line)] rounded-xl shadow-2xl overflow-hidden"
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
                 >
                   <div className="p-4">
                     <h3 className="text-sm font-semibold text-[var(--color-ink)]">
@@ -433,9 +460,14 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "divider":
       return (
-        <div className="py-2">
+        <button
+          type="button"
+          className="py-2 rounded outline-none focus:bg-[var(--color-surface-secondary)]"
+          onKeyDown={onKeyDown}
+          aria-label="Divider block"
+        >
           <hr className="border-[var(--color-line)]" />
-        </div>
+        </button>
       );
 
     case "table_block":
@@ -470,65 +502,90 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   }
 };
 
-const TableBlockEditor: React.FC<{ block: Block; pageId: string; onDeleteTable?: () => void }> = ({
-  block,
-  pageId,
-  onDeleteTable,
-}) => {
+const TableBlockEditor: React.FC<{
+  block: Block;
+  pageId: string;
+  onDeleteTable?: () => void;
+}> = ({ block, pageId, onDeleteTable }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; row: number; col: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    row: number;
+    col: number;
+  } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   const data = useMemo(
-    () => block.tableData || [
-      ["", "", ""],
-      ["", "", ""],
-      ["", "", ""],
-    ],
+    () =>
+      block.tableData || [
+        ["", "", ""],
+        ["", "", ""],
+        ["", "", ""],
+      ],
     [block.tableData],
   );
 
-  const handleCellChange = useCallback((row: number, col: number, value: string) => {
-    const next = data.map((r, ri) => (
-      ri === row ? r.map((c, ci) => (ci === col ? value : c)) : [...r]
-    ));
-    updateBlock(pageId, block.id, { tableData: next });
-  }, [data, updateBlock, pageId, block.id]);
+  const handleCellChange = useCallback(
+    (row: number, col: number, value: string) => {
+      const next = data.map((r, ri) =>
+        ri === row ? r.map((c, ci) => (ci === col ? value : c)) : [...r],
+      );
+      updateBlock(pageId, block.id, { tableData: next });
+    },
+    [data, updateBlock, pageId, block.id],
+  );
 
   const addRow = useCallback(() => {
     const cols = data[0]?.length || 3;
-    updateBlock(pageId, block.id, { tableData: [...data, new Array(cols).fill("")] });
+    updateBlock(pageId, block.id, {
+      tableData: [...data, new Array(cols).fill("")],
+    });
   }, [data, updateBlock, pageId, block.id]);
 
   const addCol = useCallback(() => {
-    updateBlock(pageId, block.id, { tableData: data.map((row) => [...row, ""]) });
-  }, [data, updateBlock, pageId, block.id]);
-
-  const removeRow = useCallback((rowIndex: number) => {
-    if (data.length <= 1) return;
     updateBlock(pageId, block.id, {
-      tableData: data.filter((_, idx) => idx !== rowIndex),
+      tableData: data.map((row) => [...row, ""]),
     });
   }, [data, updateBlock, pageId, block.id]);
 
-  const removeCol = useCallback((colIndex: number) => {
-    const colCount = data[0]?.length ?? 0;
-    if (colCount <= 1) return;
-    updateBlock(pageId, block.id, {
-      tableData: data.map((row) => row.filter((_, idx) => idx !== colIndex)),
-    });
-  }, [data, updateBlock, pageId, block.id]);
+  const removeRow = useCallback(
+    (rowIndex: number) => {
+      if (data.length <= 1) return;
+      updateBlock(pageId, block.id, {
+        tableData: data.filter((_, idx) => idx !== rowIndex),
+      });
+    },
+    [data, updateBlock, pageId, block.id],
+  );
 
-  const openContextMenu = useCallback((e: React.MouseEvent, row: number, col: number) => {
-    e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY, row, col });
-  }, []);
+  const removeCol = useCallback(
+    (colIndex: number) => {
+      const colCount = data[0]?.length ?? 0;
+      if (colCount <= 1) return;
+      updateBlock(pageId, block.id, {
+        tableData: data.map((row) => row.filter((_, idx) => idx !== colIndex)),
+      });
+    },
+    [data, updateBlock, pageId, block.id],
+  );
+
+  const openContextMenu = useCallback(
+    (e: React.MouseEvent, row: number, col: number) => {
+      e.preventDefault();
+      setContextMenu({ x: e.clientX, y: e.clientY, row, col });
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!contextMenu) return;
 
     const handleMouseDown = (e: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+      if (
+        contextMenuRef.current &&
+        !contextMenuRef.current.contains(e.target as Node)
+      ) {
         setContextMenu(null);
       }
     };
@@ -552,7 +609,15 @@ const TableBlockEditor: React.FC<{ block: Block; pageId: string; onDeleteTable?:
         <table className="w-max min-w-full text-sm">
           <tbody>
             {data.map((row, ri) => (
-              <tr key={ri} className={ri === 0 ? "bg-[var(--color-surface-secondary)] font-medium" : ""}>{/* NOSONAR - table rows identified by position */}
+              <tr
+                key={ri}
+                className={
+                  ri === 0
+                    ? "bg-[var(--color-surface-secondary)] font-medium"
+                    : ""
+                }
+              >
+                {/* NOSONAR - table rows identified by position */}
                 {row.map((cell, ci) => (
                   <td
                     key={ci} // NOSONAR - table cells identified by position
