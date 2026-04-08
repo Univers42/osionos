@@ -121,6 +121,10 @@ kill-ports: ## Kill any process occupying playground-related ports (3001)
 status: ## Show status of Docker services
 	$(DC) ps
 
+update-submodules: ## Update git submodules (if any)
+	@git submodule update --init --recursive
+	@echo -e "$(GREEN)✔ Submodules updated$(RESET)"
+
 .PHONY: help install dev dev-docker up stop down build typecheck \
         db-up db-shell db-reset re clean logs logs-vite logs-mongo \
         kill-ports status
