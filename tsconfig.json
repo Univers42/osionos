@@ -15,9 +15,7 @@
     "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
-      "@src/*": ["../src/*"],
-      "@markdown": ["../src/lib/markdown/index.ts"],
-      "@markdown/*": ["../src/lib/markdown/*"]
+      "@/*": ["src/*"]
     }
   },
   "include": ["src"]
