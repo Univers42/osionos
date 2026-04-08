@@ -6,16 +6,16 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/08 19:03:43 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { EditableContent } from "@src/components/blocks/EditableContent";
-import { DatabaseBlock } from "@src/components/DatabaseBlock";
-import type { Block } from "@src/types/database";
+import { EditableContent } from "./blocks/EditableContent";
+import { DatabaseBlock } from "./DatabaseBlock";
+import type { Block } from "../types/database";
 
 import { usePageStore } from "../store/usePageStore";
 import { CALLOUT_COLORS } from "./PlaygroundPageEditorConstants";

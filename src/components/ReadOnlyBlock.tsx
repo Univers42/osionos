@@ -11,9 +11,9 @@
 /* ************************************************************************** */
 
 import React, { useState } from 'react';
-import type { Block } from '@src/types/database';
+import type { Block } from '../types/database';
 import { ChevronRight } from 'lucide-react';
-import { DatabaseBlock } from '@src/components/DatabaseBlock';
+import { DatabaseBlock } from './DatabaseBlock';
 import { CalloutBlockReadOnly } from './CalloutBlockReadOnly';
 import { CodeBlockReadOnly } from './CodeBlockReadOnly';
 
