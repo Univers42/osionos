@@ -6,36 +6,35 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/04 23:30:46 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/08 19:47:31 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { Suspense, useCallback, useRef, useEffect } from 'react';
-import { Plus, FileText } from 'lucide-react';
+import React, { Suspense } from 'react';
+import { Plus } from 'lucide-react';
 
-import { ErrorBoundary }  from '@src/components/ErrorBoundary';
-import { DatabaseBlock }  from '@src/components/DatabaseBlock';
+import { ErrorBoundary }  from './ErrorBoundary';
+import { DatabaseBlock }  from './DatabaseBlock';
+import { NotionPage }     from './page';
 
 import { usePageStore }  from '../store/usePageStore';
 import { useUserStore }  from '../store/useUserStore';
-import { PlaygroundPageEditor } from './PlaygroundPageEditor';
 
 /**
  * Renders the right-hand content panel.
- * Shows home splash, DatabaseBlock, or block-based page view based on `activePage`.
+ * Shows home splash, DatabaseBlock, or the Notion-style page view.
  */
 export const MainContent: React.FC = () => {
   const activePage = usePageStore(s => s.activePage);
   const addPage    = usePageStore(s => s.addPage);
   const openPage   = usePageStore(s => s.openPage);
-  const pageById   = usePageStore(s => s.pageById);
   const session    = useUserStore(s => s.activeSession());
   const persona    = useUserStore(s => s.activePersona());
 
   const jwt       = session?.accessToken ?? '';
   const firstWsId = session?.privateWorkspaces[0]?._id ?? '';
 
-
+  /* ── Home splash (no page selected) ────────────────────────────── */
   if (!activePage) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-6 h-full bg-[var(--color-surface-primary)]">
@@ -69,6 +68,7 @@ export const MainContent: React.FC = () => {
     );
   }
 
+  /* ── Database view ─────────────────────────────────────────────── */
   if (activePage.kind === 'database') {
     return (
       <ErrorBoundary>
@@ -84,77 +84,13 @@ export const MainContent: React.FC = () => {
     );
   }
 
-
-  const fullPage = pageById(activePage.id);
-
+  /* ── Page view — Notion-style layout ───────────────────────────── */
   return (
-    <div className="flex-1 flex flex-col h-full overflow-auto bg-[var(--color-surface-primary)]">
-      {/* Page header */}
-      <div className="max-w-3xl w-full mx-auto px-14 pt-20 pb-4">
-        {activePage.icon
-          ? <div className="text-5xl mb-3">{activePage.icon}</div>
-          : <div className="text-5xl mb-3 text-[var(--color-ink-faint)]"><FileText size={48} /></div>
-        }
-        <EditableTitle pageId={activePage.id} title={fullPage?.title ?? activePage.title ?? ''} />
-      </div>
-
-      {/* Page body — editable blocks */}
-      <div className="max-w-3xl w-full mx-auto px-14 pb-20">
-        <PlaygroundPageEditor pageId={activePage.id} />
-      </div>
+    <div className="flex-1 h-full overflow-hidden">
+      <NotionPage pageId={activePage.id} />
     </div>
   );
 };
-
-
-const EditableTitle: React.FC<{ pageId: string; title: string }> = ({ pageId, title }) => {
-  const updatePageTitle = usePageStore(s => s.updatePageTitle);
-  const openPage        = usePageStore(s => s.openPage);
-  const activePage      = usePageStore(s => s.activePage);
-  const ref = useRef<HTMLHeadingElement>(null);
-
-  // Sync content once on mount and if title changes externally
-  useEffect(() => {
-    if (ref.current && ref.current.textContent !== title) {
-      ref.current.textContent = title;
-    }
-  }, [title]);
-
-  const handleInput = useCallback(() => {
-    if (!ref.current) return;
-    const newTitle = ref.current.textContent ?? '';
-    updatePageTitle(pageId, newTitle);
-    // Also update the active page title in the top bar
-    if (activePage?.id === pageId) {
-      openPage({ ...activePage, title: newTitle });
-    }
-  }, [pageId, updatePageTitle, activePage, openPage]);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      // Move focus to the first block
-      const firstBlock = document.querySelector('[data-block-id] [contenteditable]') as HTMLElement;
-      firstBlock?.focus();
-    }
-  }, []);
-
-  return (
-    <h1 // NOSONAR - contentEditable page title requires non-semantic roles
-      ref={ref}
-      role="textbox" // NOSONAR - contentEditable heading needs textbox role
-      aria-label="Page title"
-      contentEditable
-      suppressContentEditableWarning
-      spellCheck
-      className="text-4xl font-bold text-[var(--color-ink)] outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--color-ink-faint)]"
-      data-placeholder="Untitled"
-      onInput={handleInput}
-      onKeyDown={handleKeyDown}
-    />
-  );
-};
-
 
 const LoadingPane: React.FC = () => (
   <div className="flex-1 flex items-center justify-center h-full">
