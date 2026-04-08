@@ -6,17 +6,17 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 01:31:17 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/08 19:04:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useState, useRef, useCallback } from 'react';
 import { usePageStore } from '../store/usePageStore';
-import { detectBlockType } from '@markdown';
-import { useSlashSelect, repositionCursor } from '@src/hooks/useSlashSelect';
-import { isHeadingType, isEffectivelyEmpty, isTodoType } from '@src/hooks/blockTypeGuards';
-import { useDatabaseStore } from '@src/store/dbms/hardcoded/useDatabaseStore';
-import type { Block } from '@src/types/database';
+import { detectBlockType } from '../lib/markengine/shortcutsDetect';
+import { useSlashSelect, repositionCursor } from './useSlashSelect';
+import { isHeadingType, isEffectivelyEmpty, isTodoType } from './blockTypeGuards';
+import { useDatabaseStore } from '../store/useDatabaseStore';
+import type { Block } from '../types/database';
 import {
   handleArrowUp,
   handleArrowDown,
