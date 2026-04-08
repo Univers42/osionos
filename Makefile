@@ -1,6 +1,18 @@
+# **************************************************************************** #
+#                                                                              #
+#                                                         :::      ::::::::    #
+#    Makefile                                           :+:      :+:    :+:    #
+#                                                     +:+ +:+         +:+      #
+#    By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+         #
+#                                                 +#+#+#+#+#+   +#+            #
+#    Created: 2026/04/08 19:07:11 by dlesieur          #+#    #+#              #
+#    Updated: 2026/04/08 19:29:07 by dlesieur         ###   ########.fr        #
+#                                                                              #
+# **************************************************************************** #
+
 SHELL := /bin/bash
-ROOT  := $(realpath $(dir $(lastword $(MAKEFILE_LIST)))/..)
--include $(ROOT)/.env
+ROOT  := $(dir $(lastword $(MAKEFILE_LIST)))
+-include $(ROOT).env
 export
 
 CYAN  := \033[36m
@@ -8,7 +20,7 @@ GREEN := \033[32m
 RED   := \033[31m
 RESET := \033[0m
 
-DC := docker compose -f $(ROOT)/docker-compose.yml
+DC := docker compose -f $(ROOT)docker-compose.yml
 
 .DEFAULT_GOAL := help
 help: ## Show available targets
@@ -17,90 +29,98 @@ help: ## Show available targets
 
 # ── Development ──────────────────────────────────────────────────────────
 
-dev: ## Start playground stack (Vite :3001 + API :4000 + Mongo)
-	@echo -e "$(CYAN)Starting playground on http://localhost:3001$(RESET)"
-	cd $(ROOT) && $(DC) up -d mongodb api playground
-	@echo "Waiting for API to become healthy…"
-	@until docker inspect --format='{{.State.Health.Status}}' notion_api 2>/dev/null | grep -q healthy; do sleep 2; done
-	@echo -e "$(GREEN)✔ API ready$(RESET)"
-	@$(MAKE) check-seed --no-print-directory
-	@echo -e "$(GREEN)✔ Stack up — tailing playground logs (Ctrl-C to stop)$(RESET)"
-	@trap '$(MAKE) -C $(ROOT)/playground stop --no-print-directory' EXIT; \
-	 cd $(ROOT) && $(DC) logs -f --tail=10 playground || true
+install: ## Install Node dependencies locally (requires Node 22+)
+	@echo -e "$(CYAN)Installing dependencies…$(RESET)"
+	npm install
+	@echo -e "$(GREEN)✔ Dependencies installed$(RESET)"
 
-dev-d: ## Start playground stack (detached)
-	cd $(ROOT) && $(DC) up -d mongodb api playground
-	@echo -e "$(GREEN)✔ playground stack running (detached)$(RESET)"
+dev: ## Start Vite dev server locally on :3001 (offline mode)
+	@echo -e "$(CYAN)Starting playground on http://localhost:3001 (offline mode)$(RESET)"
+	npx vite --port 3001
 
-stop: ## Stop playground stack
-	cd $(ROOT) && $(DC) stop playground api mongodb
-	@echo -e "$(GREEN)✔ playground stack stopped$(RESET)"
+dev-docker: ## Start full stack via Docker (Vite :3001 + MongoDB)
+	@echo -e "$(CYAN)Starting playground stack via Docker…$(RESET)"
+	$(DC) up -d
+	@echo -e "$(GREEN)✔ Stack running:$(RESET)"
+	@echo -e "  Playground: http://localhost:$${VITE_PORT:-3001}"
+	@echo -e "  MongoDB:    localhost:$${MONGO_PORT:-27017}"
 
-# ── Build (destroy volumes, rebuild, seed) ───────────────────────────────
+up: dev-docker ## Alias for dev-docker
 
-build: ## Full rebuild: destroy volumes, rebuild images, start + seed
-	@echo -e "$(CYAN)══ playground: Full rebuild ══$(RESET)"
-	cd $(ROOT) && $(DC) down -v --remove-orphans 2>/dev/null || true
-	cd $(ROOT) && $(MAKE) build-app --no-print-directory
-	cd $(ROOT) && $(DC) up -d mongodb api playground
-	@sleep 2
-	@$(MAKE) seed --no-print-directory
-	@echo -e "$(GREEN)══ playground: Build complete ══$(RESET)"
+stop: ## Stop Docker stack
+	$(DC) stop
+	@echo -e "$(GREEN)✔ Stack stopped$(RESET)"
 
-# ── Seed ─────────────────────────────────────────────────────────────────
+down: ## Stop and remove Docker containers + networks
+	$(DC) down
+	@echo -e "$(GREEN)✔ Stack removed$(RESET)"
 
-API_URL := http://localhost:$${API_PORT:-4000}
+# ── Build ────────────────────────────────────────────────────────────────
 
-check-seed: ## Verify whether the DB has been seeded; warn if not
-	@status=$$(curl -s -o /dev/null -w '%{http_code}' -X POST $(API_URL)/api/auth/login \
-	  -H 'Content-Type: application/json' \
-	  -d '{"email":"admin@playground.local","password":"playground123"}' 2>/dev/null); \
-	if [ "$$status" = "200" ]; then \
-	  echo -e "$(GREEN)✔ Database already seeded$(RESET)"; \
-	else \
-	  echo -e "$(RED)⚠  Database is NOT seeded — playground will run in offline mode (no persistence).$(RESET)"; \
-	  echo -e "$(RED)   Run $(CYAN)make seed$(RED) first to enable persistent storage.$(RESET)"; \
-	fi
+build: ## Build for production
+	@echo -e "$(CYAN)Building playground…$(RESET)"
+	npx tsc --noEmit && npx vite build
+	@echo -e "$(GREEN)✔ Built to ./build$(RESET)"
 
-seed: ## Seed MongoDB with playground data (3 users + workspaces)
-	@echo -e "$(CYAN)Seeding playground data…$(RESET)"
-	cd $(ROOT) && $(DC) exec api node scripts/seed-playground.mjs
-	@echo -e "$(GREEN)✔ Playground seeded$(RESET)"
+typecheck: ## Run TypeScript type-checking
+	@echo -e "$(CYAN)Type-checking…$(RESET)"
+	npx tsc --noEmit
+	@echo -e "$(GREEN)✔ No type errors$(RESET)"
+
+# ── Database ─────────────────────────────────────────────────────────────
+
+db-up: ## Start only MongoDB
+	$(DC) up -d mongodb
+	@echo -e "$(GREEN)✔ MongoDB running on :$${MONGO_PORT:-27017}$(RESET)"
+
+db-shell: ## Open mongosh in the running MongoDB container
+	$(DC) exec mongodb mongosh -u $${MONGO_USER:-notion_user} -p $${MONGO_PASS:-notion_pass} --authenticationDatabase admin $${MONGO_DB:-playground_db}
+
+db-reset: ## Wipe MongoDB data and restart
+	@echo -e "$(RED)Wiping MongoDB data…$(RESET)"
+	$(DC) down -v mongodb
+	$(DC) up -d mongodb
+	@echo -e "$(GREEN)✔ MongoDB reset$(RESET)"
 
 # ── Reset ────────────────────────────────────────────────────────────────
 
-re: ## Full restart: wipe DBs, re-seed
-	@echo -e "$(CYAN)══ playground: Full restart ══$(RESET)"
-	@echo "1/3  Stopping containers…"
-	cd $(ROOT) && $(DC) down -v --remove-orphans
-	@echo "2/3  Starting fresh containers…"
-	cd $(ROOT) && $(DC) up -d
-	@echo "3/3  Seeding playground database…"
-	@sleep 3
-	@$(MAKE) seed --no-print-directory
-	@echo -e "$(GREEN)══ playground: restart complete ══$(RESET)"
+re: ## Full restart: wipe everything and start fresh
+	@echo -e "$(CYAN)══ Full restart ══$(RESET)"
+	$(DC) down -v --remove-orphans 2>/dev/null || true
+	$(DC) up -d
+	@echo -e "$(GREEN)══ Restart complete ══$(RESET)"
 
-# ── Packages ─────────────────────────────────────────────────────────────
+clean: ## Remove build artifacts and node_modules
+	rm -rf build node_modules .vite
+	@echo -e "$(GREEN)✔ Cleaned$(RESET)"
 
-build-packages: ## Build all packages (types → core → api)
-	@echo -e "$(CYAN)Building packages…$(RESET)"
-	cd $(ROOT) && $(DC) exec playground pnpm turbo run build --filter='./packages/*'
-	@echo -e "$(GREEN)✔ All packages built$(RESET)"
+# ── Logs ─────────────────────────────────────────────────────────────────
 
-logs: ## Tail playground stack logs
-	cd $(ROOT) && $(DC) logs -f --tail=50 playground
+logs: ## Tail all Docker stack logs
+	$(DC) logs -f --tail=50
 
-kill-ports: ## Kill any process occupying playground-related ports (3001, 4000)
-	@echo -e "$(CYAN)Killing processes on ports 3001, 4000…$(RESET)"
-	@for port in 3001 4000; do \
-		pids=$$(lsof -ti :$$port 2>/dev/null || true); \
-		if [ -n "$$pids" ]; then \
-			echo "  Killing PID(s) $$pids on :$$port"; \
-			echo "$$pids" | xargs kill -9 2>/dev/null || true; \
-		else \
-			echo "  Port :$$port is free"; \
-		fi; \
-	done
+logs-vite: ## Tail only playground (Vite) logs
+	$(DC) logs -f --tail=50 playground
+
+logs-mongo: ## Tail only MongoDB logs
+	$(DC) logs -f --tail=50 mongodb
+
+# ── Utilities ────────────────────────────────────────────────────────────
+
+kill-ports: ## Kill any process occupying playground-related ports (3001)
+	@echo -e "$(CYAN)Killing processes on port 3001…$(RESET)"
+	@pids=$$(lsof -ti :3001 2>/dev/null || true); \
+	if [ -n "$$pids" ]; then \
+		echo "  Killing PID(s) $$pids on :3001"; \
+		echo "$$pids" | xargs kill -9 2>/dev/null || true; \
+	else \
+		echo "  Port :3001 is free"; \
+	fi
 	@echo -e "$(GREEN)✔ Ports freed$(RESET)"
 
-.PHONY: help dev dev-d stop build check-seed seed re build-packages logs kill-ports
+status: ## Show status of Docker services
+	$(DC) ps
+
+.PHONY: help install dev dev-docker up stop down build typecheck \
+        db-up db-shell db-reset re clean logs logs-vite logs-mongo \
+        kill-ports status
