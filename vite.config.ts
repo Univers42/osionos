@@ -2,21 +2,16 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { defineConfig, loadEnv } from 'vite';
-import wasm from 'vite-plugin-wasm';
 
 export default defineConfig(({ mode }) => {
-  const root = __dirname;                       // playground/
-  const workspace = path.resolve(root, '..');   // project root
+  const root = __dirname;
 
-  // Load env from workspace root (VITE_API_URL, etc.)
-  const env = loadEnv(mode, workspace, '');
-
+  const env = loadEnv(mode, root, '');
   return {
     root,
     plugins: [
       react(),
       tailwindcss(),
-      wasm(),
     ],
     define: {
       'import.meta.env.VITE_API_URL': JSON.stringify(
@@ -25,8 +20,7 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        '@src': path.resolve(workspace, 'src'),
-        '@markdown': path.resolve(workspace, 'src/lib/markdown'),
+        '@': path.resolve(root, 'src'),
       },
     },
     build: {
@@ -38,9 +32,6 @@ export default defineConfig(({ mode }) => {
       watch: {
         usePolling: true,
       },
-    },
-    optimizeDeps: {
-      exclude: ['formula-engine', 'mermaid'],
     },
   };
 });
