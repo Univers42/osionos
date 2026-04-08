@@ -6,15 +6,15 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 01:31:17 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/08 19:03:43 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useMemo, useCallback, useState } from "react";
 import { Plus } from "lucide-react";
 
-import { SlashCommandMenu } from "@src/components/blocks/SlashCommandMenu";
-import type { Block } from "@src/types/database";
+import { SlashCommandMenu } from "./blocks/SlashCommandMenu";
+import type { Block } from "../types/database";
 
 import { usePageStore } from "../store/usePageStore";
 import { usePlaygroundBlockEditor } from "../hooks/usePlaygroundBlockEditor";
