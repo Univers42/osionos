@@ -6,11 +6,11 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 03:57:44 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/08 19:04:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import type { Block, BlockType } from '@src/types/database';
+import type { Block, BlockType } from '../types/database';
 import type { SeedPage } from '../data/seedPages';
 import type { ActivePage, PageEntry } from './pageStore.types';
 
