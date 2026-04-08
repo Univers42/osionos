@@ -1,0 +1,42 @@
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: playground_mongodb
+    restart: unless-stopped
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-notion_user}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASS:-notion_pass}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-playground_db}
+    volumes:
+      - mongodb_data:/data/db
+      - ./docker/services/mongodb/tools/init-collections.js:/docker-entrypoint-initdb.d/01-init-collections.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+  playground:
+    image: node:22-alpine
+    container_name: playground_vite
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "${VITE_PORT:-3001}:3001"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-}
+      NODE_ENV: development
+    volumes:
+      - .:/app
+      - playground_node_modules:/app/node_modules
+    command: sh -c "npm install && npx vite --host 0.0.0.0 --port 3001"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  mongodb_data:
+  playground_node_modules:
