@@ -1,0 +1,501 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   notionPage.css                                     :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/08 20:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/04/08 19:47:31 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Notion-style page layout
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.notion-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--color-surface-primary);
+  position: relative;
+}
+
+/* ── Cover ────────────────────────────────────────────────────────────── */
+
+.notion-page-cover {
+  position: relative;
+  width: 100%;
+  height: 30vh;
+  min-height: 180px;
+  max-height: 280px;
+  overflow: hidden;
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.notion-page-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 50%;
+  display: block;
+}
+
+.notion-page-cover-gradient {
+  width: 100%;
+  height: 100%;
+}
+
+/* Controls on hover */
+.notion-page-cover-controls {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.notion-page-cover:hover .notion-page-cover-controls {
+  opacity: 1;
+}
+
+.notion-page-cover-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.9);
+  color: #37352f;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: background 120ms ease;
+}
+
+.notion-page-cover-btn:hover {
+  background: rgba(255, 255, 255, 1);
+}
+
+/* ── Header area (icon + title zone) ─────────────────────────────── */
+
+.notion-page-header {
+  position: relative;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 96px;
+}
+
+.notion-page-header--with-cover {
+  margin-top: -42px;
+}
+
+.notion-page-header--no-cover {
+  padding-top: 80px;
+}
+
+/* ── Icon ─────────────────────────────────────────────────────────── */
+
+.notion-page-icon-wrapper {
+  position: relative;
+  display: inline-flex;
+  margin-bottom: 8px;
+}
+
+.notion-page-icon {
+  width: 78px;
+  height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 78px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease;
+  border-radius: 8px;
+  user-select: none;
+}
+
+.notion-page-icon:hover {
+  background: var(--color-surface-hover);
+}
+
+.notion-page-icon svg {
+  width: 78px;
+  height: 78px;
+  color: var(--color-ink);
+}
+
+/* ── Toolbar (add icon / add cover / add comment) ────────────────── */
+
+.notion-page-toolbar {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  margin-top: 4px;
+  margin-bottom: 4px;
+  height: 28px;
+}
+
+.notion-page-header:hover .notion-page-toolbar,
+.notion-page-toolbar--visible {
+  opacity: 1;
+}
+
+.notion-page-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: none;
+  font-size: 12px;
+  color: var(--color-ink-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.notion-page-toolbar-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-ink);
+}
+
+/* ── Title ────────────────────────────────────────────────────────── */
+
+.notion-page-title {
+  display: block;
+  width: 100%;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-ink);
+  outline: none;
+  border: none;
+  padding: 3px 0;
+  min-height: 1.2em;
+  word-break: break-word;
+  white-space: pre-wrap;
+  caret-color: var(--color-ink);
+}
+
+.notion-page-title:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-ink-faint);
+  pointer-events: none;
+}
+
+/* ── Properties ───────────────────────────────────────────────────── */
+
+.notion-page-properties {
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 96px;
+}
+
+.notion-page-property-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 14px;
+  color: var(--color-ink);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.notion-page-property-label {
+  flex-shrink: 0;
+  width: 160px;
+  color: var(--color-ink-muted);
+  font-size: 13px;
+}
+
+.notion-page-property-value {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Body (content area) ──────────────────────────────────────────── */
+
+.notion-page-body {
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 4px 96px 120px;
+  flex: 1;
+}
+
+/* ── Emoji picker ─────────────────────────────────────────────────── */
+
+.notion-emoji-picker {
+  position: absolute;
+  z-index: 1000;
+  top: 100%;
+  left: 0;
+  width: 352px;
+  max-height: 380px;
+  background: var(--color-surface-primary);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 4px 16px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.notion-emoji-picker-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--color-line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.notion-emoji-picker-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.notion-emoji-picker-tab {
+  padding: 8px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+  border: none;
+  background: transparent;
+  color: var(--color-ink-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.notion-emoji-picker-tab:hover {
+  color: var(--color-ink);
+}
+
+.notion-emoji-picker-tab--active {
+  color: var(--color-ink);
+  border-bottom-color: var(--color-ink);
+}
+
+.notion-emoji-picker-search {
+  margin: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-secondary);
+  color: var(--color-ink);
+  font-size: 13px;
+  outline: none;
+  width: calc(100% - 16px);
+}
+
+.notion-emoji-picker-search:focus {
+  border-color: var(--color-accent);
+}
+
+.notion-emoji-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.notion-emoji-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  font-size: 22px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: background 80ms ease;
+  line-height: 1;
+}
+
+.notion-emoji-picker-item:hover {
+  background: var(--color-surface-hover);
+}
+
+/* SVG icons in picker */
+.notion-emoji-picker-svg-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.notion-emoji-picker-svg-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: background 80ms ease;
+}
+
+.notion-emoji-picker-svg-item:hover {
+  background: var(--color-surface-hover);
+}
+
+.notion-emoji-picker-svg-item svg {
+  width: 24px;
+  height: 24px;
+  color: var(--color-ink);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.notion-emoji-picker-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  border-top: 1px solid var(--color-line);
+  font-size: 12px;
+  color: var(--color-ink-muted);
+}
+
+.notion-emoji-picker-remove-btn {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-ink-muted);
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.notion-emoji-picker-remove-btn:hover {
+  background: rgba(255, 0, 0, 0.06);
+  color: #e53e3e;
+}
+
+/* ── Cover picker (gallery) ───────────────────────────────────────── */
+
+.notion-cover-picker {
+  position: absolute;
+  z-index: 1000;
+  right: 16px;
+  top: calc(100% + 4px);
+  width: 380px;
+  max-height: 340px;
+  background: var(--color-surface-primary);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 4px 16px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.notion-cover-picker-header {
+  padding: 10px 12px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.notion-cover-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 8px 12px 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.notion-cover-picker-item {
+  aspect-ratio: 16/9;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 120ms ease, opacity 120ms ease;
+}
+
+.notion-cover-picker-item:hover {
+  opacity: 0.85;
+}
+
+.notion-cover-picker-item--active {
+  border-color: var(--color-accent);
+}
+
+/* ── Responsive adjustments ─────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .notion-page-header,
+  .notion-page-properties,
+  .notion-page-body {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+@media (max-width: 600px) {
+  .notion-page-header,
+  .notion-page-properties,
+  .notion-page-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .notion-page-icon {
+    width: 54px;
+    height: 54px;
+    font-size: 54px;
+  }
+
+  .notion-page-icon svg {
+    width: 54px;
+    height: 54px;
+  }
+
+  .notion-page-title {
+    font-size: 30px;
+  }
+
+  .notion-page-cover {
+    min-height: 120px;
+    max-height: 180px;
+  }
+
+  .notion-emoji-picker {
+    width: 300px;
+  }
+
+  .notion-emoji-picker-grid {
+    grid-template-columns: repeat(7, 1fr);
+  }
+}
