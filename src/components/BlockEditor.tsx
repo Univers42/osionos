@@ -252,7 +252,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "bulleted_list":
       return (
-        <div className="flex items-start gap-2 pl-3">
+        <div className="flex items-start gap-2 pl-5">
           <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-ink-faint)] mt-[7px]" />
           </span>
@@ -270,7 +270,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "numbered_list":
       return (
-        <div className="flex items-start gap-2 pl-3">
+        <div className="flex items-start gap-2 pl-5">
           <span className="text-sm leading-relaxed py-0.5 text-[var(--color-ink-muted)] select-none shrink-0 w-6 text-center font-medium">
             {numberedIndex}.
           </span>
@@ -466,7 +466,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           aria-label="Divider block"
         >
-          <hr className="border-[var(--color-line)]" />
+          <hr className="border-t-2 border-[var(--color-ink-muted)]/40" />
         </button>
       );
 
@@ -610,17 +610,16 @@ const TableBlockEditor: React.FC<{
           <tbody>
             {data.map((row, ri) => (
               <tr
-                key={ri}
+                key={`row-${ri}-${row.join("¦")}`}
                 className={
                   ri === 0
                     ? "bg-[var(--color-surface-secondary)] font-medium"
                     : ""
                 }
               >
-                {/* NOSONAR - table rows identified by position */}
                 {row.map((cell, ci) => (
                   <td
-                    key={ci} // NOSONAR - table cells identified by position
+                    key={`cell-${ri}-${ci}-${cell}`}
                     className="border-b border-r border-[var(--color-line)] last:border-r-0 px-0 py-0 min-w-[120px] text-[var(--color-ink)]"
                     onContextMenu={(e) => openContextMenu(e, ri, ci)}
                   >

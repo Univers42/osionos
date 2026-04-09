@@ -101,7 +101,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
 
     case "bulleted_list":
       return (
-        <div className="flex items-start gap-2 pl-3">
+        <div className="flex items-start gap-2 pl-5">
           <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-ink-faint)] mt-[7px]" />
           </span>
@@ -116,7 +116,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
 
     case "numbered_list":
       return (
-        <div className="flex items-start gap-2 pl-3">
+        <div className="flex items-start gap-2 pl-5">
           <span className="text-sm leading-relaxed py-0.5 text-[var(--color-ink-muted)] select-none shrink-0 w-6 text-center font-medium">
             {index + 1}.
           </span>
@@ -131,7 +131,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
 
     case "to_do":
       return (
-        <div className="flex items-start gap-2 pl-3">
+        <div className="flex items-start gap-2 pl-5">
           <span
             className={[
               "shrink-0 mt-[3px] w-4 h-4 rounded border flex items-center justify-center",
@@ -188,7 +188,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
     case "divider":
       return (
         <div className="py-2">
-          <hr className="border-[var(--color-line)]" />
+          <hr className="border-t-2 border-[var(--color-ink-muted)]/40" />
         </div>
       );
 

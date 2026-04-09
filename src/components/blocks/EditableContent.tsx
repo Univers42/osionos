@@ -15,6 +15,7 @@
  * Replaces the external @src/components/blocks/EditableContent.
  */
 import React, { useCallback, useEffect, useRef } from 'react';
+import { parseInlineMarkdown } from '../../lib/markengine';
 
 interface EditableContentProps {
   content: string;
@@ -37,11 +38,21 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const isComposing = useRef(false);
+  const isFocused = useRef(false);
 
-  // Sync content from props (only when it diverges from DOM text)
+  // Sync content from props (raw text while editing, parsed HTML while blurred)
   useEffect(() => {
-    if (ref.current && ref.current.textContent !== content) {
-      ref.current.textContent = content;
+    if (!ref.current) return;
+    if (isFocused.current) {
+      if (ref.current.textContent !== content) {
+        ref.current.textContent = content;
+      }
+      return;
+    }
+
+    const html = content ? parseInlineMarkdown(content) : '';
+    if (ref.current.innerHTML !== html) {
+      ref.current.innerHTML = html;
     }
   }, [content]);
 
@@ -59,17 +70,28 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   );
 
   return (
-    <div
+    <div // NOSONAR - contentEditable is required for this Notion-like editor UX
       ref={ref}
       role="textbox"
+      aria-multiline="true"
       tabIndex={0}
       contentEditable
       suppressContentEditableWarning
       spellCheck
       data-placeholder={placeholder}
-      className={`outline-none whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--color-ink-faint)] ${className}`}
+      className={`outline-none whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--color-ink-faint)] empty:before:pointer-events-none focus:empty:before:content-none ${className}`}
       onInput={handleInput}
       onKeyDown={handleKeyDown}
+      onFocus={() => {
+        isFocused.current = true;
+        if (!ref.current) return;
+        ref.current.textContent = content;
+      }}
+      onBlur={() => {
+        isFocused.current = false;
+        if (!ref.current) return;
+        ref.current.innerHTML = content ? parseInlineMarkdown(content) : '';
+      }}
       onCompositionStart={() => { isComposing.current = true; }}
       onCompositionEnd={() => {
         isComposing.current = false;

@@ -11,9 +11,15 @@
 /* ************************************************************************** */
 
 import React from 'react';
-import { Search, Home, Mic, Sparkles, Inbox, BookOpen } from 'lucide-react';
+import { Search, Home, Mic, Sparkles, Inbox, BookOpen, Sun, Moon, Monitor } from 'lucide-react';
 
 import { SidebarNavItem } from './SidebarNavItem';
+import {
+  applyTheme,
+  persistThemeMode,
+  readStoredThemeMode,
+  type ThemeMode,
+} from '../../lib/theme';
 
 interface SidebarTopNavProps {
   isHomeActive: boolean;
@@ -21,7 +27,33 @@ interface SidebarTopNavProps {
 }
 
 /** Top-level navigation items: Search, Home, Meetings, AI, Inbox, Library. */
-export const SidebarTopNav: React.FC<SidebarTopNavProps> = ({ isHomeActive, onOpenHome }) => (
+function nextThemeMode(mode: ThemeMode): ThemeMode {
+  if (mode === 'light') return 'dark';
+  if (mode === 'dark') return 'system';
+  return 'light';
+}
+
+function themeLabel(mode: ThemeMode): string {
+  if (mode === 'light') return 'Theme: Light';
+  if (mode === 'dark') return 'Theme: Dark';
+  return 'Theme: System';
+}
+
+function themeIcon(mode: ThemeMode): React.ReactNode {
+  if (mode === 'light') return <Sun size={16} />;
+  if (mode === 'dark') return <Moon size={16} />;
+  return <Monitor size={16} />;
+}
+
+export const SidebarTopNav: React.FC<SidebarTopNavProps> = ({ isHomeActive, onOpenHome }) => {
+  const [themeMode, setThemeMode] = React.useState<ThemeMode>(() => readStoredThemeMode());
+
+  React.useEffect(() => {
+    applyTheme(themeMode);
+    persistThemeMode(themeMode);
+  }, [themeMode]);
+
+  return (
   <div className="flex flex-col gap-px pb-2 mx-2 cursor-pointer">
     <SidebarNavItem
       icon={<Search size={16} />}
@@ -54,5 +86,11 @@ export const SidebarTopNav: React.FC<SidebarTopNavProps> = ({ isHomeActive, onOp
       label="Library"
       onClick={() => {/* placeholder */}}
     />
+    <SidebarNavItem
+      icon={themeIcon(themeMode)}
+      label={themeLabel(themeMode)}
+      onClick={() => setThemeMode((mode) => nextThemeMode(mode))}
+    />
   </div>
-);
+  );
+};

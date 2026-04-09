@@ -31,7 +31,7 @@ export const TodoBlockEditor: React.FC<{
   }, [page, block.id, block.checked, updateBlock]);
 
   return (
-    <div className="flex items-start gap-2 pl-3">
+    <div className="flex items-start gap-2 pl-5">
       <button
         type="button"
         onClick={toggleChecked}

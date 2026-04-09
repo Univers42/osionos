@@ -16,6 +16,7 @@ import { useUserStore } from "./store/useUserStore";
 import { usePageStore } from "./store/usePageStore";
 import { NotionSidebar } from "./components/sidebar/NotionSidebar";
 import { MainContent } from "./components/MainContent";
+import { applyTheme, readStoredThemeMode } from "./lib/theme";
 
 /**
  * Root of the Playground app.
@@ -34,6 +35,8 @@ const App: React.FC = () => {
 
   // Run once on mount
   useEffect(() => {
+    applyTheme(readStoredThemeMode());
+
     if (initialized) {
       setReady(true);
       return;

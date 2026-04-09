@@ -23,22 +23,12 @@ import {
 } from "lucide-react";
 
 import { SidebarNavItem } from "./SidebarNavItem";
-
-type ThemeMode = "light" | "dark" | "system";
-const THEME_STORAGE_KEY = "osionos:theme-mode";
-
-function applyTheme(mode: ThemeMode) {
-  if (typeof document === "undefined") return;
-  const root = document.documentElement;
-  if (mode === "system") {
-    const prefersDark = globalThis.matchMedia(
-      "(prefers-color-scheme: dark)",
-    ).matches;
-    root.dataset.theme = prefersDark ? "dark" : "light";
-    return;
-  }
-  root.dataset.theme = mode;
-}
+import {
+  applyTheme,
+  persistThemeMode,
+  readStoredThemeMode,
+  type ThemeMode,
+} from "../../lib/theme";
 
 function nextThemeMode(mode: ThemeMode): ThemeMode {
   if (mode === "light") return "dark";
@@ -70,18 +60,13 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   showInviteCTA,
   onDismissInvite,
 }) => {
-  const [themeMode, setThemeMode] = React.useState<ThemeMode>(() => {
-    if (globalThis.window === undefined) return "system";
-    const stored = globalThis.localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === "light" || stored === "dark" || stored === "system")
-      return stored;
-    return "system";
-  });
+  const [themeMode, setThemeMode] = React.useState<ThemeMode>(() =>
+    readStoredThemeMode(),
+  );
 
   React.useEffect(() => {
     applyTheme(themeMode);
-    if (globalThis.window === undefined) return;
-    globalThis.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+    persistThemeMode(themeMode);
   }, [themeMode]);
 
   React.useEffect(() => {

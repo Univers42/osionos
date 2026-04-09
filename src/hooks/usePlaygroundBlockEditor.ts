@@ -69,8 +69,8 @@ function parsePipeTable(text: string): string[][] | null {
 
 function isListType(
   type: Block["type"],
-): type is "bulleted_list" | "numbered_list" {
-  return type === "bulleted_list" || type === "numbered_list";
+): type is "bulleted_list" | "numbered_list" | "to_do" {
+  return type === "bulleted_list" || type === "numbered_list" || type === "to_do";
 }
 
 /** Manages block editing, slash commands, and keyboard navigation for playground pages. */
@@ -243,6 +243,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       changeBlockType(pageId, blockId, "paragraph");
       updateBlock(pageId, blockId, { content: "" });
       focusBlock(blockId);
+      repositionCursor(blockId, "");
 
       return true;
     },
@@ -269,6 +270,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       changeBlockType(pageId, blockId, "paragraph");
       updateBlock(pageId, blockId, { content: "", checked: false });
       focusBlock(blockId);
+      repositionCursor(blockId, "");
 
       return true;
     },
@@ -307,7 +309,13 @@ export function usePlaygroundBlockEditor(pageId: string) {
   );
 
   const handleDividerDelete = useCallback(
-    (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
+    (
+      e: React.KeyboardEvent,
+      blockId: string,
+      block: Block,
+      blockIdx: number,
+      content: Block[],
+    ): boolean => {
       if (
         (e.key !== "Backspace" && e.key !== "Delete") ||
         block.type !== "divider"
@@ -316,12 +324,19 @@ export function usePlaygroundBlockEditor(pageId: string) {
       }
 
       e.preventDefault();
-      changeBlockType(pageId, blockId, "paragraph");
-      updateBlock(pageId, blockId, { content: "" });
-      focusBlock(blockId);
+      const nextBlockId =
+        blockIdx < content.length - 1 ? content[blockIdx + 1].id : null;
+      const prevBlockId = blockIdx > 0 ? content[blockIdx - 1].id : null;
+
+      deleteBlock(pageId, blockId);
+      if (nextBlockId) {
+        focusBlock(nextBlockId);
+      } else if (prevBlockId) {
+        focusBlock(prevBlockId, true);
+      }
       return true;
     },
-    [pageId, changeBlockType, updateBlock, focusBlock],
+    [pageId, deleteBlock, focusBlock],
   );
 
   const handleEmptyBackspace = useCallback(
@@ -427,7 +442,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
         return;
       }
 
-      if (handleDividerDelete(e, blockId, block)) {
+      if (handleDividerDelete(e, blockId, block, blockIdx, content)) {
         return;
       }
 

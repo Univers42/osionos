@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 
 import { ErrorBoundary }  from './ErrorBoundary';
@@ -26,6 +26,8 @@ import { useUserStore }  from '../store/useUserStore';
  */
 export const MainContent: React.FC = () => {
   const activePage = usePageStore(s => s.activePage);
+  const pageById = usePageStore(s => s.pageById);
+  const fetchPageContent = usePageStore(s => s.fetchPageContent);
   const addPage    = usePageStore(s => s.addPage);
   const openPage   = usePageStore(s => s.openPage);
   const session    = useUserStore(s => s.activeSession());
@@ -33,6 +35,14 @@ export const MainContent: React.FC = () => {
 
   const jwt       = session?.accessToken ?? '';
   const firstWsId = session?.privateWorkspaces[0]?._id ?? '';
+
+  useEffect(() => {
+    if (!activePage || activePage?.kind !== 'page' || !jwt) return;
+    const page = pageById(activePage.id);
+    if (!page) {
+      fetchPageContent(activePage.id, jwt);
+    }
+  }, [activePage, jwt, pageById, fetchPageContent]);
 
   /* ── Home splash (no page selected) ────────────────────────────── */
   if (!activePage) {
