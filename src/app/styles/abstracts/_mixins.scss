@@ -1,0 +1,12 @@
+// src/app/styles/abstracts/_mixins.scss
+@mixin md {
+  @media (max-width: 900px) {
+    @content;
+  }
+}
+
+@mixin sm {
+  @media (max-width: 600px) {
+    @content;
+  }
+}

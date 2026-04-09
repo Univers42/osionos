@@ -1,0 +1,5 @@
+// src/app/styles/abstracts/_index.scss
+@forward '../base/tokens/colors';
+@forward '../base/tokens/spacing';
+@forward '../base/tokens/typography';
+@forward './mixins';
