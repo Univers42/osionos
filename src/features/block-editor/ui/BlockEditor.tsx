@@ -24,7 +24,7 @@ import { DatabaseBlock } from '@/widgets/database-view';
 import type { Block } from '@/entities/block';
 
 import { usePageStore } from '@/store/usePageStore';
-import { CALLOUT_COLORS } from '@/components/PlaygroundPageEditorConstants';
+import { CALLOUT_COLORS } from '@/entities/block';
 import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
 

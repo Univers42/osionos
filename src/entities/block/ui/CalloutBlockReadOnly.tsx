@@ -12,7 +12,7 @@
 
 import React from "react";
 import type { Block } from '@/entities/block';
-import { CALLOUT_COLORS } from "@/components/PlaygroundPageEditorConstants";
+import { CALLOUT_COLORS } from "@/entities/block";
 import { parseInlineMarkdown } from '@/shared/lib/markengine';
 
 export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
