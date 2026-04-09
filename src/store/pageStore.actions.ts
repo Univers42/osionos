@@ -10,10 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { api } from '../api/client';
+import { api } from '@/shared/api/client';
 import { SEED_PAGES } from '../data/seedPages';
 import { seedToEntry, localId, updatePageInState, isMongoId } from './pageStore.helpers';
-import type { PageEntry, PageStore } from './pageStore.types';
+import type { PageEntry, PageStore } from '@/entities/page';
 
 type SetFn = (partial: Partial<PageStore> | ((s: PageStore) => Partial<PageStore>)) => void;
 type GetFn = () => PageStore;

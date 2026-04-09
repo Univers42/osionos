@@ -10,9 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import type { Block, BlockType } from '../types/database';
+import type { Block, BlockType } from '@/entities/block';
 import type { SeedPage } from '../data/seedPages';
-import type { ActivePage, PageEntry } from './pageStore.types';
+import type { ActivePage, PageEntry } from '@/entities/page';
 
 const RECENTS_KEY = 'pg:recents';
 

@@ -10,9 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { api } from '../api/client';
+import { api } from '@/shared/api/client';
 import { isMongoId } from './pageStore.helpers';
-import type { PageEntry } from './pageStore.types';
+import type { PageEntry } from '@/entities/page';
 
 /** Lazy JWT getter — avoids importing useUserStore at module top level */
 export function getActiveJwt(): string | null {

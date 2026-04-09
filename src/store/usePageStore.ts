@@ -25,10 +25,10 @@ import {
 import {
   debouncePersistContent, persistPageTitle, getActiveJwt, registerPageLookup,
 } from './pageStore.persistence';
-import type { PageStore } from './pageStore.types';
+import type { PageStore } from '@/entities/page';
 
 // Re-export types so existing imports from this module still work
-export type { PageEntry, ActivePageKind, ActivePage } from './pageStore.types';
+export type { PageEntry, ActivePageKind, ActivePage } from '@/entities/page';
 
 /** Zustand store managing page tree, active page, recents, and block-level CRUD. */
 export const usePageStore = create<PageStore>((set, get) => ({

@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import type { Block } from '../types/database';
+import type { Block } from '@/entities/block';
 
 let _counter = 0;
 export function bid(): string {

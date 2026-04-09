@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2020",
+    "moduleResolution": "Node",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "lib": ["ES2022"]
+  },
+  "include": ["markdown.ts", "markdown/**/*.ts"],
+  "exclude": [
+    "markdown/index.ts",
+    "markdown/shortcuts.ts",
+    "markdown/shortcutsDetect.ts",
+    "markdown/renderers/react.tsx",
+    "markdown/renderers/reactHelpers.tsx"
+  ]
+}

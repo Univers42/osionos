@@ -1,0 +1,14 @@
+{
+  "name": "markengine",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --outDir dist --module commonjs --declaration false --target ES2022",
+    "start": "node playground/server.js",
+    "dev": "nodemon --legacy-watch --watch markdown --watch playground/public --watch playground/server.js --watch markdown.ts --watch tsconfig.json --ext ts,js,html,css --exec \"npm run build && node playground/server.js\""
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10",
+    "typescript": "^5.9.3"
+  }
+}

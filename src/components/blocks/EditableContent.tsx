@@ -15,7 +15,7 @@
  * Replaces the external @src/components/blocks/EditableContent.
  */
 import React, { useCallback, useEffect, useRef } from 'react';
-import { parseInlineMarkdown } from '../../lib/markengine';
+import { parseInlineMarkdown } from '@/shared/lib/markengine';
 
 interface EditableContentProps {
   content: string;
