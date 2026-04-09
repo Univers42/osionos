@@ -179,7 +179,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-2xl font-bold text-[var(--color-ink)] mt-6 mb-1 leading-tight"
+          className="text-2xl font-bold text-[var(--color-ink)] mt-8 mb-2 leading-tight"
           placeholder="Heading 1"
           onChange={onChange}
           onKeyDown={onKeyDown}
@@ -189,7 +189,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-xl font-semibold text-[var(--color-ink)] mt-5 mb-1 leading-tight"
+          className="text-xl font-semibold text-[var(--color-ink)] mt-7 mb-2 leading-tight"
           placeholder="Heading 2"
           onChange={onChange}
           onKeyDown={onKeyDown}
@@ -199,7 +199,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-lg font-semibold text-[var(--color-ink)] mt-4 mb-0.5 leading-snug"
+          className="text-lg font-semibold text-[var(--color-ink)] mt-6 mb-1.5 leading-snug"
           placeholder="Heading 3"
           onChange={onChange}
           onKeyDown={onKeyDown}
@@ -210,7 +210,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-base font-semibold text-[var(--color-ink)] mt-3 mb-0.5 leading-snug"
+          className="text-base font-semibold text-[var(--color-ink)] mt-5 mb-1 leading-snug"
           placeholder="Heading 4"
           onChange={onChange}
           onKeyDown={onKeyDown}
@@ -221,7 +221,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-sm font-semibold text-[var(--color-ink)] mt-2 mb-0.5 leading-snug"
+          className="text-sm font-semibold text-[var(--color-ink)] mt-4 mb-1 leading-snug"
           placeholder="Heading 5"
           onChange={onChange}
           onKeyDown={onKeyDown}
@@ -232,7 +232,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-xs font-semibold text-[var(--color-ink-muted)] mt-2 mb-0.5 leading-snug tracking-wide"
+          className="text-xs font-semibold text-[var(--color-ink-muted)] mt-4 mb-1 leading-snug tracking-wide"
           placeholder="Heading 6"
           onChange={onChange}
           onKeyDown={onKeyDown}
@@ -243,7 +243,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 min-h-[1.5em]"
+          className="text-base text-[var(--color-ink)] leading-relaxed py-[3px] min-h-[1.5em]"
           placeholder="Type '/' for commands…"
           onChange={onChange}
           onKeyDown={onKeyDown}
@@ -252,8 +252,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "bulleted_list":
       return (
-        <div className="flex items-start gap-2 pl-5">
-          <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
+        <div className="flex items-start gap-2 pl-1.5">
+          <span className="text-base leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-ink-faint)] mt-[7px]" />
           </span>
           <div className="flex-1">
@@ -270,8 +270,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "numbered_list":
       return (
-        <div className="flex items-start gap-2 pl-5">
-          <span className="text-sm leading-relaxed py-0.5 text-[var(--color-ink-muted)] select-none shrink-0 w-6 text-center font-medium">
+        <div className="flex items-start gap-2 pl-1.5">
+          <span className="text-base leading-relaxed py-0.5 text-[var(--color-ink-muted)] select-none shrink-0 w-6 text-center font-medium">
             {numberedIndex}.
           </span>
           <div className="flex-1">
@@ -306,7 +306,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "code":
       return (
-        <div className="my-1 rounded-lg overflow-visible border border-[var(--color-line)] relative">
+        <div className="my-3 rounded-lg overflow-visible border border-[var(--color-line)] relative">
           <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--color-surface-secondary)] border-b border-[var(--color-line)]">
             <div ref={langPickerRef} className="relative">
               <button
@@ -419,7 +419,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "quote":
       return (
-        <div className="flex my-0.5">
+        <div className="flex my-2">
           <div className="w-1 bg-[var(--color-ink)] rounded-full shrink-0 mr-3" />
           <div className="flex-1">
             <EditableContent
@@ -442,13 +442,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       };
       return (
         <div
-          className={`flex items-start gap-3 p-3 rounded-lg border my-0.5 ${colors.bg} ${colors.border}`}
+          className={`flex items-start gap-3 p-3 rounded-lg border my-3 ${colors.bg} ${colors.border}`}
         >
           <span className={`text-lg shrink-0 ${colors.text}`}>{icon}</span>
           <div className="flex-1">
             <EditableContent
               content={block.content}
-              className={`text-sm ${colors.text} leading-relaxed py-0.5`}
+              className={`text-base ${colors.text} leading-relaxed py-0.5`}
               placeholder="Input text…"
               onChange={onChange}
               onKeyDown={onKeyDown}
@@ -462,7 +462,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <button
           type="button"
-          className="py-2 rounded outline-none focus:bg-[var(--color-surface-secondary)]"
+          className="py-4 rounded outline-none focus:bg-[var(--color-surface-secondary)]"
           onKeyDown={onKeyDown}
           aria-label="Divider block"
         >
