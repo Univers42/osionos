@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { SeedPage } from './seedBlockHelpers';
+import { getCollectionEmojiValue } from '@/shared/lib/uiCollectionAssets';
 import {
   h1, h2, h3, p, bullet, todo, code,
   quote, callout, divider, toggle,
@@ -21,7 +22,7 @@ const alexWsId = 'mock-ws-private-1';
 export const designSystem: SeedPage = {
   _id: 'page-alex-design',
   title: 'Design System',
-  icon: '🎨',
+  icon: getCollectionEmojiValue('palette'),
   workspaceId: alexWsId,
   content: [
     h1('Design System v2'),
@@ -44,7 +45,7 @@ export const designSystem: SeedPage = {
     h3('Callouts'),
     callout('Use callouts to highlight important info.', '💡'),
     callout('Warnings use a different emoji and color scheme.', '⚠️'),
-    callout('Errors for critical blockers.', '❗'),
+    callout('Errors for critical blockers.', getCollectionEmojiValue('warning')),
     divider(),
     h2('Dark mode'),
     p('All colors are defined via CSS variables. Toggle by applying a class to <html>:'),
@@ -58,7 +59,7 @@ export const designSystem: SeedPage = {
 export const sprintReview: SeedPage = {
   _id: 'page-alex-sprint',
   title: 'Sprint Review',
-  icon: '🏃',
+  icon: getCollectionEmojiValue('tools'),
   workspaceId: alexWsId,
   content: [
     h1('Sprint 12 Review'),
@@ -96,7 +97,7 @@ const samWsId = 'mock-ws-private-2';
 export const quickNotes: SeedPage = {
   _id: 'page-sam-notes',
   title: 'Quick Notes',
-  icon: '📋',
+  icon: getCollectionEmojiValue('pin'),
   workspaceId: samWsId,
   content: [
     h1('Quick Notes'),
@@ -119,7 +120,7 @@ export const quickNotes: SeedPage = {
 export const readingList: SeedPage = {
   _id: 'page-sam-reading',
   title: 'Reading List',
-  icon: '📚',
+  icon: getCollectionEmojiValue('brain'),
   workspaceId: samWsId,
   content: [
     h1('Reading List'),

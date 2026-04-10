@@ -11,11 +11,14 @@
 /* ************************************************************************** */
 
 /**
- * DatabaseBlock stub — placeholder for database views.
- * In a full implementation, this renders table/board/gallery views.
- * For standalone mode, it renders a placeholder.
+ * DatabaseBlock — placeholder surface backed by the shared asset board.
  */
 import React from 'react';
+import {
+  CollectionAssetBoard,
+  IconBoard,
+  PAGE_ICON_PICKER_TABS,
+} from '@/shared/lib/uiCollectionAssets';
 
 interface DatabaseBlockProps {
   databaseId?: string;
@@ -31,7 +34,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     mode === 'full' ? 'h-full' : ''
   }`}>
     <div className="flex items-center gap-2 text-sm text-[var(--color-ink-muted)]">
-      <span className="text-lg">🗃️</span>
+      <IconBoard />
       <span>Database view</span>
       {databaseId && (
         <span className="text-xs font-mono text-[var(--color-ink-faint)]">
@@ -40,7 +43,17 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
       )}
     </div>
     <p className="text-xs text-[var(--color-ink-faint)] mt-1">
-      Connect a database backend to enable table/board/gallery views.
+      Package-backed board placeholder for table, board, and gallery views.
     </p>
+    <div className="mt-4">
+      <CollectionAssetBoard
+        tabs={PAGE_ICON_PICKER_TABS}
+        label="Selector de assets"
+        width="100%"
+        onSelect={() => {
+          // Placeholder until database view selection is wired to store state.
+        }}
+      />
+    </div>
   </div>
 );

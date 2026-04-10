@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { SeedPage } from './seedBlockHelpers';
+import { getCollectionEmojiValue } from '@/shared/lib/uiCollectionAssets';
 import {
   h1, h2, h3, p, bullet, numbered, todo, code,
   quote, callout, divider, toggle,
@@ -21,7 +22,7 @@ const adminWsId = 'mock-ws-private-0';
 export const gettingStarted: SeedPage = {
   _id: 'page-admin-getting-started',
   title: 'Getting Started',
-  icon: '🚀',
+  icon: getCollectionEmojiValue('rocket'),
   workspaceId: adminWsId,
   content: [
     h1('Welcome to the Playground'),
@@ -67,7 +68,7 @@ export const gettingStarted: SeedPage = {
 export const projectRoadmap: SeedPage = {
   _id: 'page-admin-roadmap',
   title: 'Project Roadmap',
-  icon: '🗺️',
+  icon: getCollectionEmojiValue('puzzle'),
   workspaceId: adminWsId,
   content: [
     h1('Roadmap — Q2 2026'),
@@ -97,14 +98,14 @@ export const projectRoadmap: SeedPage = {
     numbered('Store layer (Zustand) manages client state'),
     numbered('Component layer renders blocks and views'),
     code('// Simplified request flow\nclient → API route → service → adapter → DB\n                                          ↓\n                   Zustand store ← response ←', 'plaintext'),
-    callout('The playground bypasses the API entirely — all data lives in Zustand stores in-memory.', 'ℹ️'),
+    callout('The playground bypasses the API entirely — all data lives in Zustand stores in-memory.', getCollectionEmojiValue('idea')),
   ],
 };
 
 export const meetingNotes: SeedPage = {
   _id: 'page-admin-meetings',
   title: 'Meeting Notes',
-  icon: '📝',
+  icon: getCollectionEmojiValue('pin'),
   workspaceId: adminWsId,
   content: [
     h1('Weekly Sync — March 28'),

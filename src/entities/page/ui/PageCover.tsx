@@ -11,11 +11,17 @@
 /* ************************************************************************** */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ImageIcon, Trash2 } from 'lucide-react';
-import { COVER_PRESETS } from '@/shared/ui/molecules/EmojiPicker/constants';
+import { Trash2 } from 'lucide-react';
+import {
+  CollectionAssetBoard,
+  COVER_PICKER_TABS,
+  IconImage,
+  isCollectionMediaRef,
+  resolveCollectionAsset,
+} from '@/shared/lib/uiCollectionAssets';
 
 interface PageCoverProps {
-  /** Current cover value — URL or CSS gradient string. */
+  /** Current cover value — URL, CSS gradient, or ui-collection media ref. */
   cover: string;
   /** Update the cover. */
   onChangeCover: (cover: string) => void;
@@ -36,7 +42,9 @@ export const PageCover: React.FC<PageCoverProps> = ({
   const pickerRef = useRef<HTMLDivElement>(null);
 
   const isGradient = cover.startsWith('linear-gradient') || cover.startsWith('radial-gradient');
+  const resolvedCover = isCollectionMediaRef(cover) ? resolveCollectionAsset(cover) : null;
   const isUrl = !isGradient;
+  const coverSrc = resolvedCover?.kind === 'media' ? resolvedCover.src : cover;
 
   /* Close picker on outside click */
   useEffect(() => {
@@ -51,8 +59,8 @@ export const PageCover: React.FC<PageCoverProps> = ({
   }, [showPicker]);
 
   const handleSelect = useCallback(
-    (preset: string) => {
-      onChangeCover(preset);
+    (value: string) => {
+      onChangeCover(value);
       setShowPicker(false);
     },
     [onChangeCover],
@@ -67,7 +75,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
     <div className="notion-page-cover">
       {isUrl ? (
         <img
-          src={cover}
+          src={coverSrc}
           alt=""
           className="notion-page-cover-img"
           draggable={false}
@@ -86,7 +94,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
           className="notion-page-cover-btn"
           onClick={() => setShowPicker((v) => !v)}
         >
-          <ImageIcon size={14} />
+          <IconImage />
           Change cover
         </button>
         <button
@@ -100,27 +108,32 @@ export const PageCover: React.FC<PageCoverProps> = ({
 
       {/* Cover picker */}
       {showPicker && (
-        <div ref={pickerRef} className="notion-cover-picker">
-          <div className="notion-cover-picker-header">Gallery</div>
-          <div className="notion-cover-picker-grid">
-            {COVER_PRESETS.map((preset: any, i: number) => (
-              <button
-                key={i}
-                type="button"
-                className={`notion-cover-picker-item ${preset === cover ? 'notion-cover-picker-item--active' : ''}`}
-                onClick={() => handleSelect(preset)}
-              >
-                <div
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    background: preset,
-                    borderRadius: 2,
-                  }}
-                />
-              </button>
-            ))}
-          </div>
+        <div
+          ref={pickerRef}
+          style={{
+            position: 'absolute',
+            zIndex: 1000,
+            right: 16,
+            top: 'calc(100% + 4px)',
+          }}
+        >
+          {COVER_PICKER_TABS.length > 0 ? (
+            <CollectionAssetBoard
+              current={cover}
+              tabs={COVER_PICKER_TABS}
+              label="Cover assets"
+              width={380}
+              showTabs={false}
+              onSelect={handleSelect}
+            />
+          ) : (
+            <div className="notion-cover-picker">
+              <div className="notion-cover-picker-header">Gallery</div>
+              <p className="px-3 pb-3 text-xs text-[var(--color-ink-muted)]">
+                No published cover assets are available in the package yet.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -11,18 +11,16 @@
 /* ************************************************************************** */
 
 import React, { useRef, useEffect } from 'react';
-import { Check, Crown, Brush, Eye } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useUserStore } from '@/features/auth';
+import {
+  COLLECTION_ROLE_BADGES,
+  CollectionAsset,
+} from '@/shared/lib/uiCollectionAssets';
 
 interface Props {
   onClose: () => void;
 }
-
-const ROLE_ICONS: Record<string, React.ReactNode> = {
-  admin:        <Crown  size={12} className="text-amber-400"  />,
-  collaborator: <Brush  size={12} className="text-blue-400"   />,
-  guest:        <Eye    size={12} className="text-emerald-400"/>,
-};
 
 /**
  * Floating dropdown that lists all 3 pre-logged-in personas.
@@ -83,14 +81,22 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose }) => {
             ].join(' ')}
           >
             {/* Avatar emoji */}
-            <span className="text-xl leading-none">{p.emoji}</span>
+            <CollectionAsset value={p.emoji} size={20} />
 
             <span className="flex-1 min-w-0">
               <span className="flex items-center gap-1">
                 <span className="text-sm font-medium text-[var(--color-ink)] truncate">
                   {p.name}
                 </span>
-                <span className="shrink-0">{ROLE_ICONS[p.roleBadge] ?? null}</span>
+                <span className="shrink-0">
+                  <CollectionAsset
+                    value={
+                      COLLECTION_ROLE_BADGES[p.roleBadge.toLowerCase()] ??
+                      COLLECTION_ROLE_BADGES.guest
+                    }
+                    size={12}
+                  />
+                </span>
               </span>
               <span className="block text-xs text-[var(--color-ink-muted)] truncate">
                 {p.email}

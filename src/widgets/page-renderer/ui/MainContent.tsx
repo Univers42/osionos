@@ -14,6 +14,10 @@ import React, { Suspense, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 
 import { ErrorBoundary }  from '@/shared/ui';
+import {
+  CollectionAsset,
+  getCollectionEmojiValue,
+} from '@/shared/lib/uiCollectionAssets';
 import { DatabaseBlock }  from '@/widgets/database-view';
 import { NotionPage }     from '@/pages/notion-page';
 
@@ -48,7 +52,10 @@ export const MainContent: React.FC = () => {
   if (!activePage) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-6 h-full bg-[var(--color-surface-primary)]">
-        <p className="text-4xl">{persona?.emoji ?? '🏠'}</p>
+        <CollectionAsset
+          value={persona?.emoji ?? getCollectionEmojiValue('party')}
+          size={40}
+        />
         <div className="text-center">
           <h1 className="text-2xl font-bold text-[var(--color-ink)] mb-1">
             {persona?.name ?? 'Welcome'}

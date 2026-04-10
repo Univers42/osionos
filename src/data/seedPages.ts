@@ -13,6 +13,7 @@
 export type { SeedPage } from './seedBlockHelpers';
 
 import type { SeedPage } from './seedBlockHelpers';
+import { getCollectionEmojiValue } from '@/shared/lib/uiCollectionAssets';
 import {
   h1, h2, p, bullet, numbered, code, callout, divider,
 } from './seedBlockHelpers';
@@ -35,7 +36,7 @@ export const SHARED_WORKSPACE = {
 const teamWiki: SeedPage = {
   _id: 'page-shared-wiki',
   title: 'Team Wiki',
-  icon: '📖',
+  icon: getCollectionEmojiValue('brain'),
   workspaceId: SHARED_WORKSPACE_ID,
   content: [
     h1('Team Wiki'),
@@ -47,7 +48,7 @@ const teamWiki: SeedPage = {
     numbered('Copy .env.example to .env'),
     numbered('Run make dev-all to start both the API and playground'),
     numbered('Open http://localhost:3001 in your browser'),
-    callout('If the API isn\'t running, the playground falls back to offline mode with seed data.', 'ℹ️'),
+    callout('If the API isn\'t running, the playground falls back to offline mode with seed data.', getCollectionEmojiValue('idea')),
     h2('Architecture'),
     p('The project has two main parts:'),
     bullet('src/ — The main Notion database system (components, stores, types)'),

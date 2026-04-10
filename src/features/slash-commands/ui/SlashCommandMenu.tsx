@@ -16,30 +16,47 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { BlockType } from '@/entities/block';
+import { COLLECTION_SLASH_ITEMS } from '@/shared/lib/uiCollectionAssets';
 
 export interface SlashMenuItem {
   label: string;
   type: BlockType;
-  icon: string;
+  icon: React.ReactNode;
   description: string;
   calloutIcon?: string;
 }
 
-const SLASH_ITEMS: SlashMenuItem[] = [
-  { label: 'Text',           type: 'paragraph',       icon: 'T',  description: 'Plain text block' },
-  { label: 'Heading 1',      type: 'heading_1',       icon: 'H1', description: 'Large heading' },
-  { label: 'Heading 2',      type: 'heading_2',       icon: 'H2', description: 'Medium heading' },
-  { label: 'Heading 3',      type: 'heading_3',       icon: 'H3', description: 'Small heading' },
-  { label: 'Bulleted list',  type: 'bulleted_list',   icon: '•',  description: 'Bulleted list item' },
-  { label: 'Numbered list',  type: 'numbered_list',   icon: '1.',  description: 'Numbered list item' },
-  { label: 'To-do',          type: 'to_do',           icon: '☐',  description: 'Checkbox item' },
-  { label: 'Toggle',         type: 'toggle',          icon: '▶',  description: 'Collapsible content' },
-  { label: 'Code',           type: 'code',            icon: '</>',  description: 'Code block' },
-  { label: 'Quote',          type: 'quote',           icon: '"',  description: 'Block quote' },
-  { label: 'Callout',        type: 'callout',         icon: '💡', description: 'Callout block', calloutIcon: '💡' },
-  { label: 'Divider',        type: 'divider',         icon: '—',  description: 'Horizontal divider' },
-  { label: 'Table',          type: 'table_block',     icon: '⊞',  description: 'Simple table' },
-];
+const SLASH_DESCRIPTIONS: Partial<Record<BlockType, string>> = {
+  paragraph: 'Plain text block',
+  heading_1: 'Large heading',
+  heading_2: 'Medium heading',
+  heading_3: 'Small heading',
+  heading_4: 'Section heading',
+  heading_5: 'Compact heading',
+  heading_6: 'Micro heading',
+  bulleted_list: 'Bulleted list item',
+  numbered_list: 'Numbered list item',
+  to_do: 'Checkbox item',
+  toggle: 'Collapsible content',
+  code: 'Code block',
+  quote: 'Block quote',
+  callout: 'Callout block',
+  divider: 'Horizontal divider',
+  table_block: 'Simple table',
+  database_inline: 'Inline database',
+  database_full_page: 'Full-page database',
+};
+
+const SLASH_ITEMS: SlashMenuItem[] = COLLECTION_SLASH_ITEMS.map((item) => ({
+  label: item.label,
+  type: item.type,
+  icon: item.icon,
+  description:
+    SLASH_DESCRIPTIONS[item.type] ??
+    item.keywords?.slice(0, 3).join(' · ') ??
+    'Block option',
+  calloutIcon: item.calloutIcon,
+}));
 
 interface SlashCommandMenuProps {
   position: { x: number; y: number };
@@ -63,7 +80,8 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     return SLASH_ITEMS.filter(
       (item) =>
         item.label.toLowerCase().includes(lower) ||
-        item.type.toLowerCase().includes(lower),
+        item.type.toLowerCase().includes(lower) ||
+        item.description.toLowerCase().includes(lower),
     );
   }, [filter]);
 
@@ -107,7 +125,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       </p>
       {filtered.map((item, idx) => (
         <button
-          key={item.type}
+          key={`${item.type}-${item.label}`}
           type="button"
           className={`w-full flex items-center gap-3 px-3 py-1.5 text-left transition-colors ${
             idx === activeIdx ? 'bg-[var(--color-surface-hover)]' : 'hover:bg-[var(--color-surface-hover)]'

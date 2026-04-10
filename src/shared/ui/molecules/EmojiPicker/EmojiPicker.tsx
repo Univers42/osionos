@@ -10,10 +10,11 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EMOJI_CATEGORIES, SVG_ICONS } from './constants';
-
-type PickerMode = 'emoji' | 'icon';
+import React, { useCallback, useEffect, useRef } from 'react';
+import {
+  CollectionAssetBoard,
+  PAGE_ICON_PICKER_TABS,
+} from '@/shared/lib/uiCollectionAssets';
 
 interface EmojiPickerProps {
   /** Currently selected icon (emoji string or `svg:key`). */
@@ -27,11 +28,7 @@ interface EmojiPickerProps {
 }
 
 /**
- * Notion-style emoji / icon picker panel.
- * Supports:
- *   - Emoji grid (categorised, searchable)
- *   - SVG icon grid (small built-in icon library)
- *   - "Remove" action
+ * Unified asset picker panel backed by @univers42/ui-collection.
  */
 export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   current,
@@ -40,15 +37,6 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   onClose,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
-  const [mode, setMode] = useState<PickerMode>('emoji');
-  const [search, setSearch] = useState('');
-  const [activeCategory, setActiveCategory] = useState<string>('Smileys');
-
-  /* Focus search on open */
-  useEffect(() => {
-    requestAnimationFrame(() => searchRef.current?.focus());
-  }, []);
 
   /* Click outside → close */
   useEffect(() => {
@@ -70,29 +58,9 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  /* Filtered emoji list */
-  const filteredEmojis = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    if (!q) {
-      return EMOJI_CATEGORIES[activeCategory] ?? [];
-    }
-    /* When searching, flatten all categories */
-    return Object.values(EMOJI_CATEGORIES)
-      .flat()
-      .filter((emoji) => emoji.includes(q));
-  }, [search, activeCategory]);
-
-  const handleEmojiClick = useCallback(
-    (emoji: string) => {
-      onSelect(emoji);
-      onClose();
-    },
-    [onSelect, onClose],
-  );
-
-  const handleSvgClick = useCallback(
-    (key: string) => {
-      onSelect(`svg:${key}`);
+  const handleSelect = useCallback(
+    (value: string) => {
+      onSelect(value);
       onClose();
     },
     [onSelect, onClose],
@@ -103,99 +71,34 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
     onClose();
   }, [onRemove, onClose]);
 
-  const categoryNames = Object.keys(EMOJI_CATEGORIES).filter(
-    (name) => name !== 'Recent' || (EMOJI_CATEGORIES[name]?.length ?? 0) > 0,
-  );
-
   return (
-    <div ref={panelRef} className="notion-emoji-picker">
-      {/* Mode tabs: Emoji / Icons */}
-      <div className="notion-emoji-picker-tabs">
+    <div
+      ref={panelRef}
+      style={{
+        position: 'absolute',
+        zIndex: 1000,
+        top: 'calc(100% + 8px)',
+        left: 0,
+      }}
+    >
+      <CollectionAssetBoard
+        current={current}
+        tabs={PAGE_ICON_PICKER_TABS}
+        label="Selector de assets"
+        onSelect={handleSelect}
+      />
+      <div
+        style={{
+          marginTop: 8,
+          display: 'flex',
+          justifyContent: 'flex-end',
+        }}
+      >
         <button
           type="button"
-          className={`notion-emoji-picker-tab ${mode === 'emoji' ? 'notion-emoji-picker-tab--active' : ''}`}
-          onClick={() => setMode('emoji')}
+          className="notion-emoji-picker-remove-btn"
+          onClick={handleRemove}
         >
-          Emoji
-        </button>
-        <button
-          type="button"
-          className={`notion-emoji-picker-tab ${mode === 'icon' ? 'notion-emoji-picker-tab--active' : ''}`}
-          onClick={() => setMode('icon')}
-        >
-          Icons
-        </button>
-      </div>
-
-      {mode === 'emoji' ? (
-        <>
-          {/* Search */}
-          <input
-            ref={searchRef}
-            type="text"
-            className="notion-emoji-picker-search"
-            placeholder="Filter…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-
-          {/* Category tabs when not searching */}
-          {!search && (
-            <div className="notion-emoji-picker-tabs">
-              {categoryNames.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  className={`notion-emoji-picker-tab ${activeCategory === name ? 'notion-emoji-picker-tab--active' : ''}`}
-                  onClick={() => setActiveCategory(name)}
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Emoji grid */}
-          <div className="notion-emoji-picker-grid">
-            {filteredEmojis.map((emoji, i) => (
-              <button
-                key={`${emoji}-${i}`}
-                type="button"
-                className="notion-emoji-picker-item"
-                title={emoji}
-                onClick={() => handleEmojiClick(emoji)}
-              >
-                {emoji}
-              </button>
-            ))}
-            {filteredEmojis.length === 0 && (
-              <span style={{ gridColumn: '1/-1', textAlign: 'center', padding: 16, fontSize: 13, color: 'var(--color-ink-muted)' }}>
-                No emojis found
-              </span>
-            )}
-          </div>
-        </>
-      ) : (
-        /* SVG icon grid */
-        <div className="notion-emoji-picker-svg-grid">
-          {Object.entries(SVG_ICONS).map(([key, pathD]) => (
-            <button
-              key={key}
-              type="button"
-              className={`notion-emoji-picker-svg-item ${current === `svg:${key}` ? 'notion-cover-picker-item--active' : ''}`}
-              title={key}
-              onClick={() => handleSvgClick(key)}
-            >
-              <svg viewBox="0 0 24 24" dangerouslySetInnerHTML={{ __html: pathD }} />
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Footer with remove */}
-      <div className="notion-emoji-picker-footer">
-        <span>{current ? `Current: ${current.startsWith('svg:') ? current.slice(4) : current}` : 'No icon'}</span>
-        <button type="button" className="notion-emoji-picker-remove-btn" onClick={handleRemove}>
           Remove
         </button>
       </div>

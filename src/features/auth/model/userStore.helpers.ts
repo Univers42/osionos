@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import { api } from '@/shared/api/client';
+import { getCollectionEmojiValue } from '@/shared/lib/uiCollectionAssets';
 import type { StaticPersona, Workspace } from '@/entities/user';
 
 export const INITIAL_PERSONAS: StaticPersona[] = [
@@ -19,7 +20,7 @@ export const INITIAL_PERSONAS: StaticPersona[] = [
     email: 'admin@playground.local',
     password: 'playground123', // NOSONAR - demo/playground credential
     name: 'Dylan Admin',
-    emoji: '👑',
+    emoji: getCollectionEmojiValue('star'),
     roleBadge: 'Admin',
   },
   {
@@ -27,7 +28,7 @@ export const INITIAL_PERSONAS: StaticPersona[] = [
     email: 'alex@playground.local',
     password: 'playground123', // NOSONAR - demo/playground credential
     name: 'Alex Collaborator',
-    emoji: '🎨',
+    emoji: getCollectionEmojiValue('palette'),
     roleBadge: 'Member',
   },
   {
@@ -35,7 +36,7 @@ export const INITIAL_PERSONAS: StaticPersona[] = [
     email: 'sam@playground.local',
     password: 'playground123', // NOSONAR - demo/playground credential
     name: 'Sam Guest',
-    emoji: '👁️',
+    emoji: getCollectionEmojiValue('cool'),
     roleBadge: 'Guest',
   },
 ];

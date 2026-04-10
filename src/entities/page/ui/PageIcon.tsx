@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useState } from 'react';
-import { SVG_ICONS } from '@/shared/ui/molecules/EmojiPicker/constants';
+import { CollectionAsset } from '@/shared/lib/uiCollectionAssets';
 import { EmojiPicker } from '@/shared/ui';
 
 interface PageIconProps {
@@ -24,7 +24,7 @@ interface PageIconProps {
 }
 
 /**
- * Renders the large page icon (emoji or SVG).
+ * Renders the large page icon (emoji, package icon, or SVG/media asset).
  * Clicking opens the EmojiPicker.
  */
 export const PageIcon: React.FC<PageIconProps> = ({
@@ -36,10 +36,6 @@ export const PageIcon: React.FC<PageIconProps> = ({
 
   if (!icon) return null;
 
-  const isSvg = icon.startsWith('svg:');
-  const svgKey = isSvg ? icon.slice(4) : '';
-  const svgPath = isSvg ? SVG_ICONS[svgKey] : undefined;
-
   return (
     <div className="notion-page-icon-wrapper">
       <button
@@ -49,19 +45,7 @@ export const PageIcon: React.FC<PageIconProps> = ({
         aria-label="Change page icon"
         title="Click to change icon"
       >
-        {isSvg && svgPath ? (
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            dangerouslySetInnerHTML={{ __html: svgPath }}
-          />
-        ) : (
-          <span>{icon}</span>
-        )}
+        <CollectionAsset value={icon} size={78} />
       </button>
 
       {showPicker && (

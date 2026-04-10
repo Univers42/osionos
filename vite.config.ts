@@ -19,9 +19,26 @@ export default defineConfig(({ mode }) => {
       ),
     },
     resolve: {
-      alias: {
-        '@': path.resolve(root, 'src'),
-      },
+      alias: [
+        {
+          find: '@',
+          replacement: path.resolve(root, 'src'),
+        },
+        {
+          find: /^@univers42\/ui-collection$/,
+          replacement: path.resolve(
+            root,
+            '../UI-Collection/dist/library/index.js',
+          ),
+        },
+        {
+          find: /^@univers42\/ui-collection\/library\/components\/react\/asset-picker$/,
+          replacement: path.resolve(
+            root,
+            '../UI-Collection/dist/library/components/react/asset-picker/index.js',
+          ),
+        },
+      ],
     },
     build: {
       outDir: path.resolve(root, 'build'),
@@ -29,6 +46,12 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3001,
       host: '0.0.0.0',
+      fs: {
+        allow: [
+          root,
+          path.resolve(root, '../UI-Collection'),
+        ],
+      },
       watch: {
         usePolling: true,
       },

@@ -16,7 +16,13 @@
     "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@univers42/ui-collection": [
+        "../UI-Collection/dist/library/index.d.ts"
+      ],
+      "@univers42/ui-collection/library/components/react/asset-picker": [
+        "../UI-Collection/dist/library/components/react/asset-picker/index.d.ts"
+      ]
     }
   },
   "include": ["src"]

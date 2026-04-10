@@ -11,10 +11,16 @@
 /* ************************************************************************** */
 
 import React, { useCallback } from 'react';
-import { Image, Smile, MessageSquare } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 
 import { usePageStore } from '@/store/usePageStore';
-import { randomPageEmoji, COVER_PRESETS } from '@/shared/ui/molecules/EmojiPicker/constants';
+import {
+  CollectionAsset,
+  IconImage,
+  getCollectionEmojiValue,
+  randomUiCollectionCover,
+  randomUiCollectionEmoji,
+} from '@/shared/lib/uiCollectionAssets';
 
 import { PageCover, PageIcon, PageTitle } from '@/entities/page';
 import { PageBody } from './PageBody';
@@ -101,7 +107,7 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
   }, [pageId, activePage, openPage]);
 
   const handleAddIcon = useCallback(() => {
-    const emoji = randomPageEmoji();
+    const emoji = randomUiCollectionEmoji();
     handleChangeIcon(emoji);
   }, [handleChangeIcon]);
 
@@ -133,8 +139,10 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
   }, [pageId]);
 
   const handleAddCover = useCallback(() => {
-    const randomCover = COVER_PRESETS[Math.floor(Math.random() * COVER_PRESETS.length)];
-    handleChangeCover(randomCover);
+    const nextCover = randomUiCollectionCover();
+    if (nextCover) {
+      handleChangeCover(nextCover);
+    }
   }, [handleChangeCover]);
 
   /* ── Render ────────────────────────────────────────────────────── */
@@ -176,7 +184,7 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
               className="notion-page-toolbar-btn"
               onClick={handleAddIcon}
             >
-              <Smile size={14} />
+              <CollectionAsset value={getCollectionEmojiValue('sparkles')} size={14} />
               Add icon
             </button>
           )}
@@ -186,7 +194,7 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
               className="notion-page-toolbar-btn"
               onClick={handleAddCover}
             >
-              <Image size={14} />
+              <IconImage />
               Add cover
             </button>
           )}
