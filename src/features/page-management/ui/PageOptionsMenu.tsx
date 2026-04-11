@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { MoreHorizontal, Trash } from 'lucide-react';
 import { usePageStore } from '@/store/usePageStore';
 import { useUserStore } from '@/features/auth';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
+import { getAllDescendantIds } from '@/store/pageStore.helpers';
 
 import styles from './PageOptionsMenu.module.scss';
 
@@ -17,7 +18,7 @@ interface Props {
 export const PageOptionsMenu: React.FC<Props> = ({ 
   pageId, 
   pageTitle, 
-  isActivePage, 
+  isActivePage: _isActivePage, // We'll compute this based on store state for safety
   workspaceId: providedWorkspaceId,
   onRedirectHome 
 }) => {
@@ -26,12 +27,23 @@ export const PageOptionsMenu: React.FC<Props> = ({
   const menuRef = useRef<HTMLDivElement>(null);
 
   const jwt = useUserStore(s => s.activeJwt());
+  const activePageId = usePageStore(s => s.activePage?.id);
+  
   const storeWorkspaceId = usePageStore(s => 
     Object.keys(s.pages).find(wsId => s.pages[wsId].some(p => p._id === pageId))
   );
 
   const workspaceId = providedWorkspaceId || storeWorkspaceId;
+  const wsPages = usePageStore(s => workspaceId ? s.pages[workspaceId] : []);
+  
   const deletePage = usePageStore(s => s.deletePage);
+
+  // Memoize counts and descendants to avoid tree traversal on every render
+  const { descendantIds, subPageCount } = useMemo(() => {
+    if (!wsPages || !pageId) return { descendantIds: [], subPageCount: 0 };
+    const ids = getAllDescendantIds(wsPages, pageId);
+    return { descendantIds: ids, subPageCount: ids.length };
+  }, [wsPages, pageId]);
 
   useEffect(() => {
     if (!isMenuOpen) return;
@@ -58,8 +70,12 @@ export const PageOptionsMenu: React.FC<Props> = ({
     }
 
     try {
+      // Perform the deletion
       await deletePage(pageId, workspaceId, jwt ?? '');
-      if (isActivePage) {
+      
+      // Safety: If the deleted page OR any of its sub-pages was active, redirect home
+      const isDeletedActive = activePageId === pageId || descendantIds.includes(activePageId!);
+      if (isDeletedActive) {
         onRedirectHome();
       }
     } catch (err) {
@@ -99,6 +115,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
       {isModalOpen && (
         <ConfirmDeleteModal 
           title={pageTitle}
+          subPageCount={subPageCount}
           onConfirm={handleConfirmDelete} 
           onCancel={() => setIsModalOpen(false)} 
         />

@@ -5,6 +5,7 @@ interface Props {
   onConfirm: () => void;
   onCancel:  () => void;
   title?:     string;
+  subPageCount?: number;
 }
 
 /**
@@ -14,7 +15,8 @@ interface Props {
 export const ConfirmDeleteModal: React.FC<Props> = ({ 
   onConfirm, 
   onCancel, 
-  title = 'this page' 
+  title = 'this page',
+  subPageCount = 0
 }) => {
   return (
     <div 
@@ -42,10 +44,18 @@ export const ConfirmDeleteModal: React.FC<Props> = ({
 
         {/* Body */}
         <div className="px-4 py-5">
-          <p className="text-sm text-[var(--color-ink)] leading-relaxed">
-            Are you sure you want to delete <span className="font-semibold italic">{title}</span>? 
-            This action cannot be undone.
-          </p>
+          {subPageCount > 0 ? (
+            <div className="bg-[var(--color-text-danger)]/10 border border-[var(--color-text-danger)]/20 rounded p-3 mb-2">
+              <p className="text-sm text-[var(--color-text-danger)] font-medium leading-relaxed">
+                This page contains {subPageCount} sub-page{subPageCount > 1 ? 's' : ''}. Deleting it will permanently remove all its content.
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--color-ink)] leading-relaxed">
+              Are you sure you want to delete <span className="font-semibold italic">{title}</span>? 
+              This action cannot be undone.
+            </p>
+          )}
         </div>
 
         {/* Footer */}
