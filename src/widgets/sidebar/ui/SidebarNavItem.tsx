@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from 'react';
+import React, { useState } from 'react';
 
 interface Props {
   icon:     React.ReactNode;
@@ -20,6 +20,7 @@ interface Props {
   indent?:  number;                  // 0 = top-level
   subtle?:  boolean;                 // muted text for section-level items
   onClick:  () => void;
+  rightElement?: (hovered: boolean) => React.ReactNode;
 }
 
 /**
@@ -28,9 +29,10 @@ interface Props {
  * 14px font-size, 8px horizontal padding, 22×22 icon slot.
  */
 export const SidebarNavItem: React.FC<Props> = ({
-  icon, label, count, active = false, indent = 0, subtle = false, onClick,
+  icon, label, count, active = false, indent = 0, subtle = false, onClick, rightElement
 }) => {
-  const paddingLeft = 8 + indent * 12;
+  const [hovered, setHovered] = useState(false);
+  const paddingLeft = 10 + indent * 12;
 
   let stateClass: string;
   if (active) stateClass = 'bg-[var(--color-surface-tertiary)] text-[var(--color-ink)]';
@@ -38,9 +40,12 @@ export const SidebarNavItem: React.FC<Props> = ({
   else stateClass = 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]';
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       className={[
         'w-full flex items-center gap-2 rounded-[6px] text-[14px] select-none',
         'transition-colors duration-100 cursor-pointer',
@@ -56,11 +61,13 @@ export const SidebarNavItem: React.FC<Props> = ({
 
       <span className="flex-1 text-left truncate">{label}</span>
 
-      {count !== undefined && count > 0 && (
+      {rightElement ? (
+        rightElement(hovered)
+      ) : count !== undefined && count > 0 ? (
         <span className="text-[10px] font-semibold min-w-[16px] h-4 flex items-center justify-center rounded px-[3px] bg-red-500 text-white">
           {count}
         </span>
-      )}
-    </button>
+      ) : null}
+    </div>
   );
 };
