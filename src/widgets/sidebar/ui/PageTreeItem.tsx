@@ -12,8 +12,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { ChevronRight, Plus, MoreHorizontal } from 'lucide-react';
+import { AssetRenderer } from '@univers42/ui-collection';
 import { usePageStore, type PageEntry } from '@/store/usePageStore';
-import { CollectionAsset } from '@/shared/lib/uiCollectionAssets';
 
 interface Props {
   page:        PageEntry;
@@ -48,7 +48,7 @@ export const PageTreeItem: React.FC<Props> = ({
   const hasChildren = children.length > 0;
   const paddingLeft = 10 + depth * 12;
 
-  const fallbackIcon = page.databaseId ? 'ui-icon:table' : 'ui-icon:page';
+  const fallbackIcon = page.databaseId ? 'icon:table' : 'icon:page';
 
   function handleOpen(e: React.MouseEvent) {
     e.stopPropagation();
@@ -99,13 +99,13 @@ export const PageTreeItem: React.FC<Props> = ({
                 className={['transition-transform duration-150', expanded ? 'rotate-90' : ''].join(' ')}
               />
             )
-            : <CollectionAsset value={fallbackIcon} size={13} className="opacity-50" />}
+            : <AssetRenderer value={fallbackIcon} size={13} className="opacity-50" />}
         </button>
 
         {/* Page icon */}
         {page.icon
-          ? <CollectionAsset value={page.icon} size={14} className="shrink-0" />
-          : <CollectionAsset value={fallbackIcon} size={13} className="opacity-40 shrink-0" />}
+          ? <AssetRenderer value={page.icon} size={14} className="shrink-0" />
+          : <AssetRenderer value={fallbackIcon} size={13} className="opacity-40 shrink-0" />}
 
         {/* Title */}
         <span className="flex-1 text-left truncate ml-1">{page.title || 'Untitled'}</span>

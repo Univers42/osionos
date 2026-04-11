@@ -12,10 +12,10 @@
 
 import React, { useRef, useEffect } from 'react';
 import { Check } from 'lucide-react';
+import { AssetRenderer } from '@univers42/ui-collection';
 import { useUserStore } from '@/features/auth';
 import {
   COLLECTION_ROLE_BADGES,
-  CollectionAsset,
 } from '@/shared/lib/uiCollectionAssets';
 
 interface Props {
@@ -81,7 +81,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose }) => {
             ].join(' ')}
           >
             {/* Avatar emoji */}
-            <CollectionAsset value={p.emoji} size={20} />
+            <AssetRenderer value={p.emoji} size={20} />
 
             <span className="flex-1 min-w-0">
               <span className="flex items-center gap-1">
@@ -89,7 +89,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose }) => {
                   {p.name}
                 </span>
                 <span className="shrink-0">
-                  <CollectionAsset
+                  <AssetRenderer
                     value={
                       COLLECTION_ROLE_BADGES[p.roleBadge.toLowerCase()] ??
                       COLLECTION_ROLE_BADGES.guest

@@ -15,10 +15,9 @@
  */
 import React from 'react';
 import {
-  CollectionAssetBoard,
   IconBoard,
-  PAGE_ICON_PICKER_TABS,
 } from '@/shared/lib/uiCollectionAssets';
+import { CompactAssetPickerBoard } from '@/shared/ui';
 
 interface DatabaseBlockProps {
   databaseId?: string;
@@ -46,11 +45,10 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
       Package-backed board placeholder for table, board, and gallery views.
     </p>
     <div className="mt-4">
-      <CollectionAssetBoard
-        tabs={PAGE_ICON_PICKER_TABS}
+      <CompactAssetPickerBoard
         label="Selector de assets"
         width="100%"
-        onSelect={() => {
+        onSerializedValueChange={() => {
           // Placeholder until database view selection is wired to store state.
         }}
       />

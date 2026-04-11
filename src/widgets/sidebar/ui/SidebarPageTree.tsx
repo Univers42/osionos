@@ -12,12 +12,12 @@
 
 import React from 'react';
 import { Plus, Mail, CalendarRange, Monitor } from 'lucide-react';
+import { AssetRenderer } from '@univers42/ui-collection';
 
 import type { ActivePage, PageEntry } from '@/entities/page';
 import { SidebarNavItem }  from './SidebarNavItem';
 import { SidebarSection }  from './SidebarSection';
 import { PageTreeItem }    from './PageTreeItem';
-import { CollectionAsset } from '@/shared/lib/uiCollectionAssets';
 
 interface WorkspaceRef {
   _id: string;
@@ -53,8 +53,8 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
             <SidebarNavItem
               key={r.id}
               icon={r.icon
-                ? <CollectionAsset value={r.icon} size={14} />
-                : <CollectionAsset value="ui-icon:page" size={14} />
+                ? <AssetRenderer value={r.icon} size={14} />
+                : <AssetRenderer value="icon:page" size={14} />
               }
               label={r.title ?? 'Untitled'}
               active={activePage?.id === r.id}

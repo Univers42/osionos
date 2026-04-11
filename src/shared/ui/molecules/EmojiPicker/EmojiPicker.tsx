@@ -11,15 +11,12 @@
 /* ************************************************************************** */
 
 import React, { useCallback, useEffect, useRef } from 'react';
-import {
-  CollectionAssetBoard,
-  PAGE_ICON_PICKER_TABS,
-} from '@/shared/lib/uiCollectionAssets';
+import { CompactAssetPickerBoard } from '../AssetPickerBoard';
 
 interface EmojiPickerProps {
-  /** Currently selected icon (emoji string or `svg:key`). */
+  /** Currently selected icon as a canonical ui-collection value. */
   current?: string;
-  /** Called when user selects an emoji or SVG icon. */
+  /** Called when user selects an emoji, icon, or media asset. */
   onSelect: (icon: string) => void;
   /** Called when user removes the icon entirely. */
   onRemove: () => void;
@@ -81,25 +78,22 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
         left: 0,
       }}
     >
-      <CollectionAssetBoard
-        current={current}
-        tabs={PAGE_ICON_PICKER_TABS}
+      <CompactAssetPickerBoard
+        value={current}
         label="Selector de assets"
-        onSelect={handleSelect}
+        width={432}
+        onSerializedValueChange={handleSelect}
       />
-      <div
-        style={{
-          marginTop: 8,
-          display: 'flex',
-          justifyContent: 'flex-end',
-        }}
-      >
+      <div className="mt-2 flex justify-end">
         <button
           type="button"
-          className="notion-emoji-picker-remove-btn"
+          className={[
+            'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+            'text-[var(--color-ink-muted)] hover:bg-red-50 hover:text-red-600',
+          ].join(' ')}
           onClick={handleRemove}
         >
-          Remove
+          Remove icon
         </button>
       </div>
     </div>

@@ -11,11 +11,11 @@
 /* ************************************************************************** */
 
 import React, { useState } from 'react';
-import { CollectionAsset } from '@/shared/lib/uiCollectionAssets';
+import { AssetRenderer } from '@univers42/ui-collection';
 import { EmojiPicker } from '@/shared/ui';
 
 interface PageIconProps {
-  /** Current icon — emoji string, `svg:key`, or undefined. */
+  /** Current icon as a canonical ui-collection value. */
   icon?: string;
   /** Called when icon changes. */
   onChangeIcon: (icon: string) => void;
@@ -45,7 +45,7 @@ export const PageIcon: React.FC<PageIconProps> = ({
         aria-label="Change page icon"
         title="Click to change icon"
       >
-        <CollectionAsset value={icon} size={78} />
+        <AssetRenderer value={icon} size={78} />
       </button>
 
       {showPicker && (

@@ -12,10 +12,10 @@
 
 import React, { Suspense, useEffect } from 'react';
 import { Plus } from 'lucide-react';
+import { AssetRenderer } from '@univers42/ui-collection';
 
 import { ErrorBoundary }  from '@/shared/ui';
 import {
-  CollectionAsset,
   getCollectionEmojiValue,
 } from '@/shared/lib/uiCollectionAssets';
 import { DatabaseBlock }  from '@/widgets/database-view';
@@ -52,7 +52,7 @@ export const MainContent: React.FC = () => {
   if (!activePage) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-6 h-full bg-[var(--color-surface-primary)]">
-        <CollectionAsset
+        <AssetRenderer
           value={persona?.emoji ?? getCollectionEmojiValue('party')}
           size={40}
         />

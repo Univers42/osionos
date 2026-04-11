@@ -12,10 +12,10 @@
 
 import React, { useCallback } from 'react';
 import { MessageSquare } from 'lucide-react';
+import { AssetRenderer } from '@univers42/ui-collection';
 
 import { usePageStore } from '@/store/usePageStore';
 import {
-  CollectionAsset,
   IconImage,
   getCollectionEmojiValue,
   randomUiCollectionCover,
@@ -184,7 +184,7 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
               className="notion-page-toolbar-btn"
               onClick={handleAddIcon}
             >
-              <CollectionAsset value={getCollectionEmojiValue('sparkles')} size={14} />
+              <AssetRenderer value={getCollectionEmojiValue('sparkles')} size={14} />
               Add icon
             </button>
           )}

@@ -12,11 +12,11 @@
 
 import React, { useState } from 'react';
 import { ChevronDown, PenSquare } from 'lucide-react';
+import { AssetRenderer } from '@univers42/ui-collection';
 import { useUserStore } from '@/features/auth';
 import { usePageStore } from '@/store/usePageStore';
 import { UserSwitcherPanel } from '@/features/auth';
 import {
-  CollectionAsset,
   getCollectionEmojiValue,
 } from '@/shared/lib/uiCollectionAssets';
 
@@ -65,7 +65,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
         >
           {/* Avatar (rounded square, like Notion) */}
           <span className="flex items-center justify-center w-[22px] h-[22px] shrink-0 rounded text-base leading-none">
-            <CollectionAsset
+            <AssetRenderer
               value={persona?.emoji ?? getCollectionEmojiValue('package')}
               size={18}
             />

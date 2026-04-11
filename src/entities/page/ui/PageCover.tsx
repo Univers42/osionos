@@ -13,15 +13,18 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import {
-  CollectionAssetBoard,
+  COVER_PICKER_BOARD_PROPS,
   COVER_PICKER_TABS,
   IconImage,
-  isCollectionMediaRef,
-  resolveCollectionAsset,
 } from '@/shared/lib/uiCollectionAssets';
+import {
+  AssetPickerBoard,
+  resolveAssetValue,
+  resolveMediaUrl,
+} from '@univers42/ui-collection';
 
 interface PageCoverProps {
-  /** Current cover value — URL, CSS gradient, or ui-collection media ref. */
+  /** Current cover value — URL, CSS gradient, or canonical ui-collection media ref. */
   cover: string;
   /** Update the cover. */
   onChangeCover: (cover: string) => void;
@@ -42,9 +45,13 @@ export const PageCover: React.FC<PageCoverProps> = ({
   const pickerRef = useRef<HTMLDivElement>(null);
 
   const isGradient = cover.startsWith('linear-gradient') || cover.startsWith('radial-gradient');
-  const resolvedCover = isCollectionMediaRef(cover) ? resolveCollectionAsset(cover) : null;
+  const resolvedCover = isGradient ? undefined : resolveAssetValue(cover, COVER_PICKER_TABS);
   const isUrl = !isGradient;
-  const coverSrc = resolvedCover?.kind === 'media' ? resolvedCover.src : cover;
+  const coverSrc = resolvedCover?.mediaItem
+    ? resolveMediaUrl(resolvedCover.mediaItem.ref)
+    : resolvedCover?.preview?.kind === 'image'
+      ? resolvedCover.preview.src
+      : cover;
 
   /* Close picker on outside click */
   useEffect(() => {
@@ -118,13 +125,13 @@ export const PageCover: React.FC<PageCoverProps> = ({
           }}
         >
           {COVER_PICKER_TABS.length > 0 ? (
-            <CollectionAssetBoard
-              current={cover}
+            <AssetPickerBoard
+              {...COVER_PICKER_BOARD_PROPS}
               tabs={COVER_PICKER_TABS}
+              value={cover}
               label="Cover assets"
               width={380}
-              showTabs={false}
-              onSelect={handleSelect}
+              onSerializedValueChange={handleSelect}
             />
           ) : (
             <div className="notion-cover-picker">
