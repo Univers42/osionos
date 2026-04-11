@@ -54,14 +54,14 @@ export const PageOptionsMenu: React.FC<Props> = ({
   };
 
   const handleConfirmDelete = async () => {
-    if (!jwt || !workspaceId) {
-      console.error('[PageOptionsMenu] Missing JWT or workspaceId for deletion', { jwt, workspaceId });
+    if (!workspaceId) {
+      console.error('[PageOptionsMenu] Missing workspaceId for deletion', { workspaceId });
       setIsModalOpen(false);
       return;
     }
 
     try {
-      await deletePage(pageId, workspaceId, jwt);
+      await deletePage(pageId, workspaceId, jwt ?? '');
       if (isActivePage) {
         onRedirectHome();
       }

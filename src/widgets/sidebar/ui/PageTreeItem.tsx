@@ -72,8 +72,9 @@ export const PageTreeItem: React.FC<Props> = ({
 
   return (
     <>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={handleOpen}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -129,7 +130,7 @@ export const PageTreeItem: React.FC<Props> = ({
             </button>
           </span>
         )}
-      </button>
+      </div>
 
       {/* Recurse for children */}
       {expanded && hasChildren && children.map(child => (

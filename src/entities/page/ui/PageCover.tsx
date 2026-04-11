@@ -104,9 +104,9 @@ export const PageCover: React.FC<PageCoverProps> = ({
         <div ref={pickerRef} className="notion-cover-picker">
           <div className="notion-cover-picker-header">Gallery</div>
           <div className="notion-cover-picker-grid">
-            {COVER_PRESETS.map((preset: string) => (
+            {COVER_PRESETS.map((preset: string, index: number) => (
               <button
-                key={preset}
+                key={`${preset}-${index}`}
                 type="button"
                 className={`notion-cover-picker-item ${preset === cover ? "notion-cover-picker-item--active" : ""}`}
                 onClick={() => handleSelect(preset)}
