@@ -107,6 +107,13 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [prevFilter, setPrevFilter] = useState(filter);
+
+  // Reset index when filter changes (Synchronous reset during render)
+  if (filter !== prevFilter) {
+    setPrevFilter(filter);
+    setActiveIdx(0);
+  }
 
   const filtered = useMemo(() => {
     if (!filter) return SLASH_ITEMS;
