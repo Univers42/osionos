@@ -10,9 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ImageIcon, Trash2 } from 'lucide-react';
-import { COVER_PRESETS } from '@/shared/ui/molecules/EmojiPicker/constants';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ImageIcon, Trash2 } from "lucide-react";
+import { COVER_PRESETS } from "@/shared/ui/molecules/EmojiPicker/constants";
 
 interface PageCoverProps {
   /** Current cover value — URL or CSS gradient string. */
@@ -35,7 +35,8 @@ export const PageCover: React.FC<PageCoverProps> = ({
   const [showPicker, setShowPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
-  const isGradient = cover.startsWith('linear-gradient') || cover.startsWith('radial-gradient');
+  const isGradient =
+    cover.startsWith("linear-gradient") || cover.startsWith("radial-gradient");
   const isUrl = !isGradient;
 
   /* Close picker on outside click */
@@ -46,8 +47,8 @@ export const PageCover: React.FC<PageCoverProps> = ({
         setShowPicker(false);
       }
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, [showPicker]);
 
   const handleSelect = useCallback(
@@ -103,17 +104,17 @@ export const PageCover: React.FC<PageCoverProps> = ({
         <div ref={pickerRef} className="notion-cover-picker">
           <div className="notion-cover-picker-header">Gallery</div>
           <div className="notion-cover-picker-grid">
-            {COVER_PRESETS.map((preset: any, i: number) => (
+            {COVER_PRESETS.map((preset: string) => (
               <button
-                key={i}
+                key={preset}
                 type="button"
-                className={`notion-cover-picker-item ${preset === cover ? 'notion-cover-picker-item--active' : ''}`}
+                className={`notion-cover-picker-item ${preset === cover ? "notion-cover-picker-item--active" : ""}`}
                 onClick={() => handleSelect(preset)}
               >
                 <div
                   style={{
-                    width: '100%',
-                    height: '100%',
+                    width: "100%",
+                    height: "100%",
                     background: preset,
                     borderRadius: 2,
                   }}

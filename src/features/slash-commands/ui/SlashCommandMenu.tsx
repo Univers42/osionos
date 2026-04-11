@@ -14,8 +14,8 @@
  * SlashCommandMenu — slash command picker for the block editor.
  * Standalone replacement for @src/components/blocks/SlashCommandMenu.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { BlockType } from '@/entities/block';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import type { BlockType } from "@/entities/block";
 
 export interface SlashMenuItem {
   label: string;
@@ -26,19 +26,70 @@ export interface SlashMenuItem {
 }
 
 const SLASH_ITEMS: SlashMenuItem[] = [
-  { label: 'Text',           type: 'paragraph',       icon: 'T',  description: 'Plain text block' },
-  { label: 'Heading 1',      type: 'heading_1',       icon: 'H1', description: 'Large heading' },
-  { label: 'Heading 2',      type: 'heading_2',       icon: 'H2', description: 'Medium heading' },
-  { label: 'Heading 3',      type: 'heading_3',       icon: 'H3', description: 'Small heading' },
-  { label: 'Bulleted list',  type: 'bulleted_list',   icon: '•',  description: 'Bulleted list item' },
-  { label: 'Numbered list',  type: 'numbered_list',   icon: '1.',  description: 'Numbered list item' },
-  { label: 'To-do',          type: 'to_do',           icon: '☐',  description: 'Checkbox item' },
-  { label: 'Toggle',         type: 'toggle',          icon: '▶',  description: 'Collapsible content' },
-  { label: 'Code',           type: 'code',            icon: '</>',  description: 'Code block' },
-  { label: 'Quote',          type: 'quote',           icon: '"',  description: 'Block quote' },
-  { label: 'Callout',        type: 'callout',         icon: '💡', description: 'Callout block', calloutIcon: '💡' },
-  { label: 'Divider',        type: 'divider',         icon: '—',  description: 'Horizontal divider' },
-  { label: 'Table',          type: 'table_block',     icon: '⊞',  description: 'Simple table' },
+  {
+    label: "Text",
+    type: "paragraph",
+    icon: "T",
+    description: "Plain text block",
+  },
+  {
+    label: "Heading 1",
+    type: "heading_1",
+    icon: "H1",
+    description: "Large heading",
+  },
+  {
+    label: "Heading 2",
+    type: "heading_2",
+    icon: "H2",
+    description: "Medium heading",
+  },
+  {
+    label: "Heading 3",
+    type: "heading_3",
+    icon: "H3",
+    description: "Small heading",
+  },
+  {
+    label: "Bulleted list",
+    type: "bulleted_list",
+    icon: "•",
+    description: "Bulleted list item",
+  },
+  {
+    label: "Numbered list",
+    type: "numbered_list",
+    icon: "1.",
+    description: "Numbered list item",
+  },
+  { label: "To-do", type: "to_do", icon: "☐", description: "Checkbox item" },
+  {
+    label: "Toggle",
+    type: "toggle",
+    icon: "▶",
+    description: "Collapsible content",
+  },
+  { label: "Code", type: "code", icon: "</>", description: "Code block" },
+  { label: "Quote", type: "quote", icon: '"', description: "Block quote" },
+  {
+    label: "Callout",
+    type: "callout",
+    icon: "💡",
+    description: "Callout block",
+    calloutIcon: "💡",
+  },
+  {
+    label: "Divider",
+    type: "divider",
+    icon: "—",
+    description: "Horizontal divider",
+  },
+  {
+    label: "Table",
+    type: "table_block",
+    icon: "⊞",
+    description: "Simple table",
+  },
 ];
 
 interface SlashCommandMenuProps {
@@ -66,33 +117,46 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
         item.type.toLowerCase().includes(lower),
     );
   }, [filter]);
-
-  // Reset index when filter changes
-  useEffect(() => { setActiveIdx(0); }, [filter]);
+  const effectiveActiveIdx = Math.min(
+    activeIdx,
+    Math.max(filtered.length - 1, 0),
+  );
 
   // Click outside → close
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
 
   // Keyboard navigation (captured globally since focus stays in contentEditable)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return; }
-      if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, filtered.length - 1)); return; }
-      if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); return; }
-      if (e.key === 'Enter') {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key === "ArrowDown") {
         e.preventDefault();
-        if (filtered[activeIdx]) onSelect(filtered[activeIdx]);
+        setActiveIdx((i) => Math.min(i + 1, filtered.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIdx((i) => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (filtered[effectiveActiveIdx])
+          onSelect(filtered[effectiveActiveIdx]);
       }
     };
-    document.addEventListener('keydown', handler, true);
-    return () => document.removeEventListener('keydown', handler, true);
-  }, [filtered, activeIdx, onSelect, onClose]);
+    document.addEventListener("keydown", handler, true);
+    return () => document.removeEventListener("keydown", handler, true);
+  }, [filtered, effectiveActiveIdx, onSelect, onClose]);
 
   if (filtered.length === 0) return null;
 
@@ -110,7 +174,9 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           key={item.type}
           type="button"
           className={`w-full flex items-center gap-3 px-3 py-1.5 text-left transition-colors ${
-            idx === activeIdx ? 'bg-[var(--color-surface-hover)]' : 'hover:bg-[var(--color-surface-hover)]'
+            idx === effectiveActiveIdx
+              ? "bg-[var(--color-surface-hover)]"
+              : "hover:bg-[var(--color-surface-hover)]"
           }`}
           onMouseEnter={() => setActiveIdx(idx)}
           onClick={() => onSelect(item)}
@@ -119,8 +185,12 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
             {item.icon}
           </span>
           <span className="flex-1 min-w-0">
-            <span className="block text-sm text-[var(--color-ink)]">{item.label}</span>
-            <span className="block text-xs text-[var(--color-ink-muted)] truncate">{item.description}</span>
+            <span className="block text-sm text-[var(--color-ink)]">
+              {item.label}
+            </span>
+            <span className="block text-xs text-[var(--color-ink-muted)] truncate">
+              {item.description}
+            </span>
           </span>
         </button>
       ))}

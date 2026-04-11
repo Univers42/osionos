@@ -275,7 +275,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
   const isDragged = draggedBlockId === block.id;
 
   return (
-    <div
+    <div // NOSONAR - drag/drop wrapper cannot be a native interactive element due nested contentEditable controls
       className={`group/block relative transition-opacity ${isDragged ? "opacity-40" : ""}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}

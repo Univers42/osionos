@@ -10,16 +10,19 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback } from 'react';
-import { Image, Smile, MessageSquare } from 'lucide-react';
+import React, { useCallback } from "react";
+import { Image, Smile, MessageSquare } from "lucide-react";
 
-import { usePageStore } from '@/store/usePageStore';
-import { randomPageEmoji, COVER_PRESETS } from '@/shared/ui/molecules/EmojiPicker/constants';
+import { usePageStore } from "@/store/usePageStore";
+import {
+  randomPageEmoji,
+  COVER_PRESETS,
+} from "@/shared/ui/molecules/EmojiPicker/constants";
 
-import { PageCover, PageIcon, PageTitle } from '@/entities/page';
-import { PageBody } from './PageBody';
+import { PageCover, PageIcon, PageTitle } from "@/entities/page";
+import { PageBody } from "./PageBody";
 
-import './notionPage.css';
+import "./notionPage.css";
 
 interface NotionPageProps {
   pageId: string;
@@ -47,10 +50,9 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
   const activePage = usePageStore((s) => s.activePage);
   const openPage = usePageStore((s) => s.openPage);
   const updatePageTitle = usePageStore((s) => s.updatePageTitle);
-  const updateBlock = usePageStore((s) => s.updateBlock);
 
   /* ── Page metadata from store ──────────────────────────────────── */
-  const title = page?.title ?? activePage?.title ?? '';
+  const title = page?.title ?? activePage?.title ?? "";
   const icon = page?.icon ?? activePage?.icon;
   const cover = page?.cover;
 
@@ -133,7 +135,8 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
   }, [pageId]);
 
   const handleAddCover = useCallback(() => {
-    const randomCover = COVER_PRESETS[Math.floor(Math.random() * COVER_PRESETS.length)];
+    const randomCover =
+      COVER_PRESETS[Math.floor(Math.random() * COVER_PRESETS.length)];
     handleChangeCover(randomCover);
   }, [handleChangeCover]);
 
@@ -156,7 +159,9 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
       {/* Header: icon + toolbar + title */}
       <div
         className={`notion-page-header ${
-          hasCover ? 'notion-page-header--with-cover' : 'notion-page-header--no-cover'
+          hasCover
+            ? "notion-page-header--with-cover"
+            : "notion-page-header--no-cover"
         }`}
       >
         {/* Page icon */}
@@ -193,7 +198,9 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
           <button
             type="button"
             className="notion-page-toolbar-btn"
-            onClick={() => { /* Future: add comment */ }}
+            onClick={() => {
+              /* Future: add comment */
+            }}
           >
             <MessageSquare size={14} />
             Add comment

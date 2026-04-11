@@ -10,7 +10,7 @@ Act as a **Senior Backend Developer specializing in TypeScript** within the `osi
 - **Goal:** Enhance the markdown copy-paste logic to correctly parse and render code blocks with syntax highlighting, as well as other common markdown elements.
 - **Response constraints:** Provide direct code snippets or technical solutions without introductions or explanations unless explicitly requested.
 
-### 1. Copy-Paste Markdown Interpretation (MVP)
-The markdown copy-paste functionality does not correctly interpret code blocks, lists, or other markdown features.
-- **Objective:** Enhance the markdown copy-paste logic to correctly parse and render code blocks with syntax highlighting, as well as other common markdown elements.
-- **Action:** Implement proper parsing and rendering logic for each markdown element.
+### 1. Code Quality and Best Practices
+- **Current Issue:** The existing codebase should adhere to TypeScript best practices, including strict typing and proper module resolution.
+- **Objective:** Getting zero errors or warning from SonarQube and when executing typecheck and linting processes (`make typecheck` and `make lint`).
+- **Action:** Fix the type errors and linting warnings.

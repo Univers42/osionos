@@ -1,13 +1,13 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import test from "node:test";
+import assert from "node:assert/strict";
 
-const {
+import {
   compileMarkdownToHtml,
   incrementalParse,
   parseInlines,
   parseMarkdown,
   renderHtml,
-} = require("../dist/markdown.js");
+} from "../dist/markdown.js";
 
 test("parses blocks into an AST", () => {
   const source = [
