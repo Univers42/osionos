@@ -21,7 +21,8 @@ export const ToggleBlockEditor: React.FC<{
   block: Block;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
-}> = ({ block, onChange, onKeyDown }) => {
+  onRequestSlashMenu?: (position: { x: number; y: number }) => void;
+}> = ({ block, onChange, onKeyDown, onRequestSlashMenu }) => {
   const [expanded, setExpanded] = useState(!block.collapsed);
 
   return (
@@ -47,6 +48,7 @@ export const ToggleBlockEditor: React.FC<{
             placeholder="Toggle"
             onChange={onChange}
             onKeyDown={onKeyDown}
+            onRequestSlashMenu={onRequestSlashMenu}
           />
         </div>
       </div>

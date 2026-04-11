@@ -32,6 +32,8 @@ export type InlineNode =
   | { type: 'bold_italic'; children: InlineNode[] }
   | { type: 'strikethrough'; children: InlineNode[] }
   | { type: 'underline'; children: InlineNode[] }
+  | { type: 'text_color'; color: string; children: InlineNode[] }
+  | { type: 'background_color'; color: string; children: InlineNode[] }
   | { type: 'code'; value: string }
   | { type: 'link'; href: string; title?: string; children: InlineNode[] }
   | { type: 'image'; src: string; alt: string; title?: string }
@@ -96,7 +98,8 @@ export interface DefinitionItem {
 export function isInlineNode(node: any): node is InlineNode {
   return node && typeof node.type === 'string' && [
     'text', 'bold', 'italic', 'bold_italic', 'strikethrough', 'underline',
-    'code', 'link', 'image', 'line_break', 'highlight', 'math_inline',
+    'text_color', 'background_color', 'code', 'link', 'image',
+    'line_break', 'highlight', 'math_inline',
     'footnote_ref', 'emoji',
   ].includes(node.type);
 }

@@ -21,7 +21,8 @@ export const TodoBlockEditor: React.FC<{
   block: Block;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
-}> = ({ block, onChange, onKeyDown }) => {
+  onRequestSlashMenu?: (position: { x: number; y: number }) => void;
+}> = ({ block, onChange, onKeyDown, onRequestSlashMenu }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
   const page = usePageStore((s) => s.activePage);
 
@@ -66,6 +67,7 @@ export const TodoBlockEditor: React.FC<{
           placeholder="To-do"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onRequestSlashMenu={onRequestSlashMenu}
         />
       </div>
     </div>

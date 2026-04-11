@@ -48,6 +48,13 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     registerBlockRef,
   } = usePlaygroundBlockEditor(pageId);
 
+  const handleRequestSlashMenu = useCallback(
+    (blockId: string, position: { x: number; y: number }) => {
+      setSlashMenu({ blockId, position, filter: '' });
+    },
+    [setSlashMenu],
+  );
+
   if (blocks.length === 0) {
     return (
       <button
@@ -75,6 +82,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
         onKeyDown={handleKeyDown}
         onDeleteBlock={(blockId: string) => deleteBlock(pageId, blockId)}
         registerRef={registerBlockRef}
+        onRequestSlashMenu={handleRequestSlashMenu}
       />
 
       <button
@@ -120,6 +128,7 @@ interface BlockTreeProps {
   onKeyDown: (e: React.KeyboardEvent, blockId: string, blocks: Block[]) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
+  onRequestSlashMenu: (blockId: string, position: { x: number; y: number }) => void;
 }
 
 const BlockTree: React.FC<BlockTreeProps> = ({
@@ -134,6 +143,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
   onKeyDown,
   onDeleteBlock,
   registerRef,
+  onRequestSlashMenu,
 }) => {
   let numberedCounter = 0;
 
@@ -164,6 +174,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 onKeyDown={onKeyDown}
                 onDeleteBlock={onDeleteBlock}
                 registerRef={registerRef}
+                onRequestSlashMenu={onRequestSlashMenu}
               />
             </DraggablePlaygroundBlock>
 
@@ -179,6 +190,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 onKeyDown={onKeyDown}
                 onDeleteBlock={onDeleteBlock}
                 registerRef={registerRef}
+                onRequestSlashMenu={onRequestSlashMenu}
               />
             )}
           </div>
@@ -318,6 +330,7 @@ interface EditableBlockProps {
   onKeyDown: (e: React.KeyboardEvent, blockId: string, blocks: Block[]) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
+  onRequestSlashMenu: (blockId: string, position: { x: number; y: number }) => void;
 }
 
 const EditableBlock: React.FC<EditableBlockProps> = ({
@@ -329,6 +342,7 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
   onKeyDown,
   onDeleteBlock,
   registerRef,
+  onRequestSlashMenu,
 }) => {
   const handleChange = useCallback(
     (text: string) => onChange(block.id, text, blocks),
@@ -354,6 +368,7 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
         onChange={handleChange}
         onKeyDown={handleKey}
         onDeleteCodeBlock={() => onDeleteBlock(block.id)}
+        onRequestSlashMenu={(position) => onRequestSlashMenu(block.id, position)}
       />
     </div>
   );

@@ -61,6 +61,7 @@ interface BlockEditorProps {
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onDeleteCodeBlock?: () => void;
+  onRequestSlashMenu?: (position: { x: number; y: number }) => void;
 }
 
 export const BlockEditor: React.FC<BlockEditorProps> = ({
@@ -70,6 +71,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   onChange,
   onKeyDown,
   onDeleteCodeBlock,
+  onRequestSlashMenu,
 }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -183,6 +185,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 1"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onRequestSlashMenu={onRequestSlashMenu}
         />
       );
     case "heading_2":
@@ -193,6 +196,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 2"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onRequestSlashMenu={onRequestSlashMenu}
         />
       );
     case "heading_3":
@@ -203,6 +207,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 3"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onRequestSlashMenu={onRequestSlashMenu}
         />
       );
 
@@ -214,6 +219,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 4"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onRequestSlashMenu={onRequestSlashMenu}
         />
       );
 
@@ -225,6 +231,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 5"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onRequestSlashMenu={onRequestSlashMenu}
         />
       );
 
@@ -236,6 +243,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 6"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onRequestSlashMenu={onRequestSlashMenu}
         />
       );
 
@@ -247,6 +255,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Type '/' for commands…"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onRequestSlashMenu={onRequestSlashMenu}
         />
       );
 
@@ -263,6 +272,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               placeholder="List item"
               onChange={onChange}
               onKeyDown={onKeyDown}
+              onRequestSlashMenu={onRequestSlashMenu}
             />
           </div>
         </div>
@@ -281,6 +291,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               placeholder="List item"
               onChange={onChange}
               onKeyDown={onKeyDown}
+              onRequestSlashMenu={onRequestSlashMenu}
             />
           </div>
         </div>
@@ -292,6 +303,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           block={block}
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onRequestSlashMenu={onRequestSlashMenu}
         />
       );
 
@@ -301,6 +313,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           block={block}
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onRequestSlashMenu={onRequestSlashMenu}
         />
       );
 
@@ -428,6 +441,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               placeholder="Quote…"
               onChange={onChange}
               onKeyDown={onKeyDown}
+              onRequestSlashMenu={onRequestSlashMenu}
             />
           </div>
         </div>
@@ -452,6 +466,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               placeholder="Input text…"
               onChange={onChange}
               onKeyDown={onKeyDown}
+              onRequestSlashMenu={onRequestSlashMenu}
             />
           </div>
         </div>
@@ -497,6 +512,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Type something…"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onRequestSlashMenu={onRequestSlashMenu}
         />
       );
   }

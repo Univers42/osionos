@@ -2,6 +2,7 @@
 import type { BlockType, Block } from '@/entities/block';
 import type { InlineNode } from './ast';
 import { parse, parseInline } from './parser';
+import { getInlineColorOption } from '../../inlineTextStyles';
 
 export type { BlockDetection } from './shortcutsDetect';
 export { BLOCK_SHORTCUTS, detectBlockType } from './shortcutsDetect';
@@ -17,13 +18,23 @@ function renderInlineNodesToHtml(nodes: InlineNode[]): string {
   return nodes.map(node => {
     switch (node.type) {
       case 'text': return escHtml(node.value);
-      case 'bold': return `<strong>${renderInlineNodesToHtml(node.children)}</strong>`;
-      case 'italic': return `<em style="font-style:italic">${renderInlineNodesToHtml(node.children)}</em>`;
-      case 'bold_italic': return `<strong><em style="font-style:italic">${renderInlineNodesToHtml(node.children)}</em></strong>`;
-      case 'strikethrough': return `<del>${renderInlineNodesToHtml(node.children)}</del>`;
+      case 'bold': return `<strong data-inline-type="bold">${renderInlineNodesToHtml(node.children)}</strong>`;
+      case 'italic': return `<em data-inline-type="italic" style="font-style:italic">${renderInlineNodesToHtml(node.children)}</em>`;
+      case 'bold_italic': return `<strong data-inline-type="bold"><em data-inline-type="italic" style="font-style:italic">${renderInlineNodesToHtml(node.children)}</em></strong>`;
+      case 'strikethrough': return `<del data-inline-type="strikethrough">${renderInlineNodesToHtml(node.children)}</del>`;
       case 'underline': return `<u>${renderInlineNodesToHtml(node.children)}</u>`;
-      case 'code': return `<code class="inline-code" style="${inlineCodeStyle}">${escHtml(node.value)}</code>`;
-      case 'link': return `<a href="${escHtml(node.href)}">${renderInlineNodesToHtml(node.children)}</a>`;
+      case 'text_color': {
+        const color = getInlineColorOption(node.color)?.textColor;
+        if (!color) return renderInlineNodesToHtml(node.children);
+        return `<span data-inline-type="text_color" data-inline-color="${escHtml(node.color)}" style="color:${color}">${renderInlineNodesToHtml(node.children)}</span>`;
+      }
+      case 'background_color': {
+        const color = getInlineColorOption(node.color)?.backgroundColor;
+        if (!color) return renderInlineNodesToHtml(node.children);
+        return `<span data-inline-type="background_color" data-inline-color="${escHtml(node.color)}" style="background:${color};border-radius:4px;padding:0 0.2em;">${renderInlineNodesToHtml(node.children)}</span>`;
+      }
+      case 'code': return `<code data-inline-type="code" class="inline-code" style="${inlineCodeStyle}">${escHtml(node.value)}</code>`;
+      case 'link': return `<a data-inline-type="link" href="${escHtml(node.href)}">${renderInlineNodesToHtml(node.children)}</a>`;
       case 'image': return `<img src="${escHtml(node.src)}" alt="${escHtml(node.alt)}" />`;
       case 'highlight': return `<mark>${renderInlineNodesToHtml(node.children)}</mark>`;
       case 'math_inline': return `<span class="math-inline">${escHtml(node.value)}</span>`;
@@ -100,7 +111,7 @@ function inlineToPlain(nodes: InlineNode[]): string {
     switch (n.type) {
       case 'text': return n.value;
       case 'bold': case 'italic': case 'bold_italic': case 'strikethrough':
-      case 'underline': case 'highlight':
+      case 'underline': case 'highlight': case 'text_color': case 'background_color':
         return inlineToPlain(n.children);
       case 'code': return n.value;
       case 'link': return inlineToPlain(n.children);
