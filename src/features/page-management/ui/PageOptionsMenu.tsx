@@ -10,6 +10,7 @@ interface Props {
   pageId: string;
   pageTitle: string;
   isActivePage: boolean;
+  workspaceId?: string;
   onRedirectHome: () => void;
 }
 
@@ -17,6 +18,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
   pageId, 
   pageTitle, 
   isActivePage, 
+  workspaceId: providedWorkspaceId,
   onRedirectHome 
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -24,9 +26,11 @@ export const PageOptionsMenu: React.FC<Props> = ({
   const menuRef = useRef<HTMLDivElement>(null);
 
   const jwt = useUserStore(s => s.activeJwt());
-  const workspaceId = usePageStore(s => 
+  const storeWorkspaceId = usePageStore(s => 
     Object.keys(s.pages).find(wsId => s.pages[wsId].some(p => p._id === pageId))
   );
+
+  const workspaceId = providedWorkspaceId || storeWorkspaceId;
   const deletePage = usePageStore(s => s.deletePage);
 
   useEffect(() => {
@@ -47,10 +51,19 @@ export const PageOptionsMenu: React.FC<Props> = ({
   };
 
   const handleConfirmDelete = async () => {
-    if (!workspaceId) return;
+    if (!workspaceId) {
+      console.error('[PageOptionsMenu] Missing workspaceId for deletion', { workspaceId });
+      setIsModalOpen(false);
+      return;
+    }
+
     try {
       await deletePage(pageId, workspaceId, jwt ?? '');
-      if (isActivePage) onRedirectHome();
+      if (isActivePage) {
+        onRedirectHome();
+      }
+    } catch (err) {
+      console.error('[PageOptionsMenu] Failed to delete page', err);
     } finally {
       setIsModalOpen(false);
     }
@@ -65,6 +78,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
           isMenuOpen ? styles.active : ''
         ].join(' ')}
         onClick={() => setIsMenuOpen(!isMenuOpen)}
+        title="Page options"
       >
         <MoreHorizontal size={13} />
       </button>

@@ -75,6 +75,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
                   <span className="flex items-center gap-0.5 mr-0.5 shrink-0" onClick={e => e.stopPropagation()}>
                     <PageOptionsMenu
                       pageId={r.id}
+                      workspaceId={r.workspaceId}
                       pageTitle={r.title || 'Untitled'}
                       isActivePage={activePage?.id === r.id}
                       onRedirectHome={() => usePageStore.setState({ activePage: null })}
