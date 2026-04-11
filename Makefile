@@ -6,7 +6,7 @@
 #    By: sergio <sergio@student.42.fr>              +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/04/08 19:07:11 by dlesieur          #+#    #+#              #
-#    Updated: 2026/04/11 11:51:58 by sergio           ###   ########.fr        #
+#    Updated: 2026/04/11 12:07:18 by sergio           ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -78,6 +78,15 @@ lint-fix: ## Automatically fix linting errors where possible
 	@echo -e "$(CYAN)Fixing lint errors…$(RESET)"
 	npx eslint src/ --fix
 	@echo -e "$(GREEN)✔ Lint fix complete$(RESET)"
+
+sonar: ## Run SonarQube Scan (requires SonarQube container up)
+	@echo -e "$(CYAN)Step: SonarQube Scan…$(RESET)"
+	@if [ "$$(docker ps -q -f name=sonarqube)" ]; then \
+		echo -e "$(CYAN)Running Sonar scanner…$(RESET)"; \
+		npx sonar-scanner || echo -e "$(RED)✘ Sonar scan failed$(RESET)"; \
+	else \
+		echo -e "$(YELLOW)⚠ SonarQube container not running, skipping scan$(RESET)"; \
+	fi
 
 audit: ## Full analysis: Typecheck + Lint + SonarQube (requires SonarQube up)
 	@echo -e "$(CYAN)══════════════════════════════════════════════════$(RESET)"
@@ -156,4 +165,4 @@ update-submodules: ## Update git submodules (if any)
 
 .PHONY: help install dev dev-docker up stop down build typecheck \
         db-up db-shell db-reset re clean logs logs-vite logs-mongo \
-        kill-ports status lint lint-fix audit ci
+        kill-ports status lint lint-fix audit ci sonar
