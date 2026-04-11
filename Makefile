@@ -3,10 +3,10 @@
 #                                                         :::      ::::::::    #
 #    Makefile                                           :+:      :+:    :+:    #
 #                                                     +:+ +:+         +:+      #
-#    By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+         #
+#    By: sergio <sergio@student.42.fr>              +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/04/08 19:07:11 by dlesieur          #+#    #+#              #
-#    Updated: 2026/04/08 19:29:07 by dlesieur         ###   ########.fr        #
+#    Updated: 2026/04/11 12:07:18 by sergio           ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -66,6 +66,44 @@ typecheck: ## Run TypeScript type-checking
 	@echo -e "$(CYAN)Type-checking…$(RESET)"
 	npx tsc --noEmit
 	@echo -e "$(GREEN)✔ No type errors$(RESET)"
+
+# ── Analysis & Quality ──────────────────────────────────────────────────
+
+lint: ## Run ESLint with zero-tolerance for warnings
+	@echo -e "$(CYAN)Linting all source files…$(RESET)"
+	npx eslint src/ --max-warnings=0
+	@echo -e "$(GREEN)✔ No lint errors$(RESET)"
+
+lint-fix: ## Automatically fix linting errors where possible
+	@echo -e "$(CYAN)Fixing lint errors…$(RESET)"
+	npx eslint src/ --fix
+	@echo -e "$(GREEN)✔ Lint fix complete$(RESET)"
+
+sonar: ## Run SonarQube Scan (requires SonarQube container up)
+	@echo -e "$(CYAN)Step: SonarQube Scan…$(RESET)"
+	@if [ "$$(docker ps -q -f name=sonarqube)" ]; then \
+		echo -e "$(CYAN)Running Sonar scanner…$(RESET)"; \
+		npx sonar-scanner || echo -e "$(RED)✘ Sonar scan failed$(RESET)"; \
+	else \
+		echo -e "$(YELLOW)⚠ SonarQube container not running, skipping scan$(RESET)"; \
+	fi
+
+audit: ## Full analysis: Typecheck + Lint + SonarQube (requires SonarQube up)
+	@echo -e "$(CYAN)══════════════════════════════════════════════════$(RESET)"
+	@echo -e "$(CYAN)  Full Audit — TypeScript + ESLint + SonarQube    $(RESET)"
+	@echo -e "$(CYAN)══════════════════════════════════════════════════$(RESET)"
+	@$(MAKE) typecheck
+	@$(MAKE) lint
+	@echo -e "$(CYAN)Step 3/3: SonarQube Scan…$(RESET)"
+	@if [ "$$(docker ps -q -f name=sonarqube)" ]; then \
+		echo -e "$(CYAN)Running Sonar scanner…$(RESET)"; \
+		# Comando para ejecutar el scanner (ajusta la ruta si tienes sonar-scanner local) \
+		npx sonar-scanner || echo -e "$(RED)✘ Sonar scan failed$(RESET)"; \
+	else \
+		echo -e "$(YELLOW)⚠ SonarQube container not running, skipping scan$(RESET)"; \
+	fi
+
+ci: typecheck lint ## Run the same checks as GitHub Actions locally
 
 # ── Database ─────────────────────────────────────────────────────────────
 
@@ -127,4 +165,4 @@ update-submodules: ## Update git submodules (if any)
 
 .PHONY: help install dev dev-docker up stop down build typecheck \
         db-up db-shell db-reset re clean logs logs-vite logs-mongo \
-        kill-ports status
+        kill-ports status lint lint-fix audit ci sonar
