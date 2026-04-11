@@ -12,7 +12,7 @@
 
 import { api } from '@/shared/api/client';
 import { SEED_PAGES } from '../data/seedPages';
-import { seedToEntry, localId, updatePageInState, isMongoId } from './pageStore.helpers';
+import { seedToEntry, localId, updatePageInState, isMongoId, saveRecents } from './pageStore.helpers';
 import type { PageEntry, PageStore } from '@/entities/page';
 
 type SetFn = (partial: Partial<PageStore> | ((s: PageStore) => Partial<PageStore>)) => void;
@@ -148,11 +148,18 @@ export function createDeletePage(set: SetFn) {
     if (jwt && isMongoId(pageId)) {
       try { await api.delete(`/api/pages/${pageId}`, jwt); } catch { /* silent */ }
     }
-    set(s => ({
-      pages: {
-        ...s.pages,
-        [workspaceId]: (s.pages[workspaceId] ?? []).filter(p => p._id !== pageId),
-      },
-    }));
+    set(s => {
+      const newRecents = s.recents.filter(r => r.id !== pageId);
+      if (newRecents.length !== s.recents.length) {
+        saveRecents(newRecents);
+      }
+      return {
+        pages: {
+          ...s.pages,
+          [workspaceId]: (s.pages[workspaceId] ?? []).filter(p => p._id !== pageId),
+        },
+        recents: newRecents,
+      };
+    });
   };
 }

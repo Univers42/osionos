@@ -2,22 +2,20 @@
   position: absolute;
   right: 0;
   top: calc(100% + 5px);
-  width: 180px; // Un poco más ancho como en Notion
+  width: 200px;
   
-  // FUERZA EL COLOR SÓLIDO (Evita la transparencia)
-  background-color: #202020; // Un gris oscuro sólido (ajusta según tu paleta)
+  background-color: #202020;
   
-  border: 1px solid rgba(255, 255, 255, 0.05); // Borde casi invisible pero que define
-  border-radius: 8px; // Bordes redondeados suaves
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
   
-  // SOMBRA NOTION: Muy suave y expandida
   box-shadow: 
     0 0 0 1px rgba(15, 15, 15, 0.05), 
     0 3px 6px rgba(15, 15, 15, 0.1), 
     0 9px 24px rgba(15, 15, 15, 0.2);
     
   z-index: 10000;
-  padding: 6px; // Espaciado interno para los items
+  padding: 6px;
   animation: scaleIn 0.1s ease-out;
 }
 
@@ -26,26 +24,25 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 4px 8px; // Más compacto
+  padding: 4px 8px;
   font-size: 14px;
   border-radius: 4px;
-  color: rgba(255, 255, 255, 0.8); // Texto ligeramente grisáceo
+  color: rgba(255, 255, 255, 0.8);
   transition: background-color 0.1s ease;
   cursor: pointer;
   background: none;
   border: none;
 
   &:hover {
-    background-color: rgba(255, 255, 255, 0.05); // Hover muy sutil
+    background-color: rgba(255, 255, 255, 0.05);
     color: white;
   }
 
   svg {
-    opacity: 0.6; // Los iconos en Notion son más tenues que el texto
+    opacity: 0.6;
   }
 
   &.danger {
-    // Solo cambia el color al hacer hover o mantenlo sutil
     &:hover {
       color: #eb5757; 
       svg { color: #eb5757; opacity: 1; }
