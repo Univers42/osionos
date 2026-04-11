@@ -1,12 +1,12 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   NotionSidebar.tsx                                  :+:      :+:    :+:   */
+/*   Sidebar.tsx                                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 01:31:17 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/11 15:00:00 by gemini-cli       ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,26 +14,30 @@ import React, { useEffect, useMemo, useState } from 'react';
 
 import { useUserStore }  from '@/features/auth';
 import { usePageStore }  from '@/store/usePageStore';
+import { useUIStore }    from '@/shared/config/uiStore';
 import { WorkspaceSwitcher } from '@/features/auth';
 import { SidebarTopNav }     from './SidebarTopNav';
 import { SidebarPageTree }   from './SidebarPageTree';
 import { SidebarFooter }     from './SidebarFooter';
+
+import styles from './Sidebar.module.scss';
 
 interface Props {
   onOpenHome?:     () => void;
   onOpenSettings?: () => void;
 }
 
-/** Renders the 275px Notion-style sidebar with navigation, page tree, and user switching. */
-export const NotionSidebar: React.FC<Props> = ({ onOpenHome, onOpenSettings }) => {
+/** Renders the Notion-style sidebar with navigation, page tree, and user switching. */
+export const Sidebar: React.FC<Props> = ({ onOpenHome, onOpenSettings }) => {
   const session        = useUserStore(s => s.activeSession());
-  const _persona       = useUserStore(s => s.activePersona());
   const activePage     = usePageStore(s => s.activePage);
   const recents        = usePageStore(s => s.recents);
   const fetchPages     = usePageStore(s => s.fetchPages);
   const openPage       = usePageStore(s => s.openPage);
   const addPage        = usePageStore(s => s.addPage);
   const pagesForWs     = usePageStore(s => s.pagesForWorkspace);
+
+  const isSidebarOpen  = useUIStore(s => s.isSidebarOpen);
 
   const [showInviteCTA, setShowInviteCTA] = useState(true);
 
@@ -60,8 +64,10 @@ export const NotionSidebar: React.FC<Props> = ({ onOpenHome, onOpenSettings }) =
 
   return (
     <aside
-      className="w-[275px] h-full flex flex-col shrink-0 overflow-hidden bg-[var(--color-surface-secondary)]"
-      style={{ boxShadow: 'inset -1px 0 0 0 var(--color-line)' }}
+      className={[
+        styles.sidebar,
+        !isSidebarOpen ? styles.sidebarClosed : ''
+      ].join(' ')}
     >
       <WorkspaceSwitcher />
 
