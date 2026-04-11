@@ -31,7 +31,6 @@ const ROLE_ICONS: Record<string, React.ReactNode> = {
 export const UserSwitcherPanel: React.FC<Props> = ({ onClose }) => {
   const ref     = useRef<HTMLDivElement>(null);
   const personas = useUserStore(s => s.personas);
-  const sessions = useUserStore(s => s.sessions);
   const activeId = useUserStore(s => s.activeUserId);
   const switchUser = useUserStore(s => s.switchUser);
 
@@ -65,8 +64,6 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose }) => {
       </p>
 
       {personas.map(p => {
-        const session  = sessions[p.id ?? ''];
-        const _loggedIn = Boolean(session?.accessToken);
         const isActive = p.id === activeId;
 
         return (

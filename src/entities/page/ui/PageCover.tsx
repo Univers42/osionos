@@ -103,7 +103,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
         <div ref={pickerRef} className="notion-cover-picker">
           <div className="notion-cover-picker-header">Gallery</div>
           <div className="notion-cover-picker-grid">
-            {COVER_PRESETS.map((preset: any, i: number) => (
+            {COVER_PRESETS.map((preset: string, i: number) => (
               <button
                 key={i}
                 type="button"

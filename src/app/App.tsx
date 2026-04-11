@@ -29,17 +29,16 @@ import { applyTheme, readStoredThemeMode } from '@/shared/config/theme';
  * 3. If offline: load in-memory seed data for instant local use.
  */
 const App: React.FC = () => {
-  const [ready, setReady] = useState(false);
-
   const initUsers = useUserStore((s) => s.init);
   const initialized = useUserStore((s) => s.initialized);
+
+  const [ready, setReady] = useState(initialized);
 
   // Run once on mount
   useEffect(() => {
     applyTheme(readStoredThemeMode());
 
     if (initialized) {
-      setReady(true);
       return;
     }
 
