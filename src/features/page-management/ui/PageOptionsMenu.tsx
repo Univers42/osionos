@@ -70,12 +70,12 @@ export const PageOptionsMenu: React.FC<Props> = ({
   };
 
   return (
-    <div className={styles.container} onClick={e => e.stopPropagation()} ref={menuRef}>
+    <div className="relative flex items-center" onClick={e => e.stopPropagation()} ref={menuRef}>
       <button 
         type="button" 
         className={[
-          styles.trigger,
-          isMenuOpen ? styles.active : ''
+          'p-1 rounded transition-colors',
+          isMenuOpen ? 'bg-[var(--color-surface-tertiary)] text-[var(--color-ink)]' : 'hover:bg-[var(--color-surface-secondary)]'
         ].join(' ')}
         onClick={() => setIsMenuOpen(!isMenuOpen)}
         title="Page options"

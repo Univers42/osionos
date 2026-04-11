@@ -47,7 +47,7 @@ export const SidebarNavItem: React.FC<Props> = ({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className={[
-        'w-full flex items-center gap-2 rounded-[6px] text-[14px] select-none',
+        'group relative w-full flex items-center gap-2 rounded-[6px] text-[14px] select-none',
         'transition-colors duration-100 cursor-pointer',
         'font-medium',
         stateClass,
