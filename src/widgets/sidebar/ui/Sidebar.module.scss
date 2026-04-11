@@ -1,0 +1,19 @@
+@use "@/app/styles/base/tokens/spacing" as tokens;
+
+.sidebar {
+  width: tokens.$sidebar-width;
+  height: 100%;
+  flex-shrink: 0;
+  overflow: hidden;
+  background-color: var(--color-surface-secondary);
+  box-shadow: inset -1px 0 0 0 var(--color-line);
+  transition: transform 0.3s ease, width 0.3s ease, margin-left 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebarClosed {
+  width: 0;
+  transform: translateX(-100%);
+  margin-left: calc(-1 * tokens.$sidebar-width);
+}
