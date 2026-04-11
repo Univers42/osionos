@@ -47,7 +47,6 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
   const activePage = usePageStore((s) => s.activePage);
   const openPage = usePageStore((s) => s.openPage);
   const updatePageTitle = usePageStore((s) => s.updatePageTitle);
-  const updateBlock = usePageStore((s) => s.updateBlock);
 
   /* ── Page metadata from store ──────────────────────────────────── */
   const title = page?.title ?? activePage?.title ?? '';
