@@ -14,8 +14,8 @@
  * EditableContent — standalone contentEditable block component.
  * Replaces the external @src/components/blocks/EditableContent.
  */
-import React, { useCallback, useEffect, useRef } from 'react';
-import { parseInlineMarkdown } from '@/shared/lib/markengine';
+import React, { useCallback, useEffect, useRef } from "react";
+import { parseInlineMarkdown } from "@/shared/lib/markengine";
 
 interface EditableContentProps {
   content: string;
@@ -23,6 +23,7 @@ interface EditableContentProps {
   placeholder?: string;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
+  onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
 }
 
 /**
@@ -31,10 +32,11 @@ interface EditableContentProps {
  */
 export const EditableContent: React.FC<EditableContentProps> = ({
   content,
-  className = '',
-  placeholder = '',
+  className = "",
+  placeholder = "",
   onChange,
   onKeyDown,
+  onPaste,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const isComposing = useRef(false);
@@ -50,7 +52,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       return;
     }
 
-    const html = content ? parseInlineMarkdown(content) : '';
+    const html = content ? parseInlineMarkdown(content) : "";
     if (ref.current.innerHTML !== html) {
       ref.current.innerHTML = html;
     }
@@ -58,7 +60,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
   const handleInput = useCallback(() => {
     if (isComposing.current) return;
-    const text = ref.current?.textContent ?? '';
+    const text = ref.current?.textContent ?? "";
     onChange(text);
   }, [onChange]);
 
@@ -67,6 +69,13 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       onKeyDown(e);
     },
     [onKeyDown],
+  );
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLDivElement>) => {
+      onPaste?.(e);
+    },
+    [onPaste],
   );
 
   return (
@@ -82,6 +91,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       className={`outline-none whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--color-ink-faint)] empty:before:pointer-events-none focus:empty:before:content-none ${className}`}
       onInput={handleInput}
       onKeyDown={handleKeyDown}
+      onPaste={handlePaste}
       onFocus={() => {
         isFocused.current = true;
         if (!ref.current) return;
@@ -90,9 +100,11 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       onBlur={() => {
         isFocused.current = false;
         if (!ref.current) return;
-        ref.current.innerHTML = content ? parseInlineMarkdown(content) : '';
+        ref.current.innerHTML = content ? parseInlineMarkdown(content) : "";
       }}
-      onCompositionStart={() => { isComposing.current = true; }}
+      onCompositionStart={() => {
+        isComposing.current = true;
+      }}
       onCompositionEnd={() => {
         isComposing.current = false;
         handleInput();

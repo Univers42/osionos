@@ -11,16 +11,19 @@
 /* ************************************************************************** */
 
 import React, { useState, useRef, useCallback } from "react";
-import { usePageStore } from '@/store/usePageStore';
-import { detectBlockType } from '@/shared/lib/markengine';
-import { useSlashSelect, repositionCursor } from '@/features/slash-commands';
+import { usePageStore } from "@/store/usePageStore";
+import {
+  detectBlockType,
+  parseMarkdownToBlocks,
+} from "@/shared/lib/markengine";
+import { useSlashSelect, repositionCursor } from "@/features/slash-commands";
 import {
   isHeadingType,
   isEffectivelyEmpty,
   isTodoType,
 } from "@/entities/block";
-import { useDatabaseStore } from '@/store/useDatabaseStore';
-import type { Block } from '@/entities/block';
+import { useDatabaseStore } from "@/store/useDatabaseStore";
+import type { Block } from "@/entities/block";
 import {
   handleArrowUp,
   handleArrowDown,
@@ -70,7 +73,23 @@ function parsePipeTable(text: string): string[][] | null {
 function isListType(
   type: Block["type"],
 ): type is "bulleted_list" | "numbered_list" | "to_do" {
-  return type === "bulleted_list" || type === "numbered_list" || type === "to_do";
+  return (
+    type === "bulleted_list" || type === "numbered_list" || type === "to_do"
+  );
+}
+
+function toBlockUpdates(block: Block): Partial<Block> {
+  return {
+    content: block.content,
+    children: block.children,
+    checked: block.checked,
+    language: block.language,
+    color: block.color,
+    collapsed: block.collapsed,
+    tableData: block.tableData,
+    databaseId: block.databaseId,
+    viewId: block.viewId,
+  };
 }
 
 /** Manages block editing, slash commands, and keyboard navigation for playground pages. */
@@ -410,6 +429,32 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [focusBlock],
   );
 
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent, blockId: string, _content: Block[]) => {
+      const raw = e.clipboardData.getData("text/plain");
+      const markdown = raw.replaceAll("\r\n", "\n").trim();
+      if (!markdown) return;
+
+      const parsed = parseMarkdownToBlocks(markdown);
+      if (parsed.length <= 1) return;
+
+      e.preventDefault();
+
+      const [first, ...rest] = parsed;
+      changeBlockType(pageId, blockId, first.type);
+      updateBlock(pageId, blockId, toBlockUpdates(first));
+
+      let afterBlockId = blockId;
+      for (const nextBlock of rest) {
+        insertBlock(pageId, afterBlockId, nextBlock);
+        afterBlockId = nextBlock.id;
+      }
+
+      focusBlock(afterBlockId, true);
+    },
+    [pageId, changeBlockType, updateBlock, insertBlock, focusBlock],
+  );
+
   /** Handle key presses — Enter, Backspace, Arrow navigation. */
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent, blockId: string, content: Block[]) => {
@@ -557,6 +602,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
     setSlashMenu,
     handleBlockChange,
     handleKeyDown,
+    handlePaste,
     handleSlashSelect,
     handleAddBlock,
     handleInitBlock,

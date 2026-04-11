@@ -13,12 +13,11 @@
 import React, { useMemo, useCallback, useState } from "react";
 import { Plus } from "lucide-react";
 
-import { SlashCommandMenu } from '@/features/slash-commands';
-import type { Block } from '@/entities/block';
+import { SlashCommandMenu } from "@/features/slash-commands";
+import type { Block } from "@/entities/block";
 
-import { usePageStore } from '@/store/usePageStore';
-import { usePlaygroundBlockEditor } from '@/features/block-editor';
-import { BlockEditor } from '@/features/block-editor';
+import { usePageStore } from "@/store/usePageStore";
+import { usePlaygroundBlockEditor, BlockEditor } from "@/features/block-editor";
 
 interface PlaygroundPageEditorProps {
   pageId: string;
@@ -42,6 +41,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     setSlashMenu,
     handleBlockChange,
     handleKeyDown,
+    handlePaste,
     handleSlashSelect,
     handleAddBlock,
     handleInitBlock,
@@ -73,6 +73,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
         setDraggedBlockId={setDraggedBlockId}
         onChange={handleBlockChange}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         onDeleteBlock={(blockId: string) => deleteBlock(pageId, blockId)}
         registerRef={registerBlockRef}
       />
@@ -95,7 +96,9 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
         <SlashCommandMenu
           position={slashMenu.position}
           filter={slashMenu.filter}
-          onSelect={(item) => handleSlashSelect(item.type, blocks, item.calloutIcon)}
+          onSelect={(item) =>
+            handleSlashSelect(item.type, blocks, item.calloutIcon)
+          }
           onClose={() => setSlashMenu(null)}
         />
       )}
@@ -118,6 +121,7 @@ interface BlockTreeProps {
   setDraggedBlockId: (id: string | null) => void;
   onChange: (blockId: string, text: string, blocks: Block[]) => void;
   onKeyDown: (e: React.KeyboardEvent, blockId: string, blocks: Block[]) => void;
+  onPaste: (e: React.ClipboardEvent, blockId: string, blocks: Block[]) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
 }
@@ -132,6 +136,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
   setDraggedBlockId,
   onChange,
   onKeyDown,
+  onPaste,
   onDeleteBlock,
   registerRef,
 }) => {
@@ -162,6 +167,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 numberedIndex={numberedIndex}
                 onChange={onChange}
                 onKeyDown={onKeyDown}
+                onPaste={onPaste}
                 onDeleteBlock={onDeleteBlock}
                 registerRef={registerRef}
               />
@@ -177,6 +183,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 setDraggedBlockId={setDraggedBlockId}
                 onChange={onChange}
                 onKeyDown={onKeyDown}
+                onPaste={onPaste}
                 onDeleteBlock={onDeleteBlock}
                 registerRef={registerRef}
               />
@@ -316,6 +323,7 @@ interface EditableBlockProps {
   numberedIndex: number;
   onChange: (blockId: string, text: string, blocks: Block[]) => void;
   onKeyDown: (e: React.KeyboardEvent, blockId: string, blocks: Block[]) => void;
+  onPaste: (e: React.ClipboardEvent, blockId: string, blocks: Block[]) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
 }
@@ -327,6 +335,7 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
   numberedIndex,
   onChange,
   onKeyDown,
+  onPaste,
   onDeleteBlock,
   registerRef,
 }) => {
@@ -338,6 +347,11 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
   const handleKey = useCallback(
     (e: React.KeyboardEvent) => onKeyDown(e, block.id, blocks),
     [block.id, blocks, onKeyDown],
+  );
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => onPaste(e, block.id, blocks),
+    [block.id, blocks, onPaste],
   );
 
   const refCb = useCallback(
@@ -353,6 +367,7 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
         numberedIndex={numberedIndex}
         onChange={handleChange}
         onKeyDown={handleKey}
+        onPaste={handlePaste}
         onDeleteCodeBlock={() => onDeleteBlock(block.id)}
       />
     </div>

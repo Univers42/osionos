@@ -19,12 +19,12 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 
-import { EditableContent } from '@/components/blocks/EditableContent';
-import { DatabaseBlock } from '@/widgets/database-view';
-import type { Block } from '@/entities/block';
+import { EditableContent } from "@/components/blocks/EditableContent";
+import { DatabaseBlock } from "@/widgets/database-view";
+import type { Block } from "@/entities/block";
 
-import { usePageStore } from '@/store/usePageStore';
-import { CALLOUT_COLORS } from '@/entities/block';
+import { usePageStore } from "@/store/usePageStore";
+import { CALLOUT_COLORS } from "@/entities/block";
 import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
 
@@ -60,6 +60,7 @@ interface BlockEditorProps {
   numberedIndex: number;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
+  onPaste?: (e: React.ClipboardEvent) => void;
   onDeleteCodeBlock?: () => void;
 }
 
@@ -69,6 +70,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   numberedIndex,
   onChange,
   onKeyDown,
+  onPaste,
   onDeleteCodeBlock,
 }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
@@ -183,6 +185,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 1"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
         />
       );
     case "heading_2":
@@ -193,6 +196,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 2"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
         />
       );
     case "heading_3":
@@ -203,6 +207,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 3"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
         />
       );
 
@@ -214,6 +219,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 4"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
         />
       );
 
@@ -225,6 +231,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 5"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
         />
       );
 
@@ -236,6 +243,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 6"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
         />
       );
 
@@ -247,6 +255,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Type '/' for commands…"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
         />
       );
 
@@ -263,6 +272,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               placeholder="List item"
               onChange={onChange}
               onKeyDown={onKeyDown}
+              onPaste={onPaste}
             />
           </div>
         </div>
@@ -281,6 +291,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               placeholder="List item"
               onChange={onChange}
               onKeyDown={onKeyDown}
+              onPaste={onPaste}
             />
           </div>
         </div>
@@ -428,6 +439,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               placeholder="Quote…"
               onChange={onChange}
               onKeyDown={onKeyDown}
+              onPaste={onPaste}
             />
           </div>
         </div>
@@ -452,6 +464,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               placeholder="Input text…"
               onChange={onChange}
               onKeyDown={onKeyDown}
+              onPaste={onPaste}
             />
           </div>
         </div>
@@ -497,6 +510,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Type something…"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
         />
       );
   }
