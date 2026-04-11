@@ -11,8 +11,9 @@
 /* ************************************************************************** */
 
 import React, { useState, useMemo } from 'react';
-import { ChevronRight, Plus, MoreHorizontal, File, Database } from 'lucide-react';
+import { ChevronRight, Plus, File, Database } from 'lucide-react';
 import { usePageStore, type PageEntry } from '@/store/usePageStore';
+import { PageOptionsMenu } from '@/features/page-management';
 
 interface Props {
   page:        PageEntry;
@@ -110,16 +111,14 @@ export const PageTreeItem: React.FC<Props> = ({
         <span className="flex-1 text-left truncate ml-1">{page.title || 'Untitled'}</span>
 
         {/* Action buttons — appear on hover */}
-        {hovered && (
+        {(hovered || isActive) && (
           <span className="flex items-center gap-0.5 mr-0.5 shrink-0">
-            <button
-              type="button"
-              className="p-1 rounded hover:bg-[var(--color-surface-secondary)]"
-              onClick={e => e.stopPropagation()}
-              title="More"
-            >
-              <MoreHorizontal size={13} />
-            </button>
+            <PageOptionsMenu
+              pageId={page._id}
+              pageTitle={page.title || 'Untitled'}
+              isActivePage={isActive}
+              onRedirectHome={() => usePageStore.setState({ activePage: null })}
+            />
             <button
               type="button"
               className="p-1 rounded hover:bg-[var(--color-surface-secondary)]"
@@ -146,3 +145,4 @@ export const PageTreeItem: React.FC<Props> = ({
     </>
   );
 };
+
