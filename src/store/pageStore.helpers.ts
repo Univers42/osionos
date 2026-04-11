@@ -40,6 +40,33 @@ export function saveRecents(recents: ActivePage[]) {
   }
 }
 
+/** 
+ * Recursively get all descendant page IDs for a given parent page. 
+ * Includes protection against infinite recursion (circular references).
+ */
+export function getAllDescendantIds(
+  pages:   PageEntry[], 
+  parentId: string, 
+  visited = new Set<string>()
+): string[] {
+  if (visited.has(parentId)) return [];
+  visited.add(parentId);
+
+  const children = pages.filter(p => p.parentPageId === parentId);
+  let ids = children.map(c => c._id);
+
+  for (const child of children) {
+    ids = ids.concat(getAllDescendantIds(pages, child._id, visited));
+  }
+  return ids;
+}
+
+/** Compute the number of sub-pages affected by a deletion. */
+export function countSubPages(pages: PageEntry[], parentId: string): number {
+  // We use a fresh set for the helper call
+  return getAllDescendantIds(pages, parentId).length;
+}
+
 /** Convert seed page format to PageEntry (with content) */
 export function seedToEntry(sp: SeedPage): PageEntry {
   return {

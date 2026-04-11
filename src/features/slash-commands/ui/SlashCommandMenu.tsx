@@ -88,6 +88,11 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   // Reset index when filter changes
   useEffect(() => { setActiveIdx(0); }, [filter]);
 
+  const effectiveActiveIdx = Math.min(
+    activeIdx,
+    Math.max(filtered.length - 1, 0),
+  );
+
   // Click outside → close
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -105,12 +110,12 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); return; }
       if (e.key === 'Enter') {
         e.preventDefault();
-        if (filtered[activeIdx]) onSelect(filtered[activeIdx]);
+        if (filtered[effectiveActiveIdx]) onSelect(filtered[effectiveActiveIdx]);
       }
     };
     document.addEventListener('keydown', handler, true);
     return () => document.removeEventListener('keydown', handler, true);
-  }, [filtered, activeIdx, onSelect, onClose]);
+  }, [effectiveActiveIdx, filtered, onSelect, onClose]);
 
   if (filtered.length === 0) return null;
 
@@ -128,7 +133,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           key={`${item.type}-${item.label}`}
           type="button"
           className={`w-full flex items-center gap-3 px-3 py-1.5 text-left transition-colors ${
-            idx === activeIdx ? 'bg-[var(--color-surface-hover)]' : 'hover:bg-[var(--color-surface-hover)]'
+            idx === effectiveActiveIdx ? 'bg-[var(--color-surface-hover)]' : 'hover:bg-[var(--color-surface-hover)]'
           }`}
           onMouseEnter={() => setActiveIdx(idx)}
           onClick={() => onSelect(item)}

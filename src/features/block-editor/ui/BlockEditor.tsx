@@ -60,6 +60,7 @@ interface BlockEditorProps {
   numberedIndex: number;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
+  onPaste?: (e: React.ClipboardEvent) => void;
   onDeleteCodeBlock?: () => void;
   onRequestSlashMenu?: (position: { x: number; y: number }) => void;
 }
@@ -70,6 +71,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   numberedIndex,
   onChange,
   onKeyDown,
+  onPaste,
   onDeleteCodeBlock,
   onRequestSlashMenu,
 }) => {
@@ -185,6 +187,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 1"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
         />
       );
@@ -196,6 +199,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 2"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
         />
       );
@@ -207,6 +211,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 3"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
         />
       );
@@ -219,6 +224,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 4"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
         />
       );
@@ -231,6 +237,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 5"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
         />
       );
@@ -243,6 +250,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Heading 6"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
         />
       );
@@ -255,6 +263,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Type '/' for commands…"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
         />
       );
@@ -272,6 +281,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               placeholder="List item"
               onChange={onChange}
               onKeyDown={onKeyDown}
+              onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
             />
           </div>
@@ -291,6 +301,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               placeholder="List item"
               onChange={onChange}
               onKeyDown={onKeyDown}
+              onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
             />
           </div>
@@ -441,6 +452,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               placeholder="Quote…"
               onChange={onChange}
               onKeyDown={onKeyDown}
+              onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
             />
           </div>
@@ -466,6 +478,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               placeholder="Input text…"
               onChange={onChange}
               onKeyDown={onKeyDown}
+              onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
             />
           </div>
@@ -512,6 +525,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           placeholder="Type something…"
           onChange={onChange}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
         />
       );

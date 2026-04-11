@@ -10,13 +10,14 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 
-import { useUserStore } from '@/features/auth';
-import { usePageStore } from '@/store/usePageStore';
-import { NotionSidebar } from '@/widgets/sidebar';
-import { MainContent } from '@/widgets/page-renderer';
-import { applyTheme, readStoredThemeMode } from '@/shared/config/theme';
+import { useUserStore } from "@/features/auth";
+import { usePageStore } from "@/store/usePageStore";
+import { Sidebar } from "@/widgets/sidebar";
+import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
+import { MainContent } from "@/widgets/page-renderer";
+import { applyTheme, readStoredThemeMode } from "@/shared/config/theme";
 
 /**
  * Root of the Playground app.
@@ -28,17 +29,15 @@ import { applyTheme, readStoredThemeMode } from '@/shared/config/theme';
  * 3. If offline: load in-memory seed data for instant local use.
  */
 const App: React.FC = () => {
-  const [ready, setReady] = useState(false);
-
   const initUsers = useUserStore((s) => s.init);
   const initialized = useUserStore((s) => s.initialized);
+  const ready = initialized;
 
   // Run once on mount
   useEffect(() => {
     applyTheme(readStoredThemeMode());
 
     if (initialized) {
-      setReady(true);
       return;
     }
 
@@ -108,7 +107,7 @@ const App: React.FC = () => {
           await usePageStore.getState().seedOnlinePages(workspaceMap, jwt);
         }
       })
-      .finally(() => setReady(true));
+      .catch(() => undefined);
   }, [initUsers, initialized]);
 
   if (!ready) {
@@ -123,14 +122,15 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-surface-primary)]">
-      {/* Left sidebar (240 px) */}
-      <NotionSidebar
-        onOpenHome={() => usePageStore.setState({ activePage: null })}
-      />
+    <div className="relative flex h-screen w-screen overflow-hidden bg-[var(--color-surface-primary)]">
+      {/* Left sidebar */}
+      <Sidebar onOpenHome={() => usePageStore.setState({ activePage: null })} />
+
+      {/* Floating trigger for when sidebar is closed */}
+      <SidebarTrigger />
 
       {/* Content area */}
-      <main className="flex-1 flex min-w-0 overflow-hidden">
+      <main className="flex-1 flex min-w-0 overflow-hidden relative">
         <MainContent />
       </main>
     </div>

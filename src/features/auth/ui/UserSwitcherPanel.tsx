@@ -64,7 +64,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose }) => {
 
       {personas.map(p => {
         const session  = sessions[p.id ?? ''];
-        const _loggedIn = Boolean(session?.accessToken);
+        const isLoggedIn = Boolean(session?.accessToken);
         const isActive = p.id === activeId;
 
         return (
@@ -75,6 +75,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose }) => {
             className={[
               'w-full flex items-center gap-3 px-3 py-2 text-left',
               'transition-colors duration-100 cursor-pointer',
+              isLoggedIn ? '' : 'opacity-60',
               isActive
                 ? 'bg-[var(--color-surface-tertiary)]'
                 : 'hover:bg-[var(--color-surface-hover)]',

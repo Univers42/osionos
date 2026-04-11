@@ -13,12 +13,11 @@
 import React, { useMemo, useCallback, useState } from "react";
 import { Plus } from "lucide-react";
 
-import { SlashCommandMenu } from '@/features/slash-commands';
-import type { Block } from '@/entities/block';
+import { SlashCommandMenu } from "@/features/slash-commands";
+import type { Block } from "@/entities/block";
 
-import { usePageStore } from '@/store/usePageStore';
-import { usePlaygroundBlockEditor } from '@/features/block-editor';
-import { BlockEditor } from '@/features/block-editor';
+import { usePageStore } from "@/store/usePageStore";
+import { usePlaygroundBlockEditor, BlockEditor } from "@/features/block-editor";
 
 interface PlaygroundPageEditorProps {
   pageId: string;
@@ -42,6 +41,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     setSlashMenu,
     handleBlockChange,
     handleKeyDown,
+    handlePaste,
     handleSlashSelect,
     handleAddBlock,
     handleInitBlock,
@@ -80,6 +80,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
         setDraggedBlockId={setDraggedBlockId}
         onChange={handleBlockChange}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         onDeleteBlock={(blockId: string) => deleteBlock(pageId, blockId)}
         registerRef={registerBlockRef}
         onRequestSlashMenu={handleRequestSlashMenu}
@@ -103,7 +104,9 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
         <SlashCommandMenu
           position={slashMenu.position}
           filter={slashMenu.filter}
-          onSelect={(item) => handleSlashSelect(item.type, blocks, item.calloutIcon)}
+          onSelect={(item) =>
+            handleSlashSelect(item.type, blocks, item.calloutIcon)
+          }
           onClose={() => setSlashMenu(null)}
         />
       )}
@@ -126,6 +129,7 @@ interface BlockTreeProps {
   setDraggedBlockId: (id: string | null) => void;
   onChange: (blockId: string, text: string, blocks: Block[]) => void;
   onKeyDown: (e: React.KeyboardEvent, blockId: string, blocks: Block[]) => void;
+  onPaste: (e: React.ClipboardEvent, blockId: string, blocks: Block[]) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
   onRequestSlashMenu: (blockId: string, position: { x: number; y: number }) => void;
@@ -141,6 +145,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
   setDraggedBlockId,
   onChange,
   onKeyDown,
+  onPaste,
   onDeleteBlock,
   registerRef,
   onRequestSlashMenu,
@@ -172,6 +177,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 numberedIndex={numberedIndex}
                 onChange={onChange}
                 onKeyDown={onKeyDown}
+                onPaste={onPaste}
                 onDeleteBlock={onDeleteBlock}
                 registerRef={registerRef}
                 onRequestSlashMenu={onRequestSlashMenu}
@@ -188,6 +194,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 setDraggedBlockId={setDraggedBlockId}
                 onChange={onChange}
                 onKeyDown={onKeyDown}
+                onPaste={onPaste}
                 onDeleteBlock={onDeleteBlock}
                 registerRef={registerRef}
                 onRequestSlashMenu={onRequestSlashMenu}
@@ -280,7 +287,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
   const isDragged = draggedBlockId === block.id;
 
   return (
-    <div
+    <div // NOSONAR - drag/drop wrapper cannot be a native interactive element due nested contentEditable controls
       className={`group/block relative transition-opacity ${isDragged ? "opacity-40" : ""}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -328,6 +335,7 @@ interface EditableBlockProps {
   numberedIndex: number;
   onChange: (blockId: string, text: string, blocks: Block[]) => void;
   onKeyDown: (e: React.KeyboardEvent, blockId: string, blocks: Block[]) => void;
+  onPaste: (e: React.ClipboardEvent, blockId: string, blocks: Block[]) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
   onRequestSlashMenu: (blockId: string, position: { x: number; y: number }) => void;
@@ -340,6 +348,7 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
   numberedIndex,
   onChange,
   onKeyDown,
+  onPaste,
   onDeleteBlock,
   registerRef,
   onRequestSlashMenu,
@@ -352,6 +361,11 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
   const handleKey = useCallback(
     (e: React.KeyboardEvent) => onKeyDown(e, block.id, blocks),
     [block.id, blocks, onKeyDown],
+  );
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent) => onPaste(e, block.id, blocks),
+    [block.id, blocks, onPaste],
   );
 
   const refCb = useCallback(
@@ -367,6 +381,7 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
         numberedIndex={numberedIndex}
         onChange={handleChange}
         onKeyDown={handleKey}
+        onPaste={handlePaste}
         onDeleteCodeBlock={() => onDeleteBlock(block.id)}
         onRequestSlashMenu={(position) => onRequestSlashMenu(block.id, position)}
       />

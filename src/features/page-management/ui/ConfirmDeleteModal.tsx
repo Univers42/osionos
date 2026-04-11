@@ -1,0 +1,81 @@
+import React from 'react';
+import { AlertTriangle, X } from 'lucide-react';
+
+interface Props {
+  onConfirm: () => void;
+  onCancel:  () => void;
+  title?:     string;
+  subPageCount?: number;
+}
+
+/**
+ * A centered, fixed-position modal that asks for deletion confirmation.
+ * Follows Notion's style: clean overlay, centered card, clear danger action.
+ */
+export const ConfirmDeleteModal: React.FC<Props> = ({ 
+  onConfirm, 
+  onCancel, 
+  title = 'this page',
+  subPageCount = 0
+}) => {
+  return (
+    <div 
+      className="fixed inset-0 flex items-center justify-center z-[100] p-4 bg-black/40 backdrop-blur-[1px]"
+      onClick={e => { e.stopPropagation(); onCancel(); }}
+    >
+      <div 
+        className="w-full max-w-[400px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-2 text-[var(--color-text-danger)]">
+            <AlertTriangle size={18} />
+            <h3 className="text-sm font-semibold">Delete Page</h3>
+          </div>
+          <button 
+            type="button"
+            onClick={onCancel}
+            className="p-1 rounded hover:bg-[var(--color-surface-hover)] text-[var(--color-ink-faint)] transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-4 py-5">
+          {subPageCount > 0 ? (
+            <div className="bg-[var(--color-text-danger)]/10 border border-[var(--color-text-danger)]/20 rounded p-3 mb-2">
+              <p className="text-sm text-[var(--color-text-danger)] font-medium leading-relaxed">
+                This page contains {subPageCount} sub-page{subPageCount > 1 ? 's' : ''}. Deleting it will permanently remove all its content.
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--color-ink)] leading-relaxed">
+              Are you sure you want to delete <span className="font-semibold italic">{title}</span>? 
+              This action cannot be undone.
+            </p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 px-4 py-3 bg-[var(--color-surface-hover)]/30 border-t border-[var(--color-border)]">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-3 py-1.5 text-xs font-medium rounded border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] text-[var(--color-ink)] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="px-3 py-1.5 text-xs font-medium rounded bg-red-600 hover:bg-red-700 text-white shadow-sm transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

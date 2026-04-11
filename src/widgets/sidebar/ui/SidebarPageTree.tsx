@@ -18,6 +18,8 @@ import type { ActivePage, PageEntry } from '@/entities/page';
 import { SidebarNavItem }  from './SidebarNavItem';
 import { SidebarSection }  from './SidebarSection';
 import { PageTreeItem }    from './PageTreeItem';
+import { PageOptionsMenu } from '@/features/page-management';
+import { usePageStore }    from '@/store/usePageStore';
 
 interface WorkspaceRef {
   _id: string;
@@ -44,30 +46,65 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   pagesForWs,
   jwt,
   onAddToWorkspace,
-}) => (
-  <div className="flex flex-col gap-3">
+}) => {
+  const addPage = usePageStore(s => s.addPage);
 
-    <SidebarSection label="Recents">
-      {recents.length > 0
-        ? recents.slice(0, 8).map(r => (
-            <SidebarNavItem
-              key={r.id}
-              icon={r.icon
-                ? <AssetRenderer value={r.icon} size={14} />
-                : <AssetRenderer value="icon:page" size={14} />
-              }
-              label={r.title ?? 'Untitled'}
-              active={activePage?.id === r.id}
-              onClick={() => openPage(r)}
-            />
-          ))
-        : (
-          <p className="px-2 py-1 text-xs text-[var(--color-ink-faint)] italic">
-            Pages you visit will appear here
-          </p>
-        )
-      }
-    </SidebarSection>
+  const handleAddChildToRecent = async (e: React.MouseEvent, recent: ActivePage) => {
+    e.stopPropagation();
+    const child = await addPage(recent.workspaceId, 'Untitled', jwt, recent.id);
+    if (child) {
+      openPage({
+        id: child._id,
+        workspaceId: recent.workspaceId,
+        kind: 'page',
+        title: child.title,
+      });
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+
+      <SidebarSection label="Recents">
+        {recents.length > 0
+          ? recents.slice(0, 8).map(r => (
+              <SidebarNavItem
+                key={r.id}
+                icon={r.icon
+                  ? <AssetRenderer value={r.icon} size={14} />
+                  : <AssetRenderer value="icon:page" size={14} />
+                }
+                label={r.title ?? 'Untitled'}
+                active={activePage?.id === r.id}
+                onClick={() => openPage(r)}
+                rightElement={(hovered) => (hovered || activePage?.id === r.id) && (
+                  <span className="flex items-center gap-0.5 mr-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+                    <PageOptionsMenu
+                      pageId={r.id}
+                      workspaceId={r.workspaceId}
+                      pageTitle={r.title || 'Untitled'}
+                      isActivePage={activePage?.id === r.id}
+                      onRedirectHome={() => usePageStore.setState({ activePage: null })}
+                    />
+                    <button
+                      type="button"
+                      className="p-1 rounded hover:bg-[var(--color-surface-secondary)]"
+                      onClick={(e) => handleAddChildToRecent(e, r)}
+                      title="Add child page"
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </span>
+                )}
+              />
+            ))
+          : (
+            <p className="px-2 py-1 text-xs text-[var(--color-ink-faint)] italic">
+              Pages you visit will appear here
+            </p>
+          )
+        }
+      </SidebarSection>
 
 
     <SidebarSection label="Agents">
@@ -155,5 +192,6 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
       />
     </SidebarSection>
 
-  </div>
-);
+    </div>
+  );
+};

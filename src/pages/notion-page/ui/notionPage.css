@@ -6,13 +6,28 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 20:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:47:31 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/09 22:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Notion-style page layout
+   ═══════════════════════════════════════════════════════════════════════════
+   
+   Content width strategy (fluid, no breakpoints for layout):
+   
+     padding = clamp(16px, 11%, 96px)
+       → 16px minimum on small screens
+       → 11% of container on mid screens (scales fluidly)
+       → 96px maximum on large screens
+     
+     max-width = 900px, centered
+   
+   This replaces all fixed padding + media query combinations.
+   
    ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Page shell ───────────────────────────────────────────────────────── */
 
 .notion-page {
   display: flex;
@@ -23,6 +38,19 @@
   overflow-x: hidden;
   background: var(--color-surface-primary);
   position: relative;
+}
+
+/* ── Fluid content width (shared by header, properties, body) ─────── */
+
+.notion-page-header,
+.notion-page-properties,
+.notion-page-body {
+  max-width: 900px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: clamp(16px, 11%, 96px);
+  padding-right: clamp(16px, 11%, 96px);
 }
 
 /* ── Cover ────────────────────────────────────────────────────────────── */
@@ -51,7 +79,6 @@
   height: 100%;
 }
 
-/* Controls on hover */
 .notion-page-cover-controls {
   position: absolute;
   right: 16px;
@@ -86,14 +113,10 @@
   background: rgba(255, 255, 255, 1);
 }
 
-/* ── Header area (icon + title zone) ─────────────────────────────── */
+/* ── Header area (icon + toolbar + title) ─────────────────────────── */
 
 .notion-page-header {
   position: relative;
-  max-width: 900px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 0 96px;
 }
 
 .notion-page-header--with-cover {
@@ -198,13 +221,6 @@
 
 /* ── Properties ───────────────────────────────────────────────────── */
 
-.notion-page-properties {
-  max-width: 900px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 0 96px;
-}
-
 .notion-page-property-row {
   display: flex;
   align-items: center;
@@ -230,10 +246,8 @@
 /* ── Body (content area) ──────────────────────────────────────────── */
 
 .notion-page-body {
-  max-width: 900px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 4px 96px 120px;
+  padding-top: 16px;
+  padding-bottom: 120px;
   flex: 1;
 }
 
@@ -333,7 +347,6 @@
   background: var(--color-surface-hover);
 }
 
-/* SVG icons in picker */
 .notion-emoji-picker-svg-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -452,23 +465,11 @@
   border-color: var(--color-accent);
 }
 
-/* ── Responsive adjustments ─────────────────────────────────────── */
+/* ── Responsive (visual adjustments only — layout is fluid) ──────── */
 
-@media (max-width: 900px) {
-  .notion-page-header,
-  .notion-page-properties,
-  .notion-page-body {
-    padding-left: 24px;
-    padding-right: 24px;
-  }
-}
-
-@media (max-width: 600px) {
-  .notion-page-header,
-  .notion-page-properties,
-  .notion-page-body {
-    padding-left: 16px;
-    padding-right: 16px;
+@media (max-width: 768px) {
+  .notion-page-title {
+    font-size: 30px;
   }
 
   .notion-page-icon {
@@ -480,10 +481,6 @@
   .notion-page-icon svg {
     width: 54px;
     height: 54px;
-  }
-
-  .notion-page-title {
-    font-size: 30px;
   }
 
   .notion-page-cover {

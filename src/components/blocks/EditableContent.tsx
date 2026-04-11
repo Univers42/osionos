@@ -25,6 +25,7 @@ interface EditableContentProps {
   placeholder?: string;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
+  onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
   onRequestSlashMenu?: (position: { x: number; y: number }) => void;
 }
 
@@ -537,6 +538,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   placeholder = '',
   onChange,
   onKeyDown,
+  onPaste,
   onRequestSlashMenu,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
@@ -616,6 +618,13 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       requestAnimationFrame(updateSelectionSnapshot);
     },
     [onKeyDown, updateSelectionSnapshot],
+  );
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLDivElement>) => {
+      onPaste?.(e);
+    },
+    [onPaste],
   );
 
   const applyDomMutation = useCallback(
@@ -745,6 +754,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         className={`outline-none whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--color-ink-faint)] empty:before:pointer-events-none focus:empty:before:content-none ${className}`}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         onMouseUp={updateSelectionSnapshot}
         onFocus={() => {
           isFocused.current = true;

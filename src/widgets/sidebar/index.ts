@@ -1,1 +1,1 @@
-export * from './ui/NotionSidebar';
+export * from './ui/Sidebar';
