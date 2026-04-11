@@ -14,7 +14,8 @@ import React, { useEffect, useState } from "react";
 
 import { useUserStore } from '@/features/auth';
 import { usePageStore } from '@/store/usePageStore';
-import { NotionSidebar } from '@/widgets/sidebar';
+import { Sidebar } from '@/widgets/sidebar';
+import { SidebarTrigger } from '@/features/ui-orchestrator/ui/SidebarTrigger';
 import { MainContent } from '@/widgets/page-renderer';
 import { applyTheme, readStoredThemeMode } from '@/shared/config/theme';
 
@@ -123,14 +124,17 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[var(--color-surface-primary)]">
-      {/* Left sidebar (240 px) */}
-      <NotionSidebar
+    <div className="relative flex h-screen w-screen overflow-hidden bg-[var(--color-surface-primary)]">
+      {/* Left sidebar */}
+      <Sidebar
         onOpenHome={() => usePageStore.setState({ activePage: null })}
       />
 
+      {/* Floating trigger for when sidebar is closed */}
+      <SidebarTrigger />
+
       {/* Content area */}
-      <main className="flex-1 flex min-w-0 overflow-hidden">
+      <main className="flex-1 flex min-w-0 overflow-hidden relative">
         <MainContent />
       </main>
     </div>

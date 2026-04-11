@@ -11,10 +11,11 @@
 /* ************************************************************************** */
 
 import React, { useState } from 'react';
-import { ChevronDown, PenSquare } from 'lucide-react';
+import { ChevronDown, PenSquare, PanelLeftClose } from 'lucide-react';
 import { useUserStore } from '@/features/auth';
 import { usePageStore } from '@/store/usePageStore';
 import { UserSwitcherPanel } from '@/features/auth';
+import { useUIStore } from '@/shared/config/uiStore';
 
 interface Props {
   onNewPage?: () => void;
@@ -33,6 +34,8 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
   const workspaceName   = session?.privateWorkspaces[0]?.name ?? 'My Workspace';
   const addPage         = usePageStore(s => s.addPage);
   const openPage        = usePageStore(s => s.openPage);
+
+  const setSidebarOpen = useUIStore(s => s.setSidebarOpen);
 
   const jwt       = session?.accessToken ?? '';
   const firstWsId = session?.privateWorkspaces[0]?._id ?? '';
@@ -83,6 +86,19 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             title="New page"
           >
             <PenSquare size={18} />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className={[
+              'flex items-center justify-center w-7 h-7 rounded shrink-0',
+              'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]',
+              'transition-colors duration-100 cursor-pointer',
+            ].join(' ')}
+            title="Close sidebar"
+          >
+            <PanelLeftClose size={18} />
           </button>
 
           {/* Dropdown chevron */}
