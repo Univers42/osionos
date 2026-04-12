@@ -12,7 +12,7 @@
 
 import React from "react";
 import type { Block } from "@/entities/block";
-import { MermaidDiagram } from "@/shared/ui";
+import { MermaidDiagram, CodeSyntaxHighlight } from "@/shared/ui";
 
 export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
   const lang = block.language || "plaintext";
@@ -31,11 +31,12 @@ export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
           className="p-3 bg-[var(--color-surface-primary)] overflow-x-auto"
         />
       ) : (
-        <pre className="p-3 bg-[var(--color-surface-primary)] overflow-x-auto">
-          <code className="text-[13px] leading-relaxed font-mono text-[var(--color-ink)] whitespace-pre">
-            {block.content}
-          </code>
-        </pre>
+        <CodeSyntaxHighlight
+          code={block.content}
+          language={lang}
+          className="p-3 bg-[var(--color-surface-primary)] overflow-x-auto"
+          codeClassName="text-[13px] leading-relaxed font-mono whitespace-pre"
+        />
       )}
     </div>
   );
