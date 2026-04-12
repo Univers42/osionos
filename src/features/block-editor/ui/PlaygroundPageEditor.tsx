@@ -50,7 +50,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
 
   const handleRequestSlashMenu = useCallback(
     (blockId: string, position: { x: number; y: number }) => {
-      setSlashMenu({ blockId, position, filter: '' });
+      setSlashMenu({ blockId, position, filter: "" });
     },
     [setSlashMenu],
   );
@@ -102,6 +102,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
 
       {slashMenu && (
         <SlashCommandMenu
+          key={`${slashMenu.blockId}:${slashMenu.filter}`}
           position={slashMenu.position}
           filter={slashMenu.filter}
           onSelect={(item) =>
@@ -132,7 +133,10 @@ interface BlockTreeProps {
   onPaste: (e: React.ClipboardEvent, blockId: string, blocks: Block[]) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
-  onRequestSlashMenu: (blockId: string, position: { x: number; y: number }) => void;
+  onRequestSlashMenu: (
+    blockId: string,
+    position: { x: number; y: number },
+  ) => void;
 }
 
 const BlockTree: React.FC<BlockTreeProps> = ({
@@ -338,7 +342,10 @@ interface EditableBlockProps {
   onPaste: (e: React.ClipboardEvent, blockId: string, blocks: Block[]) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
-  onRequestSlashMenu: (blockId: string, position: { x: number; y: number }) => void;
+  onRequestSlashMenu: (
+    blockId: string,
+    position: { x: number; y: number },
+  ) => void;
 }
 
 const EditableBlock: React.FC<EditableBlockProps> = ({
@@ -383,7 +390,9 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
         onKeyDown={handleKey}
         onPaste={handlePaste}
         onDeleteCodeBlock={() => onDeleteBlock(block.id)}
-        onRequestSlashMenu={(position) => onRequestSlashMenu(block.id, position)}
+        onRequestSlashMenu={(position) =>
+          onRequestSlashMenu(block.id, position)
+        }
       />
     </div>
   );

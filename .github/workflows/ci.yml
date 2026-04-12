@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop, 'fix/**', 'feat/**', 'migrate/**']
+  pull_request:
+    branches: [main, master, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: root
+            working-directory: .
+            typecheck: make typecheck
+            lint: make lint
+          - name: markengine-submodule
+            working-directory: src/lib/markengine
+            typecheck: make typecheck
+            lint: make lint
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.working-directory }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.working-directory }}
+        run: npm ci
+
+      - name: Typecheck ${{ matrix.name }}
+        working-directory: ${{ matrix.working-directory }}
+        run: ${{ matrix.typecheck }}
+
+      - name: Lint ${{ matrix.name }}
+        working-directory: ${{ matrix.working-directory }}
+        run: ${{ matrix.lint }}
