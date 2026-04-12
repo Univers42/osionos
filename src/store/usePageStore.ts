@@ -10,117 +10,211 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { create } from 'zustand';
+import { create } from "zustand";
 import {
-  loadRecents, saveRecents,
+  loadRecents,
+  saveRecents,
+  loadPagesCache,
+  savePagesCache,
   updatePageInState,
-  applyBlockUpdate, applyBlockInsert, applyBlockDelete, applyBlockMove,
-  applyBlockIndent, applyBlockOutdent, applyBlockTypeChange,
-} from './pageStore.helpers';
+  applyBlockUpdate,
+  applyBlockInsert,
+  applyBlockDelete,
+  applyBlockMove,
+  applyBlockIndent,
+  applyBlockOutdent,
+  applyBlockTypeChange,
+} from "./pageStore.helpers";
 import {
-  createSeedOfflinePages, createSeedOnlinePages,
-  createFetchPages, createFetchPageContent,
-  createAddPage, createDeletePage,
-} from './pageStore.actions';
+  createSeedOfflinePages,
+  createSeedOnlinePages,
+  createFetchPages,
+  createFetchPageContent,
+  createAddPage,
+  createDeletePage,
+} from "./pageStore.actions";
 import {
-  debouncePersistContent, persistPageTitle, getActiveJwt, registerPageLookup,
-} from './pageStore.persistence';
-import type { PageStore } from '@/entities/page';
+  debouncePersistContent,
+  persistPageTitle,
+  getActiveJwt,
+  registerPageLookup,
+} from "./pageStore.persistence";
+import type { PageStore } from "@/entities/page";
 
 // Re-export types so existing imports from this module still work
-export type { PageEntry, ActivePageKind, ActivePage } from '@/entities/page';
+export type { PageEntry, ActivePageKind, ActivePage } from "@/entities/page";
 
 /** Zustand store managing page tree, active page, recents, and block-level CRUD. */
-export const usePageStore = create<PageStore>((set, get) => ({
-  pages:      {},
-  activePage: null,
-  recents:    loadRecents(),
-  loadingIds: new Set<string>(),
-  seeded:     false,
+const cachedPages = loadPagesCache();
 
-  seedOfflinePages:  createSeedOfflinePages(set, get),
-  seedOnlinePages:   createSeedOnlinePages(set, get),
-  fetchPages:        createFetchPages(set, get),
-  fetchPageContent:  createFetchPageContent(set),
-  addPage:           createAddPage(set),
-  deletePage:        createDeletePage(set),
+export const usePageStore = create<PageStore>((set, get) => ({
+  pages: cachedPages,
+  activePage: null,
+  recents: loadRecents(),
+  loadingIds: new Set<string>(),
+  seeded: false,
+
+  seedOfflinePages: createSeedOfflinePages(set, get),
+  seedOnlinePages: createSeedOnlinePages(set, get),
+  fetchPages: createFetchPages(set, get),
+  fetchPageContent: createFetchPageContent(set, get),
+  addPage: createAddPage(set, get),
+  deletePage: createDeletePage(set, get),
 
   openPage: (page) => {
-    set(s => {
-      const recents = [page, ...s.recents.filter(r => r.id !== page.id)].slice(0, 10);
+    set((s) => {
+      const recents = [
+        page,
+        ...s.recents.filter((r) => r.id !== page.id),
+      ].slice(0, 10);
       saveRecents(recents);
       return { activePage: page, recents };
     });
     const jwt = getActiveJwt();
-    if (jwt && page.kind === 'page') {
+    if (jwt && page.kind === "page") {
       get().fetchPageContent(page.id, jwt);
     }
   },
 
   clearWorkspace: (workspaceId) => {
-    set(s => {
+    set((s) => {
       const pages = { ...s.pages };
       delete pages[workspaceId];
+      savePagesCache(pages);
       return { pages };
     });
   },
 
   updateBlock: (pageId, blockId, updates) => {
-    set(s => ({ pages: updatePageInState(s.pages, pageId, applyBlockUpdate(blockId, updates)) }));
+    set((s) => {
+      const pages = updatePageInState(
+        s.pages,
+        pageId,
+        applyBlockUpdate(blockId, updates),
+      );
+      savePagesCache(pages);
+      return { pages };
+    });
     debouncePersistContent(pageId);
   },
 
   insertBlock: (pageId, afterBlockId, block) => {
-    set(s => ({ pages: updatePageInState(s.pages, pageId, applyBlockInsert(afterBlockId, block)) }));
+    set((s) => {
+      const pages = updatePageInState(
+        s.pages,
+        pageId,
+        applyBlockInsert(afterBlockId, block),
+      );
+      savePagesCache(pages);
+      return { pages };
+    });
     debouncePersistContent(pageId);
   },
 
   deleteBlock: (pageId, blockId) => {
-    set(s => ({ pages: updatePageInState(s.pages, pageId, applyBlockDelete(blockId)) }));
+    set((s) => {
+      const pages = updatePageInState(
+        s.pages,
+        pageId,
+        applyBlockDelete(blockId),
+      );
+      savePagesCache(pages);
+      return { pages };
+    });
     debouncePersistContent(pageId);
   },
 
   moveBlock: (pageId, blockId, targetIndex, parentBlockId = null) => {
-    set(s => ({ pages: updatePageInState(s.pages, pageId, applyBlockMove(blockId, targetIndex, parentBlockId)) }));
+    set((s) => {
+      const pages = updatePageInState(
+        s.pages,
+        pageId,
+        applyBlockMove(blockId, targetIndex, parentBlockId),
+      );
+      savePagesCache(pages);
+      return { pages };
+    });
     debouncePersistContent(pageId);
   },
 
   indentBlock: (pageId, blockId) => {
-    set(s => ({ pages: updatePageInState(s.pages, pageId, applyBlockIndent(blockId)) }));
+    set((s) => {
+      const pages = updatePageInState(
+        s.pages,
+        pageId,
+        applyBlockIndent(blockId),
+      );
+      savePagesCache(pages);
+      return { pages };
+    });
     debouncePersistContent(pageId);
   },
 
   outdentBlock: (pageId, blockId) => {
-    set(s => ({ pages: updatePageInState(s.pages, pageId, applyBlockOutdent(blockId)) }));
+    set((s) => {
+      const pages = updatePageInState(
+        s.pages,
+        pageId,
+        applyBlockOutdent(blockId),
+      );
+      savePagesCache(pages);
+      return { pages };
+    });
     debouncePersistContent(pageId);
   },
 
   changeBlockType: (pageId, blockId, newType) => {
-    set(s => ({ pages: updatePageInState(s.pages, pageId, applyBlockTypeChange(blockId, newType)) }));
+    set((s) => {
+      const pages = updatePageInState(
+        s.pages,
+        pageId,
+        applyBlockTypeChange(blockId, newType),
+      );
+      savePagesCache(pages);
+      return { pages };
+    });
     debouncePersistContent(pageId);
   },
 
   updatePageContent: (pageId, blocks) => {
-    set(s => ({ pages: updatePageInState(s.pages, pageId, page => ({ ...page, content: blocks })) }));
+    set((s) => {
+      const pages = updatePageInState(s.pages, pageId, (page) => ({
+        ...page,
+        content: blocks,
+      }));
+      savePagesCache(pages);
+      return { pages };
+    });
     debouncePersistContent(pageId);
   },
 
   updatePageTitle: (pageId, title) => {
-    set(s => ({ pages: updatePageInState(s.pages, pageId, page => ({ ...page, title })) }));
+    set((s) => {
+      const pages = updatePageInState(s.pages, pageId, (page) => ({
+        ...page,
+        title,
+      }));
+      savePagesCache(pages);
+      return { pages };
+    });
     persistPageTitle(pageId, title);
   },
 
   pagesForWorkspace: (workspaceId) => get().pages[workspaceId] ?? [],
 
   rootPages: (workspaceId) =>
-    (get().pages[workspaceId] ?? []).filter(p => !p.parentPageId && !p.archivedAt),
+    (get().pages[workspaceId] ?? []).filter(
+      (p) => !p.parentPageId && !p.archivedAt,
+    ),
 
   childPages: (parentId, workspaceId) =>
-    (get().pages[workspaceId] ?? []).filter(p => p.parentPageId === parentId && !p.archivedAt),
+    (get().pages[workspaceId] ?? []).filter(
+      (p) => p.parentPageId === parentId && !p.archivedAt,
+    ),
 
   pageById: (pageId) => {
     const allPages = Object.values(get().pages).flat();
-    return allPages.find(p => p._id === pageId);
+    return allPages.find((p) => p._id === pageId);
   },
 }));
 

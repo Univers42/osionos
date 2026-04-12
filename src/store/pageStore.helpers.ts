@@ -10,11 +10,12 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import type { Block, BlockType } from '@/entities/block';
-import type { SeedPage } from '../data/seedPages';
-import type { ActivePage, PageEntry } from '@/entities/page';
+import type { Block, BlockType } from "@/entities/block";
+import type { SeedPage } from "../data/seedPages";
+import type { ActivePage, PageEntry } from "@/entities/page";
 
-const RECENTS_KEY = 'pg:recents';
+const RECENTS_KEY = "pg:recents";
+const PAGE_CACHE_KEY = "pg:pages";
 
 /** A 24-hex-char string that looks like a MongoDB ObjectId. */
 const OBJECT_ID_RE = /^[a-f\d]{24}$/i;
@@ -26,7 +27,9 @@ export function isMongoId(id: string): boolean {
 
 export function loadRecents(): ActivePage[] {
   try {
-    return JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]') as ActivePage[];
+    return JSON.parse(
+      localStorage.getItem(RECENTS_KEY) ?? "[]",
+    ) as ActivePage[];
   } catch {
     return [];
   }
@@ -40,20 +43,69 @@ export function saveRecents(recents: ActivePage[]) {
   }
 }
 
-/** 
- * Recursively get all descendant page IDs for a given parent page. 
+export function loadPagesCache(): Record<string, PageEntry[]> {
+  try {
+    return JSON.parse(localStorage.getItem(PAGE_CACHE_KEY) ?? "{}") as Record<
+      string,
+      PageEntry[]
+    >;
+  } catch {
+    return {};
+  }
+}
+
+export function savePagesCache(pages: Record<string, PageEntry[]>) {
+  try {
+    localStorage.setItem(PAGE_CACHE_KEY, JSON.stringify(pages));
+  } catch {
+    // localStorage might be unavailable (e.g. private browsing quota)
+  }
+}
+
+export function mergeWorkspacePages(
+  existingPages: PageEntry[] | undefined,
+  incomingPages: PageEntry[],
+): PageEntry[] {
+  const previousPages = existingPages ?? [];
+  if (incomingPages.length === 0) return previousPages;
+
+  const cachedById = new Map(
+    previousPages.map((page) => [page._id, page] as const),
+  );
+  const mergedPages = incomingPages.map((page) => {
+    const cachedPage = cachedById.get(page._id);
+    if (!cachedPage) return page;
+    return {
+      ...cachedPage,
+      ...page,
+      content: page.content ?? cachedPage.content,
+    };
+  });
+
+  const incomingIds = new Set(incomingPages.map((page) => page._id));
+  for (const cachedPage of previousPages) {
+    if (!incomingIds.has(cachedPage._id)) {
+      mergedPages.push(cachedPage);
+    }
+  }
+
+  return mergedPages;
+}
+
+/**
+ * Recursively get all descendant page IDs for a given parent page.
  * Includes protection against infinite recursion (circular references).
  */
 export function getAllDescendantIds(
-  pages:   PageEntry[], 
-  parentId: string, 
-  visited = new Set<string>()
+  pages: PageEntry[],
+  parentId: string,
+  visited = new Set<string>(),
 ): string[] {
   if (visited.has(parentId)) return [];
   visited.add(parentId);
 
-  const children = pages.filter(p => p.parentPageId === parentId);
-  let ids = children.map(c => c._id);
+  const children = pages.filter((p) => p.parentPageId === parentId);
+  let ids = children.map((c) => c._id);
 
   for (const child of children) {
     ids = ids.concat(getAllDescendantIds(pages, child._id, visited));
@@ -70,14 +122,14 @@ export function countSubPages(pages: PageEntry[], parentId: string): number {
 /** Convert seed page format to PageEntry (with content) */
 export function seedToEntry(sp: SeedPage): PageEntry {
   return {
-    _id:          sp._id,
-    title:        sp.title,
-    icon:         sp.icon,
-    workspaceId:  sp.workspaceId,
+    _id: sp._id,
+    title: sp.title,
+    icon: sp.icon,
+    workspaceId: sp.workspaceId,
     parentPageId: sp.parentPageId ?? null,
-    databaseId:   sp.databaseId ?? null,
-    archivedAt:   sp.archivedAt ?? null,
-    content:      sp.content,
+    databaseId: sp.databaseId ?? null,
+    archivedAt: sp.archivedAt ?? null,
+    content: sp.content,
   };
 }
 
@@ -95,9 +147,9 @@ export function updatePageInState(
   const newPages = { ...pages };
   for (const wsId of Object.keys(newPages)) {
     const list = newPages[wsId];
-    const idx = list.findIndex(p => p._id === pageId);
+    const idx = list.findIndex((p) => p._id === pageId);
     if (idx < 0) continue;
-    newPages[wsId] = list.map((p, i) => i === idx ? updater(p) : p);
+    newPages[wsId] = list.map((p, i) => (i === idx ? updater(p) : p));
     return newPages;
   }
   return pages;
@@ -110,7 +162,10 @@ function cloneBlocks(blocks: Block[]): Block[] {
   }));
 }
 
-function mapBlocksTree(blocks: Block[], mapper: (block: Block) => Block): Block[] {
+function mapBlocksTree(
+  blocks: Block[],
+  mapper: (block: Block) => Block,
+): Block[] {
   return blocks.map((block) => {
     const nextChildren = block.children
       ? mapBlocksTree(block.children, mapper)
@@ -124,7 +179,9 @@ function deleteBlockFromTree(blocks: Block[], blockId: string): Block[] {
     .filter((block) => block.id !== blockId)
     .map((block) => ({
       ...block,
-      children: block.children ? deleteBlockFromTree(block.children, blockId) : undefined,
+      children: block.children
+        ? deleteBlockFromTree(block.children, blockId)
+        : undefined,
     }));
 }
 
@@ -165,7 +222,10 @@ function outdentBlockInTree(
       return true;
     }
 
-    if (block.children && outdentBlockInTree(block.children, blockId, blocks, idx)) {
+    if (
+      block.children &&
+      outdentBlockInTree(block.children, blockId, blocks, idx)
+    ) {
       return true;
     }
   }
@@ -174,19 +234,26 @@ function outdentBlockInTree(
 }
 
 /** Creates a page updater that patches a single block. */
-export function applyBlockUpdate(blockId: string, updates: Partial<Block>): (page: PageEntry) => PageEntry {
+export function applyBlockUpdate(
+  blockId: string,
+  updates: Partial<Block>,
+): (page: PageEntry) => PageEntry {
   return (page) => ({
     ...page,
     content: mapBlocksTree(page.content ?? [], (block) =>
-      block.id === blockId ? { ...block, ...updates } : block),
+      block.id === blockId ? { ...block, ...updates } : block,
+    ),
   });
 }
 
 /** Creates a page updater that inserts a block after another. */
-export function applyBlockInsert(afterBlockId: string, block: Block): (page: PageEntry) => PageEntry {
+export function applyBlockInsert(
+  afterBlockId: string,
+  block: Block,
+): (page: PageEntry) => PageEntry {
   return (page) => {
     const content = [...(page.content ?? [])];
-    const afterIdx = content.findIndex(b => b.id === afterBlockId);
+    const afterIdx = content.findIndex((b) => b.id === afterBlockId);
     if (afterIdx >= 0) content.splice(afterIdx + 1, 0, block);
     else content.push(block);
     return { ...page, content };
@@ -194,7 +261,9 @@ export function applyBlockInsert(afterBlockId: string, block: Block): (page: Pag
 }
 
 /** Creates a page updater that removes a block. */
-export function applyBlockDelete(blockId: string): (page: PageEntry) => PageEntry {
+export function applyBlockDelete(
+  blockId: string,
+): (page: PageEntry) => PageEntry {
   return (page) => ({
     ...page,
     content: deleteBlockFromTree(page.content ?? [], blockId),
@@ -202,7 +271,11 @@ export function applyBlockDelete(blockId: string): (page: PageEntry) => PageEntr
 }
 
 /** Creates a page updater that reorders a block to a target index. */
-export function applyBlockMove(blockId: string, targetIndex: number, parentBlockId: string | null = null): (page: PageEntry) => PageEntry {
+export function applyBlockMove(
+  blockId: string,
+  targetIndex: number,
+  parentBlockId: string | null = null,
+): (page: PageEntry) => PageEntry {
   return (page) => {
     const content = cloneBlocks(page.content ?? []);
 
@@ -212,7 +285,8 @@ export function applyBlockMove(blockId: string, targetIndex: number, parentBlock
 
       const [moved] = arr.splice(fromIdx, 1);
       const boundedTarget = Math.max(0, Math.min(targetIndex, arr.length));
-      const insertIdx = fromIdx < targetIndex ? boundedTarget - 1 : boundedTarget;
+      const insertIdx =
+        fromIdx < targetIndex ? boundedTarget - 1 : boundedTarget;
       arr.splice(Math.max(0, insertIdx), 0, moved);
       return true;
     };
@@ -241,16 +315,22 @@ export function applyBlockMove(blockId: string, targetIndex: number, parentBlock
 }
 
 /** Creates a page updater that changes a block's type. */
-export function applyBlockTypeChange(blockId: string, newType: BlockType): (page: PageEntry) => PageEntry {
+export function applyBlockTypeChange(
+  blockId: string,
+  newType: BlockType,
+): (page: PageEntry) => PageEntry {
   return (page) => ({
     ...page,
     content: mapBlocksTree(page.content ?? [], (block) =>
-      block.id === blockId ? { ...block, type: newType } : block),
+      block.id === blockId ? { ...block, type: newType } : block,
+    ),
   });
 }
 
 /** Creates a page updater that indents a block under its previous sibling. */
-export function applyBlockIndent(blockId: string): (page: PageEntry) => PageEntry {
+export function applyBlockIndent(
+  blockId: string,
+): (page: PageEntry) => PageEntry {
   return (page) => {
     const content = cloneBlocks(page.content ?? []);
     indentBlockInTree(content, blockId);
@@ -259,7 +339,9 @@ export function applyBlockIndent(blockId: string): (page: PageEntry) => PageEntr
 }
 
 /** Creates a page updater that outdents a block to its parent's level. */
-export function applyBlockOutdent(blockId: string): (page: PageEntry) => PageEntry {
+export function applyBlockOutdent(
+  blockId: string,
+): (page: PageEntry) => PageEntry {
   return (page) => {
     const content = cloneBlocks(page.content ?? []);
     outdentBlockInTree(content, blockId);
