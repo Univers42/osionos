@@ -185,6 +185,27 @@ function deleteBlockFromTree(blocks: Block[], blockId: string): Block[] {
     }));
 }
 
+function insertBlockIntoTree(
+  blocks: Block[],
+  afterBlockId: string,
+  nextBlock: Block,
+): boolean {
+  for (let idx = 0; idx < blocks.length; idx += 1) {
+    const block = blocks[idx];
+
+    if (block.id === afterBlockId) {
+      blocks.splice(idx + 1, 0, nextBlock);
+      return true;
+    }
+
+    if (block.children && insertBlockIntoTree(block.children, afterBlockId, nextBlock)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function indentBlockInTree(blocks: Block[], blockId: string): boolean {
   for (let idx = 0; idx < blocks.length; idx += 1) {
     const block = blocks[idx];
@@ -252,10 +273,11 @@ export function applyBlockInsert(
   block: Block,
 ): (page: PageEntry) => PageEntry {
   return (page) => {
-    const content = [...(page.content ?? [])];
-    const afterIdx = content.findIndex((b) => b.id === afterBlockId);
-    if (afterIdx >= 0) content.splice(afterIdx + 1, 0, block);
-    else content.push(block);
+    const content = cloneBlocks(page.content ?? []);
+    const inserted = insertBlockIntoTree(content, afterBlockId, block);
+    if (!inserted) {
+      content.push(block);
+    }
     return { ...page, content };
   };
 }
