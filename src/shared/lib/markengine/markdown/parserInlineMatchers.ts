@@ -5,7 +5,7 @@ import type {
   InlineMatcher,
   InlineParser,
 } from "./parserInlineTypes";
-import { normalizeInlineColorToken } from '../../inlineTextStyles';
+import { normalizeInlineColorToken } from "../../inlineTextStyles";
 import { EMOJI_MAP } from "./parserEmoji";
 import { findClosingBracket } from "./parserInlineUtils";
 
@@ -32,13 +32,13 @@ function matchDelimited(
 function matchStyledSegment(
   text: string,
   pos: number,
-  tag: 'color' | 'bg',
+  tag: "color" | "bg",
   parseInline: InlineParser,
   factory: (color: string, children: InlineNode[]) => InlineNode,
 ): InlineMatchResult | null {
   const open = `[${tag}=`;
   if (!text.startsWith(open, pos)) return null;
-  const colorEnd = text.indexOf(']', pos + open.length);
+  const colorEnd = text.indexOf("]", pos + open.length);
   if (colorEnd === -1) return null;
   const color = normalizeInlineColorToken(
     text.slice(pos + open.length, colorEnd).trim(),
@@ -50,10 +50,7 @@ function matchStyledSegment(
   return {
     start: pos,
     end: closeIndex + close.length,
-    node: factory(
-      color,
-      parseInline(text.slice(colorEnd + 1, closeIndex)),
-    ),
+    node: factory(color, parseInline(text.slice(colorEnd + 1, closeIndex))),
   };
 }
 
@@ -237,14 +234,20 @@ export function createInlineMatchers(
       };
     },
     (text, pos) =>
-      matchStyledSegment(text, pos, 'color', parseInline, (color, children) => ({
-        type: 'text_color',
-        color,
-        children,
-      })),
+      matchStyledSegment(
+        text,
+        pos,
+        "color",
+        parseInline,
+        (color, children) => ({
+          type: "text_color",
+          color,
+          children,
+        }),
+      ),
     (text, pos) =>
-      matchStyledSegment(text, pos, 'bg', parseInline, (color, children) => ({
-        type: 'background_color',
+      matchStyledSegment(text, pos, "bg", parseInline, (color, children) => ({
+        type: "background_color",
         color,
         children,
       })),

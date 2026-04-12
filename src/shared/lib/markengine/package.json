@@ -1,6 +1,7 @@
 {
   "name": "markengine",
   "private": true,
+  "type": "module",
   "version": "0.1.0",
   "scripts": {
     "build": "tsc -p tsconfig.json --outDir dist --module commonjs --declaration false --target ES2022",

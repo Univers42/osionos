@@ -201,10 +201,11 @@ function renderInline(
     case "code":
       return `<code class="inline-code" style="${inlineCodeStyle}">${esc(node.value)}</code>`;
     case "link": {
+      const href = normalizeHref(node.href);
       const attrs = [
-        `href="${esc(node.href)}"`,
+        `href="${esc(href)}"`,
         node.title ? `title="${esc(node.title)}"` : "",
-        o.externalLinks && isExternal(node.href)
+        o.externalLinks && isExternal(href)
           ? 'target="_blank" rel="noopener noreferrer"'
           : "",
       ]
@@ -241,4 +242,21 @@ function esc(str: string): string {
 
 function isExternal(href: string): boolean {
   return /^https?:\/\//.test(href);
+}
+
+function normalizeHref(href: string): string {
+  const cleanHref = href.trim();
+  if (!cleanHref) {
+    return cleanHref;
+  }
+
+  if (/^[a-z][a-z\d+.-]*:/i.test(cleanHref) || cleanHref.startsWith("//")) {
+    return cleanHref.startsWith("//") ? `https:${cleanHref}` : cleanHref;
+  }
+
+  if (/^[^\s/]+\.[^\s/]+(?:[/?#].*)?$/i.test(cleanHref)) {
+    return `https://${cleanHref}`;
+  }
+
+  return cleanHref;
 }

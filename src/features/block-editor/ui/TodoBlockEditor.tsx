@@ -12,17 +12,18 @@
 
 import React, { useCallback } from "react";
 
-import { EditableContent } from '@/components/blocks/EditableContent';
-import type { Block } from '@/entities/block';
+import { EditableContent } from "@/components/blocks/EditableContent";
+import type { Block } from "@/entities/block";
 
-import { usePageStore } from '@/store/usePageStore';
+import { usePageStore } from "@/store/usePageStore";
 
 export const TodoBlockEditor: React.FC<{
   block: Block;
+  pageId: string;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onRequestSlashMenu?: (position: { x: number; y: number }) => void;
-}> = ({ block, onChange, onKeyDown, onRequestSlashMenu }) => {
+}> = ({ block, pageId, onChange, onKeyDown, onRequestSlashMenu }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
   const page = usePageStore((s) => s.activePage);
 
@@ -65,6 +66,7 @@ export const TodoBlockEditor: React.FC<{
               : "text-[var(--color-ink)]",
           ].join(" ")}
           placeholder="To-do"
+          pageId={pageId}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onRequestSlashMenu={onRequestSlashMenu}

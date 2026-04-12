@@ -49,7 +49,7 @@ function renderInlineNodesToHtml(nodes: InlineNode[]): string {
         case "code":
           return `<code data-inline-type="code" class="inline-code" style="${inlineCodeStyle}">${escHtml(node.value)}</code>`;
         case "link":
-          return `<a data-inline-type="link" href="${escHtml(node.href)}" target="_blank" rel="noopener noreferrer" style="color:var(--color-accent);text-decoration:underline;cursor:pointer;">${renderInlineNodesToHtml(node.children)}</a>`;
+          return `<a data-inline-type="link" href="${escHtml(normalizeHref(node.href))}" target="_blank" rel="noopener noreferrer" style="color:var(--color-accent);text-decoration:underline;cursor:pointer;">${renderInlineNodesToHtml(node.children)}</a>`;
         case "image":
           return `<img src="${escHtml(node.src)}" alt="${escHtml(node.alt)}" />`;
         case "highlight":
@@ -75,6 +75,23 @@ function escHtml(s: string): string {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function normalizeHref(href: string): string {
+  const cleanHref = href.trim();
+  if (!cleanHref) {
+    return cleanHref;
+  }
+
+  if (/^[a-z][a-z\d+.-]*:/i.test(cleanHref) || cleanHref.startsWith("//")) {
+    return cleanHref.startsWith("//") ? `https:${cleanHref}` : cleanHref;
+  }
+
+  if (/^[^\s/]+\.[^\s/]+(?:[/?#].*)?$/i.test(cleanHref)) {
+    return `https://${cleanHref}`;
+  }
+
+  return cleanHref;
 }
 
 /**

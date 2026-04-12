@@ -132,10 +132,11 @@ export function renderInlineNode(
       );
 
     case "link": {
-      const isExt = isExternal(node.href);
+      const href = normalizeHref(node.href);
+      const isExt = isExternal(href);
       const props: Record<string, unknown> = {
         key,
-        href: node.href,
+        href,
         title: node.title || undefined,
         ...(o.externalLinks && isExt
           ? { target: "_blank", rel: "noopener noreferrer" }
@@ -208,4 +209,21 @@ export function renderInlineNode(
 
 export function isExternal(href: string): boolean {
   return /^https?:\/\//.test(href);
+}
+
+function normalizeHref(href: string): string {
+  const cleanHref = href.trim();
+  if (!cleanHref) {
+    return cleanHref;
+  }
+
+  if (/^[a-z][a-z\d+.-]*:/i.test(cleanHref) || cleanHref.startsWith("//")) {
+    return cleanHref.startsWith("//") ? `https:${cleanHref}` : cleanHref;
+  }
+
+  if (/^[^\s/]+\.[^\s/]+(?:[/?#].*)?$/i.test(cleanHref)) {
+    return `https://${cleanHref}`;
+  }
+
+  return cleanHref;
 }

@@ -66,10 +66,24 @@ test("parses inline links and code spans", () => {
 });
 
 test("renders links with nested parentheses", () => {
-  const source = "Read [wiki](https://en.wikipedia.org/wiki/Function_(mathematics)) now.";
+  const source =
+    "Read [wiki](https://en.wikipedia.org/wiki/Function_(mathematics)) now.";
   const html = renderHtml(parseMarkdown(source, { documentVersion: 1 }).ast);
 
-  assert.match(html, /<a[^>]*href="https:\/\/en\.wikipedia\.org\/wiki\/Function_\(mathematics\)"[^>]*>wiki<\/a>/);
+  assert.match(
+    html,
+    /<a[^>]*href="https:\/\/en\.wikipedia\.org\/wiki\/Function_\(mathematics\)"[^>]*>wiki<\/a>/,
+  );
+});
+
+test("normalizes bare domain links to https", () => {
+  const source = "Visit [Google](www.google.es) now.";
+  const html = renderHtml(parseMarkdown(source, { documentVersion: 1 }).ast);
+
+  assert.match(
+    html,
+    /<a[^>]*href="https:\/\/www\.google\.es"[^>]*>Google<\/a>/,
+  );
 });
 
 test("supports incremental reparsing", () => {
