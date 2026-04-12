@@ -131,11 +131,20 @@ export function detectBlockType(text: string): BlockDetection | null {
   const todo = detectToDo(line);
   if (todo) return todo;
 
+  if (line.startsWith(">[!")) {
+    const close = line.indexOf("]", 4);
+    if (close !== -1) {
+      const kind = line.slice(3, close).trim().toLowerCase() || "note";
+      const c = stripPrefix(line, close + 1);
+      return { type: "callout", content: c, remainingContent: c, kind };
+    }
+  }
+
   if (line.startsWith('" ')) {
     const c = stripPrefix(line, 2);
     return { type: "quote", content: c, remainingContent: c };
   }
-  if (line.startsWith("> ") && !line.startsWith(">![")) {
+  if (line.startsWith("> ")) {
     const c = stripPrefix(line, 2);
     return { type: "quote", content: c, remainingContent: c };
   }
@@ -151,15 +160,6 @@ export function detectBlockType(text: string): BlockDetection | null {
       content: orderedResult.rest,
       remainingContent: orderedResult.rest,
     };
-
-  if (line.startsWith(">![")) {
-    const close = line.indexOf("]", 3);
-    if (close !== -1) {
-      const kind = line.slice(3, close).trim().toLowerCase() || "note";
-      const c = stripPrefix(line, close + 1);
-      return { type: "callout", content: c, remainingContent: c, kind };
-    }
-  }
 
   return null;
 }
