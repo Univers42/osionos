@@ -8,9 +8,9 @@
 export {
   BLOCK_SHORTCUTS,
   detectBlockType,
+  getCalloutIconForKind,
   parseInlineMarkdown,
   parseMarkdownToBlocks,
 } from "./markengine/shortcuts";
 
 export type { BlockDetection } from "./markengine/shortcuts";
-

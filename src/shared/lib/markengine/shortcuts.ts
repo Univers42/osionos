@@ -1,11 +1,16 @@
 // Markdown shortcuts — inline parsing and block conversion
-import type { BlockType, Block } from '@/entities/block';
+import type { BlockType, Block } from "@/entities/block";
 import type { InlineNode } from "./markdown/ast";
 import { parse, parseInline } from "./markdown/parser";
 import { getInlineColorOption } from "../inlineTextStyles";
+import { getCalloutIconForKind } from "./shortcutsDetect";
 
 export type { BlockDetection } from "./shortcutsDetect";
-export { BLOCK_SHORTCUTS, detectBlockType } from "./shortcutsDetect";
+export {
+  BLOCK_SHORTCUTS,
+  detectBlockType,
+  getCalloutIconForKind,
+} from "./shortcutsDetect";
 
 export function parseInlineMarkdown(text: string): string {
   // Use the full parser's inline engine → convert to HTML
@@ -146,6 +151,7 @@ function astToBlocks(node: import("./markdown/ast").BlockNode): Block[] {
           id: crypto.randomUUID(),
           type: "callout" as BlockType,
           content: node.children.map((c) => blockToPlain(c)).join("\n"),
+          color: getCalloutIconForKind(node.kind),
         },
       ];
     case "table":

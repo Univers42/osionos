@@ -14,6 +14,7 @@ import React, { useState, useRef, useCallback } from "react";
 import { usePageStore } from "@/store/usePageStore";
 import {
   detectBlockType,
+  getCalloutIconForKind,
   parseMarkdownToBlocks,
 } from "@/shared/lib/markengine";
 import { useSlashSelect, repositionCursor } from "@/features/slash-commands";
@@ -189,7 +190,12 @@ export function usePlaygroundBlockEditor(pageId: string) {
         const detection = detectBlockType(text);
         if (detection) {
           changeBlockType(pageId, blockId, detection.type);
-          updateBlock(pageId, blockId, { content: detection.remainingContent });
+          updateBlock(pageId, blockId, {
+            content: detection.remainingContent,
+            ...(detection.type === "callout"
+              ? { color: getCalloutIconForKind(detection.kind ?? "note") }
+              : {}),
+          });
           repositionCursor(blockId, detection.remainingContent);
         }
       }
@@ -451,7 +457,9 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
       const shouldTransformSingleBlock =
         parsed.length === 1 &&
-        (parsed[0].type !== "paragraph" || markdown.includes("```") || markdown.includes("~~~"));
+        (parsed[0].type !== "paragraph" ||
+          markdown.includes("```") ||
+          markdown.includes("~~~"));
 
       if (parsed.length === 1 && !shouldTransformSingleBlock) return;
 
