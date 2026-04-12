@@ -28,6 +28,32 @@ function renderInlineMarkdown(content: string) {
   return { __html: parseInlineMarkdown(content) };
 }
 
+function getNestedListClassName(type: Block["type"]) {
+  if (type === "bulleted_list" || type === "numbered_list") {
+    return "ml-[3.25rem] mt-0.5";
+  }
+
+  if (type === "to_do") {
+    return "ml-[2.75rem] mt-0.5";
+  }
+
+  return "ml-7";
+}
+
+function renderNestedChildren(block: Block) {
+  if (!block.children?.length) {
+    return null;
+  }
+
+  return (
+    <div className={getNestedListClassName(block.type)}>
+      {block.children.map((child, index) => (
+        <ReadOnlyBlock key={child.id} block={child} index={index} />
+      ))}
+    </div>
+  );
+}
+
 export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
   switch (block.type) {
     case "paragraph":
@@ -101,69 +127,78 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
 
     case "bulleted_list":
       return (
-        <div className="flex items-start gap-2 pl-5">
-          <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-ink-faint)] mt-[7px]" />
-          </span>
-          <span
-            className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1"
-            dangerouslySetInnerHTML={
-              renderInlineMarkdown(block.content) ?? undefined
-            }
-          />
-        </div>
+        <>
+          <div className="flex items-start gap-2 pl-5">
+            <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-ink-faint)] mt-[7px]" />
+            </span>
+            <span
+              className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1"
+              dangerouslySetInnerHTML={
+                renderInlineMarkdown(block.content) ?? undefined
+              }
+            />
+          </div>
+          {renderNestedChildren(block)}
+        </>
       );
 
     case "numbered_list":
       return (
-        <div className="flex items-start gap-2 pl-5">
-          <span className="text-sm leading-relaxed py-0.5 text-[var(--color-ink-muted)] select-none shrink-0 w-6 text-center font-medium">
-            {index + 1}.
-          </span>
-          <span
-            className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1"
-            dangerouslySetInnerHTML={
-              renderInlineMarkdown(block.content) ?? undefined
-            }
-          />
-        </div>
+        <>
+          <div className="flex items-start gap-2 pl-5">
+            <span className="text-sm leading-relaxed py-0.5 text-[var(--color-ink-muted)] select-none shrink-0 w-6 text-center font-medium">
+              {index + 1}.
+            </span>
+            <span
+              className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1"
+              dangerouslySetInnerHTML={
+                renderInlineMarkdown(block.content) ?? undefined
+              }
+            />
+          </div>
+          {renderNestedChildren(block)}
+        </>
       );
 
     case "to_do":
       return (
-        <div className="flex items-start gap-2 pl-5">
-          <span
-            className={[
-              "shrink-0 mt-[3px] w-4 h-4 rounded border flex items-center justify-center",
-              block.checked
-                ? "bg-[var(--color-accent)] border-[var(--color-accent)] text-white"
-                : "border-[var(--color-line)] bg-[var(--color-surface-primary)]",
-            ].join(" ")}
-          >
-            {block.checked && (
-              <svg className="w-3 h-3" viewBox="0 0 16 16" fill="none">
-                <path
-                  d="M4 8l2.5 2.5L12 5"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            )}
-          </span>
-          <span
-            className={[
-              "text-sm leading-relaxed py-0.5 flex-1",
-              block.checked
-                ? "text-[var(--color-ink-muted)] line-through"
-                : "text-[var(--color-ink)]",
-            ].join(" ")}
-            dangerouslySetInnerHTML={
-              renderInlineMarkdown(block.content) ?? undefined
-            }
-          />
-        </div>
+        <>
+          <div className="flex items-start gap-2 pl-5">
+            <span
+              className={[
+                "shrink-0 mt-[3px] w-4 h-4 rounded border flex items-center justify-center",
+                block.checked
+                  ? "bg-[var(--color-accent)] border-[var(--color-accent)] text-white"
+                  : "border-[var(--color-line)] bg-[var(--color-surface-primary)]",
+              ].join(" ")}
+            >
+              {block.checked && (
+                <svg className="w-3 h-3" viewBox="0 0 16 16" fill="none">
+                  <path
+                    d="M4 8l2.5 2.5L12 5"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </span>
+            <span
+              className={[
+                "text-sm leading-relaxed py-0.5 flex-1",
+                block.checked
+                  ? "text-[var(--color-ink-muted)] line-through"
+                  : "text-[var(--color-ink)]",
+              ].join(" ")}
+              dangerouslySetInnerHTML={
+                renderInlineMarkdown(block.content) ?? undefined
+              }
+            />
+          </div>
+          {renderNestedChildren(block)}
+        </>
       );
 
     case "code":

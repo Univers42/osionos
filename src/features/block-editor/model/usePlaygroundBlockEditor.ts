@@ -29,6 +29,7 @@ import {
   handleArrowDown,
   handleEnterKey,
   handleBackspaceKey,
+  getAdjacentRenderedBlockId,
 } from "./playgroundBlockEditor.helpers";
 import type { SlashMenuState } from "./playgroundBlockEditor.helpers";
 
@@ -321,16 +322,13 @@ export function usePlaygroundBlockEditor(pageId: string) {
       }
 
       e.preventDefault();
-
-      const nextBlockId =
-        blockIdx < content.length - 1 ? content[blockIdx + 1].id : null;
-      const prevBlockId = blockIdx > 0 ? content[blockIdx - 1].id : null;
-
+      const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, "next");
+      const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, "prev");
       deleteBlock(pageId, blockId);
-      if (nextBlockId) {
-        focusBlock(nextBlockId);
-      } else if (prevBlockId) {
-        focusBlock(prevBlockId, true);
+      if (nextRenderedBlockId) {
+        focusBlock(nextRenderedBlockId);
+      } else if (prevRenderedBlockId) {
+        focusBlock(prevRenderedBlockId, true);
       }
 
       return true;
@@ -354,15 +352,13 @@ export function usePlaygroundBlockEditor(pageId: string) {
       }
 
       e.preventDefault();
-      const nextBlockId =
-        blockIdx < content.length - 1 ? content[blockIdx + 1].id : null;
-      const prevBlockId = blockIdx > 0 ? content[blockIdx - 1].id : null;
-
+      const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, "next");
+      const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, "prev");
       deleteBlock(pageId, blockId);
-      if (nextBlockId) {
-        focusBlock(nextBlockId);
-      } else if (prevBlockId) {
-        focusBlock(prevBlockId, true);
+      if (nextRenderedBlockId) {
+        focusBlock(nextRenderedBlockId);
+      } else if (prevRenderedBlockId) {
+        focusBlock(prevRenderedBlockId, true);
       }
       return true;
     },
@@ -376,6 +372,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       block: Block,
       blockIdx: number,
       content: Block[],
+      parentBlockId: string | null,
       isEmpty: boolean,
     ): boolean => {
       if ((e.key !== "Backspace" && e.key !== "Delete") || !isEmpty)
@@ -391,15 +388,22 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
       if (isListType(block.type)) {
         e.preventDefault();
-        const prevBlockId = blockIdx > 0 ? content[blockIdx - 1].id : null;
-        const nextBlockId =
-          blockIdx < content.length - 1 ? content[blockIdx + 1].id : null;
+        const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, "next");
+        const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, "prev");
         deleteBlock(pageId, blockId);
-        if (nextBlockId) {
-          focusBlock(nextBlockId);
-        } else if (prevBlockId) {
-          focusBlock(prevBlockId, true);
+        if (nextRenderedBlockId) {
+          focusBlock(nextRenderedBlockId);
+        } else if (prevRenderedBlockId) {
+          focusBlock(prevRenderedBlockId, true);
         }
+        return true;
+      }
+
+      if (block.type === "paragraph" && parentBlockId) {
+        e.preventDefault();
+        outdentBlock(pageId, blockId);
+        focusBlock(blockId);
+        repositionCursor(blockId, "");
         return true;
       }
 
@@ -417,7 +421,14 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
       return false;
     },
-    [pageId, deleteBlock, changeBlockType, updateBlock, focusBlock],
+    [
+      pageId,
+      deleteBlock,
+      changeBlockType,
+      updateBlock,
+      focusBlock,
+      outdentBlock,
+    ],
   );
 
   const handleArrowNavigation = useCallback(
@@ -474,7 +485,12 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
   /** Handle key presses — Enter, Backspace, Arrow navigation. */
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent, blockId: string, content: Block[]) => {
+    (
+      e: React.KeyboardEvent,
+      blockId: string,
+      content: Block[],
+      parentBlockId: string | null = null,
+    ) => {
       const block = content.find((b) => b.id === blockId);
       if (!block) return;
       const blockIdx = content.findIndex((b) => b.id === blockId);
@@ -525,7 +541,17 @@ export function usePlaygroundBlockEditor(pageId: string) {
         return;
       }
 
-      if (handleEmptyBackspace(e, blockId, block, blockIdx, content, isEmpty)) {
+      if (
+        handleEmptyBackspace(
+          e,
+          blockId,
+          block,
+          blockIdx,
+          content,
+          parentBlockId,
+          isEmpty,
+        )
+      ) {
         return;
       }
 
