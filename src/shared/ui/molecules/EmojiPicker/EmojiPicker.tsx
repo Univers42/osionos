@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   EmojiPicker.tsx                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 20:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:47:31 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/12 10:19:56 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -81,7 +81,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
       <CompactAssetPickerBoard
         value={current}
         label="Selector de assets"
-        width={432}
+        width={340}
         onSerializedValueChange={handleSelect}
       />
       <div className="mt-2 flex justify-end">
