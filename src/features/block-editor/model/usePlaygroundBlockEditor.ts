@@ -145,6 +145,17 @@ export function usePlaygroundBlockEditor(pageId: string) {
       // Always persist the content first
       updateBlock(pageId, blockId, { content: text });
 
+      const fencedCodeMatch = /^```\s*([A-Za-z0-9_+-]+)?\s*$/.exec(text);
+      if (fencedCodeMatch) {
+        changeBlockType(pageId, blockId, "code");
+        updateBlock(pageId, blockId, {
+          content: "",
+          language: fencedCodeMatch[1]?.toLowerCase() || "plaintext",
+        });
+        repositionCursor(blockId, "");
+        return;
+      }
+
       const parsedTable = parsePipeTable(text);
       if (parsedTable) {
         changeBlockType(pageId, blockId, "table_block");
@@ -436,7 +447,13 @@ export function usePlaygroundBlockEditor(pageId: string) {
       if (!markdown) return;
 
       const parsed = parseMarkdownToBlocks(markdown);
-      if (parsed.length <= 1) return;
+      if (parsed.length === 0) return;
+
+      const shouldTransformSingleBlock =
+        parsed.length === 1 &&
+        (parsed[0].type !== "paragraph" || markdown.includes("```") || markdown.includes("~~~"));
+
+      if (parsed.length === 1 && !shouldTransformSingleBlock) return;
 
       e.preventDefault();
 
