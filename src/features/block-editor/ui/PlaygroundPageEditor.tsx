@@ -188,7 +188,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
               />
             </DraggablePlaygroundBlock>
 
-            {!!block.children?.length && (
+            {!!block.children?.length && block.type !== "toggle" && (
               <BlockTree
                 blocks={block.children}
                 pageId={pageId}
