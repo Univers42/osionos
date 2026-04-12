@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AssetPickerBoard,
+  AssetRenderer,
   resolveAssetValue,
   type AssetPickerBoardProps,
   type AssetPickerBoardTab,
@@ -15,6 +16,7 @@ type AssetSourceId = string;
 interface CompactAssetPickerBoardProps {
   value?: string;
   width?: number | string;
+  height?: number | string;
   label?: string;
   onSerializedValueChange?: (value: string) => void;
 }
@@ -30,6 +32,18 @@ const SOURCE_OPTIONS: ReadonlyArray<{
 const SOURCE_IDS = new Set<AssetSourceId>(SOURCE_OPTIONS.map((option) => option.id));
 const DEFAULT_SOURCE_ID = SOURCE_OPTIONS[0]?.id ?? 'emojis';
 const EMOJI_SOURCE_TAB = PAGE_ICON_PICKER_TABS.find((tab) => tab.id === 'emojis');
+const EMOJI_BOARD_WIDTH = 324;
+const EMOJI_CATEGORY_ICON_VALUES: Record<string, string> = {
+  'Smileys & Emotion': 'icon:sparkles',
+  'People & Body': 'icon:users',
+  'Animals & Nature': 'icon:globe',
+  'Food & Drink': 'icon:check-circle',
+  'Travel & Places': 'icon:calendar',
+  Activities: 'icon:rocket',
+  Objects: 'icon:folder',
+  Symbols: 'icon:settings',
+  Flags: 'icon:mail',
+};
 const EMOJI_CATEGORY_OPTIONS = (() => {
   if (!EMOJI_SOURCE_TAB) {
     return [];
@@ -55,6 +69,7 @@ const EMOJI_CATEGORY_OPTIONS = (() => {
     id: groupId,
     label: EMOJI_SOURCE_TAB.groupLabels?.[groupId] ?? groupId,
     count: groups.get(groupId) ?? 0,
+    iconValue: EMOJI_CATEGORY_ICON_VALUES[groupId] ?? 'icon:sparkles',
   }));
 })();
 
@@ -108,7 +123,7 @@ function makeCompactBoardProps(): Partial<AssetPickerBoardProps> {
       },
       grid: {
         ...PAGE_ICON_PICKER_BOARD_PROPS.styles?.grid,
-        padding: '6px 12px 12px',
+        padding: '4px 10px 10px',
       },
       emptyState: {
         ...PAGE_ICON_PICKER_BOARD_PROPS.styles?.emptyState,
@@ -122,7 +137,8 @@ const COMPACT_BOARD_PROPS = makeCompactBoardProps();
 
 export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = ({
   value,
-  width = '100%',
+  width = EMOJI_BOARD_WIDTH,
+  height = 352,
   label = 'Selector de assets',
   onSerializedValueChange,
 }) => {
@@ -164,9 +180,10 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
 
   return (
     <div
-      className="overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)]"
+      className="flex flex-col overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)]"
       style={{
         width,
+        height,
         boxShadow: '0 18px 48px rgba(15, 23, 42, 0.16)',
       }}
     >
@@ -193,22 +210,25 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
         </div>
 
         {activeSource === 'emojis' && EMOJI_CATEGORY_OPTIONS.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
+          <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
             {EMOJI_CATEGORY_OPTIONS.map((category) => {
               const isActive = category.id === activeEmojiCategory;
               return (
                 <button
                   key={category.id}
                   type="button"
+                  aria-label={category.label}
+                  title={category.label}
                   className={[
-                    'h-7 rounded-md border px-2.5 text-[11px] font-medium transition-colors',
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors',
                     isActive
                       ? 'border-[var(--color-line)] bg-[var(--color-surface-secondary)] text-[var(--color-ink)]'
                       : 'border-transparent text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-ink)]',
                   ].join(' ')}
                   onClick={() => setActiveEmojiCategory(category.id)}
                 >
-                  {category.label}
+                  <AssetRenderer value={category.iconValue} size={14} />
+                  <span className="sr-only">{category.label}</span>
                 </button>
               );
             })}
@@ -216,15 +236,17 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
         )}
       </div>
 
-      <AssetPickerBoard
-        key={`${activeSource}:${activeEmojiCategory}`}
-        {...COMPACT_BOARD_PROPS}
-        tabs={boardTabs}
-        value={value}
-        width="100%"
-        label={label}
-        onSerializedValueChange={onSerializedValueChange}
-      />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <AssetPickerBoard
+          key={`${activeSource}:${activeEmojiCategory}`}
+          {...COMPACT_BOARD_PROPS}
+          tabs={boardTabs}
+          value={value}
+          width="100%"
+          label={label}
+          onSerializedValueChange={onSerializedValueChange}
+        />
+      </div>
     </div>
   );
 };
