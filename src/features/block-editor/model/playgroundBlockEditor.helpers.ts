@@ -20,19 +20,31 @@ export interface SlashMenuState {
   filter: string;
 }
 
+function getRenderedBlocks(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-block-id]'));
+}
+
+export function getAdjacentRenderedBlockId(
+  blockId: string,
+  direction: 'prev' | 'next',
+): string | null {
+  const orderedBlocks = getRenderedBlocks();
+  const idx = orderedBlocks.findIndex((el) => el.dataset.blockId === blockId);
+  if (idx < 0) return null;
+
+  const offset = direction === 'prev' ? -1 : 1;
+  return orderedBlocks[idx + offset]?.dataset.blockId ?? null;
+}
+
 export function handleArrowUp(blockId: string, content: Block[], focusBlock: (id: string, end?: boolean) => void): boolean {
   const sel = globalThis.getSelection();
   const range = sel?.getRangeAt(0);
   if (!range?.collapsed || range.startOffset !== 0) return false;
 
-  const orderedBlocks = Array.from(document.querySelectorAll<HTMLElement>('[data-block-id]'));
-  const idx = orderedBlocks.findIndex((el) => el.dataset.blockId === blockId);
-  if (idx > 0) {
-    const prevId = orderedBlocks[idx - 1].dataset.blockId;
-    if (prevId) {
-      focusBlock(prevId, true);
-      return true;
-    }
+  const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, 'prev');
+  if (prevRenderedBlockId) {
+    focusBlock(prevRenderedBlockId, true);
+    return true;
   }
 
   const fallbackIdx = content.findIndex(b => b.id === blockId);
@@ -51,14 +63,10 @@ export function handleArrowDown(
   const range = sel?.getRangeAt(0);
   if (!range?.collapsed || range.endOffset !== (el.textContent?.length ?? 0)) return false;
 
-  const orderedBlocks = Array.from(document.querySelectorAll<HTMLElement>('[data-block-id]'));
-  const idx = orderedBlocks.findIndex((node) => node.dataset.blockId === blockId);
-  if (idx >= 0 && idx < orderedBlocks.length - 1) {
-    const nextId = orderedBlocks[idx + 1].dataset.blockId;
-    if (nextId) {
-      focusBlock(nextId);
-      return true;
-    }
+  const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, 'next');
+  if (nextRenderedBlockId) {
+    focusBlock(nextRenderedBlockId);
+    return true;
   }
 
   const fallbackIdx = content.findIndex(b => b.id === blockId);
@@ -89,8 +97,7 @@ export function handleBackspaceKey(
   focusBlock: (id: string, end?: boolean) => void,
 ): void {
   e.preventDefault();
-  const idx = content.findIndex(b => b.id === blockId);
-  const prevBlockId = idx > 0 ? content[idx - 1].id : null;
+  const prevBlockId = getAdjacentRenderedBlockId(blockId, 'prev');
   deleteBlock(pageId, blockId);
   if (prevBlockId) focusBlock(prevBlockId, true);
 }

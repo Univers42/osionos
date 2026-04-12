@@ -330,6 +330,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <ToggleBlockEditor
           block={block}
+          pageId={pageId}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onRequestSlashMenu={onRequestSlashMenu}

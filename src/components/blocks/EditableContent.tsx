@@ -544,6 +544,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const ref = useRef<HTMLDivElement>(null);
   const isComposing = useRef(false);
   const isFocused = useRef(false);
+  const [hasFocus, setHasFocus] = useState(false);
   const [selectionSnapshot, setSelectionSnapshot] = useState<SelectionSnapshot | null>(null);
   const [openPalette, setOpenPalette] = useState<PaletteKind>(null);
 
@@ -750,18 +751,20 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         contentEditable
         suppressContentEditableWarning
         spellCheck
-        data-placeholder={placeholder}
-        className={`outline-none whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--color-ink-faint)] empty:before:pointer-events-none focus:empty:before:content-none ${className}`}
+        data-placeholder={hasFocus ? placeholder : ""}
+        className={`outline-none whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--color-ink-faint)] empty:before:pointer-events-none ${className}`}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         onMouseUp={updateSelectionSnapshot}
         onFocus={() => {
           isFocused.current = true;
+          setHasFocus(true);
           renderContent(content);
         }}
         onBlur={() => {
           isFocused.current = false;
+          setHasFocus(false);
           setSelectionSnapshot(null);
           setOpenPalette(null);
           syncContentFromDom();
