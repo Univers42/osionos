@@ -18,6 +18,7 @@ import type { Block } from "@/entities/block";
 
 import { usePageStore } from "@/store/usePageStore";
 import { usePlaygroundBlockEditor, BlockEditor } from "@/features/block-editor";
+import { BlockContextMenu } from "./BlockContextMenu";
 
 interface PlaygroundPageEditorProps {
   pageId: string;
@@ -39,6 +40,10 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
   const {
     slashMenu,
     setSlashMenu,
+    contextMenu,
+    contextMenuSections,
+    openContextMenu,
+    closeContextMenu,
     handleBlockChange,
     handleKeyDown,
     handlePaste,
@@ -84,6 +89,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
         onDeleteBlock={(blockId: string) => deleteBlock(pageId, blockId)}
         registerRef={registerBlockRef}
         onRequestSlashMenu={handleRequestSlashMenu}
+        onContextMenu={openContextMenu}
       />
 
       <button
@@ -111,6 +117,12 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
           onClose={() => setSlashMenu(null)}
         />
       )}
+
+      <BlockContextMenu
+        menu={contextMenu}
+        sections={contextMenuSections}
+        onClose={closeContextMenu}
+      />
     </div>
   );
 };
@@ -133,6 +145,7 @@ interface BlockTreeProps {
   onPaste: (e: React.ClipboardEvent, blockId: string, blocks: Block[]) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
+  onContextMenu: (e: React.MouseEvent, blockId: string) => void;
   onRequestSlashMenu: (
     blockId: string,
     position: { x: number; y: number },
@@ -152,6 +165,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
   onPaste,
   onDeleteBlock,
   registerRef,
+  onContextMenu,
   onRequestSlashMenu,
 }) => {
   let numberedCounter = 0;
@@ -173,6 +187,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
               moveBlock={moveBlock}
               draggedBlockId={draggedBlockId}
               setDraggedBlockId={setDraggedBlockId}
+              onContextMenu={onContextMenu}
             >
               <EditableBlock
                 pageId={pageId}
@@ -201,6 +216,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 onPaste={onPaste}
                 onDeleteBlock={onDeleteBlock}
                 registerRef={registerRef}
+                onContextMenu={onContextMenu}
                 onRequestSlashMenu={onRequestSlashMenu}
               />
             )}
@@ -224,6 +240,7 @@ interface DraggablePlaygroundBlockProps {
   ) => void;
   draggedBlockId: string | null;
   setDraggedBlockId: (id: string | null) => void;
+  onContextMenu: (e: React.MouseEvent, blockId: string) => void;
   children: React.ReactNode;
 }
 
@@ -235,6 +252,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
   moveBlock,
   draggedBlockId,
   setDraggedBlockId,
+  onContextMenu,
   children,
 }) => {
   const [dropPosition, setDropPosition] = useState<DropPosition>(null);
@@ -293,6 +311,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
   return (
     <div // NOSONAR - drag/drop wrapper cannot be a native interactive element due nested contentEditable controls
       className={`group/block relative transition-opacity ${isDragged ? "opacity-40" : ""}`}
+      onContextMenu={(e) => onContextMenu(e, block.id)}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}

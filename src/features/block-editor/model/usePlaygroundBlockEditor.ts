@@ -31,6 +31,7 @@ import {
   handleBackspaceKey,
 } from "./playgroundBlockEditor.helpers";
 import type { SlashMenuState } from "./playgroundBlockEditor.helpers";
+import { useBlockContextMenu } from "./useBlockContextMenu";
 
 const HEADING_SHORTCUT_RE = /^#{1,6}$/;
 const NUMBERED_SHORTCUT_RE = /^\d+\.$/;
@@ -541,6 +542,21 @@ export function usePlaygroundBlockEditor(pageId: string) {
     return useDatabaseStore.getState().createInlineDatabase(name);
   }, []);
 
+  const page = usePageStore((s) => s.pageById(pageId));
+  const content = page?.content ?? [];
+
+  const {
+    contextMenu,
+    contextMenuSections,
+    openContextMenu,
+    closeContextMenu,
+  } = useBlockContextMenu({
+    pageId,
+    content,
+    updatePageContent,
+    focusBlock,
+  });
+
   /** Handle slash-command selection. */
   const handleSlashSelect = useSlashSelect({
     pageId,
@@ -600,6 +616,10 @@ export function usePlaygroundBlockEditor(pageId: string) {
   return {
     slashMenu,
     setSlashMenu,
+    contextMenu,
+    contextMenuSections,
+    openContextMenu,
+    closeContextMenu,
     handleBlockChange,
     handleKeyDown,
     handlePaste,

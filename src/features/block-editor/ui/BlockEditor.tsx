@@ -137,6 +137,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
   const openCodeContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setShowLangPicker(false);
     setCodeContextMenu({ x: e.clientX, y: e.clientY });
   }, []);
@@ -618,6 +619,7 @@ const TableBlockEditor: React.FC<{
   const openContextMenu = useCallback(
     (e: React.MouseEvent, row: number, col: number) => {
       e.preventDefault();
+      e.stopPropagation();
       setContextMenu({ x: e.clientX, y: e.clientY, row, col });
     },
     [],
