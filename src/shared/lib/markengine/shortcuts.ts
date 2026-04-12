@@ -49,7 +49,7 @@ function renderInlineNodesToHtml(nodes: InlineNode[]): string {
         case "code":
           return `<code data-inline-type="code" class="inline-code" style="${inlineCodeStyle}">${escHtml(node.value)}</code>`;
         case "link":
-          return `<a data-inline-type="link" href="${escHtml(node.href)}">${renderInlineNodesToHtml(node.children)}</a>`;
+          return `<a data-inline-type="link" href="${escHtml(node.href)}" target="_blank" rel="noopener noreferrer" style="color:var(--color-accent);text-decoration:underline;cursor:pointer;">${renderInlineNodesToHtml(node.children)}</a>`;
         case "image":
           return `<img src="${escHtml(node.src)}" alt="${escHtml(node.alt)}" />`;
         case "highlight":

@@ -73,6 +73,61 @@ function findSingleEmphasisClose(
   return -1;
 }
 
+function isLinkTitleStart(text: string, pos: number, start: number): boolean {
+  const ch = text[pos];
+  return (ch === '"' || ch === "'") && pos > start && /\s/.test(text[pos - 1]);
+}
+
+function skipQuotedSegment(text: string, pos: number): number {
+  const quote = text[pos];
+  let i = pos + 1;
+
+  while (i < text.length) {
+    if (text[i] === "\\") {
+      i += 2;
+      continue;
+    }
+
+    if (text[i] === quote) {
+      return i + 1;
+    }
+
+    i++;
+  }
+
+  return text.length;
+}
+
+function findLinkClosingParen(
+  text: string,
+  start: number,
+  pos = start,
+  parenDepth = 0,
+): number {
+  if (pos >= text.length) return -1;
+
+  if (isLinkTitleStart(text, pos, start)) {
+    return findLinkClosingParen(
+      text,
+      start,
+      skipQuotedSegment(text, pos),
+      parenDepth,
+    );
+  }
+
+  const ch = text[pos];
+  if (ch === "(") {
+    return findLinkClosingParen(text, start, pos + 1, parenDepth + 1);
+  }
+
+  if (ch === ")") {
+    if (parenDepth === 0) return pos;
+    return findLinkClosingParen(text, start, pos + 1, parenDepth - 1);
+  }
+
+  return findLinkClosingParen(text, start, pos + 1, parenDepth);
+}
+
 export function createInlineMatchers(
   parseInline: InlineParser,
 ): InlineMatcher[] {
@@ -143,7 +198,7 @@ export function createInlineMatchers(
       if (text[pos] !== "[") return null;
       const labelClose = findClosingBracket(text, pos);
       if (labelClose === -1 || text[labelClose + 1] !== "(") return null;
-      const parenClose = text.indexOf(")", labelClose + 2);
+      const parenClose = findLinkClosingParen(text, labelClose + 2);
       if (parenClose === -1) return null;
       const label = text.slice(pos + 1, labelClose);
       const inside = text.slice(labelClose + 2, parenClose).trim();
@@ -227,7 +282,7 @@ export function createInlineMatchers(
       const c = text[pos];
       if (pos > 0 && text[pos - 1] === c) return null; // part of an existing run
       if (text[pos + 1] === c) return null; // double = bold, not italic
-      const close = findSingleEmphasisClose(text, pos, c as "*" | "_");
+      const close = findSingleEmphasisClose(text, pos, c);
       if (close === -1 || close === pos + 1) return null;
       if (c === "_") {
         if (pos > 0 && /\w/.test(text[pos - 1])) return null;

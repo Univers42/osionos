@@ -182,20 +182,11 @@ function isBackgroundColorElement(element: HTMLElement) {
   );
 }
 
-function serializeEditableNode(node: Node): string {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return node.textContent ?? '';
-  }
+function serializeTextNode(node: Node): string {
+  return node.textContent ?? '';
+}
 
-  if (node.nodeType !== Node.ELEMENT_NODE) {
-    return '';
-  }
-
-  const element = node as HTMLElement;
-  const children = Array.from(element.childNodes)
-    .map(serializeEditableNode)
-    .join('');
-
+function serializeBlockElement(element: HTMLElement, children: string): string | null {
   switch (element.tagName) {
     case 'BR':
       return '\n';
@@ -203,15 +194,23 @@ function serializeEditableNode(node: Node): string {
     case 'P':
       return children;
     default:
-      break;
+      return null;
   }
+}
 
+function serializeLinkElement(element: HTMLElement, children: string): string | null {
+  const href = element.getAttribute('href');
+  return href ? `[${children}](${href})` : null;
+}
+
+function serializeFormattedElement(element: HTMLElement, children: string): string | null {
   if (isCodeElement(element)) {
     return `\`${children}\``;
   }
 
-  if (element.tagName === 'A' && element.getAttribute('href')) {
-    return `[${children}](${element.getAttribute('href') ?? ''})`;
+  const link = serializeLinkElement(element, children);
+  if (link) {
+    return link;
   }
 
   if (isBoldElement(element)) {
@@ -249,7 +248,30 @@ function serializeEditableNode(node: Node): string {
     return color ? `[bg=${color}]${children}[/bg]` : children;
   }
 
-  return children;
+  return null;
+}
+
+function serializeEditableNode(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return serializeTextNode(node);
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return '';
+  }
+
+  const element = node as HTMLElement;
+  const children = Array.from(element.childNodes)
+    .map(serializeEditableNode)
+    .join('');
+
+  const block = serializeBlockElement(element, children);
+  if (block !== null) {
+    return block;
+  }
+
+  const formatted = serializeFormattedElement(element, children);
+  return formatted ?? children;
 }
 
 function serializeEditableContent(root: HTMLElement) {
@@ -278,7 +300,7 @@ function unwrapElement(element: HTMLElement) {
     parent.insertBefore(element.firstChild, element);
   }
 
-  parent.removeChild(element);
+  element.remove();
 }
 
 function getClosestFormatElement(
@@ -307,12 +329,12 @@ function getSharedFormatElement(
   predicate: (element: HTMLElement) => boolean,
 ) {
   const startMatch = getClosestFormatElement(range.startContainer, root, predicate);
-  if (startMatch && startMatch.contains(range.endContainer)) {
+  if (startMatch?.contains(range.endContainer)) {
     return startMatch;
   }
 
   const endMatch = getClosestFormatElement(range.endContainer, root, predicate);
-  if (endMatch && endMatch.contains(range.startContainer)) {
+  if (endMatch?.contains(range.startContainer)) {
     return endMatch;
   }
 
@@ -347,6 +369,21 @@ function createColorElement(kind: 'text' | 'background', option: InlineColorOpti
   }
 
   return span;
+}
+
+function runLegacyExecCommand(
+  command: string,
+  value?: string,
+): boolean {
+  const legacyDocument = document as Document & {
+    execCommand(commandId: string, showUI?: boolean, value?: string): boolean;
+  };
+
+  return (legacyDocument as unknown as Record<string, unknown>)['execCommand'](
+    command,
+    false,
+    value,
+  ) as boolean;
 }
 
 function wrapRange(range: Range, wrapper: HTMLElement) {
@@ -628,6 +665,23 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     [onPaste],
   );
 
+  const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement | null;
+    const anchor = target?.closest('a[href]') as HTMLAnchorElement | null;
+    if (!anchor) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    const href = anchor.href;
+    if (!href) {
+      return;
+    }
+
+    globalThis.open(href, '_blank', 'noopener,noreferrer');
+  }, []);
+
   const applyDomMutation = useCallback(
     (mutate: (root: HTMLElement, range: Range) => void) => {
       const root = ref.current;
@@ -656,8 +710,8 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const execInlineCommand = useCallback(
     (command: string, value?: string) => {
       applyDomMutation(() => {
-        document.execCommand('styleWithCSS', false, 'true');
-        document.execCommand(command, false, value);
+        runLegacyExecCommand('styleWithCSS', 'true');
+        runLegacyExecCommand(command, value);
       });
     },
     [applyDomMutation],
@@ -756,6 +810,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
+        onClick={handleClick}
         onMouseUp={updateSelectionSnapshot}
         onFocus={() => {
           isFocused.current = true;

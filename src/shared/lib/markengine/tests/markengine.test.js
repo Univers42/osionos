@@ -65,6 +65,13 @@ test("parses inline links and code spans", () => {
   assert.equal(nodes[4].type, "text");
 });
 
+test("renders links with nested parentheses", () => {
+  const source = "Read [wiki](https://en.wikipedia.org/wiki/Function_(mathematics)) now.";
+  const html = renderHtml(parseMarkdown(source, { documentVersion: 1 }).ast);
+
+  assert.match(html, /<a[^>]*href="https:\/\/en\.wikipedia\.org\/wiki\/Function_\(mathematics\)"[^>]*>wiki<\/a>/);
+});
+
 test("supports incremental reparsing", () => {
   const previousText = "# Title\n\nA *fast* **AST** engine.";
   const previousResult = parseMarkdown(previousText, { documentVersion: 1 });

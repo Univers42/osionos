@@ -34,7 +34,7 @@ function renderInlineNodesToHtml(nodes: InlineNode[]): string {
         return `<span data-inline-type="background_color" data-inline-color="${escHtml(node.color)}" style="background:${color};border-radius:4px;padding:0 0.2em;">${renderInlineNodesToHtml(node.children)}</span>`;
       }
       case 'code': return `<code data-inline-type="code" class="inline-code" style="${inlineCodeStyle}">${escHtml(node.value)}</code>`;
-      case 'link': return `<a data-inline-type="link" href="${escHtml(node.href)}">${renderInlineNodesToHtml(node.children)}</a>`;
+      case 'link': return `<a data-inline-type="link" href="${escHtml(node.href)}" target="_blank" rel="noopener noreferrer" style="color:var(--color-accent);text-decoration:underline;cursor:pointer;">${renderInlineNodesToHtml(node.children)}</a>`;
       case 'image': return `<img src="${escHtml(node.src)}" alt="${escHtml(node.alt)}" />`;
       case 'highlight': return `<mark>${renderInlineNodesToHtml(node.children)}</mark>`;
       case 'math_inline': return `<span class="math-inline">${escHtml(node.value)}</span>`;
