@@ -26,10 +26,6 @@ interface PlaygroundPageEditorProps {
 type DropPosition = "above" | "below" | null;
 const DND_TYPE = "application/x-playground-block-id";
 
-function isListBlockType(type: Block["type"]) {
-  return type === "bulleted_list" || type === "numbered_list" || type === "to_do";
-}
-
 function getNestedTreeClassName(parentBlockType: Block["type"] | null, isRoot: boolean) {
   if (isRoot || !parentBlockType) {
     return "";
