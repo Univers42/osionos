@@ -12,16 +12,13 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
+import { IconImage } from '@/shared/lib/uiCollectionAssets';
 import {
-  COVER_PICKER_BOARD_PROPS,
-  COVER_PICKER_TABS,
-  IconImage,
-} from '@/shared/lib/uiCollectionAssets';
-import {
-  AssetPickerBoard,
   resolveAssetValue,
   resolveMediaUrl,
 } from '@univers42/ui-collection';
+import { COVER_PICKER_TABS } from '@/shared/lib/uiCollectionAssets';
+import { CoverAssetPicker } from './CoverAssetPicker';
 
 interface PageCoverProps {
   /** Current cover value — URL, CSS gradient, or canonical ui-collection media ref. */
@@ -61,8 +58,17 @@ export const PageCover: React.FC<PageCoverProps> = ({
         setShowPicker(false);
       }
     };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowPicker(false);
+      }
+    };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', handleEscape);
+    };
   }, [showPicker]);
 
   const handleSelect = useCallback(
@@ -80,19 +86,21 @@ export const PageCover: React.FC<PageCoverProps> = ({
 
   return (
     <div className="notion-page-cover">
-      {isUrl ? (
-        <img
-          src={coverSrc}
-          alt=""
-          className="notion-page-cover-img"
-          draggable={false}
-        />
-      ) : (
-        <div
-          className="notion-page-cover-gradient"
-          style={{ background: cover }}
-        />
-      )}
+      <div className="notion-page-cover-media">
+        {isUrl ? (
+          <img
+            src={coverSrc}
+            alt=""
+            className="notion-page-cover-img"
+            draggable={false}
+          />
+        ) : (
+          <div
+            className="notion-page-cover-gradient"
+            style={{ background: cover }}
+          />
+        )}
+      </div>
 
       {/* Hover controls */}
       <div className="notion-page-cover-controls">
@@ -124,23 +132,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
             top: 'calc(100% + 4px)',
           }}
         >
-          {COVER_PICKER_TABS.length > 0 ? (
-            <AssetPickerBoard
-              {...COVER_PICKER_BOARD_PROPS}
-              tabs={COVER_PICKER_TABS}
-              value={cover}
-              label="Cover assets"
-              width={380}
-              onSerializedValueChange={handleSelect}
-            />
-          ) : (
-            <div className="notion-cover-picker">
-              <div className="notion-cover-picker-header">Gallery</div>
-              <p className="px-3 pb-3 text-xs text-[var(--color-ink-muted)]">
-                No published cover assets are available in the package yet.
-              </p>
-            </div>
-          )}
+          <CoverAssetPicker value={cover} onSelect={handleSelect} />
         </div>
       )}
     </div>
