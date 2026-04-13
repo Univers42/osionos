@@ -37,6 +37,11 @@ interface SelectionSnapshot {
   rect: DOMRect;
 }
 
+interface SelectionOffsets {
+  start: number;
+  end: number;
+}
+
 type PaletteKind = "text" | "background" | null;
 type LinkPickerMode = "chooser" | "external" | "internal";
 
@@ -124,6 +129,31 @@ function getSelectionSnapshot(root: HTMLElement): SelectionSnapshot | null {
   }
 
   return { start, end, rect };
+}
+
+function getSelectionOffsets(root: HTMLElement): SelectionOffsets | null {
+  const selection = globalThis.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!root.contains(range.commonAncestorContainer)) {
+    return null;
+  }
+
+  const startRange = range.cloneRange();
+  startRange.selectNodeContents(root);
+  startRange.setEnd(range.startContainer, range.startOffset);
+
+  const endRange = range.cloneRange();
+  endRange.selectNodeContents(root);
+  endRange.setEnd(range.endContainer, range.endOffset);
+
+  return {
+    start: startRange.toString().length,
+    end: endRange.toString().length,
+  };
 }
 
 function setSelectionOffsets(root: HTMLElement, start: number, end: number) {
@@ -723,8 +753,25 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       return;
     }
 
-    syncContentFromDom();
-  }, [syncContentFromDom]);
+    const root = ref.current;
+    if (!root) {
+      return;
+    }
+
+    const selectionOffsets = getSelectionOffsets(root);
+    const serialized = serializeEditableContent(root);
+    const parsedHtml = serialized ? parseInlineMarkdown(serialized) : "";
+
+    if (root.innerHTML !== parsedHtml) {
+      root.innerHTML = parsedHtml;
+      if (selectionOffsets) {
+        setSelectionOffsets(root, selectionOffsets.start, selectionOffsets.end);
+      }
+    }
+
+    onChange(serialized);
+    requestAnimationFrame(updateSelectionSnapshot);
+  }, [onChange, updateSelectionSnapshot]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {

@@ -272,7 +272,7 @@ export function createInlineMatchers(
       })),
     (text, pos) =>
       matchDelimited(text, pos, "__", "__", parseInline, (children) => ({
-        type: "underline",
+        type: "bold",
         children,
       })),
     (text, pos) =>
