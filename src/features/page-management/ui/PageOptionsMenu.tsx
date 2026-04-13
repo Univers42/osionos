@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { MoreHorizontal, Trash, Copy } from "lucide-react";
+import { MoreHorizontal, Trash, Copy, ArrowRight } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
+import { MovePageModal } from "./MovePageModal";
 import { getAllDescendantIds } from "@/store/pageStore.helpers";
 import type { PageEntry } from "@/entities/page";
 
@@ -27,6 +28,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const jwt = useUserStore((s) => s.activeJwt());
@@ -70,6 +72,12 @@ export const PageOptionsMenu: React.FC<Props> = ({
     e.stopPropagation();
     setIsMenuOpen(false);
     setIsModalOpen(true);
+  };
+
+  const handleMoveClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsMenuOpen(false);
+    setIsMoveModalOpen(true);
   };
 
   const handleDuplicateClick = async (e: React.MouseEvent) => {
@@ -142,6 +150,15 @@ export const PageOptionsMenu: React.FC<Props> = ({
 
           <button
             type="button"
+            className={styles.menuItem}
+            onClick={handleMoveClick}
+          >
+            <ArrowRight size={14} className="shrink-0" />
+            <span>Move to</span>
+          </button>
+
+          <button
+            type="button"
             className={[styles.menuItem, styles.danger].join(" ")}
             onClick={(e) => {
               e.stopPropagation();
@@ -160,6 +177,13 @@ export const PageOptionsMenu: React.FC<Props> = ({
           subPageCount={subPageCount}
           onConfirm={handleConfirmDelete}
           onCancel={() => setIsModalOpen(false)}
+        />
+      )}
+
+      {isMoveModalOpen && (
+        <MovePageModal
+          sourcePageId={pageId}
+          onClose={() => setIsMoveModalOpen(false)}
         />
       )}
     </div>
