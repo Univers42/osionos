@@ -781,6 +781,27 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     [onKeyDown, updateSelectionSnapshot],
   );
 
+  const handleKeyUp = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (isComposing.current) {
+        return;
+      }
+
+      const shouldRefreshInlineParsing =
+        e.key.length === 1 ||
+        e.key === "Backspace" ||
+        e.key === "Delete" ||
+        e.key === "Tab";
+
+      if (!shouldRefreshInlineParsing) {
+        return;
+      }
+
+      handleInput();
+    },
+    [handleInput],
+  );
+
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLDivElement>) => {
       onPaste?.(e);
@@ -1017,6 +1038,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         className={`outline-none whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--color-ink-faint)] empty:before:pointer-events-none ${className}`}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onKeyUp={handleKeyUp}
         onPaste={handlePaste}
         onClick={handleClick}
         onMouseUp={updateSelectionSnapshot}
