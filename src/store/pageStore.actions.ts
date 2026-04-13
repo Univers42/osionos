@@ -329,7 +329,7 @@ export function createMovePage(set: SetFn, get: GetFn) {
       if (sourceWorkspaceId === targetWorkspaceId) {
         // Simple re-parenting within same workspace
         nextPages[sourceWorkspaceId] = nextPages[sourceWorkspaceId].map((p) =>
-          p._id === pageId ? { ...p, parentPageId: targetParentId } : p
+          p._id === pageId ? { ...p, parentPageId: targetParentId ?? null } : p
         );
 
         savePagesCache(nextPages);
@@ -345,7 +345,7 @@ export function createMovePage(set: SetFn, get: GetFn) {
           .map((p) => ({
             ...p,
             workspaceId: targetWorkspaceId,
-            parentPageId: p._id === pageId ? targetParentId : p.parentPageId,
+            parentPageId: p._id === pageId ? (targetParentId ?? null) : (p.parentPageId ?? null),
           }));
 
         // Remove from source

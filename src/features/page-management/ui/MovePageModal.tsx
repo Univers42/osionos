@@ -26,18 +26,26 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
 
+  /* ── Store Selectors (Stable) ──────────────────────────────────── */
   const pages = usePageStore((s) => s.pages);
   const movePage = usePageStore((s) => s.movePage);
-  const sourcePage = usePageStore((s) => s.pageById(sourcePageId));
   
-  const workspaces = useUserStore((s) => {
-    const session = s.activeSession();
-    return session 
-      ? [...session.privateWorkspaces, ...session.sharedWorkspaces] 
-      : [];
-  });
+  const activeUserId = useUserStore((s) => s.activeUserId);
+  const sessions = useUserStore((s) => s.sessions);
+  const session = sessions[activeUserId];
 
+  /* ── Derived Data (Memoized) ───────────────────────────────────── */
   const allPages = useMemo(() => Object.values(pages).flat(), [pages]);
+
+  const sourcePage = useMemo(() => 
+    allPages.find(p => p._id === sourcePageId), 
+    [allPages, sourcePageId]
+  );
+  
+  const workspaces = useMemo(() => {
+    if (!session) return [];
+    return [...session.privateWorkspaces, ...session.sharedWorkspaces];
+  }, [session]);
 
   const handleMove = useCallback((targetParentId: string | null, targetWorkspaceId: string) => {
     const targetWorkspace = workspaces.find(w => w._id === targetWorkspaceId);
@@ -75,7 +83,7 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
       .filter((p) => {
         if (p._id === sourcePageId) return false;
         if (!isValidMove(pages, sourcePageId, p._id)) return false;
-        return p.title.toLowerCase().includes(searchTerm.toLowerCase());
+        return (p.title || '').toLowerCase().includes(searchTerm.toLowerCase());
       })
       .map((p) => ({
         id: p._id,
@@ -150,7 +158,7 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
-    setActiveIndex(0); // Reset index immediately on change instead of in effect
+    setActiveIndex(0);
   };
 
   return (
