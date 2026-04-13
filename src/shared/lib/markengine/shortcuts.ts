@@ -112,7 +112,7 @@ function astToBlocks(node: import("./markdown/ast").BlockNode): Block[] {
         {
           id: crypto.randomUUID(),
           type: headingType,
-          content: inlineToPlain(node.children),
+          content: inlineToMarkdown(node.children),
         },
       ];
     }
@@ -121,7 +121,7 @@ function astToBlocks(node: import("./markdown/ast").BlockNode): Block[] {
         {
           id: crypto.randomUUID(),
           type: "paragraph",
-          content: inlineToPlain(node.children),
+          content: inlineToMarkdown(node.children),
         },
       ];
     case "thematic_break":
@@ -131,7 +131,7 @@ function astToBlocks(node: import("./markdown/ast").BlockNode): Block[] {
         {
           id: crypto.randomUUID(),
           type: "quote",
-          content: node.children.map((c) => blockToPlain(c)).join("\n"),
+          content: node.children.map((c) => blockToMarkdown(c)).join("\n"),
         },
       ];
     case "code_block":
@@ -147,19 +147,19 @@ function astToBlocks(node: import("./markdown/ast").BlockNode): Block[] {
       return node.children.map((item) => ({
         id: crypto.randomUUID(),
         type: "bulleted_list" as BlockType,
-        content: item.children.map((c) => blockToPlain(c)).join("\n"),
+        content: item.children.map((c) => blockToMarkdown(c)).join("\n"),
       }));
     case "ordered_list":
       return node.children.map((item) => ({
         id: crypto.randomUUID(),
         type: "numbered_list" as BlockType,
-        content: item.children.map((c) => blockToPlain(c)).join("\n"),
+        content: item.children.map((c) => blockToMarkdown(c)).join("\n"),
       }));
     case "task_list":
       return node.children.map((item) => ({
         id: crypto.randomUUID(),
         type: "to_do" as BlockType,
-        content: item.children.map((c) => blockToPlain(c)).join("\n"),
+        content: item.children.map((c) => blockToMarkdown(c)).join("\n"),
         checked: item.checked,
       }));
     case "callout":
@@ -167,7 +167,7 @@ function astToBlocks(node: import("./markdown/ast").BlockNode): Block[] {
         {
           id: crypto.randomUUID(),
           type: "callout" as BlockType,
-          content: node.children.map((c) => blockToPlain(c)).join("\n"),
+          content: node.children.map((c) => blockToMarkdown(c)).join("\n"),
           color: getCalloutIconForKind(node.kind),
         },
       ];
@@ -226,12 +226,55 @@ function inlineToPlain(nodes: InlineNode[]): string {
     .join("");
 }
 
-function blockToPlain(node: import("./markdown/ast").BlockNode): string {
+function inlineToMarkdown(nodes: InlineNode[]): string {
+  return nodes
+    .map((n) => {
+      switch (n.type) {
+        case "text":
+          return n.value;
+        case "bold":
+          return `**${inlineToMarkdown(n.children)}**`;
+        case "italic":
+          return `*${inlineToMarkdown(n.children)}*`;
+        case "bold_italic":
+          return `***${inlineToMarkdown(n.children)}***`;
+        case "strikethrough":
+          return `~~${inlineToMarkdown(n.children)}~~`;
+        case "underline":
+          return `__${inlineToMarkdown(n.children)}__`;
+        case "highlight":
+          return `==${inlineToMarkdown(n.children)}==`;
+        case "text_color":
+          return `[color=${n.color}]${inlineToMarkdown(n.children)}[/color]`;
+        case "background_color":
+          return `[bg=${n.color}]${inlineToMarkdown(n.children)}[/bg]`;
+        case "code":
+          return `\`${n.value}\``;
+        case "link":
+          return `[${inlineToMarkdown(n.children)}](${n.href})`;
+        case "image":
+          return `![${n.alt}](${n.src})`;
+        case "emoji":
+          return n.value;
+        case "line_break":
+          return "\n";
+        case "math_inline":
+          return `$${n.value}$`;
+        case "footnote_ref":
+          return `[^${n.label}]`;
+        default:
+          return "";
+      }
+    })
+    .join("");
+}
+
+function blockToMarkdown(node: import("./markdown/ast").BlockNode): string {
   switch (node.type) {
     case "paragraph":
-      return inlineToPlain(node.children);
+      return inlineToMarkdown(node.children);
     case "heading":
-      return inlineToPlain(node.children);
+      return inlineToMarkdown(node.children);
     default:
       return "";
   }
