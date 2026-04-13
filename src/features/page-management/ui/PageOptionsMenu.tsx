@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { MoreHorizontal, Trash } from "lucide-react";
+import { MoreHorizontal, Trash, Copy } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
@@ -46,6 +46,8 @@ export const PageOptionsMenu: React.FC<Props> = ({
   );
 
   const deletePage = usePageStore((s) => s.deletePage);
+  const duplicatePage = usePageStore((s) => s.duplicatePage);
+  const openPage = usePageStore((s) => s.openPage);
 
   // Memoize counts and descendants to avoid tree traversal on every render
   const { descendantIds, subPageCount } = useMemo(() => {
@@ -69,6 +71,26 @@ export const PageOptionsMenu: React.FC<Props> = ({
     e.stopPropagation();
     setIsMenuOpen(false);
     setIsModalOpen(true);
+  };
+
+  const handleDuplicateClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsMenuOpen(false);
+    if (!workspaceId) return;
+
+    try {
+      const newId = await duplicatePage(pageId, workspaceId);
+      if (newId) {
+        // Auto-navigate to the new page as per plan
+        openPage({
+          id: newId,
+          workspaceId,
+          kind: "page",
+        });
+      }
+    } catch (err) {
+      console.error("[PageOptionsMenu] Failed to duplicate page", err);
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -118,6 +140,15 @@ export const PageOptionsMenu: React.FC<Props> = ({
 
       {isMenuOpen && (
         <div className={styles.dropdown}>
+          <button
+            type="button"
+            className={styles.menuItem}
+            onClick={handleDuplicateClick}
+          >
+            <Copy size={14} className="shrink-0" />
+            <span>Duplicate</span>
+          </button>
+
           <button
             type="button"
             className={[styles.menuItem, styles.danger].join(" ")}
