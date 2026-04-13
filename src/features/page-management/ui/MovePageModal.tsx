@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Search, X, FileText, ChevronRight, Hash } from 'lucide-react';
 import { usePageStore } from '@/store/usePageStore';
 import { useUserStore } from '@/features/auth';
@@ -11,11 +11,24 @@ interface Props {
   onClose: () => void;
 }
 
+interface RenderableItem {
+  id: string | null;
+  workspaceId: string;
+  title: string;
+  type: 'page' | 'root';
+  depth?: number;
+  icon?: string;
+  hasChildren?: boolean;
+  breadcrumbs?: string;
+}
+
 export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
 
   const pages = usePageStore((s) => s.pages);
   const movePage = usePageStore((s) => s.movePage);
+  const sourcePage = usePageStore((s) => s.pageById(sourcePageId));
   
   const workspaces = useUserStore((s) => {
     const session = s.activeSession();
@@ -26,50 +39,118 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
 
   const allPages = useMemo(() => Object.values(pages).flat(), [pages]);
 
-  const handleMove = (targetParentId: string | null, targetWorkspaceId: string) => {
+  const handleMove = useCallback((targetParentId: string | null, targetWorkspaceId: string) => {
+    const targetWorkspace = workspaces.find(w => w._id === targetWorkspaceId);
+    const targetParent = targetParentId ? allPages.find(p => p._id === targetParentId) : null;
+    const targetName = targetParent ? targetParent.title : (targetWorkspace?.name ?? 'Root');
+
+    console.log(`[MovePageModal] Moved '${sourcePage?.title}' to '${targetName}'`);
     movePage(sourcePageId, targetParentId, targetWorkspaceId);
     onClose();
+  }, [allPages, movePage, onClose, sourcePageId, sourcePage?.title, workspaces]);
+
+  const buildBreadcrumbs = useCallback((pageId: string, workspaceId: string) => {
+    const path: string[] = [];
+    let currentId: string | null | undefined = pageId;
+    
+    while (currentId) {
+      const page = allPages.find(p => p._id === currentId);
+      if (page) {
+        path.unshift(page.title || 'Untitled');
+        currentId = page.parentPageId;
+      } else {
+        currentId = null;
+      }
+    }
+
+    const ws = workspaces.find(w => w._id === workspaceId);
+    if (ws) path.unshift(ws.name);
+
+    return path.join(' / ');
+  }, [allPages, workspaces]);
+
+  const getFilteredPages = useMemo(() => {
+    if (!searchTerm.trim()) return [];
+    return allPages
+      .filter((p) => {
+        if (p._id === sourcePageId) return false;
+        if (!isValidMove(pages, sourcePageId, p._id)) return false;
+        return p.title.toLowerCase().includes(searchTerm.toLowerCase());
+      })
+      .map((p) => ({
+        id: p._id,
+        workspaceId: p.workspaceId,
+        title: p.title || 'Untitled',
+        type: 'page' as const,
+        icon: p.icon,
+        breadcrumbs: buildBreadcrumbs(p._id, p.workspaceId)
+      }));
+  }, [allPages, searchTerm, sourcePageId, pages, buildBreadcrumbs]);
+
+  const getTreeItems = useMemo(() => {
+    const items: RenderableItem[] = [];
+
+    const recurse = (workspaceId: string, parentId: string | null = null, depth = 0) => {
+      const wsPages = pages[workspaceId] ?? [];
+      const children = wsPages.filter((p) => p.parentPageId === parentId);
+
+      children.forEach((page) => {
+        if (page._id === sourcePageId || !isValidMove(pages, sourcePageId, page._id)) {
+          return;
+        }
+
+        const hasChildren = wsPages.some((p) => p.parentPageId === page._id);
+        items.push({
+          id: page._id,
+          workspaceId,
+          title: page.title || 'Untitled',
+          type: 'page',
+          depth,
+          icon: page.icon,
+          hasChildren
+        });
+
+        recurse(workspaceId, page._id, depth + 1);
+      });
+    };
+
+    workspaces.forEach(ws => {
+      items.push({
+        id: null,
+        workspaceId: ws._id,
+        title: `Move to ${ws.name} Root`,
+        type: 'root',
+        depth: 0
+      });
+      recurse(ws._id);
+    });
+
+    return items;
+  }, [pages, workspaces, sourcePageId]);
+
+  const renderableItems = searchTerm.trim() ? getFilteredPages : getTreeItems;
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex(prev => Math.min(prev + 1, renderableItems.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const activeItem = renderableItems[activeIndex];
+      if (activeItem) {
+        handleMove(activeItem.id, activeItem.workspaceId);
+      }
+    } else if (e.key === 'Escape') {
+      onClose();
+    }
   };
 
-  const filteredPages = useMemo(() => {
-    if (!searchTerm.trim()) return [];
-    return allPages.filter((p) => {
-      if (p._id === sourcePageId) return false;
-      if (!isValidMove(pages, sourcePageId, p._id)) return false;
-      return p.title.toLowerCase().includes(searchTerm.toLowerCase());
-    });
-  }, [allPages, searchTerm, sourcePageId, pages]);
-
-  const renderPageTree = (workspaceId: string, parentId: string | null = null, depth = 0) => {
-    const wsPages = pages[workspaceId] ?? [];
-    const children = wsPages.filter((p) => p.parentPageId === parentId);
-
-    return children.map((page) => {
-      // Hide source page and its descendants
-      if (page._id === sourcePageId || !isValidMove(pages, sourcePageId, page._id)) {
-        return null;
-      }
-
-      const hasChildren = wsPages.some((p) => p.parentPageId === page._id);
-
-      return (
-        <React.Fragment key={page._id}>
-          <button
-            type="button"
-            className={`${styles.listItem} ${depth > 0 ? styles.nested : ''}`}
-            style={{ paddingLeft: `${(depth + 1) * 1.5}rem` }}
-            onClick={() => handleMove(page._id, workspaceId)}
-          >
-            <span className={styles.itemIcon}>
-              {page.icon ? <span>{page.icon}</span> : <FileText size={14} />}
-            </span>
-            <span className={styles.itemTitle}>{page.title || 'Untitled'}</span>
-            {hasChildren && <ChevronRight size={12} className="text-[var(--color-ink-faint)]" />}
-          </button>
-          {renderPageTree(workspaceId, page._id, depth + 1)}
-        </React.Fragment>
-      );
-    });
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setActiveIndex(0); // Reset index immediately on change instead of in effect
   };
 
   return (
@@ -83,7 +164,8 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
             className={styles.searchInput}
             placeholder="Search for a page to move to..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
+            onKeyDown={handleKeyDown}
           />
           <button type="button" onClick={onClose} className={styles.closeButton}>
             <X size={16} />
@@ -95,21 +177,22 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
           {searchTerm.trim() ? (
             <>
               <div className={styles.sectionLabel}>Search Results</div>
-              {filteredPages.length > 0 ? (
-                filteredPages.map((page) => (
+              {getFilteredPages.length > 0 ? (
+                getFilteredPages.map((item, idx) => (
                   <button
-                    key={page._id}
+                    key={item.id}
                     type="button"
-                    className={styles.listItem}
-                    onClick={() => handleMove(page._id, page.workspaceId)}
+                    className={`${styles.listItem} ${idx === activeIndex ? styles.focused : ''}`}
+                    onClick={() => handleMove(item.id, item.workspaceId)}
+                    onMouseEnter={() => setActiveIndex(idx)}
                   >
                     <span className={styles.itemIcon}>
-                      {page.icon ? <span>{page.icon}</span> : <FileText size={14} />}
+                      {item.icon ? <span>{item.icon}</span> : <FileText size={14} />}
                     </span>
                     <div className="flex flex-col overflow-hidden">
-                      <span className={styles.itemTitle}>{page.title || 'Untitled'}</span>
-                      <span className="text-[10px] text-[var(--color-ink-faint)] truncate">
-                        {workspaces.find(w => w._id === page.workspaceId)?.name ?? 'Workspace'}
+                      <span className={styles.itemTitle}>{item.title}</span>
+                      <span className={styles.breadcrumbs}>
+                        {item.breadcrumbs}
                       </span>
                     </div>
                   </button>
@@ -119,26 +202,39 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
               )}
             </>
           ) : (
-            workspaces.map((ws) => (
-              <div key={ws._id} className="mb-4">
-                <div className={styles.sectionLabel}>{ws.name}</div>
-                
-                {/* Move to Root Option */}
-                <button
-                  type="button"
-                  className={styles.listItem}
-                  onClick={() => handleMove(null, ws._id)}
-                >
-                  <span className={styles.itemIcon}>
-                    <Hash size={14} className="text-[var(--color-ink-faint)]" />
-                  </span>
-                  <span className={styles.itemTitle}>Move to {ws.name} Root</span>
-                </button>
-
-                {/* Recursive Tree */}
-                {renderPageTree(ws._id)}
-              </div>
-            ))
+            workspaces.map((ws) => {
+              const wsItems = getTreeItems.filter(item => item.workspaceId === ws._id);
+              return (
+                <div key={ws._id} className="mb-4">
+                  <div className={styles.sectionLabel}>{ws.name}</div>
+                  {wsItems.map((item) => {
+                    const globalIdx = getTreeItems.indexOf(item);
+                    return (
+                      <button
+                        key={`${item.workspaceId}-${item.id || 'root'}`}
+                        type="button"
+                        className={`${styles.listItem} ${globalIdx === activeIndex ? styles.focused : ''}`}
+                        style={{ paddingLeft: `${(item.depth! + 1) * 1.5}rem` }}
+                        onClick={() => handleMove(item.id, item.workspaceId)}
+                        onMouseEnter={() => setActiveIndex(globalIdx)}
+                      >
+                        <span className={styles.itemIcon}>
+                          {item.type === 'root' ? (
+                            <Hash size={14} className="text-[var(--color-ink-faint)]" />
+                          ) : item.icon ? (
+                            <span>{item.icon}</span>
+                          ) : (
+                            <FileText size={14} />
+                          )}
+                        </span>
+                        <span className={styles.itemTitle}>{item.title}</span>
+                        {item.hasChildren && <ChevronRight size={12} className="text-[var(--color-ink-faint)]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })
           )}
         </div>
       </div>

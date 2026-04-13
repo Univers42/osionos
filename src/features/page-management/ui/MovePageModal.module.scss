@@ -100,9 +100,18 @@
   cursor: pointer;
   transition: background-color 0.2s;
 
-  &:hover {
+  &:hover,
+  &.focused {
     background-color: var(--color-surface-hover);
   }
+}
+
+.breadcrumbs {
+  font-size: 10px;
+  color: var(--color-ink-faint);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .nested {
