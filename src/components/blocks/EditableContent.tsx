@@ -40,6 +40,8 @@ interface SelectionSnapshot {
 type PaletteKind = "text" | "background" | null;
 type LinkPickerMode = "chooser" | "external" | "internal";
 
+const EMPTY_WORKSPACE_PAGES: readonly never[] = [];
+
 interface LinkPickerState {
   mode: LinkPickerMode;
   query: string;
@@ -650,7 +652,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const workspacePages = usePageStore((s) =>
     currentPage?.workspaceId
       ? s.pagesForWorkspace(currentPage.workspaceId)
-      : [],
+      : EMPTY_WORKSPACE_PAGES,
   );
 
   const selectablePages = workspacePages.filter(

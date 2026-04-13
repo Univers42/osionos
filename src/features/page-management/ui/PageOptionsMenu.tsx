@@ -4,8 +4,11 @@ import { usePageStore } from '@/store/usePageStore';
 import { useUserStore } from '@/features/auth';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 import { getAllDescendantIds } from '@/store/pageStore.helpers';
+import type { PageEntry } from '@/entities/page';
 
 import styles from './PageOptionsMenu.module.scss';
+
+const EMPTY_WORKSPACE_PAGES: PageEntry[] = [];
 
 interface Props {
   pageId: string;
@@ -34,7 +37,9 @@ export const PageOptionsMenu: React.FC<Props> = ({
   );
 
   const workspaceId = providedWorkspaceId || storeWorkspaceId;
-  const wsPages = usePageStore(s => workspaceId ? s.pages[workspaceId] : []);
+  const wsPages = usePageStore((s) =>
+    workspaceId ? (s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES) : EMPTY_WORKSPACE_PAGES,
+  );
   
   const deletePage = usePageStore(s => s.deletePage);
 
