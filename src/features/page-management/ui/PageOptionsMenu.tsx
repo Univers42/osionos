@@ -47,7 +47,6 @@ export const PageOptionsMenu: React.FC<Props> = ({
 
   const deletePage = usePageStore((s) => s.deletePage);
   const duplicatePage = usePageStore((s) => s.duplicatePage);
-  const openPage = usePageStore((s) => s.openPage);
 
   // Memoize counts and descendants to avoid tree traversal on every render
   const { descendantIds, subPageCount } = useMemo(() => {
@@ -79,15 +78,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
     if (!workspaceId) return;
 
     try {
-      const newId = await duplicatePage(pageId, workspaceId);
-      if (newId) {
-        // Auto-navigate to the new page as per plan
-        openPage({
-          id: newId,
-          workspaceId,
-          kind: "page",
-        });
-      }
+      await duplicatePage(pageId, workspaceId);
     } catch (err) {
       console.error("[PageOptionsMenu] Failed to duplicate page", err);
     }

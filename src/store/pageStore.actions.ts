@@ -22,7 +22,7 @@ import {
   savePagesCache,
   mergeWorkspacePages,
 } from "./pageStore.helpers";
-import type { PageEntry, PageStore } from "@/entities/page";
+import type { PageEntry, PageStore, ActivePage } from "@/entities/page";
 
 type SetFn = (
   partial: Partial<PageStore> | ((s: PageStore) => Partial<PageStore>),
@@ -233,9 +233,14 @@ export function createDuplicatePage(set: SetFn, get: GetFn) {
         ...p,
         _id: newId,
         title: isRoot ? `${p.title} (Copy)` : p.title,
-        parentPageId: p.parentPageId ? (idMap[p.parentPageId] ?? p.parentPageId) : p.parentPageId,
+        parentPageId: p.parentPageId
+          ? idMap[p.parentPageId] ?? p.parentPageId
+          : p.parentPageId,
       };
     });
+
+    const newRootId = idMap[pageId];
+    const newRootPage = clonedPages.find((p) => p._id === newRootId);
 
     set((s) => {
       const currentWsPages = s.pages[workspaceId] ?? [];
@@ -250,9 +255,32 @@ export function createDuplicatePage(set: SetFn, get: GetFn) {
         [workspaceId]: nextPages,
       };
       savePagesCache(nextAllPages);
+
+      if (newRootPage) {
+        const newActivePage: ActivePage = {
+          id: newRootPage._id,
+          workspaceId,
+          kind: "page",
+          title: newRootPage.title,
+          icon: newRootPage.icon,
+        };
+
+        const recents = [
+          newActivePage,
+          ...s.recents.filter((r) => r.id !== newRootId),
+        ].slice(0, 10);
+        saveRecents(recents);
+
+        return {
+          pages: nextAllPages,
+          activePage: newActivePage,
+          recents,
+        };
+      }
+
       return { pages: nextAllPages };
     });
 
-    return idMap[pageId];
+    return newRootId;
   };
 }
