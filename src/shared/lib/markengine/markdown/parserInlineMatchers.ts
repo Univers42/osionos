@@ -1,13 +1,13 @@
 // Markdown parser — inline matcher definitions
-import type { InlineNode } from "./ast";
+import type { InlineNode } from "./ast.js";
 import type {
   InlineMatchResult,
   InlineMatcher,
   InlineParser,
-} from "./parserInlineTypes";
-import { normalizeInlineColorToken } from "../../inlineTextStyles";
-import { EMOJI_MAP } from "./parserEmoji";
-import { findClosingBracket } from "./parserInlineUtils";
+} from "./parserInlineTypes.js";
+import { normalizeInlineColorToken } from "../../inlineTextStyles.js";
+import { EMOJI_MAP } from "./parserEmoji.js";
+import { findClosingBracket } from "./parserInlineUtils.js";
 
 function matchDelimited(
   text: string,

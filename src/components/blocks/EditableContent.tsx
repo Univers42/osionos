@@ -52,6 +52,10 @@ interface LinkPickerState {
   query: string;
 }
 
+interface LegacyExecCommandDocument {
+  execCommand(commandId: string, showUI?: boolean, value?: string): boolean;
+}
+
 const INTERNAL_PAGE_LINK_PREFIX = "page://";
 
 function buildInternalPageHref(pageId: string) {
@@ -466,11 +470,8 @@ function createColorElement(
 }
 
 function runLegacyExecCommand(command: string, value?: string): boolean {
-  const legacyDocument = document as Document & {
-    execCommand(commandId: string, showUI?: boolean, value?: string): boolean;
-  };
-  const execCommand = legacyDocument.execCommand.bind(legacyDocument);
-  return execCommand(command, false, value);
+  const legacyDocument = document as unknown as LegacyExecCommandDocument;
+  return legacyDocument.execCommand(command, false, value);
 }
 
 function wrapRange(range: Range, wrapper: HTMLElement) {

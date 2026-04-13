@@ -3,7 +3,7 @@ import ts from "typescript-eslint";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 
-export default ts.config(
+export default [
   {
     ignores: [
       "src/shared/lib/markengine/**/*",
@@ -42,4 +42,4 @@ export default ts.config(
       react: { version: "detect" },
     },
   },
-);
+];

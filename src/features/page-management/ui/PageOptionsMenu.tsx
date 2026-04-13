@@ -98,11 +98,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
   };
 
   return (
-    <div
-      className="relative flex items-center"
-      onClick={(e) => e.stopPropagation()}
-      ref={menuRef}
-    >
+    <div className="relative flex items-center" ref={menuRef}>
       <button
         type="button"
         className={[
@@ -111,7 +107,10 @@ export const PageOptionsMenu: React.FC<Props> = ({
             ? "bg-[var(--color-surface-tertiary)] text-[var(--color-ink)]"
             : "hover:bg-[var(--color-surface-secondary)]",
         ].join(" ")}
-        onClick={() => setIsMenuOpen(!isMenuOpen)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsMenuOpen(!isMenuOpen);
+        }}
         title="Page options"
       >
         <MoreHorizontal size={13} />
@@ -122,7 +121,10 @@ export const PageOptionsMenu: React.FC<Props> = ({
           <button
             type="button"
             className={[styles.menuItem, styles.danger].join(" ")}
-            onClick={handleDeleteClick}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeleteClick(e);
+            }}
           >
             <Trash size={14} className="shrink-0" />
             <span>Delete</span>
