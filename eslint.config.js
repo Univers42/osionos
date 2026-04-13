@@ -4,14 +4,16 @@ import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 
 export default ts.config(
-    {
-		ignores: [
-		  "src/shared/lib/markengine/**/*",
-		  "dist",
-		  "build",
-		  "node_modules"
-		],
-    },
+  {
+    ignores: [
+      "src/shared/lib/markengine/**/*",
+      "src/lib/markengine/dist/**/*",
+      "src/lib/markengine/playground/public/dist/**/*",
+      "dist",
+      "build",
+      "node_modules",
+    ],
+  },
   js.configs.recommended,
   ...ts.configs.recommended,
   {
@@ -31,10 +33,13 @@ export default ts.config(
       "react/react-in-jsx-scope": "off", // No necesario en React 17+
       "@typescript-eslint/no-explicit-any": "warn", // Evitar 'any' según GEMINI.md
       "no-unused-vars": "off",
-      "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }] // Regla de prefijo '_'
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_" },
+      ], // Regla de prefijo '_'
     },
     settings: {
       react: { version: "detect" },
     },
-  }
+  },
 );
