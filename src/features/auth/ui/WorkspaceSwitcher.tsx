@@ -3,23 +3,22 @@
 /*                                                        :::      ::::::::   */
 /*   WorkspaceSwitcher.tsx                              :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/04 14:03:44 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/14 12:40:17 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useState } from 'react';
 import { ChevronDown, PanelLeftClose, PenSquare } from 'lucide-react';
 import { AssetRenderer } from '@univers42/ui-collection';
-import { useUserStore } from '@/features/auth';
+import { useUserStore , UserSwitcherPanel } from '@/features/auth';
 import { usePageStore } from '@/store/usePageStore';
-import { UserSwitcherPanel } from '@/features/auth';
 import { useUIStore } from '@/shared/config/uiStore';
 import {
   getCollectionEmojiValue,
-} from '@/shared/lib/uiCollectionAssets';
+} from '@/shared/lib/markengine/uiCollectionAssets';
 
 interface Props {
   onNewPage?: () => void;

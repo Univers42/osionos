@@ -10,19 +10,21 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { parseInlineMarkdown } from '@/shared/lib/markengine';
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { parseInlineMarkdown } from "@/shared/lib/markengine";
 import {
   INLINE_COLOR_OPTIONS,
   type InlineColorOption,
   normalizeInlineColorToken,
-} from '@/shared/lib/inlineTextStyles';
+} from "@/shared/lib/markengine/inlineTextStyles";
+import { usePageStore } from "@/store/usePageStore";
 
 interface EditableContentProps {
   content: string;
   className?: string;
   placeholder?: string;
+  pageId?: string;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
@@ -35,7 +37,61 @@ interface SelectionSnapshot {
   rect: DOMRect;
 }
 
-type PaletteKind = 'text' | 'background' | null;
+interface SelectionOffsets {
+  start: number;
+  end: number;
+}
+
+type PaletteKind = "text" | "background" | null;
+type LinkPickerMode = "chooser" | "external" | "internal";
+
+const EMPTY_WORKSPACE_PAGES: readonly never[] = [];
+
+interface LinkPickerState {
+  mode: LinkPickerMode;
+  query: string;
+}
+
+interface LegacyExecCommandDocument {
+  execCommand(commandId: string, showUI?: boolean, value?: string): boolean;
+}
+
+const INTERNAL_PAGE_LINK_PREFIX = "page://";
+
+function buildInternalPageHref(pageId: string) {
+  return `${INTERNAL_PAGE_LINK_PREFIX}${pageId}`;
+}
+
+function getInternalPageIdFromHref(href: string) {
+  return href.startsWith(INTERNAL_PAGE_LINK_PREFIX)
+    ? href.slice(INTERNAL_PAGE_LINK_PREFIX.length)
+    : null;
+}
+
+function normalizeHref(href: string) {
+  const cleanHref = href.trim();
+  if (!cleanHref) {
+    return cleanHref;
+  }
+
+  if (cleanHref.startsWith(INTERNAL_PAGE_LINK_PREFIX)) {
+    return cleanHref;
+  }
+
+  if (/^[a-z][a-z\d+.-]*:/i.test(cleanHref) || cleanHref.startsWith("//")) {
+    return cleanHref.startsWith("//") ? `https:${cleanHref}` : cleanHref;
+  }
+
+  if (
+    /^[^\s/]+\.[^\s/]+(?:[/?#].*)?$/i.test(cleanHref) &&
+    !cleanHref.startsWith("/") &&
+    !cleanHref.startsWith("#")
+  ) {
+    return `https://${cleanHref}`;
+  }
+
+  return cleanHref;
+}
 
 function getSelectionRange(root: HTMLElement): Range | null {
   const selection = globalThis.getSelection();
@@ -77,6 +133,31 @@ function getSelectionSnapshot(root: HTMLElement): SelectionSnapshot | null {
   }
 
   return { start, end, rect };
+}
+
+function getSelectionOffsets(root: HTMLElement): SelectionOffsets | null {
+  const selection = globalThis.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!root.contains(range.commonAncestorContainer)) {
+    return null;
+  }
+
+  const startRange = range.cloneRange();
+  startRange.selectNodeContents(root);
+  startRange.setEnd(range.startContainer, range.startOffset);
+
+  const endRange = range.cloneRange();
+  endRange.selectNodeContents(root);
+  endRange.setEnd(range.endContainer, range.endOffset);
+
+  return {
+    start: startRange.toString().length,
+    end: endRange.toString().length,
+  };
 }
 
 function setSelectionOffsets(root: HTMLElement, start: number, end: number) {
@@ -131,87 +212,97 @@ function normalizeElementColor(value: string | null | undefined) {
 }
 
 function isBoldElement(element: HTMLElement) {
-  if (element.dataset.inlineType === 'bold') {
+  if (element.dataset.inlineType === "bold") {
     return true;
   }
 
-  if (element.tagName === 'STRONG' || element.tagName === 'B') {
+  if (element.tagName === "STRONG" || element.tagName === "B") {
     return true;
   }
 
   const fontWeight = element.style.fontWeight;
-  return fontWeight === 'bold' || Number(fontWeight) >= 600;
+  return fontWeight === "bold" || Number(fontWeight) >= 600;
 }
 
 function isItalicElement(element: HTMLElement) {
   return (
-    element.dataset.inlineType === 'italic' ||
-    element.tagName === 'EM' ||
-    element.tagName === 'I' ||
-    element.style.fontStyle === 'italic'
+    element.dataset.inlineType === "italic" ||
+    element.tagName === "EM" ||
+    element.tagName === "I" ||
+    element.style.fontStyle === "italic"
   );
 }
 
 function isStrikeElement(element: HTMLElement) {
   return (
-    element.dataset.inlineType === 'strikethrough' ||
-    element.tagName === 'DEL' ||
-    element.tagName === 'S' ||
-    element.tagName === 'STRIKE' ||
-    element.style.textDecoration.includes('line-through')
+    element.dataset.inlineType === "strikethrough" ||
+    element.tagName === "DEL" ||
+    element.tagName === "S" ||
+    element.tagName === "STRIKE" ||
+    element.style.textDecoration.includes("line-through")
   );
 }
 
 function isCodeElement(element: HTMLElement) {
-  return element.dataset.inlineType === 'code' || element.tagName === 'CODE';
+  return element.dataset.inlineType === "code" || element.tagName === "CODE";
 }
 
 function isTextColorElement(element: HTMLElement) {
   return (
-    element.dataset.inlineType === 'text_color' ||
-    (!!element.style.color && normalizeElementColor(element.style.color) !== null) ||
-    (!!element.getAttribute('color') && normalizeElementColor(element.getAttribute('color')) !== null)
+    element.dataset.inlineType === "text_color" ||
+    (!!element.style.color &&
+      normalizeElementColor(element.style.color) !== null) ||
+    (!!element.getAttribute("color") &&
+      normalizeElementColor(element.getAttribute("color")) !== null)
   );
 }
 
 function isBackgroundColorElement(element: HTMLElement) {
   return (
-    element.dataset.inlineType === 'background_color' ||
+    element.dataset.inlineType === "background_color" ||
     (!!element.style.backgroundColor &&
       normalizeElementColor(element.style.backgroundColor) !== null)
   );
 }
 
-function serializeEditableNode(node: Node): string {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return node.textContent ?? '';
-  }
+function serializeTextNode(node: Node): string {
+  return node.textContent ?? "";
+}
 
-  if (node.nodeType !== Node.ELEMENT_NODE) {
-    return '';
-  }
-
-  const element = node as HTMLElement;
-  const children = Array.from(element.childNodes)
-    .map(serializeEditableNode)
-    .join('');
-
+function serializeBlockElement(
+  element: HTMLElement,
+  children: string,
+): string | null {
   switch (element.tagName) {
-    case 'BR':
-      return '\n';
-    case 'DIV':
-    case 'P':
+    case "BR":
+      return "\n";
+    case "DIV":
+    case "P":
       return children;
     default:
-      break;
+      return null;
   }
+}
 
+function serializeLinkElement(
+  element: HTMLElement,
+  children: string,
+): string | null {
+  const href = element.getAttribute("href");
+  return href ? `[${children}](${href})` : null;
+}
+
+function serializeFormattedElement(
+  element: HTMLElement,
+  children: string,
+): string | null {
   if (isCodeElement(element)) {
     return `\`${children}\``;
   }
 
-  if (element.tagName === 'A' && element.getAttribute('href')) {
-    return `[${children}](${element.getAttribute('href') ?? ''})`;
+  const link = serializeLinkElement(element, children);
+  if (link) {
+    return link;
   }
 
   if (isBoldElement(element)) {
@@ -226,11 +317,11 @@ function serializeEditableNode(node: Node): string {
     return `~~${children}~~`;
   }
 
-  if (element.tagName === 'U') {
+  if (element.tagName === "U") {
     return `__${children}__`;
   }
 
-  if (element.tagName === 'MARK') {
+  if (element.tagName === "MARK") {
     return `==${children}==`;
   }
 
@@ -238,7 +329,7 @@ function serializeEditableNode(node: Node): string {
     const color =
       normalizeElementColor(element.dataset.inlineColor) ??
       normalizeElementColor(element.style.color) ??
-      normalizeElementColor(element.getAttribute('color'));
+      normalizeElementColor(element.getAttribute("color"));
     return color ? `[color=${color}]${children}[/color]` : children;
   }
 
@@ -249,13 +340,34 @@ function serializeEditableNode(node: Node): string {
     return color ? `[bg=${color}]${children}[/bg]` : children;
   }
 
-  return children;
+  return null;
+}
+
+function serializeEditableNode(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return serializeTextNode(node);
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return "";
+  }
+
+  const element = node as HTMLElement;
+  const children = Array.from(element.childNodes)
+    .map(serializeEditableNode)
+    .join("");
+
+  const block = serializeBlockElement(element, children);
+  if (block !== null) {
+    return block;
+  }
+
+  const formatted = serializeFormattedElement(element, children);
+  return formatted ?? children;
 }
 
 function serializeEditableContent(root: HTMLElement) {
-  return Array.from(root.childNodes)
-    .map(serializeEditableNode)
-    .join('');
+  return Array.from(root.childNodes).map(serializeEditableNode).join("");
 }
 
 function selectCurrentRange(range: Range) {
@@ -278,7 +390,7 @@ function unwrapElement(element: HTMLElement) {
     parent.insertBefore(element.firstChild, element);
   }
 
-  parent.removeChild(element);
+  element.remove();
 }
 
 function getClosestFormatElement(
@@ -306,13 +418,17 @@ function getSharedFormatElement(
   root: HTMLElement,
   predicate: (element: HTMLElement) => boolean,
 ) {
-  const startMatch = getClosestFormatElement(range.startContainer, root, predicate);
-  if (startMatch && startMatch.contains(range.endContainer)) {
+  const startMatch = getClosestFormatElement(
+    range.startContainer,
+    root,
+    predicate,
+  );
+  if (startMatch?.contains(range.endContainer)) {
     return startMatch;
   }
 
   const endMatch = getClosestFormatElement(range.endContainer, root, predicate);
-  if (endMatch && endMatch.contains(range.startContainer)) {
+  if (endMatch?.contains(range.startContainer)) {
     return endMatch;
   }
 
@@ -320,33 +436,42 @@ function getSharedFormatElement(
 }
 
 function createCodeElement() {
-  const code = document.createElement('code');
-  code.dataset.inlineType = 'code';
-  code.className = 'inline-code';
-  code.style.background = 'var(--color-surface-tertiary-soft2)';
-  code.style.border = '1px solid var(--color-line)';
-  code.style.borderRadius = '6px';
-  code.style.padding = '0 0.35em';
-  code.style.fontFamily = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
-  code.style.fontSize = '0.92em';
-  code.style.color = 'var(--color-ink-strong)';
+  const code = document.createElement("code");
+  code.dataset.inlineType = "code";
+  code.className = "inline-code";
+  code.style.background = "var(--color-surface-tertiary-soft2)";
+  code.style.border = "1px solid var(--color-line)";
+  code.style.borderRadius = "6px";
+  code.style.padding = "0 0.35em";
+  code.style.fontFamily =
+    "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";
+  code.style.fontSize = "0.92em";
+  code.style.color = "var(--color-ink-strong)";
   return code;
 }
 
-function createColorElement(kind: 'text' | 'background', option: InlineColorOption) {
-  const span = document.createElement('span');
-  span.dataset.inlineType = kind === 'text' ? 'text_color' : 'background_color';
+function createColorElement(
+  kind: "text" | "background",
+  option: InlineColorOption,
+) {
+  const span = document.createElement("span");
+  span.dataset.inlineType = kind === "text" ? "text_color" : "background_color";
   span.dataset.inlineColor = option.id;
 
-  if (kind === 'text') {
+  if (kind === "text") {
     span.style.color = option.textColor;
   } else {
     span.style.backgroundColor = option.backgroundColor;
-    span.style.borderRadius = '4px';
-    span.style.padding = '0 0.2em';
+    span.style.borderRadius = "4px";
+    span.style.padding = "0 0.2em";
   }
 
   return span;
+}
+
+function runLegacyExecCommand(command: string, value?: string): boolean {
+  const legacyDocument = document as unknown as LegacyExecCommandDocument;
+  return legacyDocument.execCommand(command, false, value);
 }
 
 function wrapRange(range: Range, wrapper: HTMLElement) {
@@ -363,10 +488,10 @@ function wrapRange(range: Range, wrapper: HTMLElement) {
 }
 
 const TOOLBAR_BUTTON_BASE =
-  'grid h-8 min-w-8 place-items-center rounded-md border border-transparent px-2 text-xs font-semibold text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-ink)]';
+  "grid h-8 min-w-8 place-items-center rounded-md border border-transparent px-2 text-xs font-semibold text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-ink)]";
 
 const TOOLBAR_ACTIVE_BUTTON =
-  'border-[var(--color-line)] bg-[var(--color-surface-secondary)] text-[var(--color-ink)]';
+  "border-[var(--color-line)] bg-[var(--color-surface-secondary)] text-[var(--color-ink)]";
 
 interface InlineSelectionToolbarProps {
   selection: SelectionSnapshot;
@@ -376,10 +501,10 @@ interface InlineSelectionToolbarProps {
   onFormatItalic: () => void;
   onFormatStrike: () => void;
   onFormatCode: () => void;
-  onFormatLink: () => void;
   onFormatTextColor: (color: InlineColorOption) => void;
   onFormatBackgroundColor: (color: InlineColorOption) => void;
   onOpenSlashMenu: () => void;
+  onOpenLinkPicker: () => void;
 }
 
 const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
@@ -390,10 +515,10 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
   onFormatItalic,
   onFormatStrike,
   onFormatCode,
-  onFormatLink,
   onFormatTextColor,
   onFormatBackgroundColor,
   onOpenSlashMenu,
+  onOpenLinkPicker,
 }) => (
   <div
     className="fixed z-[10001] -translate-x-1/2"
@@ -409,10 +534,10 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
           title="Text color"
           className={[
             TOOLBAR_BUTTON_BASE,
-            palette === 'text' ? TOOLBAR_ACTIVE_BUTTON : '',
-          ].join(' ')}
+            palette === "text" ? TOOLBAR_ACTIVE_BUTTON : "",
+          ].join(" ")}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => onTogglePalette('text')}
+          onClick={() => onTogglePalette("text")}
         >
           A
         </button>
@@ -421,10 +546,10 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
           title="Background color"
           className={[
             TOOLBAR_BUTTON_BASE,
-            palette === 'background' ? TOOLBAR_ACTIVE_BUTTON : '',
-          ].join(' ')}
+            palette === "background" ? TOOLBAR_ACTIVE_BUTTON : "",
+          ].join(" ")}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => onTogglePalette('background')}
+          onClick={() => onTogglePalette("background")}
         >
           ▣
         </button>
@@ -467,7 +592,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
           className={TOOLBAR_BUTTON_BASE}
           onMouseDown={(e) => {
             e.preventDefault();
-            onFormatLink();
+            onOpenLinkPicker();
           }}
         >
           ↗
@@ -481,7 +606,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
             onFormatCode();
           }}
         >
-          {'</>'}
+          {"</>"}
         </button>
         <button
           type="button"
@@ -506,7 +631,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
                 className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-[var(--color-ink)] hover:bg-[var(--color-surface-secondary)]"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  if (palette === 'text') {
+                  if (palette === "text") {
                     onFormatTextColor(option);
                   } else {
                     onFormatBackgroundColor(option);
@@ -517,7 +642,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
                   className="h-3 w-3 shrink-0 rounded-full border border-black/10"
                   style={{
                     background:
-                      palette === 'text'
+                      palette === "text"
                         ? option.swatch
                         : option.backgroundColor,
                   }}
@@ -534,8 +659,9 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
 
 export const EditableContent: React.FC<EditableContentProps> = ({
   content,
-  className = '',
-  placeholder = '',
+  className = "",
+  placeholder = "",
+  pageId,
   onChange,
   onKeyDown,
   onPaste,
@@ -545,15 +671,31 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const isComposing = useRef(false);
   const isFocused = useRef(false);
   const [hasFocus, setHasFocus] = useState(false);
-  const [selectionSnapshot, setSelectionSnapshot] = useState<SelectionSnapshot | null>(null);
+  const [selectionSnapshot, setSelectionSnapshot] =
+    useState<SelectionSnapshot | null>(null);
   const [openPalette, setOpenPalette] = useState<PaletteKind>(null);
+  const [linkPicker, setLinkPicker] = useState<LinkPickerState | null>(null);
+  const linkPickerRef = useRef<HTMLDivElement | null>(null);
+
+  const currentPage = usePageStore((s) =>
+    pageId ? s.pageById(pageId) : undefined,
+  );
+  const workspacePages = usePageStore((s) =>
+    currentPage?.workspaceId
+      ? s.pagesForWorkspace(currentPage.workspaceId)
+      : EMPTY_WORKSPACE_PAGES,
+  );
+
+  const selectablePages = workspacePages.filter(
+    (workspacePage) => !workspacePage.archivedAt,
+  );
 
   const renderContent = useCallback((nextContent: string) => {
     if (!ref.current) {
       return;
     }
 
-    ref.current.innerHTML = nextContent ? parseInlineMarkdown(nextContent) : '';
+    ref.current.innerHTML = nextContent ? parseInlineMarkdown(nextContent) : "";
   }, []);
 
   useEffect(() => {
@@ -572,7 +714,9 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const updateSelectionSnapshot = useCallback(() => {
     const root = ref.current;
     if (!root || !isFocused.current) {
-      setSelectionSnapshot(null);
+      if (!linkPicker) {
+        setSelectionSnapshot(null);
+      }
       setOpenPalette(null);
       return;
     }
@@ -582,18 +726,18 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     if (!snapshot) {
       setOpenPalette(null);
     }
-  }, []);
+  }, [linkPicker]);
 
   useEffect(() => {
     const handleSelectionChange = () => updateSelectionSnapshot();
-    document.addEventListener('selectionchange', handleSelectionChange);
-    window.addEventListener('resize', handleSelectionChange);
-    window.addEventListener('scroll', handleSelectionChange, true);
+    document.addEventListener("selectionchange", handleSelectionChange);
+    window.addEventListener("resize", handleSelectionChange);
+    window.addEventListener("scroll", handleSelectionChange, true);
 
     return () => {
-      document.removeEventListener('selectionchange', handleSelectionChange);
-      window.removeEventListener('resize', handleSelectionChange);
-      window.removeEventListener('scroll', handleSelectionChange, true);
+      document.removeEventListener("selectionchange", handleSelectionChange);
+      window.removeEventListener("resize", handleSelectionChange);
+      window.removeEventListener("scroll", handleSelectionChange, true);
     };
   }, [updateSelectionSnapshot]);
 
@@ -610,8 +754,25 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       return;
     }
 
-    syncContentFromDom();
-  }, [syncContentFromDom]);
+    const root = ref.current;
+    if (!root) {
+      return;
+    }
+
+    const selectionOffsets = getSelectionOffsets(root);
+    const serialized = serializeEditableContent(root);
+    const parsedHtml = serialized ? parseInlineMarkdown(serialized) : "";
+
+    if (root.innerHTML !== parsedHtml) {
+      root.innerHTML = parsedHtml;
+      if (selectionOffsets) {
+        setSelectionOffsets(root, selectionOffsets.start, selectionOffsets.end);
+      }
+    }
+
+    onChange(serialized);
+    requestAnimationFrame(updateSelectionSnapshot);
+  }, [onChange, updateSelectionSnapshot]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -621,12 +782,66 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     [onKeyDown, updateSelectionSnapshot],
   );
 
+  const handleKeyUp = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (isComposing.current) {
+        return;
+      }
+
+      const shouldRefreshInlineParsing =
+        e.key.length === 1 ||
+        e.key === "Backspace" ||
+        e.key === "Delete" ||
+        e.key === "Tab";
+
+      if (!shouldRefreshInlineParsing) {
+        return;
+      }
+
+      handleInput();
+    },
+    [handleInput],
+  );
+
   const handlePaste = useCallback(
     (e: React.ClipboardEvent<HTMLDivElement>) => {
       onPaste?.(e);
     },
     [onPaste],
   );
+
+  const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement | null;
+    const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+    if (!anchor) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    const href = anchor.href;
+    if (!href) {
+      return;
+    }
+
+    const normalizedHref = normalizeHref(anchor.getAttribute("href") ?? href);
+    const internalPageId = getInternalPageIdFromHref(normalizedHref);
+    if (internalPageId) {
+      const linkedPage = usePageStore.getState().pageById(internalPageId);
+      if (linkedPage) {
+        usePageStore.getState().openPage({
+          id: linkedPage._id,
+          workspaceId: linkedPage.workspaceId,
+          kind: linkedPage.databaseId ? "database" : "page",
+          title: linkedPage.title,
+          icon: linkedPage.icon,
+        });
+      }
+      return;
+    }
+
+    globalThis.open(normalizedHref, "_blank", "noopener,noreferrer");
+  }, []);
 
   const applyDomMutation = useCallback(
     (mutate: (root: HTMLElement, range: Range) => void) => {
@@ -635,7 +850,15 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         return;
       }
 
-      const range = getSelectionRange(root);
+      let range = getSelectionRange(root);
+      if (!range) {
+        setSelectionOffsets(
+          root,
+          selectionSnapshot.start,
+          selectionSnapshot.end,
+        );
+        range = getSelectionRange(root);
+      }
       if (!range) {
         return;
       }
@@ -646,7 +869,11 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       root.focus();
 
       requestAnimationFrame(() => {
-        setSelectionOffsets(root, selectionSnapshot.start, selectionSnapshot.end);
+        setSelectionOffsets(
+          root,
+          selectionSnapshot.start,
+          selectionSnapshot.end,
+        );
         updateSelectionSnapshot();
       });
     },
@@ -656,27 +883,29 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const execInlineCommand = useCallback(
     (command: string, value?: string) => {
       applyDomMutation(() => {
-        document.execCommand('styleWithCSS', false, 'true');
-        document.execCommand(command, false, value);
+        runLegacyExecCommand("styleWithCSS", "true");
+        runLegacyExecCommand(command, value);
       });
     },
     [applyDomMutation],
   );
 
   const handleApplyColor = useCallback(
-    (kind: 'text' | 'background', color: InlineColorOption) => {
+    (kind: "text" | "background", color: InlineColorOption) => {
       applyDomMutation((root, range) => {
         const existing = getSharedFormatElement(
           range,
           root,
-          kind === 'text' ? isTextColorElement : isBackgroundColorElement,
+          kind === "text" ? isTextColorElement : isBackgroundColorElement,
         );
 
         if (existing) {
           const currentColor =
             normalizeElementColor(existing.dataset.inlineColor) ??
             normalizeElementColor(
-              kind === 'text' ? existing.style.color : existing.style.backgroundColor,
+              kind === "text"
+                ? existing.style.color
+                : existing.style.backgroundColor,
             );
 
           if (currentColor === color.id) {
@@ -685,15 +914,15 @@ export const EditableContent: React.FC<EditableContentProps> = ({
           }
 
           existing.dataset.inlineType =
-            kind === 'text' ? 'text_color' : 'background_color';
+            kind === "text" ? "text_color" : "background_color";
           existing.dataset.inlineColor = color.id;
 
-          if (kind === 'text') {
+          if (kind === "text") {
             existing.style.color = color.textColor;
           } else {
             existing.style.backgroundColor = color.backgroundColor;
-            existing.style.borderRadius = '4px';
-            existing.style.padding = '0 0.2em';
+            existing.style.borderRadius = "4px";
+            existing.style.padding = "0 0.2em";
           }
           return;
         }
@@ -719,14 +948,37 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   }, [applyDomMutation]);
 
   const handleAddLink = useCallback(() => {
-    const url = globalThis.prompt('Link URL', 'https://');
-    const cleanUrl = url?.trim();
-    if (!cleanUrl) {
+    if (!selectionSnapshot) {
       return;
     }
 
-    execInlineCommand('createLink', cleanUrl);
-  }, [execInlineCommand]);
+    setLinkPicker({ mode: "chooser", query: "" });
+  }, [selectionSnapshot]);
+
+  const handleApplyExternalLink = useCallback(
+    (url: string) => {
+      const cleanUrl = normalizeHref(url);
+      if (!cleanUrl) {
+        return;
+      }
+
+      execInlineCommand("createLink", cleanUrl);
+      setLinkPicker(null);
+    },
+    [execInlineCommand],
+  );
+
+  const handleApplyInternalLink = useCallback(
+    (pageId: string) => {
+      if (!pageId) {
+        return;
+      }
+
+      execInlineCommand("createLink", buildInternalPageHref(pageId));
+      setLinkPicker(null);
+    },
+    [execInlineCommand],
+  );
 
   const handleOpenSlashMenu = useCallback(() => {
     if (!selectionSnapshot || !onRequestSlashMenu) {
@@ -740,6 +992,38 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     setSelectionSnapshot(null);
     setOpenPalette(null);
   }, [onRequestSlashMenu, selectionSnapshot]);
+
+  useEffect(() => {
+    if (!linkPicker) {
+      return;
+    }
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (
+        linkPickerRef.current &&
+        target &&
+        linkPickerRef.current.contains(target)
+      ) {
+        return;
+      }
+      setLinkPicker(null);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setLinkPicker(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [linkPicker]);
 
   return (
     <>
@@ -755,7 +1039,9 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         className={`outline-none whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--color-ink-faint)] empty:before:pointer-events-none ${className}`}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onKeyUp={handleKeyUp}
         onPaste={handlePaste}
+        onClick={handleClick}
         onMouseUp={updateSelectionSnapshot}
         onFocus={() => {
           isFocused.current = true;
@@ -765,35 +1051,202 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         onBlur={() => {
           isFocused.current = false;
           setHasFocus(false);
-          setSelectionSnapshot(null);
+          if (!linkPicker) {
+            setSelectionSnapshot(null);
+          }
           setOpenPalette(null);
           syncContentFromDom();
           renderContent(content);
         }}
-        onCompositionStart={() => { isComposing.current = true; }}
+        onCompositionStart={() => {
+          isComposing.current = true;
+        }}
         onCompositionEnd={() => {
           isComposing.current = false;
           handleInput();
         }}
       />
 
-      {selectionSnapshot && typeof document !== 'undefined'
+      {selectionSnapshot && typeof document !== "undefined"
         ? createPortal(
             <InlineSelectionToolbar
               selection={selectionSnapshot}
               palette={openPalette}
               onTogglePalette={(palette) =>
-                setOpenPalette((current) => (current === palette ? null : palette))
+                setOpenPalette((current) =>
+                  current === palette ? null : palette,
+                )
               }
-              onFormatBold={() => execInlineCommand('bold')}
-              onFormatItalic={() => execInlineCommand('italic')}
-              onFormatStrike={() => execInlineCommand('strikeThrough')}
+              onFormatBold={() => execInlineCommand("bold")}
+              onFormatItalic={() => execInlineCommand("italic")}
+              onFormatStrike={() => execInlineCommand("strikeThrough")}
               onFormatCode={handleToggleCode}
-              onFormatLink={handleAddLink}
-              onFormatTextColor={(color) => handleApplyColor('text', color)}
-              onFormatBackgroundColor={(color) => handleApplyColor('background', color)}
+              onFormatTextColor={(color) => handleApplyColor("text", color)}
+              onFormatBackgroundColor={(color) =>
+                handleApplyColor("background", color)
+              }
               onOpenSlashMenu={handleOpenSlashMenu}
+              onOpenLinkPicker={handleAddLink}
             />,
+            document.body,
+          )
+        : null}
+
+      {selectionSnapshot && linkPicker && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={linkPickerRef}
+              className="fixed z-[10002] w-80 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-xl"
+              style={{
+                left: selectionSnapshot.rect.left,
+                top: Math.max(12, selectionSnapshot.rect.bottom + 8),
+              }}
+            >
+              {linkPicker.mode === "chooser" && (
+                <div className="p-2">
+                  <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]">
+                    Link type
+                  </p>
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      className="rounded-lg px-3 py-2 text-left text-sm text-[var(--color-ink)] hover:bg-[var(--color-surface-secondary)]"
+                      onClick={() =>
+                        setLinkPicker({ mode: "external", query: "https://" })
+                      }
+                    >
+                      Web link
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg px-3 py-2 text-left text-sm text-[var(--color-ink)] hover:bg-[var(--color-surface-secondary)]"
+                      onClick={() =>
+                        setLinkPicker({ mode: "internal", query: "" })
+                      }
+                    >
+                      Page link
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {linkPicker.mode === "external" && (
+                <form
+                  className="p-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleApplyExternalLink(linkPicker.query);
+                  }}
+                >
+                  <div
+                    id="external-link-label"
+                    className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]"
+                  >
+                    Web URL
+                  </div>
+                  <input
+                    aria-labelledby="external-link-label"
+                    autoFocus
+                    value={linkPicker.query}
+                    onChange={(e) =>
+                      setLinkPicker((current) =>
+                        current
+                          ? { ...current, query: e.target.value }
+                          : current,
+                      )
+                    }
+                    className="w-full rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-3 py-2 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+                    placeholder="https://example.com"
+                  />
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      className="rounded-lg px-3 py-2 text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-secondary)]"
+                      onClick={() => setLinkPicker(null)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {linkPicker.mode === "internal" && (
+                <div className="p-2">
+                  <div
+                    id="page-link-label"
+                    className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]"
+                  >
+                    Page reference
+                  </div>
+                  <input
+                    aria-labelledby="page-link-label"
+                    autoFocus
+                    value={linkPicker.query}
+                    onChange={(e) =>
+                      setLinkPicker((current) =>
+                        current
+                          ? { ...current, query: e.target.value }
+                          : current,
+                      )
+                    }
+                    className="w-full rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-3 py-2 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+                    placeholder="Search pages"
+                  />
+                  <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-[var(--color-line)]">
+                    {selectablePages
+                      .filter((workspacePage) => {
+                        const lower = linkPicker.query.trim().toLowerCase();
+                        if (!lower) return true;
+                        return workspacePage.title
+                          .toLowerCase()
+                          .includes(lower);
+                      })
+                      .slice(0, 12)
+                      .map((workspacePage) => (
+                        <button
+                          key={workspacePage._id}
+                          type="button"
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-[var(--color-ink)] hover:bg-[var(--color-surface-secondary)]"
+                          onClick={() =>
+                            handleApplyInternalLink(workspacePage._id)
+                          }
+                        >
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-secondary)] text-xs text-[var(--color-ink-muted)]">
+                            {workspacePage.icon ?? "□"}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate">
+                            {workspacePage.title || "Untitled"}
+                          </span>
+                        </button>
+                      ))}
+                    {selectablePages.filter((workspacePage) => {
+                      const lower = linkPicker.query.trim().toLowerCase();
+                      if (!lower) return true;
+                      return workspacePage.title.toLowerCase().includes(lower);
+                    }).length === 0 && (
+                      <p className="px-3 py-2 text-sm text-[var(--color-ink-faint)]">
+                        No pages match your search.
+                      </p>
+                    )}
+                  </div>
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      className="rounded-lg px-3 py-2 text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-secondary)]"
+                      onClick={() => setLinkPicker(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>,
             document.body,
           )
         : null}

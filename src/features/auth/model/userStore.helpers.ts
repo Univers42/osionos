@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import { api } from '@/shared/api/client';
-import { getCollectionEmojiValue } from '@/shared/lib/uiCollectionAssets';
+import { getCollectionEmojiValue } from '@/shared/lib/markengine/uiCollectionAssets';
 import type { StaticPersona, Workspace } from '@/entities/user';
 
 export const INITIAL_PERSONAS: StaticPersona[] = [

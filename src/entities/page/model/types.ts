@@ -55,6 +55,8 @@ export interface PageStore {
   seedOnlinePages: (workspaceMap: Record<string, string>, jwt: string) => Promise<void>;
   openPage: (page: ActivePage) => void;
   addPage: (workspaceId: string, title: string, jwt: string, parentPageId?: string) => Promise<PageEntry | null>;
+  duplicatePage: (pageId: string, workspaceId: string) => Promise<string | null>;
+  movePage: (pageId: string, targetParentId: string | null, targetWorkspaceId: string) => void;
   deletePage: (pageId: string, workspaceId: string, jwt: string) => Promise<void>;
   clearWorkspace: (workspaceId: string) => void;
 

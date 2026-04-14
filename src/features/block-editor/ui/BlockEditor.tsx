@@ -197,6 +197,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
     case "heading_2":
@@ -209,6 +210,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
     case "heading_3":
@@ -221,6 +223,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
 
@@ -234,6 +237,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
 
@@ -247,6 +251,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
 
@@ -260,6 +265,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
 
@@ -273,6 +279,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
 
@@ -291,6 +298,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onKeyDown={onKeyDown}
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
+              pageId={pageId}
             />
           </div>
         </div>
@@ -311,6 +319,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onKeyDown={onKeyDown}
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
+              pageId={pageId}
             />
           </div>
         </div>
@@ -320,6 +329,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <TodoBlockEditor
           block={block}
+          pageId={pageId}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onRequestSlashMenu={onRequestSlashMenu}
@@ -330,6 +340,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <ToggleBlockEditor
           block={block}
+          pageId={pageId}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onRequestSlashMenu={onRequestSlashMenu}
@@ -559,6 +570,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
   }
