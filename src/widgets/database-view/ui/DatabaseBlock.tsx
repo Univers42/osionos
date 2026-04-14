@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   DatabaseBlock.tsx                                  :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:37 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:04:38 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/14 12:42:15 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,12 +16,11 @@
 import React from 'react';
 import {
   IconBoard,
-} from '@/shared/lib/uiCollectionAssets';
+} from '@/shared/lib/markengine/uiCollectionAssets';
 import { CompactAssetPickerBoard } from '@/shared/ui';
 
 interface DatabaseBlockProps {
   databaseId?: string;
-  initialViewId?: string;
   mode?: 'inline' | 'full';
 }
 

@@ -9,9 +9,7 @@ import {
 import {
   PAGE_ICON_PICKER_BOARD_PROPS,
   PAGE_ICON_PICKER_TABS,
-} from '@/shared/lib/uiCollectionAssets';
-
-type AssetSourceId = string;
+} from '@/shared/lib/markengine/uiCollectionAssets';
 
 interface CompactAssetPickerBoardProps {
   value?: string;
@@ -22,7 +20,7 @@ interface CompactAssetPickerBoardProps {
 }
 
 const SOURCE_OPTIONS: ReadonlyArray<{
-  id: AssetSourceId;
+  id: string;
   label: string;
 }> = PAGE_ICON_PICKER_TABS.map((tab) => ({
   id: tab.id,

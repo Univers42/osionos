@@ -16,7 +16,7 @@ import {
   COVER_PICKER_BOARD_PROPS,
   COVER_PICKER_TABS,
   IconImage,
-} from '@/shared/lib/uiCollectionAssets';
+} from '@/shared/lib/markengine/uiCollectionAssets';
 import {
   AssetPickerBoard,
   resolveAssetValue,
@@ -47,11 +47,13 @@ export const PageCover: React.FC<PageCoverProps> = ({
   const isGradient = cover.startsWith('linear-gradient') || cover.startsWith('radial-gradient');
   const resolvedCover = isGradient ? undefined : resolveAssetValue(cover, COVER_PICKER_TABS);
   const isUrl = !isGradient;
-  const coverSrc = resolvedCover?.mediaItem
-    ? resolveMediaUrl(resolvedCover.mediaItem.ref)
-    : resolvedCover?.preview?.kind === 'image'
-      ? resolvedCover.preview.src
-      : cover;
+  let coverSrc = cover;
+
+  if (resolvedCover?.mediaItem) {
+    coverSrc = resolveMediaUrl(resolvedCover.mediaItem.ref);
+  } else if (resolvedCover?.preview?.kind === 'image') {
+    coverSrc = resolvedCover.preview.src;
+  }
 
   /* Close picker on outside click */
   useEffect(() => {

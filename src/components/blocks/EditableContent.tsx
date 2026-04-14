@@ -17,7 +17,7 @@ import {
   INLINE_COLOR_OPTIONS,
   type InlineColorOption,
   normalizeInlineColorToken,
-} from "@/shared/lib/inlineTextStyles";
+} from "@/shared/lib/markengine/inlineTextStyles";
 import { usePageStore } from "@/store/usePageStore";
 
 interface EditableContentProps {

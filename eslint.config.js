@@ -7,8 +7,8 @@ export default [
   {
     ignores: [
       "src/shared/lib/markengine/**/*",
-      "src/lib/markengine/dist/**/*",
-      "src/lib/markengine/playground/public/dist/**/*",
+      "src/shared/lib/markengine/dist/**/*",
+      "src/shared/lib/markengine/playground/public/dist/**/*",
       "dist",
       "build",
       "node_modules",

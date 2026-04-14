@@ -17,7 +17,7 @@ import { AssetRenderer } from '@univers42/ui-collection';
 import { ErrorBoundary }  from '@/shared/ui';
 import {
   getCollectionEmojiValue,
-} from '@/shared/lib/uiCollectionAssets';
+} from '@/shared/lib/markengine/uiCollectionAssets';
 import { DatabaseBlock }  from '@/widgets/database-view';
 import { NotionPage }     from '@/pages/notion-page';
 
