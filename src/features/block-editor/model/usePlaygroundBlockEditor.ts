@@ -341,8 +341,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
       e: React.KeyboardEvent,
       blockId: string,
       block: Block,
-      blockIdx: number,
-      content: Block[],
+      _blockIdx: number,
+      _content: Block[],
     ): boolean => {
       if (
         (e.key !== "Backspace" && e.key !== "Delete") ||
