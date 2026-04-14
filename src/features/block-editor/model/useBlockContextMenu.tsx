@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -48,10 +48,9 @@ export function useBlockContextMenu({
     return findBlockLocation(content, contextMenu.blockId);
   }, [content, contextMenu]);
 
-  useEffect(() => {
-    if (contextMenu && !blockLocation) {
-      setContextMenu(null);
-    }
+  const activeContextMenu = useMemo(() => {
+    if (!contextMenu || !blockLocation) return null;
+    return contextMenu;
   }, [blockLocation, contextMenu]);
 
   const closeContextMenu = useCallback(() => {
@@ -218,7 +217,7 @@ export function useBlockContextMenu({
   ]);
 
   return {
-    contextMenu,
+    contextMenu: activeContextMenu,
     contextMenuSections,
     openContextMenu,
     closeContextMenu,
