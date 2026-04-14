@@ -27,7 +27,7 @@ const SOURCE_OPTIONS: ReadonlyArray<{
   label: tab.label,
 }));
 
-const SOURCE_IDS = new Set<AssetSourceId>(SOURCE_OPTIONS.map((option) => option.id));
+const SOURCE_IDS = new Set<string>(SOURCE_OPTIONS.map((option) => option.id));
 const DEFAULT_SOURCE_ID = SOURCE_OPTIONS[0]?.id ?? 'emojis';
 const EMOJI_SOURCE_TAB = PAGE_ICON_PICKER_TABS.find((tab) => tab.id === 'emojis');
 const EMOJI_BOARD_WIDTH = 324;
@@ -71,17 +71,17 @@ const EMOJI_CATEGORY_OPTIONS = (() => {
   }));
 })();
 
-function getSourceTab(source: AssetSourceId): AssetPickerBoardTab | undefined {
+function getSourceTab(source: string): AssetPickerBoardTab | undefined {
   return PAGE_ICON_PICKER_TABS.find((tab) => tab.id === source);
 }
 
-function resolveInitialSource(value?: string): AssetSourceId {
+function resolveInitialSource(value?: string): string {
   const resolvedTabId = value
     ? resolveAssetValue(value, PAGE_ICON_PICKER_TABS)?.tab?.id
     : undefined;
 
-  if (resolvedTabId && SOURCE_IDS.has(resolvedTabId as AssetSourceId)) {
-    return resolvedTabId as AssetSourceId;
+  if (resolvedTabId && SOURCE_IDS.has(resolvedTabId)) {
+    return resolvedTabId;
   }
 
   return DEFAULT_SOURCE_ID;
@@ -140,7 +140,7 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
   label = 'Selector de assets',
   onSerializedValueChange,
 }) => {
-  const [activeSource, setActiveSource] = useState<AssetSourceId>(() => resolveInitialSource(value));
+  const [activeSource, setActiveSource] = useState<string>(() => resolveInitialSource(value));
   const [activeEmojiCategory, setActiveEmojiCategory] = useState<string>(
     () => resolveInitialEmojiCategory(value),
   );
