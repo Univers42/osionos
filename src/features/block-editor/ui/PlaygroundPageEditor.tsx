@@ -27,6 +27,26 @@ interface PlaygroundPageEditorProps {
 type DropPosition = "above" | "below" | null;
 const DND_TYPE = "application/x-playground-block-id";
 
+function getNestedTreeClassName(parentBlockType: Block["type"] | null, isRoot: boolean) {
+  if (isRoot || !parentBlockType) {
+    return "";
+  }
+
+  if (parentBlockType === "bulleted_list" || parentBlockType === "numbered_list") {
+    return "ml-[3.25rem] mt-0.5";
+  }
+
+  if (parentBlockType === "to_do") {
+    return "ml-[2.75rem] mt-0.5";
+  }
+
+  if (parentBlockType === "toggle") {
+    return "ml-6 mt-0.5 pl-3 border-l-2 border-[var(--color-line)]";
+  }
+
+  return "ml-7";
+}
+
 /** Editable block-based page editor for the playground. */
 export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
   pageId,
@@ -131,6 +151,7 @@ interface BlockTreeProps {
   blocks: Block[];
   pageId: string;
   isRoot?: boolean;
+  parentBlockType?: Block["type"] | null;
   parentBlockId?: string | null;
   moveBlock: (
     pageId: string,
@@ -141,7 +162,12 @@ interface BlockTreeProps {
   draggedBlockId: string | null;
   setDraggedBlockId: (id: string | null) => void;
   onChange: (blockId: string, text: string, blocks: Block[]) => void;
-  onKeyDown: (e: React.KeyboardEvent, blockId: string, blocks: Block[]) => void;
+  onKeyDown: (
+    e: React.KeyboardEvent,
+    blockId: string,
+    blocks: Block[],
+    parentBlockId?: string | null,
+  ) => void;
   onPaste: (e: React.ClipboardEvent, blockId: string, blocks: Block[]) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
@@ -156,6 +182,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
   blocks,
   pageId,
   isRoot = false,
+  parentBlockType = null,
   parentBlockId = null,
   moveBlock,
   draggedBlockId,
@@ -171,7 +198,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
   let numberedCounter = 0;
 
   return (
-    <div className={isRoot ? "" : "ml-7"}>
+    <div className={getNestedTreeClassName(parentBlockType, isRoot)}>
       {blocks.map((block) => {
         const numberedIndex =
           block.type === "numbered_list" ? ++numberedCounter : 0;
@@ -193,6 +220,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 pageId={pageId}
                 block={block}
                 blocks={blocks}
+                parentBlockId={parentBlockId}
                 numberedIndex={numberedIndex}
                 onChange={onChange}
                 onKeyDown={onKeyDown}
@@ -203,10 +231,11 @@ const BlockTree: React.FC<BlockTreeProps> = ({
               />
             </DraggablePlaygroundBlock>
 
-            {!!block.children?.length && (
+            {!!block.children?.length && block.type !== "toggle" && (
               <BlockTree
                 blocks={block.children}
                 pageId={pageId}
+                parentBlockType={block.type}
                 parentBlockId={block.id}
                 moveBlock={moveBlock}
                 draggedBlockId={draggedBlockId}
@@ -355,9 +384,15 @@ interface EditableBlockProps {
   pageId: string;
   block: Block;
   blocks: Block[];
+  parentBlockId?: string | null;
   numberedIndex: number;
   onChange: (blockId: string, text: string, blocks: Block[]) => void;
-  onKeyDown: (e: React.KeyboardEvent, blockId: string, blocks: Block[]) => void;
+  onKeyDown: (
+    e: React.KeyboardEvent,
+    blockId: string,
+    blocks: Block[],
+    parentBlockId?: string | null,
+  ) => void;
   onPaste: (e: React.ClipboardEvent, blockId: string, blocks: Block[]) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
@@ -371,6 +406,7 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
   pageId,
   block,
   blocks,
+  parentBlockId = null,
   numberedIndex,
   onChange,
   onKeyDown,
@@ -385,8 +421,8 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
   );
 
   const handleKey = useCallback(
-    (e: React.KeyboardEvent) => onKeyDown(e, block.id, blocks),
-    [block.id, blocks, onKeyDown],
+    (e: React.KeyboardEvent) => onKeyDown(e, block.id, blocks, parentBlockId),
+    [block.id, blocks, onKeyDown, parentBlockId],
   );
 
   const handlePaste = useCallback(

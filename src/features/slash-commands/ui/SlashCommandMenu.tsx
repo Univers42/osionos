@@ -16,7 +16,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { BlockType } from "@/entities/block";
-import { COLLECTION_SLASH_ITEMS } from "@/shared/lib/uiCollectionAssets";
+import { COLLECTION_SLASH_ITEMS } from "@/shared/lib/markengine/uiCollectionAssets";
 
 export interface SlashMenuItem {
   label: string;

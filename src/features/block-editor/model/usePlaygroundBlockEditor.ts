@@ -14,6 +14,7 @@ import React, { useState, useRef, useCallback } from "react";
 import { usePageStore } from "@/store/usePageStore";
 import {
   detectBlockType,
+  getCalloutIconForKind,
   parseMarkdownToBlocks,
 } from "@/shared/lib/markengine";
 import { useSlashSelect, repositionCursor } from "@/features/slash-commands";
@@ -29,6 +30,7 @@ import {
   handleArrowDown,
   handleEnterKey,
   handleBackspaceKey,
+  getAdjacentRenderedBlockId,
 } from "./playgroundBlockEditor.helpers";
 import type { SlashMenuState } from "./playgroundBlockEditor.helpers";
 import { useBlockContextMenu } from "./useBlockContextMenu";
@@ -146,6 +148,17 @@ export function usePlaygroundBlockEditor(pageId: string) {
       // Always persist the content first
       updateBlock(pageId, blockId, { content: text });
 
+      const fencedCodeMatch = /^```\s*([A-Za-z0-9_+-]+)?\s*$/.exec(text);
+      if (fencedCodeMatch) {
+        changeBlockType(pageId, blockId, "code");
+        updateBlock(pageId, blockId, {
+          content: "",
+          language: fencedCodeMatch[1]?.toLowerCase() || "plaintext",
+        });
+        repositionCursor(blockId, "");
+        return;
+      }
+
       const parsedTable = parsePipeTable(text);
       if (parsedTable) {
         changeBlockType(pageId, blockId, "table_block");
@@ -179,7 +192,12 @@ export function usePlaygroundBlockEditor(pageId: string) {
         const detection = detectBlockType(text);
         if (detection) {
           changeBlockType(pageId, blockId, detection.type);
-          updateBlock(pageId, blockId, { content: detection.remainingContent });
+          updateBlock(pageId, blockId, {
+            content: detection.remainingContent,
+            ...(detection.type === "callout"
+              ? { color: getCalloutIconForKind(detection.kind ?? "note") }
+              : {}),
+          });
           repositionCursor(blockId, detection.remainingContent);
         }
       }
@@ -311,16 +329,13 @@ export function usePlaygroundBlockEditor(pageId: string) {
       }
 
       e.preventDefault();
-
-      const nextBlockId =
-        blockIdx < content.length - 1 ? content[blockIdx + 1].id : null;
-      const prevBlockId = blockIdx > 0 ? content[blockIdx - 1].id : null;
-
+      const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, "next");
+      const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, "prev");
       deleteBlock(pageId, blockId);
-      if (nextBlockId) {
-        focusBlock(nextBlockId);
-      } else if (prevBlockId) {
-        focusBlock(prevBlockId, true);
+      if (nextRenderedBlockId) {
+        focusBlock(nextRenderedBlockId);
+      } else if (prevRenderedBlockId) {
+        focusBlock(prevRenderedBlockId, true);
       }
 
       return true;
@@ -333,8 +348,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
       e: React.KeyboardEvent,
       blockId: string,
       block: Block,
-      blockIdx: number,
-      content: Block[],
+      _blockIdx: number,
+      _content: Block[],
     ): boolean => {
       if (
         (e.key !== "Backspace" && e.key !== "Delete") ||
@@ -344,15 +359,13 @@ export function usePlaygroundBlockEditor(pageId: string) {
       }
 
       e.preventDefault();
-      const nextBlockId =
-        blockIdx < content.length - 1 ? content[blockIdx + 1].id : null;
-      const prevBlockId = blockIdx > 0 ? content[blockIdx - 1].id : null;
-
+      const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, "next");
+      const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, "prev");
       deleteBlock(pageId, blockId);
-      if (nextBlockId) {
-        focusBlock(nextBlockId);
-      } else if (prevBlockId) {
-        focusBlock(prevBlockId, true);
+      if (nextRenderedBlockId) {
+        focusBlock(nextRenderedBlockId);
+      } else if (prevRenderedBlockId) {
+        focusBlock(prevRenderedBlockId, true);
       }
       return true;
     },
@@ -366,6 +379,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       block: Block,
       blockIdx: number,
       content: Block[],
+      parentBlockId: string | null,
       isEmpty: boolean,
     ): boolean => {
       if ((e.key !== "Backspace" && e.key !== "Delete") || !isEmpty)
@@ -381,15 +395,22 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
       if (isListType(block.type)) {
         e.preventDefault();
-        const prevBlockId = blockIdx > 0 ? content[blockIdx - 1].id : null;
-        const nextBlockId =
-          blockIdx < content.length - 1 ? content[blockIdx + 1].id : null;
+        const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, "next");
+        const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, "prev");
         deleteBlock(pageId, blockId);
-        if (nextBlockId) {
-          focusBlock(nextBlockId);
-        } else if (prevBlockId) {
-          focusBlock(prevBlockId, true);
+        if (nextRenderedBlockId) {
+          focusBlock(nextRenderedBlockId);
+        } else if (prevRenderedBlockId) {
+          focusBlock(prevRenderedBlockId, true);
         }
+        return true;
+      }
+
+      if (block.type === "paragraph" && parentBlockId) {
+        e.preventDefault();
+        outdentBlock(pageId, blockId);
+        focusBlock(blockId);
+        repositionCursor(blockId, "");
         return true;
       }
 
@@ -407,7 +428,14 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
       return false;
     },
-    [pageId, deleteBlock, changeBlockType, updateBlock, focusBlock],
+    [
+      pageId,
+      deleteBlock,
+      changeBlockType,
+      updateBlock,
+      focusBlock,
+      outdentBlock,
+    ],
   );
 
   const handleArrowNavigation = useCallback(
@@ -437,7 +465,15 @@ export function usePlaygroundBlockEditor(pageId: string) {
       if (!markdown) return;
 
       const parsed = parseMarkdownToBlocks(markdown);
-      if (parsed.length <= 1) return;
+      if (parsed.length === 0) return;
+
+      const shouldTransformSingleBlock =
+        parsed.length === 1 &&
+        (parsed[0].type !== "paragraph" ||
+          markdown.includes("```") ||
+          markdown.includes("~~~"));
+
+      if (parsed.length === 1 && !shouldTransformSingleBlock) return;
 
       e.preventDefault();
 
@@ -458,7 +494,12 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
   /** Handle key presses — Enter, Backspace, Arrow navigation. */
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent, blockId: string, content: Block[]) => {
+    (
+      e: React.KeyboardEvent,
+      blockId: string,
+      content: Block[],
+      parentBlockId: string | null = null,
+    ) => {
       const block = content.find((b) => b.id === blockId);
       if (!block) return;
       const blockIdx = content.findIndex((b) => b.id === blockId);
@@ -509,7 +550,17 @@ export function usePlaygroundBlockEditor(pageId: string) {
         return;
       }
 
-      if (handleEmptyBackspace(e, blockId, block, blockIdx, content, isEmpty)) {
+      if (
+        handleEmptyBackspace(
+          e,
+          blockId,
+          block,
+          blockIdx,
+          content,
+          parentBlockId,
+          isEmpty,
+        )
+      ) {
         return;
       }
 

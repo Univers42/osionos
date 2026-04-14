@@ -25,7 +25,7 @@ import type { Block } from "@/entities/block";
 
 import { usePageStore } from "@/store/usePageStore";
 import { CALLOUT_COLORS } from "@/entities/block";
-import { MermaidDiagram } from "@/shared/ui";
+import { MermaidDiagram, CodeSyntaxHighlight } from "@/shared/ui";
 import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
 
@@ -88,6 +88,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const isMermaidCode =
     block.type === "code" &&
     (block.language || "plaintext").trim().toLowerCase() === "mermaid";
+  const isSyntaxPreviewCode =
+    block.type === "code" &&
+    !isMermaidCode &&
+    (block.language || "plaintext").trim().toLowerCase() !== "plaintext";
 
   const handleDeleteCodeBlock = () => {
     if (!onDeleteCodeBlock) return;
@@ -194,6 +198,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
     case "heading_2":
@@ -206,6 +211,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
     case "heading_3":
@@ -218,6 +224,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
 
@@ -231,6 +238,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
 
@@ -244,6 +252,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
 
@@ -257,6 +266,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
 
@@ -270,6 +280,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
 
@@ -288,6 +299,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onKeyDown={onKeyDown}
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
+              pageId={pageId}
             />
           </div>
         </div>
@@ -308,6 +320,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onKeyDown={onKeyDown}
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
+              pageId={pageId}
             />
           </div>
         </div>
@@ -317,6 +330,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <TodoBlockEditor
           block={block}
+          pageId={pageId}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onRequestSlashMenu={onRequestSlashMenu}
@@ -327,6 +341,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <ToggleBlockEditor
           block={block}
+          pageId={pageId}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onRequestSlashMenu={onRequestSlashMenu}
@@ -384,6 +399,19 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 <MermaidDiagram
                   chart={block.content}
                   className="rounded-md border border-[var(--color-line)] p-3 bg-[var(--color-surface-secondary)] overflow-x-auto"
+                />
+              </div>
+            )}
+            {isSyntaxPreviewCode && block.content.trim() && (
+              <div className="mt-3 pt-3 border-t border-[var(--color-line)]">
+                <p className="text-[11px] font-mono text-[var(--color-ink-muted)] mb-2">
+                  Syntax preview
+                </p>
+                <CodeSyntaxHighlight
+                  code={block.content}
+                  language={block.language}
+                  className="rounded-md border border-[var(--color-line)] p-3 bg-[var(--color-surface-secondary)] overflow-x-auto"
+                  codeClassName="text-[13px] leading-relaxed font-mono whitespace-pre"
                 />
               </div>
             )}
@@ -543,6 +571,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
+          pageId={pageId}
         />
       );
   }

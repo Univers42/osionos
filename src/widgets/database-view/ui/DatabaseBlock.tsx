@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   DatabaseBlock.tsx                                  :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:37 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:04:38 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/14 12:57:00 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,7 +16,7 @@
 import React from 'react';
 import {
   IconBoard,
-} from '@/shared/lib/uiCollectionAssets';
+} from '@/shared/lib/markengine/uiCollectionAssets';
 import { CompactAssetPickerBoard } from '@/shared/ui';
 
 interface DatabaseBlockProps {
@@ -27,6 +27,7 @@ interface DatabaseBlockProps {
 
 export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
   databaseId,
+  initialViewId,
   mode = 'inline',
 }) => (
   <div className={`border border-dashed border-[var(--color-line)] rounded-lg p-4 my-2 ${
@@ -35,9 +36,9 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     <div className="flex items-center gap-2 text-sm text-[var(--color-ink-muted)]">
       <IconBoard />
       <span>Database view</span>
-      {databaseId && (
+      {(databaseId || initialViewId) && (
         <span className="text-xs font-mono text-[var(--color-ink-faint)]">
-          ({databaseId})
+          ({databaseId ?? 'unknown database'}{initialViewId ? ` · ${initialViewId}` : ''})
         </span>
       )}
     </div>

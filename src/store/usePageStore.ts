@@ -32,6 +32,8 @@ import {
   createFetchPageContent,
   createAddPage,
   createDeletePage,
+  createDuplicatePage,
+  createMovePage,
 } from "./pageStore.actions";
 import {
   debouncePersistContent,
@@ -59,6 +61,8 @@ export const usePageStore = create<PageStore>((set, get) => ({
   fetchPages: createFetchPages(set, get),
   fetchPageContent: createFetchPageContent(set, get),
   addPage: createAddPage(set, get),
+  duplicatePage: createDuplicatePage(set, get),
+  movePage: createMovePage(set, get),
   deletePage: createDeletePage(set, get),
 
   openPage: (page) => {

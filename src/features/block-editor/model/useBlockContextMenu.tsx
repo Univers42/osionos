@@ -118,7 +118,9 @@ export function useBlockContextMenu({
   const handleChangeType = useCallback(
     (nextType: Block["type"]) => {
       if (!contextMenu) return;
-      applyOperation(changeBlockTypeInTree(content, contextMenu.blockId, nextType));
+      applyOperation(
+        changeBlockTypeInTree(content, contextMenu.blockId, nextType),
+      );
     },
     [applyOperation, content, contextMenu],
   );

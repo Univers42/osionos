@@ -16,7 +16,7 @@ import { AssetRenderer } from '@univers42/ui-collection';
 import { useUserStore } from '@/features/auth';
 import {
   COLLECTION_ROLE_BADGES,
-} from '@/shared/lib/uiCollectionAssets';
+} from '@/shared/lib/markengine/uiCollectionAssets';
 
 interface Props {
   onClose: () => void;
