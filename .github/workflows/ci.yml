@@ -25,16 +25,10 @@ jobs:
             working-directory: .
             typecheck: make typecheck
             lint: make lint
-            cache: pnpm
-            lockfile-path: pnpm-lock.yaml
-            install: corepack enable && pnpm install --frozen-lockfile
           - name: markengine-submodule
             working-directory: src/shared/lib/markengine
             typecheck: make typecheck
             lint: make lint
-            cache: npm
-            lockfile-path: src/shared/lib/markengine/package-lock.json
-            install: npm ci
 
     steps:
       - name: Checkout repository
@@ -43,22 +37,16 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Setup pnpm
-        if: ${{ matrix.name == 'root' }}
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: ${{ matrix.cache }}
-          cache-dependency-path: ${{ matrix.lockfile-path }}
+          cache: npm
+          cache-dependency-path: ${{ matrix.working-directory }}/package-lock.json
 
       - name: Install dependencies
         working-directory: ${{ matrix.working-directory }}
-        run: ${{ matrix.install }}
+        run: npm ci
 
       - name: Typecheck ${{ matrix.name }}
         working-directory: ${{ matrix.working-directory }}
