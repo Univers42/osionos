@@ -1,0 +1,3 @@
+[submodule "src/shared/lib/markengine"]
+	path = src/shared/lib/markengine
+	url = https://github.com/Univers42/markengine
