@@ -10,7 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  useMemo,
+} from "react";
 import { ChevronRight } from "lucide-react";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
@@ -67,9 +73,9 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
   const pendingFocusId = useRef<string | null>(null);
 
   const children: Block[] = useMemo(
-  () => block.children ?? [],
-  [block.children],
-);
+    () => block.children ?? [],
+    [block.children],
+  );
 
   /* ── Child persistence ──────────────────────────────────────────── */
 
@@ -227,6 +233,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
             content={block.content}
             className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5"
             placeholder="Toggle"
+            pageId={pageId}
             onChange={onChange}
             onKeyDown={handleSummaryKeyDown}
             onRequestSlashMenu={onRequestSlashMenu}
@@ -243,6 +250,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
                 content={child.content}
                 className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5"
                 placeholder="Type here..."
+                pageId={pageId}
                 onChange={(text) => handleChildChange(child.id, text)}
                 onKeyDown={(e) => handleChildKeyDown(e, child.id)}
               />

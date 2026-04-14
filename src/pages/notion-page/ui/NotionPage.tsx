@@ -20,7 +20,7 @@ import {
   getCollectionEmojiValue,
   randomUiCollectionCover,
   randomUiCollectionEmoji,
-} from "@/shared/lib/uiCollectionAssets";
+} from "@/shared/lib/markengine/uiCollectionAssets";
 
 import { PageCover, PageIcon, PageTitle } from "@/entities/page";
 import { PageBody } from "./PageBody";

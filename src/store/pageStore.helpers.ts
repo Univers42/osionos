@@ -370,3 +370,19 @@ export function applyBlockOutdent(
     return { ...page, content };
   };
 }
+
+/** Validates if a page can be moved to the target destination. */
+export function isValidMove(
+  pages: Record<string, PageEntry[]>,
+  sourceId: string,
+  targetId: string | null,
+): boolean {
+  if (targetId === null) return true;
+  if (sourceId === targetId) return false;
+
+  const allPages = Object.values(pages).flat();
+  const descendantIds = getAllDescendantIds(allPages, sourceId);
+  if (descendantIds.includes(targetId)) return false;
+
+  return true;
+}

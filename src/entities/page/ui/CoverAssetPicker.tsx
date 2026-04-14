@@ -4,7 +4,7 @@ import { AssetPickerBoard } from "@univers42/ui-collection";
 import {
   COVER_PICKER_BOARD_PROPS,
   COVER_PICKER_TABS,
-} from "@/shared/lib/uiCollectionAssets";
+} from "@/shared/lib/markengine/uiCollectionAssets";
 
 interface CoverAssetPickerProps {
   value?: string;

@@ -21,8 +21,9 @@ import {
   getAllDescendantIds,
   savePagesCache,
   mergeWorkspacePages,
+  isValidMove,
 } from "./pageStore.helpers";
-import type { PageEntry, PageStore } from "@/entities/page";
+import type { PageEntry, PageStore, ActivePage } from "@/entities/page";
 
 type SetFn = (
   partial: Partial<PageStore> | ((s: PageStore) => Partial<PageStore>),
@@ -206,5 +207,180 @@ export function createDeletePage(set: SetFn, get: GetFn) {
       };
     });
     savePagesCache(get().pages);
+  };
+}
+
+export function createDuplicatePage(set: SetFn, get: GetFn) {
+  return async (pageId: string, workspaceId: string): Promise<string | null> => {
+    const state = get();
+    const wsPages = state.pages[workspaceId] ?? [];
+    const rootPage = wsPages.find((p) => p._id === pageId);
+    if (!rootPage) return null;
+
+    const descendantIds = getAllDescendantIds(wsPages, pageId);
+    const allIdsToClone = [pageId, ...descendantIds];
+    const pagesToClone = wsPages.filter((p) => allIdsToClone.includes(p._id));
+
+    // ID mapping: oldId -> newId
+    const idMap: Record<string, string> = {};
+    allIdsToClone.forEach((id) => {
+      idMap[id] = localId();
+    });
+
+    const clonedPages: PageEntry[] = pagesToClone.map((p) => {
+      const newId = idMap[p._id];
+      const isRoot = p._id === pageId;
+      return {
+        ...p,
+        _id: newId,
+        title: isRoot ? `${p.title} (Copy)` : p.title,
+        parentPageId: p.parentPageId
+          ? idMap[p.parentPageId] ?? p.parentPageId
+          : p.parentPageId,
+      };
+    });
+
+    const newRootId = idMap[pageId];
+    const newRootPage = clonedPages.find((p) => p._id === newRootId);
+
+    set((s) => {
+      const currentWsPages = s.pages[workspaceId] ?? [];
+      const rootIdx = currentWsPages.findIndex((p) => p._id === pageId);
+
+      const nextPages = [...currentWsPages];
+      // Insert cloned pages after the original root page
+      nextPages.splice(rootIdx + 1, 0, ...clonedPages);
+
+      const nextAllPages = {
+        ...s.pages,
+        [workspaceId]: nextPages,
+      };
+      savePagesCache(nextAllPages);
+
+      if (newRootPage) {
+        const newActivePage: ActivePage = {
+          id: newRootPage._id,
+          workspaceId,
+          kind: "page",
+          title: newRootPage.title,
+          icon: newRootPage.icon,
+        };
+
+        const recents = [
+          newActivePage,
+          ...s.recents.filter((r) => r.id !== newRootId),
+        ].slice(0, 10);
+        saveRecents(recents);
+
+        return {
+          pages: nextAllPages,
+          activePage: newActivePage,
+          recents,
+        };
+      }
+
+      return { pages: nextAllPages };
+    });
+
+    return newRootId;
+  };
+}
+
+export function createMovePage(set: SetFn, get: GetFn) {
+  return (
+    pageId: string,
+    targetParentId: string | null,
+    targetWorkspaceId: string
+  ) => {
+    const state = get();
+    const allPagesRecord = state.pages;
+
+    // 1. Validate move
+    if (!isValidMove(allPagesRecord, pageId, targetParentId)) {
+      console.error("[pageStore] Invalid move operation", {
+        pageId,
+        targetParentId,
+      });
+      return;
+    }
+
+    // 2. Find the page and its source workspace
+    let sourceWorkspaceId: string | null = null;
+    let targetPage: PageEntry | null = null;
+
+    for (const wsId of Object.keys(allPagesRecord)) {
+      const page = allPagesRecord[wsId].find((p) => p._id === pageId);
+      if (page) {
+        sourceWorkspaceId = wsId;
+        targetPage = page;
+        break;
+      }
+    }
+
+    if (!sourceWorkspaceId || !targetPage) {
+      console.error("[pageStore] Page not found for move", { pageId });
+      return;
+    }
+
+    // 3. Perform atomic update
+    set((s) => {
+      const nextPages = { ...s.pages };
+
+      if (sourceWorkspaceId === targetWorkspaceId) {
+        // Simple re-parenting within same workspace
+        nextPages[sourceWorkspaceId] = nextPages[sourceWorkspaceId].map((p) =>
+          p._id === pageId ? { ...p, parentPageId: targetParentId ?? null } : p
+        );
+
+        savePagesCache(nextPages);
+        return { pages: nextPages };
+      } else {
+        // Cross-workspace move
+        const sourceList = nextPages[sourceWorkspaceId] ?? [];
+        const descendantIds = getAllDescendantIds(sourceList, pageId);
+        const allIdsToMove = new Set([pageId, ...descendantIds]);
+
+        const pagesToMove = sourceList
+          .filter((p) => allIdsToMove.has(p._id))
+          .map((p) => ({
+            ...p,
+            workspaceId: targetWorkspaceId,
+            parentPageId: p._id === pageId ? (targetParentId ?? null) : (p.parentPageId ?? null),
+          }));
+
+        // Remove from source
+        nextPages[sourceWorkspaceId] = sourceList.filter(
+          (p) => !allIdsToMove.has(p._id)
+        );
+
+        // Add to target
+        nextPages[targetWorkspaceId] = [
+          ...(nextPages[targetWorkspaceId] ?? []),
+          ...pagesToMove,
+        ];
+
+        // Update recents and activePage if they are affected by workspace change
+        const updatedRecents = s.recents.map((r) =>
+          allIdsToMove.has(r.id) ? { ...r, workspaceId: targetWorkspaceId } : r
+        );
+
+        let updatedActivePage = s.activePage;
+        if (s.activePage && allIdsToMove.has(s.activePage.id)) {
+          updatedActivePage = {
+            ...s.activePage,
+            workspaceId: targetWorkspaceId,
+          };
+        }
+
+        saveRecents(updatedRecents);
+        savePagesCache(nextPages);
+
+        return {
+          pages: nextPages,
+          recents: updatedRecents,
+          activePage: updatedActivePage,
+        };
+      }
+    });
   };
 }
