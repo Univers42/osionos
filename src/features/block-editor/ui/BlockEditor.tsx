@@ -26,6 +26,7 @@ import type { Block } from "@/entities/block";
 import { usePageStore } from "@/store/usePageStore";
 import { CALLOUT_COLORS } from "@/entities/block";
 import { MermaidDiagram, CodeSyntaxHighlight } from "@/shared/ui";
+import { MediaBlockEditor } from "./MediaBlockEditor";
 import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
 
@@ -345,6 +346,20 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onChange={onChange}
           onKeyDown={onKeyDown}
           onRequestSlashMenu={onRequestSlashMenu}
+        />
+      );
+
+    case "image":
+    case "video":
+    case "audio":
+    case "file":
+      return (
+        <MediaBlockEditor
+          pageId={pageId}
+          block={block}
+          onChange={onChange}
+          onKeyDown={onKeyDown}
+          onPaste={onPaste}
         />
       );
 

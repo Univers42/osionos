@@ -3,37 +3,40 @@
 // Runs automatically when placed in /docker-entrypoint-initdb.d/.
 
 const dbName = process.env.MONGO_INITDB_DATABASE || 'notion_db';
-db = db.getSiblingDB(dbName);
+const database = db.getSiblingDB(dbName);
 
 const collections = ['tasks', 'contacts', 'content', 'inventory', 'projects', 'products'];
 
 collections.forEach(name => {
-  if (!db.getCollectionNames().includes(name)) {
-    db.createCollection(name);
+  if (!database.getCollectionNames().includes(name)) {
+    database.createCollection(name);
     print(`  ✔ Created collection: ${name}`);
   }
 });
 
 // ── Indexes ──
-db.tasks.createIndex({ status: 1 });
-db.tasks.createIndex({ priority: 1 });
-db.tasks.createIndex({ assignee: 1 });
+database.tasks.createIndex({ status: 1 });
+database.tasks.createIndex({ priority: 1 });
+database.tasks.createIndex({ assignee: 1 });
 
-db.contacts.createIndex({ company: 1 });
-db.contacts.createIndex({ stage: 1 });
-db.contacts.createIndex({ email: 1 }, { unique: true, sparse: true });
+database.contacts.createIndex({ company: 1 });
+database.contacts.createIndex({ stage: 1 });
+database.contacts.createIndex({ email: 1 }, { unique: true, sparse: true });
 
-db.content.createIndex({ status: 1 });
-db.content.createIndex({ publish_date: 1 });
+database.content.createIndex({ status: 1 });
+database.content.createIndex({ publish_date: 1 });
 
-db.inventory.createIndex({ category: 1 });
-db.inventory.createIndex({ serial_number: 1 }, { unique: true, sparse: true });
+database.inventory.createIndex({ category: 1 });
+database.inventory.createIndex(
+  { serial_number: 1 },
+  { unique: true, sparse: true },
+);
 
-db.projects.createIndex({ status: 1 });
-db.projects.createIndex({ priority: 1 });
+database.projects.createIndex({ status: 1 });
+database.projects.createIndex({ priority: 1 });
 
-db.products.createIndex({ category: 1 });
-db.products.createIndex({ price: 1 });
-db.products.createIndex({ sku: 1 }, { unique: true, sparse: true });
+database.products.createIndex({ category: 1 });
+database.products.createIndex({ price: 1 });
+database.products.createIndex({ sku: 1 }, { unique: true, sparse: true });
 
 print(`[init] MongoDB "${dbName}" initialized — ${collections.length} collections ready.`);

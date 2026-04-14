@@ -28,6 +28,10 @@ export type BlockType =
   | 'numbered_list'
   | 'to_do'
   | 'toggle'
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'file'
   | 'code'
   | 'quote'
   | 'callout'
@@ -46,6 +50,7 @@ export interface Block {
   language?: string;		/** Programming language for code blocks */		
   color?: string;			/** Color for callouts, etc. */
   collapsed?: boolean;		/** Whether a toggle is collapsed */
+  asset?: string;           /** Serialized ui-collection asset value for media blocks */
   tableData?: string[][];	/** Table data (array of rows, each row is array of cell strings) */
   databaseId?: string;		/** Database reference ID (for database_inline / database_full_page) */
   viewId?: string;			/** View ID for database blocks */

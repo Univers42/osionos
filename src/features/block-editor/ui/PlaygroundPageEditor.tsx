@@ -68,6 +68,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     handleKeyDown,
     handlePaste,
     handleSlashSelect,
+    handleSlashMediaSelect,
     handleAddBlock,
     handleInitBlock,
     registerBlockRef,
@@ -132,7 +133,10 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
           position={slashMenu.position}
           filter={slashMenu.filter}
           onSelect={(item) =>
-            handleSlashSelect(item.type, blocks, item.calloutIcon)
+            handleSlashSelect(item.blockType, blocks, item.calloutIcon)
+          }
+          onMediaSelect={(kind, value) =>
+            handleSlashMediaSelect(kind, value, blocks)
           }
           onClose={() => setSlashMenu(null)}
         />

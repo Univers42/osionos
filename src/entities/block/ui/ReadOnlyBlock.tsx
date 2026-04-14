@@ -16,6 +16,7 @@ import { ChevronRight } from "lucide-react";
 import { DatabaseBlock } from '@/widgets/database-view';
 import { CalloutBlockReadOnly } from "./CalloutBlockReadOnly";
 import { CodeBlockReadOnly } from "./CodeBlockReadOnly";
+import { MediaBlockReadOnly } from "./MediaBlockReadOnly";
 import { parseInlineMarkdown } from '@/shared/lib/markengine';
 
 interface BlockProps {
@@ -203,6 +204,12 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
 
     case "code":
       return <CodeBlockReadOnly block={block} />;
+
+    case "image":
+    case "video":
+    case "audio":
+    case "file":
+      return <MediaBlockReadOnly block={block} />;
 
     case "quote":
       return (

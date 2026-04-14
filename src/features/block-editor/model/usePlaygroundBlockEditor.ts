@@ -89,6 +89,7 @@ function toBlockUpdates(block: Block): Partial<Block> {
     language: block.language,
     color: block.color,
     collapsed: block.collapsed,
+    asset: block.asset,
     tableData: block.tableData,
     databaseId: block.databaseId,
     viewId: block.viewId,
@@ -609,7 +610,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
   });
 
   /** Handle slash-command selection. */
-  const handleSlashSelect = useSlashSelect({
+  const { handleSlashBlockSelect, handleSlashMediaSelect } = useSlashSelect({
     pageId,
     slashMenu,
     setSlashMenu,
@@ -674,7 +675,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
     handleBlockChange,
     handleKeyDown,
     handlePaste,
-    handleSlashSelect,
+    handleSlashSelect: handleSlashBlockSelect,
+    handleSlashMediaSelect,
     handleAddBlock,
     handleInitBlock,
     registerBlockRef,
