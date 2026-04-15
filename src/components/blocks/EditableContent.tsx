@@ -3,17 +3,19 @@
 /*                                                        :::      ::::::::   */
 /*   EditableContent.tsx                                :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:04:25 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/15 17:22:48 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ColorPickerBoard } from "@univers42/ui-collection";
 import { parseInlineMarkdown } from "@/shared/lib/markengine";
 import {
+  getInlineColorOption,
   INLINE_COLOR_OPTIONS,
   type InlineColorOption,
   normalizeInlineColorToken,
@@ -46,6 +48,7 @@ type PaletteKind = "text" | "background" | null;
 type LinkPickerMode = "chooser" | "external" | "internal";
 
 const EMPTY_WORKSPACE_PAGES: readonly never[] = [];
+const DEFAULT_INLINE_COLOR = INLINE_COLOR_OPTIONS[0]?.id ?? "#0F172A";
 
 interface LinkPickerState {
   mode: LinkPickerMode;
@@ -297,7 +300,7 @@ function serializeFormattedElement(
   children: string,
 ): string | null {
   if (isCodeElement(element)) {
-    return `\`${children}\``;
+    return `[code]${children}[/code]`;
   }
 
   let serialized = children;
@@ -310,27 +313,27 @@ function serializeFormattedElement(
   }
 
   if (isBoldElement(element)) {
-    serialized = `**${serialized}**`;
+    serialized = `[b]${serialized}[/b]`;
     hasFormatting = true;
   }
 
   if (isItalicElement(element)) {
-    serialized = `*${serialized}*`;
+    serialized = `[i]${serialized}[/i]`;
     hasFormatting = true;
   }
 
   if (isStrikeElement(element)) {
-    serialized = `~~${serialized}~~`;
+    serialized = `[s]${serialized}[/s]`;
     hasFormatting = true;
   }
 
   if (element.tagName === "U") {
-    serialized = `__${serialized}__`;
+    serialized = `[u]${serialized}[/u]`;
     hasFormatting = true;
   }
 
   if (element.tagName === "MARK") {
-    serialized = `==${serialized}==`;
+    serialized = `[mark]${serialized}[/mark]`;
     hasFormatting = true;
   }
 
@@ -450,18 +453,99 @@ function getSharedFormatElement(
   return null;
 }
 
+function getFormatDepth(element: HTMLElement, root: HTMLElement) {
+  let depth = 0;
+  let current: HTMLElement | null = element;
+  while (current && current !== root) {
+    depth += 1;
+    current = current.parentElement;
+  }
+  return depth;
+}
+
+function getMatchingFormatAncestors(
+  node: Node,
+  root: HTMLElement,
+  predicate: (element: HTMLElement) => boolean,
+) {
+  const matches: HTMLElement[] = [];
+  let current: HTMLElement | null =
+    node.nodeType === Node.ELEMENT_NODE
+      ? (node as HTMLElement)
+      : node.parentElement;
+
+  while (current && current !== root) {
+    if (predicate(current)) {
+      matches.push(current);
+    }
+    current = current.parentElement;
+  }
+
+  return matches;
+}
+
+function getFormatElementsForRange(
+  range: Range,
+  root: HTMLElement,
+  predicate: (element: HTMLElement) => boolean,
+) {
+  const elements = new Set<HTMLElement>();
+  const commonAncestor =
+    range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+      ? (range.commonAncestorContainer as HTMLElement)
+      : range.commonAncestorContainer.parentElement;
+
+  for (const element of getMatchingFormatAncestors(
+    range.startContainer,
+    root,
+    predicate,
+  )) {
+    elements.add(element);
+  }
+
+  for (const element of getMatchingFormatAncestors(
+    range.endContainer,
+    root,
+    predicate,
+  )) {
+    elements.add(element);
+  }
+
+  if (commonAncestor && commonAncestor !== root && predicate(commonAncestor)) {
+    elements.add(commonAncestor);
+  }
+
+  return Array.from(elements).sort(
+    (left, right) => getFormatDepth(right, root) - getFormatDepth(left, root),
+  );
+}
+
+function unwrapElements(elements: HTMLElement[]) {
+  for (const element of elements) {
+    if (element.isConnected) {
+      unwrapElement(element);
+    }
+  }
+}
+
 function createCodeElement() {
   const code = document.createElement("code");
   code.dataset.inlineType = "code";
   code.className = "inline-code";
-  code.style.background = "var(--color-surface-tertiary-soft2)";
+  code.style.backgroundColor =
+    "var(--inline-code-background,var(--color-surface-tertiary-soft2))";
   code.style.border = "1px solid var(--color-line)";
   code.style.borderRadius = "6px";
   code.style.padding = "0 0.35em";
   code.style.fontFamily =
     "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";
   code.style.fontSize = "0.92em";
-  code.style.color = "var(--color-ink-strong)";
+  code.style.color = "var(--inline-code-color,currentColor)";
+  code.style.textDecorationColor =
+    "var(--inline-code-decoration-color,currentColor)";
+  code.style.setProperty("--inline-background-fill", "transparent");
+  code.style.setProperty("--inline-background-padding", "0");
+  code.style.setProperty("--inline-background-radius", "0");
   return code;
 }
 
@@ -475,13 +559,85 @@ function createColorElement(
 
   if (kind === "text") {
     span.style.color = option.textColor;
+    span.style.textDecorationColor = option.textColor;
+    span.style.setProperty("--inline-code-color", option.textColor);
+    span.style.setProperty("--inline-code-decoration-color", option.textColor);
   } else {
-    span.style.backgroundColor = option.backgroundColor;
-    span.style.borderRadius = "4px";
-    span.style.padding = "0 0.2em";
+    span.style.setProperty(
+      "background-color",
+      `var(--inline-background-fill, ${option.backgroundColor})`,
+    );
+    span.style.borderRadius = "var(--inline-background-radius, 4px)";
+    span.style.padding = "var(--inline-background-padding, 0 0.2em)";
+    span.style.setProperty("--inline-code-background", option.backgroundColor);
   }
 
   return span;
+}
+
+function isFormattingWrapperElement(element: HTMLElement) {
+  return (
+    isBoldElement(element) ||
+    isItalicElement(element) ||
+    isStrikeElement(element) ||
+    isTextColorElement(element) ||
+    isBackgroundColorElement(element) ||
+    element.tagName === "U" ||
+    element.tagName === "MARK"
+  );
+}
+
+function shouldSuppressBackgroundElement(
+  node: Node,
+  allowCodeDescendant = false,
+): boolean {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return !node.textContent?.trim();
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return true;
+  }
+
+  const element = node as HTMLElement;
+  if (isCodeElement(element)) {
+    return true;
+  }
+
+  if (!isFormattingWrapperElement(element) && element.tagName !== "SPAN") {
+    return false;
+  }
+
+  const hasCodeDescendant =
+    allowCodeDescendant ||
+    !!element.querySelector('[data-inline-type="code"], code');
+
+  if (!hasCodeDescendant) {
+    return false;
+  }
+
+  return Array.from(element.childNodes).every((child) =>
+    shouldSuppressBackgroundElement(child, hasCodeDescendant),
+  );
+}
+
+function syncBackgroundColorSuppression(root: HTMLElement) {
+  const elements = root.querySelectorAll<HTMLElement>(
+    '[data-inline-type="background_color"]',
+  );
+
+  for (const element of elements) {
+    if (shouldSuppressBackgroundElement(element)) {
+      element.style.setProperty("--inline-background-fill", "transparent");
+      element.style.setProperty("--inline-background-padding", "0");
+      element.style.setProperty("--inline-background-radius", "0");
+      continue;
+    }
+
+    element.style.removeProperty("--inline-background-fill");
+    element.style.removeProperty("--inline-background-padding");
+    element.style.removeProperty("--inline-background-radius");
+  }
 }
 
 function runLegacyExecCommand(command: string, value?: string): boolean {
@@ -637,35 +793,39 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
       </div>
 
       {palette && (
-        <div className="absolute left-0 top-full mt-2 w-56 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 shadow-xl">
-          <div className="grid grid-cols-3 gap-1.5">
-            {INLINE_COLOR_OPTIONS.map((option) => (
-              <button
-                key={`${palette}-${option.id}`}
-                type="button"
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-[var(--color-ink)] hover:bg-[var(--color-surface-secondary)]"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  if (palette === "text") {
-                    onFormatTextColor(option);
-                  } else {
-                    onFormatBackgroundColor(option);
-                  }
-                }}
-              >
-                <span
-                  className="h-3 w-3 shrink-0 rounded-full border border-black/10"
-                  style={{
-                    background:
-                      palette === "text"
-                        ? option.swatch
-                        : option.backgroundColor,
-                  }}
-                />
-                <span>{option.label}</span>
-              </button>
-            ))}
-          </div>
+        <div
+          className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 shadow-xl"
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <ColorPickerBoard
+            defaultValue={DEFAULT_INLINE_COLOR}
+            label={palette === "text" ? "Text color" : "Background color"}
+            presets={INLINE_COLOR_OPTIONS}
+            showInput={false}
+            size={158}
+            variant="wheel"
+            styles={{
+              presetButton: {
+                gap: 0,
+                padding: "8px",
+              },
+              presetLabel: {
+                display: "none",
+              },
+            }}
+            onChangeComplete={(value) => {
+              const option = getInlineColorOption(value);
+              if (!option) {
+                return;
+              }
+
+              if (palette === "text") {
+                onFormatTextColor(option);
+              } else {
+                onFormatBackgroundColor(option);
+              }
+            }}
+          />
         </div>
       )}
     </div>
@@ -711,6 +871,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     }
 
     ref.current.innerHTML = nextContent ? parseInlineMarkdown(nextContent) : "";
+    syncBackgroundColorSuppression(ref.current);
   }, []);
 
   useEffect(() => {
@@ -780,6 +941,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
     if (root.innerHTML !== parsedHtml) {
       root.innerHTML = parsedHtml;
+      syncBackgroundColorSuppression(root);
       if (selectionOffsets) {
         setSelectionOffsets(root, selectionOffsets.start, selectionOffsets.end);
       }
@@ -880,6 +1042,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
       mutate(root, range);
       root.normalize();
+      syncBackgroundColorSuppression(root);
       syncContentFromDom();
       root.focus();
 
@@ -934,10 +1097,24 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
           if (kind === "text") {
             existing.style.color = color.textColor;
+            existing.style.textDecorationColor = color.textColor;
+            existing.style.setProperty("--inline-code-color", color.textColor);
+            existing.style.setProperty(
+              "--inline-code-decoration-color",
+              color.textColor,
+            );
           } else {
-            existing.style.backgroundColor = color.backgroundColor;
-            existing.style.borderRadius = "4px";
-            existing.style.padding = "0 0.2em";
+            existing.style.setProperty(
+              "background-color",
+              `var(--inline-background-fill, ${color.backgroundColor})`,
+            );
+            existing.style.borderRadius = "var(--inline-background-radius, 4px)";
+            existing.style.padding =
+              "var(--inline-background-padding, 0 0.2em)";
+            existing.style.setProperty(
+              "--inline-code-background",
+              color.backgroundColor,
+            );
           }
           return;
         }
@@ -952,9 +1129,9 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
   const handleToggleCode = useCallback(() => {
     applyDomMutation((root, range) => {
-      const existing = getSharedFormatElement(range, root, isCodeElement);
-      if (existing) {
-        unwrapElement(existing);
+      const existing = getFormatElementsForRange(range, root, isCodeElement);
+      if (existing.length > 0) {
+        unwrapElements(existing);
         return;
       }
 
