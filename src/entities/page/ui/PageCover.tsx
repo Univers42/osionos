@@ -13,14 +13,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import {
-  // COVER_PICKER_BOARD_PROPS,
   COVER_PICKER_TABS,
   IconImage,
+  resolveCollectionMediaAsset,
 } from '@/shared/lib/markengine/uiCollectionAssets';
-import {
-  resolveAssetValue,
-  resolveMediaUrl,
-} from '@univers42/ui-collection';
 import { CoverAssetPicker } from './CoverAssetPicker';
 
 interface PageCoverProps {
@@ -45,15 +41,11 @@ export const PageCover: React.FC<PageCoverProps> = ({
   const pickerRef = useRef<HTMLDivElement>(null);
 
   const isGradient = cover.startsWith('linear-gradient') || cover.startsWith('radial-gradient');
-  const resolvedCover = isGradient ? undefined : resolveAssetValue(cover, COVER_PICKER_TABS);
+  const resolvedCover = isGradient
+    ? null
+    : resolveCollectionMediaAsset(cover, COVER_PICKER_TABS);
   const isUrl = !isGradient;
-  let coverSrc = cover;
-
-  if (resolvedCover?.mediaItem) {
-    coverSrc = resolveMediaUrl(resolvedCover.mediaItem.ref);
-  } else if (resolvedCover?.preview?.kind === 'image') {
-    coverSrc = resolvedCover.preview.src;
-  }
+  const coverSrc = resolvedCover?.url ?? cover;
 
   /* Close picker on outside click */
   useEffect(() => {
