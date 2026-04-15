@@ -300,29 +300,38 @@ function serializeFormattedElement(
     return `\`${children}\``;
   }
 
-  const link = serializeLinkElement(element, children);
+  let serialized = children;
+  let hasFormatting = false;
+
+  const link = serializeLinkElement(element, serialized);
   if (link) {
-    return link;
+    serialized = link;
+    hasFormatting = true;
   }
 
   if (isBoldElement(element)) {
-    return `**${children}**`;
+    serialized = `**${serialized}**`;
+    hasFormatting = true;
   }
 
   if (isItalicElement(element)) {
-    return `*${children}*`;
+    serialized = `*${serialized}*`;
+    hasFormatting = true;
   }
 
   if (isStrikeElement(element)) {
-    return `~~${children}~~`;
+    serialized = `~~${serialized}~~`;
+    hasFormatting = true;
   }
 
   if (element.tagName === "U") {
-    return `__${children}__`;
+    serialized = `__${serialized}__`;
+    hasFormatting = true;
   }
 
   if (element.tagName === "MARK") {
-    return `==${children}==`;
+    serialized = `==${serialized}==`;
+    hasFormatting = true;
   }
 
   if (isTextColorElement(element)) {
@@ -330,17 +339,23 @@ function serializeFormattedElement(
       normalizeElementColor(element.dataset.inlineColor) ??
       normalizeElementColor(element.style.color) ??
       normalizeElementColor(element.getAttribute("color"));
-    return color ? `[color=${color}]${children}[/color]` : children;
+    if (color) {
+      serialized = `[color=${color}]${serialized}[/color]`;
+      hasFormatting = true;
+    }
   }
 
   if (isBackgroundColorElement(element)) {
     const color =
       normalizeElementColor(element.dataset.inlineColor) ??
       normalizeElementColor(element.style.backgroundColor);
-    return color ? `[bg=${color}]${children}[/bg]` : children;
+    if (color) {
+      serialized = `[bg=${color}]${serialized}[/bg]`;
+      hasFormatting = true;
+    }
   }
 
-  return null;
+  return hasFormatting ? serialized : null;
 }
 
 function serializeEditableNode(node: Node): string {
