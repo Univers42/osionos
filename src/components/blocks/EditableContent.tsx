@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   EditableContent.tsx                                :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:04:25 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/15 17:22:48 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -724,8 +724,17 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
             label={palette === "text" ? "Text color" : "Background color"}
             presets={INLINE_COLOR_OPTIONS}
             showInput={false}
-            size={168}
+            size={158}
             variant="wheel"
+            styles={{
+              presetButton: {
+                gap: 0,
+                padding: "8px",
+              },
+              presetLabel: {
+                display: "none",
+              },
+            }}
             onChangeComplete={(value) => {
               const option = getInlineColorOption(value);
               if (!option) {
