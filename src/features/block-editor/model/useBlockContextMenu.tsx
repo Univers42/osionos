@@ -194,18 +194,19 @@ export function useBlockContextMenu({
       label: "Duplicate",
       onClick: handleDuplicate,
     });
-    sections.push({ label: "Actions", items: actionItems });
-
-    sections.push({
-      items: [
-        {
-          icon: <Trash2 size={15} />,
-          label: "Delete",
-          danger: true,
-          onClick: handleDelete,
-        },
-      ],
-    });
+    sections.push(
+      { label: "Actions", items: actionItems },
+      {
+        items: [
+          {
+            icon: <Trash2 size={15} />,
+            label: "Delete",
+            danger: true,
+            onClick: handleDelete,
+          },
+        ],
+      },
+    );
 
     return sections;
   }, [
