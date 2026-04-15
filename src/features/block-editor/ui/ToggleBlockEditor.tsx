@@ -3,24 +3,18 @@
 /*                                                        :::      ::::::::   */
 /*   ToggleBlockEditor.tsx                              :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/12 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/15 17:39:24 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, {
-  useState,
-  useCallback,
-  useEffect,
-  useRef,
-  useMemo,
-} from "react";
+import React, { useState, useCallback } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
-import { getBlockPlaceholder, type Block } from "@/entities/block";
+import type { Block } from "@/entities/block";
 import { usePageStore } from "@/store/usePageStore";
 
 /* ── Types ──────────────────────────────────────────────────────────── */
@@ -33,34 +27,17 @@ interface ToggleBlockEditorProps {
   onRequestSlashMenu?: (position: { x: number; y: number }) => void;
 }
 
-/* ── Constants ──────────────────────────────────────────────────────── */
-
-const FOCUS_DELAY_MS = 30;
-
-/* ── Helpers ────────────────────────────────────────────────────────── */
-
-function createEmptyBlock(): Block {
-  return { id: crypto.randomUUID(), type: "paragraph", content: "" };
-}
-
-function focusBySelector(selector: string, cursorEnd = false): void {
-  setTimeout(() => {
-    const el = document.querySelector(selector) as HTMLElement | null;
-    if (!el) return;
-    el.focus();
-    if (cursorEnd && el.childNodes.length > 0) {
-      const sel = globalThis.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(false);
-      sel?.removeAllRanges();
-      sel?.addRange(range);
-    }
-  }, FOCUS_DELAY_MS);
-}
-
 /* ── Component ──────────────────────────────────────────────────────── */
 
+/**
+ * Renders only the toggle summary row (chevron + editable text).
+ *
+ * Children are NOT rendered here — they are rendered by BlockTree in
+ * PlaygroundPageEditor via the universal children rendering path.
+ * This component only controls the expanded/collapsed state and
+ * communicates it to the store so BlockTree knows whether to render
+ * the children subtree.
+ */
 export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
   block,
   pageId,
@@ -70,150 +47,71 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
 }) => {
   const [expanded, setExpanded] = useState(!block.collapsed);
   const updateBlock = usePageStore((s) => s.updateBlock);
-  const pendingFocusId = useRef<string | null>(null);
-
-  const children: Block[] = useMemo(
-    () => block.children ?? [],
-    [block.children],
-  );
-
-  /* ── Child persistence ──────────────────────────────────────────── */
-
-  const setChildren = useCallback(
-    (next: Block[]) => updateBlock(pageId, block.id, { children: next }),
-    [pageId, block.id, updateBlock],
-  );
-
-  /* ── Focus management ───────────────────────────────────────────── */
-
-  const focusChild = useCallback((childId: string, cursorEnd = false) => {
-    focusBySelector(
-      `[data-toggle-child="${childId}"] [contenteditable]`,
-      cursorEnd,
-    );
-  }, []);
-
-  useEffect(() => {
-    if (pendingFocusId.current && expanded && children.length > 0) {
-      focusChild(pendingFocusId.current);
-      pendingFocusId.current = null;
-    }
-  }, [expanded, children, focusChild]);
 
   /* ── Expand / collapse ──────────────────────────────────────────── */
 
   const handleToggle = useCallback(() => {
     const opening = !expanded;
-    if (opening && children.length === 0) {
-      const child = createEmptyBlock();
-      setChildren([child]);
-      pendingFocusId.current = child.id;
+
+    // When opening an empty toggle, create a first child paragraph
+    // via the store (not ad-hoc array mutation) so BlockTree can render it.
+    if (opening && !block.children?.length) {
+      const child: Block = {
+        id: crypto.randomUUID(),
+        type: "paragraph",
+        content: "",
+      };
+      updateBlock(pageId, block.id, { children: [child] });
     }
+
+    updateBlock(pageId, block.id, { collapsed: !opening });
     setExpanded(opening);
-  }, [expanded, children.length, setChildren]);
+  }, [expanded, block.id, block.children?.length, pageId, updateBlock]);
 
-  /* ── Child mutations ────────────────────────────────────────────── */
-
-  const handleChildChange = useCallback(
-    (childId: string, text: string) => {
-      setChildren(
-        children.map((c) => (c.id === childId ? { ...c, content: text } : c)),
-      );
-    },
-    [children, setChildren],
-  );
-
-  const insertChildAfter = useCallback(
-    (afterId: string) => {
-      const child = createEmptyBlock();
-      const idx = children.findIndex((c) => c.id === afterId);
-      const next = [...children];
-      next.splice(idx + 1, 0, child);
-      setChildren(next);
-      focusChild(child.id);
-    },
-    [children, setChildren, focusChild],
-  );
-
-  const removeChild = useCallback(
-    (childId: string) => {
-      const idx = children.findIndex((c) => c.id === childId);
-      if (idx === -1) return;
-
-      if (children.length === 1) {
-        const blank = { ...children[0], content: "" };
-        setChildren([blank]);
-        focusChild(blank.id);
-        return;
-      }
-
-      const focusTarget = idx > 0 ? children[idx - 1].id : children[1].id;
-      setChildren(children.filter((c) => c.id !== childId));
-      focusChild(focusTarget, true);
-    },
-    [children, setChildren, focusChild],
-  );
-
-  /* ── Key handlers ───────────────────────────────────────────────── */
+  /* ── Summary key handler ────────────────────────────────────────── */
 
   const handleSummaryKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        if (children.length === 0) {
-          const child = createEmptyBlock();
-          setChildren([child]);
-          pendingFocusId.current = child.id;
-        } else {
-          focusChild(children[0].id);
+
+        // Expand and ensure there's at least one child
+        if (!block.children?.length) {
+          const child: Block = {
+            id: crypto.randomUUID(),
+            type: "paragraph",
+            content: "",
+          };
+          updateBlock(pageId, block.id, { children: [child] });
         }
-        if (!expanded) setExpanded(true);
+
+        if (!expanded) {
+          updateBlock(pageId, block.id, { collapsed: false });
+          setExpanded(true);
+        }
+
+        // Focus the first child — use a short delay to allow React to render
+        // the children via BlockTree after state update.
+        const firstChildId = block.children?.[0]?.id;
+        if (firstChildId) {
+          setTimeout(() => {
+            const el = document.querySelector(
+              `[data-block-id="${firstChildId}"] [contenteditable]`,
+            ) as HTMLElement | null;
+            el?.focus();
+          }, 30);
+        }
         return;
       }
       onKeyDown(e);
     },
-    [expanded, children, setChildren, focusChild, onKeyDown],
-  );
-
-  const handleChildKeyDown = useCallback(
-    (e: React.KeyboardEvent, childId: string) => {
-      const child = children.find((c) => c.id === childId);
-      if (!child) return;
-      const idx = children.findIndex((c) => c.id === childId);
-
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        insertChildAfter(childId);
-        return;
-      }
-
-      if (e.key === "Backspace" && !child.content.trim()) {
-        e.preventDefault();
-        e.stopPropagation();
-        removeChild(childId);
-        return;
-      }
-
-      if (e.key === "ArrowUp" && idx > 0) {
-        e.preventDefault();
-        focusChild(children[idx - 1].id, true);
-        return;
-      }
-
-      if (e.key === "ArrowDown" && idx < children.length - 1) {
-        e.preventDefault();
-        focusChild(children[idx + 1].id);
-      }
-    },
-    [children, insertChildAfter, removeChild, focusChild],
+    [expanded, block.id, block.children, pageId, updateBlock, onKeyDown],
   );
 
   /* ── Render ─────────────────────────────────────────────────────── */
 
   return (
     <div className="pl-0.5">
-      {/* Summary row */}
       <div className="flex items-start gap-1">
         <button
           type="button"
@@ -232,7 +130,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
           <EditableContent
             content={block.content}
             className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5"
-            placeholder={getBlockPlaceholder(block, "Toggle")}
+            placeholder="Toggle"
             pageId={pageId}
             onChange={onChange}
             onKeyDown={handleSummaryKeyDown}
@@ -241,21 +139,13 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
         </div>
       </div>
 
-      {/* Children (editable) */}
-      {expanded && (
+      {/* Empty toggle hint — only shown when expanded with no children.
+          Children themselves are rendered by BlockTree externally. */}
+      {expanded && !block.children?.length && (
         <div className="ml-6 mt-0.5 pl-3 border-l-2 border-[var(--color-line)]">
-          {children.map((child) => (
-            <div key={child.id} data-toggle-child={child.id}>
-              <EditableContent
-                content={child.content}
-                className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5"
-                placeholder="Type here..."
-                pageId={pageId}
-                onChange={(text) => handleChildChange(child.id, text)}
-                onKeyDown={(e) => handleChildKeyDown(e, child.id)}
-              />
-            </div>
-          ))}
+          <span className="text-xs text-[var(--color-ink-faint)] py-1 italic">
+            Empty toggle
+          </span>
         </div>
       )}
     </div>

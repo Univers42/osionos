@@ -29,13 +29,17 @@ function renderInlineMarkdown(content: string) {
   return { __html: parseInlineMarkdown(content) };
 }
 
-function getNestedListClassName(type: Block["type"]) {
+function getNestedChildrenClassName(type: Block["type"]) {
   if (type === "bulleted_list" || type === "numbered_list") {
     return "ml-[3.25rem] mt-0.5";
   }
 
   if (type === "to_do") {
     return "ml-[2.75rem] mt-0.5";
+  }
+
+  if (type === "toggle") {
+    return "ml-6 mt-0.5 pl-3 border-l-2 border-[var(--color-line)]";
   }
 
   // Generic indentation for all other block types with children.
@@ -48,7 +52,7 @@ function renderNestedChildren(block: Block) {
   }
 
   return (
-    <div className={getNestedListClassName(block.type)}>
+    <div className={getNestedChildrenClassName(block.type)}>
       {block.children.map((child, index) => (
         <ReadOnlyBlock key={child.id} block={child} index={index} />
       ))}
@@ -288,7 +292,6 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
       return <ToggleBlockReadOnly block={block} />;
 
     default:
-      // Fallback: render as paragraph with children support
       return (
         <>
           <p className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5">
@@ -300,6 +303,11 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
   }
 };
 
+/**
+ * Toggle read-only: renders summary + chevron.
+ * Children use the same renderNestedChildren path as all other block types.
+ * Local expanded state controls visibility (read-only has no store mutation).
+ */
 const ToggleBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
   const [expanded, setExpanded] = useState(!block.collapsed);
 
@@ -328,14 +336,8 @@ const ToggleBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
           }
         />
       </div>
-      {expanded && block.children && block.children.length > 0 && (
-        <div className="ml-6 mt-0.5 pl-3 border-l-2 border-[var(--color-line)]">
-          {block.children.map((child, i) => (
-            <ReadOnlyBlock key={child.id} block={child} index={i} />
-          ))}
-        </div>
-      )}
-      {expanded && (!block.children || block.children.length === 0) && (
+      {expanded && renderNestedChildren(block)}
+      {expanded && !block.children?.length && (
         <div className="ml-6 mt-0.5 pl-3 border-l-2 border-[var(--color-line)]">
           <span className="text-xs text-[var(--color-ink-faint)] py-1 italic">
             Empty toggle

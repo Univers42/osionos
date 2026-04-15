@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/15 14:08:01 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/15 17:37:33 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,6 +26,24 @@ interface PlaygroundPageEditorProps {
 
 type DropPosition = "above" | "below" | null;
 const DND_TYPE = "application/x-playground-block-id";
+
+/** Types that manage their own children rendering internally. */
+const SELF_RENDERING_CHILDREN_TYPES: ReadonlySet<string> = new Set([
+  // Currently none — toggle children are now rendered by BlockTree.
+  // This set exists for future block types that may need custom children
+  // rendering (e.g., column_list, synced_block).
+]);
+
+/** Returns true when a block's children should be rendered by BlockTree. */
+function shouldRenderChildren(block: Block): boolean {
+  if (!block.children?.length) return false;
+  if (SELF_RENDERING_CHILDREN_TYPES.has(block.type)) return false;
+
+  // Toggle: respect collapsed state
+  if (block.type === "toggle" && block.collapsed) return false;
+
+  return true;
+}
 
 function getNestedTreeClassName(
   parentBlockType: Block["type"] | null,
@@ -252,9 +270,9 @@ const BlockTree: React.FC<BlockTreeProps> = ({
               />
             </DraggablePlaygroundBlock>
 
-            {!!block.children?.length && block.type !== "toggle" && (
+            {shouldRenderChildren(block) && (
               <BlockTree
-                blocks={block.children}
+                blocks={block.children!}
                 pageId={pageId}
                 parentBlockType={block.type}
                 parentBlockId={block.id}
