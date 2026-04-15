@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   usePlaygroundBlockEditor.ts                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:04:59 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/15 14:13:53 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -37,6 +37,13 @@ import { useBlockContextMenu } from "./useBlockContextMenu";
 
 const HEADING_SHORTCUT_RE = /^#{1,6}$/;
 const NUMBERED_SHORTCUT_RE = /^\d+\.$/;
+
+/** Block types that should not be indented/outdented via Tab. */
+const NON_INDENTABLE_TYPES: ReadonlySet<string> = new Set([
+  "divider",
+  "database_inline",
+  "database_full_page",
+]);
 
 function parsePipeTable(text: string): string[][] | null {
   const lines = text
@@ -243,24 +250,24 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [pageId, changeBlockType, updateBlock, focusBlock],
   );
 
-  const handleListIndentation = useCallback(
-    (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
-      if (e.key !== "Tab" || !isListType(block.type)) return false;
+const handleBlockIndentation = useCallback(
+  (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
+    if (e.key !== "Tab" || NON_INDENTABLE_TYPES.has(block.type)) return false;
 
-      e.preventDefault();
+    e.preventDefault();
 
-      if (e.shiftKey) {
-        outdentBlock(pageId, blockId);
-      } else {
-        indentBlock(pageId, blockId);
-      }
+    if (e.shiftKey) {
+      outdentBlock(pageId, blockId);
+    } else {
+      indentBlock(pageId, blockId);
+    }
 
-      repositionCursor(blockId, block.content);
+    repositionCursor(blockId, block.content);
 
-      return true;
-    },
-    [pageId, indentBlock, outdentBlock],
-  );
+    return true;
+  },
+  [pageId, indentBlock, outdentBlock],
+);
 
   const handleEmptyListEnter = useCallback(
     (
@@ -511,7 +518,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
         (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
       const isEmpty = isEffectivelyEmpty(liveText);
 
-      if (handleListIndentation(e, blockId, block)) {
+      if (handleBlockIndentation(e, blockId, block)) {
         return;
       }
 
@@ -581,7 +588,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       slashMenu,
       insertBlock,
       focusBlock,
-      handleListIndentation,
+      handleBlockIndentation,
       handleParagraphSpaceShortcut,
       handleEmptyListEnter,
       handleEmptyTodoEnter,

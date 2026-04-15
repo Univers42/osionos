@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/15 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -38,7 +38,8 @@ function getNestedListClassName(type: Block["type"]) {
     return "ml-[2.75rem] mt-0.5";
   }
 
-  return "ml-7";
+  // Generic indentation for all other block types with children.
+  return "ml-6 mt-0.5";
 }
 
 function renderNestedChildren(block: Block) {
@@ -58,72 +59,100 @@ function renderNestedChildren(block: Block) {
 export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
   switch (block.type) {
     case "paragraph":
-      return block.content ? (
-        <p
-          className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 min-h-[1.5em]"
-          dangerouslySetInnerHTML={
-            renderInlineMarkdown(block.content) ?? undefined
-          }
-        />
-      ) : (
-        <p className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 min-h-[1.5em]">
-          <span className="text-[var(--color-ink-faint)]">&nbsp;</span>
-        </p>
+      return (
+        <>
+          {block.content ? (
+            <p
+              className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 min-h-[1.5em]"
+              dangerouslySetInnerHTML={
+                renderInlineMarkdown(block.content) ?? undefined
+              }
+            />
+          ) : (
+            <p className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 min-h-[1.5em]">
+              <span className="text-[var(--color-ink-faint)]">&nbsp;</span>
+            </p>
+          )}
+          {renderNestedChildren(block)}
+        </>
       );
 
     case "heading_1":
       return (
-        <h1
-          className="text-2xl font-bold text-[var(--color-ink)] mt-6 mb-1 leading-tight"
-          dangerouslySetInnerHTML={
-            renderInlineMarkdown(block.content) ?? undefined
-          }
-        />
+        <>
+          <h1
+            className="text-2xl font-bold text-[var(--color-ink)] mt-6 mb-1 leading-tight"
+            dangerouslySetInnerHTML={
+              renderInlineMarkdown(block.content) ?? undefined
+            }
+          />
+          {renderNestedChildren(block)}
+        </>
       );
+
     case "heading_2":
       return (
-        <h2
-          className="text-xl font-semibold text-[var(--color-ink)] mt-5 mb-1 leading-tight"
-          dangerouslySetInnerHTML={
-            renderInlineMarkdown(block.content) ?? undefined
-          }
-        />
+        <>
+          <h2
+            className="text-xl font-semibold text-[var(--color-ink)] mt-5 mb-1 leading-tight"
+            dangerouslySetInnerHTML={
+              renderInlineMarkdown(block.content) ?? undefined
+            }
+          />
+          {renderNestedChildren(block)}
+        </>
       );
+
     case "heading_3":
       return (
-        <h3
-          className="text-lg font-semibold text-[var(--color-ink)] mt-4 mb-0.5 leading-snug"
-          dangerouslySetInnerHTML={
-            renderInlineMarkdown(block.content) ?? undefined
-          }
-        />
+        <>
+          <h3
+            className="text-lg font-semibold text-[var(--color-ink)] mt-4 mb-0.5 leading-snug"
+            dangerouslySetInnerHTML={
+              renderInlineMarkdown(block.content) ?? undefined
+            }
+          />
+          {renderNestedChildren(block)}
+        </>
       );
+
     case "heading_4":
       return (
-        <h4
-          className="text-base font-semibold text-[var(--color-ink)] mt-3 mb-0.5 leading-snug"
-          dangerouslySetInnerHTML={
-            renderInlineMarkdown(block.content) ?? undefined
-          }
-        />
+        <>
+          <h4
+            className="text-base font-semibold text-[var(--color-ink)] mt-3 mb-0.5 leading-snug"
+            dangerouslySetInnerHTML={
+              renderInlineMarkdown(block.content) ?? undefined
+            }
+          />
+          {renderNestedChildren(block)}
+        </>
       );
+
     case "heading_5":
       return (
-        <h5
-          className="text-sm font-semibold text-[var(--color-ink)] mt-2 mb-0.5 leading-snug"
-          dangerouslySetInnerHTML={
-            renderInlineMarkdown(block.content) ?? undefined
-          }
-        />
+        <>
+          <h5
+            className="text-sm font-semibold text-[var(--color-ink)] mt-2 mb-0.5 leading-snug"
+            dangerouslySetInnerHTML={
+              renderInlineMarkdown(block.content) ?? undefined
+            }
+          />
+          {renderNestedChildren(block)}
+        </>
       );
+
     case "heading_6":
       return (
-        <h6
-          className="text-xs font-semibold text-[var(--color-ink-muted)] mt-2 mb-0.5 leading-snug uppercase tracking-wide"
-          dangerouslySetInnerHTML={
-            renderInlineMarkdown(block.content) ?? undefined
-          }
-        />
+        <>
+          <h6
+            className="text-xs font-semibold text-[var(--color-ink-muted)] mt-2 mb-0.5 leading-snug uppercase tracking-wide"
+            dangerouslySetInnerHTML={
+              renderInlineMarkdown(block.content) ?? undefined
+            }
+          />
+          {renderNestedChildren(block)}
+        </>
       );
 
     case "bulleted_list":
@@ -213,19 +242,27 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
 
     case "quote":
       return (
-        <div className="flex my-0.5">
-          <div className="w-1 bg-[var(--color-ink)] rounded-full shrink-0 mr-3" />
-          <span
-            className="text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic flex-1"
-            dangerouslySetInnerHTML={
-              renderInlineMarkdown(block.content) ?? undefined
-            }
-          />
-        </div>
+        <>
+          <div className="flex my-0.5">
+            <div className="w-1 bg-[var(--color-ink)] rounded-full shrink-0 mr-3" />
+            <span
+              className="text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic flex-1"
+              dangerouslySetInnerHTML={
+                renderInlineMarkdown(block.content) ?? undefined
+              }
+            />
+          </div>
+          {renderNestedChildren(block)}
+        </>
       );
 
     case "callout":
-      return <CalloutBlockReadOnly block={block} />;
+      return (
+        <>
+          <CalloutBlockReadOnly block={block} />
+          {renderNestedChildren(block)}
+        </>
+      );
 
     case "divider":
       return (
@@ -251,11 +288,14 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
       return <ToggleBlockReadOnly block={block} />;
 
     default:
-      // Fallback: render as paragraph
+      // Fallback: render as paragraph with children support
       return (
-        <p className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5">
-          {block.content}
-        </p>
+        <>
+          <p className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5">
+            {block.content}
+          </p>
+          {renderNestedChildren(block)}
+        </>
       );
   }
 };

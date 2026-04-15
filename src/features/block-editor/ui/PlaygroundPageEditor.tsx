@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   PlaygroundPageEditor.tsx                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:03:43 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/15 14:08:01 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -27,12 +27,18 @@ interface PlaygroundPageEditorProps {
 type DropPosition = "above" | "below" | null;
 const DND_TYPE = "application/x-playground-block-id";
 
-function getNestedTreeClassName(parentBlockType: Block["type"] | null, isRoot: boolean) {
+function getNestedTreeClassName(
+  parentBlockType: Block["type"] | null,
+  isRoot: boolean,
+) {
   if (isRoot || !parentBlockType) {
     return "";
   }
 
-  if (parentBlockType === "bulleted_list" || parentBlockType === "numbered_list") {
+  if (
+    parentBlockType === "bulleted_list" ||
+    parentBlockType === "numbered_list"
+  ) {
     return "ml-[3.25rem] mt-0.5";
   }
 
@@ -44,7 +50,9 @@ function getNestedTreeClassName(parentBlockType: Block["type"] | null, isRoot: b
     return "ml-6 mt-0.5 pl-3 border-l-2 border-[var(--color-line)]";
   }
 
-  return "ml-7";
+  // Generic indentation for all other block types (paragraph, headings,
+  // quote, callout, code, etc.) that have children via indent/outdent.
+  return "ml-6 mt-0.5";
 }
 
 /** Editable block-based page editor for the playground. */
