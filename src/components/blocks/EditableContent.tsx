@@ -6,7 +6,7 @@
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/15 17:22:48 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/15 18:58:09 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -794,7 +794,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
 
       {palette && (
         <div
-          className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 shadow-xl"
+          className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 w-45 h-60 shadow-xl"
           onMouseDown={(e) => e.preventDefault()}
         >
           <ColorPickerBoard
@@ -805,9 +805,44 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
             size={158}
             variant="wheel"
             styles={{
+              root: {
+                fontSize: "13px",
+              },
+              header: {
+                marginBottom: "0px",
+              },
+              eyebrow: {
+                display: "none",
+              },
+              title: {
+                fontSize: "14px",
+                lineHeight: 1,
+              },
+              selectedValue: {
+                display: "none",
+              },
+              presets: {
+                gridTemplateColumns: "repeat(4, 14px)",
+                justifyContent: "start",
+                gap: "4px",
+                marginTop: "5px",
+                marginBottom: "0px",
+                marginLeft: "0px",
+                marginRight: "0px",
+              },
               presetButton: {
                 gap: 0,
-                padding: "8px",
+                padding: "0px",
+                width: "14px",
+                minWidth: "14px",
+                maxWidth: "14px",
+                height: "14px",
+                minHeight: "14px",
+                maxHeight: "14px",
+              },
+              presetSwatch: {
+                width: "14px",
+                height: "14px",
               },
               presetLabel: {
                 display: "none",
