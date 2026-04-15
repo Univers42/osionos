@@ -6,7 +6,7 @@
 #    By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/04/08 19:07:11 by dlesieur          #+#    #+#              #
-#    Updated: 2026/04/12 10:54:22 by rstancu          ###   ########.fr        #
+#    Updated: 2026/04/15 11:34:20 by rstancu          ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -161,7 +161,7 @@ status: ## Show status of Docker services
 	$(DC) ps
 
 update-submodules: ## Update git submodules (if any)
-	@git submodule update --init --recursive
+	@git submodule update --init --recursive --remote
 	@echo -e "$(GREEN)✔ Submodules updated$(RESET)"
 
 .PHONY: help install dev dev-docker up stop down build typecheck \
