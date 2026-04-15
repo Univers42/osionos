@@ -313,27 +313,27 @@ function serializeFormattedElement(
   }
 
   if (isBoldElement(element)) {
-    serialized = `**${serialized}**`;
+    serialized = `[b]${serialized}[/b]`;
     hasFormatting = true;
   }
 
   if (isItalicElement(element)) {
-    serialized = `*${serialized}*`;
+    serialized = `[i]${serialized}[/i]`;
     hasFormatting = true;
   }
 
   if (isStrikeElement(element)) {
-    serialized = `~~${serialized}~~`;
+    serialized = `[s]${serialized}[/s]`;
     hasFormatting = true;
   }
 
   if (element.tagName === "U") {
-    serialized = `__${serialized}__`;
+    serialized = `[u]${serialized}[/u]`;
     hasFormatting = true;
   }
 
   if (element.tagName === "MARK") {
-    serialized = `==${serialized}==`;
+    serialized = `[mark]${serialized}[/mark]`;
     hasFormatting = true;
   }
 
@@ -532,14 +532,20 @@ function createCodeElement() {
   const code = document.createElement("code");
   code.dataset.inlineType = "code";
   code.className = "inline-code";
-  code.style.background = "var(--color-surface-tertiary-soft2)";
+  code.style.backgroundColor =
+    "var(--inline-code-background,var(--color-surface-tertiary-soft2))";
   code.style.border = "1px solid var(--color-line)";
   code.style.borderRadius = "6px";
   code.style.padding = "0 0.35em";
   code.style.fontFamily =
     "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace";
   code.style.fontSize = "0.92em";
-  code.style.color = "var(--color-ink-strong)";
+  code.style.color = "var(--inline-code-color,currentColor)";
+  code.style.textDecorationColor =
+    "var(--inline-code-decoration-color,currentColor)";
+  code.style.setProperty("--inline-background-fill", "transparent");
+  code.style.setProperty("--inline-background-padding", "0");
+  code.style.setProperty("--inline-background-radius", "0");
   return code;
 }
 
@@ -553,13 +559,85 @@ function createColorElement(
 
   if (kind === "text") {
     span.style.color = option.textColor;
+    span.style.textDecorationColor = option.textColor;
+    span.style.setProperty("--inline-code-color", option.textColor);
+    span.style.setProperty("--inline-code-decoration-color", option.textColor);
   } else {
-    span.style.backgroundColor = option.backgroundColor;
-    span.style.borderRadius = "4px";
-    span.style.padding = "0 0.2em";
+    span.style.setProperty(
+      "background-color",
+      `var(--inline-background-fill, ${option.backgroundColor})`,
+    );
+    span.style.borderRadius = "var(--inline-background-radius, 4px)";
+    span.style.padding = "var(--inline-background-padding, 0 0.2em)";
+    span.style.setProperty("--inline-code-background", option.backgroundColor);
   }
 
   return span;
+}
+
+function isFormattingWrapperElement(element: HTMLElement) {
+  return (
+    isBoldElement(element) ||
+    isItalicElement(element) ||
+    isStrikeElement(element) ||
+    isTextColorElement(element) ||
+    isBackgroundColorElement(element) ||
+    element.tagName === "U" ||
+    element.tagName === "MARK"
+  );
+}
+
+function shouldSuppressBackgroundElement(
+  node: Node,
+  allowCodeDescendant = false,
+): boolean {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return !node.textContent?.trim();
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return true;
+  }
+
+  const element = node as HTMLElement;
+  if (isCodeElement(element)) {
+    return true;
+  }
+
+  if (!isFormattingWrapperElement(element) && element.tagName !== "SPAN") {
+    return false;
+  }
+
+  const hasCodeDescendant =
+    allowCodeDescendant ||
+    !!element.querySelector('[data-inline-type="code"], code');
+
+  if (!hasCodeDescendant) {
+    return false;
+  }
+
+  return Array.from(element.childNodes).every((child) =>
+    shouldSuppressBackgroundElement(child, hasCodeDescendant),
+  );
+}
+
+function syncBackgroundColorSuppression(root: HTMLElement) {
+  const elements = root.querySelectorAll<HTMLElement>(
+    '[data-inline-type="background_color"]',
+  );
+
+  for (const element of elements) {
+    if (shouldSuppressBackgroundElement(element)) {
+      element.style.setProperty("--inline-background-fill", "transparent");
+      element.style.setProperty("--inline-background-padding", "0");
+      element.style.setProperty("--inline-background-radius", "0");
+      continue;
+    }
+
+    element.style.removeProperty("--inline-background-fill");
+    element.style.removeProperty("--inline-background-padding");
+    element.style.removeProperty("--inline-background-radius");
+  }
 }
 
 function runLegacyExecCommand(command: string, value?: string): boolean {
@@ -793,6 +871,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     }
 
     ref.current.innerHTML = nextContent ? parseInlineMarkdown(nextContent) : "";
+    syncBackgroundColorSuppression(ref.current);
   }, []);
 
   useEffect(() => {
@@ -862,6 +941,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
     if (root.innerHTML !== parsedHtml) {
       root.innerHTML = parsedHtml;
+      syncBackgroundColorSuppression(root);
       if (selectionOffsets) {
         setSelectionOffsets(root, selectionOffsets.start, selectionOffsets.end);
       }
@@ -962,6 +1042,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
       mutate(root, range);
       root.normalize();
+      syncBackgroundColorSuppression(root);
       syncContentFromDom();
       root.focus();
 
@@ -1016,10 +1097,24 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
           if (kind === "text") {
             existing.style.color = color.textColor;
+            existing.style.textDecorationColor = color.textColor;
+            existing.style.setProperty("--inline-code-color", color.textColor);
+            existing.style.setProperty(
+              "--inline-code-decoration-color",
+              color.textColor,
+            );
           } else {
-            existing.style.backgroundColor = color.backgroundColor;
-            existing.style.borderRadius = "4px";
-            existing.style.padding = "0 0.2em";
+            existing.style.setProperty(
+              "background-color",
+              `var(--inline-background-fill, ${color.backgroundColor})`,
+            );
+            existing.style.borderRadius = "var(--inline-background-radius, 4px)";
+            existing.style.padding =
+              "var(--inline-background-padding, 0 0.2em)";
+            existing.style.setProperty(
+              "--inline-code-background",
+              color.backgroundColor,
+            );
           }
           return;
         }
