@@ -39,6 +39,9 @@ const CONTEXT_MENU_TRANSFORM_TYPES = new Set<BlockType>([
   "heading_1",
   "heading_2",
   "heading_3",
+  "heading_4",
+  "heading_5",
+  "heading_6",
   "bulleted_list",
   "numbered_list",
   "to_do",
@@ -103,7 +106,8 @@ export function insertBlockRelative(
     return { blocks: nextBlocks, focusBlockId: newBlock.id };
   }
 
-  const insertionIndex = position === "before" ? location.index : location.index + 1;
+  const insertionIndex =
+    position === "before" ? location.index : location.index + 1;
   location.siblings.splice(insertionIndex, 0, newBlock);
 
   return { blocks: nextBlocks, focusBlockId: newBlock.id };
@@ -137,7 +141,8 @@ export function deleteBlockInTree(
     return { blocks: nextBlocks };
   }
 
-  const prevSibling = location.index > 0 ? location.siblings[location.index - 1] : null;
+  const prevSibling =
+    location.index > 0 ? location.siblings[location.index - 1] : null;
   const nextSibling =
     location.index < location.siblings.length - 1
       ? location.siblings[location.index + 1]
@@ -164,7 +169,8 @@ export function moveBlockInTree(
     return { blocks: nextBlocks };
   }
 
-  const targetIndex = direction === "up" ? location.index - 1 : location.index + 1;
+  const targetIndex =
+    direction === "up" ? location.index - 1 : location.index + 1;
   if (targetIndex < 0 || targetIndex >= location.siblings.length) {
     return { blocks: nextBlocks, focusBlockId: location.block.id };
   }
@@ -185,7 +191,10 @@ function normalizeBlockForType(block: Block, nextType: BlockType): Block {
     case "to_do":
       return { ...base, checked: Boolean(block.checked) };
     case "callout":
-      return { ...base, color: typeof block.color === "string" ? block.color : "💡" };
+      return {
+        ...base,
+        color: typeof block.color === "string" ? block.color : "💡",
+      };
     case "code":
       return {
         ...base,
@@ -208,7 +217,9 @@ export function changeBlockTypeInTree(
 ): { blocks: Block[]; focusBlockId?: string } {
   const transform = (list: Block[]): Block[] =>
     list.map((block) => ({
-      ...(block.id === blockId ? normalizeBlockForType(block, nextType) : block),
+      ...(block.id === blockId
+        ? normalizeBlockForType(block, nextType)
+        : block),
       children: block.children ? transform(block.children) : undefined,
     }));
 

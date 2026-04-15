@@ -36,7 +36,7 @@ install: ## Install Node dependencies locally (requires Node 22+)
 
 dev: ## Start Vite dev server locally on :3001 (offline mode)
 	@echo -e "$(CYAN)Starting playground on http://localhost:3001 (offline mode)$(RESET)"
-	npm install @univers42/ui-collection@latest
+	npm install
 	npx vite --port 3001
 
 dev-docker: ## Start full stack via Docker (Vite :3001 + MongoDB)
