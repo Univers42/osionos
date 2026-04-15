@@ -6,7 +6,7 @@
 #    By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/04/08 19:07:11 by dlesieur          #+#    #+#              #
-#    Updated: 2026/04/15 11:34:20 by rstancu          ###   ########.fr        #
+#    Updated: 2026/04/15 19:23:15 by rstancu          ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -34,7 +34,7 @@ install: ## Install Node dependencies locally (requires Node 22+)
 	npm install
 	@echo -e "$(GREEN)✔ Dependencies installed$(RESET)"
 
-dev: ## Start Vite dev server locally on :3001 (offline mode)
+dev: update-submodules ## Start Vite dev server locally on :3001 (offline mode)
 	@echo -e "$(CYAN)Starting playground on http://localhost:3001 (offline mode)$(RESET)"
 	npm install
 	npx vite --port 3001
