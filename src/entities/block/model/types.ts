@@ -51,6 +51,7 @@ export interface Block {
   color?: string;			/** Color for callouts, etc. */
   collapsed?: boolean;		/** Whether a toggle is collapsed */
   asset?: string;           /** Serialized ui-collection asset value for media blocks */
+  placeholderText?: string; /** Temporary placeholder hint for empty transformed blocks */
   tableData?: string[][];	/** Table data (array of rows, each row is array of cell strings) */
   databaseId?: string;		/** Database reference ID (for database_inline / database_full_page) */
   viewId?: string;			/** View ID for database blocks */

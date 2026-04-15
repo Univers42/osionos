@@ -28,12 +28,21 @@ export interface SlashBlockCommand extends SlashCommandBase {
   blockType: BlockType;
 }
 
+export interface SlashTurnIntoCommand extends SlashCommandBase {
+  kind: "turn-into";
+  blockType: BlockType;
+  placeholderText: string;
+}
+
 export interface SlashMediaPickerCommand extends SlashCommandBase {
   kind: "media-picker";
   mediaKind: MediaBlockType;
 }
 
-export type SlashCommand = SlashBlockCommand | SlashMediaPickerCommand;
+export type SlashCommand =
+  | SlashBlockCommand
+  | SlashTurnIntoCommand
+  | SlashMediaPickerCommand;
 
 export interface SlashCommandSection {
   id: string;

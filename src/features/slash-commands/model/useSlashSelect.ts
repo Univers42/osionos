@@ -84,16 +84,27 @@ export function useSlashSelect({
   createInlineDatabase,
   focusBlock,
 }: UseSlashSelectOptions) {
-  const handleSlashBlockSelect = useCallback(
-    (selectedType: BlockType, content: Block[], calloutIcon?: string) => {
+  const applyBlockSelection = useCallback(
+    (
+      selectedType: BlockType,
+      content: Block[],
+      options?: {
+        calloutIcon?: string;
+        placeholderText?: string;
+      },
+    ) => {
       if (!slashMenu) return;
       const { blockId } = slashMenu;
 
       setSlashMenu(null);
 
       const block = findBlockInTree(content, blockId);
+      const cleanContent = stripSlashQuery(block?.content ?? "");
       if (block) {
-        updateBlock(pageId, blockId, { content: stripSlashQuery(block.content) });
+        updateBlock(pageId, blockId, {
+          content: cleanContent,
+          placeholderText: options?.placeholderText,
+        });
       }
 
       if (selectedType === "database_inline") {
@@ -130,7 +141,7 @@ export function useSlashSelect({
       changeBlockType(pageId, blockId, selectedType);
 
       if (selectedType === "callout") {
-        updateBlock(pageId, blockId, { color: calloutIcon || "💡" });
+        updateBlock(pageId, blockId, { color: options?.calloutIcon || "💡" });
       }
 
       if (selectedType === "code") {
@@ -151,6 +162,27 @@ export function useSlashSelect({
     ],
   );
 
+  const handleSlashBlockSelect = useCallback(
+    (selectedType: BlockType, content: Block[], calloutIcon?: string) => {
+      applyBlockSelection(selectedType, content, { calloutIcon });
+    },
+    [applyBlockSelection],
+  );
+
+  const handleSlashTurnIntoSelect = useCallback(
+    (
+      selectedType: BlockType,
+      content: Block[],
+      options?: {
+        calloutIcon?: string;
+        placeholderText?: string;
+      },
+    ) => {
+      applyBlockSelection(selectedType, content, options);
+    },
+    [applyBlockSelection],
+  );
+
   const handleSlashMediaSelect = useCallback(
     (mediaType: MediaBlockType, asset: string, content: Block[]) => {
       if (!slashMenu) return;
@@ -162,7 +194,10 @@ export function useSlashSelect({
       const cleanContent = stripSlashQuery(block?.content ?? "");
 
       if (block) {
-        updateBlock(pageId, blockId, { content: cleanContent });
+        updateBlock(pageId, blockId, {
+          content: cleanContent,
+          placeholderText: undefined,
+        });
       }
 
       if (!block || cleanContent.trim().length > 0) {
@@ -176,6 +211,7 @@ export function useSlashSelect({
       updateBlock(pageId, blockId, {
         content: "",
         asset,
+        placeholderText: undefined,
       });
       focusBlock(blockId);
     },
@@ -192,6 +228,7 @@ export function useSlashSelect({
 
   return {
     handleSlashBlockSelect,
+    handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
   };
 }

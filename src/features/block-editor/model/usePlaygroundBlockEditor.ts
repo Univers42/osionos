@@ -147,7 +147,10 @@ export function usePlaygroundBlockEditor(pageId: string) {
   const handleBlockChange = useCallback(
     (blockId: string, text: string, _content: Block[]) => {
       // Always persist the content first
-      updateBlock(pageId, blockId, { content: text });
+      updateBlock(pageId, blockId, {
+        content: text,
+        ...(text.trim().length > 0 ? { placeholderText: undefined } : {}),
+      });
 
       const fencedCodeMatch = /^```\s*([A-Za-z0-9_+-]+)?\s*$/.exec(text);
       if (fencedCodeMatch) {
@@ -610,7 +613,11 @@ export function usePlaygroundBlockEditor(pageId: string) {
   });
 
   /** Handle slash-command selection. */
-  const { handleSlashBlockSelect, handleSlashMediaSelect } = useSlashSelect({
+  const {
+    handleSlashBlockSelect,
+    handleSlashTurnIntoSelect,
+    handleSlashMediaSelect,
+  } = useSlashSelect({
     pageId,
     slashMenu,
     setSlashMenu,
@@ -676,6 +683,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
     handleKeyDown,
     handlePaste,
     handleSlashSelect: handleSlashBlockSelect,
+    handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
     handleAddBlock,
     handleInitBlock,

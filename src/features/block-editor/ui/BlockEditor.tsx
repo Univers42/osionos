@@ -21,7 +21,7 @@ import { createPortal } from "react-dom";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
 import { DatabaseBlock } from "@/widgets/database-view";
-import type { Block } from "@/entities/block";
+import { getBlockPlaceholder, type Block } from "@/entities/block";
 
 import { usePageStore } from "@/store/usePageStore";
 import { CALLOUT_COLORS } from "@/entities/block";
@@ -194,7 +194,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <EditableContent
           content={block.content}
           className="text-2xl font-bold text-[var(--color-ink)] mt-6 mb-1 leading-tight"
-          placeholder="Heading 1"
+          placeholder={getBlockPlaceholder(block, "Heading 1")}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
@@ -207,7 +207,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <EditableContent
           content={block.content}
           className="text-xl font-semibold text-[var(--color-ink)] mt-5 mb-1 leading-tight"
-          placeholder="Heading 2"
+          placeholder={getBlockPlaceholder(block, "Heading 2")}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
@@ -220,7 +220,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <EditableContent
           content={block.content}
           className="text-lg font-semibold text-[var(--color-ink)] mt-4 mb-0.5 leading-snug"
-          placeholder="Heading 3"
+          placeholder={getBlockPlaceholder(block, "Heading 3")}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
@@ -234,7 +234,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <EditableContent
           content={block.content}
           className="text-base font-semibold text-[var(--color-ink)] mt-3 mb-0.5 leading-snug"
-          placeholder="Heading 4"
+          placeholder={getBlockPlaceholder(block, "Heading 4")}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
@@ -248,7 +248,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <EditableContent
           content={block.content}
           className="text-sm font-semibold text-[var(--color-ink)] mt-2 mb-0.5 leading-snug"
-          placeholder="Heading 5"
+          placeholder={getBlockPlaceholder(block, "Heading 5")}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
@@ -262,7 +262,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <EditableContent
           content={block.content}
           className="text-xs font-semibold text-[var(--color-ink-muted)] mt-2 mb-0.5 leading-snug tracking-wide"
-          placeholder="Heading 6"
+          placeholder={getBlockPlaceholder(block, "Heading 6")}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
@@ -276,7 +276,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <EditableContent
           content={block.content}
           className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 min-h-[1.5em]"
-          placeholder="Type '/' for commands…"
+          placeholder={getBlockPlaceholder(block, "Type '/' for commands…")}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
@@ -295,7 +295,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             <EditableContent
               content={block.content}
               className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 whitespace-pre-wrap"
-              placeholder="List item"
+              placeholder={getBlockPlaceholder(block, "List item")}
               onChange={onChange}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
@@ -316,7 +316,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             <EditableContent
               content={block.content}
               className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 whitespace-pre-wrap"
-              placeholder="List item"
+              placeholder={getBlockPlaceholder(block, "List item")}
               onChange={onChange}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
@@ -402,7 +402,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onChange={(e) => onChange(e.target.value)}
               onKeyDown={handleCodeTextareaKeyDown}
               onContextMenu={openCodeContextMenu}
-              placeholder="Code…"
+              placeholder={getBlockPlaceholder(block, "Code…")}
               spellCheck={false}
               className="w-full min-h-[120px] text-[13px] leading-relaxed font-mono text-[var(--color-ink)] whitespace-pre bg-transparent outline-none resize-y"
             />
@@ -508,7 +508,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             <EditableContent
               content={block.content}
               className="text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic"
-              placeholder="Quote…"
+              placeholder={getBlockPlaceholder(block, "Quote…")}
               onChange={onChange}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
@@ -534,7 +534,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             <EditableContent
               content={block.content}
               className={`text-sm ${colors.text} leading-relaxed py-0.5`}
-              placeholder="Input text…"
+              placeholder={getBlockPlaceholder(block, "Input text…")}
               onChange={onChange}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
@@ -581,7 +581,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <EditableContent
           content={block.content}
           className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5"
-          placeholder="Type something…"
+          placeholder={getBlockPlaceholder(block, "Type something…")}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onPaste={onPaste}

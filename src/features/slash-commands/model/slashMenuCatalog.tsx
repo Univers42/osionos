@@ -15,7 +15,11 @@ import {
   COLLECTION_SLASH_SECTION_LABELS,
 } from "@/shared/lib/markengine/uiCollectionAssets";
 import type { BlockType, MediaBlockType } from "@/entities/block";
-import type { SlashCommand, SlashCommandSection } from "./types";
+import type {
+  SlashCommand,
+  SlashCommandSection,
+  SlashTurnIntoCommand,
+} from "./types";
 
 const SLASH_DESCRIPTIONS: Partial<Record<BlockType, string>> = {
   paragraph: "Plain text block",
@@ -49,37 +53,85 @@ const MEDIA_PICKER_TYPES = new Set<MediaBlockType>([
   "file",
 ]);
 
-export const SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.map(
-  (item) => {
-    const description =
-      SLASH_DESCRIPTIONS[item.type] ??
-      item.keywords?.slice(0, 3).join(" · ") ??
-      "Block option";
+const TURN_INTO_BLOCK_TYPES = new Set<BlockType>([
+  "paragraph",
+  "heading_1",
+  "heading_2",
+  "heading_3",
+  "heading_4",
+  "heading_5",
+  "heading_6",
+  "bulleted_list",
+  "numbered_list",
+  "to_do",
+  "toggle",
+  "code",
+  "quote",
+  "callout",
+]);
 
-    if (MEDIA_PICKER_TYPES.has(item.type as MediaBlockType)) {
-      return {
-        id: `${item.section}:${item.type}`,
-        kind: "media-picker",
-        section: item.section,
-        label: item.label,
-        icon: item.icon,
-        description,
-        mediaKind: item.type as MediaBlockType,
-      };
-    }
+const EXTRA_SECTION_LABELS: Record<string, string> = {
+  "turn-into": "Turn into",
+};
 
+const SECTION_ORDER = [
+  "basic",
+  "media",
+  "turn-into",
+  "database",
+  "layout",
+  "advanced",
+] as const;
+
+const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.map((item) => {
+  const description =
+    SLASH_DESCRIPTIONS[item.type] ??
+    item.keywords?.slice(0, 3).join(" · ") ??
+    "Block option";
+
+  if (MEDIA_PICKER_TYPES.has(item.type as MediaBlockType)) {
     return {
-      id: `${item.section}:${item.type}:${item.label}`,
-      kind: "block",
+      id: `${item.section}:${item.type}`,
+      kind: "media-picker",
       section: item.section,
       label: item.label,
       icon: item.icon,
       description,
-      blockType: item.type,
-      calloutIcon: item.calloutIcon,
+      mediaKind: item.type as MediaBlockType,
     };
-  },
-);
+  }
+
+  return {
+    id: `${item.section}:${item.type}:${item.label}`,
+    kind: "block",
+    section: item.section,
+    label: item.label,
+    icon: item.icon,
+    description,
+    blockType: item.type,
+    calloutIcon: item.calloutIcon,
+  };
+});
+
+export const TURN_INTO_COMMANDS: SlashTurnIntoCommand[] =
+  COLLECTION_SLASH_ITEMS.filter((item) =>
+    item.section === "basic" && TURN_INTO_BLOCK_TYPES.has(item.type),
+  ).map((item) => ({
+    id: `turn-into:${item.type}:${item.label}`,
+    kind: "turn-into",
+    section: "turn-into",
+    label: item.label,
+    icon: item.icon,
+    description: `Transform the current line into ${item.label.toLowerCase()}`,
+    blockType: item.type,
+    calloutIcon: item.calloutIcon,
+    placeholderText: item.label,
+  }));
+
+export const SLASH_COMMANDS: SlashCommand[] = [
+  ...BASE_SLASH_COMMANDS,
+  ...TURN_INTO_COMMANDS,
+];
 
 export function filterSlashCommands(filter: string): SlashCommand[] {
   if (!filter) {
@@ -106,9 +158,24 @@ export function groupSlashCommands(commands: SlashCommand[]): SlashCommandSectio
     bySection.set(command.section, items);
   }
 
-  return Array.from(bySection.entries()).map(([id, items]) => ({
+  const sections = Array.from(bySection.entries()).map(([id, items]) => ({
     id,
-    label: COLLECTION_SLASH_SECTION_LABELS[id] ?? id,
+    label: COLLECTION_SLASH_SECTION_LABELS[id] ?? EXTRA_SECTION_LABELS[id] ?? id,
     items,
   }));
+
+  return sections.sort((left, right) => {
+    const leftIndex = SECTION_ORDER.indexOf(
+      left.id as (typeof SECTION_ORDER)[number],
+    );
+    const rightIndex = SECTION_ORDER.indexOf(
+      right.id as (typeof SECTION_ORDER)[number],
+    );
+
+    const normalizedLeft = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
+    const normalizedRight =
+      rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
+
+    return normalizedLeft - normalizedRight || left.label.localeCompare(right.label);
+  });
 }

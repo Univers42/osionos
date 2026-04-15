@@ -20,7 +20,7 @@ import React, {
 import { ChevronRight } from "lucide-react";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
-import type { Block } from "@/entities/block";
+import { getBlockPlaceholder, type Block } from "@/entities/block";
 import { usePageStore } from "@/store/usePageStore";
 
 /* ── Types ──────────────────────────────────────────────────────────── */
@@ -232,7 +232,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
           <EditableContent
             content={block.content}
             className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5"
-            placeholder="Toggle"
+            placeholder={getBlockPlaceholder(block, "Toggle")}
             pageId={pageId}
             onChange={onChange}
             onKeyDown={handleSummaryKeyDown}

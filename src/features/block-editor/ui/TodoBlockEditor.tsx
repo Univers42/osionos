@@ -13,7 +13,7 @@
 import React, { useCallback } from "react";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
-import type { Block } from "@/entities/block";
+import { getBlockPlaceholder, type Block } from "@/entities/block";
 
 import { usePageStore } from "@/store/usePageStore";
 
@@ -65,7 +65,7 @@ export const TodoBlockEditor: React.FC<{
               ? "text-[var(--color-ink-muted)] line-through"
               : "text-[var(--color-ink)]",
           ].join(" ")}
-          placeholder="To-do"
+          placeholder={getBlockPlaceholder(block, "To-do")}
           pageId={pageId}
           onChange={onChange}
           onKeyDown={onKeyDown}

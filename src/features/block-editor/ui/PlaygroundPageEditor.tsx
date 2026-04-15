@@ -68,6 +68,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     handleKeyDown,
     handlePaste,
     handleSlashSelect,
+    handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
     handleAddBlock,
     handleInitBlock,
@@ -132,9 +133,17 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
           key={`${slashMenu.blockId}:${slashMenu.filter}`}
           position={slashMenu.position}
           filter={slashMenu.filter}
-          onSelect={(item) =>
-            handleSlashSelect(item.blockType, blocks, item.calloutIcon)
-          }
+          onSelect={(item) => {
+            if (item.kind === "turn-into") {
+              handleSlashTurnIntoSelect(item.blockType, blocks, {
+                calloutIcon: item.calloutIcon,
+                placeholderText: item.placeholderText,
+              });
+              return;
+            }
+
+            handleSlashSelect(item.blockType, blocks, item.calloutIcon);
+          }}
           onMediaSelect={(kind, value) =>
             handleSlashMediaSelect(kind, value, blocks)
           }
