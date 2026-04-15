@@ -12,8 +12,10 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ColorPickerBoard } from "@univers42/ui-collection";
 import { parseInlineMarkdown } from "@/shared/lib/markengine";
 import {
+  getInlineColorOption,
   INLINE_COLOR_OPTIONS,
   type InlineColorOption,
   normalizeInlineColorToken,
@@ -46,6 +48,7 @@ type PaletteKind = "text" | "background" | null;
 type LinkPickerMode = "chooser" | "external" | "internal";
 
 const EMPTY_WORKSPACE_PAGES: readonly never[] = [];
+const DEFAULT_INLINE_COLOR = INLINE_COLOR_OPTIONS[0]?.id ?? "#0F172A";
 
 interface LinkPickerState {
   mode: LinkPickerMode;
@@ -297,7 +300,7 @@ function serializeFormattedElement(
   children: string,
 ): string | null {
   if (isCodeElement(element)) {
-    return `\`${children}\``;
+    return `[code]${children}[/code]`;
   }
 
   let serialized = children;
@@ -448,6 +451,81 @@ function getSharedFormatElement(
   }
 
   return null;
+}
+
+function getFormatDepth(element: HTMLElement, root: HTMLElement) {
+  let depth = 0;
+  let current: HTMLElement | null = element;
+  while (current && current !== root) {
+    depth += 1;
+    current = current.parentElement;
+  }
+  return depth;
+}
+
+function getMatchingFormatAncestors(
+  node: Node,
+  root: HTMLElement,
+  predicate: (element: HTMLElement) => boolean,
+) {
+  const matches: HTMLElement[] = [];
+  let current: HTMLElement | null =
+    node.nodeType === Node.ELEMENT_NODE
+      ? (node as HTMLElement)
+      : node.parentElement;
+
+  while (current && current !== root) {
+    if (predicate(current)) {
+      matches.push(current);
+    }
+    current = current.parentElement;
+  }
+
+  return matches;
+}
+
+function getFormatElementsForRange(
+  range: Range,
+  root: HTMLElement,
+  predicate: (element: HTMLElement) => boolean,
+) {
+  const elements = new Set<HTMLElement>();
+  const commonAncestor =
+    range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+      ? (range.commonAncestorContainer as HTMLElement)
+      : range.commonAncestorContainer.parentElement;
+
+  for (const element of getMatchingFormatAncestors(
+    range.startContainer,
+    root,
+    predicate,
+  )) {
+    elements.add(element);
+  }
+
+  for (const element of getMatchingFormatAncestors(
+    range.endContainer,
+    root,
+    predicate,
+  )) {
+    elements.add(element);
+  }
+
+  if (commonAncestor && commonAncestor !== root && predicate(commonAncestor)) {
+    elements.add(commonAncestor);
+  }
+
+  return Array.from(elements).sort(
+    (left, right) => getFormatDepth(right, root) - getFormatDepth(left, root),
+  );
+}
+
+function unwrapElements(elements: HTMLElement[]) {
+  for (const element of elements) {
+    if (element.isConnected) {
+      unwrapElement(element);
+    }
+  }
 }
 
 function createCodeElement() {
@@ -637,35 +715,30 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
       </div>
 
       {palette && (
-        <div className="absolute left-0 top-full mt-2 w-56 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 shadow-xl">
-          <div className="grid grid-cols-3 gap-1.5">
-            {INLINE_COLOR_OPTIONS.map((option) => (
-              <button
-                key={`${palette}-${option.id}`}
-                type="button"
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-[var(--color-ink)] hover:bg-[var(--color-surface-secondary)]"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  if (palette === "text") {
-                    onFormatTextColor(option);
-                  } else {
-                    onFormatBackgroundColor(option);
-                  }
-                }}
-              >
-                <span
-                  className="h-3 w-3 shrink-0 rounded-full border border-black/10"
-                  style={{
-                    background:
-                      palette === "text"
-                        ? option.swatch
-                        : option.backgroundColor,
-                  }}
-                />
-                <span>{option.label}</span>
-              </button>
-            ))}
-          </div>
+        <div
+          className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 shadow-xl"
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          <ColorPickerBoard
+            defaultValue={DEFAULT_INLINE_COLOR}
+            label={palette === "text" ? "Text color" : "Background color"}
+            presets={INLINE_COLOR_OPTIONS}
+            showInput={false}
+            size={168}
+            variant="wheel"
+            onChangeComplete={(value) => {
+              const option = getInlineColorOption(value);
+              if (!option) {
+                return;
+              }
+
+              if (palette === "text") {
+                onFormatTextColor(option);
+              } else {
+                onFormatBackgroundColor(option);
+              }
+            }}
+          />
         </div>
       )}
     </div>
@@ -952,9 +1025,9 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
   const handleToggleCode = useCallback(() => {
     applyDomMutation((root, range) => {
-      const existing = getSharedFormatElement(range, root, isCodeElement);
-      if (existing) {
-        unwrapElement(existing);
+      const existing = getFormatElementsForRange(range, root, isCodeElement);
+      if (existing.length > 0) {
+        unwrapElements(existing);
         return;
       }
 
