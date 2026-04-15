@@ -23,3 +23,13 @@ Act as a **Senior Backend Developer specializing in TypeScript** within the `osi
 - **Current Issue:** There is repeated logic, scattered utilities, and components or functions that solve similar problems in different ways, which makes maintenance difficult and increases the risk of inconsistencies.
 - **Objective:** Centralize reusable logic into well-defined modules, utilities, services, or components to reduce duplication, improve consistency, and facilitate code scalability.
 - **Action:** Extract common logic into reusable functions, hooks, helpers, or services; define shared types and interfaces; avoid copying and pasting code; and establish a clear structure for reusing components without creating unnecessary coupling.
+
+### 4. Performance Optimization
+- **Current Problem:** Some parts of the code may have performance issues due to inefficient algorithms, unnecessary re-renders, or improper state management, which can lead to slow response times and a poor user experience.
+- **Objective:** Identify and optimize performance bottlenecks to ensure a smooth and responsive user experience, especially in critical paths of the application.
+- **Action:** Analyze the code for performance issues, optimize algorithms, use memoization or React's `useMemo` and `useCallback` to prevent unnecessary re-renders, and ensure efficient state management to minimize performance overhead.
+
+### 5. UI-Collection Assets
+- **Current Issue:** UI assets are being created or imported outside of ui-collection, resulting in duplication and inconsistencies.
+- **Objective:** Use ui-collection as the single source for icons, emojis, and reusable media.
+- **Action:** Always check if the request can be resolved with ui-collection; if so, use it and notify the developer if they attempt to create or add that content to this repository.
