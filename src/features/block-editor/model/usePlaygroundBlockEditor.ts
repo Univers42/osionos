@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/15 14:13:53 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/16 10:18:52 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -40,6 +40,7 @@ const NUMBERED_SHORTCUT_RE = /^\d+\.$/;
 
 /** Block types that should not be indented/outdented via Tab. */
 const NON_INDENTABLE_TYPES: ReadonlySet<string> = new Set([
+  "code",
   "divider",
   "database_inline",
   "database_full_page",
@@ -250,24 +251,34 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [pageId, changeBlockType, updateBlock, focusBlock],
   );
 
-const handleBlockIndentation = useCallback(
-  (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
-    if (e.key !== "Tab" || NON_INDENTABLE_TYPES.has(block.type)) return false;
+  const handleBlockIndentation = useCallback(
+    (
+      e: React.KeyboardEvent,
+      blockId: string,
+      block: Block,
+      content: Block[],
+    ): boolean => {
+      if (e.key !== "Tab" || NON_INDENTABLE_TYPES.has(block.type)) return false;
 
-    e.preventDefault();
+      const idx = content.findIndex((b) => b.id === blockId);
 
-    if (e.shiftKey) {
-      outdentBlock(pageId, blockId);
-    } else {
-      indentBlock(pageId, blockId);
-    }
+      // Can't indent the first sibling (no previous sibling to nest into)
+      if (!e.shiftKey && idx <= 0) return false;
 
-    repositionCursor(blockId, block.content);
+      e.preventDefault();
 
-    return true;
-  },
-  [pageId, indentBlock, outdentBlock],
-);
+      if (e.shiftKey) {
+        outdentBlock(pageId, blockId);
+      } else {
+        indentBlock(pageId, blockId);
+      }
+
+      repositionCursor(blockId, block.content);
+
+      return true;
+    },
+    [pageId, indentBlock, outdentBlock],
+  );
 
   const handleEmptyListEnter = useCallback(
     (
@@ -518,7 +529,7 @@ const handleBlockIndentation = useCallback(
         (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
       const isEmpty = isEffectivelyEmpty(liveText);
 
-      if (handleBlockIndentation(e, blockId, block)) {
+      if (handleBlockIndentation(e, blockId, block, content)) {
         return;
       }
 

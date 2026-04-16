@@ -99,6 +99,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     handleAddBlock,
     handleInitBlock,
     registerBlockRef,
+    focusBlock,
   } = usePlaygroundBlockEditor(pageId);
 
   const handleRequestSlashMenu = useCallback(
@@ -136,6 +137,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
         onPaste={handlePaste}
         onDeleteBlock={(blockId: string) => deleteBlock(pageId, blockId)}
         registerRef={registerBlockRef}
+        focusBlock={focusBlock}
         onRequestSlashMenu={handleRequestSlashMenu}
         onContextMenu={openContextMenu}
       />
@@ -210,6 +212,7 @@ interface BlockTreeProps {
   onPaste: (e: React.ClipboardEvent, blockId: string, blocks: Block[]) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
+  focusBlock: (blockId: string, cursorEnd?: boolean) => void;
   onContextMenu: (e: React.MouseEvent, blockId: string) => void;
   onRequestSlashMenu: (
     blockId: string,
@@ -231,6 +234,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
   onPaste,
   onDeleteBlock,
   registerRef,
+  focusBlock,
   onContextMenu,
   onRequestSlashMenu,
 }) => {
@@ -266,6 +270,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 onPaste={onPaste}
                 onDeleteBlock={onDeleteBlock}
                 registerRef={registerRef}
+                focusBlock={focusBlock}
                 onRequestSlashMenu={onRequestSlashMenu}
               />
             </DraggablePlaygroundBlock>
@@ -284,6 +289,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 onPaste={onPaste}
                 onDeleteBlock={onDeleteBlock}
                 registerRef={registerRef}
+                focusBlock={focusBlock}
                 onContextMenu={onContextMenu}
                 onRequestSlashMenu={onRequestSlashMenu}
               />
@@ -435,6 +441,7 @@ interface EditableBlockProps {
   onPaste: (e: React.ClipboardEvent, blockId: string, blocks: Block[]) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
+  focusBlock: (blockId: string, cursorEnd?: boolean) => void;
   onRequestSlashMenu: (
     blockId: string,
     position: { x: number; y: number },
@@ -452,6 +459,7 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
   onPaste,
   onDeleteBlock,
   registerRef,
+  focusBlock,
   onRequestSlashMenu,
 }) => {
   const handleChange = useCallback(
@@ -484,6 +492,7 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
         onKeyDown={handleKey}
         onPaste={handlePaste}
         onDeleteCodeBlock={() => onDeleteBlock(block.id)}
+        focusBlock={focusBlock}
         onRequestSlashMenu={(position) =>
           onRequestSlashMenu(block.id, position)
         }

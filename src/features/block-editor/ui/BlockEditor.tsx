@@ -64,6 +64,7 @@ interface BlockEditorProps {
   onKeyDown: (e: React.KeyboardEvent) => void;
   onPaste?: (e: React.ClipboardEvent) => void;
   onDeleteCodeBlock?: () => void;
+  focusBlock: (blockId: string, cursorEnd?: boolean) => void;
   onRequestSlashMenu?: (position: { x: number; y: number }) => void;
 }
 
@@ -75,6 +76,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   onKeyDown,
   onPaste,
   onDeleteCodeBlock,
+  focusBlock,
   onRequestSlashMenu,
 }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
@@ -345,6 +347,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           onChange={onChange}
           onKeyDown={onKeyDown}
+          focusBlock={focusBlock}
           onRequestSlashMenu={onRequestSlashMenu}
         />
       );

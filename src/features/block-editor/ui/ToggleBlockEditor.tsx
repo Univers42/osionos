@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/15 17:39:24 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/16 10:35:46 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,6 +24,7 @@ interface ToggleBlockEditorProps {
   pageId: string;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
+  focusBlock: (blockId: string, cursorEnd?: boolean) => void;
   onRequestSlashMenu?: (position: { x: number; y: number }) => void;
 }
 
@@ -43,6 +44,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
   pageId,
   onChange,
   onKeyDown,
+  focusBlock,
   onRequestSlashMenu,
 }) => {
   const [expanded, setExpanded] = useState(!block.collapsed);
@@ -53,8 +55,6 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
   const handleToggle = useCallback(() => {
     const opening = !expanded;
 
-    // When opening an empty toggle, create a first child paragraph
-    // via the store (not ad-hoc array mutation) so BlockTree can render it.
     if (opening && !block.children?.length) {
       const child: Block = {
         id: crypto.randomUUID(),
@@ -62,11 +62,16 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
         content: "",
       };
       updateBlock(pageId, block.id, { children: [child] });
+      updateBlock(pageId, block.id, { collapsed: false });
+      setExpanded(true);
+
+      focusBlock(child.id);
+      return;
     }
 
     updateBlock(pageId, block.id, { collapsed: !opening });
     setExpanded(opening);
-  }, [expanded, block.id, block.children?.length, pageId, updateBlock]);
+  }, [expanded, block.id, block.children?.length, pageId, updateBlock, focusBlock]);
 
   /* ── Summary key handler ────────────────────────────────────────── */
 
@@ -75,37 +80,31 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
 
-        // Expand and ensure there's at least one child
-        if (!block.children?.length) {
+        if (block.children?.length) {
+          if (!expanded) {
+            updateBlock(pageId, block.id, { collapsed: false });
+            setExpanded(true);
+          }
+
+          const firstChildId = block.children[0].id;
+          focusBlock(firstChildId);
+        } else {
           const child: Block = {
             id: crypto.randomUUID(),
             type: "paragraph",
             content: "",
           };
           updateBlock(pageId, block.id, { children: [child] });
-        }
-
-        if (!expanded) {
           updateBlock(pageId, block.id, { collapsed: false });
           setExpanded(true);
-        }
 
-        // Focus the first child — use a short delay to allow React to render
-        // the children via BlockTree after state update.
-        const firstChildId = block.children?.[0]?.id;
-        if (firstChildId) {
-          setTimeout(() => {
-            const el = document.querySelector(
-              `[data-block-id="${firstChildId}"] [contenteditable]`,
-            ) as HTMLElement | null;
-            el?.focus();
-          }, 30);
+          focusBlock(child.id);
         }
         return;
       }
       onKeyDown(e);
     },
-    [expanded, block.id, block.children, pageId, updateBlock, onKeyDown],
+    [expanded, block.id, block.children, pageId, updateBlock, focusBlock, onKeyDown],
   );
 
   /* ── Render ─────────────────────────────────────────────────────── */

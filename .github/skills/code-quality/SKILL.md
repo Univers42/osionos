@@ -38,4 +38,3 @@ Act as a **Senior Backend Developer specializing in TypeScript** within the `osi
 - **Current Issue:** The codebase may lack sufficient documentation, making it difficult for developers to understand the purpose and usage of different modules, functions, and components, which can hinder collaboration and onboarding.
 - **Objective:** Provide clear and comprehensive documentation to facilitate understanding, collaboration, and onboarding for current and future developers.
 - **Action:** Document the purpose, inputs, outputs, and usage of functions, components, and modules using JSDoc comments or similar conventions. Create README files for modules or components that explain their functionality, usage examples, and any relevant details. Ensure that documentation is kept up-to-date with code changes to maintain its accuracy and usefulness for developers.
-
