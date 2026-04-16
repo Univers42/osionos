@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { MoreHorizontal, Trash, Copy, ArrowRight } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
+import { canDeletePage, canDuplicatePage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import { MovePageModal } from "./MovePageModal";
 import { getAllDescendantIds } from "@/store/pageStore.helpers";
@@ -46,6 +47,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
       ? (s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES)
       : EMPTY_WORKSPACE_PAGES,
   );
+  const currentPage = usePageStore((s) => s.pageById(pageId));
 
   const deletePage = usePageStore((s) => s.deletePage);
   const duplicatePage = usePageStore((s) => s.duplicatePage);
@@ -84,6 +86,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
     e.stopPropagation();
     setIsMenuOpen(false);
     if (!workspaceId) return;
+    if (!currentPage || !canDuplicatePage(currentPage, getCurrentPageAccessContext())) return;
 
     try {
       await duplicatePage(pageId, workspaceId);
@@ -97,6 +100,11 @@ export const PageOptionsMenu: React.FC<Props> = ({
       console.error("[PageOptionsMenu] Missing workspaceId for deletion", {
         workspaceId,
       });
+      setIsModalOpen(false);
+      return;
+    }
+
+    if (!currentPage || !canDeletePage(currentPage, getCurrentPageAccessContext())) {
       setIsModalOpen(false);
       return;
     }

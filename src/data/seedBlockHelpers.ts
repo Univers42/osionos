@@ -60,6 +60,12 @@ export interface SeedPage {
   title:         string;
   icon?:         string;
   workspaceId:   string;
+  ownerId?:      string | null;
+  visibility?:   'private' | 'shared' | 'public';
+  collaborators?: Array<{
+    userId: string;
+    role: 'viewer' | 'editor' | 'owner';
+  }>;
   parentPageId?: string | null;
   databaseId?:   string | null;
   archivedAt?:   string | null;

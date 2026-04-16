@@ -12,6 +12,18 @@
 
 import type { Block, BlockType } from '@/entities/block';
 
+/** Access model for page visibility. */
+export type PageVisibility = 'private' | 'shared' | 'public';
+
+/** Collaborator permission on a page. */
+export type PageCollaboratorRole = 'viewer' | 'editor' | 'owner';
+
+/** Explicit collaborator entry attached to a page. */
+export interface PageCollaborator {
+  userId: string;
+  role: PageCollaboratorRole;
+}
+
 /** Entry representing a page in the workspace tree. */
 export interface PageEntry {
   _id: string;
@@ -20,6 +32,9 @@ export interface PageEntry {
   /** Cover image URL or CSS gradient. */
   cover?: string;
   workspaceId: string;
+  ownerId?: string | null;
+  visibility?: PageVisibility;
+  collaborators?: PageCollaborator[];
   parentPageId?: string | null;
   databaseId?: string | null;
   archivedAt?: string | null;

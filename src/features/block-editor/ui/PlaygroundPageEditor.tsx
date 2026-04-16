@@ -109,6 +109,19 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     [setSlashMenu],
   );
 
+  if (!page) {
+    return (
+      <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-6 py-12 text-center">
+        <div>
+          <p className="text-sm font-medium text-[var(--color-ink)]">Page unavailable</p>
+          <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
+            You cannot edit this page in the current session.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (blocks.length === 0) {
     return (
       <button
