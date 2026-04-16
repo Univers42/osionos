@@ -11,53 +11,35 @@
 /* ************************************************************************** */
 
 import React from "react";
-import {
-  AssetRenderer,
-  resolveAssetValue,
-  resolveMediaUrl,
-} from "@univers42/ui-collection";
+import { AssetRenderer } from "@univers42/ui-collection";
 
 import {
   MEDIA_BLOCK_LABELS,
   isMediaBlockType,
   type Block,
 } from "@/entities/block";
-import { getSlashMediaPickerTabs } from "@/shared/lib/markengine/uiCollectionAssets";
+import {
+  getSlashMediaPickerTabs,
+  type ResolvedCollectionMediaAsset,
+  resolveCollectionMediaAsset,
+} from "@/shared/lib/markengine/uiCollectionAssets";
 
 interface MediaBlockPreviewProps {
   block: Block;
 }
 
-interface ResolvedMediaBlockAsset {
-  label: string;
-  url?: string;
-  thumbnailUrl?: string;
-}
-
 export function resolveMediaBlockAsset(
   block: Block,
-): ResolvedMediaBlockAsset | null {
+): ResolvedCollectionMediaAsset | null {
   if (!isMediaBlockType(block.type) || !block.asset) {
     return null;
   }
 
-  const resolved = resolveAssetValue(block.asset, getSlashMediaPickerTabs(block.type));
-  if (!resolved) {
-    return null;
-  }
-
-  const mediaItem = resolved.mediaItem;
-
-  return {
-    label:
-      resolved.item?.label ??
-      mediaItem?.label ??
-      MEDIA_BLOCK_LABELS[block.type],
-    url: mediaItem ? resolveMediaUrl(mediaItem.ref) : undefined,
-    thumbnailUrl: mediaItem?.thumbnailRef
-      ? resolveMediaUrl(mediaItem.thumbnailRef)
-      : undefined,
-  };
+  return resolveCollectionMediaAsset(
+    block.asset,
+    getSlashMediaPickerTabs(block.type),
+    MEDIA_BLOCK_LABELS[block.type],
+  );
 }
 
 function Placeholder({ label }: Readonly<{ label: string }>) {
