@@ -3,6 +3,7 @@ import { Search, X, FileText, ChevronRight, Hash } from 'lucide-react';
 import { usePageStore } from '@/store/usePageStore';
 import { useUserStore } from '@/features/auth';
 import { isValidMove } from '@/store/pageStore.helpers';
+import type { PageEntry } from '@/entities/page';
 
 import styles from './MovePageModal.module.scss';
 
@@ -20,6 +21,51 @@ interface RenderableItem {
   icon?: string;
   hasChildren?: boolean;
   breadcrumbs?: string;
+}
+
+function buildMovePageItems(
+  pages: Record<string, PageEntry[]>,
+  workspaces: Array<{ _id: string; name: string }>,
+  sourcePageId: string,
+): RenderableItem[] {
+  const items: RenderableItem[] = [];
+
+  const recurse = (workspaceId: string, parentId: string | null = null, depth = 0) => {
+    const wsPages = pages[workspaceId] ?? [];
+    const children = wsPages.filter((p) => p.parentPageId === parentId);
+
+    children.forEach((page) => {
+      if (page._id === sourcePageId || !isValidMove(pages, sourcePageId, page._id)) {
+        return;
+      }
+
+      const hasChildren = wsPages.some((p) => p.parentPageId === page._id);
+      items.push({
+        id: page._id,
+        workspaceId,
+        title: page.title || 'Untitled',
+        type: 'page',
+        depth,
+        icon: page.icon,
+        hasChildren,
+      });
+
+      recurse(workspaceId, page._id, depth + 1);
+    });
+  };
+
+  workspaces.forEach((ws) => {
+    items.push({
+      id: null,
+      workspaceId: ws._id,
+      title: `Move to ${ws.name} Root`,
+      type: 'root',
+      depth: 0,
+    });
+    recurse(ws._id);
+  });
+
+  return items;
 }
 
 export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
@@ -95,46 +141,10 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
       }));
   }, [allPages, searchTerm, sourcePageId, pages, buildBreadcrumbs]);
 
-  const getTreeItems = useMemo(() => {
-    const items: RenderableItem[] = [];
-
-    const recurse = (workspaceId: string, parentId: string | null = null, depth = 0) => {
-      const wsPages = pages[workspaceId] ?? [];
-      const children = wsPages.filter((p) => p.parentPageId === parentId);
-
-      children.forEach((page) => {
-        if (page._id === sourcePageId || !isValidMove(pages, sourcePageId, page._id)) {
-          return;
-        }
-
-        const hasChildren = wsPages.some((p) => p.parentPageId === page._id);
-        items.push({
-          id: page._id,
-          workspaceId,
-          title: page.title || 'Untitled',
-          type: 'page',
-          depth,
-          icon: page.icon,
-          hasChildren
-        });
-
-        recurse(workspaceId, page._id, depth + 1);
-      });
-    };
-
-    workspaces.forEach(ws => {
-      items.push({
-        id: null,
-        workspaceId: ws._id,
-        title: `Move to ${ws.name} Root`,
-        type: 'root',
-        depth: 0
-      });
-      recurse(ws._id);
-    });
-
-    return items;
-  }, [pages, workspaces, sourcePageId]);
+  const getTreeItems = useMemo(
+    () => buildMovePageItems(pages, workspaces, sourcePageId),
+    [pages, workspaces, sourcePageId],
+  );
 
   const renderableItems = searchTerm.trim() ? getFilteredPages : getTreeItems;
 
@@ -162,9 +172,26 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
   };
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        {/* Header / Search */}
+    <>
+      <button
+        type="button"
+        className={styles.overlay}
+        aria-label="Close move page modal"
+        onClick={onClose}
+      />
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+          pointerEvents: 'none',
+        }}
+      >
+        <div className={styles.modal} style={{ pointerEvents: 'auto' }}>
+          {/* Header / Search */}
         <div className={styles.header}>
           <Search size={16} className={styles.searchIcon} />
           <input
@@ -227,13 +254,17 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
                         onMouseEnter={() => setActiveIndex(globalIdx)}
                       >
                         <span className={styles.itemIcon}>
-                          {item.type === 'root' ? (
-                            <Hash size={14} className="text-[var(--color-ink-faint)]" />
-                          ) : item.icon ? (
-                            <span>{item.icon}</span>
-                          ) : (
-                            <FileText size={14} />
-                          )}
+                          {(() => {
+                            if (item.type === 'root') {
+                              return <Hash size={14} className="text-[var(--color-ink-faint)]" />;
+                            }
+
+                            if (item.icon) {
+                              return <span>{item.icon}</span>;
+                            }
+
+                            return <FileText size={14} />;
+                          })()}
                         </span>
                         <span className={styles.itemTitle}>{item.title}</span>
                         {item.hasChildren && <ChevronRight size={12} className="text-[var(--color-ink-faint)]" />}
@@ -247,5 +278,6 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
         </div>
       </div>
     </div>
+  </>
   );
 };

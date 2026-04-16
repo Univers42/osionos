@@ -94,14 +94,17 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
                 key={`${section.label ?? "section"}-${item.label}`}
                 type="button"
                 onClick={item.onClick}
-                className={[
-                  "flex w-full items-center gap-3 px-3 py-1.5 text-left transition-colors",
-                  item.danger
-                    ? "text-red-600 hover:bg-red-50"
-                    : item.active
-                      ? "bg-[var(--color-surface-hover)] text-[var(--color-ink)]"
-                      : "text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)]",
-                ].join(" ")}
+                className={(() => {
+                  if (item.danger) {
+                    return "flex w-full items-center gap-3 px-3 py-1.5 text-left transition-colors text-red-600 hover:bg-red-50";
+                  }
+
+                  if (item.active) {
+                    return "flex w-full items-center gap-3 px-3 py-1.5 text-left transition-colors bg-[var(--color-surface-hover)] text-[var(--color-ink)]";
+                  }
+
+                  return "flex w-full items-center gap-3 px-3 py-1.5 text-left transition-colors text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)]";
+                })()}
               >
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--color-surface-secondary)] text-[var(--color-ink-muted)]">
                   {item.icon}

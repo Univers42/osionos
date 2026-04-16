@@ -19,14 +19,27 @@ export const ConfirmDeleteModal: React.FC<Props> = ({
   subPageCount = 0
 }) => {
   return (
-    <div 
-      className="fixed inset-0 flex items-center justify-center z-[100] p-4 bg-black/40 backdrop-blur-[1px]"
-      onClick={e => { e.stopPropagation(); onCancel(); }}
-    >
-      <div 
-        className="w-full max-w-[400px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200"
-        onClick={e => e.stopPropagation()}
+    <>
+      <button
+        type="button"
+        className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-[1px]"
+        aria-label="Close delete confirmation"
+        onClick={onCancel}
+      />
+      <div
+        className="fixed inset-0 z-[100]"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+          pointerEvents: 'none',
+        }}
       >
+        <div
+          className="w-full max-w-[400px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200"
+          style={{ pointerEvents: 'auto' }}
+        >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2 text-[var(--color-text-danger)]">
@@ -77,5 +90,6 @@ export const ConfirmDeleteModal: React.FC<Props> = ({
         </div>
       </div>
     </div>
+  </>
   );
 };
