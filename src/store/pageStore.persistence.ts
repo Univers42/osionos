@@ -13,6 +13,7 @@
 import { api } from '@/shared/api/client';
 import { isMongoId } from './pageStore.helpers';
 import type { PageEntry } from '@/entities/page';
+import { canEditPage, getCurrentPageAccessContext } from '@/shared/lib/auth/pageAccess';
 
 /** Lazy JWT getter — avoids importing useUserStore at module top level */
 export function getActiveJwt(): string | null {
@@ -56,6 +57,7 @@ function flushPendingPersists() {
     // Use registered lookup instead of direct store import (avoids circular dep)
     const page = _pageByIdFn?.(pageId);
     if (!page?.content) continue;
+    if (!canEditPage(page, getCurrentPageAccessContext())) continue;
     const jwt = getActiveJwt();
     if (!jwt) continue;
     const url = `${(import.meta.env as Record<string, string>)['VITE_API_URL'] ?? 'http://localhost:4000'}/api/pages/${pageId}`;
@@ -82,6 +84,7 @@ async function persistPageContent(pageId: string) {
   if (!isMongoId(pageId)) return;  // offline seed page — skip API call
   const page = _pageByIdFn?.(pageId);
   if (!page?.content) return;
+  if (!canEditPage(page, getCurrentPageAccessContext())) return;
 
   const jwt = getActiveJwt();
   if (!jwt) return;
@@ -95,6 +98,8 @@ async function persistPageContent(pageId: string) {
 
 export async function persistPageTitle(pageId: string, title: string) {
   if (!isMongoId(pageId)) return;  // offline seed page — skip API call
+  const page = _pageByIdFn?.(pageId);
+  if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
   const jwt = getActiveJwt();
   if (!jwt) return;
   try {

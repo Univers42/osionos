@@ -20,10 +20,97 @@ import { SidebarSection }  from './SidebarSection';
 import { PageTreeItem }    from './PageTreeItem';
 import { PageOptionsMenu } from '@/features/page-management';
 import { usePageStore }    from '@/store/usePageStore';
+import { canReadPage, getCurrentPageAccessContext } from '@/shared/lib/auth/pageAccess';
 
 interface WorkspaceRef {
   _id: string;
 }
+
+interface RecentPageActionsProps {
+  recent: ActivePage;
+  active: boolean;
+  onRedirectHome: () => void;
+  onAddChild: (e: React.MouseEvent, recent: ActivePage) => void;
+}
+
+const RecentPageActions: React.FC<RecentPageActionsProps> = ({
+  recent,
+  active,
+  onRedirectHome,
+  onAddChild,
+}) => {
+  const page = usePageStore((s) => s.pageById(recent.id));
+  const accessContext = getCurrentPageAccessContext();
+
+  if (!page || !canReadPage(page, accessContext)) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-center gap-0.5 mr-0.5 shrink-0">
+      <PageOptionsMenu
+        pageId={recent.id}
+        workspaceId={recent.workspaceId}
+        pageTitle={recent.title || 'Untitled'}
+        isActivePage={active}
+        onRedirectHome={onRedirectHome}
+      />
+      <button
+        type="button"
+        className="p-1 rounded hover:bg-[var(--color-surface-secondary)]"
+        onClick={(e) => onAddChild(e, recent)}
+        title="Add child page"
+      >
+        <Plus size={13} />
+      </button>
+    </div>
+  );
+};
+
+interface RecentSidebarItemProps {
+  recent: ActivePage;
+  activePageId: string | null | undefined;
+  onOpenPage: (page: ActivePage) => void;
+  onRedirectHome: () => void;
+  onAddChild: (e: React.MouseEvent, recent: ActivePage) => void;
+}
+
+const RecentSidebarItem: React.FC<RecentSidebarItemProps> = ({
+  recent,
+  activePageId,
+  onOpenPage,
+  onRedirectHome,
+  onAddChild,
+}) => {
+  const page = usePageStore((s) => s.pageById(recent.id));
+  const accessContext = getCurrentPageAccessContext();
+
+  if (!page || !canReadPage(page, accessContext)) {
+    return null;
+  }
+
+  const isActive = activePageId === recent.id;
+
+  return (
+    <SidebarNavItem
+      icon={recent.icon
+        ? <AssetRenderer value={recent.icon} size={14} />
+        : <AssetRenderer value="icon:page" size={14} />
+      }
+      label={recent.title ?? 'Untitled'}
+      active={isActive}
+      onClick={() => onOpenPage(recent)}
+      rightElement={(
+        <RecentPageActions
+          recent={recent}
+          active={isActive}
+          onRedirectHome={onRedirectHome}
+          onAddChild={onAddChild}
+        />
+      )}
+    />
+  );
+};
 
 interface SidebarPageTreeProps {
   recents:            ActivePage[];
@@ -48,6 +135,8 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   onAddToWorkspace,
 }) => {
   const addPage = usePageStore(s => s.addPage);
+  const pageById = usePageStore(s => s.pageById);
+  const accessContext = getCurrentPageAccessContext();
 
   const handleAddChildToRecent = async (e: React.MouseEvent, recent: ActivePage) => {
     e.stopPropagation();
@@ -67,35 +156,17 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
 
       <SidebarSection label="Recents">
         {recents.length > 0
-          ? recents.slice(0, 8).map(r => (
-              <SidebarNavItem
+          ? recents.filter((r) => {
+              const page = pageById(r.id);
+              return !!page && canReadPage(page, accessContext);
+            }).slice(0, 8).map(r => (
+              <RecentSidebarItem
                 key={r.id}
-                icon={r.icon
-                  ? <AssetRenderer value={r.icon} size={14} />
-                  : <AssetRenderer value="icon:page" size={14} />
-                }
-                label={r.title ?? 'Untitled'}
-                active={activePage?.id === r.id}
-                onClick={() => openPage(r)}
-                rightElement={(hovered) => (hovered || activePage?.id === r.id) && (
-                  <span className="flex items-center gap-0.5 mr-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-                    <PageOptionsMenu
-                      pageId={r.id}
-                      workspaceId={r.workspaceId}
-                      pageTitle={r.title || 'Untitled'}
-                      isActivePage={activePage?.id === r.id}
-                      onRedirectHome={() => usePageStore.setState({ activePage: null })}
-                    />
-                    <button
-                      type="button"
-                      className="p-1 rounded hover:bg-[var(--color-surface-secondary)]"
-                      onClick={(e) => handleAddChildToRecent(e, r)}
-                      title="Add child page"
-                    >
-                      <Plus size={13} />
-                    </button>
-                  </span>
-                )}
+                recent={r}
+                activePageId={activePage?.id}
+                onOpenPage={openPage}
+                onRedirectHome={() => usePageStore.setState({ activePage: null })}
+                onAddChild={handleAddChildToRecent}
               />
             ))
           : (

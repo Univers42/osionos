@@ -11,6 +11,13 @@
 /* ************************************************************************** */
 
 import { api } from "@/shared/api/client";
+import {
+  canDeletePage,
+  canDuplicatePage,
+  canMovePage,
+  canReadPage,
+  getCurrentPageAccessContext,
+} from "@/shared/lib/auth/pageAccess";
 import { SEED_PAGES } from "../data/seedPages";
 import {
   seedToEntry,
@@ -65,6 +72,9 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
             title: sp.title,
             icon: sp.icon,
             content: sp.content,
+            ownerId: sp.ownerId ?? undefined,
+            visibility: sp.visibility,
+            collaborators: sp.collaborators,
           },
           jwt,
         );
@@ -85,6 +95,8 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
 export function createFetchPages(set: SetFn, get: GetFn) {
   return async (workspaceId: string, jwt: string) => {
     if (!jwt) return;
+    const context = getCurrentPageAccessContext();
+    if (context && !context.workspaceIds.includes(workspaceId)) return;
     if (get().loadingIds.has(workspaceId)) return;
     set((s) => ({ loadingIds: new Set([...s.loadingIds, workspaceId]) }));
     try {
@@ -115,6 +127,9 @@ export function createFetchPages(set: SetFn, get: GetFn) {
 export function createFetchPageContent(set: SetFn, get: GetFn) {
   return async (pageId: string, jwt: string) => {
     if (!jwt || !isMongoId(pageId)) return; // skip for offline seed pages
+    const page = get().pageById(pageId);
+    const context = getCurrentPageAccessContext();
+    if (!page || !canReadPage(page, context)) return;
     try {
       const fullPage = await api.get<PageEntry>(`/api/pages/${pageId}`, jwt);
       if (!fullPage) return;
@@ -140,11 +155,24 @@ export function createAddPage(set: SetFn, get: GetFn) {
     jwt: string,
     parentPageId?: string,
   ): Promise<PageEntry | null> => {
+    const context = getCurrentPageAccessContext();
+    if (!context?.workspaceIds.includes(workspaceId)) {
+      return null;
+    }
+
     if (jwt) {
       try {
         const page = await api.post<PageEntry>(
           "/api/pages",
-          { workspaceId, title, parentPageId, content: [] },
+          {
+            workspaceId,
+            title,
+            parentPageId,
+            content: [],
+            ownerId: context.userId,
+            visibility: "private",
+            collaborators: [],
+          },
           jwt,
         );
         set((s) => ({
@@ -163,6 +191,9 @@ export function createAddPage(set: SetFn, get: GetFn) {
       _id: localId(),
       title,
       workspaceId,
+      ownerId: context.userId,
+      visibility: "private",
+      collaborators: [],
       parentPageId: parentPageId ?? null,
       databaseId: null,
       archivedAt: null,
@@ -181,6 +212,10 @@ export function createAddPage(set: SetFn, get: GetFn) {
 
 export function createDeletePage(set: SetFn, get: GetFn) {
   return async (pageId: string, workspaceId: string, jwt: string) => {
+    const page = get().pageById(pageId);
+    const context = getCurrentPageAccessContext();
+    if (!page || !canDeletePage(page, context)) return;
+
     if (jwt && isMongoId(pageId)) {
       try {
         await api.delete(`/api/pages/${pageId}`, jwt);
@@ -212,10 +247,11 @@ export function createDeletePage(set: SetFn, get: GetFn) {
 
 export function createDuplicatePage(set: SetFn, get: GetFn) {
   return async (pageId: string, workspaceId: string): Promise<string | null> => {
+    const context = getCurrentPageAccessContext();
     const state = get();
     const wsPages = state.pages[workspaceId] ?? [];
     const rootPage = wsPages.find((p) => p._id === pageId);
-    if (!rootPage) return null;
+    if (!rootPage || !canDuplicatePage(rootPage, context)) return null;
 
     const descendantIds = getAllDescendantIds(wsPages, pageId);
     const allIdsToClone = [pageId, ...descendantIds];
@@ -234,6 +270,9 @@ export function createDuplicatePage(set: SetFn, get: GetFn) {
         ...p,
         _id: newId,
         title: isRoot ? `${p.title} (Copy)` : p.title,
+        ownerId: context?.userId ?? p.ownerId ?? null,
+        visibility: "private",
+        collaborators: [],
         parentPageId: p.parentPageId
           ? idMap[p.parentPageId] ?? p.parentPageId
           : p.parentPageId,
@@ -294,6 +333,7 @@ export function createMovePage(set: SetFn, get: GetFn) {
   ) => {
     const state = get();
     const allPagesRecord = state.pages;
+    const context = getCurrentPageAccessContext();
 
     // 1. Validate move
     if (!isValidMove(allPagesRecord, pageId, targetParentId)) {
@@ -319,6 +359,14 @@ export function createMovePage(set: SetFn, get: GetFn) {
 
     if (!sourceWorkspaceId || !targetPage) {
       console.error("[pageStore] Page not found for move", { pageId });
+      return;
+    }
+
+    if (!canMovePage(targetPage, targetWorkspaceId, context)) {
+      console.error("[pageStore] Unauthorized move operation", {
+        pageId,
+        targetWorkspaceId,
+      });
       return;
     }
 

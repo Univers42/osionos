@@ -24,6 +24,7 @@ export const gettingStarted: SeedPage = {
   title: 'Getting Started',
   icon: getCollectionEmojiValue('rocket'),
   workspaceId: adminWsId,
+  ownerId: 'mock-user-0',
   content: [
     h1('Welcome to the Playground'),
     p('This is a local-first Notion clone playground. Everything runs in the browser — no backend required.'),
@@ -70,6 +71,7 @@ export const projectRoadmap: SeedPage = {
   title: 'Project Roadmap',
   icon: getCollectionEmojiValue('puzzle'),
   workspaceId: adminWsId,
+  ownerId: 'mock-user-0',
   content: [
     h1('Roadmap — Q2 2026'),
     p('This page tracks the high-level goals and milestones for the current quarter.'),
@@ -107,6 +109,7 @@ export const meetingNotes: SeedPage = {
   title: 'Meeting Notes',
   icon: getCollectionEmojiValue('pin'),
   workspaceId: adminWsId,
+  ownerId: 'mock-user-0',
   content: [
     h1('Weekly Sync — March 28'),
     p('Attendees: Dylan, Alex, Sam'),

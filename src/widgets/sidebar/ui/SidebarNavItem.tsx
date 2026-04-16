@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState } from 'react';
+import React from 'react';
 
 interface Props {
   icon:     React.ReactNode;
@@ -20,7 +20,7 @@ interface Props {
   indent?:  number;                  // 0 = top-level
   subtle?:  boolean;                 // muted text for section-level items
   onClick:  () => void;
-  rightElement?: (hovered: boolean) => React.ReactNode;
+  rightElement?: React.ReactNode;
 }
 
 /**
@@ -31,7 +31,6 @@ interface Props {
 export const SidebarNavItem: React.FC<Props> = ({
   icon, label, count, active = false, indent = 0, subtle = false, onClick, rightElement
 }) => {
-  const [hovered, setHovered] = useState(false);
   const paddingLeft = 10 + indent * 12;
 
   let stateClass: string;
@@ -39,34 +38,47 @@ export const SidebarNavItem: React.FC<Props> = ({
   else if (subtle) stateClass = 'text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink-muted)]';
   else stateClass = 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]';
 
+  const countBadge = count !== undefined && count > 0 ? (
+    <span className="text-[10px] font-semibold min-w-[16px] h-4 flex items-center justify-center rounded px-[3px] bg-red-500 text-white">
+      {count}
+    </span>
+  ) : null;
+
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       className={[
         'group relative w-full flex items-center gap-2 rounded-[6px] text-[14px] select-none',
-        'transition-colors duration-100 cursor-pointer',
         'font-medium',
         stateClass,
       ].join(' ')}
       style={{ paddingLeft, paddingRight: 8, height: 30, minHeight: 27 }}
     >
-      {/* Icon slot: fixed 22 × 22 matching Notion */}
-      <span className="flex items-center justify-center w-[22px] h-[22px] shrink-0 opacity-70">
-        {icon}
-      </span>
+      <button
+        type="button"
+        onClick={onClick}
+        className={[
+          'flex min-w-0 flex-1 items-center gap-2 rounded-[6px] text-[14px] select-none',
+          'transition-colors duration-100 cursor-pointer',
+          'font-medium',
+          stateClass,
+        ].join(' ')}
+        style={{ paddingLeft: 0, paddingRight: 0, height: 30, minHeight: 27 }}
+      >
+        <span className="flex items-center justify-center w-[22px] h-[22px] shrink-0 opacity-70">
+          {icon}
+        </span>
 
-      <span className="flex-1 text-left truncate">{label}</span>
+        <span className="flex-1 text-left truncate">{label}</span>
+
+        {countBadge}
+      </button>
 
       {rightElement ? (
-        rightElement(hovered)
-      ) : count !== undefined && count > 0 ? (
-        <span className="text-[10px] font-semibold min-w-[16px] h-4 flex items-center justify-center rounded px-[3px] bg-red-500 text-white">
-          {count}
-        </span>
+        <div className="absolute right-0 h-full flex items-center">
+          <div className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+            {rightElement}
+          </div>
+        </div>
       ) : null}
     </div>
   );

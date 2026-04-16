@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ColorPickerBoard } from "@univers42/ui-collection";
 import { parseInlineMarkdown } from "@/shared/lib/markengine";
@@ -21,6 +21,7 @@ import {
   normalizeInlineColorToken,
 } from "@/shared/lib/markengine/inlineTextStyles";
 import { usePageStore } from "@/store/usePageStore";
+import { canReadPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 
 interface EditableContentProps {
   content: string;
@@ -795,7 +796,6 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
       {palette && (
         <div
           className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 w-45 h-60 shadow-xl"
-          onMouseDown={(e) => e.preventDefault()}
         >
           <ColorPickerBoard
             defaultValue={DEFAULT_INLINE_COLOR}
@@ -892,13 +892,17 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   );
   const workspacePages = usePageStore((s) =>
     currentPage?.workspaceId
-      ? s.pagesForWorkspace(currentPage.workspaceId)
+      ? s.pages[currentPage.workspaceId] ?? EMPTY_WORKSPACE_PAGES
       : EMPTY_WORKSPACE_PAGES,
   );
 
-  const selectablePages = workspacePages.filter(
-    (workspacePage) => !workspacePage.archivedAt,
-  );
+  const selectablePages = useMemo(() => {
+    const accessContext = getCurrentPageAccessContext();
+    return workspacePages.filter(
+      (workspacePage) =>
+        !workspacePage.archivedAt && canReadPage(workspacePage, accessContext),
+    );
+  }, [workspacePages]);
 
   const renderContent = useCallback((nextContent: string) => {
     if (!ref.current) {

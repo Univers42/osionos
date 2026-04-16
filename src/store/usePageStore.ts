@@ -42,6 +42,7 @@ import {
   registerPageLookup,
 } from "./pageStore.persistence";
 import type { PageStore } from "@/entities/page";
+import { canEditPage, canReadPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 
 // Re-export types so existing imports from this module still work
 export type { PageEntry, ActivePageKind, ActivePage } from "@/entities/page";
@@ -66,6 +67,13 @@ export const usePageStore = create<PageStore>((set, get) => ({
   deletePage: createDeletePage(set, get),
 
   openPage: (page) => {
+    const context = getCurrentPageAccessContext();
+    const currentPage = get().pageById(page.id);
+    if (page.kind === "page" && (!currentPage || !canReadPage(currentPage, context))) {
+      set({ activePage: null });
+      return;
+    }
+
     set((s) => {
       const recents = [
         page,
@@ -90,6 +98,9 @@ export const usePageStore = create<PageStore>((set, get) => ({
   },
 
   updateBlock: (pageId, blockId, updates) => {
+    const page = get().pageById(pageId);
+    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+
     set((s) => {
       const pages = updatePageInState(
         s.pages,
@@ -103,6 +114,9 @@ export const usePageStore = create<PageStore>((set, get) => ({
   },
 
   insertBlock: (pageId, afterBlockId, block) => {
+    const page = get().pageById(pageId);
+    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+
     set((s) => {
       const pages = updatePageInState(
         s.pages,
@@ -116,6 +130,9 @@ export const usePageStore = create<PageStore>((set, get) => ({
   },
 
   deleteBlock: (pageId, blockId) => {
+    const page = get().pageById(pageId);
+    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+
     set((s) => {
       const pages = updatePageInState(
         s.pages,
@@ -129,6 +146,9 @@ export const usePageStore = create<PageStore>((set, get) => ({
   },
 
   moveBlock: (pageId, blockId, targetIndex, parentBlockId = null) => {
+    const page = get().pageById(pageId);
+    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+
     set((s) => {
       const pages = updatePageInState(
         s.pages,
@@ -142,6 +162,9 @@ export const usePageStore = create<PageStore>((set, get) => ({
   },
 
   indentBlock: (pageId, blockId) => {
+    const page = get().pageById(pageId);
+    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+
     set((s) => {
       const pages = updatePageInState(
         s.pages,
@@ -155,6 +178,9 @@ export const usePageStore = create<PageStore>((set, get) => ({
   },
 
   outdentBlock: (pageId, blockId) => {
+    const page = get().pageById(pageId);
+    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+
     set((s) => {
       const pages = updatePageInState(
         s.pages,
@@ -168,6 +194,9 @@ export const usePageStore = create<PageStore>((set, get) => ({
   },
 
   changeBlockType: (pageId, blockId, newType) => {
+    const page = get().pageById(pageId);
+    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+
     set((s) => {
       const pages = updatePageInState(
         s.pages,
@@ -181,6 +210,9 @@ export const usePageStore = create<PageStore>((set, get) => ({
   },
 
   updatePageContent: (pageId, blocks) => {
+    const page = get().pageById(pageId);
+    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+
     set((s) => {
       const pages = updatePageInState(s.pages, pageId, (page) => ({
         ...page,
@@ -193,6 +225,9 @@ export const usePageStore = create<PageStore>((set, get) => ({
   },
 
   updatePageTitle: (pageId, title) => {
+    const page = get().pageById(pageId);
+    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+
     set((s) => {
       const pages = updatePageInState(s.pages, pageId, (page) => ({
         ...page,
@@ -208,17 +243,19 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   rootPages: (workspaceId) =>
     (get().pages[workspaceId] ?? []).filter(
-      (p) => !p.parentPageId && !p.archivedAt,
+      (p) => !p.parentPageId && !p.archivedAt && canReadPage(p, getCurrentPageAccessContext()),
     ),
 
   childPages: (parentId, workspaceId) =>
     (get().pages[workspaceId] ?? []).filter(
-      (p) => p.parentPageId === parentId && !p.archivedAt,
+      (p) => p.parentPageId === parentId && !p.archivedAt && canReadPage(p, getCurrentPageAccessContext()),
     ),
 
   pageById: (pageId) => {
     const allPages = Object.values(get().pages).flat();
-    return allPages.find((p) => p._id === pageId);
+    const page = allPages.find((p) => p._id === pageId);
+    if (!page) return undefined;
+    return canReadPage(page, getCurrentPageAccessContext()) ? page : undefined;
   },
 }));
 

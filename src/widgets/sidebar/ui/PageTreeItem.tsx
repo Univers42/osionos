@@ -15,6 +15,9 @@ import { ChevronRight, Plus } from 'lucide-react';
 import { AssetRenderer } from '@univers42/ui-collection';
 import { usePageStore, type PageEntry } from '@/store/usePageStore';
 import { PageOptionsMenu } from '@/features/page-management';
+import { canReadPage, getCurrentPageAccessContext } from '@/shared/lib/auth/pageAccess';
+
+const EMPTY_WORKSPACE_PAGES: readonly PageEntry[] = [];
 
 interface Props {
   page:        PageEntry;
@@ -34,16 +37,20 @@ export const PageTreeItem: React.FC<Props> = ({
   page, workspaceId, jwt, depth = 0, activeId,
 }) => {
   const [expanded, setExpanded] = useState(false);
-  const [hovered,  setHovered]  = useState(false);
 
   const openPage = usePageStore(s => s.openPage);
   const addPage  = usePageStore(s => s.addPage);
 
   // Access raw pages array (stable reference) and derive children outside selector
-  const wsPages   = usePageStore(s => s.pages[workspaceId]);
+  const wsPages   = usePageStore(s => s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES);
+  const accessContext = getCurrentPageAccessContext();
   const children  = useMemo(
-    () => (wsPages ?? []).filter(p => p.parentPageId === page._id && !p.archivedAt),
-    [wsPages, page._id],
+    () => (wsPages ?? []).filter((p) =>
+      p.parentPageId === page._id &&
+      !p.archivedAt &&
+      canReadPage(p, accessContext),
+    ),
+    [wsPages, page._id, accessContext],
   );
   const isActive  = activeId === page._id;
   const hasChildren = children.length > 0;
@@ -53,6 +60,10 @@ export const PageTreeItem: React.FC<Props> = ({
 
   function handleOpen(e: React.MouseEvent) {
     e.stopPropagation();
+    handleOpenPage();
+  }
+
+  function handleOpenPage() {
     openPage({
       id:          page._id,
       workspaceId,
@@ -74,47 +85,48 @@ export const PageTreeItem: React.FC<Props> = ({
   return (
     <>
       <div
-        role="button"
-        tabIndex={0}
-        onClick={handleOpen}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        className={[
-          'group relative w-full flex items-center gap-0.5 h-7 rounded-md text-sm select-none',
-          'transition-colors duration-100 cursor-pointer',
-          isActive
-            ? 'bg-[var(--color-surface-tertiary)] text-[var(--color-ink)]'
-            : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]',
-        ].join(' ')}
+        className="group relative w-full flex items-center gap-0.5 h-7 rounded-md text-sm select-none"
         style={{ paddingLeft, paddingRight: 4 }}
       >
-        {/* Expand/collapse chevron */}
+        {hasChildren ? (
+          <button
+            type="button"
+            className="flex items-center justify-center w-5 h-5 shrink-0 rounded hover:bg-[var(--color-surface-hover)]"
+            onClick={e => { e.stopPropagation(); setExpanded(o => !o); }}
+          >
+            <ChevronRight
+              size={12}
+              className={['transition-transform duration-150', expanded ? 'rotate-90' : ''].join(' ')}
+            />
+          </button>
+        ) : (
+          <span className="flex items-center justify-center w-5 h-5 shrink-0">
+            <AssetRenderer value={fallbackIcon} size={13} className="opacity-50" />
+          </span>
+        )}
+
         <button
           type="button"
-          className="flex items-center justify-center w-5 h-5 shrink-0 rounded hover:bg-[var(--color-surface-hover)]"
-          onClick={e => { e.stopPropagation(); setExpanded(o => !o); }}
+          onClick={handleOpen}
+          className={[
+            'flex min-w-0 flex-1 items-center gap-0.5 h-full rounded-md text-sm text-left transition-colors duration-100 pr-14',
+            isActive
+              ? 'bg-[var(--color-surface-tertiary)] text-[var(--color-ink)]'
+              : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]',
+          ].join(' ')}
         >
-          {hasChildren
-            ? (
-              <ChevronRight
-                size={12}
-                className={['transition-transform duration-150', expanded ? 'rotate-90' : ''].join(' ')}
-              />
-            )
-            : <AssetRenderer value={fallbackIcon} size={13} className="opacity-50" />}
+          {page.icon
+            ? <AssetRenderer value={page.icon} size={14} className="shrink-0" />
+            : <AssetRenderer value={fallbackIcon} size={13} className="opacity-40 shrink-0" />}
+
+          <span className="flex-1 text-left truncate ml-1">{page.title || 'Untitled'}</span>
         </button>
 
-        {/* Page icon */}
-        {page.icon
-          ? <AssetRenderer value={page.icon} size={14} className="shrink-0" />
-          : <AssetRenderer value={fallbackIcon} size={13} className="opacity-40 shrink-0" />}
-
-        {/* Title */}
-        <span className="flex-1 text-left truncate ml-1">{page.title || 'Untitled'}</span>
-
         {/* Action buttons — appear on hover */}
-        {(hovered || isActive) && (
-          <span className="flex items-center gap-0.5 mr-0.5 shrink-0">
+        <span className={[
+          'absolute right-0 flex items-center gap-0.5 mr-0.5 shrink-0 h-full transition-opacity',
+          isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+        ].join(' ')}>
             <PageOptionsMenu
               pageId={page._id}
               workspaceId={workspaceId}
@@ -130,8 +142,7 @@ export const PageTreeItem: React.FC<Props> = ({
             >
               <Plus size={13} />
             </button>
-          </span>
-        )}
+        </span>
       </div>
 
       {/* Recurse for children */}

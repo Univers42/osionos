@@ -38,6 +38,8 @@ const teamWiki: SeedPage = {
   title: 'Team Wiki',
   icon: getCollectionEmojiValue('brain'),
   workspaceId: SHARED_WORKSPACE_ID,
+  ownerId: 'mock-user-0',
+  visibility: 'public',
   content: [
     h1('Team Wiki'),
     p('Shared knowledge base for the whole team.'),

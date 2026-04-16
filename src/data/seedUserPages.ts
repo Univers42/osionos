@@ -24,6 +24,7 @@ export const designSystem: SeedPage = {
   title: 'Design System',
   icon: getCollectionEmojiValue('palette'),
   workspaceId: alexWsId,
+  ownerId: 'mock-user-1',
   content: [
     h1('Design System v2'),
     p('This document outlines the design tokens, component patterns, and visual guidelines for the project.'),
@@ -61,6 +62,7 @@ export const sprintReview: SeedPage = {
   title: 'Sprint Review',
   icon: getCollectionEmojiValue('tools'),
   workspaceId: alexWsId,
+  ownerId: 'mock-user-1',
   content: [
     h1('Sprint 12 Review'),
     p('Sprint: March 18 — March 29, 2026'),
@@ -99,6 +101,7 @@ export const quickNotes: SeedPage = {
   title: 'Quick Notes',
   icon: getCollectionEmojiValue('pin'),
   workspaceId: samWsId,
+  ownerId: 'mock-user-2',
   content: [
     h1('Quick Notes'),
     p('A place to jot down ideas and thoughts.'),
@@ -122,6 +125,7 @@ export const readingList: SeedPage = {
   title: 'Reading List',
   icon: getCollectionEmojiValue('brain'),
   workspaceId: samWsId,
+  ownerId: 'mock-user-2',
   content: [
     h1('Reading List'),
     p('Books and articles to check out.'),

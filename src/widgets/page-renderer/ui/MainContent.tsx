@@ -34,6 +34,7 @@ export const MainContent: React.FC = () => {
   const fetchPageContent = usePageStore(s => s.fetchPageContent);
   const addPage    = usePageStore(s => s.addPage);
   const openPage   = usePageStore(s => s.openPage);
+  const clearActivePage = usePageStore.setState;
   const session    = useUserStore(s => s.activeSession());
   const persona    = useUserStore(s => s.activePersona());
 
@@ -47,6 +48,12 @@ export const MainContent: React.FC = () => {
       fetchPageContent(activePage.id, jwt);
     }
   }, [activePage, jwt, pageById, fetchPageContent]);
+
+  useEffect(() => {
+    if (activePage?.kind === 'page' && !pageById(activePage.id)) {
+      clearActivePage({ activePage: null });
+    }
+  }, [activePage, pageById, clearActivePage]);
 
   /* ── Home splash (no page selected) ────────────────────────────── */
   if (!activePage) {
@@ -80,6 +87,24 @@ export const MainContent: React.FC = () => {
         >
           <Plus size={16} />
           New page
+        </button>
+      </div>
+    );
+  }
+
+  if (activePage.kind === 'page' && !pageById(activePage.id)) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-4 h-full bg-[var(--color-surface-primary)]">
+        <h1 className="text-2xl font-bold text-[var(--color-ink)]">Page unavailable</h1>
+        <p className="text-sm text-[var(--color-ink-muted)] text-center max-w-sm">
+          You do not have access to this page in the current session.
+        </p>
+        <button
+          type="button"
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity"
+          onClick={() => clearActivePage({ activePage: null })}
+        >
+          Back to home
         </button>
       </div>
     );
