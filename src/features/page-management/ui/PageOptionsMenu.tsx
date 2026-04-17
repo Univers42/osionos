@@ -1,4 +1,11 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { MoreHorizontal, Trash, Copy, ArrowRight } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
@@ -11,6 +18,13 @@ import type { PageEntry } from "@/entities/page";
 import styles from "./PageOptionsMenu.module.scss";
 
 const EMPTY_WORKSPACE_PAGES: PageEntry[] = [];
+const MENU_MARGIN = 12;
+const MENU_GAP = 6;
+
+type MenuPosition = {
+  top: number;
+  left: number;
+};
 
 interface Props {
   pageId: string;
@@ -30,7 +44,10 @@ export const PageOptionsMenu: React.FC<Props> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const portalTarget = globalThis.document?.body ?? null;
 
   const jwt = useUserStore((s) => s.activeJwt());
   const activePageId = usePageStore((s) => s.activePage?.id);
@@ -68,6 +85,53 @@ export const PageOptionsMenu: React.FC<Props> = ({
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
+  }, [isMenuOpen]);
+
+  useLayoutEffect(() => {
+    if (!isMenuOpen) {
+      setMenuPosition(null);
+      return;
+    }
+
+    const updateMenuPosition = () => {
+      const triggerElement = triggerRef.current;
+      const menuElement = menuRef.current;
+
+      if (!triggerElement || !menuElement) return;
+
+      const triggerRect = triggerElement.getBoundingClientRect();
+      const menuRect = menuElement.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      const left = Math.max(
+        MENU_MARGIN,
+        Math.min(
+          triggerRect.right - menuRect.width,
+          viewportWidth - menuRect.width - MENU_MARGIN,
+        ),
+      );
+
+      const spaceBelow = viewportHeight - triggerRect.bottom - MENU_GAP - MENU_MARGIN;
+      const spaceAbove = triggerRect.top - MENU_GAP - MENU_MARGIN;
+      const openAbove = spaceBelow < menuRect.height && spaceAbove > spaceBelow;
+
+      const top = openAbove
+        ? Math.max(MENU_MARGIN, triggerRect.top - menuRect.height - MENU_GAP)
+        : Math.min(triggerRect.bottom + MENU_GAP, viewportHeight - menuRect.height - MENU_MARGIN);
+
+      setMenuPosition({ top, left });
+    };
+
+    updateMenuPosition();
+
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
   }, [isMenuOpen]);
 
   const handleDeleteClick = (e: React.MouseEvent) => {
@@ -127,7 +191,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
   };
 
   return (
-    <div className="relative flex items-center" ref={menuRef}>
+    <div className="relative flex items-center" ref={triggerRef}>
       <button
         type="button"
         className={[
@@ -145,8 +209,16 @@ export const PageOptionsMenu: React.FC<Props> = ({
         <MoreHorizontal size={13} />
       </button>
 
-      {isMenuOpen && (
-        <div className={styles.dropdown}>
+      {isMenuOpen && portalTarget && createPortal(
+        <div
+          ref={menuRef}
+          className={styles.dropdown}
+          style={{
+            top: menuPosition?.top ?? 0,
+            left: menuPosition?.left ?? 0,
+            visibility: menuPosition ? "visible" : "hidden",
+          }}
+        >
           <button
             type="button"
             className={styles.menuItem}
@@ -176,7 +248,8 @@ export const PageOptionsMenu: React.FC<Props> = ({
             <Trash size={14} className="shrink-0" />
             <span>Delete</span>
           </button>
-        </div>
+        </div>,
+        portalTarget,
       )}
 
       {isModalOpen && (
