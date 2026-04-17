@@ -575,11 +575,11 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <button
           type="button"
-          className="py-2 rounded outline-none focus:bg-[var(--color-surface-secondary)]"
+          className="w-full py-2 rounded outline-none focus:bg-[var(--color-surface-secondary)]"
           onKeyDown={onKeyDown}
           aria-label="Divider block"
         >
-          <hr className="border-t-2 border-[var(--color-ink-muted)]/40" />
+          <hr className="w-full h-px border-0 bg-[var(--color-ink-faint)]" />
         </button>
       );
 
