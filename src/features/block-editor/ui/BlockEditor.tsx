@@ -537,7 +537,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             <EditableContent
               content={block.content}
               className={`text-sm ${colors.text} leading-relaxed py-0.5`}
-              placeholder={getBlockPlaceholder(block, "Input text…")}
+              placeholder={getBlockPlaceholder(block, "Type '/' for commands…")}
               onChange={onChange}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
