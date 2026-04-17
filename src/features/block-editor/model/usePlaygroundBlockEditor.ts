@@ -151,15 +151,18 @@ export function usePlaygroundBlockEditor(pageId: string) {
     return { x: 100, y: 300 };
   }, []);
 
-  /** Handle content change — detects '/' trigger and markdown shortcuts. */
-  const handleBlockChange = useCallback(
-    (blockId: string, text: string, _content: Block[]) => {
-      // Always persist the content first
+  const persistBlockText = useCallback(
+    (blockId: string, text: string) => {
       updateBlock(pageId, blockId, {
         content: text,
         ...(text.trim().length > 0 ? { placeholderText: undefined } : {}),
       });
+    },
+    [pageId, updateBlock],
+  );
 
+  const tryHandleCodeOrTable = useCallback(
+    (blockId: string, text: string): boolean => {
       const fencedCodeMatch = /^```\s*([A-Za-z0-9_+-]+)?\s*$/.exec(text);
       if (fencedCodeMatch) {
         changeBlockType(pageId, blockId, "code");
@@ -168,53 +171,78 @@ export function usePlaygroundBlockEditor(pageId: string) {
           language: fencedCodeMatch[1]?.toLowerCase() || "plaintext",
         });
         repositionCursor(blockId, "");
-        return;
+        return true;
       }
 
       const parsedTable = parsePipeTable(text);
-      if (parsedTable) {
-        changeBlockType(pageId, blockId, "table_block");
-        updateBlock(pageId, blockId, { content: "", tableData: parsedTable });
-        return;
-      }
+      if (!parsedTable) return false;
 
-      // Slash menu trigger: opened when '/' is typed
-      if (text.endsWith("/") && !slashMenu) {
-        const pos = getCaretRect();
-        setSlashMenu({ blockId, position: pos, filter: "" });
-        return;
-      }
-
-      // Slash menu is open: update filter based on text after last '/'
-      if (slashMenu?.blockId === blockId) {
-        const slashIdx = text.lastIndexOf("/");
-        if (slashIdx >= 0) {
-          setSlashMenu((prev) =>
-            prev ? { ...prev, filter: text.slice(slashIdx + 1) } : null,
-          );
-        } else {
-          // User deleted the slash — close the menu
-          setSlashMenu(null);
-        }
-        return;
-      }
-
-      // Markdown shortcut detection (only triggers when space is typed after prefix)
-      if (text.endsWith(" ") || text === "---" || text === "```") {
-        const detection = detectBlockType(text);
-        if (detection) {
-          changeBlockType(pageId, blockId, detection.type);
-          updateBlock(pageId, blockId, {
-            content: detection.remainingContent,
-            ...(detection.type === "callout"
-              ? { color: getCalloutIconForKind(detection.kind ?? "note") }
-              : {}),
-          });
-          repositionCursor(blockId, detection.remainingContent);
-        }
-      }
+      changeBlockType(pageId, blockId, "table_block");
+      updateBlock(pageId, blockId, { content: "", tableData: parsedTable });
+      return true;
     },
-    [pageId, slashMenu, changeBlockType, updateBlock, getCaretRect],
+    [pageId, changeBlockType, updateBlock],
+  );
+
+  const tryHandleSlashMenu = useCallback(
+    (blockId: string, text: string): boolean => {
+      if (text.endsWith("/") && !slashMenu) {
+        setSlashMenu({ blockId, position: getCaretRect(), filter: "" });
+        return true;
+      }
+
+      if (slashMenu?.blockId !== blockId) return false;
+
+      const slashIdx = text.lastIndexOf("/");
+      if (slashIdx >= 0) {
+        setSlashMenu((prev) =>
+          prev ? { ...prev, filter: text.slice(slashIdx + 1) } : null,
+        );
+      } else {
+        setSlashMenu(null);
+      }
+
+      return true;
+    },
+    [slashMenu, getCaretRect],
+  );
+
+  const tryHandleMarkdownShortcut = useCallback(
+    (blockId: string, text: string): void => {
+      if (!(text.endsWith(" ") || text === "---" || text === "```")) return;
+
+      const detection = detectBlockType(text);
+      if (!detection) return;
+
+      changeBlockType(pageId, blockId, detection.type);
+      updateBlock(pageId, blockId, {
+        content: detection.remainingContent,
+        ...(detection.type === "to_do"
+          ? { checked: Boolean(detection.checked) }
+          : {}),
+        ...(detection.type === "callout"
+          ? { color: getCalloutIconForKind(detection.kind ?? "note") }
+          : {}),
+      });
+      repositionCursor(blockId, detection.remainingContent);
+    },
+    [pageId, changeBlockType, updateBlock],
+  );
+
+  /** Handle content change — detects '/' trigger and markdown shortcuts. */
+  const handleBlockChange = useCallback(
+    (blockId: string, text: string, _content: Block[]) => {
+      persistBlockText(blockId, text);
+      if (tryHandleCodeOrTable(blockId, text)) return;
+      if (tryHandleSlashMenu(blockId, text)) return;
+      tryHandleMarkdownShortcut(blockId, text);
+    },
+    [
+      persistBlockText,
+      tryHandleCodeOrTable,
+      tryHandleSlashMenu,
+      tryHandleMarkdownShortcut,
+    ],
   );
 
   const handleParagraphSpaceShortcut = useCallback(
