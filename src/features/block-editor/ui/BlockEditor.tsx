@@ -18,14 +18,14 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { AssetRenderer } from "@univers42/ui-collection";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
 import { DatabaseBlock } from "@/widgets/database-view";
 import { getBlockPlaceholder, type Block } from "@/entities/block";
 
 import { usePageStore } from "@/store/usePageStore";
-import { CALLOUT_COLORS } from "@/entities/block";
-import { MermaidDiagram, CodeSyntaxHighlight } from "@/shared/ui";
+import { MermaidDiagram, CodeSyntaxHighlight, EmojiPicker } from "@/shared/ui";
 import { MediaBlockEditor } from "./MediaBlockEditor";
 import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
@@ -82,6 +82,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const updateBlock = usePageStore((s) => s.updateBlock);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showLangPicker, setShowLangPicker] = useState(false);
+  const [showCalloutIconPicker, setShowCalloutIconPicker] = useState(false);
   const langPickerRef = useRef<HTMLDivElement | null>(null);
   const [codeContextMenu, setCodeContextMenu] = useState<{
     x: number;
@@ -523,8 +524,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "callout": {
       const icon = block.color || "💡";
-      const colors = CALLOUT_COLORS[icon] || {
-        bg: "bg-[var(--color-surface-secondary)]",
+      const colors = {
+        bg: "bg-[var(--color-surface-primary)]",
         border: "border-[var(--color-line)]",
         text: "text-[var(--color-ink)]",
       };
@@ -532,7 +533,29 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <div
           className={`flex items-start gap-3 p-3 rounded-lg border my-0.5 ${colors.bg} ${colors.border}`}
         >
-          <span className={`text-lg shrink-0 ${colors.text}`}>{icon}</span>
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              className={`inline-flex cursor-pointer items-center justify-center rounded ${colors.text}`}
+              aria-label="Change callout icon"
+              title="Change callout icon"
+              onClick={() => setShowCalloutIconPicker((prev) => !prev)}
+            >
+              <AssetRenderer value={icon} size={20} />
+            </button>
+            {showCalloutIconPicker && (
+              <EmojiPicker
+                current={icon}
+                onSelect={(nextIcon) => {
+                  updateBlock(pageId, block.id, { color: nextIcon });
+                }}
+                onRemove={() => {
+                  updateBlock(pageId, block.id, { color: "💡" });
+                }}
+                onClose={() => setShowCalloutIconPicker(false)}
+              />
+            )}
+          </div>
           <div className="flex-1">
             <EditableContent
               content={block.content}

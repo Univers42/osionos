@@ -83,50 +83,57 @@ const SECTION_ORDER = [
   "advanced",
 ] as const;
 
-const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.map((item) => {
-  const description =
-    SLASH_DESCRIPTIONS[item.type] ??
-    item.keywords?.slice(0, 3).join(" · ") ??
-    "Block option";
+const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.map(
+  (item) => {
+    const normalizedLabel = item.type === "callout" ? "Callout" : item.label;
+    const description =
+      SLASH_DESCRIPTIONS[item.type] ??
+      item.keywords?.slice(0, 3).join(" · ") ??
+      "Block option";
 
-  if (MEDIA_PICKER_TYPES.has(item.type as MediaBlockType)) {
+    if (MEDIA_PICKER_TYPES.has(item.type as MediaBlockType)) {
+      return {
+        id: `${item.section}:${item.type}`,
+        kind: "media-picker",
+        section: item.section,
+        label: normalizedLabel,
+        icon: item.icon,
+        description,
+        mediaKind: item.type as MediaBlockType,
+      };
+    }
+
     return {
-      id: `${item.section}:${item.type}`,
-      kind: "media-picker",
+      id: `${item.section}:${item.type}:${item.label}`,
+      kind: "block",
       section: item.section,
-      label: item.label,
+      label: normalizedLabel,
       icon: item.icon,
       description,
-      mediaKind: item.type as MediaBlockType,
+      blockType: item.type,
+      calloutIcon: item.calloutIcon,
     };
-  }
-
-  return {
-    id: `${item.section}:${item.type}:${item.label}`,
-    kind: "block",
-    section: item.section,
-    label: item.label,
-    icon: item.icon,
-    description,
-    blockType: item.type,
-    calloutIcon: item.calloutIcon,
-  };
-});
+  },
+);
 
 export const TURN_INTO_COMMANDS: SlashTurnIntoCommand[] =
-  COLLECTION_SLASH_ITEMS.filter((item) =>
-    item.section === "basic" && TURN_INTO_BLOCK_TYPES.has(item.type),
-  ).map((item) => ({
-    id: `turn-into:${item.type}:${item.label}`,
-    kind: "turn-into",
-    section: "turn-into",
-    label: item.label,
-    icon: item.icon,
-    description: `Transform the current line into ${item.label.toLowerCase()}`,
-    blockType: item.type,
-    calloutIcon: item.calloutIcon,
-    placeholderText: item.label,
-  }));
+  COLLECTION_SLASH_ITEMS.filter(
+    (item) => item.section === "basic" && TURN_INTO_BLOCK_TYPES.has(item.type),
+  ).map((item) => {
+    const normalizedLabel = item.type === "callout" ? "Callout" : item.label;
+
+    return {
+      id: `turn-into:${item.type}:${normalizedLabel}`,
+      kind: "turn-into",
+      section: "turn-into",
+      label: normalizedLabel,
+      icon: item.icon,
+      description: `Transform the current line into ${normalizedLabel.toLowerCase()}`,
+      blockType: item.type,
+      calloutIcon: item.calloutIcon,
+      placeholderText: normalizedLabel,
+    };
+  });
 
 export const SLASH_COMMANDS: SlashCommand[] = [
   ...BASE_SLASH_COMMANDS,
@@ -149,7 +156,9 @@ export function filterSlashCommands(filter: string): SlashCommand[] {
   });
 }
 
-export function groupSlashCommands(commands: SlashCommand[]): SlashCommandSection[] {
+export function groupSlashCommands(
+  commands: SlashCommand[],
+): SlashCommandSection[] {
   const bySection = new Map<string, SlashCommand[]>();
 
   for (const command of commands) {
@@ -160,7 +169,8 @@ export function groupSlashCommands(commands: SlashCommand[]): SlashCommandSectio
 
   const sections = Array.from(bySection.entries()).map(([id, items]) => ({
     id,
-    label: COLLECTION_SLASH_SECTION_LABELS[id] ?? EXTRA_SECTION_LABELS[id] ?? id,
+    label:
+      COLLECTION_SLASH_SECTION_LABELS[id] ?? EXTRA_SECTION_LABELS[id] ?? id,
     items,
   }));
 
@@ -172,10 +182,13 @@ export function groupSlashCommands(commands: SlashCommand[]): SlashCommandSectio
       right.id as (typeof SECTION_ORDER)[number],
     );
 
-    const normalizedLeft = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
+    const normalizedLeft =
+      leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
     const normalizedRight =
       rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
 
-    return normalizedLeft - normalizedRight || left.label.localeCompare(right.label);
+    return (
+      normalizedLeft - normalizedRight || left.label.localeCompare(right.label)
+    );
   });
 }
