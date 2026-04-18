@@ -6,11 +6,17 @@
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/16 21:46:25 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/18 13:19:28 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { ColorPickerBoard } from "@univers42/ui-collection";
 import type { PageEntry } from "@/entities/page";
@@ -32,7 +38,10 @@ import {
   type InlineColorOption,
 } from "@/shared/lib/markengine/inlineTextStyles";
 import { usePageStore } from "@/store/usePageStore";
-import { canReadPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
+import {
+  canReadPage,
+  getCurrentPageAccessContext,
+} from "@/shared/lib/auth/pageAccess";
 
 interface EditableContentProps {
   content: string;
@@ -100,7 +109,9 @@ function preserveEditorSelection(event: React.MouseEvent<HTMLDivElement>) {
 interface InlineSelectionToolbarProps {
   selection: SelectionSnapshot;
   palette: PaletteKind;
+  shortcutsOpen: boolean;
   onTogglePalette: (palette: Exclude<PaletteKind, null>) => void;
+  onToggleShortcuts: () => void;
   onFormatBold: () => void;
   onFormatItalic: () => void;
   onFormatStrike: () => void;
@@ -114,7 +125,9 @@ interface InlineSelectionToolbarProps {
 const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
   selection,
   palette,
+  shortcutsOpen,
   onTogglePalette,
+  onToggleShortcuts,
   onFormatBold,
   onFormatItalic,
   onFormatStrike,
@@ -215,6 +228,18 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
         </button>
         <button
           type="button"
+          title="Keyboard shortcuts"
+          className={[
+            TOOLBAR_BUTTON_BASE,
+            shortcutsOpen ? TOOLBAR_ACTIVE_BUTTON : "",
+          ].join(" ")}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onToggleShortcuts}
+        >
+          ?
+        </button>
+        <button
+          type="button"
           title="Open slash menu"
           className={TOOLBAR_BUTTON_BASE}
           onMouseDown={(e) => {
@@ -227,9 +252,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
       </div>
 
       {palette && (
-        <div
-          className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 w-45 h-60 shadow-xl"
-        >
+        <div className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 w-45 h-60 shadow-xl">
           <ColorPickerBoard
             defaultValue={DEFAULT_INLINE_COLOR}
             label={palette === "text" ? "Text color" : "Background color"}
@@ -296,6 +319,46 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
           />
         </div>
       )}
+
+      {shortcutsOpen && (
+        <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 shadow-xl">
+          <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]">
+            Keyboard shortcuts
+          </p>
+          <ul className="space-y-1">
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+              <span>Bold</span>
+              <span className="text-[var(--color-ink-muted)]">
+                Ctrl/Cmd + B
+              </span>
+            </li>
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+              <span>Italic</span>
+              <span className="text-[var(--color-ink-muted)]">
+                Ctrl/Cmd + I
+              </span>
+            </li>
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+              <span>Inline code</span>
+              <span className="text-[var(--color-ink-muted)]">
+                Ctrl/Cmd + E
+              </span>
+            </li>
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+              <span>Strikethrough</span>
+              <span className="text-[var(--color-ink-muted)]">
+                Ctrl/Cmd + Shift + X
+              </span>
+            </li>
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+              <span>Add link</span>
+              <span className="text-[var(--color-ink-muted)]">
+                Ctrl/Cmd + Shift + L
+              </span>
+            </li>
+          </ul>
+        </div>
+      )}
     </div>
   </div>
 );
@@ -318,6 +381,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     useState<SelectionSnapshot | null>(null);
   const selectionSnapshotRef = useRef<SelectionSnapshot | null>(null);
   const [openPalette, setOpenPalette] = useState<PaletteKind>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [linkPicker, setLinkPicker] = useState<LinkPickerState | null>(null);
   const linkPickerRef = useRef<HTMLDivElement | null>(null);
   const canonicalSourceRef = useRef(content);
@@ -365,18 +429,21 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     canonicalSourceRef.current = content;
   }, [content]);
 
-  const renderContent = useCallback((nextContent: string) => {
-    const root = ref.current;
-    if (!root) {
-      return;
-    }
+  const renderContent = useCallback(
+    (nextContent: string) => {
+      const root = ref.current;
+      if (!root) {
+        return;
+      }
 
-    canonicalSourceRef.current = nextContent;
-    const nextHtml = getRenderedInlineHtml(nextContent);
-    if (root.innerHTML !== nextHtml) {
-      root.innerHTML = nextHtml;
-    }
-  }, [getRenderedInlineHtml]);
+      canonicalSourceRef.current = nextContent;
+      const nextHtml = getRenderedInlineHtml(nextContent);
+      if (root.innerHTML !== nextHtml) {
+        root.innerHTML = nextHtml;
+      }
+    },
+    [getRenderedInlineHtml],
+  );
 
   const clearScheduledNormalization = useCallback(() => {
     if (normalizationTimerRef.current) {
@@ -426,6 +493,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         setSelectionSnapshot((current) => (current ? null : current));
       }
       setOpenPalette(null);
+      setShowShortcuts(false);
       return;
     }
 
@@ -438,6 +506,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     );
     if (!snapshot) {
       setOpenPalette(null);
+      setShowShortcuts(false);
     }
   }, [linkPicker]);
 
@@ -486,10 +555,32 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     }
 
     const { source } = readInlineEditorDomState(ref.current);
-    canonicalSourceRef.current = source;
-    onChange(source);
-    return source;
+    const normalizedSource = normalizeInlineSource(source);
+    canonicalSourceRef.current = normalizedSource;
+    onChange(normalizedSource);
+    return normalizedSource;
   }, [onChange]);
+
+  const getCurrentSelectionOffsets = useCallback(() => {
+    const root = ref.current;
+    if (!root) {
+      return null;
+    }
+
+    const liveSelection = getInlineEditorSelectionOffsets(root);
+    if (liveSelection) {
+      return liveSelection;
+    }
+
+    if (!selectionSnapshot) {
+      return null;
+    }
+
+    return {
+      start: selectionSnapshot.start,
+      end: selectionSnapshot.end,
+    };
+  }, [selectionSnapshot]);
 
   const handleInput = useCallback(() => {
     if (isComposing.current) {
@@ -502,7 +593,8 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     }
 
     const { source, requiresNormalization } = readInlineEditorDomState(root);
-    canonicalSourceRef.current = source;
+    const normalizedSource = normalizeInlineSource(source);
+    canonicalSourceRef.current = normalizedSource;
 
     if (requiresNormalization) {
       scheduleNormalization(source);
@@ -510,7 +602,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       clearScheduledNormalization();
     }
 
-    onChange(source);
+    onChange(normalizedSource);
     requestAnimationFrame(updateSelectionSnapshot);
   }, [
     clearScheduledNormalization,
@@ -752,6 +844,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
             setSelectionSnapshot(null);
           }
           setOpenPalette(null);
+          setShowShortcuts(false);
           const syncedContent = syncContentFromDom();
           renderContent(syncedContent ?? canonicalSourceRef.current);
         }}
@@ -769,11 +862,16 @@ export const EditableContent: React.FC<EditableContentProps> = ({
             <InlineSelectionToolbar
               selection={selectionSnapshot}
               palette={openPalette}
+              shortcutsOpen={showShortcuts}
               onTogglePalette={(palette) =>
                 setOpenPalette((current) =>
                   current === palette ? null : palette,
                 )
               }
+              onToggleShortcuts={() => {
+                setOpenPalette(null);
+                setShowShortcuts((current) => !current);
+              }}
               onFormatBold={() => handleToggleInlineFormat("bold")}
               onFormatItalic={() => handleToggleInlineFormat("italic")}
               onFormatStrike={() => handleToggleInlineFormat("strikethrough")}

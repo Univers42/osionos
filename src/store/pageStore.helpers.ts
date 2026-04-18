@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   pageStore.helpers.ts                               :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:04:59 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/18 09:52:21 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -232,14 +232,17 @@ function updateBlockInTree(
 }
 
 function deleteBlockFromTree(blocks: Block[], blockId: string): Block[] {
-  return blocks
-    .filter((block) => block.id !== blockId)
-    .map((block) => ({
+  return blocks.flatMap((block) => {
+    if (block.id === blockId) {
+      return block.children ?? [];
+    }
+    return [{
       ...block,
       children: block.children
         ? deleteBlockFromTree(block.children, blockId)
         : undefined,
-    }));
+    }];
+  });
 }
 
 function insertBlockIntoTree(

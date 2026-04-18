@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/18 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@ import React from "react";
 import type { Block } from '@/entities/block';
 import { CALLOUT_COLORS } from "@/entities/block";
 import { parseInlineMarkdown } from '@/shared/lib/markengine';
+import { ReadOnlyBlock } from "./ReadOnlyBlock";
 
 export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
   const icon = block.color || "💡";
@@ -31,10 +32,19 @@ export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
       className={`flex items-start gap-3 p-3 rounded-lg border my-0.5 ${colors.bg} ${colors.border}`}
     >
       <span className={`text-lg shrink-0 ${colors.text}`}>{icon}</span>
-      <span
-        className={`text-sm ${colors.text} leading-relaxed py-0.5 flex-1`}
-        dangerouslySetInnerHTML={content ?? undefined}
-      />
+      <div className="flex-1 min-w-0">
+        <span
+          className={`text-sm ${colors.text} leading-relaxed py-0.5`}
+          dangerouslySetInnerHTML={content ?? undefined}
+        />
+        {block.children?.length ? (
+          <div className="mt-1">
+            {block.children.map((child, index) => (
+              <ReadOnlyBlock key={child.id} block={child} index={index} />
+            ))}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 };

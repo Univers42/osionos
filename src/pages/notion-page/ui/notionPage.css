@@ -111,7 +111,9 @@
   cursor: pointer;
   background: rgba(255, 255, 255, 0.9);
   color: #37352f;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.1);
   transition: background 120ms ease;
 }
 
@@ -193,7 +195,9 @@
   color: var(--color-ink-muted);
   background: transparent;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .notion-page-toolbar-btn:hover {
@@ -257,6 +261,21 @@
   flex: 1;
 }
 
+.notion-page-body a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-underline-offset: 0.14em;
+}
+
+.notion-page-body a:hover {
+  color: color-mix(in srgb, var(--color-accent) 86%, black);
+}
+
+.notion-page-body a:visited {
+  color: color-mix(in srgb, var(--color-accent) 88%, #6b21a8);
+}
+
 /* ── Emoji picker ─────────────────────────────────────────────────── */
 
 .notion-emoji-picker {
@@ -297,7 +316,9 @@
   color: var(--color-ink-muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  transition: color 120ms ease, border-color 120ms ease;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
 }
 
 .notion-emoji-picker-tab:hover {
@@ -408,7 +429,9 @@
   cursor: pointer;
   font-size: 12px;
   color: var(--color-ink-muted);
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .notion-emoji-picker-remove-btn:hover {

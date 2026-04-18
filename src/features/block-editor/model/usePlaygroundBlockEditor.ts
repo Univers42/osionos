@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   usePlaygroundBlockEditor.ts                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/16 10:18:52 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/18 13:20:12 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -44,6 +44,25 @@ const NON_INDENTABLE_TYPES: ReadonlySet<string> = new Set([
   "divider",
   "database_inline",
   "database_full_page",
+]);
+
+/** Block types that cannot receive children via indentation. */
+const NON_PARENTABLE_TYPES: ReadonlySet<string> = new Set([
+  "heading_1",
+  "heading_2",
+  "heading_3",
+  "heading_4",
+  "heading_5",
+  "heading_6",
+  "code",
+  "divider",
+  "table_block",
+  "database_inline",
+  "database_full_page",
+  "image",
+  "video",
+  "audio",
+  "file",
 ]);
 
 function parsePipeTable(text: string): string[][] | null {
@@ -87,6 +106,10 @@ function isListType(
   return (
     type === "bulleted_list" || type === "numbered_list" || type === "to_do"
   );
+}
+
+function isEffectivelyEmptyForDeletion(text: string): boolean {
+  return text.replaceAll(/[\r\n\u200B]/g, "").length === 0;
 }
 
 function toBlockUpdates(block: Block): Partial<Block> {
@@ -182,7 +205,12 @@ export function usePlaygroundBlockEditor(pageId: string) {
         content: text,
         ...(text.trim().length > 0 ? { placeholderText: undefined } : {}),
       });
+    },
+    [pageId, updateBlock],
+  );
 
+  const tryHandleCodeOrTable = useCallback(
+    (blockId: string, text: string): boolean => {
       const fencedCodeMatch = /^```\s*([A-Za-z0-9_+-]+)?\s*$/.exec(text);
       if (fencedCodeMatch) {
         changeBlockType(pageId, blockId, "code");
@@ -191,53 +219,78 @@ export function usePlaygroundBlockEditor(pageId: string) {
           language: fencedCodeMatch[1]?.toLowerCase() || "plaintext",
         });
         repositionCursor(blockId, "");
-        return;
+        return true;
       }
 
       const parsedTable = parsePipeTable(text);
-      if (parsedTable) {
-        changeBlockType(pageId, blockId, "table_block");
-        updateBlock(pageId, blockId, { content: "", tableData: parsedTable });
-        return;
-      }
+      if (!parsedTable) return false;
 
-      // Slash menu trigger: opened when '/' is typed
-      if (text.endsWith("/") && !slashMenu) {
-        const pos = getCaretRect();
-        setSlashMenu({ blockId, position: pos, filter: "" });
-        return;
-      }
-
-      // Slash menu is open: update filter based on text after last '/'
-      if (slashMenu?.blockId === blockId) {
-        const slashIdx = text.lastIndexOf("/");
-        if (slashIdx >= 0) {
-          setSlashMenu((prev) =>
-            prev ? { ...prev, filter: text.slice(slashIdx + 1) } : null,
-          );
-        } else {
-          // User deleted the slash — close the menu
-          setSlashMenu(null);
-        }
-        return;
-      }
-
-      // Markdown shortcut detection (only triggers when space is typed after prefix)
-      if (text.endsWith(" ") || text === "---" || text === "```") {
-        const detection = detectBlockType(text);
-        if (detection) {
-          changeBlockType(pageId, blockId, detection.type);
-          updateBlock(pageId, blockId, {
-            content: detection.remainingContent,
-            ...(detection.type === "callout"
-              ? { color: getCalloutIconForKind(detection.kind ?? "note") }
-              : {}),
-          });
-          repositionCursor(blockId, detection.remainingContent);
-        }
-      }
+      changeBlockType(pageId, blockId, "table_block");
+      updateBlock(pageId, blockId, { content: "", tableData: parsedTable });
+      return true;
     },
-    [pageId, slashMenu, changeBlockType, updateBlock, getCaretRect],
+    [pageId, changeBlockType, updateBlock],
+  );
+
+  const tryHandleSlashMenu = useCallback(
+    (blockId: string, text: string): boolean => {
+      if (text.endsWith("/") && !slashMenu) {
+        setSlashMenu({ blockId, position: getCaretRect(), filter: "" });
+        return true;
+      }
+
+      if (slashMenu?.blockId !== blockId) return false;
+
+      const slashIdx = text.lastIndexOf("/");
+      if (slashIdx >= 0) {
+        setSlashMenu((prev) =>
+          prev ? { ...prev, filter: text.slice(slashIdx + 1) } : null,
+        );
+      } else {
+        setSlashMenu(null);
+      }
+
+      return true;
+    },
+    [slashMenu, getCaretRect],
+  );
+
+  const tryHandleMarkdownShortcut = useCallback(
+    (blockId: string, text: string): void => {
+      if (!(text.endsWith(" ") || text === "---" || text === "```")) return;
+
+      const detection = detectBlockType(text);
+      if (!detection) return;
+
+      changeBlockType(pageId, blockId, detection.type);
+      updateBlock(pageId, blockId, {
+        content: detection.remainingContent,
+        ...(detection.type === "to_do"
+          ? { checked: Boolean(detection.checked) }
+          : {}),
+        ...(detection.type === "callout"
+          ? { color: getCalloutIconForKind(detection.kind ?? "note") }
+          : {}),
+      });
+      repositionCursor(blockId, detection.remainingContent);
+    },
+    [pageId, changeBlockType, updateBlock],
+  );
+
+  /** Handle content change — detects '/' trigger and markdown shortcuts. */
+  const handleBlockChange = useCallback(
+    (blockId: string, text: string, _content: Block[]) => {
+      persistBlockText(blockId, text);
+      if (tryHandleCodeOrTable(blockId, text)) return;
+      if (tryHandleSlashMenu(blockId, text)) return;
+      tryHandleMarkdownShortcut(blockId, text);
+    },
+    [
+      persistBlockText,
+      tryHandleCodeOrTable,
+      tryHandleSlashMenu,
+      tryHandleMarkdownShortcut,
+    ],
   );
 
   const handleParagraphSpaceShortcut = useCallback(
@@ -285,8 +338,12 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
       const idx = content.findIndex((b) => b.id === blockId);
 
-      // Can't indent the first sibling (no previous sibling to nest into)
-      if (!e.shiftKey && idx <= 0) return false;
+      if (!e.shiftKey) {
+        // Can't indent the first sibling
+        if (idx <= 0) return false;
+        // Can't indent under a leaf block
+        if (NON_PARENTABLE_TYPES.has(content[idx - 1].type)) return false;
+      }
 
       e.preventDefault();
 
@@ -553,6 +610,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       const liveText =
         (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
       const isEmpty = isEffectivelyEmpty(liveText);
+      const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
 
       if (handleBlockIndentation(e, blockId, block, content)) {
         return;
@@ -605,7 +663,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
           blockIdx,
           content,
           parentBlockId,
-          isEmpty,
+          isEmptyForDeletion,
         )
       ) {
         return;

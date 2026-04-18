@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/15 17:37:33 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/18 10:43:31 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,9 +29,8 @@ const DND_TYPE = "application/x-playground-block-id";
 
 /** Types that manage their own children rendering internally. */
 const SELF_RENDERING_CHILDREN_TYPES: ReadonlySet<string> = new Set([
-  // Currently none — toggle children are now rendered by BlockTree.
-  // This set exists for future block types that may need custom children
-  // rendering (e.g., column_list, synced_block).
+  "callout",
+  "quote",
 ]);
 
 /** Returns true when a block's children should be rendered by BlockTree. */
@@ -113,7 +112,9 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     return (
       <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-6 py-12 text-center">
         <div>
-          <p className="text-sm font-medium text-[var(--color-ink)]">Page unavailable</p>
+          <p className="text-sm font-medium text-[var(--color-ink)]">
+            Page unavailable
+          </p>
           <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
             You cannot edit this page in the current session.
           </p>
@@ -260,7 +261,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
         if (block.type !== "numbered_list") numberedCounter = 0;
 
         return (
-          <div key={block.id}>
+          <div key={block.id} className="group/block-branch rounded-md">
             <DraggablePlaygroundBlock
               block={block}
               blocks={blocks}
@@ -281,29 +282,35 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 onPaste={onPaste}
                 onDeleteBlock={onDeleteBlock}
                 registerRef={registerRef}
-                focusBlock={focusBlock}
                 onRequestSlashMenu={onRequestSlashMenu}
+                focusBlock={focusBlock}
+                moveBlock={moveBlock}
+                draggedBlockId={draggedBlockId}
+                setDraggedBlockId={setDraggedBlockId}
+                onContextMenu={onContextMenu}
               />
             </DraggablePlaygroundBlock>
 
             {shouldRenderChildren(block) && (
-              <BlockTree
-                blocks={block.children!}
-                pageId={pageId}
-                parentBlockType={block.type}
-                parentBlockId={block.id}
-                moveBlock={moveBlock}
-                draggedBlockId={draggedBlockId}
-                setDraggedBlockId={setDraggedBlockId}
-                onChange={onChange}
-                onKeyDown={onKeyDown}
-                onPaste={onPaste}
-                onDeleteBlock={onDeleteBlock}
-                registerRef={registerRef}
-                focusBlock={focusBlock}
-                onContextMenu={onContextMenu}
-                onRequestSlashMenu={onRequestSlashMenu}
-              />
+              <div className="rounded-md transition-colors group-focus-within/block-branch:bg-[var(--color-surface-secondary)]">
+                <BlockTree
+                  blocks={block.children!}
+                  pageId={pageId}
+                  parentBlockType={block.type}
+                  parentBlockId={block.id}
+                  moveBlock={moveBlock}
+                  draggedBlockId={draggedBlockId}
+                  setDraggedBlockId={setDraggedBlockId}
+                  onChange={onChange}
+                  onKeyDown={onKeyDown}
+                  onPaste={onPaste}
+                  onDeleteBlock={onDeleteBlock}
+                  registerRef={registerRef}
+                  focusBlock={focusBlock}
+                  onContextMenu={onContextMenu}
+                  onRequestSlashMenu={onRequestSlashMenu}
+                />
+              </div>
             )}
           </div>
         );
@@ -395,7 +402,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 
   return (
     <div // NOSONAR - drag/drop wrapper cannot be a native interactive element due nested contentEditable controls
-      className={`group/block relative transition-opacity ${isDragged ? "opacity-40" : ""}`}
+      className={`group/block relative rounded-md transition-colors transition-opacity hover:bg-[var(--color-surface-secondary)] focus-within:bg-[var(--color-surface-secondary)] ${isDragged ? "opacity-40" : ""}`}
       onContextMenu={(e) => onContextMenu(e, block.id)}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -404,6 +411,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
       <button
         type="button"
         draggable
+        onClick={(e) => onContextMenu(e, block.id)}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         className="absolute -left-7 top-2 p-0.5 rounded text-[var(--color-ink-faint)] hover:text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-secondary)] transition-colors opacity-0 group-hover/block:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
@@ -455,6 +463,15 @@ interface EditableBlockProps {
     blockId: string,
     position: { x: number; y: number },
   ) => void;
+  moveBlock: (
+    pageId: string,
+    blockId: string,
+    targetIndex: number,
+    parentBlockId?: string | null,
+  ) => void;
+  draggedBlockId: string | null;
+  setDraggedBlockId: (id: string | null) => void;
+  onContextMenu: (e: React.MouseEvent, blockId: string) => void;
 }
 
 const EditableBlockBase: React.FC<EditableBlockProps> = ({
@@ -469,6 +486,10 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
   registerRef,
   focusBlock,
   onRequestSlashMenu,
+  moveBlock,
+  draggedBlockId,
+  setDraggedBlockId,
+  onContextMenu,
 }) => {
   const handleChange = useCallback(
     (text: string) => onChange(block.id, text),
@@ -490,8 +511,49 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
     [block.id, registerRef],
   );
 
+  // NEW: callback for callout/quote to render children inside their container
+  const renderChildren = useCallback(() => {
+    if (!block.children?.length) return null;
+
+    return (
+      <BlockTree
+        blocks={block.children}
+        pageId={pageId}
+        parentBlockType={block.type}
+        parentBlockId={block.id}
+        moveBlock={moveBlock}
+        draggedBlockId={draggedBlockId}
+        setDraggedBlockId={setDraggedBlockId}
+        onChange={onChange}
+        onKeyDown={onKeyDown}
+        onPaste={onPaste}
+        onDeleteBlock={onDeleteBlock}
+        registerRef={registerRef}
+        focusBlock={focusBlock}
+        onContextMenu={onContextMenu}
+        onRequestSlashMenu={onRequestSlashMenu}
+      />
+    );
+  }, [
+    block.children,
+    block.type,
+    block.id,
+    pageId,
+    moveBlock,
+    draggedBlockId,
+    setDraggedBlockId,
+    onChange,
+    onKeyDown,
+    onPaste,
+    onDeleteBlock,
+    registerRef,
+    focusBlock,
+    onContextMenu,
+    onRequestSlashMenu,
+  ]);
+
   return (
-    <div data-block-id={block.id} ref={refCb}>
+    <div data-block-id={block.id} ref={refCb} className="-mx-1 rounded-md px-1">
       <BlockEditor
         pageId={pageId}
         block={block}
@@ -504,6 +566,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
         onRequestSlashMenu={(position) =>
           onRequestSlashMenu(block.id, position)
         }
+        renderChildren={renderChildren}
       />
     </div>
   );

@@ -16,6 +16,7 @@ import {
   canDuplicatePage,
   canMovePage,
   canReadPage,
+  getTargetWorkspaceMoveVisibility,
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
 import { SEED_PAGES } from "../data/seedPages";
@@ -159,6 +160,11 @@ export function createAddPage(set: SetFn, get: GetFn) {
     if (!context?.workspaceIds.includes(workspaceId)) {
       return null;
     }
+    const targetVisibility = getTargetWorkspaceMoveVisibility(
+      workspaceId,
+      context,
+      "private",
+    );
 
     if (jwt) {
       try {
@@ -170,7 +176,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
             parentPageId,
             content: [],
             ownerId: context.userId,
-            visibility: "private",
+            visibility: targetVisibility,
             collaborators: [],
           },
           jwt,
@@ -192,7 +198,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
       title,
       workspaceId,
       ownerId: context.userId,
-      visibility: "private",
+      visibility: targetVisibility,
       collaborators: [],
       parentPageId: parentPageId ?? null,
       databaseId: null,
@@ -246,7 +252,10 @@ export function createDeletePage(set: SetFn, get: GetFn) {
 }
 
 export function createDuplicatePage(set: SetFn, get: GetFn) {
-  return async (pageId: string, workspaceId: string): Promise<string | null> => {
+  return async (
+    pageId: string,
+    workspaceId: string,
+  ): Promise<string | null> => {
     const context = getCurrentPageAccessContext();
     const state = get();
     const wsPages = state.pages[workspaceId] ?? [];
@@ -271,10 +280,14 @@ export function createDuplicatePage(set: SetFn, get: GetFn) {
         _id: newId,
         title: isRoot ? `${p.title} (Copy)` : p.title,
         ownerId: context?.userId ?? p.ownerId ?? null,
-        visibility: "private",
+        visibility: getTargetWorkspaceMoveVisibility(
+          workspaceId,
+          context,
+          p.visibility,
+        ),
         collaborators: [],
         parentPageId: p.parentPageId
-          ? idMap[p.parentPageId] ?? p.parentPageId
+          ? (idMap[p.parentPageId] ?? p.parentPageId)
           : p.parentPageId,
       };
     });
@@ -329,7 +342,7 @@ export function createMovePage(set: SetFn, get: GetFn) {
   return (
     pageId: string,
     targetParentId: string | null,
-    targetWorkspaceId: string
+    targetWorkspaceId: string,
   ) => {
     const state = get();
     const allPagesRecord = state.pages;
@@ -377,7 +390,7 @@ export function createMovePage(set: SetFn, get: GetFn) {
       if (sourceWorkspaceId === targetWorkspaceId) {
         // Simple re-parenting within same workspace
         nextPages[sourceWorkspaceId] = nextPages[sourceWorkspaceId].map((p) =>
-          p._id === pageId ? { ...p, parentPageId: targetParentId ?? null } : p
+          p._id === pageId ? { ...p, parentPageId: targetParentId ?? null } : p,
         );
 
         savePagesCache(nextPages);
@@ -393,12 +406,20 @@ export function createMovePage(set: SetFn, get: GetFn) {
           .map((p) => ({
             ...p,
             workspaceId: targetWorkspaceId,
-            parentPageId: p._id === pageId ? (targetParentId ?? null) : (p.parentPageId ?? null),
+            visibility: getTargetWorkspaceMoveVisibility(
+              targetWorkspaceId,
+              context,
+              p.visibility,
+            ),
+            parentPageId:
+              p._id === pageId
+                ? (targetParentId ?? null)
+                : (p.parentPageId ?? null),
           }));
 
         // Remove from source
         nextPages[sourceWorkspaceId] = sourceList.filter(
-          (p) => !allIdsToMove.has(p._id)
+          (p) => !allIdsToMove.has(p._id),
         );
 
         // Add to target
@@ -409,7 +430,7 @@ export function createMovePage(set: SetFn, get: GetFn) {
 
         // Update recents and activePage if they are affected by workspace change
         const updatedRecents = s.recents.map((r) =>
-          allIdsToMove.has(r.id) ? { ...r, workspaceId: targetWorkspaceId } : r
+          allIdsToMove.has(r.id) ? { ...r, workspaceId: targetWorkspaceId } : r,
         );
 
         let updatedActivePage = s.activePage;
