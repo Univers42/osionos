@@ -262,7 +262,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
         if (block.type !== "numbered_list") numberedCounter = 0;
 
         return (
-          <div key={block.id}>
+          <div key={block.id} className="group/block-branch rounded-md">
             <DraggablePlaygroundBlock
               block={block}
               blocks={blocks}
@@ -294,23 +294,25 @@ const BlockTree: React.FC<BlockTreeProps> = ({
             </DraggablePlaygroundBlock>
 
             {shouldRenderChildren(block) && (
-              <BlockTree
-                blocks={block.children!}
-                pageId={pageId}
-                parentBlockType={block.type}
-                parentBlockId={block.id}
-                moveBlock={moveBlock}
-                draggedBlockId={draggedBlockId}
-                setDraggedBlockId={setDraggedBlockId}
-                onChange={onChange}
-                onKeyDown={onKeyDown}
-                onPaste={onPaste}
-                onDeleteBlock={onDeleteBlock}
-                registerRef={registerRef}
-                focusBlock={focusBlock}
-                onContextMenu={onContextMenu}
-                onRequestSlashMenu={onRequestSlashMenu}
-              />
+              <div className="rounded-md transition-colors group-focus-within/block-branch:bg-[var(--color-surface-secondary)]">
+                <BlockTree
+                  blocks={block.children!}
+                  pageId={pageId}
+                  parentBlockType={block.type}
+                  parentBlockId={block.id}
+                  moveBlock={moveBlock}
+                  draggedBlockId={draggedBlockId}
+                  setDraggedBlockId={setDraggedBlockId}
+                  onChange={onChange}
+                  onKeyDown={onKeyDown}
+                  onPaste={onPaste}
+                  onDeleteBlock={onDeleteBlock}
+                  registerRef={registerRef}
+                  focusBlock={focusBlock}
+                  onContextMenu={onContextMenu}
+                  onRequestSlashMenu={onRequestSlashMenu}
+                />
+              </div>
             )}
           </div>
         );
@@ -402,7 +404,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 
   return (
     <div // NOSONAR - drag/drop wrapper cannot be a native interactive element due nested contentEditable controls
-      className={`group/block relative transition-opacity ${isDragged ? "opacity-40" : ""}`}
+      className={`group/block relative rounded-md transition-colors transition-opacity hover:bg-[var(--color-surface-secondary)] focus-within:bg-[var(--color-surface-secondary)] ${isDragged ? "opacity-40" : ""}`}
       onContextMenu={(e) => onContextMenu(e, block.id)}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -555,11 +557,7 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
   ]);
 
   return (
-    <div
-      data-block-id={block.id}
-      ref={refCb}
-      className="-mx-1 rounded-md px-1 transition-colors hover:bg-[var(--color-surface-secondary)] focus-within:bg-[var(--color-surface-secondary)]"
-    >
+    <div data-block-id={block.id} ref={refCb} className="-mx-1 rounded-md px-1">
       <BlockEditor
         pageId={pageId}
         block={block}
