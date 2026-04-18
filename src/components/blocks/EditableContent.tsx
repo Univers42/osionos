@@ -77,7 +77,7 @@ function getInternalPageIdFromHref(href: string) {
 }
 
 function normalizeInlineSource(source: string): string {
-  return /\S/.test(source) ? source : "";
+  return source.replaceAll(/[\r\n\u200B]/g, "").length === 0 ? "" : source;
 }
 
 const TOOLBAR_BUTTON_BASE =

@@ -48,14 +48,21 @@ const NON_INDENTABLE_TYPES: ReadonlySet<string> = new Set([
 
 /** Block types that cannot receive children via indentation. */
 const NON_PARENTABLE_TYPES: ReadonlySet<string> = new Set([
-  "heading_1", "heading_2", "heading_3",
-  "heading_4", "heading_5", "heading_6",
+  "heading_1",
+  "heading_2",
+  "heading_3",
+  "heading_4",
+  "heading_5",
+  "heading_6",
   "code",
   "divider",
   "table_block",
   "database_inline",
   "database_full_page",
-  "image", "video", "audio", "file",
+  "image",
+  "video",
+  "audio",
+  "file",
 ]);
 
 function parsePipeTable(text: string): string[][] | null {
@@ -99,6 +106,10 @@ function isListType(
   return (
     type === "bulleted_list" || type === "numbered_list" || type === "to_do"
   );
+}
+
+function isEffectivelyEmptyForDeletion(text: string): boolean {
+  return text.replaceAll(/[\r\n\u200B]/g, "").length === 0;
 }
 
 function toBlockUpdates(block: Block): Partial<Block> {
@@ -303,10 +314,10 @@ export function usePlaygroundBlockEditor(pageId: string) {
       const idx = content.findIndex((b) => b.id === blockId);
 
       if (!e.shiftKey) {
-      // Can't indent the first sibling
-      if (idx <= 0) return false;
-      // Can't indent under a leaf block
-      if (NON_PARENTABLE_TYPES.has(content[idx - 1].type)) return false;
+        // Can't indent the first sibling
+        if (idx <= 0) return false;
+        // Can't indent under a leaf block
+        if (NON_PARENTABLE_TYPES.has(content[idx - 1].type)) return false;
       }
 
       e.preventDefault();
@@ -572,6 +583,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       const liveText =
         (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
       const isEmpty = isEffectivelyEmpty(liveText);
+      const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
 
       if (handleBlockIndentation(e, blockId, block, content)) {
         return;
@@ -624,7 +636,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
           blockIdx,
           content,
           parentBlockId,
-          isEmpty,
+          isEmptyForDeletion,
         )
       ) {
         return;
