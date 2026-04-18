@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { usePageStore } from "@/store/usePageStore";
 import {
   detectBlockType,
@@ -104,6 +104,28 @@ function toBlockUpdates(block: Block): Partial<Block> {
   };
 }
 
+function findChildrenForParent(
+  blocks: Block[],
+  parentBlockId: string,
+): Block[] | null {
+  for (const block of blocks) {
+    if (block.id === parentBlockId) {
+      return block.children ?? [];
+    }
+
+    if (!block.children) {
+      continue;
+    }
+
+    const nestedChildren = findChildrenForParent(block.children, parentBlockId);
+    if (nestedChildren) {
+      return nestedChildren;
+    }
+  }
+
+  return null;
+}
+
 /** Manages block editing, slash commands, and keyboard navigation for playground pages. */
 export function usePlaygroundBlockEditor(pageId: string) {
   const {
@@ -118,6 +140,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const contentRef = useRef<Block[]>([]);
 
   /** Focus a block element after a short delay. */
   const focusBlock = useCallback((blockId: string, cursorEnd = false) => {
@@ -153,7 +176,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
   /** Handle content change — detects '/' trigger and markdown shortcuts. */
   const handleBlockChange = useCallback(
-    (blockId: string, text: string, _content: Block[]) => {
+    (blockId: string, text: string) => {
       // Always persist the content first
       updateBlock(pageId, blockId, {
         content: text,
@@ -481,7 +504,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
   );
 
   const handlePaste = useCallback(
-    (e: React.ClipboardEvent, blockId: string, _content: Block[]) => {
+    (e: React.ClipboardEvent, blockId: string) => {
       const raw = e.clipboardData.getData("text/plain");
       const markdown = raw.replaceAll("\r\n", "\n").trim();
       if (!markdown) return;
@@ -519,9 +542,11 @@ export function usePlaygroundBlockEditor(pageId: string) {
     (
       e: React.KeyboardEvent,
       blockId: string,
-      content: Block[],
       parentBlockId: string | null = null,
     ) => {
+      const content = parentBlockId
+        ? findChildrenForParent(contentRef.current, parentBlockId) ?? []
+        : contentRef.current;
       const block = content.find((b) => b.id === blockId);
       if (!block) return;
       const blockIdx = content.findIndex((b) => b.id === blockId);
@@ -616,7 +641,11 @@ export function usePlaygroundBlockEditor(pageId: string) {
   }, []);
 
   const page = usePageStore((s) => s.pageById(pageId));
-  const content = page?.content ?? [];
+  const content = useMemo(() => page?.content ?? [], [page?.content]);
+
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
 
   const {
     contextMenu,

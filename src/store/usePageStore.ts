@@ -16,6 +16,7 @@ import {
   saveRecents,
   loadPagesCache,
   savePagesCache,
+  schedulePagesCachePersist,
   updatePageInState,
   applyBlockUpdate,
   applyBlockInsert,
@@ -107,7 +108,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         pageId,
         applyBlockUpdate(blockId, updates),
       );
-      savePagesCache(pages);
+      schedulePagesCachePersist(pages);
       return { pages };
     });
     debouncePersistContent(pageId);
@@ -123,7 +124,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         pageId,
         applyBlockInsert(afterBlockId, block),
       );
-      savePagesCache(pages);
+      schedulePagesCachePersist(pages);
       return { pages };
     });
     debouncePersistContent(pageId);
@@ -139,7 +140,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         pageId,
         applyBlockDelete(blockId),
       );
-      savePagesCache(pages);
+      schedulePagesCachePersist(pages);
       return { pages };
     });
     debouncePersistContent(pageId);
@@ -155,7 +156,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         pageId,
         applyBlockMove(blockId, targetIndex, parentBlockId),
       );
-      savePagesCache(pages);
+      schedulePagesCachePersist(pages);
       return { pages };
     });
     debouncePersistContent(pageId);
@@ -171,7 +172,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         pageId,
         applyBlockIndent(blockId),
       );
-      savePagesCache(pages);
+      schedulePagesCachePersist(pages);
       return { pages };
     });
     debouncePersistContent(pageId);
@@ -187,7 +188,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         pageId,
         applyBlockOutdent(blockId),
       );
-      savePagesCache(pages);
+      schedulePagesCachePersist(pages);
       return { pages };
     });
     debouncePersistContent(pageId);
@@ -203,7 +204,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         pageId,
         applyBlockTypeChange(blockId, newType),
       );
-      savePagesCache(pages);
+      schedulePagesCachePersist(pages);
       return { pages };
     });
     debouncePersistContent(pageId);
@@ -218,7 +219,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         ...page,
         content: blocks,
       }));
-      savePagesCache(pages);
+      schedulePagesCachePersist(pages);
       return { pages };
     });
     debouncePersistContent(pageId);
@@ -233,7 +234,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         ...page,
         title,
       }));
-      savePagesCache(pages);
+      schedulePagesCachePersist(pages);
       return { pages };
     });
     persistPageTitle(pageId, title);

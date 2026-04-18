@@ -13,6 +13,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ColorPickerBoard } from "@univers42/ui-collection";
+import type { PageEntry } from "@/entities/page";
 import {
   applyInlineFormatting,
   areInlineEditorSelectionSnapshotsEqual,
@@ -49,6 +50,7 @@ type LinkPickerMode = "chooser" | "external" | "internal";
 
 const EMPTY_WORKSPACE_PAGES: readonly never[] = [];
 const DEFAULT_INLINE_COLOR = INLINE_COLOR_OPTIONS[0]?.id ?? "#0F172A";
+const NORMALIZATION_IDLE_DELAY_MS = 120;
 
 interface LinkPickerState {
   mode: LinkPickerMode;
@@ -67,11 +69,33 @@ function getInternalPageIdFromHref(href: string) {
     : null;
 }
 
+function getSelectablePagesSnapshot(pageId?: string): PageEntry[] {
+  if (!pageId) {
+    return [];
+  }
+
+  const { pageById, pages } = usePageStore.getState();
+  const currentPage = pageById(pageId);
+  if (!currentPage?.workspaceId) {
+    return [];
+  }
+
+  const accessContext = getCurrentPageAccessContext();
+  return (pages[currentPage.workspaceId] ?? EMPTY_WORKSPACE_PAGES).filter(
+    (workspacePage) =>
+      !workspacePage.archivedAt && canReadPage(workspacePage, accessContext),
+  );
+}
+
 const TOOLBAR_BUTTON_BASE =
   "grid h-8 min-w-8 place-items-center rounded-md border border-transparent px-2 text-xs font-semibold text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-ink)]";
 
 const TOOLBAR_ACTIVE_BUTTON =
   "border-[var(--color-line)] bg-[var(--color-surface-secondary)] text-[var(--color-ink)]";
+
+function preserveEditorSelection(event: React.MouseEvent<HTMLDivElement>) {
+  event.preventDefault();
+}
 
 interface InlineSelectionToolbarProps {
   selection: SelectionSnapshot;
@@ -106,6 +130,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
       left: selection.rect.left + selection.rect.width / 2,
       top: Math.max(12, selection.rect.top - 58),
     }}
+    onMouseDownCapture={preserveEditorSelection}
   >
     <div className="relative rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] px-1.5 py-1 shadow-xl">
       <div className="flex items-center gap-1">
@@ -291,31 +316,37 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const [hasFocus, setHasFocus] = useState(false);
   const [selectionSnapshot, setSelectionSnapshot] =
     useState<SelectionSnapshot | null>(null);
+  const selectionSnapshotRef = useRef<SelectionSnapshot | null>(null);
   const [openPalette, setOpenPalette] = useState<PaletteKind>(null);
   const [linkPicker, setLinkPicker] = useState<LinkPickerState | null>(null);
   const linkPickerRef = useRef<HTMLDivElement | null>(null);
   const canonicalSourceRef = useRef(content);
+  const normalizationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const renderedContentCache = useRef<{ source: string; html: string }>({
     source: "",
     html: "",
   });
 
-  const currentPage = usePageStore((s) =>
-    pageId ? s.pageById(pageId) : undefined,
-  );
-  const workspacePages = usePageStore((s) =>
-    currentPage?.workspaceId
-      ? s.pages[currentPage.workspaceId] ?? EMPTY_WORKSPACE_PAGES
-      : EMPTY_WORKSPACE_PAGES,
-  );
-
   const selectablePages = useMemo(() => {
-    const accessContext = getCurrentPageAccessContext();
-    return workspacePages.filter(
-      (workspacePage) =>
-        !workspacePage.archivedAt && canReadPage(workspacePage, accessContext),
-    );
-  }, [workspacePages]);
+    return linkPicker?.mode === "internal"
+      ? getSelectablePagesSnapshot(pageId)
+      : EMPTY_WORKSPACE_PAGES;
+  }, [linkPicker?.mode, pageId]);
+
+  const filteredSelectablePages = useMemo(() => {
+    if (linkPicker?.mode !== "internal") {
+      return EMPTY_WORKSPACE_PAGES;
+    }
+
+    const lower = linkPicker.query.trim().toLowerCase();
+    return selectablePages
+      .filter((workspacePage) => {
+        if (!lower) return true;
+        return workspacePage.title.toLowerCase().includes(lower);
+      })
+      .slice(0, 12);
+  }, [linkPicker, selectablePages]);
+  const shouldTrackSelection = hasFocus || linkPicker !== null;
 
   const getRenderedInlineHtml = useCallback((nextContent: string) => {
     if (renderedContentCache.current.source === nextContent) {
@@ -347,12 +378,39 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     }
   }, [getRenderedInlineHtml]);
 
-  useEffect(() => {
-    if (!ref.current) {
+  const clearScheduledNormalization = useCallback(() => {
+    if (normalizationTimerRef.current) {
+      clearTimeout(normalizationTimerRef.current);
+      normalizationTimerRef.current = null;
+    }
+  }, []);
+
+  const normalizeEditorDom = useCallback((nextContent: string) => {
+    const root = ref.current;
+    if (!root) {
       return;
     }
 
-    const { source } = readInlineEditorDomState(ref.current);
+    const selectionOffsets = isFocused.current
+      ? getInlineEditorSelectionOffsets(root)
+      : null;
+    renderContent(nextContent);
+    if (selectionOffsets && isFocused.current) {
+      setInlineEditorSelectionOffsets(root, selectionOffsets);
+    }
+  }, [renderContent]);
+
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) {
+      return;
+    }
+
+    if (content === canonicalSourceRef.current && root.innerHTML !== "") {
+      return;
+    }
+
+    const { source } = readInlineEditorDomState(root);
     if (source === content) {
       return;
     }
@@ -364,6 +422,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     const root = ref.current;
     if (!root || !isFocused.current) {
       if (!linkPicker) {
+        selectionSnapshotRef.current = null;
         setSelectionSnapshot((current) => (current ? null : current));
       }
       setOpenPalette(null);
@@ -371,6 +430,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     }
 
     const snapshot = getInlineEditorSelectionSnapshot(root);
+    selectionSnapshotRef.current = snapshot;
     setSelectionSnapshot((current) =>
       areInlineEditorSelectionSnapshotsEqual(current, snapshot)
         ? current
@@ -382,6 +442,10 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   }, [linkPicker]);
 
   useEffect(() => {
+    if (!shouldTrackSelection) {
+      return;
+    }
+
     const handleSelectionChange = () => updateSelectionSnapshot();
     document.addEventListener("selectionchange", handleSelectionChange);
     window.addEventListener("resize", handleSelectionChange);
@@ -392,7 +456,29 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       window.removeEventListener("resize", handleSelectionChange);
       window.removeEventListener("scroll", handleSelectionChange, true);
     };
-  }, [updateSelectionSnapshot]);
+  }, [shouldTrackSelection, updateSelectionSnapshot]);
+
+  useEffect(() => clearScheduledNormalization, [clearScheduledNormalization]);
+
+  const scheduleNormalization = useCallback(
+    (nextContent: string) => {
+      clearScheduledNormalization();
+      normalizationTimerRef.current = setTimeout(() => {
+        normalizationTimerRef.current = null;
+        if (isComposing.current) {
+          return;
+        }
+
+        normalizeEditorDom(
+          canonicalSourceRef.current === nextContent
+            ? nextContent
+            : canonicalSourceRef.current,
+        );
+        requestAnimationFrame(updateSelectionSnapshot);
+      }, NORMALIZATION_IDLE_DELAY_MS);
+    },
+    [clearScheduledNormalization, normalizeEditorDom, updateSelectionSnapshot],
+  );
 
   const syncContentFromDom = useCallback(() => {
     if (!ref.current) {
@@ -415,24 +501,23 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       return;
     }
 
-    const selectionOffsets = getInlineEditorSelectionOffsets(root);
     const { source, requiresNormalization } = readInlineEditorDomState(root);
     canonicalSourceRef.current = source;
 
     if (requiresNormalization) {
-      const parsedHtml = getRenderedInlineHtml(source);
-
-      if (root.innerHTML !== parsedHtml) {
-        root.innerHTML = parsedHtml;
-        if (selectionOffsets) {
-          setInlineEditorSelectionOffsets(root, selectionOffsets);
-        }
-      }
+      scheduleNormalization(source);
+    } else {
+      clearScheduledNormalization();
     }
 
     onChange(source);
     requestAnimationFrame(updateSelectionSnapshot);
-  }, [getRenderedInlineHtml, onChange, updateSelectionSnapshot]);
+  }, [
+    clearScheduledNormalization,
+    onChange,
+    scheduleNormalization,
+    updateSelectionSnapshot,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -440,27 +525,6 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       requestAnimationFrame(updateSelectionSnapshot);
     },
     [onKeyDown, updateSelectionSnapshot],
-  );
-
-  const handleKeyUp = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (isComposing.current) {
-        return;
-      }
-
-      const shouldRefreshInlineParsing =
-        e.key.length === 1 ||
-        e.key === "Backspace" ||
-        e.key === "Delete" ||
-        e.key === "Tab";
-
-      if (!shouldRefreshInlineParsing) {
-        return;
-      }
-
-      handleInput();
-    },
-    [handleInput],
   );
 
   const handlePaste = useCallback(
@@ -508,31 +572,37 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const applyInlineFormattingCommand = useCallback(
     (command: InlineFormattingCommand) => {
       const root = ref.current;
-      if (!root || !selectionSnapshot) {
+      const activeSelectionSnapshot = selectionSnapshotRef.current;
+      if (!root || !activeSelectionSnapshot) {
         return;
       }
 
       const source = canonicalSourceRef.current;
-      const nextContent = applyInlineFormatting(source, selectionSnapshot, command);
+      const nextContent = applyInlineFormatting(
+        source,
+        activeSelectionSnapshot,
+        command,
+      );
       if (nextContent === source) {
         root.focus();
         requestAnimationFrame(updateSelectionSnapshot);
         return;
       }
 
+      clearScheduledNormalization();
       onChange(nextContent);
       renderContent(nextContent);
       root.focus();
 
       requestAnimationFrame(() => {
         setInlineEditorSelectionOffsets(root, {
-          start: selectionSnapshot.start,
-          end: selectionSnapshot.end,
+          start: activeSelectionSnapshot.start,
+          end: activeSelectionSnapshot.end,
         });
         updateSelectionSnapshot();
       });
     },
-    [onChange, renderContent, selectionSnapshot, updateSelectionSnapshot],
+    [clearScheduledNormalization, onChange, renderContent, updateSelectionSnapshot],
   );
 
   const handleToggleInlineFormat = useCallback(
@@ -565,12 +635,12 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   }, [applyInlineFormattingCommand]);
 
   const handleAddLink = useCallback(() => {
-    if (!selectionSnapshot) {
+    if (!selectionSnapshotRef.current) {
       return;
     }
 
     setLinkPicker({ mode: "chooser", query: "" });
-  }, [selectionSnapshot]);
+  }, []);
 
   const handleApplyExternalLink = useCallback(
     (url: string) => {
@@ -604,17 +674,19 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   );
 
   const handleOpenSlashMenu = useCallback(() => {
-    if (!selectionSnapshot || !onRequestSlashMenu) {
+    const activeSelectionSnapshot = selectionSnapshotRef.current;
+    if (!activeSelectionSnapshot || !onRequestSlashMenu) {
       return;
     }
 
     onRequestSlashMenu({
-      x: selectionSnapshot.rect.left,
-      y: selectionSnapshot.rect.bottom,
+      x: activeSelectionSnapshot.rect.left,
+      y: activeSelectionSnapshot.rect.bottom,
     });
+    selectionSnapshotRef.current = null;
     setSelectionSnapshot(null);
     setOpenPalette(null);
-  }, [onRequestSlashMenu, selectionSnapshot]);
+  }, [onRequestSlashMenu]);
 
   useEffect(() => {
     if (!linkPicker) {
@@ -662,24 +734,26 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         className={`outline-none whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--color-ink-faint)] empty:before:pointer-events-none ${className}`}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
-        onKeyUp={handleKeyUp}
         onPaste={handlePaste}
         onClick={handleClick}
         onMouseUp={updateSelectionSnapshot}
         onFocus={() => {
+          clearScheduledNormalization();
           isFocused.current = true;
           setHasFocus(true);
-          renderContent(content);
+          renderContent(canonicalSourceRef.current);
         }}
         onBlur={() => {
+          clearScheduledNormalization();
           isFocused.current = false;
           setHasFocus(false);
           if (!linkPicker) {
+            selectionSnapshotRef.current = null;
             setSelectionSnapshot(null);
           }
           setOpenPalette(null);
           const syncedContent = syncContentFromDom();
-          renderContent(syncedContent ?? content);
+          renderContent(syncedContent ?? canonicalSourceRef.current);
         }}
         onCompositionStart={() => {
           isComposing.current = true;
@@ -822,16 +896,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                     placeholder="Search pages"
                   />
                   <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-[var(--color-line)]">
-                    {selectablePages
-                      .filter((workspacePage) => {
-                        const lower = linkPicker.query.trim().toLowerCase();
-                        if (!lower) return true;
-                        return workspacePage.title
-                          .toLowerCase()
-                          .includes(lower);
-                      })
-                      .slice(0, 12)
-                      .map((workspacePage) => (
+                    {filteredSelectablePages.map((workspacePage) => (
                         <button
                           key={workspacePage._id}
                           type="button"
@@ -848,11 +913,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                           </span>
                         </button>
                       ))}
-                    {selectablePages.filter((workspacePage) => {
-                      const lower = linkPicker.query.trim().toLowerCase();
-                      if (!lower) return true;
-                      return workspacePage.title.toLowerCase().includes(lower);
-                    }).length === 0 && (
+                    {filteredSelectablePages.length === 0 && (
                       <p className="px-3 py-2 text-sm text-[var(--color-ink-faint)]">
                         No pages match your search.
                       </p>

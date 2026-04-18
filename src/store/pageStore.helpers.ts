@@ -16,6 +16,7 @@ import type { ActivePage, PageEntry } from "@/entities/page";
 
 const RECENTS_KEY = "pg:recents";
 const PAGE_CACHE_KEY = "pg:pages";
+const PAGE_CACHE_SAVE_DELAY_MS = 180;
 
 /** A 24-hex-char string that looks like a MongoDB ObjectId. */
 const OBJECT_ID_RE = /^[a-f\d]{24}$/i;
@@ -60,6 +61,39 @@ export function savePagesCache(pages: Record<string, PageEntry[]>) {
   } catch {
     // localStorage might be unavailable (e.g. private browsing quota)
   }
+}
+
+let pendingPagesCache: Record<string, PageEntry[]> | null = null;
+let pendingPagesCacheTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function schedulePagesCachePersist(pages: Record<string, PageEntry[]>) {
+  pendingPagesCache = pages;
+
+  if (pendingPagesCacheTimer) {
+    clearTimeout(pendingPagesCacheTimer);
+  }
+
+  pendingPagesCacheTimer = setTimeout(() => {
+    flushScheduledPagesCachePersist();
+  }, PAGE_CACHE_SAVE_DELAY_MS);
+}
+
+export function flushScheduledPagesCachePersist() {
+  if (pendingPagesCacheTimer) {
+    clearTimeout(pendingPagesCacheTimer);
+    pendingPagesCacheTimer = null;
+  }
+
+  if (!pendingPagesCache) {
+    return;
+  }
+
+  savePagesCache(pendingPagesCache);
+  pendingPagesCache = null;
+}
+
+if (globalThis.window !== undefined) {
+  globalThis.addEventListener("beforeunload", flushScheduledPagesCachePersist);
 }
 
 export function mergeWorkspacePages(
@@ -165,16 +199,36 @@ function cloneBlocks(blocks: Block[]): Block[] {
   }));
 }
 
-function mapBlocksTree(
+function updateBlockInTree(
   blocks: Block[],
-  mapper: (block: Block) => Block,
+  blockId: string,
+  updater: (block: Block) => Block,
 ): Block[] {
-  return blocks.map((block) => {
-    const nextChildren = block.children
-      ? mapBlocksTree(block.children, mapper)
-      : undefined;
-    return mapper({ ...block, children: nextChildren });
+  let changed = false;
+
+  const nextBlocks = blocks.map((block) => {
+    if (block.id === blockId) {
+      changed = true;
+      return updater(block);
+    }
+
+    if (!block.children) {
+      return block;
+    }
+
+    const nextChildren = updateBlockInTree(block.children, blockId, updater);
+    if (nextChildren === block.children) {
+      return block;
+    }
+
+    changed = true;
+    return {
+      ...block,
+      children: nextChildren,
+    };
   });
+
+  return changed ? nextBlocks : blocks;
 }
 
 function deleteBlockFromTree(blocks: Block[], blockId: string): Block[] {
@@ -264,9 +318,10 @@ export function applyBlockUpdate(
 ): (page: PageEntry) => PageEntry {
   return (page) => ({
     ...page,
-    content: mapBlocksTree(page.content ?? [], (block) =>
-      block.id === blockId ? { ...block, ...updates } : block,
-    ),
+    content: updateBlockInTree(page.content ?? [], blockId, (block) => ({
+      ...block,
+      ...updates,
+    })),
   });
 }
 
@@ -346,9 +401,10 @@ export function applyBlockTypeChange(
 ): (page: PageEntry) => PageEntry {
   return (page) => ({
     ...page,
-    content: mapBlocksTree(page.content ?? [], (block) =>
-      block.id === blockId ? { ...block, type: newType } : block,
-    ),
+    content: updateBlockInTree(page.content ?? [], blockId, (block) => ({
+      ...block,
+      type: newType,
+    })),
   });
 }
 
