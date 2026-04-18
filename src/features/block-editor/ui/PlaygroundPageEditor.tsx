@@ -112,7 +112,9 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     return (
       <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-6 py-12 text-center">
         <div>
-          <p className="text-sm font-medium text-[var(--color-ink)]">Page unavailable</p>
+          <p className="text-sm font-medium text-[var(--color-ink)]">
+            Page unavailable
+          </p>
           <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
             You cannot edit this page in the current session.
           </p>
@@ -462,7 +464,12 @@ interface EditableBlockProps {
     blockId: string,
     position: { x: number; y: number },
   ) => void;
-  moveBlock: (pageId: string, blockId: string, targetIndex: number, parentBlockId?: string | null) => void;
+  moveBlock: (
+    pageId: string,
+    blockId: string,
+    targetIndex: number,
+    parentBlockId?: string | null,
+  ) => void;
   draggedBlockId: string | null;
   setDraggedBlockId: (id: string | null) => void;
   onContextMenu: (e: React.MouseEvent, blockId: string) => void;
@@ -530,14 +537,29 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
       />
     );
   }, [
-    block.children, block.type, block.id, pageId,
-    moveBlock, draggedBlockId, setDraggedBlockId,
-    onChange, onKeyDown, onPaste, onDeleteBlock,
-    registerRef, focusBlock, onContextMenu, onRequestSlashMenu,
+    block.children,
+    block.type,
+    block.id,
+    pageId,
+    moveBlock,
+    draggedBlockId,
+    setDraggedBlockId,
+    onChange,
+    onKeyDown,
+    onPaste,
+    onDeleteBlock,
+    registerRef,
+    focusBlock,
+    onContextMenu,
+    onRequestSlashMenu,
   ]);
 
   return (
-    <div data-block-id={block.id} ref={refCb}>
+    <div
+      data-block-id={block.id}
+      ref={refCb}
+      className="-mx-1 rounded-md px-1 transition-colors hover:bg-[var(--color-surface-secondary)] focus-within:bg-[var(--color-surface-secondary)]"
+    >
       <BlockEditor
         pageId={pageId}
         block={block}
