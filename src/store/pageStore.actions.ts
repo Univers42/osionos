@@ -16,6 +16,7 @@ import {
   canDuplicatePage,
   canMovePage,
   canReadPage,
+  getTargetWorkspaceMoveVisibility,
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
 import { SEED_PAGES } from "../data/seedPages";
@@ -393,6 +394,11 @@ export function createMovePage(set: SetFn, get: GetFn) {
           .map((p) => ({
             ...p,
             workspaceId: targetWorkspaceId,
+            visibility: getTargetWorkspaceMoveVisibility(
+              targetWorkspaceId,
+              context,
+              p.visibility,
+            ),
             parentPageId: p._id === pageId ? (targetParentId ?? null) : (p.parentPageId ?? null),
           }));
 

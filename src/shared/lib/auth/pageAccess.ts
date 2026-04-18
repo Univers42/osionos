@@ -4,6 +4,8 @@ import type { UserSession } from '@/entities/user';
 export interface PageAccessContext {
   userId: string;
   workspaceIds: string[];
+  privateWorkspaceIds: string[];
+  sharedWorkspaceIds: string[];
 }
 
 interface PlaygroundUserStoreLike {
@@ -17,14 +19,15 @@ const USER_STORE_KEY = '__playgroundUserStore';
 export function createPageAccessContext(session: UserSession | null | undefined): PageAccessContext | null {
   if (!session) return null;
 
-  const workspaceIds = [
-    ...session.privateWorkspaces.map((workspace) => workspace._id),
-    ...session.sharedWorkspaces.map((workspace) => workspace._id),
-  ];
+  const privateWorkspaceIds = session.privateWorkspaces.map((workspace) => workspace._id);
+  const sharedWorkspaceIds = session.sharedWorkspaces.map((workspace) => workspace._id);
+  const workspaceIds = [...privateWorkspaceIds, ...sharedWorkspaceIds];
 
   return {
     userId: session.userId,
     workspaceIds,
+    privateWorkspaceIds,
+    sharedWorkspaceIds,
   };
 }
 
@@ -39,7 +42,7 @@ export function getCurrentPageAccessContext(): PageAccessContext | null {
   }
 }
 
-export function normalizePageVisibility(value: PageVisibility | string | null | undefined): PageVisibility {
+export function normalizePageVisibility(value: unknown): PageVisibility {
   if (value === 'shared' || value === 'public') return value;
   return 'private';
 }
@@ -62,6 +65,7 @@ export function canReadPage(page: PageEntry, context: PageAccessContext | null):
 
   const visibility = normalizePageVisibility(page.visibility);
   if (visibility === 'public') return true;
+  if (visibility === 'shared') return true;
 
   if (page.ownerId && page.ownerId === context.userId) return true;
 
@@ -92,6 +96,17 @@ export function canDuplicatePage(page: PageEntry, context: PageAccessContext | n
 export function canMovePage(page: PageEntry, targetWorkspaceId: string, context: PageAccessContext | null): boolean {
   if (!context || !hasWorkspaceAccess(page, context)) return false;
   return context.workspaceIds.includes(targetWorkspaceId) && canEditPage(page, context);
+}
+
+export function getTargetWorkspaceMoveVisibility(
+  targetWorkspaceId: string,
+  context: PageAccessContext | null,
+  fallback: PageVisibility | null | undefined,
+): PageVisibility {
+  if (!context) return normalizePageVisibility(fallback);
+  if (context.sharedWorkspaceIds.includes(targetWorkspaceId)) return 'shared';
+  if (context.privateWorkspaceIds.includes(targetWorkspaceId)) return 'private';
+  return normalizePageVisibility(fallback);
 }
 
 export function getPageCollaboratorList(collaborators: PageCollaborator[] | undefined): PageCollaborator[] {
