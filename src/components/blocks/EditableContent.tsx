@@ -6,7 +6,7 @@
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/18 13:28:29 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/18 13:35:14 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,13 +26,13 @@ import {
   getInlineEditorSelectionOffsets,
   getInlineEditorSelectionSnapshot,
   normalizeInlineLinkHref,
-  normalizeInlineSource,
   parseInlineMarkdown,
   readInlineEditorDomState,
   setInlineEditorSelectionOffsets,
   type InlineEditorSelectionSnapshot as SelectionSnapshot,
   type InlineFormattingCommand,
 } from "@/shared/lib/markengine";
+import { normalizeInlineSource } from "@/shared/lib/markengine/inlineSource";
 import {
   getInlineColorOption,
   INLINE_COLOR_OPTIONS,
