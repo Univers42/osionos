@@ -501,10 +501,17 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       return;
     }
 
-    const { source, requiresNormalization } = readInlineEditorDomState(root);
+    const {
+      source,
+      requiresNormalization,
+      requiresElementNormalization,
+    } = readInlineEditorDomState(root);
     canonicalSourceRef.current = source;
 
-    if (requiresNormalization) {
+    if (requiresElementNormalization) {
+      clearScheduledNormalization();
+      normalizeEditorDom(source);
+    } else if (requiresNormalization) {
       scheduleNormalization(source);
     } else {
       clearScheduledNormalization();
@@ -514,6 +521,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     requestAnimationFrame(updateSelectionSnapshot);
   }, [
     clearScheduledNormalization,
+    normalizeEditorDom,
     onChange,
     scheduleNormalization,
     updateSelectionSnapshot,
