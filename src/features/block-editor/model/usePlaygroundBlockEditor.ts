@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/16 10:18:52 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/18 10:00:58 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -44,6 +44,18 @@ const NON_INDENTABLE_TYPES: ReadonlySet<string> = new Set([
   "divider",
   "database_inline",
   "database_full_page",
+]);
+
+/** Block types that cannot receive children via indentation. */
+const NON_PARENTABLE_TYPES: ReadonlySet<string> = new Set([
+  "heading_1", "heading_2", "heading_3",
+  "heading_4", "heading_5", "heading_6",
+  "code",
+  "divider",
+  "table_block",
+  "database_inline",
+  "database_full_page",
+  "image", "video", "audio", "file",
 ]);
 
 function parsePipeTable(text: string): string[][] | null {
@@ -290,8 +302,12 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
       const idx = content.findIndex((b) => b.id === blockId);
 
-      // Can't indent the first sibling (no previous sibling to nest into)
-      if (!e.shiftKey && idx <= 0) return false;
+      if (!e.shiftKey) {
+      // Can't indent the first sibling
+      if (idx <= 0) return false;
+      // Can't indent under a leaf block
+      if (NON_PARENTABLE_TYPES.has(content[idx - 1].type)) return false;
+      }
 
       e.preventDefault();
 
