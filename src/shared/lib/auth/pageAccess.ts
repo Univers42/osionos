@@ -1,5 +1,10 @@
-import type { PageCollaborator, PageCollaboratorRole, PageEntry, PageVisibility } from '@/entities/page';
-import type { UserSession } from '@/entities/user';
+import type {
+  PageCollaborator,
+  PageCollaboratorRole,
+  PageEntry,
+  PageVisibility,
+} from "@/entities/page";
+import type { UserSession } from "@/entities/user";
 
 export interface PageAccessContext {
   userId: string;
@@ -14,13 +19,19 @@ interface PlaygroundUserStoreLike {
   };
 }
 
-const USER_STORE_KEY = '__playgroundUserStore';
+const USER_STORE_KEY = "__playgroundUserStore";
 
-export function createPageAccessContext(session: UserSession | null | undefined): PageAccessContext | null {
+export function createPageAccessContext(
+  session: UserSession | null | undefined,
+): PageAccessContext | null {
   if (!session) return null;
 
-  const privateWorkspaceIds = session.privateWorkspaces.map((workspace) => workspace._id);
-  const sharedWorkspaceIds = session.sharedWorkspaces.map((workspace) => workspace._id);
+  const privateWorkspaceIds = session.privateWorkspaces.map(
+    (workspace) => workspace._id,
+  );
+  const sharedWorkspaceIds = session.sharedWorkspaces.map(
+    (workspace) => workspace._id,
+  );
   const workspaceIds = [...privateWorkspaceIds, ...sharedWorkspaceIds];
 
   return {
@@ -32,7 +43,9 @@ export function createPageAccessContext(session: UserSession | null | undefined)
 }
 
 export function getCurrentPageAccessContext(): PageAccessContext | null {
-  const store = (globalThis as Record<string, unknown>)[USER_STORE_KEY] as PlaygroundUserStoreLike | undefined;
+  const store = (globalThis as Record<string, unknown>)[USER_STORE_KEY] as
+    | PlaygroundUserStoreLike
+    | undefined;
   if (!store) return null;
 
   try {
@@ -43,29 +56,45 @@ export function getCurrentPageAccessContext(): PageAccessContext | null {
 }
 
 export function normalizePageVisibility(value: unknown): PageVisibility {
-  if (value === 'shared' || value === 'public') return value;
-  return 'private';
+  if (value === "shared" || value === "public") return value;
+  return "private";
 }
 
-function getCollaboratorRole(page: PageEntry, userId: string): PageCollaboratorRole | null {
+function getCollaboratorRole(
+  page: PageEntry,
+  userId: string,
+): PageCollaboratorRole | null {
   const collaborators = page.collaborators ?? [];
-  return collaborators.find((collaborator) => collaborator.userId === userId)?.role ?? null;
+  return (
+    collaborators.find((collaborator) => collaborator.userId === userId)
+      ?.role ?? null
+  );
 }
 
-function hasWorkspaceAccess(page: PageEntry, context: PageAccessContext): boolean {
+function hasWorkspaceAccess(
+  page: PageEntry,
+  context: PageAccessContext,
+): boolean {
   return context.workspaceIds.includes(page.workspaceId);
 }
 
 function isLegacyPage(page: PageEntry): boolean {
-  return page.ownerId == null && page.visibility == null && (page.collaborators?.length ?? 0) === 0;
+  return (
+    page.ownerId == null &&
+    page.visibility == null &&
+    (page.collaborators?.length ?? 0) === 0
+  );
 }
 
-export function canReadPage(page: PageEntry, context: PageAccessContext | null): boolean {
+export function canReadPage(
+  page: PageEntry,
+  context: PageAccessContext | null,
+): boolean {
   if (!context || !hasWorkspaceAccess(page, context)) return false;
 
   const visibility = normalizePageVisibility(page.visibility);
-  if (visibility === 'public') return true;
-  if (visibility === 'shared') return true;
+  if (visibility === "public") return true;
+  if (visibility === "shared") return true;
 
   if (page.ownerId && page.ownerId === context.userId) return true;
 
@@ -74,28 +103,46 @@ export function canReadPage(page: PageEntry, context: PageAccessContext | null):
   return getCollaboratorRole(page, context.userId) !== null;
 }
 
-export function canEditPage(page: PageEntry, context: PageAccessContext | null): boolean {
+export function canEditPage(
+  page: PageEntry,
+  context: PageAccessContext | null,
+): boolean {
   if (!context || !hasWorkspaceAccess(page, context)) return false;
+
+  if (context.sharedWorkspaceIds.includes(page.workspaceId)) return true;
 
   if (page.ownerId && page.ownerId === context.userId) return true;
 
   if (isLegacyPage(page)) return true;
 
   const collaboratorRole = getCollaboratorRole(page, context.userId);
-  return collaboratorRole === 'editor' || collaboratorRole === 'owner';
+  return collaboratorRole === "editor" || collaboratorRole === "owner";
 }
 
-export function canDeletePage(page: PageEntry, context: PageAccessContext | null): boolean {
+export function canDeletePage(
+  page: PageEntry,
+  context: PageAccessContext | null,
+): boolean {
   return canEditPage(page, context);
 }
 
-export function canDuplicatePage(page: PageEntry, context: PageAccessContext | null): boolean {
+export function canDuplicatePage(
+  page: PageEntry,
+  context: PageAccessContext | null,
+): boolean {
   return canReadPage(page, context);
 }
 
-export function canMovePage(page: PageEntry, targetWorkspaceId: string, context: PageAccessContext | null): boolean {
+export function canMovePage(
+  page: PageEntry,
+  targetWorkspaceId: string,
+  context: PageAccessContext | null,
+): boolean {
   if (!context || !hasWorkspaceAccess(page, context)) return false;
-  return context.workspaceIds.includes(targetWorkspaceId) && canEditPage(page, context);
+  return (
+    context.workspaceIds.includes(targetWorkspaceId) &&
+    canEditPage(page, context)
+  );
 }
 
 export function getTargetWorkspaceMoveVisibility(
@@ -104,11 +151,15 @@ export function getTargetWorkspaceMoveVisibility(
   fallback: PageVisibility | null | undefined,
 ): PageVisibility {
   if (!context) return normalizePageVisibility(fallback);
-  if (context.sharedWorkspaceIds.includes(targetWorkspaceId)) return 'shared';
-  if (context.privateWorkspaceIds.includes(targetWorkspaceId)) return 'private';
+  if (context.sharedWorkspaceIds.includes(targetWorkspaceId)) return "shared";
+  if (context.privateWorkspaceIds.includes(targetWorkspaceId)) return "private";
   return normalizePageVisibility(fallback);
 }
 
-export function getPageCollaboratorList(collaborators: PageCollaborator[] | undefined): PageCollaborator[] {
-  return collaborators ? collaborators.map((collaborator) => ({ ...collaborator })) : [];
+export function getPageCollaboratorList(
+  collaborators: PageCollaborator[] | undefined,
+): PageCollaborator[] {
+  return collaborators
+    ? collaborators.map((collaborator) => ({ ...collaborator }))
+    : [];
 }
