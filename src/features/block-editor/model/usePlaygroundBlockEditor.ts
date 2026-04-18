@@ -6,7 +6,7 @@
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/18 13:20:12 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/18 13:28:29 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -197,10 +197,9 @@ export function usePlaygroundBlockEditor(pageId: string) {
     return { x: 100, y: 300 };
   }, []);
 
-  /** Handle content change — detects '/' trigger and markdown shortcuts. */
-  const handleBlockChange = useCallback(
+  /** Persist block content edits in the page store. */
+  const persistBlockText = useCallback(
     (blockId: string, text: string) => {
-      // Always persist the content first
       updateBlock(pageId, blockId, {
         content: text,
         ...(text.trim().length > 0 ? { placeholderText: undefined } : {}),
@@ -279,7 +278,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
   /** Handle content change — detects '/' trigger and markdown shortcuts. */
   const handleBlockChange = useCallback(
-    (blockId: string, text: string, _content: Block[]) => {
+    (blockId: string, text: string) => {
       persistBlockText(blockId, text);
       if (tryHandleCodeOrTable(blockId, text)) return;
       if (tryHandleSlashMenu(blockId, text)) return;

@@ -6,7 +6,7 @@
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/18 13:19:28 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/18 13:28:29 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,6 +26,7 @@ import {
   getInlineEditorSelectionOffsets,
   getInlineEditorSelectionSnapshot,
   normalizeInlineLinkHref,
+  normalizeInlineSource,
   parseInlineMarkdown,
   readInlineEditorDomState,
   setInlineEditorSelectionOffsets,
@@ -560,27 +561,6 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     onChange(normalizedSource);
     return normalizedSource;
   }, [onChange]);
-
-  const getCurrentSelectionOffsets = useCallback(() => {
-    const root = ref.current;
-    if (!root) {
-      return null;
-    }
-
-    const liveSelection = getInlineEditorSelectionOffsets(root);
-    if (liveSelection) {
-      return liveSelection;
-    }
-
-    if (!selectionSnapshot) {
-      return null;
-    }
-
-    return {
-      start: selectionSnapshot.start,
-      end: selectionSnapshot.end,
-    };
-  }, [selectionSnapshot]);
 
   const handleInput = useCallback(() => {
     if (isComposing.current) {
