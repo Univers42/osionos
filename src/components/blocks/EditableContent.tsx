@@ -463,6 +463,27 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     return normalizedSource;
   }, [onChange]);
 
+  const getCurrentSelectionOffsets = useCallback(() => {
+    const root = ref.current;
+    if (!root) {
+      return null;
+    }
+
+    const liveSelection = getInlineEditorSelectionOffsets(root);
+    if (liveSelection) {
+      return liveSelection;
+    }
+
+    if (!selectionSnapshot) {
+      return null;
+    }
+
+    return {
+      start: selectionSnapshot.start,
+      end: selectionSnapshot.end,
+    };
+  }, [selectionSnapshot]);
+
   const handleInput = useCallback(() => {
     if (isComposing.current) {
       return;
@@ -492,14 +513,6 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     onChange(normalizedSource);
     requestAnimationFrame(updateSelectionSnapshot);
   }, [getRenderedInlineHtml, onChange, updateSelectionSnapshot]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      onKeyDown(e);
-      requestAnimationFrame(updateSelectionSnapshot);
-    },
-    [onKeyDown, updateSelectionSnapshot],
-  );
 
   const handleKeyUp = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -567,14 +580,19 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const applyInlineFormattingCommand = useCallback(
     (command: InlineFormattingCommand) => {
       const root = ref.current;
-      if (!root || !selectionSnapshot) {
+      const selectionOffsets = getCurrentSelectionOffsets();
+      if (
+        !root ||
+        !selectionOffsets ||
+        selectionOffsets.start === selectionOffsets.end
+      ) {
         return;
       }
 
       const source = canonicalSourceRef.current;
       const nextContent = applyInlineFormatting(
         source,
-        selectionSnapshot,
+        selectionOffsets,
         command,
       );
       if (nextContent === source) {
@@ -589,13 +607,18 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
       requestAnimationFrame(() => {
         setInlineEditorSelectionOffsets(root, {
-          start: selectionSnapshot.start,
-          end: selectionSnapshot.end,
+          start: selectionOffsets.start,
+          end: selectionOffsets.end,
         });
         updateSelectionSnapshot();
       });
     },
-    [onChange, renderContent, selectionSnapshot, updateSelectionSnapshot],
+    [
+      getCurrentSelectionOffsets,
+      onChange,
+      renderContent,
+      updateSelectionSnapshot,
+    ],
   );
 
   const handleToggleInlineFormat = useCallback(
@@ -628,12 +651,74 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   }, [applyInlineFormattingCommand]);
 
   const handleAddLink = useCallback(() => {
-    if (!selectionSnapshot) {
+    const selectionOffsets = getCurrentSelectionOffsets();
+    if (!selectionOffsets || selectionOffsets.start === selectionOffsets.end) {
       return;
     }
 
     setLinkPicker({ mode: "chooser", query: "" });
-  }, [selectionSnapshot]);
+  }, [getCurrentSelectionOffsets]);
+
+  const handleInlineFormattingShortcut = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (isComposing.current || event.altKey) {
+        return false;
+      }
+
+      const hasPrimaryModifier = event.metaKey || event.ctrlKey;
+      if (!hasPrimaryModifier) {
+        return false;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === "b") {
+        event.preventDefault();
+        handleToggleInlineFormat("bold");
+        return true;
+      }
+
+      if (key === "i") {
+        event.preventDefault();
+        handleToggleInlineFormat("italic");
+        return true;
+      }
+
+      if (key === "e" || event.key === "`") {
+        event.preventDefault();
+        handleToggleCode();
+        return true;
+      }
+
+      if (key === "k") {
+        event.preventDefault();
+        handleAddLink();
+        return true;
+      }
+
+      if (key === "s" && event.shiftKey) {
+        event.preventDefault();
+        handleToggleInlineFormat("strikethrough");
+        return true;
+      }
+
+      return false;
+    },
+    [handleAddLink, handleToggleCode, handleToggleInlineFormat],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (handleInlineFormattingShortcut(e)) {
+        requestAnimationFrame(updateSelectionSnapshot);
+        return;
+      }
+
+      onKeyDown(e);
+      requestAnimationFrame(updateSelectionSnapshot);
+    },
+    [handleInlineFormattingShortcut, onKeyDown, updateSelectionSnapshot],
+  );
 
   const handleApplyExternalLink = useCallback(
     (url: string) => {
