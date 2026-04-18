@@ -413,6 +413,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
       <button
         type="button"
         draggable
+        onClick={(e) => onContextMenu(e, block.id)}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         className="absolute -left-7 top-2 p-0.5 rounded text-[var(--color-ink-faint)] hover:text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-secondary)] transition-colors opacity-0 group-hover/block:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
