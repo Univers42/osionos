@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/15 17:37:33 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/18 10:43:31 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,9 +29,8 @@ const DND_TYPE = "application/x-playground-block-id";
 
 /** Types that manage their own children rendering internally. */
 const SELF_RENDERING_CHILDREN_TYPES: ReadonlySet<string> = new Set([
-  // Currently none — toggle children are now rendered by BlockTree.
-  // This set exists for future block types that may need custom children
-  // rendering (e.g., column_list, synced_block).
+  "callout",
+  "quote",
 ]);
 
 /** Returns true when a block's children should be rendered by BlockTree. */
@@ -283,8 +282,12 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 onPaste={onPaste}
                 onDeleteBlock={onDeleteBlock}
                 registerRef={registerRef}
-                focusBlock={focusBlock}
                 onRequestSlashMenu={onRequestSlashMenu}
+                focusBlock={focusBlock}
+                moveBlock={moveBlock}
+                draggedBlockId={draggedBlockId}
+                setDraggedBlockId={setDraggedBlockId}
+                onContextMenu={onContextMenu}
               />
             </DraggablePlaygroundBlock>
 
@@ -459,6 +462,10 @@ interface EditableBlockProps {
     blockId: string,
     position: { x: number; y: number },
   ) => void;
+  moveBlock: (pageId: string, blockId: string, targetIndex: number, parentBlockId?: string | null) => void;
+  draggedBlockId: string | null;
+  setDraggedBlockId: (id: string | null) => void;
+  onContextMenu: (e: React.MouseEvent, blockId: string) => void;
 }
 
 const EditableBlock: React.FC<EditableBlockProps> = ({
@@ -474,6 +481,10 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
   registerRef,
   focusBlock,
   onRequestSlashMenu,
+  moveBlock,
+  draggedBlockId,
+  setDraggedBlockId,
+  onContextMenu,
 }) => {
   const handleChange = useCallback(
     (text: string) => onChange(block.id, text, blocks),
@@ -495,6 +506,36 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
     [block.id, registerRef],
   );
 
+  // NEW: callback for callout/quote to render children inside their container
+  const renderChildren = useCallback(() => {
+    if (!block.children?.length) return null;
+
+    return (
+      <BlockTree
+        blocks={block.children}
+        pageId={pageId}
+        parentBlockType={block.type}
+        parentBlockId={block.id}
+        moveBlock={moveBlock}
+        draggedBlockId={draggedBlockId}
+        setDraggedBlockId={setDraggedBlockId}
+        onChange={onChange}
+        onKeyDown={onKeyDown}
+        onPaste={onPaste}
+        onDeleteBlock={onDeleteBlock}
+        registerRef={registerRef}
+        focusBlock={focusBlock}
+        onContextMenu={onContextMenu}
+        onRequestSlashMenu={onRequestSlashMenu}
+      />
+    );
+  }, [
+    block.children, block.type, block.id, pageId,
+    moveBlock, draggedBlockId, setDraggedBlockId,
+    onChange, onKeyDown, onPaste, onDeleteBlock,
+    registerRef, focusBlock, onContextMenu, onRequestSlashMenu,
+  ]);
+
   return (
     <div data-block-id={block.id} ref={refCb}>
       <BlockEditor
@@ -509,6 +550,7 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
         onRequestSlashMenu={(position) =>
           onRequestSlashMenu(block.id, position)
         }
+        renderChildren={renderChildren}
       />
     </div>
   );

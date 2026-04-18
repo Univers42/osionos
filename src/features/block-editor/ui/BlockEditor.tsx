@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   BlockEditor.tsx                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:03:43 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/18 10:49:08 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -64,8 +64,9 @@ interface BlockEditorProps {
   onKeyDown: (e: React.KeyboardEvent) => void;
   onPaste?: (e: React.ClipboardEvent) => void;
   onDeleteCodeBlock?: () => void;
-  focusBlock: (blockId: string, cursorEnd?: boolean) => void;
   onRequestSlashMenu?: (position: { x: number; y: number }) => void;
+  renderChildren?: () => React.ReactNode;
+  focusBlock: (blockId: string, cursorEnd?: boolean) => void;
 }
 
 export const BlockEditor: React.FC<BlockEditorProps> = ({
@@ -78,6 +79,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   onDeleteCodeBlock,
   focusBlock,
   onRequestSlashMenu,
+  renderChildren,
 }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -505,69 +507,71 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       );
 
     case "quote":
-      return (
-        <div className="flex my-0.5">
-          <div className="w-1 bg-[var(--color-ink)] rounded-full shrink-0 mr-3" />
-          <div className="flex-1">
-            <EditableContent
-              content={block.content}
-              className="text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic"
-              placeholder={getBlockPlaceholder(block, "Quote…")}
-              onChange={onChange}
-              onKeyDown={onKeyDown}
-              onPaste={onPaste}
-              onRequestSlashMenu={onRequestSlashMenu}
-            />
-          </div>
+    return (
+      <div className="flex my-0.5">
+        <div className="w-1 bg-[var(--color-ink)] rounded-full shrink-0 mr-3" />
+        <div className="flex-1 min-w-0">
+          <EditableContent
+            content={block.content}
+            className="text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic"
+            placeholder="Quote…"
+            onChange={onChange}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            onRequestSlashMenu={onRequestSlashMenu}
+          />
+          {renderChildren?.()}
         </div>
-      );
+      </div>
+    );
 
     case "callout": {
-      const icon = block.color || "💡";
-      const colors = {
-        bg: "bg-[var(--color-surface-primary)]",
-        border: "border-[var(--color-line)]",
-        text: "text-[var(--color-ink)]",
-      };
-      return (
-        <div
-          className={`flex items-start gap-3 p-3 rounded-lg border my-0.5 ${colors.bg} ${colors.border}`}
-        >
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              className={`inline-flex cursor-pointer items-center justify-center rounded ${colors.text}`}
-              aria-label="Change callout icon"
-              title="Change callout icon"
-              onClick={() => setShowCalloutIconPicker((prev) => !prev)}
-            >
-              <AssetRenderer value={icon} size={20} />
-            </button>
-            {showCalloutIconPicker && (
-              <EmojiPicker
-                current={icon}
-                onSelect={(nextIcon) => {
-                  updateBlock(pageId, block.id, { color: nextIcon });
-                }}
-                onRemove={() => {
-                  updateBlock(pageId, block.id, { color: "💡" });
-                }}
-                onClose={() => setShowCalloutIconPicker(false)}
-              />
-            )}
-          </div>
-          <div className="flex-1">
-            <EditableContent
-              content={block.content}
-              className={`text-sm ${colors.text} leading-relaxed py-0.5`}
-              placeholder={getBlockPlaceholder(block, "Type '/' for commands…")}
-              onChange={onChange}
-              onKeyDown={onKeyDown}
-              onPaste={onPaste}
-              onRequestSlashMenu={onRequestSlashMenu}
+    const icon = block.color || "💡";
+    const colors = {
+      bg: "bg-[var(--color-surface-primary)]",
+      border: "border-[var(--color-line)]",
+      text: "text-[var(--color-ink)]",
+    };
+    return (
+      <div
+        className={`flex items-start gap-3 p-3 rounded-lg border my-0.5 ${colors.bg} ${colors.border}`}
+      >
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            className={`inline-flex cursor-pointer items-center justify-center rounded ${colors.text}`}
+            aria-label="Change callout icon"
+            title="Change callout icon"
+            onClick={() => setShowCalloutIconPicker((prev) => !prev)}
+          >
+            <AssetRenderer value={icon} size={20} />
+          </button>
+          {showCalloutIconPicker && (
+            <EmojiPicker
+              current={icon}
+              onSelect={(nextIcon) => {
+                updateBlock(pageId, block.id, { color: nextIcon });
+              }}
+              onRemove={() => {
+                updateBlock(pageId, block.id, { color: "💡" });
+              }}
+              onClose={() => setShowCalloutIconPicker(false)}
             />
-          </div>
+          )}
         </div>
+        <div className="flex-1 min-w-0">
+          <EditableContent
+            content={block.content}
+            className={`text-sm ${colors.text} leading-relaxed py-0.5`}
+            placeholder={getBlockPlaceholder(block, "Type '/' for commands…")}
+            onChange={onChange}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            onRequestSlashMenu={onRequestSlashMenu}
+          />
+          {renderChildren?.()}
+        </div>
+      </div>
       );
     }
 
