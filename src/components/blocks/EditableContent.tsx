@@ -10,7 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { ColorPickerBoard } from "@univers42/ui-collection";
 import {
@@ -31,7 +37,10 @@ import {
   type InlineColorOption,
 } from "@/shared/lib/markengine/inlineTextStyles";
 import { usePageStore } from "@/store/usePageStore";
-import { canReadPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
+import {
+  canReadPage,
+  getCurrentPageAccessContext,
+} from "@/shared/lib/auth/pageAccess";
 
 interface EditableContentProps {
   content: string;
@@ -65,6 +74,10 @@ function getInternalPageIdFromHref(href: string) {
   return href.startsWith(INTERNAL_PAGE_LINK_PREFIX)
     ? href.slice(INTERNAL_PAGE_LINK_PREFIX.length)
     : null;
+}
+
+function normalizeInlineSource(source: string): string {
+  return /\S/.test(source) ? source : "";
 }
 
 const TOOLBAR_BUTTON_BASE =
@@ -202,9 +215,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
       </div>
 
       {palette && (
-        <div
-          className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 w-45 h-60 shadow-xl"
-        >
+        <div className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 w-45 h-60 shadow-xl">
           <ColorPickerBoard
             defaultValue={DEFAULT_INLINE_COLOR}
             label={palette === "text" ? "Text color" : "Background color"}
@@ -305,7 +316,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   );
   const workspacePages = usePageStore((s) =>
     currentPage?.workspaceId
-      ? s.pages[currentPage.workspaceId] ?? EMPTY_WORKSPACE_PAGES
+      ? (s.pages[currentPage.workspaceId] ?? EMPTY_WORKSPACE_PAGES)
       : EMPTY_WORKSPACE_PAGES,
   );
 
@@ -334,18 +345,21 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     canonicalSourceRef.current = content;
   }, [content]);
 
-  const renderContent = useCallback((nextContent: string) => {
-    const root = ref.current;
-    if (!root) {
-      return;
-    }
+  const renderContent = useCallback(
+    (nextContent: string) => {
+      const root = ref.current;
+      if (!root) {
+        return;
+      }
 
-    canonicalSourceRef.current = nextContent;
-    const nextHtml = getRenderedInlineHtml(nextContent);
-    if (root.innerHTML !== nextHtml) {
-      root.innerHTML = nextHtml;
-    }
-  }, [getRenderedInlineHtml]);
+      canonicalSourceRef.current = nextContent;
+      const nextHtml = getRenderedInlineHtml(nextContent);
+      if (root.innerHTML !== nextHtml) {
+        root.innerHTML = nextHtml;
+      }
+    },
+    [getRenderedInlineHtml],
+  );
 
   useEffect(() => {
     if (!ref.current) {
@@ -400,9 +414,10 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     }
 
     const { source } = readInlineEditorDomState(ref.current);
-    canonicalSourceRef.current = source;
-    onChange(source);
-    return source;
+    const normalizedSource = normalizeInlineSource(source);
+    canonicalSourceRef.current = normalizedSource;
+    onChange(normalizedSource);
+    return normalizedSource;
   }, [onChange]);
 
   const handleInput = useCallback(() => {
@@ -417,10 +432,11 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
     const selectionOffsets = getInlineEditorSelectionOffsets(root);
     const { source, requiresNormalization } = readInlineEditorDomState(root);
-    canonicalSourceRef.current = source;
+    const normalizedSource = normalizeInlineSource(source);
+    canonicalSourceRef.current = normalizedSource;
 
     if (requiresNormalization) {
-      const parsedHtml = getRenderedInlineHtml(source);
+      const parsedHtml = getRenderedInlineHtml(normalizedSource);
 
       if (root.innerHTML !== parsedHtml) {
         root.innerHTML = parsedHtml;
@@ -430,7 +446,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       }
     }
 
-    onChange(source);
+    onChange(normalizedSource);
     requestAnimationFrame(updateSelectionSnapshot);
   }, [getRenderedInlineHtml, onChange, updateSelectionSnapshot]);
 
@@ -513,7 +529,11 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       }
 
       const source = canonicalSourceRef.current;
-      const nextContent = applyInlineFormatting(source, selectionSnapshot, command);
+      const nextContent = applyInlineFormatting(
+        source,
+        selectionSnapshot,
+        command,
+      );
       if (nextContent === source) {
         root.focus();
         requestAnimationFrame(updateSelectionSnapshot);
