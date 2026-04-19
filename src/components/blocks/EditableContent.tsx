@@ -558,7 +558,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     const { source } = readInlineEditorDomState(ref.current);
     const normalizedSource = normalizeInlineSource(source);
     canonicalSourceRef.current = normalizedSource;
-    onChange(normalizedSource);
+    onChange(source);
     return normalizedSource;
   }, [onChange]);
 
@@ -588,7 +588,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       clearScheduledNormalization();
     }
 
-    onChange(normalizedSource);
+    onChange(source);
     requestAnimationFrame(updateSelectionSnapshot);
   }, [
     clearScheduledNormalization,
