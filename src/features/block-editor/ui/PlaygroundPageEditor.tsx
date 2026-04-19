@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/18 10:43:31 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/19 10:04:58 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,6 +20,8 @@ import { usePageStore } from "@/store/usePageStore";
 import { usePlaygroundBlockEditor, BlockEditor } from "@/features/block-editor";
 import { BlockContextMenu } from "./BlockContextMenu";
 
+import { selfRendersChildren } from "@/entities/block";
+
 interface PlaygroundPageEditorProps {
   pageId: string;
 }
@@ -27,20 +29,11 @@ interface PlaygroundPageEditorProps {
 type DropPosition = "above" | "below" | null;
 const DND_TYPE = "application/x-playground-block-id";
 
-/** Types that manage their own children rendering internally. */
-const SELF_RENDERING_CHILDREN_TYPES: ReadonlySet<string> = new Set([
-  "callout",
-  "quote",
-]);
-
 /** Returns true when a block's children should be rendered by BlockTree. */
 function shouldRenderChildren(block: Block): boolean {
   if (!block.children?.length) return false;
-  if (SELF_RENDERING_CHILDREN_TYPES.has(block.type)) return false;
-
-  // Toggle: respect collapsed state
+  if (selfRendersChildren(block.type)) return false;
   if (block.type === "toggle" && block.collapsed) return false;
-
   return true;
 }
 

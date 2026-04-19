@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/18 10:00:58 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/19 10:32:20 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,9 +19,12 @@ import {
 } from "@/shared/lib/markengine";
 import { useSlashSelect, repositionCursor } from "@/features/slash-commands";
 import {
-  isHeadingType,
+  isIndentable,
+  isParentable,
+  isHeadingBlock,
+  isListBlock,
   isEffectivelyEmpty,
-  isTodoType,
+  enterCreatesChild,
 } from "@/entities/block";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
 import type { Block } from "@/entities/block";
@@ -37,33 +40,6 @@ import { useBlockContextMenu } from "./useBlockContextMenu";
 
 const HEADING_SHORTCUT_RE = /^#{1,6}$/;
 const NUMBERED_SHORTCUT_RE = /^\d+\.$/;
-
-/** Block types that should not be indented/outdented via Tab. */
-const NON_INDENTABLE_TYPES: ReadonlySet<string> = new Set([
-  "code",
-  "divider",
-  "database_inline",
-  "database_full_page",
-]);
-
-/** Block types that cannot receive children via indentation. */
-const NON_PARENTABLE_TYPES: ReadonlySet<string> = new Set([
-  "heading_1",
-  "heading_2",
-  "heading_3",
-  "heading_4",
-  "heading_5",
-  "heading_6",
-  "code",
-  "divider",
-  "table_block",
-  "database_inline",
-  "database_full_page",
-  "image",
-  "video",
-  "audio",
-  "file",
-]);
 
 function parsePipeTable(text: string): string[][] | null {
   const lines = text
@@ -98,14 +74,6 @@ function parsePipeTable(text: string): string[][] | null {
 
   const table = [header, ...bodyRows];
   return table.length ? table : null;
-}
-
-function isListType(
-  type: Block["type"],
-): type is "bulleted_list" | "numbered_list" | "to_do" {
-  return (
-    type === "bulleted_list" || type === "numbered_list" || type === "to_do"
-  );
 }
 
 function isEffectivelyEmptyForDeletion(text: string): boolean {
@@ -309,7 +277,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       block: Block,
       content: Block[],
     ): boolean => {
-      if (e.key !== "Tab" || NON_INDENTABLE_TYPES.has(block.type)) return false;
+      if (e.key !== "Tab" || !isIndentable(block.type)) return false;
 
       const idx = content.findIndex((b) => b.id === blockId);
 
@@ -317,7 +285,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
         // Can't indent the first sibling
         if (idx <= 0) return false;
         // Can't indent under a leaf block
-        if (NON_PARENTABLE_TYPES.has(content[idx - 1].type)) return false;
+        if (!isParentable(content[idx - 1].type)) return false;
       }
 
       e.preventDefault();
@@ -347,7 +315,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       if (
         e.key !== "Enter" ||
         e.shiftKey ||
-        !isListType(block.type) ||
+        !isListBlock(block.type) ||
         !isEmpty
       ) {
         return false;
@@ -375,7 +343,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       if (
         e.key !== "Enter" ||
         e.shiftKey ||
-        !isTodoType(block.type) ||
+        block.type !== 'to_do' ||
         !isEmpty
       ) {
         return false;
@@ -401,7 +369,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       content: Block[],
       isEmpty: boolean,
     ): boolean => {
-      if (e.key !== "Delete" || !isListType(block.type) || !isEmpty) {
+      if (e.key !== "Delete" || !isListBlock(block.type) || !isEmpty) {
         return false;
       }
 
@@ -462,7 +430,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       if ((e.key !== "Backspace" && e.key !== "Delete") || !isEmpty)
         return false;
 
-      if (isHeadingType(block.type)) {
+      if (isHeadingBlock(block.type)) {
         e.preventDefault();
         changeBlockType(pageId, blockId, "paragraph");
         updateBlock(pageId, blockId, { content: "" });
@@ -470,7 +438,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
         return true;
       }
 
-      if (isListType(block.type)) {
+      if (isListBlock(block.type)) {
         e.preventDefault();
         const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, "next");
         const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, "prev");
@@ -569,102 +537,92 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [pageId, changeBlockType, updateBlock, insertBlock, focusBlock],
   );
 
-  /** Handle key presses — Enter, Backspace, Arrow navigation. */
-  const handleKeyDown = useCallback(
+  const handleContainerEnter = useCallback(
     (
       e: React.KeyboardEvent,
       blockId: string,
-      content: Block[],
-      parentBlockId: string | null = null,
-    ) => {
-      const block = content.find((b) => b.id === blockId);
-      if (!block) return;
-      const blockIdx = content.findIndex((b) => b.id === blockId);
-      const liveText =
-        (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
-      const isEmpty = isEffectivelyEmpty(liveText);
-      const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
-
-      if (handleBlockIndentation(e, blockId, block, content)) {
-        return;
-      }
-
-      if (handleParagraphSpaceShortcut(e, blockId, block)) {
-        return;
-      }
-
-      if (handleEmptyListEnter(e, blockId, block, blockIdx, content, isEmpty)) {
-        return;
-      }
-
-      if (handleEmptyTodoEnter(e, blockId, block, isEmpty)) {
-        return;
-      }
-
+      block: Block,
+    ): boolean => {
       if (
-        handleEmptyListDelete(e, blockId, block, blockIdx, content, isEmpty)
+        e.key !== "Enter" ||
+        e.shiftKey ||
+        !enterCreatesChild(block.type) ||
+        block.type === "toggle"
       ) {
-        return;
+        return false;
       }
 
-      if (handleDividerDelete(e, blockId, block, blockIdx, content)) {
-        return;
-      }
-
-      if (e.key === "Enter" && block.type === "code") {
-        return;
-      }
-
-      if (e.key === "Enter" && !e.shiftKey) {
-        handleEnterKey(
-          e,
-          blockId,
-          block.type,
-          slashMenu,
-          pageId,
-          insertBlock,
-          focusBlock,
-        );
-        return;
-      }
-
-      if (
-        handleEmptyBackspace(
-          e,
-          blockId,
-          block,
-          blockIdx,
-          content,
-          parentBlockId,
-          isEmptyForDeletion,
-        )
-      ) {
-        return;
-      }
-
-      if (handleArrowNavigation(e, blockId, content)) {
-        return;
-      }
-
-      if (e.key === "Escape" && slashMenu) {
-        setSlashMenu(null);
-      }
+      e.preventDefault();
+      const child: Block = { id: crypto.randomUUID(), type: "paragraph", content: "" };
+      const existingChildren = block.children ?? [];
+      updateBlock(pageId, blockId, { children: [...existingChildren, child] });
+      focusBlock(child.id);
+      return true;
     },
-    [
-      pageId,
-      slashMenu,
-      insertBlock,
-      focusBlock,
-      handleBlockIndentation,
-      handleParagraphSpaceShortcut,
-      handleEmptyListEnter,
-      handleEmptyTodoEnter,
-      handleEmptyListDelete,
-      handleDividerDelete,
-      handleEmptyBackspace,
-      handleArrowNavigation,
-    ],
+    [pageId, updateBlock, focusBlock],
   );
+
+  /** Handle key presses — Enter, Backspace, Arrow navigation. */
+  const handleKeyDown = useCallback(
+  (
+    e: React.KeyboardEvent,
+    blockId: string,
+    content: Block[],
+    parentBlockId: string | null = null,
+  ) => {
+    const block = content.find((b) => b.id === blockId);
+    if (!block) return;
+    const blockIdx = content.findIndex((b) => b.id === blockId);
+    const liveText =
+      (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
+    const isEmpty = isEffectivelyEmpty(liveText);
+    const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
+
+    const handled =
+      handleBlockIndentation(e, blockId, block, content) ||
+      handleParagraphSpaceShortcut(e, blockId, block) ||
+      handleEmptyListEnter(e, blockId, block, blockIdx, content, isEmpty) ||
+      handleEmptyTodoEnter(e, blockId, block, isEmpty) ||
+      handleEmptyListDelete(e, blockId, block, blockIdx, content, isEmpty) ||
+      handleDividerDelete(e, blockId, block, blockIdx, content) ||
+      (e.key === "Enter" && block.type === "code") ||
+      handleContainerEnter(e, blockId, block);
+
+    if (handled) return;
+
+    if (e.key === "Enter" && !e.shiftKey) {
+      handleEnterKey(e, blockId, block.type, slashMenu, pageId, insertBlock, focusBlock);
+      return;
+    }
+
+    if (handleEmptyBackspace(e, blockId, block, blockIdx, content, parentBlockId, isEmptyForDeletion)) {
+      return;
+    }
+
+    if (handleArrowNavigation(e, blockId, content)) {
+      return;
+    }
+
+    if (e.key === "Escape" && slashMenu) {
+      setSlashMenu(null);
+    }
+  },
+  [
+    pageId,
+    slashMenu,
+    insertBlock,
+    focusBlock,
+    handleBlockIndentation,
+    handleParagraphSpaceShortcut,
+    handleEmptyListEnter,
+    handleEmptyTodoEnter,
+    handleEmptyListDelete,
+    handleDividerDelete,
+    handleContainerEnter,
+    handleEmptyBackspace,
+    handleArrowNavigation,
+  ],
+);
 
   /** Create a real inline database + default view in the shared DBMS store. */
   const createInlineDatabase = useCallback((name?: string) => {

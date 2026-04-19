@@ -6,13 +6,13 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/17 14:39:49 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/19 10:03:45 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React from 'react';
 import type { Block } from '@/entities/block';
-import { continuesWithSameTypeOnEnter } from '@/entities/block';
+import { continuesSameType } from '@/entities/block';
 
 export interface SlashMenuState {
   blockId: string;
@@ -89,7 +89,7 @@ export function handleEnterKey(
 ): void {
   if (e.defaultPrevented) return;
   e.preventDefault();
-  const nextType = continuesWithSameTypeOnEnter(blockType) ? blockType : 'paragraph';
+  const nextType = continuesSameType(blockType) ? blockType : 'paragraph';
   const newBlock: Block = { id: crypto.randomUUID(), type: nextType, content: '' };
   insertBlock(pageId, blockId, newBlock);
   focusBlock(newBlock.id);
