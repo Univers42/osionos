@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/19 10:04:58 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/19 20:12:21 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -382,7 +382,22 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
       const midY = rect.top + rect.height / 2;
       const insertionIdx = e.clientY < midY ? targetIdx : targetIdx + 1;
 
-      moveBlock(pageId, draggedId, insertionIdx, parentBlockId);
+      // Check if the dragged block is in the same sibling array
+      const isSameLevel = blocks.some((b) => b.id === draggedId);
+
+      if (isSameLevel) {
+        // Same parent — simple reorder
+        moveBlock(pageId, draggedId, insertionIdx, parentBlockId);
+      } else {
+        // Cross-tree move — extract from old position, insert here
+        usePageStore.getState().moveBlockAcrossTree(
+          pageId,
+          draggedId,
+          parentBlockId,
+          insertionIdx,
+        );
+      }
+
       setDraggedBlockId(null);
     },
     [block.id, blocks, moveBlock, pageId, parentBlockId, setDraggedBlockId],

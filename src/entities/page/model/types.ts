@@ -1,12 +1,12 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   pageStore.types.ts                                 :+:      :+:    :+:   */
+/*   types.ts                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:47:31 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/19 20:11:32 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -79,6 +79,7 @@ export interface PageStore {
   insertBlock: (pageId: string, afterBlockId: string, block: Block) => void;
   deleteBlock: (pageId: string, blockId: string) => void;
   moveBlock: (pageId: string, blockId: string, targetIndex: number, parentBlockId?: string | null) => void;
+  moveBlockAcrossTree: (pageId: string, blockId: string, targetParentBlockId: string | null, targetIndex: number) => void;
   indentBlock: (pageId: string, blockId: string) => void;
   outdentBlock: (pageId: string, blockId: string) => void;
   changeBlockType: (pageId: string, blockId: string, newType: BlockType) => void;

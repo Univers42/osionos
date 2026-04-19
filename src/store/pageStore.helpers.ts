@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/18 09:52:21 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/19 20:09:11 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -339,6 +339,71 @@ export function applyBlockMove(
     }
 
     return { ...page, content };
+  };
+}
+
+/**
+ * Extracts a block (with its children) from anywhere in the tree
+ * and inserts it at a target position under a specified parent.
+ * Used by drag-and-drop to move blocks across nesting levels.
+ */
+export function applyBlockMoveAcrossTree(
+  blockId: string,
+  targetParentBlockId: string | null,
+  targetIndex: number,
+): (page: PageEntry) => PageEntry {
+  return (page) => {
+    const content = cloneBlocks(page.content ?? []);
+
+    // Step 1: Extract the block from its current position
+    let extracted: Block | null = null;
+
+    const extractFromTree = (blocks: Block[]): Block[] =>
+      blocks.flatMap((block) => {
+        if (block.id === blockId) {
+          extracted = block;
+          return [];
+        }
+        return [{
+          ...block,
+          children: block.children
+            ? extractFromTree(block.children)
+            : undefined,
+        }];
+      });
+
+    const withoutBlock = extractFromTree(content);
+    if (!extracted) return page;
+
+    // Step 2: Insert at root level
+    if (!targetParentBlockId) {
+      const bounded = Math.max(0, Math.min(targetIndex, withoutBlock.length));
+      withoutBlock.splice(bounded, 0, extracted);
+      return { ...page, content: withoutBlock };
+    }
+
+    // Step 3: Insert as child of target parent
+    const insertInParent = (blocks: Block[]): boolean => {
+      for (const block of blocks) {
+        if (block.id === targetParentBlockId) {
+          block.children = block.children ?? [];
+          const bounded = Math.max(0, Math.min(targetIndex, block.children.length));
+          block.children.splice(bounded, 0, extracted!);
+          return true;
+        }
+        if (block.children && insertInParent(block.children)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (!insertInParent(withoutBlock)) {
+      // Fallback: if target parent not found, insert at root
+      withoutBlock.splice(Math.max(0, Math.min(targetIndex, withoutBlock.length)), 0, extracted);
+    }
+
+    return { ...page, content: withoutBlock };
   };
 }
 

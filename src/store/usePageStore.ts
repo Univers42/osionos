@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   usePageStore.ts                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 01:31:17 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/19 20:10:34 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,6 +21,7 @@ import {
   applyBlockInsert,
   applyBlockDelete,
   applyBlockMove,
+  applyBlockMoveAcrossTree,
   applyBlockIndent,
   applyBlockOutdent,
   applyBlockTypeChange,
@@ -154,6 +155,22 @@ export const usePageStore = create<PageStore>((set, get) => ({
         s.pages,
         pageId,
         applyBlockMove(blockId, targetIndex, parentBlockId),
+      );
+      savePagesCache(pages);
+      return { pages };
+    });
+    debouncePersistContent(pageId);
+  },
+
+  moveBlockAcrossTree: (pageId, blockId, targetParentBlockId, targetIndex) => {
+    const page = get().pageById(pageId);
+    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+
+    set((s) => {
+      const pages = updatePageInState(
+        s.pages,
+        pageId,
+        applyBlockMoveAcrossTree(blockId, targetParentBlockId, targetIndex),
       );
       savePagesCache(pages);
       return { pages };
