@@ -6,7 +6,7 @@
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/18 13:35:14 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/19 11:46:52 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -572,11 +572,17 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       return;
     }
 
-    const { source, requiresNormalization } = readInlineEditorDomState(root);
-    const normalizedSource = normalizeInlineSource(source);
-    canonicalSourceRef.current = normalizedSource;
+    const {
+      source,
+      requiresNormalization,
+      requiresElementNormalization,
+    } = readInlineEditorDomState(root);
+    canonicalSourceRef.current = source;
 
-    if (requiresNormalization) {
+    if (requiresElementNormalization) {
+      clearScheduledNormalization();
+      normalizeEditorDom(source);
+    } else if (requiresNormalization) {
       scheduleNormalization(source);
     } else {
       clearScheduledNormalization();
@@ -586,6 +592,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     requestAnimationFrame(updateSelectionSnapshot);
   }, [
     clearScheduledNormalization,
+    normalizeEditorDom,
     onChange,
     scheduleNormalization,
     updateSelectionSnapshot,
