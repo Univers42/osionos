@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/19 20:12:21 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/20 12:00:00 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@ import React, { useMemo, useCallback, useState } from "react";
 import { Plus } from "lucide-react";
 
 import { SlashCommandMenu } from "@/features/slash-commands";
+import { PageSelectorMenu } from "./PageSelectorMenu";
 import type { Block } from "@/entities/block";
 
 import { usePageStore } from "@/store/usePageStore";
@@ -78,6 +79,8 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
   const {
     slashMenu,
     setSlashMenu,
+    pageSelector,
+    setPageSelector,
     contextMenu,
     contextMenuSections,
     openContextMenu,
@@ -88,6 +91,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     handleSlashSelect,
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
+    handlePageSelectorSelect,
     handleAddBlock,
     handleInitBlock,
     registerBlockRef,
@@ -183,6 +187,16 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
             handleSlashMediaSelect(kind, value, blocks)
           }
           onClose={() => setSlashMenu(null)}
+        />
+      )}
+
+      {pageSelector && (
+        <PageSelectorMenu
+          key={`${pageSelector.blockId}:${pageSelector.filter}`}
+          position={pageSelector.position}
+          filter={pageSelector.filter}
+          onSelect={handlePageSelectorSelect}
+          onClose={() => setPageSelector(null)}
         />
       )}
 

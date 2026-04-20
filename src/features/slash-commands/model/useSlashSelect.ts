@@ -54,9 +54,9 @@ function stripSlashQuery(content: string): string {
 }
 
 /**
- * Places the cursor at the start of a block's editable content.
+ * Places the cursor at the start or end of a block's editable content.
  */
-export function repositionCursor(blockId: string, _content: string) {
+export function repositionCursor(blockId: string, _content: string, atEnd = true) {
   setTimeout(() => {
     const el = document.querySelector(
       `[data-block-id="${blockId}"] [contenteditable]`,
@@ -67,7 +67,7 @@ export function repositionCursor(blockId: string, _content: string) {
     if (sel) {
       const range = document.createRange();
       range.selectNodeContents(el);
-      range.collapse(true);
+      range.collapse(!atEnd);
       sel.removeAllRanges();
       sel.addRange(range);
     }
