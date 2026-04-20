@@ -46,6 +46,34 @@ export async function clearAndType(editor, text) {
   }
 }
 
+export async function focusEditorStart(editor) {
+  await editor.click();
+  await editor.press("Home");
+}
+
+export async function focusEditorEnd(editor) {
+  await editor.click();
+  await editor.evaluate((node) => {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+  await editor.page().waitForTimeout(50);
+}
+
+export async function pressEnter(editor) {
+  await focusEditorEnd(editor);
+  await editor.page().keyboard.press("Enter");
+}
+
+export async function pressTab(target, options = {}) {
+  await target.click();
+  await target.page().keyboard.press(options.shift ? "Shift+Tab" : "Tab");
+}
+
 export async function selectText(editor, text, occurrence = 0) {
   const content = await editorText(editor);
   let startIndex = -1;
@@ -114,9 +142,75 @@ export async function choosePaletteColor(page, index = 0) {
   return label;
 }
 
+export async function choosePaletteColorByLabel(page, label) {
+  const swatches = page.locator('button[aria-label]:visible');
+  const swatchIndex = await swatches.evaluateAll(
+    (nodes, targetLabel) =>
+      nodes.findIndex(
+        (node) => node.getAttribute("aria-label") === targetLabel,
+      ),
+    label,
+  );
+
+  if (swatchIndex < 0) {
+    throw new Error(`Could not find a visible palette swatch named "${label}"`);
+  }
+
+  await swatches.nth(swatchIndex).click({ force: true });
+}
+
 export async function openSlashMenuFromEditor(editor, text) {
   await editor.click();
   await editor.page().keyboard.type(text);
+}
+
+export async function createParagraphs(page, texts) {
+  if (texts.length === 0) {
+    return getEditors(page);
+  }
+
+  const firstEditor = await activateFirstEditor(page);
+  await clearAndType(firstEditor, texts[0]);
+
+  for (let index = 1; index < texts.length; index += 1) {
+    const previousEditor = getEditors(page).nth(index - 1);
+    await pressEnter(previousEditor);
+    const editor = getEditors(page).nth(index);
+    await editor.waitFor();
+    await clearAndType(editor, texts[index]);
+  }
+
+  return getEditors(page);
+}
+
+export function blockLocator(page, index) {
+  return page.locator("[data-block-id]").nth(index);
+}
+
+export function blockLocatorForEditor(editor) {
+  return editor.locator("xpath=ancestor::*[@data-block-id][1]");
+}
+
+export async function editorLeft(editor) {
+  const box = await editor.boundingBox();
+  if (!box) {
+    throw new Error("Could not resolve editor bounding box");
+  }
+
+  return box.x;
+}
+
+export async function editorTop(editor) {
+  const box = await editor.boundingBox();
+  if (!box) {
+    throw new Error("Could not resolve editor bounding box");
+  }
+
+  return box.y;
+}
+
+export async function editorHasFocus(editor) {
+  return editor.evaluate((node) => node === document.activeElement);
 }
 
 export async function selectSlashMenuEntry(page, label) {
@@ -126,22 +220,51 @@ export async function selectSlashMenuEntry(page, label) {
     .click();
 }
 
+export async function createBlockViaSlash(page, slashCommand, label, editorIndex = 0) {
+  if ((await getEditors(page).count()) === 0) {
+    await activateFirstEditor(page);
+  }
+
+  const editor = getEditors(page).nth(editorIndex);
+  await editor.waitFor();
+  await openSlashMenuFromEditor(editor, `/${slashCommand}`);
+  await selectSlashMenuEntry(page, `^${label}$`);
+  return editor;
+}
+
 export async function createCallout(page) {
-  const editor = await activateFirstEditor(page);
-  await openSlashMenuFromEditor(editor, "/callout");
-  await selectSlashMenuEntry(page, "^Callout$");
+  await createBlockViaSlash(page, "callout", "Callout");
   await page.getByRole("button", { name: "Change callout icon" }).waitFor();
 }
 
+export async function createQuote(page) {
+  await createBlockViaSlash(page, "quote", "Quote");
+}
+
+export async function createToggle(page) {
+  await createBlockViaSlash(page, "toggle", "Toggle");
+}
+
+export async function createDivider(page) {
+  await createBlockViaSlash(page, "divider", "Divider");
+}
+
+export async function createCodeBlock(page) {
+  await createBlockViaSlash(page, "code", "Code");
+  await page.locator("textarea").waitFor();
+}
+
 export async function createMediaBlock(page, slashCommand) {
-  const editor = await activateFirstEditor(page);
-  await openSlashMenuFromEditor(editor, `/${slashCommand}`);
-  await selectSlashMenuEntry(page, `^${capitalize(slashCommand)}$`);
+  await createBlockViaSlash(page, slashCommand, capitalize(slashCommand));
   await page.getByRole("button", { name: /^Close$/ }).waitFor();
   await pickFirstAssetFromVisiblePicker(page);
 }
 
 export async function pickFirstAssetFromVisiblePicker(page) {
+  return pickAssetFromVisiblePicker(page);
+}
+
+export async function pickAssetFromVisiblePicker(page, selectableIndex = 0) {
   const pickerButtons = page.locator(
     [
       'button[title]:visible',
@@ -192,14 +315,18 @@ export async function pickFirstAssetFromVisiblePicker(page) {
         "Images",
         "Videos",
         "Audio",
-        "Files",
+      "Files",
       ].includes(label)
     ) {
       continue;
     }
 
-    await pickerButtons.nth(index).click();
-    return label;
+    if (selectableIndex === 0) {
+      await pickerButtons.nth(index).click();
+      return label;
+    }
+
+    selectableIndex -= 1;
   }
 
   throw new Error("Could not find a selectable asset inside the visible picker");
@@ -212,8 +339,63 @@ export async function wrapperCount(editor, selector) {
   );
 }
 
+export async function openBlockContextMenuForEditor(editor) {
+  const block = blockLocatorForEditor(editor);
+  await block.click({ button: "right" });
+}
+
+export function contextMenuItem(page, label) {
+  return page.getByRole("button", { name: new RegExp(`^${escapeRegex(label)}$`) });
+}
+
+export async function pasteText(editor, text) {
+  const page = editor.page();
+  const origin = new URL(page.url()).origin;
+  await page.context().grantPermissions(
+    ["clipboard-read", "clipboard-write"],
+    { origin },
+  );
+  await page.evaluate(async (value) => {
+    await navigator.clipboard.writeText(value);
+  }, text);
+  await editor.click();
+  await page.keyboard.press(`${modifier()}+V`);
+  await page.waitForTimeout(100);
+}
+
+export async function dragBlockTo(page, fromIndex, toIndex, targetPosition = "above") {
+  const source = page.getByRole("button", { name: /Drag to reorder block/i }).nth(fromIndex);
+  const target = blockLocator(page, toIndex);
+  const targetBox = await target.boundingBox();
+
+  if (!targetBox) {
+    throw new Error("Could not resolve target block bounding box");
+  }
+
+  await source.dragTo(target, {
+    targetPosition: {
+      x: Math.min(24, Math.max(8, targetBox.width / 2)),
+      y: targetPosition === "above" ? 2 : Math.max(4, targetBox.height - 2),
+    },
+  });
+}
+
+export async function visibleBlockTexts(page) {
+  return page.locator("[data-block-id]").evaluateAll((nodes) =>
+    nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim() ?? ""),
+  );
+}
+
+export async function clickOutside(page) {
+  await page.mouse.click(24, 24);
+}
+
 function capitalize(value) {
   return value.slice(0, 1).toUpperCase() + value.slice(1);
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function modifier() {
