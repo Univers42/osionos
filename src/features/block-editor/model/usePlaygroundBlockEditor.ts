@@ -10,7 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  useCallback,
+} from "react";
 import { usePageStore } from "@/store/usePageStore";
 import {
   detectBlockType,
@@ -593,52 +599,65 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [pageId, changeBlockType, updateBlock, insertBlock, focusBlock],
   );
 
-  /** Handle key presses — Enter, Backspace, Arrow navigation. */
-  const handleKeyDown = useCallback(
+  const handleTransformKeys = useCallback(
     (
       e: React.KeyboardEvent,
       blockId: string,
-      parentBlockId: string | null = null,
-    ) => {
-      const content = parentBlockId
-        ? findChildrenForParent(contentRef.current, parentBlockId) ?? []
-        : contentRef.current;
-      const block = content.find((b) => b.id === blockId);
-      if (!block) return;
-      const blockIdx = content.findIndex((b) => b.id === blockId);
-      const liveText =
-        (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
-      const isEmpty = isEffectivelyEmpty(liveText);
-      const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
-
+      block: Block,
+      blockIdx: number,
+      content: Block[],
+      isEmpty: boolean,
+    ): boolean => {
       if (handleBlockIndentation(e, blockId, block, content)) {
-        return;
+        return true;
       }
 
       if (handleParagraphSpaceShortcut(e, blockId, block)) {
-        return;
+        return true;
       }
 
       if (handleEmptyListEnter(e, blockId, block, blockIdx, content, isEmpty)) {
-        return;
+        return true;
       }
 
       if (handleEmptyTodoEnter(e, blockId, block, isEmpty)) {
-        return;
+        return true;
       }
 
       if (
         handleEmptyListDelete(e, blockId, block, blockIdx, content, isEmpty)
       ) {
-        return;
+        return true;
       }
 
       if (handleDividerDelete(e, blockId, block, blockIdx, content)) {
-        return;
+        return true;
       }
 
+      return false;
+    },
+    [
+      handleBlockIndentation,
+      handleParagraphSpaceShortcut,
+      handleEmptyListEnter,
+      handleEmptyTodoEnter,
+      handleEmptyListDelete,
+      handleDividerDelete,
+    ],
+  );
+
+  const handleFlowAndNavigationKeys = useCallback(
+    (
+      e: React.KeyboardEvent,
+      blockId: string,
+      block: Block,
+      blockIdx: number,
+      content: Block[],
+      parentBlockId: string | null,
+      isEmptyForDeletion: boolean,
+    ): boolean => {
       if (e.key === "Enter" && block.type === "code") {
-        return;
+        return true;
       }
 
       if (e.key === "Enter" && !e.shiftKey) {
@@ -651,7 +670,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
           insertBlock,
           focusBlock,
         );
-        return;
+        return true;
       }
 
       if (
@@ -665,30 +684,71 @@ export function usePlaygroundBlockEditor(pageId: string) {
           isEmptyForDeletion,
         )
       ) {
-        return;
+        return true;
       }
 
       if (handleArrowNavigation(e, blockId, content)) {
-        return;
+        return true;
       }
 
       if (e.key === "Escape" && slashMenu) {
         setSlashMenu(null);
+        return true;
+      }
+
+      return false;
+    },
+    [
+      slashMenu,
+      pageId,
+      insertBlock,
+      focusBlock,
+      handleEmptyBackspace,
+      handleArrowNavigation,
+    ],
+  );
+
+  /** Handle key presses — Enter, Backspace, Arrow navigation. */
+  const handleKeyDown = useCallback(
+    (
+      e: React.KeyboardEvent,
+      blockId: string,
+      parentBlockId: string | null = null,
+    ) => {
+      const content = parentBlockId
+        ? (findChildrenForParent(contentRef.current, parentBlockId) ?? [])
+        : contentRef.current;
+      const block = content.find((b) => b.id === blockId);
+      if (!block) return;
+      const blockIdx = content.findIndex((b) => b.id === blockId);
+      const liveText =
+        (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
+      const isEmpty = isEffectivelyEmpty(liveText);
+      const shouldPreventParagraphBackspaceDelete =
+        e.key === "Backspace" && block.type === "paragraph";
+      const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
+
+      if (handleTransformKeys(e, blockId, block, blockIdx, content, isEmpty)) {
+        return;
+      }
+
+      if (
+        handleFlowAndNavigationKeys(
+          e,
+          blockId,
+          block,
+          blockIdx,
+          content,
+          parentBlockId,
+          isEmptyForDeletion && !shouldPreventParagraphBackspaceDelete,
+        )
+      ) {
+        return;
       }
     },
     [
-      pageId,
-      slashMenu,
-      insertBlock,
-      focusBlock,
-      handleBlockIndentation,
-      handleParagraphSpaceShortcut,
-      handleEmptyListEnter,
-      handleEmptyTodoEnter,
-      handleEmptyListDelete,
-      handleDividerDelete,
-      handleEmptyBackspace,
-      handleArrowNavigation,
+      handleTransformKeys,
+      handleFlowAndNavigationKeys,
     ],
   );
 

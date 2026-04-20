@@ -6,7 +6,7 @@
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/19 11:46:52 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/16 21:46:25 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,7 +19,6 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { ColorPickerBoard } from "@univers42/ui-collection";
-import type { PageEntry } from "@/entities/page";
 import {
   applyInlineFormatting,
   areInlineEditorSelectionSnapshotsEqual,
@@ -32,7 +31,6 @@ import {
   type InlineEditorSelectionSnapshot as SelectionSnapshot,
   type InlineFormattingCommand,
 } from "@/shared/lib/markengine";
-import { normalizeInlineSource } from "@/shared/lib/markengine/inlineSource";
 import {
   getInlineColorOption,
   INLINE_COLOR_OPTIONS,
@@ -60,7 +58,6 @@ type LinkPickerMode = "chooser" | "external" | "internal";
 
 const EMPTY_WORKSPACE_PAGES: readonly never[] = [];
 const DEFAULT_INLINE_COLOR = INLINE_COLOR_OPTIONS[0]?.id ?? "#0F172A";
-const NORMALIZATION_IDLE_DELAY_MS = 120;
 
 interface LinkPickerState {
   mode: LinkPickerMode;
@@ -79,22 +76,12 @@ function getInternalPageIdFromHref(href: string) {
     : null;
 }
 
-function getSelectablePagesSnapshot(pageId?: string): PageEntry[] {
-  if (!pageId) {
-    return [];
-  }
+function normalizeInlineSource(source: string): string {
+  return source.replaceAll(/[\r\n\u200B]/g, "").length === 0 ? "" : source;
+}
 
-  const { pageById, pages } = usePageStore.getState();
-  const currentPage = pageById(pageId);
-  if (!currentPage?.workspaceId) {
-    return [];
-  }
-
-  const accessContext = getCurrentPageAccessContext();
-  return (pages[currentPage.workspaceId] ?? EMPTY_WORKSPACE_PAGES).filter(
-    (workspacePage) =>
-      !workspacePage.archivedAt && canReadPage(workspacePage, accessContext),
-  );
+function isInlineSourceEmpty(source: string): boolean {
+  return normalizeInlineSource(source).replaceAll("\u00A0", " ").trim().length === 0;
 }
 
 const TOOLBAR_BUTTON_BASE =
@@ -103,16 +90,10 @@ const TOOLBAR_BUTTON_BASE =
 const TOOLBAR_ACTIVE_BUTTON =
   "border-[var(--color-line)] bg-[var(--color-surface-secondary)] text-[var(--color-ink)]";
 
-function preserveEditorSelection(event: React.MouseEvent<HTMLDivElement>) {
-  event.preventDefault();
-}
-
 interface InlineSelectionToolbarProps {
   selection: SelectionSnapshot;
   palette: PaletteKind;
-  shortcutsOpen: boolean;
   onTogglePalette: (palette: Exclude<PaletteKind, null>) => void;
-  onToggleShortcuts: () => void;
   onFormatBold: () => void;
   onFormatItalic: () => void;
   onFormatStrike: () => void;
@@ -126,9 +107,7 @@ interface InlineSelectionToolbarProps {
 const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
   selection,
   palette,
-  shortcutsOpen,
   onTogglePalette,
-  onToggleShortcuts,
   onFormatBold,
   onFormatItalic,
   onFormatStrike,
@@ -144,7 +123,6 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
       left: selection.rect.left + selection.rect.width / 2,
       top: Math.max(12, selection.rect.top - 58),
     }}
-    onMouseDownCapture={preserveEditorSelection}
   >
     <div className="relative rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] px-1.5 py-1 shadow-xl">
       <div className="flex items-center gap-1">
@@ -229,18 +207,6 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
         </button>
         <button
           type="button"
-          title="Keyboard shortcuts"
-          className={[
-            TOOLBAR_BUTTON_BASE,
-            shortcutsOpen ? TOOLBAR_ACTIVE_BUTTON : "",
-          ].join(" ")}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={onToggleShortcuts}
-        >
-          ?
-        </button>
-        <button
-          type="button"
           title="Open slash menu"
           className={TOOLBAR_BUTTON_BASE}
           onMouseDown={(e) => {
@@ -320,46 +286,6 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
           />
         </div>
       )}
-
-      {shortcutsOpen && (
-        <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 shadow-xl">
-          <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]">
-            Keyboard shortcuts
-          </p>
-          <ul className="space-y-1">
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
-              <span>Bold</span>
-              <span className="text-[var(--color-ink-muted)]">
-                Ctrl/Cmd + B
-              </span>
-            </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
-              <span>Italic</span>
-              <span className="text-[var(--color-ink-muted)]">
-                Ctrl/Cmd + I
-              </span>
-            </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
-              <span>Inline code</span>
-              <span className="text-[var(--color-ink-muted)]">
-                Ctrl/Cmd + E
-              </span>
-            </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
-              <span>Strikethrough</span>
-              <span className="text-[var(--color-ink-muted)]">
-                Ctrl/Cmd + Shift + X
-              </span>
-            </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
-              <span>Add link</span>
-              <span className="text-[var(--color-ink-muted)]">
-                Ctrl/Cmd + Shift + L
-              </span>
-            </li>
-          </ul>
-        </div>
-      )}
     </div>
   </div>
 );
@@ -380,38 +306,32 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const [hasFocus, setHasFocus] = useState(false);
   const [selectionSnapshot, setSelectionSnapshot] =
     useState<SelectionSnapshot | null>(null);
-  const selectionSnapshotRef = useRef<SelectionSnapshot | null>(null);
+  const isPlaceholderVisible = isInlineSourceEmpty(content);
   const [openPalette, setOpenPalette] = useState<PaletteKind>(null);
-  const [showShortcuts, setShowShortcuts] = useState(false);
   const [linkPicker, setLinkPicker] = useState<LinkPickerState | null>(null);
   const linkPickerRef = useRef<HTMLDivElement | null>(null);
   const canonicalSourceRef = useRef(content);
-  const normalizationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const renderedContentCache = useRef<{ source: string; html: string }>({
     source: "",
     html: "",
   });
 
+  const currentPage = usePageStore((s) =>
+    pageId ? s.pageById(pageId) : undefined,
+  );
+  const workspacePages = usePageStore((s) =>
+    currentPage?.workspaceId
+      ? (s.pages[currentPage.workspaceId] ?? EMPTY_WORKSPACE_PAGES)
+      : EMPTY_WORKSPACE_PAGES,
+  );
+
   const selectablePages = useMemo(() => {
-    return linkPicker?.mode === "internal"
-      ? getSelectablePagesSnapshot(pageId)
-      : EMPTY_WORKSPACE_PAGES;
-  }, [linkPicker?.mode, pageId]);
-
-  const filteredSelectablePages = useMemo(() => {
-    if (linkPicker?.mode !== "internal") {
-      return EMPTY_WORKSPACE_PAGES;
-    }
-
-    const lower = linkPicker.query.trim().toLowerCase();
-    return selectablePages
-      .filter((workspacePage) => {
-        if (!lower) return true;
-        return workspacePage.title.toLowerCase().includes(lower);
-      })
-      .slice(0, 12);
-  }, [linkPicker, selectablePages]);
-  const shouldTrackSelection = hasFocus || linkPicker !== null;
+    const accessContext = getCurrentPageAccessContext();
+    return workspacePages.filter(
+      (workspacePage) =>
+        !workspacePage.archivedAt && canReadPage(workspacePage, accessContext),
+    );
+  }, [workspacePages]);
 
   const getRenderedInlineHtml = useCallback((nextContent: string) => {
     if (renderedContentCache.current.source === nextContent) {
@@ -446,39 +366,12 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     [getRenderedInlineHtml],
   );
 
-  const clearScheduledNormalization = useCallback(() => {
-    if (normalizationTimerRef.current) {
-      clearTimeout(normalizationTimerRef.current);
-      normalizationTimerRef.current = null;
-    }
-  }, []);
-
-  const normalizeEditorDom = useCallback((nextContent: string) => {
-    const root = ref.current;
-    if (!root) {
-      return;
-    }
-
-    const selectionOffsets = isFocused.current
-      ? getInlineEditorSelectionOffsets(root)
-      : null;
-    renderContent(nextContent);
-    if (selectionOffsets && isFocused.current) {
-      setInlineEditorSelectionOffsets(root, selectionOffsets);
-    }
-  }, [renderContent]);
-
   useEffect(() => {
-    const root = ref.current;
-    if (!root) {
+    if (!ref.current) {
       return;
     }
 
-    if (content === canonicalSourceRef.current && root.innerHTML !== "") {
-      return;
-    }
-
-    const { source } = readInlineEditorDomState(root);
+    const { source } = readInlineEditorDomState(ref.current);
     if (source === content) {
       return;
     }
@@ -490,16 +383,13 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     const root = ref.current;
     if (!root || !isFocused.current) {
       if (!linkPicker) {
-        selectionSnapshotRef.current = null;
         setSelectionSnapshot((current) => (current ? null : current));
       }
       setOpenPalette(null);
-      setShowShortcuts(false);
       return;
     }
 
     const snapshot = getInlineEditorSelectionSnapshot(root);
-    selectionSnapshotRef.current = snapshot;
     setSelectionSnapshot((current) =>
       areInlineEditorSelectionSnapshotsEqual(current, snapshot)
         ? current
@@ -507,15 +397,10 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     );
     if (!snapshot) {
       setOpenPalette(null);
-      setShowShortcuts(false);
     }
   }, [linkPicker]);
 
   useEffect(() => {
-    if (!shouldTrackSelection) {
-      return;
-    }
-
     const handleSelectionChange = () => updateSelectionSnapshot();
     document.addEventListener("selectionchange", handleSelectionChange);
     window.addEventListener("resize", handleSelectionChange);
@@ -526,29 +411,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       window.removeEventListener("resize", handleSelectionChange);
       window.removeEventListener("scroll", handleSelectionChange, true);
     };
-  }, [shouldTrackSelection, updateSelectionSnapshot]);
-
-  useEffect(() => clearScheduledNormalization, [clearScheduledNormalization]);
-
-  const scheduleNormalization = useCallback(
-    (nextContent: string) => {
-      clearScheduledNormalization();
-      normalizationTimerRef.current = setTimeout(() => {
-        normalizationTimerRef.current = null;
-        if (isComposing.current) {
-          return;
-        }
-
-        normalizeEditorDom(
-          canonicalSourceRef.current === nextContent
-            ? nextContent
-            : canonicalSourceRef.current,
-        );
-        requestAnimationFrame(updateSelectionSnapshot);
-      }, NORMALIZATION_IDLE_DELAY_MS);
-    },
-    [clearScheduledNormalization, normalizeEditorDom, updateSelectionSnapshot],
-  );
+  }, [updateSelectionSnapshot]);
 
   const syncContentFromDom = useCallback(() => {
     if (!ref.current) {
@@ -558,7 +421,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     const { source } = readInlineEditorDomState(ref.current);
     const normalizedSource = normalizeInlineSource(source);
     canonicalSourceRef.current = normalizedSource;
-    onChange(source);
+    onChange(normalizedSource);
     return normalizedSource;
   }, [onChange]);
 
@@ -572,31 +435,25 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       return;
     }
 
-    const {
-      source,
-      requiresNormalization,
-      requiresElementNormalization,
-    } = readInlineEditorDomState(root);
-    canonicalSourceRef.current = source;
+    const selectionOffsets = getInlineEditorSelectionOffsets(root);
+    const { source, requiresNormalization } = readInlineEditorDomState(root);
+    const normalizedSource = normalizeInlineSource(source);
+    canonicalSourceRef.current = normalizedSource;
 
-    if (requiresElementNormalization) {
-      clearScheduledNormalization();
-      normalizeEditorDom(source);
-    } else if (requiresNormalization) {
-      scheduleNormalization(source);
-    } else {
-      clearScheduledNormalization();
+    if (requiresNormalization) {
+      const parsedHtml = getRenderedInlineHtml(normalizedSource);
+
+      if (root.innerHTML !== parsedHtml) {
+        root.innerHTML = parsedHtml;
+        if (selectionOffsets) {
+          setInlineEditorSelectionOffsets(root, selectionOffsets);
+        }
+      }
     }
 
-    onChange(source);
+    onChange(normalizedSource);
     requestAnimationFrame(updateSelectionSnapshot);
-  }, [
-    clearScheduledNormalization,
-    normalizeEditorDom,
-    onChange,
-    scheduleNormalization,
-    updateSelectionSnapshot,
-  ]);
+  }, [getRenderedInlineHtml, onChange, updateSelectionSnapshot]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -604,6 +461,27 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       requestAnimationFrame(updateSelectionSnapshot);
     },
     [onKeyDown, updateSelectionSnapshot],
+  );
+
+  const handleKeyUp = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (isComposing.current) {
+        return;
+      }
+
+      const shouldRefreshInlineParsing =
+        e.key.length === 1 ||
+        e.key === "Backspace" ||
+        e.key === "Delete" ||
+        e.key === "Tab";
+
+      if (!shouldRefreshInlineParsing) {
+        return;
+      }
+
+      handleInput();
+    },
+    [handleInput],
   );
 
   const handlePaste = useCallback(
@@ -651,15 +529,14 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const applyInlineFormattingCommand = useCallback(
     (command: InlineFormattingCommand) => {
       const root = ref.current;
-      const activeSelectionSnapshot = selectionSnapshotRef.current;
-      if (!root || !activeSelectionSnapshot) {
+      if (!root || !selectionSnapshot) {
         return;
       }
 
       const source = canonicalSourceRef.current;
       const nextContent = applyInlineFormatting(
         source,
-        activeSelectionSnapshot,
+        selectionSnapshot,
         command,
       );
       if (nextContent === source) {
@@ -668,20 +545,19 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         return;
       }
 
-      clearScheduledNormalization();
       onChange(nextContent);
       renderContent(nextContent);
       root.focus();
 
       requestAnimationFrame(() => {
         setInlineEditorSelectionOffsets(root, {
-          start: activeSelectionSnapshot.start,
-          end: activeSelectionSnapshot.end,
+          start: selectionSnapshot.start,
+          end: selectionSnapshot.end,
         });
         updateSelectionSnapshot();
       });
     },
-    [clearScheduledNormalization, onChange, renderContent, updateSelectionSnapshot],
+    [onChange, renderContent, selectionSnapshot, updateSelectionSnapshot],
   );
 
   const handleToggleInlineFormat = useCallback(
@@ -714,12 +590,12 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   }, [applyInlineFormattingCommand]);
 
   const handleAddLink = useCallback(() => {
-    if (!selectionSnapshotRef.current) {
+    if (!selectionSnapshot) {
       return;
     }
 
     setLinkPicker({ mode: "chooser", query: "" });
-  }, []);
+  }, [selectionSnapshot]);
 
   const handleApplyExternalLink = useCallback(
     (url: string) => {
@@ -753,19 +629,17 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   );
 
   const handleOpenSlashMenu = useCallback(() => {
-    const activeSelectionSnapshot = selectionSnapshotRef.current;
-    if (!activeSelectionSnapshot || !onRequestSlashMenu) {
+    if (!selectionSnapshot || !onRequestSlashMenu) {
       return;
     }
 
     onRequestSlashMenu({
-      x: activeSelectionSnapshot.rect.left,
-      y: activeSelectionSnapshot.rect.bottom,
+      x: selectionSnapshot.rect.left,
+      y: selectionSnapshot.rect.bottom,
     });
-    selectionSnapshotRef.current = null;
     setSelectionSnapshot(null);
     setOpenPalette(null);
-  }, [onRequestSlashMenu]);
+  }, [onRequestSlashMenu, selectionSnapshot]);
 
   useEffect(() => {
     if (!linkPicker) {
@@ -810,30 +684,28 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         suppressContentEditableWarning
         spellCheck
         data-placeholder={hasFocus ? placeholder : ""}
-        className={`outline-none whitespace-pre-wrap break-words empty:before:content-[attr(data-placeholder)] empty:before:text-[var(--color-ink-faint)] empty:before:pointer-events-none ${className}`}
+        data-empty={hasFocus && isPlaceholderVisible}
+        className={`outline-none whitespace-pre-wrap break-words data-[empty=true]:before:content-[attr(data-placeholder)] data-[empty=true]:before:text-[var(--color-ink-faint)] data-[empty=true]:before:pointer-events-none ${className}`}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onKeyUp={handleKeyUp}
         onPaste={handlePaste}
         onClick={handleClick}
         onMouseUp={updateSelectionSnapshot}
         onFocus={() => {
-          clearScheduledNormalization();
           isFocused.current = true;
           setHasFocus(true);
-          renderContent(canonicalSourceRef.current);
+          renderContent(content);
         }}
         onBlur={() => {
-          clearScheduledNormalization();
           isFocused.current = false;
           setHasFocus(false);
           if (!linkPicker) {
-            selectionSnapshotRef.current = null;
             setSelectionSnapshot(null);
           }
           setOpenPalette(null);
-          setShowShortcuts(false);
           const syncedContent = syncContentFromDom();
-          renderContent(syncedContent ?? canonicalSourceRef.current);
+          renderContent(syncedContent ?? content);
         }}
         onCompositionStart={() => {
           isComposing.current = true;
@@ -849,16 +721,11 @@ export const EditableContent: React.FC<EditableContentProps> = ({
             <InlineSelectionToolbar
               selection={selectionSnapshot}
               palette={openPalette}
-              shortcutsOpen={showShortcuts}
               onTogglePalette={(palette) =>
                 setOpenPalette((current) =>
                   current === palette ? null : palette,
                 )
               }
-              onToggleShortcuts={() => {
-                setOpenPalette(null);
-                setShowShortcuts((current) => !current);
-              }}
               onFormatBold={() => handleToggleInlineFormat("bold")}
               onFormatItalic={() => handleToggleInlineFormat("italic")}
               onFormatStrike={() => handleToggleInlineFormat("strikethrough")}
@@ -981,7 +848,16 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                     placeholder="Search pages"
                   />
                   <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-[var(--color-line)]">
-                    {filteredSelectablePages.map((workspacePage) => (
+                    {selectablePages
+                      .filter((workspacePage) => {
+                        const lower = linkPicker.query.trim().toLowerCase();
+                        if (!lower) return true;
+                        return workspacePage.title
+                          .toLowerCase()
+                          .includes(lower);
+                      })
+                      .slice(0, 12)
+                      .map((workspacePage) => (
                         <button
                           key={workspacePage._id}
                           type="button"
@@ -998,7 +874,11 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                           </span>
                         </button>
                       ))}
-                    {filteredSelectablePages.length === 0 && (
+                    {selectablePages.filter((workspacePage) => {
+                      const lower = linkPicker.query.trim().toLowerCase();
+                      if (!lower) return true;
+                      return workspacePage.title.toLowerCase().includes(lower);
+                    }).length === 0 && (
                       <p className="px-3 py-2 text-sm text-[var(--color-ink-faint)]">
                         No pages match your search.
                       </p>
