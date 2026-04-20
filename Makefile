@@ -106,6 +106,10 @@ audit: ## Full analysis: Typecheck + Lint + SonarQube (requires SonarQube up)
 
 ci: typecheck lint ## Run the same checks as GitHub Actions locally
 
+test: ## Prepare browser-test dependencies if needed and run MANUAL_TESTING_GUIDE.md scenarios
+	@echo -e "$(CYAN)Preparing browser regression test environment…$(RESET)"
+	npm run test
+
 # ── Database ─────────────────────────────────────────────────────────────
 
 db-up: ## Start only MongoDB
@@ -166,4 +170,4 @@ update-submodules: ## Update git submodules (if any)
 
 .PHONY: help install dev dev-docker up stop down build typecheck \
         db-up db-shell db-reset re clean logs logs-vite logs-mongo \
-        kill-ports status lint lint-fix audit ci sonar update-submodules
+        kill-ports status lint lint-fix audit ci sonar update-submodules test
