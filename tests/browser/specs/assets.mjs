@@ -2,11 +2,13 @@ import { expect } from "@playwright/test";
 
 import {
   activateFirstEditor,
+  clickOutside,
   clearAndType,
   createCallout,
   createMediaBlock,
   getEditors,
   openFreshPage,
+  pickAssetFromVisiblePicker,
   pickFirstAssetFromVisiblePicker,
   selectText,
   toolbarButton,
@@ -55,6 +57,34 @@ export const assetScenarios = [
   defineScenario(
     "12. Emojis, Icons & Media",
     "Page icons",
+    "clicking outside the page icon picker closes it",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await page.getByRole("button", { name: /Add icon/i }).dispatchEvent("click");
+      const iconButton = page.getByRole("button", { name: "Change page icon" });
+      await iconButton.dispatchEvent("click");
+      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
+      await clickOutside(page);
+      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toHaveCount(0);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Page icons",
+    "the page icon picker can be reopened after closing it once",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await page.getByRole("button", { name: /Add icon/i }).dispatchEvent("click");
+      const iconButton = page.getByRole("button", { name: "Change page icon" });
+      await iconButton.dispatchEvent("click");
+      await page.keyboard.press("Escape");
+      await iconButton.dispatchEvent("click");
+      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Page icons",
     "Remove icon clears the page icon and restores the Add icon action",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
@@ -64,6 +94,30 @@ export const assetScenarios = [
       await page.getByRole("button", { name: /^Remove icon$/ }).click();
       await expect(page.getByRole("button", { name: /Add icon/i })).toBeVisible();
       await expect(iconButton).toHaveCount(0);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Page icons",
+    "clicking a custom page icon reopens its picker after the icon has already been changed",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await page.getByRole("button", { name: /Add icon/i }).dispatchEvent("click");
+      const iconButton = page.getByRole("button", { name: "Change page icon" });
+      await iconButton.dispatchEvent("click");
+      await pickFirstAssetFromVisiblePicker(page);
+      await iconButton.dispatchEvent("click");
+      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Callout icons",
+    "new callout blocks start with the default light bulb icon",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createCallout(page);
+      await expect(page.getByRole("button", { name: "Change callout icon" })).toContainText("💡");
     },
   ),
   defineScenario(
@@ -83,6 +137,20 @@ export const assetScenarios = [
   defineScenario(
     "12. Emojis, Icons & Media",
     "Callout icons",
+    "clicking outside the callout icon picker closes it",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createCallout(page);
+      const button = page.getByRole("button", { name: "Change callout icon" });
+      await button.click({ force: true });
+      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
+      await clickOutside(page);
+      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toHaveCount(0);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Callout icons",
     "selecting an asset updates the callout icon immediately",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
@@ -93,6 +161,34 @@ export const assetScenarios = [
       await page.getByRole("button", { name: /^Icons$/ }).click();
       await pickFirstAssetFromVisiblePicker(page);
       expect(await button.innerHTML()).not.toBe(previousMarkup);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Callout icons",
+    "the callout icon picker can be reopened after being closed",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createCallout(page);
+      const button = page.getByRole("button", { name: "Change callout icon" });
+      await button.click({ force: true });
+      await page.keyboard.press("Escape");
+      await button.click({ force: true });
+      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Callout icons",
+    "clicking a custom callout icon reopens its picker after the icon has already changed",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createCallout(page);
+      const button = page.getByRole("button", { name: "Change callout icon" });
+      await button.click({ force: true });
+      await pickFirstAssetFromVisiblePicker(page);
+      await button.click({ force: true });
+      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
     },
   ),
   defineScenario(
@@ -124,6 +220,19 @@ export const assetScenarios = [
   defineScenario(
     "12. Emojis, Icons & Media",
     "Page cover",
+    "selecting a cover from the picker updates the page cover immediately",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await page.getByRole("button", { name: /Add cover/i }).dispatchEvent("click");
+      const previousMarkup = await page.locator(".notion-page-cover-media").innerHTML();
+      await page.getByRole("button", { name: /Change cover/i }).dispatchEvent("click");
+      await pickFirstAssetFromVisiblePicker(page);
+      expect(await page.locator(".notion-page-cover-media").innerHTML()).not.toBe(previousMarkup);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Page cover",
     "clicking Change cover opens the cover picker and outside click closes it",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
@@ -132,6 +241,46 @@ export const assetScenarios = [
       await expect(page.locator(".notion-cover-picker")).toHaveCount(1);
       await page.mouse.click(20, 20);
       await expect(page.locator(".notion-cover-picker")).toHaveCount(0);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Page cover",
+    "pressing Escape closes the cover picker",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await page.getByRole("button", { name: /Add cover/i }).dispatchEvent("click");
+      await page.getByRole("button", { name: /Change cover/i }).dispatchEvent("click");
+      await expect(page.locator(".notion-cover-picker")).toHaveCount(1);
+      await page.keyboard.press("Escape");
+      await expect(page.locator(".notion-cover-picker")).toHaveCount(0);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Page cover",
+    "the cover picker can be reopened after it has been closed",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await page.getByRole("button", { name: /Add cover/i }).dispatchEvent("click");
+      const changeCover = page.getByRole("button", { name: /Change cover/i });
+      await changeCover.dispatchEvent("click");
+      await page.keyboard.press("Escape");
+      await changeCover.dispatchEvent("click");
+      await expect(page.locator(".notion-cover-picker")).toHaveCount(1);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Page cover",
+    "closing the cover picker without selecting anything keeps the current cover in place",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await page.getByRole("button", { name: /Add cover/i }).dispatchEvent("click");
+      const previousMarkup = await page.locator(".notion-page-cover-media").innerHTML();
+      await page.getByRole("button", { name: /Change cover/i }).dispatchEvent("click");
+      await page.keyboard.press("Escape");
+      expect(await page.locator(".notion-page-cover-media").innerHTML()).toBe(previousMarkup);
     },
   ),
   defineScenario(
@@ -206,6 +355,35 @@ export const assetScenarios = [
       await page.getByRole("button", { name: /^Image$/i }).click();
       await pickFirstAssetFromVisiblePicker(page);
       await expect(getEditors(page).first()).toHaveText("Paragraph before image");
+      await expect(page.locator('button:has-text("Change image")')).toBeVisible();
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Media blocks",
+    "changing an image asset updates the image preview without changing block type",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createMediaBlock(page, "image");
+      const image = page.locator("img").first();
+      const previousSrc = await image.getAttribute("src");
+      await page.locator('button:has-text("Change image")').click();
+      await pickAssetFromVisiblePicker(page, 1);
+      await expect(page.locator('button:has-text("Change image")')).toBeVisible();
+      expect(await page.locator("img").first().getAttribute("src")).not.toBe(previousSrc);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Media blocks",
+    "clicking outside a media picker closes it without changing the current block",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createMediaBlock(page, "image");
+      await page.locator('button:has-text("Change image")').click();
+      await expect(page.getByRole("button", { name: /^Close$/ }).last()).toBeVisible();
+      await clickOutside(page);
+      await expect(page.getByRole("button", { name: /^Close$/ })).toHaveCount(0);
       await expect(page.locator('button:has-text("Change image")')).toBeVisible();
     },
   ),

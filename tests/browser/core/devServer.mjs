@@ -1,5 +1,16 @@
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
+import path from "node:path";
 import net from "node:net";
+
+const require = createRequire(import.meta.url);
+const isWindows = process.platform === "win32";
+const vitePackagePath = require.resolve("vite/package.json");
+const vitePackage = require(vitePackagePath);
+const viteBinPath = path.join(
+  path.dirname(vitePackagePath),
+  typeof vitePackage.bin === "string" ? vitePackage.bin : vitePackage.bin.vite,
+);
 
 function getFreePort() {
   return new Promise((resolve, reject) => {
@@ -57,7 +68,7 @@ async function stopDevServer(child) {
     return;
   }
 
-  child.kill("SIGTERM");
+  terminateProcessGroup(child.pid, "SIGTERM");
   const killedGracefully = await new Promise((resolve) => {
     const timer = setTimeout(() => resolve(false), 5_000);
     child.once("exit", () => {
@@ -67,8 +78,28 @@ async function stopDevServer(child) {
   });
 
   if (!killedGracefully && child.exitCode === null) {
-    child.kill("SIGKILL");
+    terminateProcessGroup(child.pid, "SIGKILL");
     await new Promise((resolve) => child.once("exit", resolve));
+  }
+}
+
+function terminateProcessGroup(pid, signal) {
+  if (!pid) {
+    return;
+  }
+
+  try {
+    if (isWindows) {
+      process.kill(pid, signal);
+      return;
+    }
+
+    process.kill(-pid, signal);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ESRCH") {
+      return;
+    }
+    throw error;
   }
 }
 
@@ -77,11 +108,9 @@ export async function startDevServer({ cwd }) {
   const url = `http://127.0.0.1:${port}/`;
   const output = [];
   const child = spawn(
-    "npm",
+    process.execPath,
     [
-      "run",
-      "dev",
-      "--",
+      viteBinPath,
       "--host",
       "127.0.0.1",
       "--port",
@@ -95,6 +124,7 @@ export async function startDevServer({ cwd }) {
         BROWSER: "none",
         CI: "1",
       },
+      detached: !isWindows,
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
