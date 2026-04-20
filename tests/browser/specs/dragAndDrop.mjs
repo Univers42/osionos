@@ -1,12 +1,18 @@
 import { expect } from "@playwright/test";
 
 import {
+  blockLocator,
+  blockWrapper,
+  blockOpacity,
   createParagraphs,
+  dragOverBlock,
   dragBlockTo,
+  endSyntheticBlockDrag,
   editorLeft,
   getEditors,
   openFreshPage,
   pressTab,
+  startSyntheticBlockDrag,
   visibleBlockTexts,
 } from "../core/app.mjs";
 import { defineScenario } from "../core/scenario.mjs";
@@ -79,6 +85,31 @@ export const dragAndDropScenarios = [
       await pressTab(getEditors(page).nth(2));
       await dragBlockTo(page, 0, 3, "below");
       expect((await visibleBlockTexts(page)).slice(0, 4)).toEqual(["D", "A", "B", "C"]);
+    },
+  ),
+  defineScenario(
+    "6. Drag and Drop",
+    "Safety checks",
+    "starting a drag marks the dragged block with reduced opacity",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createParagraphs(page, ["A", "B"]);
+      const dataTransfer = await startSyntheticBlockDrag(page, 0);
+      await expect.poll(async () => blockOpacity(page, 0)).toBeLessThan(0.5);
+      await endSyntheticBlockDrag(page, 0, dataTransfer);
+    },
+  ),
+  defineScenario(
+    "6. Drag and Drop",
+    "Safety checks",
+    "dragging over another block shows a visible drop indicator",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createParagraphs(page, ["A", "B"]);
+      const dataTransfer = await startSyntheticBlockDrag(page, 0);
+      await dragOverBlock(page, 1, dataTransfer, "above");
+      await expect(blockWrapper(page, 1).locator("div.pointer-events-none")).toHaveCount(1);
+      await endSyntheticBlockDrag(page, 0, dataTransfer);
     },
   ),
   defineScenario(

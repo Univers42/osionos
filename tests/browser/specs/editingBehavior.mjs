@@ -2,6 +2,7 @@ import { expect } from "@playwright/test";
 
 import {
   activateFirstEditor,
+  blockLocatorForEditor,
   clearAndType,
   createBlockViaSlash,
   createDivider,
@@ -114,6 +115,26 @@ export const editingBehaviorScenarios = [
   defineScenario(
     "3. Enter Key Behavior",
     "List continuation",
+    "pressing Enter on a checked empty to-do item converts it into a paragraph and clears the checked state",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await clearAndType(editor, "[] ");
+      await page.keyboard.type("Task");
+      await pressEnter(editor);
+      const emptyItem = getEditors(page).nth(1);
+      await todoCheckboxes(page).nth(1).click();
+      await pressEnter(emptyItem);
+      await expect(todoCheckboxes(page)).toHaveCount(1);
+      await expect(getEditors(page)).toHaveCount(2);
+      await expect(
+        blockLocatorForEditor(getEditors(page).nth(1)).locator("button.w-4.h-4"),
+      ).toHaveCount(0);
+    },
+  ),
+  defineScenario(
+    "3. Enter Key Behavior",
+    "List continuation",
     "pressing Enter on an empty bulleted list item converts it into a paragraph",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
@@ -124,6 +145,22 @@ export const editingBehaviorScenarios = [
       const emptyItem = getEditors(page).nth(1);
       await pressEnter(emptyItem);
       await expect(page.locator(".rounded-full")).toHaveCount(1);
+      await expect(getEditors(page)).toHaveCount(2);
+    },
+  ),
+  defineScenario(
+    "3. Enter Key Behavior",
+    "List continuation",
+    "pressing Enter on an empty numbered list item converts it into a paragraph",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await clearAndType(editor, "1. ");
+      await page.keyboard.type("First");
+      await pressEnter(editor);
+      const emptyItem = getEditors(page).nth(1);
+      await pressEnter(emptyItem);
+      await expect(page.locator("text=2.")).toHaveCount(0);
       await expect(getEditors(page)).toHaveCount(2);
     },
   ),
@@ -194,6 +231,22 @@ export const editingBehaviorScenarios = [
   defineScenario(
     "4. Backspace / Delete Behavior",
     "Empty block deletion",
+    "Backspace on an empty bulleted list item deletes it and keeps focus on a logical sibling",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await clearAndType(editor, "- ");
+      await page.keyboard.type("Bullet");
+      await pressEnter(editor);
+      const emptyItem = getEditors(page).nth(1);
+      await emptyItem.press("Backspace");
+      await expect(page.locator(".rounded-full")).toHaveCount(1);
+      expect(await editorHasFocus(getEditors(page).first())).toBe(true);
+    },
+  ),
+  defineScenario(
+    "4. Backspace / Delete Behavior",
+    "Empty block deletion",
     "Backspace on an empty root paragraph deletes it and focuses the previous block",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
@@ -202,6 +255,21 @@ export const editingBehaviorScenarios = [
       await clearAndType(second, "");
       await second.press("Backspace");
       await expect(getEditors(page)).toHaveCount(1);
+      expect(await editorHasFocus(getEditors(page).first())).toBe(true);
+    },
+  ),
+  defineScenario(
+    "4. Backspace / Delete Behavior",
+    "Empty block deletion",
+    "Delete on the first empty root paragraph deletes it and focuses the next logical block",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createParagraphs(page, ["Delete me", "Keep me"]);
+      const first = getEditors(page).first();
+      await clearAndType(first, "");
+      await first.press("Delete");
+      await expect(getEditors(page)).toHaveCount(1);
+      await expect(getEditors(page).first()).toHaveText("Keep me");
       expect(await editorHasFocus(getEditors(page).first())).toBe(true);
     },
   ),
@@ -237,6 +305,18 @@ export const editingBehaviorScenarios = [
       await child.press("Backspace");
       expect(await editorLeft(child)).toBeLessThan(indentedLeft - 8);
       await expect(getEditors(page)).toHaveCount(2);
+    },
+  ),
+  defineScenario(
+    "4. Backspace / Delete Behavior",
+    "Divider deletion",
+    "Backspace on a focused divider removes it from the page",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createDivider(page);
+      await page.getByRole("button", { name: /Divider block/i }).click();
+      await page.keyboard.press("Backspace");
+      await expect(page.getByRole("button", { name: /Divider block/i })).toHaveCount(0);
     },
   ),
   defineScenario(

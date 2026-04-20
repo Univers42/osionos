@@ -2,8 +2,16 @@ import process from "node:process";
 
 export async function openFreshPage(page, appUrl) {
   await page.goto(appUrl, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: /New page/i }).last().click();
+  const newPageButton = page.getByRole("button", { name: /New page/i }).first();
+  await newPageButton.waitFor({ state: "visible" });
+  await newPageButton.click({ force: true });
   await page.getByRole("textbox", { name: "Page title" }).waitFor();
+}
+
+export async function openHarnessPage(page, appUrl, relativePath) {
+  await page.goto(new URL(relativePath, appUrl).toString(), {
+    waitUntil: "networkidle",
+  });
 }
 
 export async function activateFirstEditor(page) {
@@ -21,6 +29,10 @@ export async function activateFirstEditor(page) {
 
 export function getEditors(page) {
   return page.locator('[role="textbox"][aria-multiline="true"]');
+}
+
+export function pageTitleEditor(page) {
+  return page.getByRole("textbox", { name: "Page title" });
 }
 
 export async function editorText(editor) {
@@ -44,6 +56,13 @@ export async function clearAndType(editor, text) {
   if (text) {
     await editor.page().keyboard.type(text);
   }
+}
+
+export async function clearAndTypePageTitle(page, text) {
+  const title = pageTitleEditor(page);
+  await title.click();
+  await title.press(`${modifier()}+A`);
+  await page.keyboard.type(text);
 }
 
 export async function focusEditorStart(editor) {
@@ -187,6 +206,13 @@ export function blockLocator(page, index) {
   return page.locator("[data-block-id]").nth(index);
 }
 
+export function blockWrapper(page, index) {
+  return page
+    .getByRole("button", { name: /Drag to reorder block/i })
+    .nth(index)
+    .locator("xpath=ancestor::div[button[@aria-label='Drag to reorder block']][1]");
+}
+
 export function blockLocatorForEditor(editor) {
   return editor.locator("xpath=ancestor::*[@data-block-id][1]");
 }
@@ -213,11 +239,13 @@ export async function editorHasFocus(editor) {
   return editor.evaluate((node) => node === document.activeElement);
 }
 
-export async function selectSlashMenuEntry(page, label) {
-  await page
+export async function selectSlashMenuEntry(page, label, options = {}) {
+  const entry = page
     .locator("button:visible", { hasText: new RegExp(label, "i") })
-    .first()
-    .click();
+    .first();
+  await entry.waitFor({ timeout: options.timeout ?? 30_000 });
+  await entry.scrollIntoViewIfNeeded();
+  await entry.click({ force: true });
 }
 
 export async function createBlockViaSlash(page, slashCommand, label, editorIndex = 0) {
@@ -228,7 +256,11 @@ export async function createBlockViaSlash(page, slashCommand, label, editorIndex
   const editor = getEditors(page).nth(editorIndex);
   await editor.waitFor();
   await openSlashMenuFromEditor(editor, `/${slashCommand}`);
-  await selectSlashMenuEntry(page, `^${label}$`);
+  try {
+    await selectSlashMenuEntry(page, `^${label}$`, { timeout: 1_000 });
+  } catch {
+    await selectSlashMenuEntry(page, label);
+  }
   return editor;
 }
 
@@ -350,17 +382,26 @@ export function contextMenuItem(page, label) {
 
 export async function pasteText(editor, text) {
   const page = editor.page();
-  const origin = new URL(page.url()).origin;
-  await page.context().grantPermissions(
-    ["clipboard-read", "clipboard-write"],
-    { origin },
-  );
+  await ensureClipboardAccess(page);
   await page.evaluate(async (value) => {
     await navigator.clipboard.writeText(value);
   }, text);
   await editor.click();
   await page.keyboard.press(`${modifier()}+V`);
   await page.waitForTimeout(100);
+}
+
+export async function ensureClipboardAccess(page) {
+  const origin = new URL(page.url()).origin;
+  await page.context().grantPermissions(
+    ["clipboard-read", "clipboard-write"],
+    { origin },
+  );
+}
+
+export async function readClipboardText(page) {
+  await ensureClipboardAccess(page);
+  return page.evaluate(async () => navigator.clipboard.readText());
 }
 
 export async function dragBlockTo(page, fromIndex, toIndex, targetPosition = "above") {
@@ -378,6 +419,46 @@ export async function dragBlockTo(page, fromIndex, toIndex, targetPosition = "ab
       y: targetPosition === "above" ? 2 : Math.max(4, targetBox.height - 2),
     },
   });
+}
+
+export async function startSyntheticBlockDrag(page, fromIndex) {
+  const handle = page
+    .getByRole("button", { name: /Drag to reorder block/i })
+    .nth(fromIndex);
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  await handle.dispatchEvent("dragstart", { dataTransfer });
+  return dataTransfer;
+}
+
+export async function dragOverBlock(page, toIndex, dataTransfer, targetPosition = "above") {
+  const target = blockLocator(page, toIndex);
+  const targetBox = await target.boundingBox();
+
+  if (!targetBox) {
+    throw new Error("Could not resolve drag target bounding box");
+  }
+
+  await target.dispatchEvent("dragover", {
+    dataTransfer,
+    clientX: targetBox.x + Math.min(24, Math.max(8, targetBox.width / 2)),
+    clientY:
+      targetBox.y +
+      (targetPosition === "above" ? 2 : Math.max(4, targetBox.height - 2)),
+  });
+}
+
+export async function endSyntheticBlockDrag(page, fromIndex, dataTransfer) {
+  const handle = page
+    .getByRole("button", { name: /Drag to reorder block/i })
+    .nth(fromIndex);
+  await handle.dispatchEvent("dragend", { dataTransfer });
+  await dataTransfer.dispose();
+}
+
+export async function blockOpacity(page, index) {
+  return blockWrapper(page, index).evaluate((node) =>
+    Number.parseFloat(getComputedStyle(node).opacity),
+  );
 }
 
 export async function visibleBlockTexts(page) {
