@@ -81,7 +81,9 @@ function normalizeInlineSource(source: string): string {
 }
 
 function isInlineSourceEmpty(source: string): boolean {
-  return normalizeInlineSource(source).replaceAll("\u00A0", " ").trim().length === 0;
+  return (
+    normalizeInlineSource(source).replaceAll("\u00A0", " ").trim().length === 0
+  );
 }
 
 const TOOLBAR_BUTTON_BASE =

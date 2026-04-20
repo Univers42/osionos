@@ -115,7 +115,7 @@ function isListType(
 }
 
 function isEffectivelyEmptyForDeletion(text: string): boolean {
-  return text.replaceAll(/[\r\n\u200B]/g, "").length === 0;
+  return text.replaceAll("\u200B", "").trim().length === 0;
 }
 
 function toBlockUpdates(block: Block): Partial<Block> {
@@ -724,9 +724,9 @@ export function usePlaygroundBlockEditor(pageId: string) {
       const liveText =
         (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
       const isEmpty = isEffectivelyEmpty(liveText);
-      const shouldPreventParagraphBackspaceDelete =
-        e.key === "Backspace" && block.type === "paragraph";
-      const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
+      const isEmptyForDeletion =
+        isEffectivelyEmptyForDeletion(liveText) ||
+        isEffectivelyEmptyForDeletion(block.content);
 
       if (handleTransformKeys(e, blockId, block, blockIdx, content, isEmpty)) {
         return;
@@ -740,16 +740,13 @@ export function usePlaygroundBlockEditor(pageId: string) {
           blockIdx,
           content,
           parentBlockId,
-          isEmptyForDeletion && !shouldPreventParagraphBackspaceDelete,
+          isEmptyForDeletion,
         )
       ) {
         return;
       }
     },
-    [
-      handleTransformKeys,
-      handleFlowAndNavigationKeys,
-    ],
+    [handleTransformKeys, handleFlowAndNavigationKeys],
   );
 
   /** Create a real inline database + default view in the shared DBMS store. */
