@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { FileText, Database } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import { canReadPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
