@@ -3,11 +3,13 @@ import { expect } from "@playwright/test";
 import {
   clearAndType,
   contextMenuItem,
+  createBlockViaSlash,
   createParagraphs,
   editorHasFocus,
   getEditors,
   openBlockContextMenuForEditor,
   openFreshPage,
+  pressEnter,
   pressTab,
   visibleBlockTexts,
 } from "../core/app.mjs";
@@ -43,6 +45,39 @@ export const contextMenuScenarios = [
       await dragHandle(page).click({ force: true });
       await expect(contextMenuItem(page, "Insert text above")).toBeVisible();
       await expect(contextMenuItem(page, "Duplicate")).toBeVisible();
+    },
+  ),
+  defineScenario(
+    "5. Context Menu",
+    "Basic operations",
+    "Copy text writes the current block text to the clipboard",
+    async ({ page, appUrl }) => {
+      await page.addInitScript(() => {
+        const clipboard = navigator.clipboard;
+        (window).__copiedText = null;
+        if (!clipboard?.writeText) {
+          return;
+        }
+
+        const originalWriteText = clipboard.writeText.bind(clipboard);
+        Object.defineProperty(clipboard, "writeText", {
+          configurable: true,
+          value: async (value) => {
+            (window).__copiedText = value;
+            try {
+              return await originalWriteText(value);
+            } catch {
+              return undefined;
+            }
+          },
+        });
+      });
+      await openFreshPage(page, appUrl);
+      await createParagraphs(page, ["Copy me"]);
+      await page.waitForTimeout(150);
+      await openBlockContextMenuForEditor(getEditors(page).first());
+      await contextMenuItem(page, "Copy text").click();
+      await expect.poll(() => page.evaluate(() => window.__copiedText)).toBe("Copy me");
     },
   ),
   defineScenario(
@@ -160,12 +195,12 @@ export const contextMenuScenarios = [
     "Delete on a toggle parent removes the whole toggle subtree",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await createParagraphs(page, ["Toggle parent", "Toggle child"]);
+      await createBlockViaSlash(page, "toggle", "Toggle");
       const parent = getEditors(page).first();
-      await clearAndType(parent, "/toggle");
-      await page.getByRole("button", { name: /^Toggle$/ }).click();
-      await pressTab(getEditors(page).nth(1));
-      await openBlockContextMenuForEditor(getEditors(page).first());
+      await clearAndType(parent, "Toggle parent");
+      await pressEnter(parent);
+      await clearAndType(getEditors(page).nth(1), "Toggle child");
+      await openBlockContextMenuForEditor(parent);
       await contextMenuItem(page, "Delete").click();
       await expect(getEditors(page)).toHaveCount(0);
     },

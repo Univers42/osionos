@@ -12,6 +12,10 @@ import { editingBehaviorScenarios } from "./specs/editingBehavior.mjs";
 import { contextMenuScenarios } from "./specs/contextMenu.mjs";
 import { dragAndDropScenarios } from "./specs/dragAndDrop.mjs";
 import { containerAndPasteScenarios } from "./specs/containersAndPaste.mjs";
+import { categoryRegistryScenarios } from "./specs/categoryRegistry.mjs";
+import { harnessCoverageScenarios } from "./specs/harnessCoverage.mjs";
+import { focusManagementScenarios } from "./specs/focusManagement.mjs";
+import { persistenceAndQualityScenarios } from "./specs/persistenceAndQuality.mjs";
 
 const scenarios = [
   ...blockCreationScenarios,
@@ -20,8 +24,12 @@ const scenarios = [
   ...contextMenuScenarios,
   ...dragAndDropScenarios,
   ...containerAndPasteScenarios,
+  ...categoryRegistryScenarios,
+  ...focusManagementScenarios,
   ...inlineToolbarScenarios,
   ...assetScenarios,
+  ...harnessCoverageScenarios,
+  ...persistenceAndQualityScenarios,
 ];
 const testFilter = process.env.TEST_FILTER?.trim().toLowerCase() ?? "";
 const filteredScenarios = testFilter
@@ -80,6 +88,23 @@ function formatResultLine(result) {
   }
 
   return `${colorize(color, symbol)} ${colorize(color, label)} ${duration} ${colorize(ANSI.red, `-> ${result.reason}`)}`;
+}
+
+function formatFailureSummary(results) {
+  const failures = results.filter((result) => result.status === "FAIL");
+  if (failures.length === 0) {
+    return "";
+  }
+
+  const lines = failures.map((result, index) => {
+    return `  ${index + 1}. ${formatScenarioLabel(result.scenario)}\n     ${result.reason}`;
+  });
+
+  return [
+    "",
+    colorize(ANSI.red, "Failed Scenarios:"),
+    ...lines,
+  ].join("\n");
 }
 
 async function executeScenario(browser, scenario, appUrl) {
@@ -168,6 +193,10 @@ async function main() {
       `${summarySymbol} Summary: ${passed}/${completedResults.length} passed, ${failed}/${completedResults.length} failed.`,
     )} ${colorize(ANSI.dim, `(${totalDurationMs}ms total)`)}`
   );
+
+  if (failed > 0) {
+    console.log(formatFailureSummary(completedResults));
+  }
 
   if (failed > 0) {
     process.exitCode = 1;

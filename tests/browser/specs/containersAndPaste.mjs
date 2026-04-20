@@ -2,10 +2,13 @@ import { expect } from "@playwright/test";
 
 import {
   activateFirstEditor,
+  blockLocatorForEditor,
   clearAndType,
+  contextMenuItem,
   createBlockViaSlash,
   editorLeft,
   getEditors,
+  openBlockContextMenuForEditor,
   openFreshPage,
   openSlashMenuFromEditor,
   pasteText,
@@ -107,6 +110,27 @@ export const containerAndPasteScenarios = [
   defineScenario(
     "7. Toggle Block",
     "Toggle + external interactions",
+    "a root block can be moved into a collapsed toggle and remains hidden until the toggle is expanded",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createBlockViaSlash(page, "toggle", "Toggle");
+      await page.keyboard.type("Toggle summary");
+      const summary = getEditors(page).first();
+      await openBlockContextMenuForEditor(summary);
+      await contextMenuItem(page, "Insert text below").click();
+      const child = getEditors(page).nth(1);
+      await clearAndType(child, "Hidden child");
+      await toggleChevron(page).click();
+      await pressTab(child);
+      await expect(getEditors(page)).toHaveCount(1);
+      await toggleChevron(page).click();
+      await expect(getEditors(page)).toHaveCount(2);
+      await expect(getEditors(page).nth(1)).toHaveText("Hidden child");
+    },
+  ),
+  defineScenario(
+    "7. Toggle Block",
+    "Toggle + external interactions",
     "deleting an empty toggle summary promotes its child blocks to the parent level",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
@@ -122,6 +146,23 @@ export const containerAndPasteScenarios = [
       await expect(getEditors(page)).toHaveCount(1);
       await expect(getEditors(page).first()).toHaveText("Promoted child");
       expect(await editorLeft(getEditors(page).first())).toBeLessThan(childLeft - 8);
+    },
+  ),
+  defineScenario(
+    "8. Callout & Quote as Containers",
+    "Callout",
+    "callout children are rendered inside the callout box",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createBlockViaSlash(page, "callout", "Callout");
+      const callout = getEditors(page).first();
+      await clearAndType(callout, "Callout");
+      await pressEnter(callout);
+      const child = getEditors(page).nth(1);
+      await clearAndType(child, "Nested inside callout");
+      await expect(blockLocatorForEditor(callout).locator("[data-block-id]")).toContainText([
+        "Nested inside callout",
+      ]);
     },
   ),
   defineScenario(
@@ -156,6 +197,33 @@ export const containerAndPasteScenarios = [
   defineScenario(
     "8. Callout & Quote as Containers",
     "Callout",
+    "deleting an empty callout keeps nested grandchildren under their promoted parent",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createBlockViaSlash(page, "callout", "Callout");
+      const callout = getEditors(page).first();
+      await clearAndType(callout, "Callout");
+      await pressEnter(callout);
+      const parentChild = getEditors(page).nth(1);
+      await clearAndType(parentChild, "Parent child");
+      await pressEnter(parentChild);
+      const secondChild = getEditors(page).nth(2);
+      await clearAndType(secondChild, "Grandchild");
+      await pressTab(secondChild);
+      const nestedLeftBefore = await editorLeft(secondChild);
+      await clearAndType(callout, "");
+      await callout.press("Backspace");
+      await expect(getEditors(page).first()).toHaveText("Parent child");
+      await expect(getEditors(page).nth(1)).toHaveText("Grandchild");
+      expect(await editorLeft(getEditors(page).nth(1))).toBeGreaterThan(
+        (await editorLeft(getEditors(page).first())) + 8,
+      );
+      expect(await editorLeft(getEditors(page).nth(1))).toBeGreaterThan(nestedLeftBefore - 4);
+    },
+  ),
+  defineScenario(
+    "8. Callout & Quote as Containers",
+    "Callout",
     "deleting an empty callout promotes its children instead of deleting their content",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
@@ -171,6 +239,23 @@ export const containerAndPasteScenarios = [
       await expect(getEditors(page)).toHaveCount(1);
       await expect(getEditors(page).first()).toHaveText("Promoted child");
       expect(await editorLeft(getEditors(page).first())).toBeLessThan(childLeft - 8);
+    },
+  ),
+  defineScenario(
+    "8. Callout & Quote as Containers",
+    "Quote",
+    "quote children are rendered inside the quote branch",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createBlockViaSlash(page, "quote", "Quote");
+      const quote = getEditors(page).first();
+      await clearAndType(quote, "Quote");
+      await pressEnter(quote);
+      const child = getEditors(page).nth(1);
+      await clearAndType(child, "Nested inside quote");
+      await expect(blockLocatorForEditor(quote).locator("[data-block-id]")).toContainText([
+        "Nested inside quote",
+      ]);
     },
   ),
   defineScenario(
@@ -192,6 +277,26 @@ export const containerAndPasteScenarios = [
       expect(await editorLeft(firstChild)).toBeGreaterThan(quoteLeft + 8);
       expect(await editorLeft(secondChild)).toBeGreaterThan(quoteLeft + 8);
       await expect(getEditors(page)).toHaveCount(3);
+    },
+  ),
+  defineScenario(
+    "8. Callout & Quote as Containers",
+    "Quote",
+    "deleting an empty quote promotes its children according to editor rules",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createBlockViaSlash(page, "quote", "Quote");
+      const quote = getEditors(page).first();
+      await clearAndType(quote, "Quote");
+      await pressEnter(quote);
+      const child = getEditors(page).nth(1);
+      await clearAndType(child, "Promoted quote child");
+      const childLeft = await editorLeft(child);
+      await clearAndType(quote, "");
+      await quote.press("Backspace");
+      await expect(getEditors(page)).toHaveCount(1);
+      await expect(getEditors(page).first()).toHaveText("Promoted quote child");
+      expect(await editorLeft(getEditors(page).first())).toBeLessThan(childLeft - 8);
     },
   ),
   defineScenario(

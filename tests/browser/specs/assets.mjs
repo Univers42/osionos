@@ -298,6 +298,17 @@ export const assetScenarios = [
   defineScenario(
     "12. Emojis, Icons & Media",
     "Media blocks",
+    "creating an image from an empty paragraph converts the current block without leaving an extra paragraph behind",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createMediaBlock(page, "image");
+      await expect(page.locator('button:has-text("Change image")')).toBeVisible();
+      await expect(getEditors(page)).toHaveCount(1);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Media blocks",
     "an image block can be created from the slash menu on an empty paragraph",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
@@ -371,6 +382,20 @@ export const assetScenarios = [
       await pickAssetFromVisiblePicker(page, 1);
       await expect(page.locator('button:has-text("Change image")')).toBeVisible();
       expect(await page.locator("img").first().getAttribute("src")).not.toBe(previousSrc);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Media blocks",
+    "pressing Escape closes a media picker without changing the current block",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createMediaBlock(page, "image");
+      await page.locator('button:has-text("Change image")').click();
+      await expect(page.getByRole("button", { name: /^Close$/ }).last()).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("button", { name: /^Close$/ })).toHaveCount(0);
+      await expect(page.locator('button:has-text("Change image")')).toBeVisible();
     },
   ),
   defineScenario(

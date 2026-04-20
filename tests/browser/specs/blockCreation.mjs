@@ -158,6 +158,19 @@ export const blockCreationScenarios = [
   defineScenario(
     "1. Block Creation & Type Selection",
     "Markdown shortcuts",
+    "typing [ ] and a space also turns the paragraph into a to-do item",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await openSlashMenuFromEditor(editor, "[ ] ");
+      await page.keyboard.type("Todo item");
+      await expect(page.locator("button.w-4.h-4")).toHaveCount(1);
+      await expect(editor).toHaveText("Todo item");
+    },
+  ),
+  defineScenario(
+    "1. Block Creation & Type Selection",
+    "Markdown shortcuts",
     "typing 1. and a space turns the paragraph into a numbered list item",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
