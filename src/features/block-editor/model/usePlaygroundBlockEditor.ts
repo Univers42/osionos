@@ -6,11 +6,17 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/19 10:32:20 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/20 10:19:11 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState, useRef, useCallback } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  useRef,
+  useCallback,
+} from "react";
 import { usePageStore } from "@/store/usePageStore";
 import {
   detectBlockType,
@@ -77,7 +83,7 @@ function parsePipeTable(text: string): string[][] | null {
 }
 
 function isEffectivelyEmptyForDeletion(text: string): boolean {
-  return text.replaceAll(/[\r\n\u200B]/g, "").length === 0;
+  return text.replaceAll("\u200B", "").trim().length === 0;
 }
 
 function toBlockUpdates(block: Block): Partial<Block> {
@@ -95,6 +101,28 @@ function toBlockUpdates(block: Block): Partial<Block> {
   };
 }
 
+function findChildrenForParent(
+  blocks: Block[],
+  parentBlockId: string,
+): Block[] | null {
+  for (const block of blocks) {
+    if (block.id === parentBlockId) {
+      return block.children ?? [];
+    }
+
+    if (!block.children) {
+      continue;
+    }
+
+    const nestedChildren = findChildrenForParent(block.children, parentBlockId);
+    if (nestedChildren) {
+      return nestedChildren;
+    }
+  }
+
+  return null;
+}
+
 /** Manages block editing, slash commands, and keyboard navigation for playground pages. */
 export function usePlaygroundBlockEditor(pageId: string) {
   const {
@@ -109,6 +137,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const contentRef = useRef<Block[]>([]);
 
   /** Focus a block element after a short delay. */
   const focusBlock = useCallback((blockId: string, cursorEnd = false) => {
@@ -142,6 +171,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
     return { x: 100, y: 300 };
   }, []);
 
+  /** Persist block content edits in the page store. */
   const persistBlockText = useCallback(
     (blockId: string, text: string) => {
       updateBlock(pageId, blockId, {
@@ -222,7 +252,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
   /** Handle content change — detects '/' trigger and markdown shortcuts. */
   const handleBlockChange = useCallback(
-    (blockId: string, text: string, _content: Block[]) => {
+    (blockId: string, text: string) => {
       persistBlockText(blockId, text);
       if (tryHandleCodeOrTable(blockId, text)) return;
       if (tryHandleSlashMenu(blockId, text)) return;
@@ -504,7 +534,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
   );
 
   const handlePaste = useCallback(
-    (e: React.ClipboardEvent, blockId: string, _content: Block[]) => {
+    (e: React.ClipboardEvent, blockId: string) => {
       const raw = e.clipboardData.getData("text/plain");
       const markdown = raw.replaceAll("\r\n", "\n").trim();
       if (!markdown) return;
@@ -630,7 +660,11 @@ export function usePlaygroundBlockEditor(pageId: string) {
   }, []);
 
   const page = usePageStore((s) => s.pageById(pageId));
-  const content = page?.content ?? [];
+  const content = useMemo(() => page?.content ?? [], [page?.content]);
+
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
 
   const {
     contextMenu,

@@ -209,14 +209,13 @@ interface BlockTreeProps {
   ) => void;
   draggedBlockId: string | null;
   setDraggedBlockId: (id: string | null) => void;
-  onChange: (blockId: string, text: string, blocks: Block[]) => void;
+  onChange: (blockId: string, text: string) => void;
   onKeyDown: (
     e: React.KeyboardEvent,
     blockId: string,
-    blocks: Block[],
     parentBlockId?: string | null,
   ) => void;
-  onPaste: (e: React.ClipboardEvent, blockId: string, blocks: Block[]) => void;
+  onPaste: (e: React.ClipboardEvent, blockId: string) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
@@ -269,7 +268,6 @@ const BlockTree: React.FC<BlockTreeProps> = ({
               <EditableBlock
                 pageId={pageId}
                 block={block}
-                blocks={blocks}
                 parentBlockId={parentBlockId}
                 numberedIndex={numberedIndex}
                 onChange={onChange}
@@ -457,17 +455,15 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 interface EditableBlockProps {
   pageId: string;
   block: Block;
-  blocks: Block[];
   parentBlockId?: string | null;
   numberedIndex: number;
-  onChange: (blockId: string, text: string, blocks: Block[]) => void;
+  onChange: (blockId: string, text: string) => void;
   onKeyDown: (
     e: React.KeyboardEvent,
     blockId: string,
-    blocks: Block[],
     parentBlockId?: string | null,
   ) => void;
-  onPaste: (e: React.ClipboardEvent, blockId: string, blocks: Block[]) => void;
+  onPaste: (e: React.ClipboardEvent, blockId: string) => void;
   onDeleteBlock: (blockId: string) => void;
   registerRef: (blockId: string, el: HTMLElement | null) => void;
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
@@ -486,10 +482,9 @@ interface EditableBlockProps {
   onContextMenu: (e: React.MouseEvent, blockId: string) => void;
 }
 
-const EditableBlock: React.FC<EditableBlockProps> = ({
+const EditableBlockBase: React.FC<EditableBlockProps> = ({
   pageId,
   block,
-  blocks,
   parentBlockId = null,
   numberedIndex,
   onChange,
@@ -505,18 +500,18 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
   onContextMenu,
 }) => {
   const handleChange = useCallback(
-    (text: string) => onChange(block.id, text, blocks),
-    [block.id, blocks, onChange],
+    (text: string) => onChange(block.id, text),
+    [block.id, onChange],
   );
 
   const handleKey = useCallback(
-    (e: React.KeyboardEvent) => onKeyDown(e, block.id, blocks, parentBlockId),
-    [block.id, blocks, onKeyDown, parentBlockId],
+    (e: React.KeyboardEvent) => onKeyDown(e, block.id, parentBlockId),
+    [block.id, onKeyDown, parentBlockId],
   );
 
   const handlePaste = useCallback(
-    (e: React.ClipboardEvent) => onPaste(e, block.id, blocks),
-    [block.id, blocks, onPaste],
+    (e: React.ClipboardEvent) => onPaste(e, block.id),
+    [block.id, onPaste],
   );
 
   const refCb = useCallback(
@@ -584,3 +579,5 @@ const EditableBlock: React.FC<EditableBlockProps> = ({
     </div>
   );
 };
+
+const EditableBlock = React.memo(EditableBlockBase);
