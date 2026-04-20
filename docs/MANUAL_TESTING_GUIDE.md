@@ -1,0 +1,256 @@
+# Block Editor — Manual Testing Guide
+
+**Purpose:** Shared reference for verifying block editor behavior after any change.
+**Usage:** Run the relevant sections after modifying editor files. Run all sections before merging to develop.
+**Last updated:** April 2026
+
+---
+
+## How to use this document
+
+Each test has a priority level:
+
+- **P0 — Critical:** Must pass before any merge. Failure means broken core functionality.
+- **P1 — Important:** Must pass before merging features that touch the relevant area.
+- **P2 — Edge case:** Should pass. Failure indicates a minor issue that can be tracked.
+
+Format: `[Priority] Description → Action → Expected result`
+
+---
+
+## 1. Block Creation & Type Selection
+
+### Slash menu
+
+- [P0] **Slash menu opens on `/`** → Type `/` in an empty paragraph → Slash menu appears below the cursor with block type options.
+- [P0] **Slash menu filters on typing** → Type `/hea` → Only heading options are visible in the menu.
+- [P0] **Slash menu selection with Enter** → Type `/quote`, press Enter on the highlighted option → Block converts to quote. The `/quote` text is cleaned. No extra paragraph is created below.
+- [P0] **Slash menu selection with click** → Type `/`, click on "Bulleted List" → Block converts to bulleted list. The `/` text is cleaned.
+- [P1] **Slash menu closes on Escape** → Type `/`, press Escape → Menu closes, `/` remains in the text as typed content.
+- [P1] **Slash menu closes on backspace past `/`** → Type `/he`, backspace 3 times (removing `h`, `e`, `/`) → Menu closes when `/` is deleted.
+- [P2] **Slash menu reopens after previous use** → Create a block via slash menu, move to a new paragraph, type `/` again → Menu opens normally.
+
+### Markdown shortcuts
+
+- [P0] **Heading shortcut** → Type `# ` (hash + space) in an empty paragraph → Converts to heading_1. The `# ` prefix is removed.
+- [P0] **Bulleted list shortcut** → Type `- ` (dash + space) → Converts to bulleted_list.
+- [P0] **Numbered list shortcut** → Type `1. ` → Converts to numbered_list.
+- [P1] **Code fence shortcut** → Type ` ``` ` or ` ```typescript ` → Converts to code block with the specified language.
+- [P1] **Divider shortcut** → Type `---` → Converts to divider.
+- [P1] **Todo shortcut** → Type `[] ` or markdown todo syntax → Converts to to_do block.
+
+---
+
+## 2. Indentation (Tab / Shift+Tab)
+
+### Basic indentation
+
+- [P0] **Tab indents paragraph under previous sibling** → Create paragraphs A, B. Cursor in B, press Tab → B appears indented under A.
+- [P0] **Shift+Tab outdents** → With B indented under A, cursor in B, press Shift+Tab → B returns to root level.
+- [P0] **Tab on first block does nothing** → Create a single paragraph, press Tab → Nothing happens (no previous sibling to nest into).
+- [P0] **Shift+Tab at root does nothing** → Cursor in a root-level paragraph, press Shift+Tab → Nothing happens.
+
+### Type-specific indentation
+
+- [P0] **Heading indents under paragraph** → Create paragraph A, heading B below. Tab on B → B indents under A, keeps heading style.
+- [P0] **Cannot indent under a heading** → Create heading A, paragraph B below. Tab on B → Nothing happens (headings are NON_PARENTABLE).
+- [P0] **Cannot indent under code block** → Create code block A, paragraph B below. Tab on B → Nothing happens.
+- [P0] **Cannot indent under divider** → Create divider, paragraph below. Tab on paragraph → Nothing happens.
+- [P1] **Can indent under callout** → Create callout A, paragraph B below. Tab on B → B appears inside the callout's colored box.
+- [P1] **Can indent under quote** → Create quote A, paragraph B below. Tab on B → B appears inside the quote's left border.
+- [P1] **Code block Tab inserts spaces** → Cursor inside a code block textarea, press Tab → 4 spaces inserted (not block-level indent).
+
+### Multi-level indentation
+
+- [P0] **Two levels deep** → Create A, B, C. Tab on B (child of A). Tab on C (child of A, sibling of B). Tab on C again (child of B, grandchild of A) → Two visible indentation levels. C is further right than B.
+- [P0] **Outdent one level at a time** → With A → B → C nested. Shift+Tab on C → C becomes sibling of B. Shift+Tab on C again → C returns to root.
+- [P1] **Single Tab from root goes one level** → Create A (with child B), then C at root. Tab on C → C becomes sibling of B (child of A), NOT child of B. Second Tab on C → C becomes child of B.
+
+---
+
+## 3. Enter Key Behavior
+
+### Standard blocks
+
+- [P0] **Enter in paragraph creates new paragraph** → Type text in a paragraph, press Enter → New empty paragraph appears below, cursor moves to it.
+- [P0] **Enter in heading creates paragraph** → Type in a heading, press Enter → New paragraph (not heading) appears below.
+- [P0] **Enter in code block creates newline** → Press Enter inside code textarea → Newline inserted in the code. No new block created.
+
+### List continuation
+
+- [P0] **Enter in bulleted list creates new bullet** → Type in a bulleted_list item, press Enter → New bulleted_list item appears below.
+- [P0] **Enter in numbered list creates new number** → Type in a numbered_list item, press Enter → New numbered_list item with next number.
+- [P0] **Enter in to_do creates new to_do** → Type in a to_do item, press Enter → New unchecked to_do appears below.
+- [P0] **Enter in empty list item converts to paragraph** → Create a bulleted_list, press Enter on empty item → Converts to paragraph.
+- [P0] **Enter in empty to_do converts to paragraph** → Press Enter on empty to_do → Converts to paragraph, checked state cleared.
+
+### Container blocks (Enter creates child inside)
+
+- [P0] **Enter in callout creates child inside** → Type in a callout, press Enter → New paragraph appears inside the callout's colored box (not below it).
+- [P0] **Enter in quote creates child inside** → Type in a quote, press Enter → New paragraph appears inside the quote's left border.
+- [P0] **Enter in toggle summary expands and creates child** → Type in a toggle summary, press Enter → Toggle expands, new paragraph child appears inside.
+
+---
+
+## 4. Backspace / Delete Behavior
+
+### Empty block deletion
+
+- [P0] **Backspace on empty paragraph (root) deletes it** → Create two paragraphs, empty the second, press Backspace → Second paragraph deleted, focus moves to first.
+- [P0] **Backspace on empty heading converts to paragraph** → Create a heading, clear its text, press Backspace → Converts to paragraph (not deleted).
+- [P0] **Backspace on empty list item deletes it** → Create a bulleted_list item, clear it, press Backspace → Item deleted, focus moves to adjacent block.
+
+### Parent-child deletion
+
+- [P0] **Backspace on empty parent promotes children** → Create paragraph A with children B, C. Clear A, press Backspace → A disappears. B and C move up to A's former level.
+- [P0] **Promotion preserves multi-level nesting** → Create A → B → C (three levels). Clear A, press Backspace → B (with its child C) promotes to root. C remains child of B.
+- [P1] **Backspace on empty indented paragraph outdents** → Indent paragraph B under A. Clear B, press Backspace → B outdents to A's level (not deleted).
+
+### Divider deletion
+
+- [P1] **Backspace or Delete on focused divider removes it** → Focus a divider block, press Backspace or Delete → Divider removed, focus moves to adjacent block.
+
+---
+
+## 5. Context Menu
+
+### Basic operations
+
+- [P0] **Context menu opens on right-click** → Right-click a block → Context menu appears with Insert, Move, Turn into, Actions, Delete sections.
+- [P0] **Context menu opens on drag handle click** → Click the 6-dot drag handle → Context menu appears.
+- [P0] **Delete from context menu removes entire subtree** → Create A with children B, C. Right-click A → Delete → A, B, and C all disappear.
+- [P1] **Insert above/below** → Right-click a block → "Insert text above" → New paragraph appears above the block.
+- [P1] **Duplicate** → Right-click a block with content → Duplicate → Identical block appears below.
+- [P1] **Move up/down** → Right-click a block between two others → Move up → Block swaps with the one above.
+- [P1] **Turn into** → Right-click a paragraph → Turn into → Heading 1 → Block becomes heading_1 with same content.
+- [P2] **Copy text** → Right-click a block with content → Copy text → Content is in clipboard.
+
+### Context menu + children
+
+- [P0] **Delete parent from menu removes all children** → A with children B, C. Delete A from context menu → A, B, C gone. Focus moves to next or previous block.
+- [P1] **Delete leaf block from menu** → Delete a block with no children → Only that block removed.
+- [P2] **Duplicate parent duplicates subtree** → A with child B. Duplicate A → New A' with child B' appears below. Both are independent copies.
+
+---
+
+## 6. Drag and Drop
+
+### Same-level reorder
+
+- [P0] **Reorder siblings** → Create A, B, C at root. Drag C above A → Order: C, A, B.
+- [P0] **Reorder within nested children** → A has children B, C, D. Drag D above B → A's children: D, B, C.
+
+### Cross-level moves
+
+- [P0] **Drag child to root** → A has child B. Drag B below A at root level → A (no children), B at root.
+- [P0] **Drag between parent groups** → A has children B, C. D has children E, F. Drag B below E inside D → A has child C. D has children E, B, F.
+- [P1] **Drag block maintains its children** → A has child B. B has child C. Drag A to a new position → A, B, C hierarchy preserved.
+
+### Safety checks
+
+- [P0] **Cannot drop block on itself** → Drag A, drop on A → Nothing happens.
+- [P1] **Visual drop indicator shows** → While dragging over a block → Blue line appears above or below the target block.
+- [P2] **Dragged block appears transparent** → While dragging → Original block position shows at reduced opacity.
+
+---
+
+## 7. Toggle Block
+
+### Basic toggle behavior
+
+- [P0] **Expand/collapse with chevron** → Click chevron on a toggle → Children appear/disappear.
+- [P0] **Enter on toggle summary creates child** → Type in toggle, press Enter → Toggle expands, new paragraph child inside.
+- [P0] **Empty toggle shows hint** → Expand a toggle with no children → "Empty toggle" text appears in grey.
+
+### Toggle children as full blocks
+
+- [P0] **Slash menu works in toggle children** → Inside a toggle child, type `/` → Slash menu appears.
+- [P0] **Markdown shortcuts work in toggle children** → Inside a toggle child, type `- ` → Converts to bulleted_list inside the toggle.
+- [P1] **Indent within toggle** → Toggle has children A, B. Tab on B → B indents under A inside the toggle.
+- [P1] **Collapsed toggle preserves children** → Add children, collapse toggle, expand → Children intact.
+
+### Toggle + external interactions
+
+- [P1] **Indent block under collapsed toggle** → Create toggle (collapsed) and paragraph below. Tab on paragraph → Paragraph moves into toggle's children (disappears visually). Expand toggle → Paragraph visible as child.
+- [P1] **Delete toggle promotes children** → Toggle with children A, B. Clear toggle summary, Backspace → A and B promote to root.
+- [P1] **Delete toggle from context menu removes all** → Toggle with children. Right-click toggle → Delete → Toggle and all children gone.
+
+---
+
+## 8. Callout & Quote as Containers
+
+### Callout
+
+- [P0] **Enter in callout creates child inside box** → Type in callout, Enter → New paragraph inside the colored box, aligned with text.
+- [P0] **Children render inside callout visually** → Indent a block under callout → Block appears inside the colored background.
+- [P1] **Slash menu works inside callout children** → In a callout child, type `/` → Slash menu works.
+- [P1] **Delete callout promotes children** → Callout with children. Backspace on empty callout → Children promote to callout's level.
+
+### Quote
+
+- [P0] **Enter in quote creates child inside border** → Type in quote, Enter → New paragraph inside the left border.
+- [P0] **Children render inside quote visually** → Indent a block under quote → Block appears inside the left border decoration.
+- [P1] **Multiple children inside quote** → Create quote with 3 children → All render inside the left border, properly indented.
+
+---
+
+## 9. Read-Only Rendering
+
+- [P0] **All block types render correctly** → Open a page with diverse block types in read-only mode → Every type displays with correct styling.
+- [P0] **Nested children render in read-only** → Page with indented blocks → Children appear indented correctly.
+- [P0] **Callout children inside colored box** → Read-only callout with children → Children visible inside the box.
+- [P0] **Quote children inside left border** → Read-only quote with children → Children visible inside the border.
+- [P0] **Toggle expand/collapse in read-only** → Click toggle chevron → Children show/hide.
+- [P1] **Numbered list counter resets per context** → Nested numbered lists → Each nesting level starts counting from 1.
+
+---
+
+## 10. Paste Handling
+
+- [P1] **Paste markdown creates multiple blocks** → Copy multi-line markdown (e.g., heading + paragraph + list), paste into editor → Creates corresponding block types.
+- [P1] **Paste code fence creates code block** → Paste text with ` ``` ` fences → Creates code block with content.
+- [P2] **Paste single line stays as inline text** → Paste a single short sentence → Inserts as text in current block (no new block created).
+
+---
+
+## 11. Block Category Registry Compliance
+
+These tests verify that the registry (`blockCategories.ts`) is correctly wired:
+
+### NON_INDENTABLE types (Tab does nothing)
+
+- [P1] **Code block** → Tab inside code → Inserts spaces, not block indent.
+- [P1] **Divider** → Cannot focus to Tab (expected).
+- [P1] **Database inline** → Tab does nothing.
+
+### NON_PARENTABLE types (cannot receive children via indent)
+
+- [P1] **Headings (h1-h6)** → Tab on a block below a heading → Nothing happens.
+- [P1] **Code, divider, table, database, media** → Tab on a block below any of these → Nothing happens.
+
+### enterCreatesChild types (Enter creates child inside)
+
+- [P1] **Toggle** → Enter on summary → Child created inside (handled by ToggleBlockEditor).
+- [P1] **Callout** → Enter → Child inside colored box.
+- [P1] **Quote** → Enter → Child inside left border.
+- [P1] **Paragraph, headings, lists** → Enter → Sibling created (not child).
+
+---
+
+## 12. Cross-Cutting Concerns
+
+### Focus management
+
+- [P0] **Focus moves to new block after Enter** → Press Enter → Cursor is in the new block.
+- [P0] **Focus moves to adjacent block after delete** → Delete a block → Cursor moves to next or previous block.
+- [P1] **Focus moves to child after toggle expand** → Expand empty toggle → Cursor in the new child paragraph.
+
+### Persistence
+
+- [P1] **Changes persist on refresh** → Make edits, refresh the page → Edits are preserved (localStorage cache).
+- [P1] **Offline mode works** → Disconnect network, open the app → Seed data loads, editing works locally.
+
+### Lint & type safety
+
+- [P0] **`make ci` passes** → Run `make ci` → Zero type errors, zero lint warnings.
+- [P0] **No SonarQube cognitive complexity violations** → Run SonarQube analysis → No new issues on modified files.
