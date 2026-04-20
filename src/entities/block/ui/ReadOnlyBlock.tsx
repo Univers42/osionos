@@ -3,31 +3,38 @@
 /*                                                        :::      ::::::::   */
 /*   ReadOnlyBlock.tsx                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/15 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/20 12:00:00 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import type { Block } from '@/entities/block';
 import { ChevronRight } from "lucide-react";
 import { DatabaseBlock } from '@/widgets/database-view';
 import { CalloutBlockReadOnly } from "./CalloutBlockReadOnly";
 import { CodeBlockReadOnly } from "./CodeBlockReadOnly";
 import { MediaBlockReadOnly } from "./MediaBlockReadOnly";
-import { parseInlineMarkdown } from '@/shared/lib/markengine';
+import { renderInlineToReact } from '@/shared/lib/markengine';
+import { InternalPageLink } from "@/entities/page";
 
 interface BlockProps {
   block: Block;
   index: number;
 }
 
-function renderInlineMarkdown(content: string) {
-  if (!content) return null;
-  return { __html: parseInlineMarkdown(content) };
-}
+const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
+  const renderedContent = useMemo(() => {
+    if (!content) return null;
+    return renderInlineToReact(content, {
+      internalLinkRenderer: (pageId: string) => <InternalPageLink pageId={pageId} />,
+    });
+  }, [content]);
+
+  return <>{renderedContent}</>;
+};
 
 function getNestedChildrenClassName(type: Block["type"]) {
   if (type === "bulleted_list" || type === "numbered_list") {
@@ -66,12 +73,9 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
       return (
         <>
           {block.content ? (
-            <p
-              className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 min-h-[1.5em]"
-              dangerouslySetInnerHTML={
-                renderInlineMarkdown(block.content) ?? undefined
-              }
-            />
+            <p className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 min-h-[1.5em]">
+              <InlineMarkdown content={block.content} />
+            </p>
           ) : (
             <p className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 min-h-[1.5em]">
               <span className="text-[var(--color-ink-faint)]">&nbsp;</span>
@@ -84,12 +88,9 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
     case "heading_1":
       return (
         <>
-          <h1
-            className="text-2xl font-bold text-[var(--color-ink)] mt-6 mb-1 leading-tight"
-            dangerouslySetInnerHTML={
-              renderInlineMarkdown(block.content) ?? undefined
-            }
-          />
+          <h1 className="text-2xl font-bold text-[var(--color-ink)] mt-6 mb-1 leading-tight">
+            <InlineMarkdown content={block.content} />
+          </h1>
           {renderNestedChildren(block)}
         </>
       );
@@ -97,12 +98,9 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
     case "heading_2":
       return (
         <>
-          <h2
-            className="text-xl font-semibold text-[var(--color-ink)] mt-5 mb-1 leading-tight"
-            dangerouslySetInnerHTML={
-              renderInlineMarkdown(block.content) ?? undefined
-            }
-          />
+          <h2 className="text-xl font-semibold text-[var(--color-ink)] mt-5 mb-1 leading-tight">
+            <InlineMarkdown content={block.content} />
+          </h2>
           {renderNestedChildren(block)}
         </>
       );
@@ -110,12 +108,9 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
     case "heading_3":
       return (
         <>
-          <h3
-            className="text-lg font-semibold text-[var(--color-ink)] mt-4 mb-0.5 leading-snug"
-            dangerouslySetInnerHTML={
-              renderInlineMarkdown(block.content) ?? undefined
-            }
-          />
+          <h3 className="text-lg font-semibold text-[var(--color-ink)] mt-4 mb-0.5 leading-snug">
+            <InlineMarkdown content={block.content} />
+          </h3>
           {renderNestedChildren(block)}
         </>
       );
@@ -123,12 +118,9 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
     case "heading_4":
       return (
         <>
-          <h4
-            className="text-base font-semibold text-[var(--color-ink)] mt-3 mb-0.5 leading-snug"
-            dangerouslySetInnerHTML={
-              renderInlineMarkdown(block.content) ?? undefined
-            }
-          />
+          <h4 className="text-base font-semibold text-[var(--color-ink)] mt-3 mb-0.5 leading-snug">
+            <InlineMarkdown content={block.content} />
+          </h4>
           {renderNestedChildren(block)}
         </>
       );
@@ -136,12 +128,9 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
     case "heading_5":
       return (
         <>
-          <h5
-            className="text-sm font-semibold text-[var(--color-ink)] mt-2 mb-0.5 leading-snug"
-            dangerouslySetInnerHTML={
-              renderInlineMarkdown(block.content) ?? undefined
-            }
-          />
+          <h5 className="text-sm font-semibold text-[var(--color-ink)] mt-2 mb-0.5 leading-snug">
+            <InlineMarkdown content={block.content} />
+          </h5>
           {renderNestedChildren(block)}
         </>
       );
@@ -149,12 +138,9 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
     case "heading_6":
       return (
         <>
-          <h6
-            className="text-xs font-semibold text-[var(--color-ink-muted)] mt-2 mb-0.5 leading-snug uppercase tracking-wide"
-            dangerouslySetInnerHTML={
-              renderInlineMarkdown(block.content) ?? undefined
-            }
-          />
+          <h6 className="text-xs font-semibold text-[var(--color-ink-muted)] mt-2 mb-0.5 leading-snug uppercase tracking-wide">
+            <InlineMarkdown content={block.content} />
+          </h6>
           {renderNestedChildren(block)}
         </>
       );
@@ -166,12 +152,9 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
             <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-ink-faint)] mt-[7px]" />
             </span>
-            <span
-              className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1"
-              dangerouslySetInnerHTML={
-                renderInlineMarkdown(block.content) ?? undefined
-              }
-            />
+            <span className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1">
+              <InlineMarkdown content={block.content} />
+            </span>
           </div>
           {renderNestedChildren(block)}
         </>
@@ -184,12 +167,9 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
             <span className="text-sm leading-relaxed py-0.5 text-[var(--color-ink-muted)] select-none shrink-0 w-6 text-center font-medium">
               {index + 1}.
             </span>
-            <span
-              className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1"
-              dangerouslySetInnerHTML={
-                renderInlineMarkdown(block.content) ?? undefined
-              }
-            />
+            <span className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1">
+              <InlineMarkdown content={block.content} />
+            </span>
           </div>
           {renderNestedChildren(block)}
         </>
@@ -226,10 +206,9 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
                   ? "text-[var(--color-ink-muted)] line-through"
                   : "text-[var(--color-ink)]",
               ].join(" ")}
-              dangerouslySetInnerHTML={
-                renderInlineMarkdown(block.content) ?? undefined
-              }
-            />
+            >
+              <InlineMarkdown content={block.content} />
+            </span>
           </div>
           {renderNestedChildren(block)}
         </>
@@ -249,12 +228,9 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
         <>
           <div className="flex my-0.5">
             <div className="w-1 bg-[var(--color-ink)] rounded-full shrink-0 mr-3" />
-            <span
-              className="text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic flex-1"
-              dangerouslySetInnerHTML={
-                renderInlineMarkdown(block.content) ?? undefined
-              }
-            />
+            <span className="text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic flex-1">
+              <InlineMarkdown content={block.content} />
+            </span>
           </div>
           {renderNestedChildren(block)}
         </>
@@ -331,10 +307,9 @@ const ToggleBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
           type="button"
           className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1 cursor-pointer select-none text-left"
           onClick={() => setExpanded((o) => !o)}
-          dangerouslySetInnerHTML={
-            renderInlineMarkdown(block.content) ?? undefined
-          }
-        />
+        >
+          <InlineMarkdown content={block.content} />
+        </button>
       </div>
       {expanded && renderNestedChildren(block)}
       {expanded && !block.children?.length && (
@@ -375,10 +350,9 @@ const TableBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
                 <td
                   key={`cell-${ri}-${ci}`}
                   className="border-b border-r border-[var(--color-line)] last:border-r-0 px-3 py-1.5 min-w-[120px] text-[var(--color-ink)]"
-                  dangerouslySetInnerHTML={
-                    renderInlineMarkdown(cell) ?? undefined
-                  }
-                />
+                >
+                  <InlineMarkdown content={cell} />
+                </td>
               ))}
             </tr>
           ))}

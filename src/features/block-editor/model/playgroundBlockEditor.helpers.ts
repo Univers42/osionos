@@ -20,6 +20,12 @@ export interface SlashMenuState {
   filter: string;
 }
 
+export interface PageSelectorMenuState {
+  blockId: string;
+  position: { x: number; y: number };
+  filter: string;
+}
+
 function getRenderedBlocks(): HTMLElement[] {
   return Array.from(document.querySelectorAll<HTMLElement>('[data-block-id]'));
 }
