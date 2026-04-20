@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/20 10:19:11 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/20 10:21:49 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -594,19 +594,21 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
   /** Handle key presses — Enter, Backspace, Arrow navigation. */
   const handleKeyDown = useCallback(
-  (
-    e: React.KeyboardEvent,
-    blockId: string,
-    content: Block[],
-    parentBlockId: string | null = null,
-  ) => {
-    const block = content.find((b) => b.id === blockId);
-    if (!block) return;
-    const blockIdx = content.findIndex((b) => b.id === blockId);
-    const liveText =
-      (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
-    const isEmpty = isEffectivelyEmpty(liveText);
-    const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
+    (
+      e: React.KeyboardEvent,
+      blockId: string,
+      parentBlockId: string | null = null,
+    ) => {
+      const content = parentBlockId
+        ? findChildrenForParent(contentRef.current, parentBlockId) ?? []
+        : contentRef.current;
+      const block = content.find((b) => b.id === blockId);
+      if (!block) return;
+      const blockIdx = content.findIndex((b) => b.id === blockId);
+      const liveText =
+        (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
+      const isEmpty = isEffectivelyEmpty(liveText);
+      const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
 
     const handled =
       handleBlockIndentation(e, blockId, block, content) ||
