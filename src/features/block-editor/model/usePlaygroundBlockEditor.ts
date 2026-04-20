@@ -739,7 +739,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       const triggerIdx = text.lastIndexOf("[[");
       if (triggerIdx >= 0) {
         const newContent =
-          text.slice(0, triggerIdx) + `[[page:${targetPageId}]]`;
+          text.slice(0, triggerIdx) + `[[page:${targetPageId}]] `;
         updateBlock(pageId, blockId, { content: newContent });
         repositionCursor(blockId, newContent);
       }
