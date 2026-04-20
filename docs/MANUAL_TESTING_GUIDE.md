@@ -213,7 +213,89 @@ Format: `[Priority] Description → Action → Expected result`
 
 ---
 
-## 11. Block Category Registry Compliance
+## 11. Inline Text Selection & Formatting Toolbar
+
+### Toolbar visibility
+
+- [P0] **Toolbar appears on non-collapsed text selection** → Select text inside a paragraph, heading, quote, callout, list item, toggle summary, or media caption → Inline toolbar appears above the selection.
+- [P0] **Toolbar does not appear on collapsed selection** → Click inside editable text without selecting characters → Inline toolbar does not appear.
+- [P0] **Toolbar closes when selection is cleared** → Select text so the toolbar appears, then click elsewhere in the same block → Toolbar disappears.
+- [P1] **Toolbar closes on blur** → Select text, then click outside the editor → Toolbar disappears and no floating inline controls remain visible.
+- [P1] **Toolbar is not used inside code block textarea** → Select text inside a code block textarea → Native textarea selection appears. Inline toolbar does not appear.
+
+### Color actions
+
+- [P0] **Text color button opens palette** → Select text, click `A` in the toolbar → Text color palette opens below the toolbar.
+- [P0] **Background color button opens palette** → Select text, click `▣` in the toolbar → Background color palette opens below the toolbar.
+- [P0] **Applying text color updates only the selected text** → Select one word, choose a text color → Only the selected word changes text color.
+- [P0] **Applying background color updates only the selected text** → Select one word, choose a background color → Only the selected word receives the highlight/background.
+- [P0] **Text color survives additional typing** → Apply text color to a selection, place the caret inside that colored text, type several characters → Newly typed characters stay inside the same colored span. Color does not stack or intensify.
+- [P0] **Background color survives additional typing** → Apply background color to a selection, place the caret inside that highlighted text, type several characters → Newly typed characters stay inside the same background span. Background does not stack or intensify.
+- [P0] **Text color and background color can coexist with other formats** → Apply bold + italic + text color + background color to the same selection, then type inside it → All formats remain active together without visual duplication or slowdown.
+- [P1] **Applying the same text color again removes that text color** → Select text that already has a uniform text color, reopen the text color palette, choose the same color → Text color wrapper is removed and text returns to inherited/default color.
+- [P1] **Applying the same background color again removes that background color** → Select text that already has a uniform background color, reopen the background color palette, choose the same color → Background wrapper is removed and text returns to inherited/default background.
+- [P1] **Background color excludes trailing whitespace** → Select a word plus the following space, apply background color → The word is highlighted, but the trailing space is not.
+
+### Format actions
+
+- [P0] **Bold button toggles bold on selection** → Select text, click `B` → Selection becomes bold. Click `B` again on the same fully bold selection → Bold is removed.
+- [P0] **Italic button toggles italic on selection** → Select text, click `I` → Selection becomes italic. Click `I` again on the same fully italic selection → Italic is removed.
+- [P0] **Strikethrough button toggles strikethrough on selection** → Select text, click `S` → Selection becomes strikethrough. Click `S` again on the same fully struck selection → Strikethrough is removed.
+- [P0] **Inline code button wraps the selection as inline code** → Select text, click `</>` → Selection is rendered as inline code.
+- [P1] **Inline code keeps inherited custom colors** → Select text with custom text color and background color plus additional wrappers (e.g. bold), click `</>` → Inline code renders with the same custom code text/background colors instead of the default code background.
+- [P1] **Mixed formats persist after subsequent edits** → Apply multiple formats to part of a line, continue typing in the same formatted region, then delete characters → Wrappers remain stable and formatting is preserved instead of multiplying.
+
+### Link and slash actions
+
+- [P0] **Add link opens link type chooser** → Select text, click `↗` → Link chooser opens with `Web link` and `Page link`.
+- [P0] **External link can be applied** → Select text, click `↗`, choose `Web link`, enter a URL, submit → Selected text becomes a link to that URL.
+- [P0] **Internal page link can be applied** → Select text, click `↗`, choose `Page link`, search for a visible page, click it → Selected text becomes an internal page link.
+- [P1] **Page link search filters results** → Open `Page link`, type part of a page title → Matching pages remain visible, non-matching pages disappear.
+- [P1] **No-result state is shown for page link search** → Open `Page link`, search for a non-existent title → `No pages match your search.` is displayed.
+- [P1] **Cancel or Escape closes the link picker** → Open either link picker mode, click `Cancel` or press Escape → Picker closes without changing the selection.
+- [P1] **Slash button opens slash menu from the selection** → Select text, click `/` in the toolbar → Slash menu opens near the selection and the floating toolbar closes.
+
+---
+
+## 12. Emojis, Icons & Media
+
+### Page icons
+
+- [P0] **Add icon assigns a page icon when none exists** → Open a page without an icon, click `Add icon` in the page toolbar → A random page icon is assigned and displayed above the title.
+- [P0] **Clicking the page icon opens the picker** → Open a page with an icon, click the large icon → Emoji/icon/media picker opens below the icon.
+- [P0] **Selecting an asset updates the page icon** → In the page icon picker, choose an emoji, icon, or supported asset → Page icon updates immediately.
+- [P1] **Remove icon clears the page icon** → Open the page icon picker, click `Remove icon` → Icon disappears and the `Add icon` button becomes visible again.
+- [P1] **Page icon picker closes on outside click or Escape** → Open the page icon picker, click outside or press Escape → Picker closes.
+
+### Callout icons
+
+- [P0] **Clicking a callout icon opens the picker** → Create a callout block, click its icon → Picker opens next to the callout icon.
+- [P0] **Selecting an asset updates the callout icon** → In the callout icon picker, choose a new emoji/icon → Callout icon updates immediately.
+- [P1] **Remove icon resets callout to default icon** → Open the callout icon picker, click `Remove icon` → Callout icon resets to the default `💡` instead of becoming empty.
+- [P1] **Callout icon picker closes on outside click or Escape** → Open the callout icon picker, click outside or press Escape → Picker closes.
+
+### Page cover
+
+- [P0] **Add cover assigns a cover when none exists** → Open a page without a cover, click `Add cover` → A random cover appears at the top of the page.
+- [P0] **Change cover opens the cover picker** → On a page with a cover, click `Change cover` → Cover picker opens below the cover controls.
+- [P0] **Selecting a cover updates the page cover** → In the cover picker, choose a gradient or media cover → Page cover updates immediately.
+- [P1] **Remove cover clears the cover** → On a page with a cover, click the trash/remove cover control → Cover disappears and `Add cover` becomes visible again.
+- [P1] **Cover picker closes on outside click or Escape** → Open the cover picker, click outside or press Escape → Picker closes.
+
+### Media blocks
+
+- [P0] **Slash menu can create image/video/audio/file blocks** → Type `/image`, `/video`, `/audio`, or `/file`, then select a library asset → Corresponding media block is created.
+- [P0] **Selecting media on an empty paragraph converts the current block** → In an empty paragraph, open the slash menu media picker and choose an asset → Current block becomes the selected media block type with that asset.
+- [P0] **Selecting media when the current paragraph already has text inserts a new media block** → In a paragraph with typed text, open the slash menu media picker and choose an asset → Original paragraph text remains and a new media block is inserted below.
+- [P0] **Media block preview matches type** → Create one block of each media type with a valid asset → Image shows inline image preview, video shows a player/poster, audio shows an audio player, file shows an openable file card.
+- [P0] **Change media asset updates the preview** → In an existing media block, click `Change image/video/audio/file`, pick a different asset → Preview updates immediately without changing block type.
+- [P1] **Empty media block shows placeholder** → Create a media block without selecting an asset or remove its asset from state/dev tools → Placeholder prompt such as `Select a ...` is shown.
+- [P1] **Media picker closes on outside click or Escape** → Open `Change image/video/audio/file`, click outside or press Escape → Picker closes.
+- [P1] **Media block caption is editable inline** → Add text to the caption area under a media block → Caption is stored as inline editable text and supports the standard text selection toolbar.
+
+---
+
+## 13. Block Category Registry Compliance
 
 These tests verify that the registry (`blockCategories.ts`) is correctly wired:
 
@@ -237,7 +319,7 @@ These tests verify that the registry (`blockCategories.ts`) is correctly wired:
 
 ---
 
-## 12. Cross-Cutting Concerns
+## 14. Cross-Cutting Concerns
 
 ### Focus management
 
