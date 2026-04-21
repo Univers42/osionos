@@ -1,10 +1,22 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   app.mjs                                            :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/20 21:29:15 by rstancu           #+#    #+#             */
+/*   Updated: 2026/04/20 21:29:16 by rstancu          ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import process from "node:process";
 
 export async function openFreshPage(page, appUrl) {
   await page.goto(appUrl, { waitUntil: "networkidle" });
   const newPageButton = page.getByRole("button", { name: /New page/i }).first();
   await newPageButton.waitFor({ state: "visible" });
-  await newPageButton.click({ force: true });
+  await newPageButton.click();
   await page.getByRole("textbox", { name: "Page title" }).waitFor();
 }
 
@@ -80,7 +92,24 @@ export async function focusEditorEnd(editor) {
     selection?.removeAllRanges();
     selection?.addRange(range);
   });
-  await editor.page().waitForTimeout(50);
+  const handle = await editor.elementHandle();
+  if (!handle) {
+    throw new Error("Could not resolve editor element for caret placement");
+  }
+
+  try {
+    await editor.page().waitForFunction((node) => {
+      const selection = window.getSelection();
+      return Boolean(
+        selection &&
+          selection.rangeCount > 0 &&
+          selection.isCollapsed &&
+          node.contains(selection.anchorNode),
+      );
+    }, handle);
+  } finally {
+    await handle.dispose();
+  }
 }
 
 export async function pressEnter(editor) {
@@ -118,7 +147,27 @@ export async function selectText(editor, text, occurrence = 0) {
     await editor.press("ArrowRight");
   }
   await editor.page().keyboard.up("Shift");
-  await editor.page().waitForTimeout(150);
+
+  const handle = await editor.elementHandle();
+  if (!handle) {
+    throw new Error("Could not resolve editor element for text selection");
+  }
+
+  try {
+    await editor.page().waitForFunction(
+      ([node, expectedText]) => {
+        const selection = window.getSelection();
+        return Boolean(
+          selection &&
+            selection.toString() === expectedText &&
+            node.contains(selection.anchorNode),
+        );
+      },
+      [handle, text],
+    );
+  } finally {
+    await handle.dispose();
+  }
 }
 
 export async function setCaretInsideText(editor, text, offsetFromStart) {
@@ -135,7 +184,24 @@ export async function setCaretInsideText(editor, text, offsetFromStart) {
     await editor.press("ArrowRight");
   }
 
-  await editor.page().waitForTimeout(100);
+  const handle = await editor.elementHandle();
+  if (!handle) {
+    throw new Error("Could not resolve editor element for caret placement");
+  }
+
+  try {
+    await editor.page().waitForFunction((node) => {
+      const selection = window.getSelection();
+      return Boolean(
+        selection &&
+          selection.rangeCount > 0 &&
+          selection.isCollapsed &&
+          node.contains(selection.anchorNode),
+      );
+    }, handle);
+  } finally {
+    await handle.dispose();
+  }
 }
 
 export async function expectToolbar(page) {
@@ -157,7 +223,7 @@ export async function openColorPalette(page, kind) {
 export async function choosePaletteColor(page, index = 0) {
   const swatch = page.locator('button[aria-pressed="false"]:visible').nth(index);
   const label = await swatch.getAttribute("aria-label");
-  await swatch.click({ force: true });
+  await swatch.click();
   return label;
 }
 
@@ -175,7 +241,7 @@ export async function choosePaletteColorByLabel(page, label) {
     throw new Error(`Could not find a visible palette swatch named "${label}"`);
   }
 
-  await swatches.nth(swatchIndex).click({ force: true });
+  await swatches.nth(swatchIndex).click();
 }
 
 export async function openSlashMenuFromEditor(editor, text) {
@@ -245,7 +311,7 @@ export async function selectSlashMenuEntry(page, label, options = {}) {
     .first();
   await entry.waitFor({ timeout: options.timeout ?? 30_000 });
   await entry.scrollIntoViewIfNeeded();
-  await entry.click({ force: true });
+  await entry.click();
 }
 
 export async function createBlockViaSlash(page, slashCommand, label, editorIndex = 0) {
@@ -383,12 +449,23 @@ export function contextMenuItem(page, label) {
 export async function pasteText(editor, text) {
   const page = editor.page();
   await ensureClipboardAccess(page);
+  const expectedFragments = pasteExpectationFragments(text);
   await page.evaluate(async (value) => {
     await navigator.clipboard.writeText(value);
   }, text);
   await editor.click();
   await page.keyboard.press(`${modifier()}+V`);
-  await page.waitForTimeout(100);
+  await page.waitForFunction(
+    (fragments) => {
+      const bodyText = document.body?.innerText ?? "";
+      const textareaText = Array.from(document.querySelectorAll("textarea"))
+        .map((node) => node.value)
+        .join("\n");
+      const combined = `${bodyText}\n${textareaText}`;
+      return fragments.every((fragment) => combined.includes(fragment));
+    },
+    expectedFragments,
+  );
 }
 
 export async function ensureClipboardAccess(page) {
@@ -473,6 +550,24 @@ export async function clickOutside(page) {
 
 function capitalize(value) {
   return value.slice(0, 1).toUpperCase() + value.slice(1);
+}
+
+function pasteExpectationFragments(text) {
+  const fragments = text
+    .split("\n")
+    .map((line) => line.trim())
+    .map((line) =>
+      line
+        .replace(/^```[\w-]*$/, "")
+        .replace(/^#+\s+/, "")
+        .replace(/^[-*+]\s+/, "")
+        .replace(/^\d+\.\s+/, "")
+        .replace(/^\[(?: |x|X)\]\s+/, "")
+        .trim(),
+    )
+    .filter(Boolean);
+
+  return fragments.length > 0 ? [...new Set(fragments)] : [text.trim()];
 }
 
 function escapeRegex(value) {

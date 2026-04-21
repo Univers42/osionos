@@ -6,7 +6,6 @@ import {
   clearAndTypePageTitle,
   focusEditorEnd,
   getEditors,
-  openFreshPage,
   pageTitleEditor,
 } from "../core/app.mjs";
 import { defineScenario } from "../core/scenario.mjs";
@@ -16,15 +15,55 @@ function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function sidebarNewPageButton(page) {
+  return page.locator('button[title="New page"]').first();
+}
+
+async function waitForSidebarReady(page) {
+  try {
+    await sidebarNewPageButton(page).waitFor({ state: "visible", timeout: 10_000 });
+  } catch {
+    throw new Error("Sidebar did not become ready after load");
+  }
+}
+
 async function openPageFromSidebar(page, title) {
+  const titleEditor = pageTitleEditor(page);
+  if ((await titleEditor.count()) > 0) {
+    const currentTitle = (await titleEditor.textContent()) ?? "";
+    if (currentTitle.includes(title)) {
+      return;
+    }
+  }
+
+  await waitForSidebarReady(page);
   const button = page
     .locator("nav button")
-    .filter({ hasText: new RegExp(`^${escapeRegex(title)}$`) })
+    .filter({ hasText: new RegExp(escapeRegex(title), "i") })
     .first();
-  await button.waitFor({ state: "visible" });
+
+  try {
+    await button.waitFor({ state: "visible", timeout: 10_000 });
+  } catch {
+    throw new Error(`Could not find sidebar entry for page "${title}" after reload`);
+  }
+
   await button.scrollIntoViewIfNeeded();
-  await button.click({ force: true });
-  await pageTitleEditor(page).waitFor();
+  await button.click();
+
+  try {
+    await expect(pageTitleEditor(page)).toContainText(title, { timeout: 10_000 });
+  } catch {
+    throw new Error(`Sidebar entry for "${title}" was visible but did not open the page editor`);
+  }
+}
+
+async function waitForPagesCacheToContain(page, value) {
+  await expect
+    .poll(async () =>
+      page.evaluate(() => localStorage.getItem("pg:pages") ?? ""),
+    )
+    .toContain(value);
 }
 
 export const persistenceAndQualityScenarios = [
@@ -68,7 +107,7 @@ export const persistenceAndQualityScenarios = [
       const editor = await activateFirstEditor(page);
       await focusEditorEnd(editor);
       await page.keyboard.type(` ${token}`);
-      await page.waitForTimeout(300);
+      await waitForPagesCacheToContain(page, token);
 
       await page.reload({ waitUntil: "networkidle" });
       await openPageFromSidebar(page, "Getting Started");
@@ -88,11 +127,15 @@ export const persistenceAndQualityScenarios = [
       const body = `Body ${Date.now().toString(36)}`;
 
       await page.route("**/api/**", (route) => route.abort());
-      await openFreshPage(page, appUrl);
+      await page.goto(appUrl, { waitUntil: "networkidle" });
+      await waitForSidebarReady(page);
+      await sidebarNewPageButton(page).click();
+      await pageTitleEditor(page).waitFor();
       await clearAndTypePageTitle(page, title);
       const editor = await activateFirstEditor(page);
       await clearAndType(editor, body);
-      await page.waitForTimeout(300);
+      await waitForPagesCacheToContain(page, title);
+      await waitForPagesCacheToContain(page, body);
 
       await page.reload({ waitUntil: "networkidle" });
       await openPageFromSidebar(page, title);
@@ -111,6 +154,7 @@ export const persistenceAndQualityScenarios = [
     async () => {
       await runLocalCommand("make", ["ci"]);
     },
+    { needsBrowser: false, serial: true },
   ),
   defineScenario(
     "30. Technical Integration Quality",
@@ -119,5 +163,6 @@ export const persistenceAndQualityScenarios = [
     async () => {
       await runLocalCommand("make", ["audit"]);
     },
+    { needsBrowser: false, serial: true },
   ),
 ];

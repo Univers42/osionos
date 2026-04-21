@@ -108,11 +108,34 @@ function formatFailureSummary(results) {
 }
 
 async function executeScenario(browser, scenario, appUrl) {
+  const startedAt = Date.now();
+
+  if (!scenario.needsBrowser) {
+    try {
+      await scenario.run({ appUrl });
+      return {
+        scenario,
+        status: "PASS",
+        durationMs: Date.now() - startedAt,
+      };
+    } catch (error) {
+      return {
+        scenario,
+        status: "FAIL",
+        durationMs: Date.now() - startedAt,
+        reason: error instanceof Error ? error.message.split("\n")[0] : String(error),
+      };
+    }
+  }
+
+  if (!browser) {
+    throw new Error("Browser scenario execution requires a browser instance");
+  }
+
   const context = await browser.newContext({
     viewport: { width: 1440, height: 960 },
   });
   const page = await context.newPage();
-  const startedAt = Date.now();
 
   try {
     await scenario.run({ browser, context, page, appUrl });
@@ -133,50 +156,89 @@ async function executeScenario(browser, scenario, appUrl) {
   }
 }
 
+async function runParallelScenarioItems(items, browser, appUrl, workerCount, results) {
+  let nextScenarioIndex = 0;
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const itemIndex = nextScenarioIndex;
+        nextScenarioIndex += 1;
+
+        if (itemIndex >= items.length) {
+          return;
+        }
+
+        const item = items[itemIndex];
+        const result = await executeScenario(browser, item.scenario, appUrl);
+        results[item.index] = result;
+        console.log(formatResultLine(result));
+      }
+    }),
+  );
+}
+
 async function main() {
   if (filteredScenarios.length === 0) {
     console.log(colorize(ANSI.yellow, "No browser scenarios match the current TEST_FILTER."));
     return;
   }
 
+  const indexedScenarios = filteredScenarios.map((scenario, index) => ({
+    scenario,
+    index,
+  }));
+  const parallelBrowserItems = indexedScenarios.filter(
+    (item) => item.scenario.needsBrowser && !item.scenario.serial,
+  );
+  const serialBrowserItems = indexedScenarios.filter(
+    (item) => item.scenario.needsBrowser && item.scenario.serial,
+  );
+  const commandItems = indexedScenarios.filter((item) => !item.scenario.needsBrowser);
+  const browserItemCount = parallelBrowserItems.length + serialBrowserItems.length;
   const workerCount = getWorkerCount();
   const startedAt = Date.now();
-  const browser = await chromium.launch({ headless: true });
-  const server = await startDevServer({ cwd: process.cwd() });
+  let browser = null;
+  let server = null;
   const results = new Array(filteredScenarios.length);
-  let nextScenarioIndex = 0;
 
   try {
     console.log(
       colorize(
         ANSI.cyan,
-        `Running ${filteredScenarios.length} browser scenario(s) with ${workerCount} worker(s)...`,
+        `Running ${filteredScenarios.length} scenario(s) with ${workerCount} worker(s)...`,
       ),
     );
 
-    await Promise.all(
-      Array.from({ length: workerCount }, async () => {
-        while (true) {
-          const scenarioIndex = nextScenarioIndex;
-          nextScenarioIndex += 1;
+    if (browserItemCount > 0) {
+      browser = await chromium.launch({ headless: true });
+      server = await startDevServer({ cwd: process.cwd() });
 
-          if (scenarioIndex >= filteredScenarios.length) {
-            return;
-          }
+      if (parallelBrowserItems.length > 0) {
+        await runParallelScenarioItems(
+          parallelBrowserItems,
+          browser,
+          server.url,
+          Math.min(workerCount, parallelBrowserItems.length),
+          results,
+        );
+      }
 
-          const result = await executeScenario(
-            browser,
-            filteredScenarios[scenarioIndex],
-            server.url,
-          );
-          results[scenarioIndex] = result;
-          console.log(formatResultLine(result));
-        }
-      }),
-    );
+      for (const item of serialBrowserItems) {
+        const result = await executeScenario(browser, item.scenario, server.url);
+        results[item.index] = result;
+        console.log(formatResultLine(result));
+      }
+    }
+
+    for (const item of commandItems) {
+      const result = await executeScenario(null, item.scenario, null);
+      results[item.index] = result;
+      console.log(formatResultLine(result));
+    }
   } finally {
-    await server.close();
-    await browser.close();
+    await server?.close();
+    await browser?.close();
   }
 
   const completedResults = results.filter(Boolean);
