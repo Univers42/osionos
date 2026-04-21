@@ -423,10 +423,14 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      const mention = target.closest(".page-mention-placeholder") as HTMLElement;
+      const mention = target.closest(
+        ".page-mention-placeholder",
+      ) as HTMLElement;
       if (mention) {
         const targetPageId = mention.dataset.pageId;
-        const page = targetPageId ? usePageStore.getState().pageById(targetPageId) : null;
+        const page = targetPageId
+          ? usePageStore.getState().pageById(targetPageId)
+          : null;
         if (page) {
           e.preventDefault();
           e.stopPropagation();

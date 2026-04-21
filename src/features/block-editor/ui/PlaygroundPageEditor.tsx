@@ -127,8 +127,9 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
 
     const handleFocusIn = (event: FocusEvent) => {
       const target = event.target as HTMLElement | null;
-      const blockId = target?.closest<HTMLElement>("[data-block-id]")?.dataset
-        .blockId ?? null;
+      const blockId =
+        target?.closest<HTMLElement>("[data-block-id]")?.dataset.blockId ??
+        null;
       setFocusedBlockId(blockId);
     };
 
@@ -492,12 +493,9 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
         moveBlock(pageId, draggedId, insertionIdx, parentBlockId);
       } else {
         // Cross-tree move — extract from old position, insert here
-        usePageStore.getState().moveBlockAcrossTree(
-          pageId,
-          draggedId,
-          parentBlockId,
-          insertionIdx,
-        );
+        usePageStore
+          .getState()
+          .moveBlockAcrossTree(pageId, draggedId, parentBlockId, insertionIdx);
       }
 
       setDraggedBlockId(null);
