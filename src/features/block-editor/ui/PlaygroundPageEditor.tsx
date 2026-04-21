@@ -652,6 +652,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
     block.children,
     block.type,
     block.id,
+    isHighlighted,
     pageId,
     moveBlock,
     draggedBlockId,
