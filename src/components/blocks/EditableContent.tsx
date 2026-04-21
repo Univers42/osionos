@@ -501,39 +501,59 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     [onPaste],
   );
 
-  const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement | null;
-    const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
-    if (!anchor) {
-      return;
-    }
+    if (!target) return;
 
-    e.preventDefault();
-    e.stopPropagation();
-    const href = anchor.href;
-    if (!href) {
-      return;
-    }
-
-    const normalizedHref = normalizeInlineLinkHref(
-      anchor.getAttribute("href") ?? href,
-    );
-    const internalPageId = getInternalPageIdFromHref(normalizedHref);
-    if (internalPageId) {
-      const linkedPage = usePageStore.getState().pageById(internalPageId);
-      if (linkedPage) {
+    // 1. Handle Wiki Links (Internal mentions)
+    const mention = target.closest(".page-mention-placeholder") as HTMLElement;
+    if (mention) {
+      const targetPageId = mention.dataset.pageId;
+      const page = targetPageId ? usePageStore.getState().pageById(targetPageId) : null;
+      if (page) {
+        e.preventDefault();
+        e.stopPropagation();
         usePageStore.getState().openPage({
-          id: linkedPage._id,
-          workspaceId: linkedPage.workspaceId,
-          kind: linkedPage.databaseId ? "database" : "page",
-          title: linkedPage.title,
-          icon: linkedPage.icon,
+          id: page._id,
+          workspaceId: page.workspaceId,
+          kind: page.databaseId ? "database" : "page",
+          title: page.title,
+          icon: page.icon,
         });
       }
       return;
     }
 
-    globalThis.open(normalizedHref, "_blank", "noopener,noreferrer");
+    // 2. Handle Standard Links (A tags)
+    const anchor = target.closest("a[href]") as HTMLAnchorElement | null;
+    if (anchor) {
+      const href = anchor.getAttribute("href");
+      if (!href) return;
+
+      const normalizedHref = normalizeInlineLinkHref(href);
+      const internalPageId = getInternalPageIdFromHref(normalizedHref);
+
+      if (internalPageId) {
+        // Internal page link from toolbar
+        const linkedPage = usePageStore.getState().pageById(internalPageId);
+        if (linkedPage) {
+          e.preventDefault();
+          e.stopPropagation();
+          usePageStore.getState().openPage({
+            id: linkedPage._id,
+            workspaceId: linkedPage.workspaceId,
+            kind: linkedPage.databaseId ? "database" : "page",
+            title: linkedPage.title,
+            icon: linkedPage.icon,
+          });
+        }
+      } else {
+        // External link
+        e.preventDefault();
+        e.stopPropagation();
+        globalThis.open(normalizedHref, "_blank", "noopener,noreferrer");
+      }
+    }
   }, []);
 
   const applyInlineFormattingCommand = useCallback(
@@ -700,7 +720,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         onPaste={handlePaste}
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
         onMouseUp={updateSelectionSnapshot}
         onFocus={() => {
           isFocused.current = true;
