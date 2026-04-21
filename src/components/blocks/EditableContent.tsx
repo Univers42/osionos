@@ -51,6 +51,8 @@ interface EditableContentProps {
   onKeyDown: (e: React.KeyboardEvent) => void;
   onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
   onRequestSlashMenu?: (position: { x: number; y: number }) => void;
+  onFocus?: React.FocusEventHandler<HTMLDivElement>;
+  onBlur?: React.FocusEventHandler<HTMLDivElement>;
 }
 
 type PaletteKind = "text" | "background" | null;
@@ -357,6 +359,8 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   onKeyDown,
   onPaste,
   onRequestSlashMenu,
+  onFocus,
+  onBlur,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const isComposing = useRef(false);
@@ -872,14 +876,14 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         onPaste={handlePaste}
-        onClick={handleClick}
-        onMouseUp={updateSelectionSnapshot}
-        onFocus={() => {
+        onFocus={(event) => {
+          onFocus?.(event);
           isFocused.current = true;
           setHasFocus(true);
           renderContent(content);
         }}
-        onBlur={() => {
+        onBlur={(event) => {
+          onBlur?.(event);
           isFocused.current = false;
           setHasFocus(false);
           if (!linkPicker) {
@@ -890,6 +894,8 @@ export const EditableContent: React.FC<EditableContentProps> = ({
           const syncedContent = syncContentFromDom();
           renderContent(syncedContent ?? content);
         }}
+        onClick={handleClick}
+        onMouseUp={updateSelectionSnapshot}
         onCompositionStart={() => {
           isComposing.current = true;
         }}
