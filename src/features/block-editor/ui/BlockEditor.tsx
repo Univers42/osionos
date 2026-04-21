@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/18 10:49:08 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/21 10:27:02 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,6 +29,8 @@ import { MermaidDiagram, CodeSyntaxHighlight, EmojiPicker } from "@/shared/ui";
 import { MediaBlockEditor } from "./MediaBlockEditor";
 import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
+
+import { getAdjacentRenderedBlockId } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
 
 const LANGUAGES = [
   "plaintext",
@@ -140,9 +142,28 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         return;
       }
 
+      // Arrow navigation out of code block: jump to adjacent block
+      // when cursor is at the very start (ArrowUp) or very end (ArrowDown).
+      if (e.key === "ArrowUp" && e.currentTarget.selectionStart === 0) {
+        e.preventDefault();
+        const prevId = getAdjacentRenderedBlockId(block.id, "prev");
+        if (prevId) focusBlock(prevId, true);
+        return;
+      }
+
+      if (e.key === "ArrowDown") {
+        const ta = e.currentTarget;
+        if (ta.selectionEnd === ta.value.length) {
+          e.preventDefault();
+          const nextId = getAdjacentRenderedBlockId(block.id, "next");
+          if (nextId) focusBlock(nextId);
+          return;
+        }
+      }
+
       onKeyDown(e);
     },
-    [onChange, onKeyDown],
+    [onChange, onKeyDown, block.id, focusBlock],
   );
 
   const openCodeContextMenu = useCallback((e: React.MouseEvent) => {
@@ -580,7 +601,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <button
           type="button"
           className="w-full py-2 rounded outline-none focus:bg-[var(--color-surface-secondary)]"
-          onKeyDown={onKeyDown}
+          onKeyDown={(e) => {
+            onKeyDown(e);
+          }}
           aria-label="Divider block"
         >
           <hr className="w-full h-px border-0 bg-[var(--color-ink-faint)]" />

@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/20 10:21:49 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/21 10:28:05 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -147,9 +147,17 @@ export function usePlaygroundBlockEditor(pageId: string) {
         (document.querySelector(`[data-block-id="${blockId}"]`) as HTMLElement);
       if (!el) return;
       const editable =
-        (el.querySelector("[contenteditable]") as HTMLElement) ?? el;
+        (el.querySelector("[contenteditable]") as HTMLElement) ??
+        (el.querySelector("textarea") as HTMLElement) ??
+        (el.querySelector(":scope > button") as HTMLElement) ??
+        el;
       editable.focus();
-      if (cursorEnd && editable.childNodes.length) {
+  
+      if (editable instanceof HTMLTextAreaElement) {
+        const pos = cursorEnd ? editable.value.length : 0;
+        editable.selectionStart = pos;
+        editable.selectionEnd = pos;
+      } else if (cursorEnd && editable.childNodes.length && editable.isContentEditable) {
         const sel = globalThis.getSelection();
         const range = document.createRange();
         range.selectNodeContents(editable);
