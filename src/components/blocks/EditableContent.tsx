@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   EditableContent.tsx                                :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: sergio <sergio@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/16 21:46:25 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/21 17:15:29 by sergio           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -51,6 +51,8 @@ interface EditableContentProps {
   onKeyDown: (e: React.KeyboardEvent) => void;
   onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
   onRequestSlashMenu?: (position: { x: number; y: number }) => void;
+  onFocus?: React.FocusEventHandler<HTMLDivElement>;
+  onBlur?: React.FocusEventHandler<HTMLDivElement>;
 }
 
 type PaletteKind = "text" | "background" | null;
@@ -95,7 +97,9 @@ const TOOLBAR_ACTIVE_BUTTON =
 interface InlineSelectionToolbarProps {
   selection: SelectionSnapshot;
   palette: PaletteKind;
+  shortcutsOpen: boolean;
   onTogglePalette: (palette: Exclude<PaletteKind, null>) => void;
+  onToggleShortcuts: () => void;
   onFormatBold: () => void;
   onFormatItalic: () => void;
   onFormatStrike: () => void;
@@ -109,7 +113,9 @@ interface InlineSelectionToolbarProps {
 const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
   selection,
   palette,
+  shortcutsOpen,
   onTogglePalette,
+  onToggleShortcuts,
   onFormatBold,
   onFormatItalic,
   onFormatStrike,
@@ -209,6 +215,18 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
         </button>
         <button
           type="button"
+          title="Keyboard shortcuts"
+          className={[
+            TOOLBAR_BUTTON_BASE,
+            shortcutsOpen ? TOOLBAR_ACTIVE_BUTTON : "",
+          ].join(" ")}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onToggleShortcuts}
+        >
+          ?
+        </button>
+        <button
+          type="button"
           title="Open slash menu"
           className={TOOLBAR_BUTTON_BASE}
           onMouseDown={(e) => {
@@ -288,6 +306,46 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
           />
         </div>
       )}
+
+      {shortcutsOpen && (
+        <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 shadow-xl">
+          <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]">
+            Keyboard shortcuts
+          </p>
+          <ul className="space-y-1">
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+              <span>Bold</span>
+              <span className="text-[var(--color-ink-muted)]">
+                Ctrl/Cmd + B
+              </span>
+            </li>
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+              <span>Italic</span>
+              <span className="text-[var(--color-ink-muted)]">
+                Ctrl/Cmd + I
+              </span>
+            </li>
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+              <span>Inline code</span>
+              <span className="text-[var(--color-ink-muted)]">
+                Ctrl/Cmd + E
+              </span>
+            </li>
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+              <span>Strikethrough</span>
+              <span className="text-[var(--color-ink-muted)]">
+                Ctrl/Cmd + Shift + X
+              </span>
+            </li>
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+              <span>Add link</span>
+              <span className="text-[var(--color-ink-muted)]">
+                Ctrl/Cmd + Shift + L
+              </span>
+            </li>
+          </ul>
+        </div>
+      )}
     </div>
   </div>
 );
@@ -301,6 +359,8 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   onKeyDown,
   onPaste,
   onRequestSlashMenu,
+  onFocus,
+  onBlur,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const isComposing = useRef(false);
@@ -310,6 +370,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     useState<SelectionSnapshot | null>(null);
   const isPlaceholderVisible = isInlineSourceEmpty(content);
   const [openPalette, setOpenPalette] = useState<PaletteKind>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [linkPicker, setLinkPicker] = useState<LinkPickerState | null>(null);
   const linkPickerRef = useRef<HTMLDivElement | null>(null);
   const canonicalSourceRef = useRef(content);
@@ -362,10 +423,14 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
     const handleClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      const mention = target.closest(".page-mention-placeholder") as HTMLElement;
+      const mention = target.closest(
+        ".page-mention-placeholder",
+      ) as HTMLElement;
       if (mention) {
         const targetPageId = mention.dataset.pageId;
-        const page = targetPageId ? usePageStore.getState().pageById(targetPageId) : null;
+        const page = targetPageId
+          ? usePageStore.getState().pageById(targetPageId)
+          : null;
         if (page) {
           e.preventDefault();
           e.stopPropagation();
@@ -424,6 +489,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         setSelectionSnapshot((current) => (current ? null : current));
       }
       setOpenPalette(null);
+      setShowShortcuts(false);
       return;
     }
 
@@ -435,6 +501,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     );
     if (!snapshot) {
       setOpenPalette(null);
+      setShowShortcuts(false);
     }
   }, [linkPicker]);
 
@@ -462,6 +529,27 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     onChange(normalizedSource);
     return normalizedSource;
   }, [onChange]);
+
+  const getCurrentSelectionOffsets = useCallback(() => {
+    const root = ref.current;
+    if (!root) {
+      return null;
+    }
+
+    const liveSelection = getInlineEditorSelectionOffsets(root);
+    if (liveSelection) {
+      return liveSelection;
+    }
+
+    if (!selectionSnapshot) {
+      return null;
+    }
+
+    return {
+      start: selectionSnapshot.start,
+      end: selectionSnapshot.end,
+    };
+  }, [selectionSnapshot]);
 
   const handleInput = useCallback(() => {
     if (isComposing.current) {
@@ -493,14 +581,6 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     requestAnimationFrame(updateSelectionSnapshot);
   }, [getRenderedInlineHtml, onChange, updateSelectionSnapshot]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      onKeyDown(e);
-      requestAnimationFrame(updateSelectionSnapshot);
-    },
-    [onKeyDown, updateSelectionSnapshot],
-  );
-
   const handleKeyUp = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (isComposing.current) {
@@ -529,52 +609,77 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     [onPaste],
   );
 
-  const handleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement | null;
-    const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
-    if (!anchor) {
-      return;
-    }
+    if (!target) return;
 
-    e.preventDefault();
-    e.stopPropagation();
-    const href = anchor.href;
-    if (!href) {
-      return;
-    }
-
-    const normalizedHref = normalizeInlineLinkHref(
-      anchor.getAttribute("href") ?? href,
-    );
-    const internalPageId = getInternalPageIdFromHref(normalizedHref);
-    if (internalPageId) {
-      const linkedPage = usePageStore.getState().pageById(internalPageId);
-      if (linkedPage) {
+    // 1. Handle Wiki Links (Internal mentions)
+    const mention = target.closest(".page-mention-placeholder") as HTMLElement;
+    if (mention) {
+      const targetPageId = mention.dataset.pageId;
+      const page = targetPageId ? usePageStore.getState().pageById(targetPageId) : null;
+      if (page) {
+        e.preventDefault();
+        e.stopPropagation();
         usePageStore.getState().openPage({
-          id: linkedPage._id,
-          workspaceId: linkedPage.workspaceId,
-          kind: linkedPage.databaseId ? "database" : "page",
-          title: linkedPage.title,
-          icon: linkedPage.icon,
+          id: page._id,
+          workspaceId: page.workspaceId,
+          kind: page.databaseId ? "database" : "page",
+          title: page.title,
+          icon: page.icon,
         });
       }
       return;
     }
 
-    globalThis.open(normalizedHref, "_blank", "noopener,noreferrer");
+    // 2. Handle Standard Links (A tags)
+    const anchor = target.closest("a[href]") as HTMLAnchorElement | null;
+    if (anchor) {
+      const href = anchor.getAttribute("href");
+      if (!href) return;
+
+      const normalizedHref = normalizeInlineLinkHref(href);
+      const internalPageId = getInternalPageIdFromHref(normalizedHref);
+
+      if (internalPageId) {
+        // Internal page link from toolbar
+        const linkedPage = usePageStore.getState().pageById(internalPageId);
+        if (linkedPage) {
+          e.preventDefault();
+          e.stopPropagation();
+          usePageStore.getState().openPage({
+            id: linkedPage._id,
+            workspaceId: linkedPage.workspaceId,
+            kind: linkedPage.databaseId ? "database" : "page",
+            title: linkedPage.title,
+            icon: linkedPage.icon,
+          });
+        }
+      } else {
+        // External link
+        e.preventDefault();
+        e.stopPropagation();
+        globalThis.open(normalizedHref, "_blank", "noopener,noreferrer");
+      }
+    }
   }, []);
 
   const applyInlineFormattingCommand = useCallback(
     (command: InlineFormattingCommand) => {
       const root = ref.current;
-      if (!root || !selectionSnapshot) {
+      const selectionOffsets = getCurrentSelectionOffsets();
+      if (
+        !root ||
+        !selectionOffsets ||
+        selectionOffsets.start === selectionOffsets.end
+      ) {
         return;
       }
 
       const source = canonicalSourceRef.current;
       const nextContent = applyInlineFormatting(
         source,
-        selectionSnapshot,
+        selectionOffsets,
         command,
       );
       if (nextContent === source) {
@@ -589,13 +694,18 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
       requestAnimationFrame(() => {
         setInlineEditorSelectionOffsets(root, {
-          start: selectionSnapshot.start,
-          end: selectionSnapshot.end,
+          start: selectionOffsets.start,
+          end: selectionOffsets.end,
         });
         updateSelectionSnapshot();
       });
     },
-    [onChange, renderContent, selectionSnapshot, updateSelectionSnapshot],
+    [
+      getCurrentSelectionOffsets,
+      onChange,
+      renderContent,
+      updateSelectionSnapshot,
+    ],
   );
 
   const handleToggleInlineFormat = useCallback(
@@ -628,12 +738,74 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   }, [applyInlineFormattingCommand]);
 
   const handleAddLink = useCallback(() => {
-    if (!selectionSnapshot) {
+    const selectionOffsets = getCurrentSelectionOffsets();
+    if (!selectionOffsets || selectionOffsets.start === selectionOffsets.end) {
       return;
     }
 
     setLinkPicker({ mode: "chooser", query: "" });
-  }, [selectionSnapshot]);
+  }, [getCurrentSelectionOffsets]);
+
+  const handleInlineFormattingShortcut = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (isComposing.current || event.altKey) {
+        return false;
+      }
+
+      const hasPrimaryModifier = event.metaKey || event.ctrlKey;
+      if (!hasPrimaryModifier) {
+        return false;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === "b") {
+        event.preventDefault();
+        handleToggleInlineFormat("bold");
+        return true;
+      }
+
+      if (key === "i") {
+        event.preventDefault();
+        handleToggleInlineFormat("italic");
+        return true;
+      }
+
+      if (key === "e" || event.key === "`") {
+        event.preventDefault();
+        handleToggleCode();
+        return true;
+      }
+
+      if (key === "l" && event.shiftKey) {
+        event.preventDefault();
+        handleAddLink();
+        return true;
+      }
+
+      if (key === "x" && event.shiftKey) {
+        event.preventDefault();
+        handleToggleInlineFormat("strikethrough");
+        return true;
+      }
+
+      return false;
+    },
+    [handleAddLink, handleToggleCode, handleToggleInlineFormat],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (handleInlineFormattingShortcut(e)) {
+        requestAnimationFrame(updateSelectionSnapshot);
+        return;
+      }
+
+      onKeyDown(e);
+      requestAnimationFrame(updateSelectionSnapshot);
+    },
+    [handleInlineFormattingShortcut, onKeyDown, updateSelectionSnapshot],
+  );
 
   const handleApplyExternalLink = useCallback(
     (url: string) => {
@@ -728,23 +900,26 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         onPaste={handlePaste}
-        onClick={handleClick}
-        onMouseUp={updateSelectionSnapshot}
-        onFocus={() => {
+        onMouseDown={handleMouseDown}
+        onFocus={(event) => {
+          onFocus?.(event);
           isFocused.current = true;
           setHasFocus(true);
           renderContent(content);
         }}
-        onBlur={() => {
+        onBlur={(event) => {
+          onBlur?.(event);
           isFocused.current = false;
           setHasFocus(false);
           if (!linkPicker) {
             setSelectionSnapshot(null);
           }
           setOpenPalette(null);
+          setShowShortcuts(false);
           const syncedContent = syncContentFromDom();
           renderContent(syncedContent ?? content);
         }}
+        onMouseUp={updateSelectionSnapshot}
         onCompositionStart={() => {
           isComposing.current = true;
         }}
@@ -759,11 +934,16 @@ export const EditableContent: React.FC<EditableContentProps> = ({
             <InlineSelectionToolbar
               selection={selectionSnapshot}
               palette={openPalette}
+              shortcutsOpen={showShortcuts}
               onTogglePalette={(palette) =>
                 setOpenPalette((current) =>
                   current === palette ? null : palette,
                 )
               }
+              onToggleShortcuts={() => {
+                setOpenPalette(null);
+                setShowShortcuts((current) => !current);
+              }}
               onFormatBold={() => handleToggleInlineFormat("bold")}
               onFormatItalic={() => handleToggleInlineFormat("italic")}
               onFormatStrike={() => handleToggleInlineFormat("strikethrough")}
