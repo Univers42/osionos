@@ -135,7 +135,10 @@ export const editingBehaviorScenarios = [
       await page.keyboard.type("Task");
       await pressEnter(editor);
       const emptyItem = getEditors(page).nth(1);
-      await todoCheckboxes(page).nth(1).click();
+      const emptyItemCheckbox = blockLocatorForEditor(emptyItem).locator("button.w-4.h-4");
+      await expect(todoCheckboxes(page)).toHaveCount(2);
+      await expect(emptyItemCheckbox).toHaveCount(1);
+      await emptyItemCheckbox.click({ force: true });
       await pressEnter(emptyItem);
       await expect(todoCheckboxes(page)).toHaveCount(1);
       await expect(getEditors(page)).toHaveCount(2);

@@ -37,7 +37,10 @@ services:
       mongodb:
         condition: service_healthy
   browser-tests:
-    image: mcr.microsoft.com/playwright:v1.59.1-noble
+    image: osionos-browser-tests:local
+    build:
+      context: ./docker/services/browser-tests
+      dockerfile: Dockerfile
     working_dir: /app
     init: true
     ipc: host
