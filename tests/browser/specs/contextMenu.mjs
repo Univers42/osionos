@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   contextMenu.mjs                                    :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/20 21:29:48 by rstancu           #+#    #+#             */
+/*   Updated: 2026/04/20 21:29:49 by rstancu          ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import { expect } from "@playwright/test";
 
 import {
@@ -42,7 +54,8 @@ export const contextMenuScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createParagraphs(page, ["Handle target"]);
-      await dragHandle(page).click({ force: true });
+      await dragHandle(page).hover();
+      await dragHandle(page).click();
       await expect(contextMenuItem(page, "Insert text above")).toBeVisible();
       await expect(contextMenuItem(page, "Duplicate")).toBeVisible();
     },
@@ -74,7 +87,7 @@ export const contextMenuScenarios = [
       });
       await openFreshPage(page, appUrl);
       await createParagraphs(page, ["Copy me"]);
-      await page.waitForTimeout(150);
+      await expect(getEditors(page).first()).toHaveText("Copy me");
       await openBlockContextMenuForEditor(getEditors(page).first());
       await contextMenuItem(page, "Copy text").click();
       await expect.poll(() => page.evaluate(() => window.__copiedText)).toBe("Copy me");

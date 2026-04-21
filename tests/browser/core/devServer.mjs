@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   devServer.mjs                                      :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/20 21:29:20 by rstancu           #+#    #+#             */
+/*   Updated: 2026/04/20 21:29:21 by rstancu          ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";

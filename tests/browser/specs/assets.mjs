@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   assets.mjs                                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/20 21:29:32 by rstancu           #+#    #+#             */
+/*   Updated: 2026/04/20 21:29:33 by rstancu          ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import { expect } from "@playwright/test";
 
 import {
@@ -15,6 +27,58 @@ import {
 } from "../core/app.mjs";
 import { defineScenario } from "../core/scenario.mjs";
 
+function pageIconButton(page) {
+  return page.getByRole("button", { name: "Change page icon" });
+}
+
+function removeIconButton(page) {
+  return page.getByRole("button", { name: /^Remove icon$/ });
+}
+
+function addCoverButton(page) {
+  return page.getByRole("button", { name: /Add cover/i });
+}
+
+function changeCoverButton(page) {
+  return page.getByRole("button", { name: /Change cover/i });
+}
+
+function removeCoverButton(page) {
+  return page.locator(".notion-page-cover-controls button").last();
+}
+
+async function addPageIcon(page) {
+  await page.getByRole("button", { name: /Add icon/i }).click();
+  await expect(pageIconButton(page)).toBeVisible();
+}
+
+async function openPageIconPicker(page) {
+  const iconButton = pageIconButton(page);
+  await iconButton.click();
+  await expect(removeIconButton(page)).toBeVisible();
+  return iconButton;
+}
+
+async function openCalloutIconPicker(page) {
+  const button = page.getByRole("button", { name: "Change callout icon" });
+  await button.click();
+  await expect(removeIconButton(page)).toBeVisible();
+  return button;
+}
+
+async function addPageCover(page) {
+  await addCoverButton(page).click();
+  await expect(changeCoverButton(page)).toBeVisible();
+  await expect(page.locator(".notion-page-cover")).toHaveCount(1);
+}
+
+async function openCoverPicker(page) {
+  const button = changeCoverButton(page);
+  await button.click();
+  await expect(page.locator(".notion-cover-picker")).toHaveCount(1);
+  return button;
+}
+
 export const assetScenarios = [
   defineScenario(
     "12. Emojis, Icons & Media",
@@ -22,8 +86,7 @@ export const assetScenarios = [
     "Add icon assigns a page icon when the page starts without one",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add icon/i }).dispatchEvent("click");
-      await expect(page.getByRole("button", { name: "Change page icon" })).toBeVisible();
+      await addPageIcon(page);
     },
   ),
   defineScenario(
@@ -32,12 +95,10 @@ export const assetScenarios = [
     "clicking the page icon opens the asset picker and Escape closes it",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add icon/i }).dispatchEvent("click");
-      const iconButton = page.getByRole("button", { name: "Change page icon" });
-      await iconButton.dispatchEvent("click");
-      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
+      await addPageIcon(page);
+      await openPageIconPicker(page);
       await page.keyboard.press("Escape");
-      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toHaveCount(0);
+      await expect(removeIconButton(page)).toHaveCount(0);
     },
   ),
   defineScenario(
@@ -46,10 +107,10 @@ export const assetScenarios = [
     "selecting an asset updates the page icon immediately",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add icon/i }).dispatchEvent("click");
-      const iconButton = page.getByRole("button", { name: "Change page icon" });
+      await addPageIcon(page);
+      const iconButton = pageIconButton(page);
       const previousIcon = await iconButton.innerText();
-      await iconButton.dispatchEvent("click");
+      await openPageIconPicker(page);
       await pickFirstAssetFromVisiblePicker(page);
       await expect(iconButton).not.toContainText(previousIcon);
     },
@@ -60,12 +121,10 @@ export const assetScenarios = [
     "clicking outside the page icon picker closes it",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add icon/i }).dispatchEvent("click");
-      const iconButton = page.getByRole("button", { name: "Change page icon" });
-      await iconButton.dispatchEvent("click");
-      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
+      await addPageIcon(page);
+      await openPageIconPicker(page);
       await clickOutside(page);
-      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toHaveCount(0);
+      await expect(removeIconButton(page)).toHaveCount(0);
     },
   ),
   defineScenario(
@@ -74,12 +133,11 @@ export const assetScenarios = [
     "the page icon picker can be reopened after closing it once",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add icon/i }).dispatchEvent("click");
-      const iconButton = page.getByRole("button", { name: "Change page icon" });
-      await iconButton.dispatchEvent("click");
+      await addPageIcon(page);
+      const iconButton = await openPageIconPicker(page);
       await page.keyboard.press("Escape");
-      await iconButton.dispatchEvent("click");
-      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
+      await iconButton.click();
+      await expect(removeIconButton(page)).toBeVisible();
     },
   ),
   defineScenario(
@@ -88,10 +146,9 @@ export const assetScenarios = [
     "Remove icon clears the page icon and restores the Add icon action",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add icon/i }).dispatchEvent("click");
-      const iconButton = page.getByRole("button", { name: "Change page icon" });
-      await iconButton.dispatchEvent("click");
-      await page.getByRole("button", { name: /^Remove icon$/ }).click();
+      await addPageIcon(page);
+      const iconButton = await openPageIconPicker(page);
+      await removeIconButton(page).click();
       await expect(page.getByRole("button", { name: /Add icon/i })).toBeVisible();
       await expect(iconButton).toHaveCount(0);
     },
@@ -102,12 +159,11 @@ export const assetScenarios = [
     "clicking a custom page icon reopens its picker after the icon has already been changed",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add icon/i }).dispatchEvent("click");
-      const iconButton = page.getByRole("button", { name: "Change page icon" });
-      await iconButton.dispatchEvent("click");
+      await addPageIcon(page);
+      const iconButton = await openPageIconPicker(page);
       await pickFirstAssetFromVisiblePicker(page);
-      await iconButton.dispatchEvent("click");
-      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
+      await iconButton.click();
+      await expect(removeIconButton(page)).toBeVisible();
     },
   ),
   defineScenario(
@@ -127,11 +183,9 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createCallout(page);
-      const button = page.getByRole("button", { name: "Change callout icon" });
-      await button.click({ force: true });
-      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
+      await openCalloutIconPicker(page);
       await page.keyboard.press("Escape");
-      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toHaveCount(0);
+      await expect(removeIconButton(page)).toHaveCount(0);
     },
   ),
   defineScenario(
@@ -141,11 +195,9 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createCallout(page);
-      const button = page.getByRole("button", { name: "Change callout icon" });
-      await button.click({ force: true });
-      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
+      await openCalloutIconPicker(page);
       await clickOutside(page);
-      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toHaveCount(0);
+      await expect(removeIconButton(page)).toHaveCount(0);
     },
   ),
   defineScenario(
@@ -157,7 +209,7 @@ export const assetScenarios = [
       await createCallout(page);
       const button = page.getByRole("button", { name: "Change callout icon" });
       const previousMarkup = await button.innerHTML();
-      await button.click({ force: true });
+      await openCalloutIconPicker(page);
       await page.getByRole("button", { name: /^Icons$/ }).click();
       await pickFirstAssetFromVisiblePicker(page);
       expect(await button.innerHTML()).not.toBe(previousMarkup);
@@ -170,11 +222,10 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createCallout(page);
-      const button = page.getByRole("button", { name: "Change callout icon" });
-      await button.click({ force: true });
+      const button = await openCalloutIconPicker(page);
       await page.keyboard.press("Escape");
-      await button.click({ force: true });
-      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
+      await button.click();
+      await expect(removeIconButton(page)).toBeVisible();
     },
   ),
   defineScenario(
@@ -184,11 +235,10 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createCallout(page);
-      const button = page.getByRole("button", { name: "Change callout icon" });
-      await button.click({ force: true });
+      const button = await openCalloutIconPicker(page);
       await pickFirstAssetFromVisiblePicker(page);
-      await button.click({ force: true });
-      await expect(page.getByRole("button", { name: /^Remove icon$/ })).toBeVisible();
+      await button.click();
+      await expect(removeIconButton(page)).toBeVisible();
     },
   ),
   defineScenario(
@@ -198,11 +248,10 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createCallout(page);
-      const button = page.getByRole("button", { name: "Change callout icon" });
-      await button.click({ force: true });
+      const button = await openCalloutIconPicker(page);
       await pickFirstAssetFromVisiblePicker(page);
-      await button.click({ force: true });
-      await page.getByRole("button", { name: /^Remove icon$/ }).click();
+      await button.click();
+      await removeIconButton(page).click();
       await expect(button).toContainText("💡");
     },
   ),
@@ -212,9 +261,7 @@ export const assetScenarios = [
     "Add cover assigns a cover to a page that starts without one",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add cover/i }).dispatchEvent("click");
-      await expect(page.getByRole("button", { name: /Change cover/i })).toBeVisible();
-      await expect(page.locator(".notion-page-cover")).toHaveCount(1);
+      await addPageCover(page);
     },
   ),
   defineScenario(
@@ -223,9 +270,9 @@ export const assetScenarios = [
     "selecting a cover from the picker updates the page cover immediately",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add cover/i }).dispatchEvent("click");
+      await addPageCover(page);
       const previousMarkup = await page.locator(".notion-page-cover-media").innerHTML();
-      await page.getByRole("button", { name: /Change cover/i }).dispatchEvent("click");
+      await openCoverPicker(page);
       await pickFirstAssetFromVisiblePicker(page);
       expect(await page.locator(".notion-page-cover-media").innerHTML()).not.toBe(previousMarkup);
     },
@@ -236,9 +283,8 @@ export const assetScenarios = [
     "clicking Change cover opens the cover picker and outside click closes it",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add cover/i }).dispatchEvent("click");
-      await page.getByRole("button", { name: /Change cover/i }).dispatchEvent("click");
-      await expect(page.locator(".notion-cover-picker")).toHaveCount(1);
+      await addPageCover(page);
+      await openCoverPicker(page);
       await page.mouse.click(20, 20);
       await expect(page.locator(".notion-cover-picker")).toHaveCount(0);
     },
@@ -249,9 +295,8 @@ export const assetScenarios = [
     "pressing Escape closes the cover picker",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add cover/i }).dispatchEvent("click");
-      await page.getByRole("button", { name: /Change cover/i }).dispatchEvent("click");
-      await expect(page.locator(".notion-cover-picker")).toHaveCount(1);
+      await addPageCover(page);
+      await openCoverPicker(page);
       await page.keyboard.press("Escape");
       await expect(page.locator(".notion-cover-picker")).toHaveCount(0);
     },
@@ -262,11 +307,10 @@ export const assetScenarios = [
     "the cover picker can be reopened after it has been closed",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add cover/i }).dispatchEvent("click");
-      const changeCover = page.getByRole("button", { name: /Change cover/i });
-      await changeCover.dispatchEvent("click");
+      await addPageCover(page);
+      const changeCover = await openCoverPicker(page);
       await page.keyboard.press("Escape");
-      await changeCover.dispatchEvent("click");
+      await changeCover.click();
       await expect(page.locator(".notion-cover-picker")).toHaveCount(1);
     },
   ),
@@ -276,9 +320,9 @@ export const assetScenarios = [
     "closing the cover picker without selecting anything keeps the current cover in place",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add cover/i }).dispatchEvent("click");
+      await addPageCover(page);
       const previousMarkup = await page.locator(".notion-page-cover-media").innerHTML();
-      await page.getByRole("button", { name: /Change cover/i }).dispatchEvent("click");
+      await openCoverPicker(page);
       await page.keyboard.press("Escape");
       expect(await page.locator(".notion-page-cover-media").innerHTML()).toBe(previousMarkup);
     },
@@ -289,9 +333,9 @@ export const assetScenarios = [
     "Remove cover clears the current cover and restores Add cover",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      await page.getByRole("button", { name: /Add cover/i }).dispatchEvent("click");
-      await page.locator(".notion-page-cover button").nth(1).dispatchEvent("click");
-      await expect(page.getByRole("button", { name: /Add cover/i })).toBeVisible();
+      await addPageCover(page);
+      await removeCoverButton(page).click();
+      await expect(addCoverButton(page)).toBeVisible();
       await expect(page.locator(".notion-page-cover")).toHaveCount(0);
     },
   ),
