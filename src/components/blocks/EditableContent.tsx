@@ -340,12 +340,48 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       return renderedContentCache.current.html;
     }
 
-    const html = nextContent ? parseInlineMarkdown(nextContent) : "";
+    const html = nextContent
+      ? parseInlineMarkdown(nextContent, {
+          resolveInternalLinkTitle: (pageId) => {
+            const page = usePageStore.getState().pageById(pageId);
+            if (!page) return null;
+            return { title: page.title, icon: page.icon };
+          },
+        })
+      : "";
     renderedContentCache.current = {
       source: nextContent,
       html,
     };
     return html;
+  }, []);
+
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const mention = target.closest(".page-mention-placeholder") as HTMLElement;
+      if (mention) {
+        const targetPageId = mention.dataset.pageId;
+        const page = targetPageId ? usePageStore.getState().pageById(targetPageId) : null;
+        if (page) {
+          e.preventDefault();
+          e.stopPropagation();
+          usePageStore.getState().openPage({
+            id: page._id,
+            workspaceId: page.workspaceId,
+            kind: page.databaseId ? "database" : "page",
+            title: page.title,
+            icon: page.icon,
+          });
+        }
+      }
+    };
+
+    root.addEventListener("click", handleClick);
+    return () => root.removeEventListener("click", handleClick);
   }, []);
 
   useEffect(() => {
