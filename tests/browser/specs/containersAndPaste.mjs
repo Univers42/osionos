@@ -79,6 +79,7 @@ export const containerAndPasteScenarios = [
       await clearAndType(summary, "Summary");
       await pressEnter(summary);
       const child = getEditors(page).nth(1);
+      await child.waitFor();
       await openSlashMenuFromEditor(child, "/");
       await expect(page.getByRole("button", { name: /Heading 1/i })).toBeVisible();
     },
@@ -202,6 +203,7 @@ export const containerAndPasteScenarios = [
       await clearAndType(callout, "Callout");
       await pressEnter(callout);
       const child = getEditors(page).nth(1);
+      await child.waitFor();
       await openSlashMenuFromEditor(child, "/");
       await expect(page.getByRole("button", { name: /Heading 1/i })).toBeVisible();
     },
