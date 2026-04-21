@@ -36,6 +36,7 @@ export const TodoBlockEditor: React.FC<{
     <div className="flex items-start gap-2 pl-5">
       <button
         type="button"
+        data-testid="todo-checkbox"
         onClick={toggleChecked}
         className={[
           "shrink-0 mt-[3px] w-4 h-4 rounded border flex items-center justify-center cursor-pointer",

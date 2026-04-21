@@ -46,7 +46,7 @@ services:
     environment:
       CI: "1"
       NODE_ENV: test
-      TEST_WORKERS: ${TEST_WORKERS:-10}
+      TEST_WORKERS: ${TEST_WORKERS:-1}
       TEST_FILTER: ${TEST_FILTER:-}
       VITE_API_URL: ${VITE_API_URL:-}
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
@@ -57,7 +57,7 @@ services:
       - browser_test_node_modules:/app/node_modules
       - browser_test_npm_cache:/root/.npm
     entrypoint: ["/bin/bash", "/app/docker/services/browser-tests/entrypoint.sh"]
-    command: ["node", "tests/browser/run.mjs"]
+    command: ["npx", "playwright", "test"]
 
 volumes:
   mongodb_data:

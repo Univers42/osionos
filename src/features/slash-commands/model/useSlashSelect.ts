@@ -19,6 +19,7 @@ import {
   type MediaBlockType,
 } from "@/entities/block";
 import type { SlashMenuState } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
+import { focusEditableBlock } from "@/features/block-editor/model/blockDomFocus";
 
 interface UseSlashSelectOptions {
   pageId: string;
@@ -57,21 +58,7 @@ function stripSlashQuery(content: string): string {
  * Places the cursor at the start of a block's editable content.
  */
 export function repositionCursor(blockId: string, _content: string) {
-  setTimeout(() => {
-    const el = document.querySelector(
-      `[data-block-id="${blockId}"] [contenteditable]`,
-    ) as HTMLElement;
-    if (!el) return;
-    el.focus();
-    const sel = globalThis.getSelection();
-    if (sel) {
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    }
-  }, 30);
+  focusEditableBlock(blockId, "start");
 }
 
 export function useSlashSelect({

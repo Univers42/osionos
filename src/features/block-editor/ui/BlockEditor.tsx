@@ -140,6 +140,19 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         return;
       }
 
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const ta = e.currentTarget;
+        const { selectionStart, selectionEnd, value } = ta;
+        const next =
+          value.slice(0, selectionStart) + "\n" + value.slice(selectionEnd);
+        onChange(next);
+        requestAnimationFrame(() => {
+          ta.selectionStart = ta.selectionEnd = selectionStart + 1;
+        });
+        return;
+      }
+
       onKeyDown(e);
     },
     [onChange, onKeyDown],

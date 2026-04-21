@@ -13,7 +13,7 @@
 import process from "node:process";
 
 export async function openFreshPage(page, appUrl) {
-  await page.goto(appUrl, { waitUntil: "networkidle" });
+  await page.goto(appUrl, { waitUntil: "domcontentloaded" });
   const newPageButton = page.getByRole("button", { name: /New page/i }).first();
   await newPageButton.waitFor({ state: "visible" });
   await newPageButton.click();
@@ -22,7 +22,7 @@ export async function openFreshPage(page, appUrl) {
 
 export async function openHarnessPage(page, appUrl, relativePath) {
   await page.goto(new URL(relativePath, appUrl).toString(), {
-    waitUntil: "networkidle",
+    waitUntil: "domcontentloaded",
   });
 }
 
@@ -217,11 +217,35 @@ export async function setCaretInsideText(editor, text, offsetFromStart) {
 }
 
 export async function expectToolbar(page) {
-  await page.locator('button[title="Bold"]').waitFor();
+  await page.getByTestId("inline-selection-toolbar").waitFor();
 }
 
 export function toolbarButton(page, title) {
-  return page.locator(`button[title="${title}"]`);
+  return page.getByTestId("inline-selection-toolbar").locator(`button[title="${title}"]`);
+}
+
+export function slashMenu(page) {
+  return page.getByTestId("slash-command-menu");
+}
+
+export function slashCommandEntry(page, label) {
+  return slashMenu(page).locator(
+    `[data-testid="slash-command-entry"][data-command-label="${label}"]`,
+  );
+}
+
+export function inlineColorPalette(page, kind) {
+  return page.getByTestId(
+    kind === "text" ? "inline-text-color-palette" : "inline-background-color-palette",
+  );
+}
+
+export function mediaBlockPicker(page) {
+  return page.getByTestId("media-block-picker");
+}
+
+export function pageCoverImage(page) {
+  return page.getByTestId("page-cover-image");
 }
 
 export async function openColorPalette(page, kind) {
@@ -229,31 +253,25 @@ export async function openColorPalette(page, kind) {
     page,
     kind === "text" ? "Text color" : "Background color",
   ).click();
-  await page.locator('button[aria-pressed="false"]').first().waitFor();
+  await inlineColorPalette(page, kind).waitFor();
 }
 
 export async function choosePaletteColor(page, index = 0) {
-  const swatch = page.locator('button[aria-pressed="false"]:visible').nth(index);
-  const label = await swatch.getAttribute("aria-label");
-  await swatch.click({ force: true });
+  const palette = await resolveVisibleInlinePalette(page);
+  const swatch = palette.locator('button[title*=": #"]:has(span)').nth(index);
+  await swatch.waitFor();
+  const label = await swatch.getAttribute("title");
+  await swatch.click();
   return label;
 }
 
 export async function choosePaletteColorByLabel(page, label) {
-  const swatches = page.locator('button[aria-label]:visible');
-  const swatchIndex = await swatches.evaluateAll(
-    (nodes, targetLabel) =>
-      nodes.findIndex(
-        (node) => node.getAttribute("aria-label") === targetLabel,
-      ),
-    label,
-  );
-
-  if (swatchIndex < 0) {
+  const palette = await resolveVisibleInlinePalette(page);
+  const swatch = palette.locator(`button[title="${label}"]:has(span)`);
+  if ((await swatch.count()) === 0) {
     throw new Error(`Could not find a visible palette swatch named "${label}"`);
   }
-
-  await swatches.nth(swatchIndex).click({ force: true });
+  await swatch.first().click();
 }
 
 export async function openSlashMenuFromEditor(editor, text) {
@@ -281,14 +299,11 @@ export async function createParagraphs(page, texts) {
 }
 
 export function blockLocator(page, index) {
-  return page.locator("[data-block-id]").nth(index);
+  return page.getByTestId("draggable-block").nth(index);
 }
 
 export function blockWrapper(page, index) {
-  return page
-    .getByRole("button", { name: /Drag to reorder block/i })
-    .nth(index)
-    .locator("xpath=ancestor::div[button[@aria-label='Drag to reorder block']][1]");
+  return page.getByTestId("draggable-block").nth(index);
 }
 
 export function blockLocatorForEditor(editor) {
@@ -318,8 +333,9 @@ export async function editorHasFocus(editor) {
 }
 
 export async function selectSlashMenuEntry(page, label, options = {}) {
-  const entry = page
-    .locator("button:visible", { hasText: new RegExp(label, "i") })
+  const entry = slashMenu(page)
+    .getByTestId("slash-command-entry")
+    .filter({ hasText: new RegExp(label, "i") })
     .first();
   await entry.waitFor({ timeout: options.timeout ?? 30_000 });
   await entry.scrollIntoViewIfNeeded();
@@ -375,9 +391,10 @@ export async function pickFirstAssetFromVisiblePicker(page) {
 }
 
 export async function pickAssetFromVisiblePicker(page, selectableIndex = 0) {
-  const pickerButtons = page.locator(
+  const picker = await resolveVisibleAssetPicker(page);
+  const pickerButtons = picker.locator(
     [
-      'button[title]:visible',
+      'button[title]',
       ':not([title="Text color"])',
       ':not([title="Background color"])',
       ':not([title="Bold"])',
@@ -461,12 +478,28 @@ export function contextMenuItem(page, label) {
 export async function pasteText(editor, text) {
   const page = editor.page();
   await ensureClipboardAccess(page);
+  const beforeHtml = await editorHtml(editor);
+  const handle = await editor.elementHandle();
+  if (!handle) {
+    throw new Error("Could not resolve editor element for paste verification");
+  }
   await page.evaluate(async (value) => {
     await navigator.clipboard.writeText(value);
   }, text);
   await editor.click();
   await page.keyboard.press(`${modifier()}+V`);
-  await page.waitForTimeout(100);
+
+  try {
+    await page.waitForFunction(
+      ([node, previousHtml]) =>
+        !node.isConnected ||
+        node.innerHTML !== previousHtml ||
+        Boolean(document.querySelector("textarea")),
+      [handle, beforeHtml],
+    );
+  } finally {
+    await handle.dispose();
+  }
 }
 
 export async function ensureClipboardAccess(page) {
@@ -540,13 +573,56 @@ export async function blockOpacity(page, index) {
 }
 
 export async function visibleBlockTexts(page) {
-  return page.locator("[data-block-id]").evaluateAll((nodes) =>
+  return getEditors(page).evaluateAll((nodes) =>
     nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim() ?? ""),
   );
 }
 
 export async function clickOutside(page) {
-  await page.mouse.click(24, 24);
+  await page.getByTestId("app-shell").click({ position: { x: 8, y: 8 } });
+}
+
+async function resolveVisibleAssetPicker(page) {
+  const candidates = [
+    page.getByTestId("media-block-picker"),
+    page.getByTestId("page-cover-picker"),
+    page.getByTestId("emoji-picker"),
+    page.getByTestId("slash-media-picker"),
+  ];
+
+  for (const candidate of candidates) {
+    const count = await candidate.count();
+    if (count === 0) {
+      continue;
+    }
+
+    const visibleCandidate = candidate.last();
+    if (await visibleCandidate.isVisible()) {
+      return visibleCandidate;
+    }
+  }
+
+  throw new Error("Could not find a visible asset picker container");
+}
+
+async function resolveVisibleInlinePalette(page) {
+  const candidates = [
+    page.getByTestId("inline-text-color-palette"),
+    page.getByTestId("inline-background-color-palette"),
+  ];
+
+  for (const candidate of candidates) {
+    const count = await candidate.count();
+    if (count === 0) {
+      continue;
+    }
+
+    if (await candidate.last().isVisible()) {
+      return candidate.last();
+    }
+  }
+
+  throw new Error("Could not find a visible inline color palette");
 }
 
 function capitalize(value) {

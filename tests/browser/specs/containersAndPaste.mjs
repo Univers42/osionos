@@ -26,6 +26,7 @@ import {
   pasteText,
   pressEnter,
   pressTab,
+  slashMenu,
 } from "../core/app.mjs";
 import { defineScenario } from "../core/scenario.mjs";
 
@@ -81,7 +82,7 @@ export const containerAndPasteScenarios = [
       const child = getEditors(page).nth(1);
       await child.waitFor();
       await openSlashMenuFromEditor(child, "/");
-      await expect(page.getByRole("button", { name: /Heading 1/i })).toBeVisible();
+      await expect(slashMenu(page)).toContainText("Heading");
     },
   ),
   defineScenario(
@@ -205,7 +206,7 @@ export const containerAndPasteScenarios = [
       const child = getEditors(page).nth(1);
       await child.waitFor();
       await openSlashMenuFromEditor(child, "/");
-      await expect(page.getByRole("button", { name: /Heading 1/i })).toBeVisible();
+      await expect(slashMenu(page)).toContainText("Heading");
     },
   ),
   defineScenario(

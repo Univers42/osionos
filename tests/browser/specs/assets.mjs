@@ -19,6 +19,7 @@ import {
   createCallout,
   createMediaBlock,
   getEditors,
+  mediaBlockPicker,
   openFreshPage,
   pickAssetFromVisiblePicker,
   pickFirstAssetFromVisiblePicker,
@@ -44,7 +45,7 @@ function changeCoverButton(page) {
 }
 
 function removeCoverButton(page) {
-  return page.locator(".notion-page-cover-controls button").last();
+  return page.getByTestId("page-cover-remove");
 }
 
 async function addPageIcon(page) {
@@ -75,7 +76,7 @@ async function addPageCover(page) {
 async function openCoverPicker(page) {
   const button = changeCoverButton(page);
   await button.click();
-  await expect(page.locator(".notion-cover-picker")).toHaveCount(1);
+  await expect(page.getByTestId("page-cover-picker")).toBeVisible();
   return button;
 }
 
@@ -271,10 +272,10 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await addPageCover(page);
-      const previousMarkup = await page.locator(".notion-page-cover-media").innerHTML();
+      const previousCover = await page.getByTestId("page-cover-media").innerHTML();
       await openCoverPicker(page);
       await pickFirstAssetFromVisiblePicker(page);
-      expect(await page.locator(".notion-page-cover-media").innerHTML()).not.toBe(previousMarkup);
+      expect(await page.getByTestId("page-cover-media").innerHTML()).not.toBe(previousCover);
     },
   ),
   defineScenario(
@@ -285,8 +286,8 @@ export const assetScenarios = [
       await openFreshPage(page, appUrl);
       await addPageCover(page);
       await openCoverPicker(page);
-      await page.mouse.click(20, 20);
-      await expect(page.locator(".notion-cover-picker")).toHaveCount(0);
+      await clickOutside(page);
+      await expect(page.getByTestId("page-cover-picker")).toHaveCount(0);
     },
   ),
   defineScenario(
@@ -298,7 +299,7 @@ export const assetScenarios = [
       await addPageCover(page);
       await openCoverPicker(page);
       await page.keyboard.press("Escape");
-      await expect(page.locator(".notion-cover-picker")).toHaveCount(0);
+      await expect(page.getByTestId("page-cover-picker")).toHaveCount(0);
     },
   ),
   defineScenario(
@@ -311,7 +312,7 @@ export const assetScenarios = [
       const changeCover = await openCoverPicker(page);
       await page.keyboard.press("Escape");
       await changeCover.click();
-      await expect(page.locator(".notion-cover-picker")).toHaveCount(1);
+      await expect(page.getByTestId("page-cover-picker")).toBeVisible();
     },
   ),
   defineScenario(
@@ -321,10 +322,10 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await addPageCover(page);
-      const previousMarkup = await page.locator(".notion-page-cover-media").innerHTML();
+      const previousCover = await page.getByTestId("page-cover-media").innerHTML();
       await openCoverPicker(page);
       await page.keyboard.press("Escape");
-      expect(await page.locator(".notion-page-cover-media").innerHTML()).toBe(previousMarkup);
+      expect(await page.getByTestId("page-cover-media").innerHTML()).toBe(previousCover);
     },
   ),
   defineScenario(
@@ -436,9 +437,9 @@ export const assetScenarios = [
       await openFreshPage(page, appUrl);
       await createMediaBlock(page, "image");
       await page.locator('button:has-text("Change image")').click();
-      await expect(page.getByRole("button", { name: /^Close$/ }).last()).toBeVisible();
+      await expect(mediaBlockPicker(page)).toBeVisible();
       await page.keyboard.press("Escape");
-      await expect(page.getByRole("button", { name: /^Close$/ })).toHaveCount(0);
+      await expect(mediaBlockPicker(page)).toHaveCount(0);
       await expect(page.locator('button:has-text("Change image")')).toBeVisible();
     },
   ),
@@ -450,9 +451,9 @@ export const assetScenarios = [
       await openFreshPage(page, appUrl);
       await createMediaBlock(page, "image");
       await page.locator('button:has-text("Change image")').click();
-      await expect(page.getByRole("button", { name: /^Close$/ }).last()).toBeVisible();
+      await expect(mediaBlockPicker(page)).toBeVisible();
       await clickOutside(page);
-      await expect(page.getByRole("button", { name: /^Close$/ })).toHaveCount(0);
+      await expect(mediaBlockPicker(page)).toHaveCount(0);
       await expect(page.locator('button:has-text("Change image")')).toBeVisible();
     },
   ),

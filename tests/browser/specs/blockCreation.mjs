@@ -14,18 +14,19 @@ import { expect } from "@playwright/test";
 
 import {
   activateFirstEditor,
+  blockLocatorForEditor,
   editorText,
   openFreshPage,
   openSlashMenuFromEditor,
   selectSlashMenuEntry,
+  slashCommandEntry,
+  slashMenu,
 } from "../core/app.mjs";
 import { defineScenario } from "../core/scenario.mjs";
 
 async function expectSlashMenuOpen(page) {
-  await page
-    .locator("button:visible", { hasText: /Heading 1/i })
-    .first()
-    .waitFor();
+  await expect(slashMenu(page)).toBeVisible();
+  await expect(slashMenu(page).getByTestId("slash-command-entry").first()).toBeVisible();
 }
 
 export const blockCreationScenarios = [
@@ -48,8 +49,9 @@ export const blockCreationScenarios = [
       await openFreshPage(page, appUrl);
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "/hea");
-      await page.locator("button:visible", { hasText: /Heading 1/i }).first().waitFor();
-      await expect(page.getByRole("button", { name: /^Quote$/i })).toHaveCount(0);
+      await expectSlashMenuOpen(page);
+      await expect(slashMenu(page)).toContainText("Heading 1");
+      await expect(slashCommandEntry(page, "Quote")).toHaveCount(0);
     },
   ),
   defineScenario(
@@ -61,8 +63,7 @@ export const blockCreationScenarios = [
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "/quote");
       await page.keyboard.press("Enter");
-      const fontStyle = await editor.evaluate((node) => getComputedStyle(node).fontStyle);
-      expect(fontStyle).toBe("italic");
+      await expect(blockLocatorForEditor(editor)).toHaveAttribute("data-block-type", "quote");
       await expect(editor).toHaveText("");
       await expect(page.locator('[role="textbox"][aria-multiline="true"]')).toHaveCount(1);
     },
@@ -76,7 +77,7 @@ export const blockCreationScenarios = [
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "/");
       await selectSlashMenuEntry(page, "^Bulleted List$");
-      await page.locator(".rounded-full").first().waitFor();
+      await expect(blockLocatorForEditor(editor)).toHaveAttribute("data-block-type", "bulleted_list");
       await expect(editor).toHaveText("");
     },
   ),
@@ -92,7 +93,7 @@ export const blockCreationScenarios = [
       await page.keyboard.press("Backspace");
       await page.keyboard.press("Backspace");
       await page.keyboard.press("Backspace");
-      await expect(page.getByRole("button", { name: /Heading 1/i })).toHaveCount(0);
+      await expect(slashMenu(page)).toHaveCount(0);
       await expect(editor).toHaveText("");
     },
   ),
@@ -106,7 +107,7 @@ export const blockCreationScenarios = [
       await openSlashMenuFromEditor(editor, "/");
       await expectSlashMenuOpen(page);
       await page.keyboard.press("Escape");
-      await expect(page.getByRole("button", { name: /Heading 1/i })).toHaveCount(0);
+      await expect(slashMenu(page)).toHaveCount(0);
       expect(await editorText(editor)).toBe("/");
     },
   ),
@@ -134,10 +135,7 @@ export const blockCreationScenarios = [
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "# ");
       await page.keyboard.type("Heading");
-      const fontSize = await editor.evaluate((node) =>
-        Number.parseFloat(getComputedStyle(node).fontSize),
-      );
-      expect(fontSize).toBeGreaterThan(20);
+      await expect(blockLocatorForEditor(editor)).toHaveAttribute("data-block-type", "heading_1");
       await expect(editor).toHaveText("Heading");
     },
   ),
@@ -150,7 +148,7 @@ export const blockCreationScenarios = [
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "- ");
       await page.keyboard.type("Bullet item");
-      await page.locator(".rounded-full").first().waitFor();
+      await expect(blockLocatorForEditor(editor)).toHaveAttribute("data-block-type", "bulleted_list");
       expect(await editorText(editor)).not.toBe("- Bullet item");
     },
   ),
@@ -163,7 +161,8 @@ export const blockCreationScenarios = [
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "[] ");
       await page.keyboard.type("Todo item");
-      await expect(page.locator("button.w-4.h-4")).toHaveCount(1);
+      await expect(blockLocatorForEditor(editor)).toHaveAttribute("data-block-type", "to_do");
+      await expect(blockLocatorForEditor(editor).getByTestId("todo-checkbox")).toHaveCount(1);
       await expect(editor).toHaveText("Todo item");
     },
   ),
@@ -176,7 +175,8 @@ export const blockCreationScenarios = [
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "[ ] ");
       await page.keyboard.type("Todo item");
-      await expect(page.locator("button.w-4.h-4")).toHaveCount(1);
+      await expect(blockLocatorForEditor(editor)).toHaveAttribute("data-block-type", "to_do");
+      await expect(blockLocatorForEditor(editor).getByTestId("todo-checkbox")).toHaveCount(1);
       await expect(editor).toHaveText("Todo item");
     },
   ),
@@ -189,7 +189,7 @@ export const blockCreationScenarios = [
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "1. ");
       await page.keyboard.type("Numbered item");
-      await expect(page.locator("text=1.").first()).toBeVisible();
+      await expect(blockLocatorForEditor(editor)).toHaveAttribute("data-block-type", "numbered_list");
       expect(await editorText(editor)).not.toBe("1. Numbered item");
     },
   ),

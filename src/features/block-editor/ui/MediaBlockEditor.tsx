@@ -82,7 +82,7 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
   }, [showPicker]);
 
   return (
-    <div className="my-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)]">
+    <div data-testid="media-block-editor" className="my-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)]">
       <div className="p-3">
         <MediaBlockPreview block={block} />
       </div>
@@ -100,6 +100,7 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
         <div ref={pickerRef} className="relative">
           <button
             type="button"
+            data-testid="media-block-change-asset"
             className="rounded-md border border-[var(--color-line)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-secondary)]"
             onClick={() => setShowPicker((current) => !current)}
           >
@@ -107,7 +108,10 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
           </button>
 
           {showPicker && (
-            <div className="absolute right-0 top-full z-50 mt-2 w-[320px] overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-2xl">
+            <div
+              data-testid="media-block-picker"
+              className="absolute right-0 top-full z-50 mt-2 w-[320px] overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-2xl"
+            >
               <MediaAssetPicker
                 kind={kind}
                 value={block.asset}

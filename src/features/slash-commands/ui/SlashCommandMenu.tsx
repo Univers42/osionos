@@ -125,6 +125,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   return (
     <div
       ref={ref}
+      data-testid="slash-command-menu"
       className="fixed z-[10000] flex max-h-[26rem] overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-2xl"
       style={{ top: position.y + 4, left: position.x }}
     >
@@ -155,6 +156,8 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                     <button
                       key={item.id}
                       type="button"
+                      data-testid="slash-command-entry"
+                      data-command-label={item.label}
                       className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${
                         isActive || isPickerSelected
                           ? "bg-[var(--color-surface-hover)]"
@@ -181,7 +184,10 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       </div>
 
       {activeMediaKind && (
-        <div className="flex w-[296px] min-w-0 flex-col border-l border-[var(--color-line)]">
+        <div
+          data-testid="slash-media-picker"
+          className="flex w-[296px] min-w-0 flex-col border-l border-[var(--color-line)]"
+        >
           <div className="flex items-center justify-between border-b border-[var(--color-line)] px-3 py-2">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-faint)]">
