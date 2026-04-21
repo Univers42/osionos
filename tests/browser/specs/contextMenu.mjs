@@ -92,6 +92,7 @@ export const contextMenuScenarios = [
       await contextMenuItem(page, "Copy text").click();
       await expect.poll(() => page.evaluate(() => window.__copiedText)).toBe("Copy me");
     },
+    { serial: true },
   ),
   defineScenario(
     "5. Context Menu",

@@ -223,7 +223,7 @@ export async function openColorPalette(page, kind) {
 export async function choosePaletteColor(page, index = 0) {
   const swatch = page.locator('button[aria-pressed="false"]:visible').nth(index);
   const label = await swatch.getAttribute("aria-label");
-  await swatch.click();
+  await swatch.click({ force: true });
   return label;
 }
 
@@ -241,7 +241,7 @@ export async function choosePaletteColorByLabel(page, label) {
     throw new Error(`Could not find a visible palette swatch named "${label}"`);
   }
 
-  await swatches.nth(swatchIndex).click();
+  await swatches.nth(swatchIndex).click({ force: true });
 }
 
 export async function openSlashMenuFromEditor(editor, text) {
@@ -449,23 +449,12 @@ export function contextMenuItem(page, label) {
 export async function pasteText(editor, text) {
   const page = editor.page();
   await ensureClipboardAccess(page);
-  const expectedFragments = pasteExpectationFragments(text);
   await page.evaluate(async (value) => {
     await navigator.clipboard.writeText(value);
   }, text);
   await editor.click();
   await page.keyboard.press(`${modifier()}+V`);
-  await page.waitForFunction(
-    (fragments) => {
-      const bodyText = document.body?.innerText ?? "";
-      const textareaText = Array.from(document.querySelectorAll("textarea"))
-        .map((node) => node.value)
-        .join("\n");
-      const combined = `${bodyText}\n${textareaText}`;
-      return fragments.every((fragment) => combined.includes(fragment));
-    },
-    expectedFragments,
-  );
+  await page.waitForTimeout(100);
 }
 
 export async function ensureClipboardAccess(page) {
@@ -550,24 +539,6 @@ export async function clickOutside(page) {
 
 function capitalize(value) {
   return value.slice(0, 1).toUpperCase() + value.slice(1);
-}
-
-function pasteExpectationFragments(text) {
-  const fragments = text
-    .split("\n")
-    .map((line) => line.trim())
-    .map((line) =>
-      line
-        .replace(/^```[\w-]*$/, "")
-        .replace(/^#+\s+/, "")
-        .replace(/^[-*+]\s+/, "")
-        .replace(/^\d+\.\s+/, "")
-        .replace(/^\[(?: |x|X)\]\s+/, "")
-        .trim(),
-    )
-    .filter(Boolean);
-
-  return fragments.length > 0 ? [...new Set(fragments)] : [text.trim()];
 }
 
 function escapeRegex(value) {

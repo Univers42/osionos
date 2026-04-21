@@ -323,6 +323,7 @@ export const containerAndPasteScenarios = [
       await expect(getEditors(page).first()).toHaveText("Title");
       await expect(page.locator(".rounded-full")).toHaveCount(1);
     },
+    { serial: true },
   ),
   defineScenario(
     "10. Paste Handling",
@@ -335,6 +336,7 @@ export const containerAndPasteScenarios = [
       await expect(page.locator("textarea")).toHaveCount(1);
       await expect(page.locator("textarea")).toHaveValue("console.log(1)");
     },
+    { serial: true },
   ),
   defineScenario(
     "10. Paste Handling",
@@ -347,5 +349,6 @@ export const containerAndPasteScenarios = [
       await expect(getEditors(page)).toHaveCount(1);
       await expect(editor).toHaveText("Single line paste");
     },
+    { serial: true },
   ),
 ];
