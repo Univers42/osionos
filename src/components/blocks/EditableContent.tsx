@@ -357,34 +357,6 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   }, []);
 
   useEffect(() => {
-    const root = ref.current;
-    if (!root) return;
-
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const mention = target.closest(".page-mention-placeholder") as HTMLElement;
-      if (mention) {
-        const targetPageId = mention.dataset.pageId;
-        const page = targetPageId ? usePageStore.getState().pageById(targetPageId) : null;
-        if (page) {
-          e.preventDefault();
-          e.stopPropagation();
-          usePageStore.getState().openPage({
-            id: page._id,
-            workspaceId: page.workspaceId,
-            kind: page.databaseId ? "database" : "page",
-            title: page.title,
-            icon: page.icon,
-          });
-        }
-      }
-    };
-
-    root.addEventListener("click", handleClick);
-    return () => root.removeEventListener("click", handleClick);
-  }, []);
-
-  useEffect(() => {
     canonicalSourceRef.current = content;
   }, [content]);
 
