@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/21 10:28:05 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/21 10:41:07 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -227,7 +227,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       if (slashIdx >= 0) {
         const newFilter = text.slice(slashIdx + 1);
         setSlashMenu((prev) => {
-          if (prev && prev.filter === newFilter) return prev;
+          if (prev?.filter === newFilter) return prev;
           return prev ? { ...prev, filter: newFilter } : null;
         });
       } else {
@@ -252,7 +252,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       if (triggerIdx >= 0) {
         const newFilter = text.slice(triggerIdx + 2);
         setPageSelector((prev) => {
-          if (prev && prev.filter === newFilter) return prev;
+          if (prev?.filter === newFilter) return prev;
           return prev ? { ...prev, filter: newFilter } : null;
         });
       } else {
