@@ -6,7 +6,7 @@
 #    By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/04/08 19:07:11 by dlesieur          #+#    #+#              #
-#    Updated: 2026/04/20 21:23:44 by rstancu          ###   ########.fr        #
+#    Updated: 2026/04/21 10:37:35 by rstancu          ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -21,7 +21,7 @@ RED   := \033[31m
 RESET := \033[0m
 
 DC := docker compose -f $(ROOT)docker-compose.yml
-TEST_WORKERS ?= 10
+TEST_WORKERS ?= 4
 
 .DEFAULT_GOAL := help
 help: ## Show available targets

@@ -23,7 +23,7 @@ export const focusManagementScenarios = [
       await clearAndType(heading, "# ");
       await page.keyboard.type("Heading");
       await pressEnter(heading);
-      expect(await editorHasFocus(getEditors(page).nth(1))).toBe(true);
+      await expect.poll(async () => editorHasFocus(getEditors(page).nth(1))).toBe(true);
     },
   ),
   defineScenario(
@@ -48,6 +48,7 @@ export const focusManagementScenarios = [
       await openFreshPage(page, appUrl);
       await createBlockViaSlash(page, "toggle", "Toggle");
       await page.keyboard.press("Enter");
+      await expect(getEditors(page)).toHaveCount(2);
       await expect.poll(async () => editorHasFocus(getEditors(page).nth(1))).toBe(true);
     },
   ),

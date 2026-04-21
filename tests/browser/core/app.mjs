@@ -115,11 +115,23 @@ export async function focusEditorEnd(editor) {
 export async function pressEnter(editor) {
   await focusEditorEnd(editor);
   await editor.page().keyboard.press("Enter");
+  await waitForRenderStability(editor.page());
 }
 
 export async function pressTab(target, options = {}) {
   await target.click();
   await target.page().keyboard.press(options.shift ? "Shift+Tab" : "Tab");
+}
+
+export async function waitForRenderStability(page) {
+  await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve(true));
+        });
+      }),
+  );
 }
 
 export async function selectText(editor, text, occurrence = 0) {

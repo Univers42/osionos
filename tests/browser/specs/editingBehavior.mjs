@@ -22,14 +22,45 @@ import {
   editorHasFocus,
   editorLeft,
   getEditors,
+  openSlashMenuFromEditor,
   openFreshPage,
   pressEnter,
   pressTab,
+  waitForRenderStability,
 } from "../core/app.mjs";
 import { defineScenario } from "../core/scenario.mjs";
 
 function todoCheckboxes(page) {
   return page.locator("button.w-4.h-4");
+}
+
+async function createBulletedListItem(page, text) {
+  await createBlockViaSlash(page, "bullet", "Bulleted List");
+  const editor = getEditors(page).first();
+  await clearAndType(editor, text);
+  await expect(blockLocatorForEditor(editor).locator(".rounded-full")).toHaveCount(1);
+  await waitForRenderStability(page);
+  return editor;
+}
+
+async function createNumberedListItem(page, text) {
+  await createBlockViaSlash(page, "numbered", "Numbered List");
+  const editor = getEditors(page).first();
+  await clearAndType(editor, text);
+  await expect(editor).toHaveText(text);
+  await expect(blockLocatorForEditor(editor)).toContainText("1.");
+  await waitForRenderStability(page);
+  return editor;
+}
+
+async function createTodoListItem(page, text) {
+  const editor = await activateFirstEditor(page);
+  await openSlashMenuFromEditor(editor, "[] ");
+  await expect(blockLocatorForEditor(editor).locator("button.w-4.h-4")).toHaveCount(1);
+  await waitForRenderStability(page);
+  await clearAndType(editor, text);
+  await waitForRenderStability(page);
+  return editor;
 }
 
 export const editingBehaviorScenarios = [
@@ -44,7 +75,7 @@ export const editingBehaviorScenarios = [
       await pressEnter(editor);
       const second = getEditors(page).nth(1);
       await second.waitFor();
-      expect(await editorHasFocus(second)).toBe(true);
+      await expect.poll(async () => editorHasFocus(second)).toBe(true);
       await expect(second).toHaveText("");
     },
   ),
@@ -59,11 +90,12 @@ export const editingBehaviorScenarios = [
       await page.keyboard.type("Heading");
       await pressEnter(editor);
       const second = getEditors(page).nth(1);
+      await second.waitFor();
       const fontSize = await second.evaluate((node) =>
         Number.parseFloat(getComputedStyle(node).fontSize),
       );
       expect(fontSize).toBeLessThan(20);
-      expect(await editorHasFocus(second)).toBe(true);
+      await expect.poll(async () => editorHasFocus(second)).toBe(true);
     },
   ),
   defineScenario(
@@ -88,12 +120,12 @@ export const editingBehaviorScenarios = [
     "pressing Enter in a bulleted list item creates a new bullet below",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      const editor = await activateFirstEditor(page);
-      await clearAndType(editor, "- ");
-      await page.keyboard.type("Bullet");
+      const editor = await createBulletedListItem(page, "Bullet");
       await pressEnter(editor);
       await expect(getEditors(page)).toHaveCount(2);
-      await expect(page.locator(".rounded-full")).toHaveCount(2);
+      await expect(
+        blockLocatorForEditor(getEditors(page).nth(1)).locator(".rounded-full"),
+      ).toHaveCount(1);
     },
   ),
   defineScenario(
@@ -102,12 +134,10 @@ export const editingBehaviorScenarios = [
     "pressing Enter in a numbered list item creates the next number",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      const editor = await activateFirstEditor(page);
-      await clearAndType(editor, "1. ");
-      await page.keyboard.type("First");
+      const editor = await createNumberedListItem(page, "First");
       await pressEnter(editor);
       await expect(getEditors(page)).toHaveCount(2);
-      await expect(page.locator("text=2.").first()).toBeVisible();
+      await expect(blockLocatorForEditor(getEditors(page).nth(1))).toContainText("2.");
     },
   ),
   defineScenario(
@@ -116,12 +146,12 @@ export const editingBehaviorScenarios = [
     "pressing Enter in a to-do item creates a new unchecked to-do below",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      const editor = await activateFirstEditor(page);
-      await clearAndType(editor, "[] ");
-      await page.keyboard.type("Task");
+      const editor = await createTodoListItem(page, "Task");
       await pressEnter(editor);
       await expect(getEditors(page)).toHaveCount(2);
-      await expect(todoCheckboxes(page)).toHaveCount(2);
+      await expect(
+        blockLocatorForEditor(getEditors(page).nth(1)).locator("button.w-4.h-4"),
+      ).toHaveCount(1);
     },
   ),
   defineScenario(
@@ -130,15 +160,15 @@ export const editingBehaviorScenarios = [
     "pressing Enter on a checked empty to-do item converts it into a paragraph and clears the checked state",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      const editor = await activateFirstEditor(page);
-      await clearAndType(editor, "[] ");
-      await page.keyboard.type("Task");
+      const editor = await createTodoListItem(page, "Task");
       await pressEnter(editor);
       const emptyItem = getEditors(page).nth(1);
+      await emptyItem.waitFor();
       const emptyItemCheckbox = blockLocatorForEditor(emptyItem).locator("button.w-4.h-4");
       await expect(todoCheckboxes(page)).toHaveCount(2);
       await expect(emptyItemCheckbox).toHaveCount(1);
       await emptyItemCheckbox.click({ force: true });
+      await waitForRenderStability(page);
       await pressEnter(emptyItem);
       await expect(todoCheckboxes(page)).toHaveCount(1);
       await expect(getEditors(page)).toHaveCount(2);
@@ -153,13 +183,13 @@ export const editingBehaviorScenarios = [
     "pressing Enter on an empty bulleted list item converts it into a paragraph",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      const editor = await activateFirstEditor(page);
-      await clearAndType(editor, "- ");
-      await page.keyboard.type("Bullet");
+      const editor = await createBulletedListItem(page, "Bullet");
       await pressEnter(editor);
       const emptyItem = getEditors(page).nth(1);
+      await emptyItem.waitFor();
+      await expect(blockLocatorForEditor(emptyItem).locator(".rounded-full")).toHaveCount(1);
       await pressEnter(emptyItem);
-      await expect(page.locator(".rounded-full")).toHaveCount(1);
+      await expect(blockLocatorForEditor(getEditors(page).nth(1)).locator(".rounded-full")).toHaveCount(0);
       await expect(getEditors(page)).toHaveCount(2);
     },
   ),
@@ -169,13 +199,13 @@ export const editingBehaviorScenarios = [
     "pressing Enter on an empty numbered list item converts it into a paragraph",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      const editor = await activateFirstEditor(page);
-      await clearAndType(editor, "1. ");
-      await page.keyboard.type("First");
+      const editor = await createNumberedListItem(page, "First");
       await pressEnter(editor);
       const emptyItem = getEditors(page).nth(1);
+      await emptyItem.waitFor();
+      await expect(blockLocatorForEditor(emptyItem)).toContainText("2.");
       await pressEnter(emptyItem);
-      await expect(page.locator("text=2.")).toHaveCount(0);
+      await expect(blockLocatorForEditor(getEditors(page).nth(1))).not.toContainText("2.");
       await expect(getEditors(page)).toHaveCount(2);
     },
   ),
@@ -185,13 +215,13 @@ export const editingBehaviorScenarios = [
     "pressing Enter on an empty to-do item converts it into a paragraph",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
-      const editor = await activateFirstEditor(page);
-      await clearAndType(editor, "[] ");
-      await page.keyboard.type("Task");
+      const editor = await createTodoListItem(page, "Task");
       await pressEnter(editor);
       const emptyItem = getEditors(page).nth(1);
+      await emptyItem.waitFor();
+      await expect(blockLocatorForEditor(emptyItem).locator("button.w-4.h-4")).toHaveCount(1);
       await pressEnter(emptyItem);
-      await expect(todoCheckboxes(page)).toHaveCount(1);
+      await expect(blockLocatorForEditor(getEditors(page).nth(1)).locator("button.w-4.h-4")).toHaveCount(0);
       await expect(getEditors(page)).toHaveCount(2);
     },
   ),
@@ -207,8 +237,9 @@ export const editingBehaviorScenarios = [
       const before = await editorLeft(callout);
       await pressEnter(callout);
       const child = getEditors(page).nth(1);
+      await child.waitFor();
       expect(await editorLeft(child)).toBeGreaterThan(before + 8);
-      expect(await editorHasFocus(child)).toBe(true);
+      await expect.poll(async () => editorHasFocus(child)).toBe(true);
     },
   ),
   defineScenario(
@@ -223,8 +254,9 @@ export const editingBehaviorScenarios = [
       const before = await editorLeft(quote);
       await pressEnter(quote);
       const child = getEditors(page).nth(1);
+      await child.waitFor();
       expect(await editorLeft(child)).toBeGreaterThan(before + 8);
-      expect(await editorHasFocus(child)).toBe(true);
+      await expect.poll(async () => editorHasFocus(child)).toBe(true);
     },
   ),
   defineScenario(
@@ -239,8 +271,9 @@ export const editingBehaviorScenarios = [
       const before = await editorLeft(summary);
       await pressEnter(summary);
       const child = getEditors(page).nth(1);
+      await child.waitFor();
       expect(await editorLeft(child)).toBeGreaterThan(before + 8);
-      expect(await editorHasFocus(child)).toBe(true);
+      await expect.poll(async () => editorHasFocus(child)).toBe(true);
     },
   ),
   defineScenario(
@@ -254,9 +287,10 @@ export const editingBehaviorScenarios = [
       await page.keyboard.type("Bullet");
       await pressEnter(editor);
       const emptyItem = getEditors(page).nth(1);
+      await emptyItem.waitFor();
       await emptyItem.press("Backspace");
-      await expect(page.locator(".rounded-full")).toHaveCount(1);
-      expect(await editorHasFocus(getEditors(page).first())).toBe(true);
+      await expect(blockLocatorForEditor(getEditors(page).first()).locator(".rounded-full")).toHaveCount(1);
+      await expect.poll(async () => editorHasFocus(getEditors(page).first())).toBe(true);
     },
   ),
   defineScenario(
@@ -270,7 +304,7 @@ export const editingBehaviorScenarios = [
       await clearAndType(second, "");
       await second.press("Backspace");
       await expect(getEditors(page)).toHaveCount(1);
-      expect(await editorHasFocus(getEditors(page).first())).toBe(true);
+      await expect.poll(async () => editorHasFocus(getEditors(page).first())).toBe(true);
     },
   ),
   defineScenario(
@@ -285,7 +319,7 @@ export const editingBehaviorScenarios = [
       await first.press("Delete");
       await expect(getEditors(page)).toHaveCount(1);
       await expect(getEditors(page).first()).toHaveText("Keep me");
-      expect(await editorHasFocus(getEditors(page).first())).toBe(true);
+      await expect.poll(async () => editorHasFocus(getEditors(page).first())).toBe(true);
     },
   ),
   defineScenario(
