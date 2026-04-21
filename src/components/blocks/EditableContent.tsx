@@ -900,6 +900,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         onPaste={handlePaste}
+        onMouseDown={handleMouseDown}
         onFocus={(event) => {
           onFocus?.(event);
           isFocused.current = true;
@@ -918,7 +919,6 @@ export const EditableContent: React.FC<EditableContentProps> = ({
           const syncedContent = syncContentFromDom();
           renderContent(syncedContent ?? content);
         }}
-        onClick={handleClick}
         onMouseUp={updateSelectionSnapshot}
         onCompositionStart={() => {
           isComposing.current = true;
