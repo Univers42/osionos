@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   TrashView.tsx                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: danfern3 <danfern3@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/04/22 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/22 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Created: 2026/04/22 12:00:00 by danfern3          #+#    #+#             */
+/*   Updated: 2026/04/22 12:00:00 by danfern3         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -114,7 +114,7 @@ export const TrashView: React.FC = () => {
       month: "short",
       day: "numeric",
       year:
-        date.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
+        date.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
     });
   };
 

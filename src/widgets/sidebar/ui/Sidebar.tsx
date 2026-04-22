@@ -40,7 +40,7 @@ export const Sidebar: React.FC<Props> = ({
   const fetchPages = usePageStore((s) => s.fetchPages);
   const openPage = usePageStore((s) => s.openPage);
   const addPage = usePageStore((s) => s.addPage);
-  const pagesForWs = usePageStore((s) => s.pagesForWorkspace);
+  const pagesByWorkspace = usePageStore((s) => s.pages);
 
   const isSidebarOpen = useUIStore((s) => s.isSidebarOpen);
 
@@ -106,7 +106,7 @@ export const Sidebar: React.FC<Props> = ({
           openPage={openPage}
           privateWorkspaces={privateWorkspaces}
           sharedWorkspaces={sharedWorkspaces}
-          pagesForWs={pagesForWs}
+          pagesByWorkspace={pagesByWorkspace}
           jwt={jwt}
           onAddToWorkspace={handleAddToWorkspace}
         />
