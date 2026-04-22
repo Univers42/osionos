@@ -291,12 +291,9 @@ export const usePageStore = create<PageStore>((set, get) => ({
         canReadPage(p, getCurrentPageAccessContext()),
     ),
 
-  trashPages: (workspaceId, userId) =>
+  trashPages: (workspaceId) =>
     (get().pages[workspaceId] ?? []).filter(
-      (p) =>
-        p.archivedAt &&
-        p.ownerId === userId &&
-        canReadPage(p, getCurrentPageAccessContext()),
+      (p) => p.archivedAt && canReadPage(p, getCurrentPageAccessContext()),
     ),
 
   pageById: (pageId) => {

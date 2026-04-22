@@ -139,7 +139,7 @@ export interface PageStore {
   pagesForWorkspace: (workspaceId: string) => PageEntry[];
   rootPages: (workspaceId: string) => PageEntry[];
   childPages: (parentId: string, workspaceId: string) => PageEntry[];
-  trashPages: (workspaceId: string, userId: string) => PageEntry[];
+  trashPages: (workspaceId: string) => PageEntry[];
   /** Get full page data including content (for rendering) */
   pageById: (pageId: string) => PageEntry | undefined;
 }

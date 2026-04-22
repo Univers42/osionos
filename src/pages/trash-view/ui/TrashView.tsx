@@ -66,11 +66,7 @@ export const TrashView: React.FC = () => {
     return (pages[selectedWorkspaceId] ?? [])
       .filter((page) => {
         if (!context) return false;
-        return (
-          !!page.archivedAt &&
-          page.ownerId === context.userId &&
-          canReadPage(page, context)
-        );
+        return !!page.archivedAt && canReadPage(page, context);
       })
       .sort(
         (a, b) =>
@@ -89,19 +85,22 @@ export const TrashView: React.FC = () => {
     );
   }
 
-  const handleRestore = async (pageId: string) => {
-    if (!selectedWorkspaceId || !jwt) return;
+  const handleRestore = async (pageId: string, workspaceId: string) => {
+    if (!workspaceId) return;
     try {
-      await restorePage(pageId, selectedWorkspaceId, jwt);
+      await restorePage(pageId, workspaceId, jwt ?? "");
     } catch (err) {
       console.error("[TrashView] Failed to restore page", err);
     }
   };
 
-  const handlePermanentlyDelete = async (pageId: string) => {
-    if (!selectedWorkspaceId || !jwt) return;
+  const handlePermanentlyDelete = async (
+    pageId: string,
+    workspaceId: string,
+  ) => {
+    if (!workspaceId) return;
     try {
-      await permanentlyDeletePage(pageId, selectedWorkspaceId, jwt);
+      await permanentlyDeletePage(pageId, workspaceId, jwt ?? "");
       setConfirmDeleteId(null);
     } catch (err) {
       console.error("[TrashView] Failed to permanently delete page", err);
@@ -188,7 +187,7 @@ export const TrashView: React.FC = () => {
                   <button
                     type="button"
                     className="trash-btn-restore"
-                    onClick={() => handleRestore(page._id)}
+                    onClick={() => handleRestore(page._id, page.workspaceId)}
                     title="Restore page"
                   >
                     <Redo2 size={14} />
@@ -200,7 +199,9 @@ export const TrashView: React.FC = () => {
                       <button
                         type="button"
                         className="trash-btn-confirm-delete"
-                        onClick={() => handlePermanentlyDelete(page._id)}
+                        onClick={() =>
+                          handlePermanentlyDelete(page._id, page.workspaceId)
+                        }
                       >
                         <Trash size={14} />
                         <span>Confirm Delete</span>
