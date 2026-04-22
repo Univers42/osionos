@@ -12,7 +12,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 
-import { useUserStore } from "@/features/auth";
+import { useUserStore, WorkspaceSwitcher } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { useUIStore } from "@/shared/config/uiStore";
 import { SidebarTopNav } from "./SidebarTopNav";
