@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@univers42/ui-collection": "^2.4.2",
+    "@univers42/ui-collection": "^2.4.6",
     "highlight.js": "^11.11.1",
     "lucide-react": "^0.474.0",
     "mermaid": "^11.14.0",
