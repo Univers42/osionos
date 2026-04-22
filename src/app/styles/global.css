@@ -104,3 +104,34 @@ body {
   color: var(--color-ink) !important;
   padding: 0 !important;
 }
+
+/* Link and Mention Unification */
+.editor-link {
+  color: var(--color-accent) !important;
+  text-decoration: underline !important;
+  text-underline-offset: 0.14em !important;
+  cursor: pointer !important;
+  transition: opacity 0.15s ease;
+}
+
+.editor-link:hover {
+  opacity: 0.75;
+}
+
+.editor-mention {
+  color: var(--color-accent) !important;
+  text-decoration: none !important;
+  background-color: var(--color-surface-tertiary) !important;
+  font-weight: 500 !important;
+  padding: 0 4px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+  transition: background-color 0.15s ease;
+}
+
+.editor-mention:hover {
+  background-color: var(--color-surface-hover) !important;
+}

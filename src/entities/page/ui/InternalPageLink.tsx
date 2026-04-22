@@ -49,12 +49,13 @@ export const InternalPageLink: React.FC<InternalPageLinkProps> = ({ pageId }) =>
     <button
       type="button"
       onClick={handleClick}
-      className="inline-flex items-center gap-1.5 rounded bg-[var(--color-surface-tertiary)] hover:bg-[var(--color-surface-hover)] px-1.5 py-0.5 text-[var(--color-accent)] transition-colors cursor-pointer border-none align-baseline"
+      className="editor-mention align-baseline border-none"
+      style={{ display: "inline-flex" }}
     >
-      <span className="flex items-center justify-center text-[14px]">
+      <span className="flex items-center justify-center text-[14px] mr-1">
         {page.icon || <Icon className="h-3.5 w-3.5" />}
       </span>
-      <span className="text-[13px] font-medium underline decoration-1 underline-offset-2">
+      <span className="text-[13px]">
         {page.title || "Untitled"}
       </span>
     </button>
