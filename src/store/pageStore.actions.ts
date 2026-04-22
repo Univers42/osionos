@@ -222,19 +222,28 @@ export function createDeletePage(set: SetFn, get: GetFn) {
     const context = getCurrentPageAccessContext();
     if (!page || !canDeletePage(page, context)) return;
 
+    // Mark page as archived (soft delete) instead of permanently deleting
+    const archivedAt = new Date().toISOString();
+    
     if (jwt && isMongoId(pageId)) {
       try {
-        await api.delete(`/api/pages/${pageId}`, jwt);
+        await api.patch(
+          `/api/pages/${pageId}`,
+          { archivedAt },
+          jwt,
+        );
       } catch {
         /* silent */
       }
     }
+
+    // Update state: mark page and descendants as archived
     set((s) => {
       const wsPages = s.pages[workspaceId] ?? [];
       const descendantIds = getAllDescendantIds(wsPages, pageId);
-      const deletedIds = new Set([pageId, ...descendantIds]);
+      const archivedIds = new Set([pageId, ...descendantIds]);
 
-      const newRecents = s.recents.filter((r) => !deletedIds.has(r.id));
+      const newRecents = s.recents.filter((r) => !archivedIds.has(r.id));
       if (newRecents.length !== s.recents.length) {
         saveRecents(newRecents);
       }
@@ -242,7 +251,11 @@ export function createDeletePage(set: SetFn, get: GetFn) {
       return {
         pages: {
           ...s.pages,
-          [workspaceId]: wsPages.filter((p) => !deletedIds.has(p._id)),
+          [workspaceId]: wsPages.map((p) =>
+            archivedIds.has(p._id)
+              ? { ...p, archivedAt }
+              : p,
+          ),
         },
         recents: newRecents,
       };
@@ -451,5 +464,75 @@ export function createMovePage(set: SetFn, get: GetFn) {
         };
       }
     });
+  };
+}
+
+export function createRestorePage(set: SetFn, get: GetFn) {
+  return async (pageId: string, workspaceId: string, jwt: string) => {
+    const page = get().pageById(pageId);
+    const context = getCurrentPageAccessContext();
+    if (!page || !canDeletePage(page, context)) return;
+
+    if (jwt && isMongoId(pageId)) {
+      try {
+        await api.patch(
+          `/api/pages/${pageId}`,
+          { archivedAt: null },
+          jwt,
+        );
+      } catch {
+        /* silent */
+      }
+    }
+
+    // Update state: restore page and descendants
+    set((s) => {
+      const wsPages = s.pages[workspaceId] ?? [];
+      const descendantIds = getAllDescendantIds(wsPages, pageId);
+      const restoredIds = new Set([pageId, ...descendantIds]);
+
+      return {
+        pages: {
+          ...s.pages,
+          [workspaceId]: wsPages.map((p) =>
+            restoredIds.has(p._id)
+              ? { ...p, archivedAt: null }
+              : p,
+          ),
+        },
+      };
+    });
+    savePagesCache(get().pages);
+  };
+}
+
+export function createPermanentlyDeletePage(set: SetFn, get: GetFn) {
+  return async (pageId: string, workspaceId: string, jwt: string) => {
+    const page = get().pageById(pageId);
+    const context = getCurrentPageAccessContext();
+    if (!page || !canDeletePage(page, context)) return;
+
+    if (jwt && isMongoId(pageId)) {
+      try {
+        await api.delete(`/api/pages/${pageId}`, jwt);
+      } catch {
+        /* silent */
+      }
+    }
+
+    // Update state: permanently remove from pages array
+    set((s) => {
+      const wsPages = s.pages[workspaceId] ?? [];
+      const descendantIds = getAllDescendantIds(wsPages, pageId);
+      const deletedIds = new Set([pageId, ...descendantIds]);
+
+      return {
+        pages: {
+          ...s.pages,
+          [workspaceId]: wsPages.filter((p) => !deletedIds.has(p._id)),
+        },
+      };
+    });
+    savePagesCache(get().pages);
   };
 }

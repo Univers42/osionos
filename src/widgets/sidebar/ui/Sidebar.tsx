@@ -25,10 +25,11 @@ import styles from './Sidebar.module.scss';
 interface Props {
   onOpenHome?:     () => void;
   onOpenSettings?: () => void;
+  onOpenTrash?:    () => void;
 }
 
 /** Renders the Notion-style sidebar with navigation, page tree, and user switching. */
-export const Sidebar: React.FC<Props> = ({ onOpenHome, onOpenSettings }) => {
+export const Sidebar: React.FC<Props> = ({ onOpenHome, onOpenSettings, onOpenTrash }) => {
   const session        = useUserStore(s => s.activeSession());
   const activePage     = usePageStore(s => s.activePage);
   const recents        = usePageStore(s => s.recents);
@@ -90,6 +91,7 @@ export const Sidebar: React.FC<Props> = ({ onOpenHome, onOpenSettings }) => {
 
       <SidebarFooter
         onOpenSettings={onOpenSettings}
+        onOpenTrash={onOpenTrash}
         showInviteCTA={showInviteCTA}
         onDismissInvite={() => setShowInviteCTA(false)}
       />

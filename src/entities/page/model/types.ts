@@ -60,6 +60,7 @@ export interface PageStore {
   recents: ActivePage[];                         // last 10 opened
   loadingIds: Set<string>;                       // workspaceIds currently fetching
   seeded: boolean;                                // true once seed data is loaded
+  showTrash: boolean;                             // true when trash view is active
 
   fetchPages: (workspaceId: string, jwt: string) => Promise<void>;
   /** Fetch full page data (with content) from API */
@@ -73,7 +74,10 @@ export interface PageStore {
   duplicatePage: (pageId: string, workspaceId: string) => Promise<string | null>;
   movePage: (pageId: string, targetParentId: string | null, targetWorkspaceId: string) => void;
   deletePage: (pageId: string, workspaceId: string, jwt: string) => Promise<void>;
+  restorePage: (pageId: string, workspaceId: string, jwt: string) => Promise<void>;
+  permanentlyDeletePage: (pageId: string, workspaceId: string, jwt: string) => Promise<void>;
   clearWorkspace: (workspaceId: string) => void;
+  setShowTrash: (show: boolean) => void;
 
   updateBlock: (pageId: string, blockId: string, updates: Partial<Block>) => void;
   insertBlock: (pageId: string, afterBlockId: string, block: Block) => void;
@@ -90,6 +94,7 @@ export interface PageStore {
   pagesForWorkspace: (workspaceId: string) => PageEntry[];
   rootPages: (workspaceId: string) => PageEntry[];
   childPages: (parentId: string, workspaceId: string) => PageEntry[];
+  trashPages: (workspaceId: string, userId: string) => PageEntry[];
   /** Get full page data including content (for rendering) */
   pageById: (pageId: string) => PageEntry | undefined;
 }

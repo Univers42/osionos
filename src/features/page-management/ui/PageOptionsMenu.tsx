@@ -246,7 +246,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
             }}
           >
             <Trash size={14} className="shrink-0" />
-            <span>Delete</span>
+            <span>Move to Trash</span>
           </button>
         </div>,
         portalTarget,

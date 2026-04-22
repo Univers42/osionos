@@ -20,6 +20,7 @@ import {
 } from '@/shared/lib/markengine/uiCollectionAssets';
 import { DatabaseBlock }  from '@/widgets/database-view';
 import { NotionPage }     from '@/pages/notion-page';
+import { TrashView }      from '@/pages/trash-view';
 
 import { usePageStore }  from '@/store/usePageStore';
 import { useUserStore }  from '@/features/auth';
@@ -30,6 +31,7 @@ import { useUserStore }  from '@/features/auth';
  */
 export const MainContent: React.FC = () => {
   const activePage = usePageStore(s => s.activePage);
+  const showTrash = usePageStore(s => s.showTrash);
   const pageById = usePageStore(s => s.pageById);
   const fetchPageContent = usePageStore(s => s.fetchPageContent);
   const addPage    = usePageStore(s => s.addPage);
@@ -54,6 +56,17 @@ export const MainContent: React.FC = () => {
       clearActivePage({ activePage: null });
     }
   }, [activePage, pageById, clearActivePage]);
+
+  /* ── Trash view ────────────────────────────────────────────────── */
+  if (showTrash) {
+    return (
+      <ErrorBoundary>
+        <div className="flex-1 h-full overflow-auto bg-[var(--color-surface-primary)]">
+          <TrashView />
+        </div>
+      </ErrorBoundary>
+    );
+  }
 
   /* ── Home splash (no page selected) ────────────────────────────── */
   if (!activePage) {

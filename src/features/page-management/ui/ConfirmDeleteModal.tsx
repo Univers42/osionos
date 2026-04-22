@@ -9,8 +9,8 @@ interface Props {
 }
 
 /**
- * A centered, fixed-position modal that asks for deletion confirmation.
- * Follows Notion's style: clean overlay, centered card, clear danger action.
+ * A centered, fixed-position modal that asks for move-to-trash confirmation.
+ * Follows Notion's style: clean overlay, centered card, clear action.
  */
 export const ConfirmDeleteModal: React.FC<Props> = ({ 
   onConfirm, 
@@ -23,7 +23,7 @@ export const ConfirmDeleteModal: React.FC<Props> = ({
       <button
         type="button"
         className="fixed inset-0 z-[100] bg-[var(--color-backdrop)] backdrop-blur-sm"
-        aria-label="Close delete confirmation"
+        aria-label="Close move-to-trash confirmation"
         onClick={onCancel}
       />
       <div
@@ -44,7 +44,7 @@ export const ConfirmDeleteModal: React.FC<Props> = ({
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2 text-[var(--color-text-danger)]">
             <AlertTriangle size={18} />
-            <h3 className="text-sm font-semibold">Delete Page</h3>
+            <h3 className="text-sm font-semibold">Move to Trash</h3>
           </div>
           <button 
             type="button"
@@ -60,13 +60,12 @@ export const ConfirmDeleteModal: React.FC<Props> = ({
           {subPageCount > 0 ? (
             <div className="bg-[var(--color-text-danger)]/10 border border-[var(--color-text-danger)]/20 rounded p-3 mb-2">
               <p className="text-sm text-[var(--color-text-danger)] font-medium leading-relaxed">
-                This page contains {subPageCount} sub-page{subPageCount > 1 ? 's' : ''}. Deleting it will permanently remove all its content.
+                This page contains {subPageCount} sub-page{subPageCount > 1 ? 's' : ''}. Moving it to trash will also move all its sub-pages. You can restore them later from trash.
               </p>
             </div>
           ) : (
             <p className="text-sm text-[var(--color-ink)] leading-relaxed">
-              Are you sure you want to delete <span className="font-semibold italic">{title}</span>? 
-              This action cannot be undone.
+              Move <span className="font-semibold italic">{title}</span> to trash? You can restore it later from the trash.
             </p>
           )}
         </div>
@@ -85,7 +84,7 @@ export const ConfirmDeleteModal: React.FC<Props> = ({
             onClick={onConfirm}
             className="px-3 py-1.5 text-xs font-medium rounded bg-red-600 hover:bg-red-700 text-white shadow-sm transition-colors"
           >
-            Delete
+            Move to Trash
           </button>
         </div>
       </div>
