@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   usePlaygroundBlockEditor.ts                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/20 10:21:49 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/22 11:30:41 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -40,7 +40,7 @@ import {
   handleEnterKey,
   getAdjacentRenderedBlockId,
 } from "./playgroundBlockEditor.helpers";
-import type { SlashMenuState } from "./playgroundBlockEditor.helpers";
+import type { SlashMenuState, PageSelectorMenuState } from "./playgroundBlockEditor.helpers";
 import { useBlockContextMenu } from "./useBlockContextMenu";
 import { focusEditableBlock } from "./blockDomFocus";
 
@@ -136,6 +136,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
   } = usePageStore.getState();
 
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null);
+  const [pageSelector, setPageSelector] = useState<PageSelectorMenuState | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
   const contentRef = useRef<Block[]>([]);
 
@@ -200,9 +201,11 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
       const slashIdx = text.lastIndexOf("/");
       if (slashIdx >= 0) {
-        setSlashMenu((prev) =>
-          prev ? { ...prev, filter: text.slice(slashIdx + 1) } : null,
-        );
+        const newFilter = text.slice(slashIdx + 1);
+        setSlashMenu((prev) => {
+          if (prev?.filter === newFilter) return prev;
+          return prev ? { ...prev, filter: newFilter } : null;
+        });
       } else {
         setSlashMenu(null);
       }
@@ -210,6 +213,31 @@ export function usePlaygroundBlockEditor(pageId: string) {
       return true;
     },
     [slashMenu, getCaretRect],
+  );
+
+  const tryHandlePageSelectorMenu = useCallback(
+    (blockId: string, text: string): boolean => {
+      if (text.endsWith("[[") && !pageSelector) {
+        setPageSelector({ blockId, position: getCaretRect(), filter: "" });
+        return true;
+      }
+
+      if (pageSelector?.blockId !== blockId) return false;
+
+      const triggerIdx = text.lastIndexOf("[[");
+      if (triggerIdx >= 0) {
+        const newFilter = text.slice(triggerIdx + 2);
+        setPageSelector((prev) => {
+          if (prev?.filter === newFilter) return prev;
+          return prev ? { ...prev, filter: newFilter } : null;
+        });
+      } else {
+        setPageSelector(null);
+      }
+
+      return true;
+    },
+    [pageSelector, getCaretRect],
   );
 
   const tryHandleMarkdownShortcut = useCallback(
@@ -240,12 +268,14 @@ export function usePlaygroundBlockEditor(pageId: string) {
       persistBlockText(blockId, text);
       if (tryHandleCodeOrTable(blockId, text)) return;
       if (tryHandleSlashMenu(blockId, text)) return;
+      if (tryHandlePageSelectorMenu(blockId, text)) return;
       tryHandleMarkdownShortcut(blockId, text);
     },
     [
       persistBlockText,
       tryHandleCodeOrTable,
       tryHandleSlashMenu,
+      tryHandlePageSelectorMenu,
       tryHandleMarkdownShortcut,
     ],
   );
@@ -647,13 +677,15 @@ export function usePlaygroundBlockEditor(pageId: string) {
       return;
     }
 
-    if (e.key === "Escape" && slashMenu) {
-      setSlashMenu(null);
+    if (e.key === "Escape") {
+      if (slashMenu) setSlashMenu(null);
+      if (pageSelector) setPageSelector(null);
     }
   },
   [
     pageId,
     slashMenu,
+    pageSelector,
     insertBlock,
     focusBlock,
     handleBlockIndentation,
@@ -708,6 +740,26 @@ export function usePlaygroundBlockEditor(pageId: string) {
     focusBlock,
   });
 
+  const handlePageSelectorSelect = useCallback(
+    (targetPageId: string) => {
+      if (!pageSelector) return;
+      const { blockId } = pageSelector;
+      const block = contentRef.current.find((b) => b.id === blockId);
+      if (!block) return;
+
+      const text = block.content;
+      const triggerIdx = text.lastIndexOf("[[");
+      if (triggerIdx >= 0) {
+        const newContent =
+          text.slice(0, triggerIdx) + `[[page:${targetPageId}]] `;
+        updateBlock(pageId, blockId, { content: newContent });
+        repositionCursor(blockId, newContent);
+      }
+      setPageSelector(null);
+    },
+    [pageSelector, pageId, updateBlock],
+  );
+
   /** Add a new blank paragraph at the end. */
   const handleAddBlock = useCallback(
     (content: Block[]) => {
@@ -755,6 +807,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
   return {
     slashMenu,
     setSlashMenu,
+    pageSelector,
+    setPageSelector,
     contextMenu,
     contextMenuSections,
     openContextMenu,
@@ -765,6 +819,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
     handleSlashSelect: handleSlashBlockSelect,
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
+    handlePageSelectorSelect,
     handleAddBlock,
     handleInitBlock,
     registerBlockRef,

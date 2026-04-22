@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   BlockEditor.tsx                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/18 10:49:08 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/22 11:30:46 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -593,7 +593,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <button
           type="button"
           className="w-full py-2 rounded outline-none focus:bg-[var(--color-surface-secondary)]"
-          onKeyDown={onKeyDown}
+          onKeyDown={(e) => {
+            onKeyDown(e);
+          }}
           aria-label="Divider block"
         >
           <hr className="w-full h-px border-0 bg-[var(--color-ink-faint)]" />

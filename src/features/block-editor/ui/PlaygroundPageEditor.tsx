@@ -3,17 +3,18 @@
 /*                                                        :::      ::::::::   */
 /*   PlaygroundPageEditor.tsx                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/19 20:12:21 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/22 11:30:52 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useMemo, useCallback, useState } from "react";
+import React, { useEffect, useMemo, useCallback, useState } from "react";
 import { Plus } from "lucide-react";
 
 import { SlashCommandMenu } from "@/features/slash-commands";
+import { PageSelectorMenu } from "./PageSelectorMenu";
 import type { Block } from "@/entities/block";
 
 import { usePageStore } from "@/store/usePageStore";
@@ -65,6 +66,41 @@ function getNestedTreeClassName(
   return "ml-6 mt-0.5";
 }
 
+function findBlockById(blocks: Block[], blockId: string): Block | null {
+  for (const block of blocks) {
+    if (block.id === blockId) {
+      return block;
+    }
+
+    if (!block.children?.length) {
+      continue;
+    }
+
+    const nestedBlock = findBlockById(block.children, blockId);
+    if (nestedBlock) {
+      return nestedBlock;
+    }
+  }
+
+  return null;
+}
+
+function getHighlightedRootBlockId(
+  blocks: Block[],
+  focusedBlockId: string | null,
+): string | null {
+  if (!focusedBlockId) {
+    return null;
+  }
+
+  const focusedBlock = findBlockById(blocks, focusedBlockId);
+  if (!focusedBlock) {
+    return null;
+  }
+
+  return focusedBlock.id;
+}
+
 /** Editable block-based page editor for the playground. */
 export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
   pageId,
@@ -74,10 +110,47 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
   const moveBlock = usePageStore((s) => s.moveBlock);
   const blocks = useMemo(() => page?.content ?? [], [page?.content]);
   const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
+  const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+  const highlightedRootBlockId = useMemo(
+    () => getHighlightedRootBlockId(blocks, focusedBlockId),
+    [blocks, focusedBlockId],
+  );
+
+  useEffect(() => {
+    const syncFocusedBlock = () => {
+      const activeElement = document.activeElement as HTMLElement | null;
+      const activeBlockId =
+        activeElement?.closest<HTMLElement>("[data-block-id]")?.dataset
+          .blockId ?? null;
+      setFocusedBlockId(activeBlockId);
+    };
+
+    const handleFocusIn = (event: FocusEvent) => {
+      const target = event.target as HTMLElement | null;
+      const blockId =
+        target?.closest<HTMLElement>("[data-block-id]")?.dataset.blockId ??
+        null;
+      setFocusedBlockId(blockId);
+    };
+
+    const handleFocusOut = () => {
+      setTimeout(syncFocusedBlock, 0);
+    };
+
+    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("focusout", handleFocusOut);
+
+    return () => {
+      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("focusout", handleFocusOut);
+    };
+  }, []);
 
   const {
     slashMenu,
     setSlashMenu,
+    pageSelector,
+    setPageSelector,
     contextMenu,
     contextMenuSections,
     openContextMenu,
@@ -88,6 +161,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     handleSlashSelect,
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
+    handlePageSelectorSelect,
     handleAddBlock,
     handleInitBlock,
     registerBlockRef,
@@ -136,6 +210,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
         blocks={blocks}
         pageId={pageId}
         isRoot
+        highlightedRootBlockId={highlightedRootBlockId}
         moveBlock={moveBlock}
         draggedBlockId={draggedBlockId}
         setDraggedBlockId={setDraggedBlockId}
@@ -186,6 +261,16 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
         />
       )}
 
+      {pageSelector && (
+        <PageSelectorMenu
+          key={`${pageSelector.blockId}:${pageSelector.filter}`}
+          position={pageSelector.position}
+          filter={pageSelector.filter}
+          onSelect={handlePageSelectorSelect}
+          onClose={() => setPageSelector(null)}
+        />
+      )}
+
       <BlockContextMenu
         menu={contextMenu}
         sections={contextMenuSections}
@@ -201,6 +286,8 @@ interface BlockTreeProps {
   isRoot?: boolean;
   parentBlockType?: Block["type"] | null;
   parentBlockId?: string | null;
+  highlightedRootBlockId: string | null;
+  isHighlightedBranch?: boolean;
   moveBlock: (
     pageId: string,
     blockId: string,
@@ -232,6 +319,8 @@ const BlockTree: React.FC<BlockTreeProps> = ({
   isRoot = false,
   parentBlockType = null,
   parentBlockId = null,
+  highlightedRootBlockId,
+  isHighlightedBranch = false,
   moveBlock,
   draggedBlockId,
   setDraggedBlockId,
@@ -261,6 +350,10 @@ const BlockTree: React.FC<BlockTreeProps> = ({
         const numberedIndex =
           block.type === "numbered_list" ? ++numberedCounter : 0;
         if (block.type !== "numbered_list") numberedCounter = 0;
+        const isHighlighted =
+          isHighlightedBranch ||
+          (highlightedRootBlockId !== null &&
+            block.id === highlightedRootBlockId);
 
         return (
           <div key={block.id} className="group/block-branch rounded-md">
@@ -279,6 +372,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 block={block}
                 parentBlockId={parentBlockId}
                 numberedIndex={numberedIndex}
+                isHighlighted={isHighlighted}
                 onChange={onChange}
                 onKeyDown={onKeyDown}
                 onPaste={onPaste}
@@ -294,12 +388,20 @@ const BlockTree: React.FC<BlockTreeProps> = ({
             </DraggablePlaygroundBlock>
 
             {shouldRenderChildren(block) && (
-              <div className="rounded-md transition-colors group-focus-within/block-branch:bg-[var(--color-surface-secondary)]">
+              <div
+                className={
+                  isHighlighted
+                    ? "rounded-md bg-[var(--color-surface-secondary)]"
+                    : "rounded-md transition-colors"
+                }
+              >
                 <BlockTree
                   blocks={block.children!}
                   pageId={pageId}
                   parentBlockType={block.type}
                   parentBlockId={block.id}
+                  highlightedRootBlockId={highlightedRootBlockId}
+                  isHighlightedBranch={isHighlighted}
                   moveBlock={moveBlock}
                   draggedBlockId={draggedBlockId}
                   setDraggedBlockId={setDraggedBlockId}
@@ -397,12 +499,9 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
         moveBlock(pageId, draggedId, insertionIdx, parentBlockId);
       } else {
         // Cross-tree move — extract from old position, insert here
-        usePageStore.getState().moveBlockAcrossTree(
-          pageId,
-          draggedId,
-          parentBlockId,
-          insertionIdx,
-        );
+        usePageStore
+          .getState()
+          .moveBlockAcrossTree(pageId, draggedId, parentBlockId, insertionIdx);
       }
 
       setDraggedBlockId(null);
@@ -471,6 +570,7 @@ interface EditableBlockProps {
   block: Block;
   parentBlockId?: string | null;
   numberedIndex: number;
+  isHighlighted: boolean;
   onChange: (blockId: string, text: string) => void;
   onKeyDown: (
     e: React.KeyboardEvent,
@@ -501,6 +601,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
   block,
   parentBlockId = null,
   numberedIndex,
+  isHighlighted,
   onChange,
   onKeyDown,
   onPaste,
@@ -543,6 +644,8 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
         pageId={pageId}
         parentBlockType={block.type}
         parentBlockId={block.id}
+        highlightedRootBlockId={isHighlighted ? block.id : null}
+        isHighlightedBranch={isHighlighted}
         moveBlock={moveBlock}
         draggedBlockId={draggedBlockId}
         setDraggedBlockId={setDraggedBlockId}
@@ -560,6 +663,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
     block.children,
     block.type,
     block.id,
+    isHighlighted,
     pageId,
     moveBlock,
     draggedBlockId,

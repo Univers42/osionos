@@ -27,6 +27,9 @@ function buildMovePageItems(
   pages: Record<string, PageEntry[]>,
   workspaces: Array<{ _id: string; name: string }>,
   sourcePageId: string,
+  privateWorkspaceIds: string[],
+  sourceOwnerId: string | null | undefined,
+  currentUserId: string,
 ): RenderableItem[] {
   const items: RenderableItem[] = [];
 
@@ -62,6 +65,12 @@ function buildMovePageItems(
   };
 
   workspaces.forEach((ws) => {
+    // Hide private workspace roots when the page isn't owned by current user
+    const isPrivate = privateWorkspaceIds.includes(ws._id);
+    if (isPrivate && sourceOwnerId && sourceOwnerId !== currentUserId) {
+      return;
+    }
+
     items.push({
       id: null,
       workspaceId: ws._id,
@@ -100,8 +109,42 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
     return [...session.privateWorkspaces, ...session.sharedWorkspaces];
   }, [session]);
 
+  const privateWorkspaceIds = useMemo(
+    () => session?.privateWorkspaces.map((w) => w._id) ?? [],
+    [session],
+  );
+
+  // REPLACE the existing getTreeItems (near the bottom of the derived data section):
+  const getTreeItems = useMemo(
+    () =>
+      buildMovePageItems(
+        pages,
+        workspaces,
+        sourcePageId,
+        privateWorkspaceIds,
+        sourcePage?.ownerId,
+        activeUserId,
+      ),
+    [pages, workspaces, sourcePageId, privateWorkspaceIds, sourcePage?.ownerId, activeUserId],
+  );
+
   const handleMove = useCallback(
     (targetParentId: string | null, targetWorkspaceId: string) => {
+      // Prevent non-owners from moving to private workspaces
+      const isTargetPrivate = session?.privateWorkspaces.some(
+        (w) => w._id === targetWorkspaceId,
+      );
+      if (
+        isTargetPrivate &&
+        sourcePage?.ownerId &&
+        sourcePage.ownerId !== activeUserId
+      ) {
+        console.warn(
+          "[MovePageModal] Cannot move another user's page to your private workspace. Use Duplicate instead.",
+        );
+        return;
+      }
+
       const targetWorkspace = workspaces.find(
         (w) => w._id === targetWorkspaceId,
       );
@@ -118,7 +161,7 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
       movePage(sourcePageId, targetParentId, targetWorkspaceId);
       onClose();
     },
-    [allPages, movePage, onClose, sourcePageId, sourcePage?.title, workspaces],
+    [allPages, movePage, onClose, sourcePageId, sourcePage, workspaces, session, activeUserId],
   );
 
   const buildBreadcrumbs = useCallback(
@@ -161,11 +204,6 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
         breadcrumbs: buildBreadcrumbs(p._id, p.workspaceId),
       }));
   }, [allPages, searchTerm, sourcePageId, pages, buildBreadcrumbs]);
-
-  const getTreeItems = useMemo(
-    () => buildMovePageItems(pages, workspaces, sourcePageId),
-    [pages, workspaces, sourcePageId],
-  );
 
   const renderableItems = searchTerm.trim() ? getFilteredPages : getTreeItems;
 

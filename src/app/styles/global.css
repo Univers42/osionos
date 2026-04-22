@@ -19,6 +19,12 @@
   --color-surface-hover: #ebebea;
   --color-accent: #2383e2;
   --color-line: #e9e9e7;
+
+  /* Modals & UI */
+  --color-surface: var(--color-surface-primary);
+  --color-border: var(--color-line);
+  --color-text-danger: #dc2626;
+  --color-backdrop: rgba(0, 0, 0, 0.45);
 }
 
 [data-theme="dark"] {
@@ -33,6 +39,12 @@
   --color-surface-hover: #2f2f2f;
   --color-accent: #529cca;
   --color-line: #ffffff14;
+
+  /* Modals & UI */
+  --color-surface: var(--color-surface-primary);
+  --color-border: var(--color-line);
+  --color-text-danger: #ef4444;
+  --color-backdrop: rgba(0, 0, 0, 0.7);
 }
 
 html,
@@ -91,4 +103,35 @@ body {
   background: transparent !important;
   color: var(--color-ink) !important;
   padding: 0 !important;
+}
+
+/* Link and Mention Unification */
+.editor-link {
+  color: var(--color-accent) !important;
+  text-decoration: underline !important;
+  text-underline-offset: 0.14em !important;
+  cursor: pointer !important;
+  transition: opacity 0.15s ease;
+}
+
+.editor-link:hover {
+  opacity: 0.75;
+}
+
+.editor-mention {
+  color: var(--color-accent) !important;
+  text-decoration: none !important;
+  background-color: var(--color-surface-tertiary) !important;
+  font-weight: 500 !important;
+  padding: 0 4px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+  transition: background-color 0.15s ease;
+}
+
+.editor-mention:hover {
+  background-color: var(--color-surface-hover) !important;
 }

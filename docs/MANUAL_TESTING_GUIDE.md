@@ -26,6 +26,7 @@ Format: `[Priority] Description → Action → Expected result`
 - [P0] **Slash menu filters on typing** → Type `/hea` → Only heading options are visible in the menu.
 - [P0] **Slash menu selection with Enter** → Type `/quote`, press Enter on the highlighted option → Block converts to quote. The `/quote` text is cleaned. No extra paragraph is created below.
 - [P0] **Slash menu selection with click** → Type `/`, click on "Bulleted List" → Block converts to bulleted list. The `/` text is cleaned.
+- [P0] **Slash menu keyboard scroll** → Type `/`, press ArrowDown repeatedly past the visible area → The active item scrolls into view automatically. The selected item is always visible.
 - [P1] **Slash menu closes on Escape** → Type `/`, press Escape → Menu closes, `/` remains in the text as typed content.
 - [P1] **Slash menu closes on backspace past `/`** → Type `/he`, backspace 3 times (removing `h`, `e`, `/`) → Menu closes when `/` is deleted.
 - [P2] **Slash menu reopens after previous use** → Create a block via slash menu, move to a new paragraph, type `/` again → Menu opens normally.
@@ -75,6 +76,7 @@ Format: `[Priority] Description → Action → Expected result`
 - [P0] **Enter in paragraph creates new paragraph** → Type text in a paragraph, press Enter → New empty paragraph appears below, cursor moves to it.
 - [P0] **Enter in heading creates paragraph** → Type in a heading, press Enter → New paragraph (not heading) appears below.
 - [P0] **Enter in code block creates newline** → Press Enter inside code textarea → Newline inserted in the code. No new block created.
+- [P0] **Enter on divider creates new paragraph below** → Focus a divider, press Enter → New paragraph appears below the divider.
 
 ### List continuation
 
@@ -92,7 +94,29 @@ Format: `[Priority] Description → Action → Expected result`
 
 ---
 
-## 4. Backspace / Delete Behavior
+## 4. Arrow Navigation
+
+### Standard navigation
+
+- [P0] **ArrowDown at end of block jumps to next block** → Place cursor at the end of a paragraph's text, press ArrowDown → Cursor moves to the start of the next block.
+- [P0] **ArrowUp at start of block jumps to previous block** → Place cursor at the start of a paragraph's text, press ArrowUp → Cursor moves to the end of the previous block.
+- [P0] **ArrowDown in middle of text does not jump** → Place cursor in the middle of text, press ArrowDown → Cursor moves down within the text (browser default), does not jump to next block.
+
+### Navigation through non-text blocks
+
+- [P0] **Arrow through divider** → Paragraph above, divider, paragraph below. ArrowDown from end of top paragraph → Focus lands on divider → ArrowDown again → Focus moves to bottom paragraph.
+- [P0] **Arrow through code block** → Paragraph above, code block with content, paragraph below. ArrowDown from end of top paragraph → Cursor enters code block textarea at the start. ArrowDown navigates lines within the textarea. ArrowDown at last line of textarea → Focus moves to bottom paragraph.
+- [P0] **ArrowUp exits code block** → Cursor at the first character of code textarea, press ArrowUp → Focus moves to previous block.
+- [P1] **Arrow through database block** → ArrowDown from paragraph above a database → Focus skips over database to the next block below it.
+
+### Smooth scrolling
+
+- [P0] **Navigation scrolls smoothly** → Navigate with arrow keys through many blocks until past the viewport edge → Page scrolls smoothly to keep the focused block visible. No abrupt jumps.
+- [P0] **No scroll when block is already visible** → Navigate between two adjacent visible blocks → No scroll movement occurs.
+
+---
+
+## 5. Backspace / Delete Behavior
 
 ### Empty block deletion
 
@@ -112,7 +136,7 @@ Format: `[Priority] Description → Action → Expected result`
 
 ---
 
-## 5. Context Menu
+## 6. Context Menu
 
 ### Basic operations
 
@@ -133,7 +157,7 @@ Format: `[Priority] Description → Action → Expected result`
 
 ---
 
-## 6. Drag and Drop
+## 7. Drag and Drop
 
 ### Same-level reorder
 
@@ -154,7 +178,7 @@ Format: `[Priority] Description → Action → Expected result`
 
 ---
 
-## 7. Toggle Block
+## 8. Toggle Block
 
 ### Basic toggle behavior
 
@@ -177,24 +201,27 @@ Format: `[Priority] Description → Action → Expected result`
 
 ---
 
-## 8. Callout & Quote as Containers
+## 9. Callout & Quote as Containers
 
 ### Callout
 
-- [P0] **Enter in callout creates child inside box** → Type in callout, Enter → New paragraph inside the colored box, aligned with text.
+- [P0] **Enter in callout creates child inside box** → Type in callout, Enter → New paragraph inside the colored box, aligned with text (right of icon).
 - [P0] **Children render inside callout visually** → Indent a block under callout → Block appears inside the colored background.
 - [P1] **Slash menu works inside callout children** → In a callout child, type `/` → Slash menu works.
 - [P1] **Delete callout promotes children** → Callout with children. Backspace on empty callout → Children promote to callout's level.
+- [P1] **Delete callout from context menu removes all** → Callout with children. Right-click callout → Delete → Callout and children gone.
 
 ### Quote
 
 - [P0] **Enter in quote creates child inside border** → Type in quote, Enter → New paragraph inside the left border.
 - [P0] **Children render inside quote visually** → Indent a block under quote → Block appears inside the left border decoration.
 - [P1] **Multiple children inside quote** → Create quote with 3 children → All render inside the left border, properly indented.
+- [P1] **Delete quote promotes children** → Quote with children. Backspace on empty quote → Children promote.
+- [P1] **Delete quote from context menu removes all** → Quote with children. Right-click quote → Delete → Quote and children gone.
 
 ---
 
-## 9. Read-Only Rendering
+## 10. Read-Only Rendering
 
 - [P0] **All block types render correctly** → Open a page with diverse block types in read-only mode → Every type displays with correct styling.
 - [P0] **Nested children render in read-only** → Page with indented blocks → Children appear indented correctly.
@@ -205,7 +232,7 @@ Format: `[Priority] Description → Action → Expected result`
 
 ---
 
-## 10. Paste Handling
+## 11. Paste Handling
 
 - [P1] **Paste markdown creates multiple blocks** → Copy multi-line markdown (e.g., heading + paragraph + list), paste into editor → Creates corresponding block types.
 - [P1] **Paste code fence creates code block** → Paste text with ` ``` ` fences → Creates code block with content.
@@ -213,7 +240,7 @@ Format: `[Priority] Description → Action → Expected result`
 
 ---
 
-## 11. Inline Text Selection & Formatting Toolbar
+## 12. Inline Text Selection & Formatting Toolbar
 
 ### Toolbar visibility
 
@@ -257,7 +284,7 @@ Format: `[Priority] Description → Action → Expected result`
 
 ---
 
-## 12. Emojis, Icons & Media
+## 13. Emojis, Icons & Media
 
 ### Page icons
 
@@ -295,14 +322,14 @@ Format: `[Priority] Description → Action → Expected result`
 
 ---
 
-## 13. Block Category Registry Compliance
+## 14. Block Category Registry Compliance
 
 These tests verify that the registry (`blockCategories.ts`) is correctly wired:
 
 ### NON_INDENTABLE types (Tab does nothing)
 
 - [P1] **Code block** → Tab inside code → Inserts spaces, not block indent.
-- [P1] **Divider** → Cannot focus to Tab (expected).
+- [P1] **Divider** → Focus divider with click → Tab does not indent.
 - [P1] **Database inline** → Tab does nothing.
 
 ### NON_PARENTABLE types (cannot receive children via indent)
@@ -319,12 +346,31 @@ These tests verify that the registry (`blockCategories.ts`) is correctly wired:
 
 ---
 
-## 14. Cross-Cutting Concerns
+## 15. Page Permissions (ABAC)
+
+### Private / Shared page movement
+
+- [P0] **Owner can move own page to Private** → User A creates a page in Shared → User A moves it to their Private workspace → Page moves successfully, only User A has access.
+- [P0] **Non-owner cannot move shared page to their Private** → User A creates a page, moves to Shared → Switch to User B → User B opens Move modal → User B's private workspace is not listed as a destination.
+- [P0] **Non-owner can duplicate shared page** → User A creates a page in Shared → User B duplicates it → Copy appears in User B's private workspace with User B as owner. Original stays in Shared.
+- [P1] **canMovePage blocks unauthorized moves** → Attempt to call movePage programmatically for a non-owned page to a private workspace → Operation is rejected by canMovePage guard.
+
+### Page visibility
+
+- [P0] **Private pages only visible to owner** → User A creates a private page → Switch to User B → Page does not appear in User B's sidebar or search.
+- [P0] **Shared pages visible to all workspace members** → User A creates a page in the shared workspace → Switch to User B → Page is visible and editable.
+- [P1] **Moving page to Shared updates visibility** → User A has a private page, moves to Shared workspace → Visibility updates to 'shared', page appears for all members.
+
+---
+
+## 16. Cross-Cutting Concerns
 
 ### Focus management
 
 - [P0] **Focus moves to new block after Enter** → Press Enter → Cursor is in the new block.
 - [P0] **Focus moves to adjacent block after delete** → Delete a block → Cursor moves to next or previous block.
+- [P0] **Focus enters textarea when navigating to code block** → ArrowDown into a code block → Cursor appears inside the textarea and is editable.
+- [P0] **Focus enters button when navigating to divider** → ArrowDown into a divider → Divider receives focus (visual indicator shows).
 - [P1] **Focus moves to child after toggle expand** → Expand empty toggle → Cursor in the new child paragraph.
 
 ### Persistence

@@ -139,10 +139,17 @@ export function canMovePage(
   context: PageAccessContext | null,
 ): boolean {
   if (!context || !hasWorkspaceAccess(page, context)) return false;
-  return (
-    context.workspaceIds.includes(targetWorkspaceId) &&
-    canEditPage(page, context)
-  );
+  if (!context.workspaceIds.includes(targetWorkspaceId)) return false;
+  if (!canEditPage(page, context)) return false;
+
+  // Only the page owner can move a page to a private workspace.
+  // Non-owners can duplicate instead to get their own copy.
+  const isTargetPrivate = context.privateWorkspaceIds.includes(targetWorkspaceId);
+  if (isTargetPrivate && page.ownerId && page.ownerId !== context.userId) {
+    return false;
+  }
+
+  return true;
 }
 
 export function getTargetWorkspaceMoveVisibility(

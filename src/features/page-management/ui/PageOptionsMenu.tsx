@@ -252,20 +252,22 @@ export const PageOptionsMenu: React.FC<Props> = ({
         portalTarget,
       )}
 
-      {isModalOpen && (
+      {isModalOpen && portalTarget && createPortal(
         <ConfirmDeleteModal
           title={pageTitle}
           subPageCount={subPageCount}
           onConfirm={handleConfirmDelete}
           onCancel={() => setIsModalOpen(false)}
-        />
+        />,
+        portalTarget
       )}
 
-      {isMoveModalOpen && (
+      {isMoveModalOpen && portalTarget && createPortal(
         <MovePageModal
           sourcePageId={pageId}
           onClose={() => setIsMoveModalOpen(false)}
-        />
+        />,
+        portalTarget
       )}
     </div>
   );
