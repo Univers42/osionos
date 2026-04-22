@@ -612,21 +612,45 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "table_block":
       return (
-        <TableBlockEditor
-          block={block}
-          pageId={pageId}
-          onDeleteTable={onDeleteCodeBlock}
-        />
+        <div // NOSONAR - keyboard navigation wrapper for non-editable block
+          onKeyDown={(e) => {
+            if (e.key === "ArrowUp" || e.key === "ArrowDown" ||
+                e.key === "Backspace" || e.key === "Delete" ||
+                e.key === "Enter" || e.key === "Escape") {
+              onKeyDown(e);
+            }
+          }}
+          tabIndex={-1}
+          aria-label="Table block"
+        >
+          <TableBlockEditor
+            block={block}
+            pageId={pageId}
+            onDeleteTable={onDeleteCodeBlock}
+          />
+        </div>
       );
 
     case "database_inline":
     case "database_full_page":
       return (
-        <DatabaseBlock
-          databaseId={block.databaseId}
-          initialViewId={block.viewId}
-          mode="inline"
-        />
+        <div // NOSONAR - keyboard navigation wrapper for non-editable block
+          onKeyDown={(e) => {
+            if (e.key === "ArrowUp" || e.key === "ArrowDown" ||
+                e.key === "Backspace" || e.key === "Delete" ||
+                e.key === "Enter" || e.key === "Escape") {
+              onKeyDown(e);
+            }
+          }}
+          tabIndex={-1}
+          aria-label="Database block"
+        >
+          <DatabaseBlock
+            databaseId={block.databaseId}
+            initialViewId={block.viewId}
+            mode="inline"
+          />
+        </div>
       );
 
     default:
@@ -754,7 +778,7 @@ const TableBlockEditor: React.FC<{
           <tbody>
             {data.map((row, ri) => (
               <tr
-                key={`row-${ri}-${row.join("¦")}`}
+                key={`row-${ri}`} // NOSONAR - positional keys are correct for table grid cells
                 className={
                   ri === 0
                     ? "bg-[var(--color-surface-secondary)] font-medium"
@@ -763,7 +787,7 @@ const TableBlockEditor: React.FC<{
               >
                 {row.map((cell, ci) => (
                   <td
-                    key={`cell-${ri}-${ci}-${cell}`}
+                    key={`cell-${ri}-${ci}`} // NOSONAR - positional keys are correct for table grid cells
                     className="border-b border-r border-[var(--color-line)] last:border-r-0 px-0 py-0 min-w-[120px] text-[var(--color-ink)]"
                     onContextMenu={(e) => openContextMenu(e, ri, ci)}
                   >

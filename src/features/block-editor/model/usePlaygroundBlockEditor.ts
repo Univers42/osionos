@@ -150,12 +150,19 @@ export function usePlaygroundBlockEditor(pageId: string) {
       const editable =
         (el.querySelector("[contenteditable]") as HTMLElement) ??
         (el.querySelector("textarea") as HTMLElement) ??
+        (el.querySelector("input") as HTMLElement) ??
         (el.querySelector(":scope > button") as HTMLElement) ??
         el;
+  
+      // Ensure the fallback element is focusable
+      if (editable === el && !el.hasAttribute("tabindex")) {
+        el.setAttribute("tabindex", "-1");
+      }
+  
       editable.focus();
       editable.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   
-      if (editable instanceof HTMLTextAreaElement) {
+      if (editable instanceof HTMLTextAreaElement || editable instanceof HTMLInputElement) {
         const pos = cursorEnd ? editable.value.length : 0;
         editable.selectionStart = pos;
         editable.selectionEnd = pos;
