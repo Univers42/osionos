@@ -6,18 +6,40 @@ function resolveEditableBlock(blockId: string): HTMLElement | null {
     return null;
   }
 
-  return (block.querySelector("[contenteditable]") as HTMLElement | null) ?? (block as HTMLElement);
+  // Priority: contenteditable → textarea → input → direct child button → wrapper
+  const editable =
+    (block.querySelector("[contenteditable]") as HTMLElement | null) ??
+    (block.querySelector("textarea") as HTMLElement | null) ??
+    (block.querySelector("input") as HTMLElement | null) ??
+    (block.querySelector(":scope > button") as HTMLElement | null) ??
+    (block as HTMLElement);
+
+  // Ensure the fallback wrapper element is focusable
+  if (editable === block && !block.hasAttribute("tabindex")) {
+    (block as HTMLElement).setAttribute("tabindex", "-1");
+  }
+
+  return editable;
 }
 
 function placeCaret(target: HTMLElement, placement: CaretPlacement) {
-  const selection = globalThis.getSelection();
-  if (!selection) {
+  // Textarea and input: use selectionStart/selectionEnd
+  if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
+    const pos = placement === "end" ? target.value.length : 0;
+    target.selectionStart = pos;
+    target.selectionEnd = pos;
     return;
   }
 
+  // ContentEditable: use Selection API
+  if (!target.isContentEditable) return;
+
+  const selection = globalThis.getSelection();
+  if (!selection) return;
+
   const range = document.createRange();
   range.selectNodeContents(target);
-  range.collapse(placement === "end");
+  range.collapse(placement !== "end");
   selection.removeAllRanges();
   selection.addRange(range);
 }
@@ -38,6 +60,7 @@ export function focusEditableBlock(
     }
 
     editable.focus();
+    editable.scrollIntoView({ block: "nearest", behavior: "smooth" });
     placeCaret(editable, placement);
 
     if (document.activeElement !== editable && remainingFrames > 0) {

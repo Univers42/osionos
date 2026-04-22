@@ -477,6 +477,26 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [pageId, deleteBlock, focusBlock],
   );
 
+  const deleteAndFocusAdjacent = useCallback(
+    (e: React.KeyboardEvent, blockId: string) => {
+      e.preventDefault();
+      const nextId = getAdjacentRenderedBlockId(blockId, "next");
+      const prevId = getAdjacentRenderedBlockId(blockId, "prev");
+      deleteBlock(pageId, blockId);
+
+      const preferNext = e.key === "Delete";
+      const primaryId = preferNext ? nextId : prevId;
+      const fallbackId = preferNext ? prevId : nextId;
+
+      if (primaryId) {
+        focusBlock(primaryId, !preferNext);
+      } else if (fallbackId) {
+        focusBlock(fallbackId, preferNext);
+      }
+    },
+    [pageId, deleteBlock, focusBlock],
+  );
+
   const handleEmptyBackspace = useCallback(
     (
       e: React.KeyboardEvent,
@@ -499,15 +519,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       }
 
       if (isListBlock(block.type)) {
-        e.preventDefault();
-        const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, "next");
-        const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, "prev");
-        deleteBlock(pageId, blockId);
-        if (nextRenderedBlockId) {
-          focusBlock(nextRenderedBlockId);
-        } else if (prevRenderedBlockId) {
-          focusBlock(prevRenderedBlockId, true);
-        }
+        deleteAndFocusAdjacent(e, blockId);
         return true;
       }
 
@@ -520,26 +532,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       }
 
       if (content.length >= 1) {
-        e.preventDefault();
-        const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, "next");
-        const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, "prev");
-        deleteBlock(pageId, blockId);
-
-        if (e.key === "Delete") {
-          if (nextRenderedBlockId) {
-            focusBlock(nextRenderedBlockId);
-          } else if (prevRenderedBlockId) {
-            focusBlock(prevRenderedBlockId, true);
-          }
-          return true;
-        }
-
-        if (prevRenderedBlockId) {
-          focusBlock(prevRenderedBlockId, true);
-        } else if (nextRenderedBlockId) {
-          focusBlock(nextRenderedBlockId);
-        }
-
+        deleteAndFocusAdjacent(e, blockId);
         return true;
       }
 
@@ -547,11 +540,11 @@ export function usePlaygroundBlockEditor(pageId: string) {
     },
     [
       pageId,
-      deleteBlock,
       changeBlockType,
       updateBlock,
       focusBlock,
       outdentBlock,
+      deleteAndFocusAdjacent,
     ],
   );
 
