@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/11 15:00:00 by gemini-cli       ###   ########.fr       */
+/*   Updated: 2026/04/11 15:00:00 by danfern3         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,7 +15,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { useUIStore } from "@/shared/config/uiStore";
-import { WorkspaceSwitcher } from "@/features/auth";
 import { SidebarTopNav } from "./SidebarTopNav";
 import { SidebarPageTree } from "./SidebarPageTree";
 import { SidebarFooter } from "./SidebarFooter";
@@ -81,7 +80,7 @@ export const Sidebar: React.FC<Props> = ({
     <aside
       className={[
         styles.sidebar,
-        !isSidebarOpen ? styles.sidebarClosed : "",
+        isSidebarOpen ? "" : styles.sidebarClosed,
       ].join(" ")}
     >
       <WorkspaceSwitcher />
