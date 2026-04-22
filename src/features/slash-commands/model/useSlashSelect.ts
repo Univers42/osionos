@@ -17,6 +17,7 @@ import {
   type Block,
   type BlockType,
   type MediaBlockType,
+  findBlockInTree,
 } from "@/entities/block";
 import type { SlashMenuState } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
 
@@ -29,23 +30,6 @@ interface UseSlashSelectOptions {
   insertBlock: (pageId: string, afterBlockId: string, block: Block) => void;
   createInlineDatabase: (name?: string) => { databaseId: string; viewId: string } | null;
   focusBlock: (blockId: string, end?: boolean) => void;
-}
-
-function findBlockInTree(blocks: Block[], blockId: string): Block | null {
-  for (const block of blocks) {
-    if (block.id === blockId) {
-      return block;
-    }
-
-    if (block.children?.length) {
-      const nested = findBlockInTree(block.children, blockId);
-      if (nested) {
-        return nested;
-      }
-    }
-  }
-
-  return null;
 }
 
 function stripSlashQuery(content: string): string {

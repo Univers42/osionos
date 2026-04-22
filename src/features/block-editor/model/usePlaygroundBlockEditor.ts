@@ -31,6 +31,7 @@ import {
   isListBlock,
   isEffectivelyEmpty,
   enterCreatesChild,
+  findBlockInTree,
 } from "@/entities/block";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
 import type { Block } from "@/entities/block";
@@ -741,7 +742,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
     (targetPageId: string) => {
       if (!pageSelector) return;
       const { blockId } = pageSelector;
-      const block = contentRef.current.find((b) => b.id === blockId);
+      const block = findBlockInTree(contentRef.current, blockId);
       if (!block) return;
 
       const text = block.content;
