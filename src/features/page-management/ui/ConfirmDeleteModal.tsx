@@ -22,7 +22,7 @@ export const ConfirmDeleteModal: React.FC<Props> = ({
     <>
       <button
         type="button"
-        className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-[1px]"
+        className="fixed inset-0 z-[100] bg-[var(--color-backdrop)] backdrop-blur-sm"
         aria-label="Close delete confirmation"
         onClick={onCancel}
       />

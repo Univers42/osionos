@@ -19,6 +19,12 @@
   --color-surface-hover: #ebebea;
   --color-accent: #2383e2;
   --color-line: #e9e9e7;
+
+  /* Modals & UI */
+  --color-surface: var(--color-surface-primary);
+  --color-border: var(--color-line);
+  --color-text-danger: #dc2626;
+  --color-backdrop: rgba(0, 0, 0, 0.45);
 }
 
 [data-theme="dark"] {
@@ -33,6 +39,12 @@
   --color-surface-hover: #2f2f2f;
   --color-accent: #529cca;
   --color-line: #ffffff14;
+
+  /* Modals & UI */
+  --color-surface: var(--color-surface-primary);
+  --color-border: var(--color-line);
+  --color-text-danger: #ef4444;
+  --color-backdrop: rgba(0, 0, 0, 0.7);
 }
 
 html,
