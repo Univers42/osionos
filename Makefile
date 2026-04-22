@@ -119,7 +119,7 @@ test-smoke: ## Run the browser smoke/harness subset only
 	@echo -e "$(CYAN)Running browser smoke tests…$(RESET)"
 	npx playwright test tests/e2e/smoke
 
-test-ci: ## Official CI browser command (strict, artifact-friendly)
+test-ci: ## Official CI browser command (strict; workflow decides if advisory or blocking)
 	@echo -e "$(CYAN)Running browser regression tests in CI mode…$(RESET)"
 	CI=1 npx playwright test
 
