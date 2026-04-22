@@ -533,27 +533,6 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     return normalizedSource;
   }, [onChange]);
 
-  const getCurrentSelectionOffsets = useCallback(() => {
-    const root = ref.current;
-    if (!root) {
-      return null;
-    }
-
-    const liveSelection = getInlineEditorSelectionOffsets(root);
-    if (liveSelection) {
-      return liveSelection;
-    }
-
-    if (!selectionSnapshot) {
-      return null;
-    }
-
-    return {
-      start: selectionSnapshot.start,
-      end: selectionSnapshot.end,
-    };
-  }, [selectionSnapshot]);
-
   const handleInput = useCallback(() => {
     if (isComposing.current) {
       return;
@@ -702,9 +681,9 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       });
     },
     [
-      getCurrentSelectionOffsets,
       onChange,
       renderContent,
+      selectionSnapshot,
       updateSelectionSnapshot,
     ],
   );
@@ -744,7 +723,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     }
 
     setLinkPicker({ mode: "chooser", query: "" });
-  }, [getCurrentSelectionOffsets]);
+  }, [selectionSnapshot]);
 
   const handleInlineFormattingShortcut = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {

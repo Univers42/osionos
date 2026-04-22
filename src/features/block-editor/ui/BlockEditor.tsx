@@ -30,8 +30,6 @@ import { MediaBlockEditor } from "./MediaBlockEditor";
 import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
 
-import { getAdjacentRenderedBlockId } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
-
 const LANGUAGES = [
   "plaintext",
   "javascript",
@@ -157,7 +155,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
       onKeyDown(e);
     },
-    [onChange, onKeyDown, block.id, focusBlock],
+    [onChange, onKeyDown],
   );
 
   const openCodeContextMenu = useCallback((e: React.MouseEvent) => {

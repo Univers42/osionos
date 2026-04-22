@@ -362,7 +362,6 @@ const BlockTree: React.FC<BlockTreeProps> = ({
               blocks={blocks}
               pageId={pageId}
               parentBlockId={parentBlockId}
-              isHighlighted={isHighlighted}
               moveBlock={moveBlock}
               draggedBlockId={draggedBlockId}
               setDraggedBlockId={setDraggedBlockId}
@@ -429,7 +428,6 @@ interface DraggablePlaygroundBlockProps {
   blocks: Block[];
   pageId: string;
   parentBlockId: string | null;
-  isHighlighted: boolean;
   moveBlock: (
     pageId: string,
     blockId: string,
@@ -447,7 +445,6 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
   blocks,
   pageId,
   parentBlockId,
-  isHighlighted,
   moveBlock,
   draggedBlockId,
   setDraggedBlockId,
