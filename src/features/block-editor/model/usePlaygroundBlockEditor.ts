@@ -153,6 +153,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
         (el.querySelector(":scope > button") as HTMLElement) ??
         el;
       editable.focus();
+      editable.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   
       if (editable instanceof HTMLTextAreaElement) {
         const pos = cursorEnd ? editable.value.length : 0;

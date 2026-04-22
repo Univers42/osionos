@@ -108,6 +108,14 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     return () => document.removeEventListener("keydown", handler, true);
   }, [effectiveActiveIdx, filtered, handleCommandSelect, onClose]);
 
+  // Auto-scroll active item into view when navigating with keyboard
+  useEffect(() => {
+    const container = ref.current?.querySelector('.overflow-y-auto');
+    if (!container) return;
+    const activeEl = container.querySelectorAll('button')[effectiveActiveIdx];
+    activeEl?.scrollIntoView({ block: 'nearest' });
+  }, [effectiveActiveIdx]);
+
   if (filtered.length === 0 && !activeMediaKind) {
     return null;
   }
