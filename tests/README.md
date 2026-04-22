@@ -120,6 +120,14 @@ Current browser pipeline:
 2. `npx playwright install --with-deps chromium`
 3. `TEST_WORKERS=1 make test-ci`
 4. Upload artifacts
+5. Publish advisory summary in workflow run
+
+Browser policy in CI:
+
+- `quality` remains blocking
+- `browser-tests` remains visible but non-blocking
+- browser failures keep failing output and artifacts
+- browser failures do not fail `ci-required`
 
 Artifacts on failure:
 
@@ -182,3 +190,4 @@ If you need understand or modify E2E stack, start here:
 - Prefer stable locators and `data-testid`.
 - Prefer state-based waits over time-based waits.
 - Keep CI command strict and artifact-friendly.
+- Keep non-blocking policy in workflow, not in test command.
