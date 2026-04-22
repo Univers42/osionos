@@ -57,7 +57,9 @@
   border: 1px solid var(--color-border);
   border-radius: 0.5rem;
   background: var(--color-surface-secondary);
-  transition: background-color 150ms ease, border-color 150ms ease;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
 }
 
 .trash-page-item:hover {

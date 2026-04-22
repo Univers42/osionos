@@ -46,7 +46,11 @@ import {
   registerPageLookup,
 } from "./pageStore.persistence";
 import type { PageStore } from "@/entities/page";
-import { canEditPage, canReadPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
+import {
+  canEditPage,
+  canReadPage,
+  getCurrentPageAccessContext,
+} from "@/shared/lib/auth/pageAccess";
 
 // Re-export types so existing imports from this module still work
 export type { PageEntry, ActivePageKind, ActivePage } from "@/entities/page";
@@ -76,7 +80,10 @@ export const usePageStore = create<PageStore>((set, get) => ({
   openPage: (page) => {
     const context = getCurrentPageAccessContext();
     const currentPage = get().pageById(page.id);
-    if (page.kind === "page" && (!currentPage || !canReadPage(currentPage, context))) {
+    if (
+      page.kind === "page" &&
+      (!currentPage || !canReadPage(currentPage, context))
+    ) {
       set({ activePage: null, showTrash: false });
       return;
     }
@@ -270,17 +277,26 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   rootPages: (workspaceId) =>
     (get().pages[workspaceId] ?? []).filter(
-      (p) => !p.parentPageId && !p.archivedAt && canReadPage(p, getCurrentPageAccessContext()),
+      (p) =>
+        !p.parentPageId &&
+        !p.archivedAt &&
+        canReadPage(p, getCurrentPageAccessContext()),
     ),
 
   childPages: (parentId, workspaceId) =>
     (get().pages[workspaceId] ?? []).filter(
-      (p) => p.parentPageId === parentId && !p.archivedAt && canReadPage(p, getCurrentPageAccessContext()),
+      (p) =>
+        p.parentPageId === parentId &&
+        !p.archivedAt &&
+        canReadPage(p, getCurrentPageAccessContext()),
     ),
 
   trashPages: (workspaceId, userId) =>
     (get().pages[workspaceId] ?? []).filter(
-      (p) => p.archivedAt && p.ownerId === userId && canReadPage(p, getCurrentPageAccessContext()),
+      (p) =>
+        p.archivedAt &&
+        p.ownerId === userId &&
+        canReadPage(p, getCurrentPageAccessContext()),
     ),
 
   pageById: (pageId) => {

@@ -128,8 +128,12 @@ const App: React.FC = () => {
     >
       {/* Left sidebar */}
       <Sidebar
-        onOpenHome={() => usePageStore.setState({ activePage: null, showTrash: false })}
-        onOpenTrash={() => usePageStore.setState({ activePage: null, showTrash: true })}
+        onOpenHome={() =>
+          usePageStore.setState({ activePage: null, showTrash: false })
+        }
+        onOpenTrash={() =>
+          usePageStore.setState({ activePage: null, showTrash: true })
+        }
       />
 
       {/* Floating trigger for when sidebar is closed */}

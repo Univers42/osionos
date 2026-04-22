@@ -14,7 +14,10 @@ import React, { useState, useMemo } from "react";
 import { Trash2, Redo2, Trash, AlertTriangle } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
-import { canReadPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
+import {
+  canReadPage,
+  getCurrentPageAccessContext,
+} from "@/shared/lib/auth/pageAccess";
 
 import "./trashView.css";
 
@@ -38,7 +41,10 @@ export const TrashView: React.FC = () => {
 
   const isAuthenticated = !!session && !!context;
   const userWorkspaces = useMemo(
-    () => (session ? [...session.privateWorkspaces, ...session.sharedWorkspaces] : []),
+    () =>
+      session
+        ? [...session.privateWorkspaces, ...session.sharedWorkspaces]
+        : [],
     [session],
   );
 
@@ -60,7 +66,11 @@ export const TrashView: React.FC = () => {
     return (pages[selectedWorkspaceId] ?? [])
       .filter((page) => {
         if (!context) return false;
-        return !!page.archivedAt && page.ownerId === context.userId && canReadPage(page, context);
+        return (
+          !!page.archivedAt &&
+          page.ownerId === context.userId &&
+          canReadPage(page, context)
+        );
       })
       .sort(
         (a, b) =>
@@ -104,7 +114,8 @@ export const TrashView: React.FC = () => {
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
-      year: date.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
+      year:
+        date.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
     });
   };
 
@@ -118,8 +129,8 @@ export const TrashView: React.FC = () => {
           </h1>
         </div>
         <p className="text-sm text-[var(--color-ink-faint)]">
-          Pages you delete are moved here. They&apos;ll be permanently deleted after
-          30 days.
+          Pages you delete are moved here. They&apos;ll be permanently deleted
+          after 30 days.
         </p>
       </div>
 
@@ -130,7 +141,11 @@ export const TrashView: React.FC = () => {
           </label>
           <select
             value={selectedWorkspaceId || ""}
-            onChange={(e) => setPreferredWorkspaceId(e.target.value === "" ? undefined : e.target.value)}
+            onChange={(e) =>
+              setPreferredWorkspaceId(
+                e.target.value === "" ? undefined : e.target.value,
+              )
+            }
             className="w-full px-3 py-2 text-sm rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:border-[var(--color-border-hover)] focus:outline-none focus:border-[var(--color-accent)]"
           >
             <option value="">Select a workspace</option>
@@ -154,10 +169,7 @@ export const TrashView: React.FC = () => {
         ) : (
           <div className="trash-view-list">
             {trashPages.map((page) => (
-              <div
-                key={page._id}
-                className="trash-page-item"
-              >
+              <div key={page._id} className="trash-page-item">
                 <div className="trash-page-info">
                   <div className="flex items-center gap-2 mb-1">
                     {page.icon && (

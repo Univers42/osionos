@@ -10,41 +10,39 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { Suspense, useEffect } from 'react';
-import { Plus } from 'lucide-react';
-import { AssetRenderer } from '@univers42/ui-collection';
+import React, { Suspense, useEffect } from "react";
+import { Plus } from "lucide-react";
+import { AssetRenderer } from "@univers42/ui-collection";
 
-import { ErrorBoundary }  from '@/shared/ui';
-import {
-  getCollectionEmojiValue,
-} from '@/shared/lib/markengine/uiCollectionAssets';
-import { DatabaseBlock }  from '@/widgets/database-view';
-import { NotionPage }     from '@/pages/notion-page';
-import { TrashView }      from '@/pages/trash-view';
+import { ErrorBoundary } from "@/shared/ui";
+import { getCollectionEmojiValue } from "@/shared/lib/markengine/uiCollectionAssets";
+import { DatabaseBlock } from "@/widgets/database-view";
+import { NotionPage } from "@/pages/notion-page";
+import { TrashView } from "@/pages/trash-view";
 
-import { usePageStore }  from '@/store/usePageStore';
-import { useUserStore }  from '@/features/auth';
+import { usePageStore } from "@/store/usePageStore";
+import { useUserStore } from "@/features/auth";
 
 /**
  * Renders the right-hand content panel.
  * Shows home splash, DatabaseBlock, or the Notion-style page view.
  */
 export const MainContent: React.FC = () => {
-  const activePage = usePageStore(s => s.activePage);
-  const showTrash = usePageStore(s => s.showTrash);
-  const pageById = usePageStore(s => s.pageById);
-  const fetchPageContent = usePageStore(s => s.fetchPageContent);
-  const addPage    = usePageStore(s => s.addPage);
-  const openPage   = usePageStore(s => s.openPage);
+  const activePage = usePageStore((s) => s.activePage);
+  const showTrash = usePageStore((s) => s.showTrash);
+  const pageById = usePageStore((s) => s.pageById);
+  const fetchPageContent = usePageStore((s) => s.fetchPageContent);
+  const addPage = usePageStore((s) => s.addPage);
+  const openPage = usePageStore((s) => s.openPage);
   const clearActivePage = usePageStore.setState;
-  const session    = useUserStore(s => s.activeSession());
-  const persona    = useUserStore(s => s.activePersona());
+  const session = useUserStore((s) => s.activeSession());
+  const persona = useUserStore((s) => s.activePersona());
 
-  const jwt       = session?.accessToken ?? '';
-  const firstWsId = session?.privateWorkspaces[0]?._id ?? '';
+  const jwt = session?.accessToken ?? "";
+  const firstWsId = session?.privateWorkspaces[0]?._id ?? "";
 
   useEffect(() => {
-    if (!activePage || activePage?.kind !== 'page' || !jwt) return;
+    if (!activePage || activePage?.kind !== "page" || !jwt) return;
     const page = pageById(activePage.id);
     if (!page) {
       fetchPageContent(activePage.id, jwt);
@@ -52,7 +50,7 @@ export const MainContent: React.FC = () => {
   }, [activePage, jwt, pageById, fetchPageContent]);
 
   useEffect(() => {
-    if (activePage?.kind === 'page' && !pageById(activePage.id)) {
+    if (activePage?.kind === "page" && !pageById(activePage.id)) {
       clearActivePage({ activePage: null });
     }
   }, [activePage, pageById, clearActivePage]);
@@ -73,29 +71,35 @@ export const MainContent: React.FC = () => {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-6 h-full bg-[var(--color-surface-primary)]">
         <AssetRenderer
-          value={persona?.emoji ?? getCollectionEmojiValue('party')}
+          value={persona?.emoji ?? getCollectionEmojiValue("party")}
           size={40}
         />
         <div className="text-center">
           <h1 className="text-2xl font-bold text-[var(--color-ink)] mb-1">
-            {persona?.name ?? 'Welcome'}
+            {persona?.name ?? "Welcome"}
           </h1>
           <p className="text-sm text-[var(--color-ink-muted)]">
-            {session?.privateWorkspaces[0]?.name ?? 'Your workspace'} is ready.
+            {session?.privateWorkspaces[0]?.name ?? "Your workspace"} is ready.
           </p>
         </div>
         <button
           type="button"
           disabled={!firstWsId}
           className={[
-            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium',
-            'bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity',
-            'disabled:opacity-40 disabled:cursor-not-allowed',
-          ].join(' ')}
+            "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium",
+            "bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity",
+            "disabled:opacity-40 disabled:cursor-not-allowed",
+          ].join(" ")}
           onClick={async () => {
             if (!firstWsId) return;
-            const p = await addPage(firstWsId, 'Untitled', jwt);
-            if (p) openPage({ id: p._id, workspaceId: firstWsId, kind: 'page', title: p.title });
+            const p = await addPage(firstWsId, "Untitled", jwt);
+            if (p)
+              openPage({
+                id: p._id,
+                workspaceId: firstWsId,
+                kind: "page",
+                title: p.title,
+              });
           }}
         >
           <Plus size={16} />
@@ -105,10 +109,12 @@ export const MainContent: React.FC = () => {
     );
   }
 
-  if (activePage.kind === 'page' && !pageById(activePage.id)) {
+  if (activePage.kind === "page" && !pageById(activePage.id)) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4 h-full bg-[var(--color-surface-primary)]">
-        <h1 className="text-2xl font-bold text-[var(--color-ink)]">Page unavailable</h1>
+        <h1 className="text-2xl font-bold text-[var(--color-ink)]">
+          Page unavailable
+        </h1>
         <p className="text-sm text-[var(--color-ink-muted)] text-center max-w-sm">
           You do not have access to this page in the current session.
         </p>
@@ -124,15 +130,12 @@ export const MainContent: React.FC = () => {
   }
 
   /* ── Database view ─────────────────────────────────────────────── */
-  if (activePage.kind === 'database') {
+  if (activePage.kind === "database") {
     return (
       <ErrorBoundary>
         <Suspense fallback={<LoadingPane />}>
           <div className="flex-1 h-full overflow-auto bg-[var(--color-surface-primary)]">
-            <DatabaseBlock
-              databaseId={activePage.id}
-              mode="full"
-            />
+            <DatabaseBlock databaseId={activePage.id} mode="full" />
           </div>
         </Suspense>
       </ErrorBoundary>

@@ -1,1 +1,1 @@
-export * from './ui/TrashView';
+export * from "./ui/TrashView";

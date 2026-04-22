@@ -224,14 +224,10 @@ export function createDeletePage(set: SetFn, get: GetFn) {
 
     // Mark page as archived (soft delete) instead of permanently deleting
     const archivedAt = new Date().toISOString();
-    
+
     if (jwt && isMongoId(pageId)) {
       try {
-        await api.patch(
-          `/api/pages/${pageId}`,
-          { archivedAt },
-          jwt,
-        );
+        await api.patch(`/api/pages/${pageId}`, { archivedAt }, jwt);
       } catch {
         /* silent */
       }
@@ -252,9 +248,7 @@ export function createDeletePage(set: SetFn, get: GetFn) {
         pages: {
           ...s.pages,
           [workspaceId]: wsPages.map((p) =>
-            archivedIds.has(p._id)
-              ? { ...p, archivedAt }
-              : p,
+            archivedIds.has(p._id) ? { ...p, archivedAt } : p,
           ),
         },
         recents: newRecents,
@@ -475,11 +469,7 @@ export function createRestorePage(set: SetFn, get: GetFn) {
 
     if (jwt && isMongoId(pageId)) {
       try {
-        await api.patch(
-          `/api/pages/${pageId}`,
-          { archivedAt: null },
-          jwt,
-        );
+        await api.patch(`/api/pages/${pageId}`, { archivedAt: null }, jwt);
       } catch {
         /* silent */
       }
@@ -495,9 +485,7 @@ export function createRestorePage(set: SetFn, get: GetFn) {
         pages: {
           ...s.pages,
           [workspaceId]: wsPages.map((p) =>
-            restoredIds.has(p._id)
-              ? { ...p, archivedAt: null }
-              : p,
+            restoredIds.has(p._id) ? { ...p, archivedAt: null } : p,
           ),
         },
       };

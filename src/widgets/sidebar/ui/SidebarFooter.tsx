@@ -28,7 +28,7 @@ import {
   persistThemeMode,
   readStoredThemeMode,
   type ThemeMode,
-} from '@/shared/config/theme';
+} from "@/shared/config/theme";
 
 function nextThemeMode(mode: ThemeMode): ThemeMode {
   if (mode === "light") return "dark";
