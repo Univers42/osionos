@@ -99,7 +99,7 @@ Make targets:
 - `make test`
 - `make test-serial`
 - `make test-smoke`
-- `make test-ci`
+- `make test-ci` (optional local CI-style run)
 
 Quality gates stay separate:
 
@@ -112,28 +112,17 @@ Environment preparation stays separate:
 
 ## CI Execution
 
-CI uses native Playwright job from `.github/workflows/ci.yml`.
+GitHub CI does not run browser E2E tests.
 
-Current browser pipeline:
+Browser E2E policy:
 
-1. `npm ci`
-2. `npx playwright install --with-deps chromium`
-3. `TEST_WORKERS=1 make test-ci`
-4. Upload artifacts
-5. Publish advisory summary in workflow run
-
-Browser policy in CI:
-
-- `quality` remains blocking
-- `browser-tests` remains visible but non-blocking
-- browser failures keep failing output and artifacts
-- browser failures do not fail `ci-required`
-
-Artifacts on failure:
-
-- `playwright-report/`
-- `test-results/`
-- `test-results/junit.xml`
+- developers run them locally with `make test`
+- GitHub Actions runs only fast quality gates
+- pushes and PR updates are not slowed down by Playwright/browser setup
+- if browser evidence is needed, run tests locally and inspect:
+  - `playwright-report/`
+  - `test-results/`
+  - `test-results/junit.xml`
 
 ## Architecture Decisions
 
@@ -141,7 +130,6 @@ Artifacts on failure:
 
 Because CI needs:
 
-- strict exit codes
 - native discovery
 - reproducible workers
 - traces, screenshots, video
@@ -190,4 +178,4 @@ If you need understand or modify E2E stack, start here:
 - Prefer stable locators and `data-testid`.
 - Prefer state-based waits over time-based waits.
 - Keep CI command strict and artifact-friendly.
-- Keep non-blocking policy in workflow, not in test command.
+- Keep browser execution local unless team later decides to restore a dedicated workflow.

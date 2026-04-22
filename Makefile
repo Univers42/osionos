@@ -107,7 +107,7 @@ audit: ## Full analysis: Typecheck + Lint + SonarQube (requires SonarQube up)
 
 ci: typecheck lint ## Run the fast quality gates locally
 
-test: ## Run browser regression tests locally with Playwright Test (strict)
+test: ## Developer-only browser regression tests run locally with Playwright Test
 	@echo -e "$(CYAN)Running browser regression tests locally…$(RESET)"
 	npx playwright test
 
@@ -119,7 +119,7 @@ test-smoke: ## Run the browser smoke/harness subset only
 	@echo -e "$(CYAN)Running browser smoke tests…$(RESET)"
 	npx playwright test tests/e2e/smoke
 
-test-ci: ## Official CI browser command (strict; workflow decides if advisory or blocking)
+test-ci: ## Optional local CI-style browser command; not used by GitHub Actions
 	@echo -e "$(CYAN)Running browser regression tests in CI mode…$(RESET)"
 	CI=1 npx playwright test
 
