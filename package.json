@@ -12,12 +12,11 @@
     "test:e2e": "npx playwright test",
     "test:e2e:serial": "npx playwright test --workers=1",
     "test:e2e:smoke": "npx playwright test tests/e2e/smoke",
-    "test:e2e:legacy": "node tests/browser/run.mjs",
     "test:quality": "make ci",
     "test:setup": "npx playwright install --with-deps chromium"
   },
   "dependencies": {
-    "@univers42/ui-collection": "^2.4.2",
+    "@univers42/ui-collection": "^2.4.6",
     "highlight.js": "^11.11.1",
     "lucide-react": "^0.474.0",
     "mermaid": "^11.14.0",
