@@ -7,7 +7,13 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "npm run test:e2e",
+    "test:e2e": "npx playwright test",
+    "test:e2e:serial": "npx playwright test --workers=1",
+    "test:e2e:smoke": "npx playwright test tests/e2e/smoke",
+    "test:quality": "make ci",
+    "test:setup": "npx playwright install --with-deps chromium"
   },
   "dependencies": {
     "@univers42/ui-collection": "^2.4.6",
@@ -20,6 +26,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.1.3",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.10",
@@ -28,6 +35,7 @@
     "eslint": "^9.39.4",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "playwright": "^1.59.1",
     "sass-embedded": "^1.99.0",
     "tailwindcss": "^4.1.3",
     "typescript": "~5.7.3",

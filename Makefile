@@ -6,7 +6,7 @@
 #    By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/04/08 19:07:11 by dlesieur          #+#    #+#              #
-#    Updated: 2026/04/16 08:45:47 by rstancu          ###   ########.fr        #
+#    Updated: 2026/04/21 10:57:45 by rstancu          ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -21,6 +21,7 @@ RED   := \033[31m
 RESET := \033[0m
 
 DC := docker compose -f $(ROOT)docker-compose.yml
+TEST_WORKERS ?= 3
 
 .DEFAULT_GOAL := help
 help: ## Show available targets
@@ -104,7 +105,27 @@ audit: ## Full analysis: Typecheck + Lint + SonarQube (requires SonarQube up)
 		echo -e "$(YELLOW)⚠ SonarQube container not running, skipping scan$(RESET)"; \
 	fi
 
-ci: typecheck lint ## Run the same checks as GitHub Actions locally
+ci: typecheck lint ## Run the fast quality gates locally
+
+test: ## Developer-only browser regression tests run locally with Playwright Test
+	@echo -e "$(CYAN)Running browser regression tests locally…$(RESET)"
+	npx playwright test
+
+test-serial: ## Run browser regression tests locally with a single worker
+	@echo -e "$(CYAN)Running browser regression tests locally in serial mode…$(RESET)"
+	npx playwright test --workers=1
+
+test-smoke: ## Run the browser smoke/harness subset only
+	@echo -e "$(CYAN)Running browser smoke tests…$(RESET)"
+	npx playwright test tests/e2e/smoke
+
+test-ci: ## Optional local CI-style browser command; not used by GitHub Actions
+	@echo -e "$(CYAN)Running browser regression tests in CI mode…$(RESET)"
+	CI=1 npx playwright test
+
+test-docker: ## Run browser tests inside Docker using Playwright Test
+	@echo -e "$(CYAN)Running browser regression tests inside Docker…$(RESET)"
+	$(DC) run --rm --no-deps browser-tests
 
 # ── Database ─────────────────────────────────────────────────────────────
 
@@ -166,4 +187,5 @@ update-submodules: ## Update git submodules (if any)
 
 .PHONY: help install dev dev-docker up stop down build typecheck \
         db-up db-shell db-reset re clean logs logs-vite logs-mongo \
-        kill-ports status lint lint-fix audit ci sonar update-submodules
+        kill-ports status lint lint-fix audit ci sonar update-submodules \
+        test test-serial test-smoke test-ci test-docker

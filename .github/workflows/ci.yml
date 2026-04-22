@@ -62,7 +62,7 @@ jobs:
     needs: [quality]
     if: ${{ always() }}
     steps:
-      - name: Enforce quality success
+      - name: Enforce required checks
         run: |
           if [ "${{ needs.quality.result }}" != "success" ]; then
             echo "Quality checks failed: ${{ needs.quality.result }}"
