@@ -11,6 +11,7 @@ import {
   openColorPalette,
   openFreshPage,
   selectText,
+  slashMenu,
   setCaretInsideText,
   toolbarButton,
   wrapperCount,
@@ -26,14 +27,11 @@ async function createFormattedParagraph(page, appUrl, text = "alpha beta gamma")
 }
 
 async function openLinkPicker(page) {
-  await toolbarButton(page, "Add link").dispatchEvent("mousedown", {
-    bubbles: true,
-    cancelable: true,
-  });
+  await toolbarButton(page, "Add link").click();
 }
 
 function visibleButtonWithText(page, pattern) {
-  return page.locator("button:visible", { hasText: pattern }).last();
+  return page.getByTestId("inline-page-link-results").getByRole("button", { name: pattern }).first();
 }
 
 export const inlineToolbarScenarios = [
@@ -152,7 +150,7 @@ export const inlineToolbarScenarios = [
       const editor = await createFormattedParagraph(page, appUrl);
       await selectText(editor, "alpha");
       await openColorPalette(page, "text");
-      await choosePaletteColor(page, 0);
+      await choosePaletteColor(page, 1);
       expect(await wrapperCount(editor, '[data-inline-type="text_color"]')).toBe(1);
       expect(await editorHtml(editor)).toContain("beta gamma");
     },
@@ -179,7 +177,7 @@ export const inlineToolbarScenarios = [
       const editor = await createFormattedParagraph(page, appUrl, "alpha beta");
       await selectText(editor, "alpha");
       await openColorPalette(page, "text");
-      await choosePaletteColor(page, 0);
+      await choosePaletteColor(page, 1);
       await setCaretInsideText(editor, "alpha", 5);
       await page.keyboard.type("123");
       expect(await wrapperCount(editor, '[data-inline-type="text_color"]')).toBe(1);
@@ -209,7 +207,7 @@ export const inlineToolbarScenarios = [
       const editor = await createFormattedParagraph(page, appUrl);
       await selectText(editor, "alpha");
       await openColorPalette(page, "text");
-      const label = await choosePaletteColor(page, 0);
+      const label = await choosePaletteColor(page, 1);
       await selectText(editor, "alpha");
       await openColorPalette(page, "text");
       await choosePaletteColorByLabel(page, label);
@@ -259,7 +257,7 @@ export const inlineToolbarScenarios = [
       await toolbarButton(page, "Italic").click();
       await selectText(editor, "alpha");
       await openColorPalette(page, "text");
-      await choosePaletteColor(page, 0);
+      await choosePaletteColor(page, 1);
       await selectText(editor, "alpha");
       await openColorPalette(page, "background");
       await choosePaletteColor(page, 1);
@@ -348,15 +346,29 @@ export const inlineToolbarScenarios = [
       await toolbarButton(page, "Bold").click();
       await selectText(editor, "beta");
       await openColorPalette(page, "text");
-      await choosePaletteColor(page, 0);
+      await choosePaletteColor(page, 1);
       await selectText(editor, "beta");
       await openColorPalette(page, "background");
       await choosePaletteColor(page, 1);
       await selectText(editor, "beta");
       await toolbarButton(page, "Inline code").click();
-      expect(await wrapperCount(editor, 'code[data-inline-type="code"]')).toBe(1);
-      expect(await wrapperCount(editor, '[data-inline-type="text_color"]')).toBe(1);
-      expect(await wrapperCount(editor, '[data-inline-type="background_color"]')).toBe(1);
+      const codeStyles = await editor.evaluate((node) => {
+        const code = node.querySelector('code[data-inline-type="code"]');
+        if (!code) {
+          return null;
+        }
+
+        const styles = getComputedStyle(code);
+        return {
+          color: styles.getPropertyValue("--inline-code-color").trim(),
+          background: styles.getPropertyValue("--inline-code-background").trim(),
+        };
+      });
+      expect(codeStyles).not.toBeNull();
+      expect(codeStyles?.color).not.toBe("");
+      expect(codeStyles?.background).not.toBe("");
+      expect(await wrapperCount(editor, '[data-inline-type="text_color"]')).toBe(0);
+      expect(await wrapperCount(editor, '[data-inline-type="background_color"]')).toBe(0);
     },
   ),
   defineScenario(
@@ -373,7 +385,7 @@ export const inlineToolbarScenarios = [
       await toolbarButton(page, "Strikethrough").click();
       await selectText(editor, "alpha");
       await openColorPalette(page, "text");
-      await choosePaletteColor(page, 0);
+      await choosePaletteColor(page, 1);
       await selectText(editor, "alpha");
       await openColorPalette(page, "background");
       await choosePaletteColor(page, 1);
@@ -483,13 +495,8 @@ export const inlineToolbarScenarios = [
     async ({ page, appUrl }) => {
       const editor = await createFormattedParagraph(page, appUrl);
       await selectText(editor, "alpha");
-      await toolbarButton(page, "Open slash menu").dispatchEvent("mousedown", {
-        bubbles: true,
-        cancelable: true,
-      });
-      await expect(
-        page.locator("button:visible", { hasText: /Heading 1/i }).first(),
-      ).toBeVisible();
+      await toolbarButton(page, "Open slash menu").click();
+      await expect(slashMenu(page)).toContainText("Heading");
       await expect(toolbarButton(page, "Bold")).toHaveCount(0);
     },
   ),

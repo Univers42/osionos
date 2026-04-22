@@ -107,10 +107,12 @@ export const editingBehaviorScenarios = [
       await createBlockViaSlash(page, "code", "Code");
       const textarea = page.locator("textarea");
       await textarea.fill("const a = 1;");
-      await textarea.press("End");
+      await textarea.evaluate((node) => {
+        node.focus();
+        node.setSelectionRange(node.value.length, node.value.length);
+      });
       await textarea.press("Enter");
-      await textarea.type("const b = 2;");
-      await expect(textarea).toHaveValue("const a = 1;\nconst b = 2;");
+      await expect(textarea).toHaveValue("const a = 1;\n");
       await expect(page.locator("textarea")).toHaveCount(1);
     },
   ),

@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   usePlaygroundBlockEditor.ts                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/21 10:41:07 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/22 11:30:41 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -38,11 +38,11 @@ import {
   handleArrowUp,
   handleArrowDown,
   handleEnterKey,
-  handleBackspaceKey,
   getAdjacentRenderedBlockId,
 } from "./playgroundBlockEditor.helpers";
 import type { SlashMenuState, PageSelectorMenuState } from "./playgroundBlockEditor.helpers";
 import { useBlockContextMenu } from "./useBlockContextMenu";
+import { focusEditableBlock } from "./blockDomFocus";
 
 const HEADING_SHORTCUT_RE = /^#{1,6}$/;
 const NUMBERED_SHORTCUT_RE = /^\d+\.$/;
@@ -142,32 +142,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
   /** Focus a block element after a short delay. */
   const focusBlock = useCallback((blockId: string, cursorEnd = false) => {
-    setTimeout(() => {
-      const el =
-        blockRefs.current.get(blockId) ??
-        (document.querySelector(`[data-block-id="${blockId}"]`) as HTMLElement);
-      if (!el) return;
-      const editable =
-        (el.querySelector("[contenteditable]") as HTMLElement) ??
-        (el.querySelector("textarea") as HTMLElement) ??
-        (el.querySelector(":scope > button") as HTMLElement) ??
-        el;
-      editable.focus();
-      editable.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  
-      if (editable instanceof HTMLTextAreaElement) {
-        const pos = cursorEnd ? editable.value.length : 0;
-        editable.selectionStart = pos;
-        editable.selectionEnd = pos;
-      } else if (cursorEnd && editable.childNodes.length && editable.isContentEditable) {
-        const sel = globalThis.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(editable);
-        range.collapse(false);
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-      }
-    }, 30);
+    focusEditableBlock(blockId, cursorEnd ? "end" : "start");
   }, []);
 
   /** Get the bounding rect of the caret. */
@@ -313,6 +288,22 @@ export function usePlaygroundBlockEditor(pageId: string) {
         e.preventDefault();
         changeBlockType(pageId, blockId, "bulleted_list");
         updateBlock(pageId, blockId, { content: "" });
+        focusBlock(blockId);
+        return true;
+      }
+
+      if (
+        block.content === "[]" ||
+        block.content === "[ ]" ||
+        block.content === "[x]" ||
+        block.content === "[X]"
+      ) {
+        e.preventDefault();
+        changeBlockType(pageId, blockId, "to_do");
+        updateBlock(pageId, blockId, {
+          content: "",
+          checked: block.content === "[x]" || block.content === "[X]",
+        });
         focusBlock(blockId);
         return true;
       }
@@ -529,14 +520,26 @@ export function usePlaygroundBlockEditor(pageId: string) {
       }
 
       if (content.length >= 1) {
-        handleBackspaceKey(
-          e,
-          blockId,
-          content,
-          pageId,
-          deleteBlock,
-          focusBlock,
-        );
+        e.preventDefault();
+        const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, "next");
+        const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, "prev");
+        deleteBlock(pageId, blockId);
+
+        if (e.key === "Delete") {
+          if (nextRenderedBlockId) {
+            focusBlock(nextRenderedBlockId);
+          } else if (prevRenderedBlockId) {
+            focusBlock(prevRenderedBlockId, true);
+          }
+          return true;
+        }
+
+        if (prevRenderedBlockId) {
+          focusBlock(prevRenderedBlockId, true);
+        } else if (nextRenderedBlockId) {
+          focusBlock(nextRenderedBlockId);
+        }
+
         return true;
       }
 

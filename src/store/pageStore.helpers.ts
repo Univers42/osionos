@@ -368,9 +368,7 @@ export function applyBlockMove(
 
       const [moved] = arr.splice(fromIdx, 1);
       const boundedTarget = Math.max(0, Math.min(targetIndex, arr.length));
-      const insertIdx =
-        fromIdx < targetIndex ? boundedTarget - 1 : boundedTarget;
-      arr.splice(Math.max(0, insertIdx), 0, moved);
+      arr.splice(boundedTarget, 0, moved);
       return true;
     };
 

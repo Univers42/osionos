@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   PlaygroundPageEditor.tsx                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/20 12:00:00 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/22 11:30:52 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -336,7 +336,16 @@ const BlockTree: React.FC<BlockTreeProps> = ({
   let numberedCounter = 0;
 
   return (
-    <div className={getNestedTreeClassName(parentBlockType, isRoot)}>
+    <div
+      data-testid={
+        isRoot
+          ? "block-tree-root"
+          : `${parentBlockType ?? "nested"}-children`
+      }
+      data-parent-block-type={parentBlockType ?? ""}
+      data-parent-block-id={parentBlockId ?? ""}
+      className={getNestedTreeClassName(parentBlockType, isRoot)}
+    >
       {blocks.map((block) => {
         const numberedIndex =
           block.type === "numbered_list" ? ++numberedCounter : 0;
@@ -512,7 +521,10 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 
   return (
     <div // NOSONAR - drag/drop wrapper cannot be a native interactive element due nested contentEditable controls
-      className={`group/block relative rounded-md transition-colors transition-opacity ${isHighlighted ? "bg-[var(--color-surface-secondary)]" : "hover:bg-[var(--color-surface-secondary)]"} ${isDragged ? "opacity-40" : ""}`}
+      data-testid="draggable-block"
+      data-draggable-block-id={block.id}
+      data-block-type={block.type}
+      className={`group/block relative rounded-md transition-colors transition-opacity hover:bg-[var(--color-surface-secondary)] focus-within:bg-[var(--color-surface-secondary)] ${isDragged ? "opacity-40" : ""}`}
       onContextMenu={(e) => onContextMenu(e, block.id)}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -521,6 +533,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
       <button
         type="button"
         draggable
+        data-testid="block-drag-handle"
         onClick={(e) => onContextMenu(e, block.id)}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -545,6 +558,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 
       {dropPosition && (
         <div
+          data-testid="block-drop-indicator"
           className={`absolute left-0 right-0 h-0.5 bg-[var(--color-accent)] rounded-full pointer-events-none z-10 ${dropPosition === "above" ? "-top-px" : "-bottom-px"}`}
         />
       )}
@@ -668,7 +682,12 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
   ]);
 
   return (
-    <div data-block-id={block.id} ref={refCb} className="-mx-1 rounded-md px-1">
+    <div
+      data-block-id={block.id}
+      data-block-type={block.type}
+      ref={refCb}
+      className="-mx-1 rounded-md px-1"
+    >
       <BlockEditor
         pageId={pageId}
         block={block}

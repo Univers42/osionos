@@ -47,6 +47,7 @@ export const focusManagementScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createBlockViaSlash(page, "toggle", "Toggle");
+      await getEditors(page).first().click();
       await page.keyboard.press("Enter");
       await expect(getEditors(page)).toHaveCount(2);
       await expect.poll(async () => editorHasFocus(getEditors(page).nth(1))).toBe(true);

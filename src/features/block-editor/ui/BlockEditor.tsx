@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   BlockEditor.tsx                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/21 10:27:02 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/22 11:30:46 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -142,23 +142,17 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         return;
       }
 
-      // Arrow navigation out of code block: jump to adjacent block
-      // when cursor is at the very start (ArrowUp) or very end (ArrowDown).
-      if (e.key === "ArrowUp" && e.currentTarget.selectionStart === 0) {
+      if (e.key === "Enter") {
         e.preventDefault();
-        const prevId = getAdjacentRenderedBlockId(block.id, "prev");
-        if (prevId) focusBlock(prevId, true);
-        return;
-      }
-
-      if (e.key === "ArrowDown") {
         const ta = e.currentTarget;
-        if (ta.selectionEnd === ta.value.length) {
-          e.preventDefault();
-          const nextId = getAdjacentRenderedBlockId(block.id, "next");
-          if (nextId) focusBlock(nextId);
-          return;
-        }
+        const { selectionStart, selectionEnd, value } = ta;
+        const next =
+          value.slice(0, selectionStart) + "\n" + value.slice(selectionEnd);
+        onChange(next);
+        requestAnimationFrame(() => {
+          ta.selectionStart = ta.selectionEnd = selectionStart + 1;
+        });
+        return;
       }
 
       onKeyDown(e);
