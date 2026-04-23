@@ -11,6 +11,8 @@
 /* ************************************************************************** */
 
 import type { Block, BlockType } from "@/entities/block";
+import { StoreApi } from "zustand";
+import { TemporalState } from "zundo";
 
 /** Access model for page visibility. */
 export type PageVisibility = "private" | "shared" | "public";
@@ -52,6 +54,13 @@ export interface ActivePage {
   kind: ActivePageKind;
   title?: string;
   icon?: string;
+}
+
+/** Subset of PageStore tracked in history */
+export interface PageStoreHistory {
+  pages: Record<string, PageEntry[]>;
+  activePage: ActivePage | null;
+  recents: ActivePage[];
 }
 
 export interface PageStore {
@@ -108,8 +117,7 @@ export interface PageStore {
   /** Force a manual snapshot of the current state into history (closes edit sessions) */
   forceHistorySnapshot: () => void;
   /** Access to zundo's temporal store for history management */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  temporal: any;
+  temporal: StoreApi<TemporalState<PageStoreHistory>>;
 
   updateBlock: (
     pageId: string,

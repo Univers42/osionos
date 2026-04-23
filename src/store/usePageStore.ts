@@ -66,10 +66,10 @@ export const usePageStore = create<PageStore>()(
   temporal(
     (set, get) => {
       // Helper for actions that should bypass debounce and trigger history instantly
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const structuralSet: typeof set = (partial: any, replace?: any) => {
+      const structuralSet: typeof set = (...args) => {
         isStructuralAction = true;
-        set(partial, replace);
+        // @ts-expect-error - Zustand set overloads are hard to spread correctly
+        set(...args);
       };
 
       return {
@@ -79,8 +79,6 @@ export const usePageStore = create<PageStore>()(
         loadingIds: new Set<string>(),
         seeded: false,
         showTrash: false,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        temporal: null as any, // Injected by zundo middleware
 
         seedOfflinePages: createSeedOfflinePages(structuralSet, get),
         seedOnlinePages: createSeedOnlinePages(structuralSet, get),
@@ -98,7 +96,8 @@ export const usePageStore = create<PageStore>()(
             clearTimeout(contentTimer);
             contentTimer = null;
           }
-          get().temporal?.getState().snapshot();
+          // Trigger a structural no-op to flush the history
+          structuralSet((s) => ({ ...s }));
         },
 
         openPage: (page) => {
@@ -348,7 +347,7 @@ export const usePageStore = create<PageStore>()(
             ? page
             : undefined;
         },
-      };
+      } as PageStore;
     },
     {
       limit: 50,
