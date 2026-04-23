@@ -216,13 +216,12 @@ export function createAddPage(set: SetFn, get: GetFn) {
   };
 }
 
-export function createDeletePage(set: SetFn, get: GetFn) {
+export function createArchivePage(set: SetFn, get: GetFn) {
   return async (pageId: string, workspaceId: string, jwt: string) => {
     const page = get().pageById(pageId);
     const context = getCurrentPageAccessContext();
     if (!page || !canDeletePage(page, context)) return;
 
-    // Mark page as archived (soft delete) instead of permanently deleting
     const archivedAt = new Date().toISOString();
 
     if (jwt && isMongoId(pageId)) {
@@ -233,7 +232,6 @@ export function createDeletePage(set: SetFn, get: GetFn) {
       }
     }
 
-    // Update state: mark page and descendants as archived
     set((s) => {
       const wsPages = s.pages[workspaceId] ?? [];
       const descendantIds = getAllDescendantIds(wsPages, pageId);
@@ -495,6 +493,10 @@ export function createRestorePage(set: SetFn, get: GetFn) {
 }
 
 export function createPermanentlyDeletePage(set: SetFn, get: GetFn) {
+  return createDeletePage(set, get);
+}
+
+export function createDeletePage(set: SetFn, get: GetFn) {
   return async (pageId: string, workspaceId: string, jwt: string) => {
     const page = get().pageById(pageId);
     const context = getCurrentPageAccessContext();
@@ -508,17 +510,24 @@ export function createPermanentlyDeletePage(set: SetFn, get: GetFn) {
       }
     }
 
-    // Update state: permanently remove from pages array
     set((s) => {
       const wsPages = s.pages[workspaceId] ?? [];
       const descendantIds = getAllDescendantIds(wsPages, pageId);
       const deletedIds = new Set([pageId, ...descendantIds]);
+      const recents = s.recents.filter((recent) => !deletedIds.has(recent.id));
+
+      if (recents.length !== s.recents.length) {
+        saveRecents(recents);
+      }
 
       return {
         pages: {
           ...s.pages,
           [workspaceId]: wsPages.filter((p) => !deletedIds.has(p._id)),
         },
+        activePage:
+          s.activePage && deletedIds.has(s.activePage.id) ? null : s.activePage,
+        recents,
       };
     });
     savePagesCache(get().pages);

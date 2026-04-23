@@ -60,7 +60,7 @@ export interface PageStore {
   recents: ActivePage[]; // last 10 opened
   loadingIds: Set<string>; // workspaceIds currently fetching
   seeded: boolean; // true once seed data is loaded
-  showTrash: boolean; // true when trash view is active
+  showTrash: boolean; // true when archived files view is active
 
   fetchPages: (workspaceId: string, jwt: string) => Promise<void>;
   /** Fetch full page data (with content) from API */
@@ -83,6 +83,11 @@ export interface PageStore {
     pageId: string,
     workspaceId: string,
   ) => Promise<string | null>;
+  archivePage: (
+    pageId: string,
+    workspaceId: string,
+    jwt: string,
+  ) => Promise<void>;
   movePage: (
     pageId: string,
     targetParentId: string | null,
@@ -139,7 +144,7 @@ export interface PageStore {
   pagesForWorkspace: (workspaceId: string) => PageEntry[];
   rootPages: (workspaceId: string) => PageEntry[];
   childPages: (parentId: string, workspaceId: string) => PageEntry[];
-  trashPages: (workspaceId: string) => PageEntry[];
+  archivedPages: (workspaceId: string) => PageEntry[];
   /** Get full page data including content (for rendering) */
   pageById: (pageId: string) => PageEntry | undefined;
 }

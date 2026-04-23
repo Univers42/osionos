@@ -22,7 +22,7 @@ import {
 import "./trashView.css";
 
 /**
- * Trash view component that displays all archived pages for the current user.
+ * Archived files view component that displays all archived pages for the current user.
  * Allows restoring or permanently deleting pages.
  */
 export const TrashView: React.FC = () => {
@@ -34,7 +34,7 @@ export const TrashView: React.FC = () => {
   // Get store and user data
   const pages = usePageStore((s) => s.pages);
   const restorePage = usePageStore((s) => s.restorePage);
-  const permanentlyDeletePage = usePageStore((s) => s.permanentlyDeletePage);
+  const deletePage = usePageStore((s) => s.deletePage);
   const jwt = useUserStore((s) => s.activeJwt());
   const session = useUserStore((s) => s.activeSession());
   const context = getCurrentPageAccessContext();
@@ -100,7 +100,7 @@ export const TrashView: React.FC = () => {
   ) => {
     if (!workspaceId) return;
     try {
-      await permanentlyDeletePage(pageId, workspaceId, jwt ?? "");
+      await deletePage(pageId, workspaceId, jwt ?? "");
       setConfirmDeleteId(null);
     } catch (err) {
       console.error("[TrashView] Failed to permanently delete page", err);
@@ -124,12 +124,12 @@ export const TrashView: React.FC = () => {
         <div className="flex items-center gap-3 mb-6">
           <Trash2 size={24} className="text-[var(--color-ink)]" />
           <h1 className="text-2xl font-semibold text-[var(--color-ink)]">
-            Trash
+            Archived files
           </h1>
         </div>
         <p className="text-sm text-[var(--color-ink-faint)]">
-          Pages you delete are moved here. They&apos;ll be permanently deleted
-          after 30 days.
+          Pages you archive are moved here. Restore them anytime, or delete
+          them permanently.
         </p>
       </div>
 
@@ -162,7 +162,7 @@ export const TrashView: React.FC = () => {
           <div className="trash-view-empty">
             <Trash2 size={48} className="text-[var(--color-ink-faint)] mb-3" />
             <p className="text-[var(--color-ink-faint)] text-center">
-              No pages in trash
+              No archived pages
             </p>
           </div>
         ) : (
@@ -179,7 +179,7 @@ export const TrashView: React.FC = () => {
                     </h3>
                   </div>
                   <p className="text-xs text-[var(--color-ink-faint)]">
-                    Moved to trash {formatDate(page.archivedAt)}
+                    Archived {formatDate(page.archivedAt)}
                   </p>
                 </div>
 

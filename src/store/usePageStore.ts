@@ -33,6 +33,7 @@ import {
   createFetchPages,
   createFetchPageContent,
   createAddPage,
+  createArchivePage,
   createDeletePage,
   createRestorePage,
   createPermanentlyDeletePage,
@@ -73,6 +74,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
   addPage: createAddPage(set, get),
   duplicatePage: createDuplicatePage(set, get),
   movePage: createMovePage(set, get),
+  archivePage: createArchivePage(set, get),
   deletePage: createDeletePage(set, get),
   restorePage: createRestorePage(set, get),
   permanentlyDeletePage: createPermanentlyDeletePage(set, get),
@@ -291,7 +293,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         canReadPage(p, getCurrentPageAccessContext()),
     ),
 
-  trashPages: (workspaceId) =>
+  archivedPages: (workspaceId) =>
     (get().pages[workspaceId] ?? []).filter(
       (p) => p.archivedAt && canReadPage(p, getCurrentPageAccessContext()),
     ),
