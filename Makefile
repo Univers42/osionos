@@ -32,13 +32,12 @@ help: ## Show available targets
 
 install: ## Install Node dependencies locally (requires Node 22+)
 	@echo -e "$(CYAN)Installing dependencies…$(RESET)"
-	npm install
+	npm ci
 	@echo -e "$(GREEN)✔ Dependencies installed$(RESET)"
 
 dev: update-submodules ## Start Vite dev server locally on :3001 (offline mode)
 	@echo -e "$(CYAN)Starting playground on http://localhost:3001 (offline mode)$(RESET)"
-	npm install @univers42/ui-collection@latest
-	npx vite --port 3001
+	npm run dev -- --port 3001
 
 dev-docker: ## Start full stack via Docker (Vite :3001 + MongoDB)
 	@echo -e "$(CYAN)Starting playground stack via Docker…$(RESET)"
@@ -109,15 +108,23 @@ ci: typecheck lint ## Run the fast quality gates locally
 
 test: ## Developer-only browser regression tests run locally with Playwright Test
 	@echo -e "$(CYAN)Running browser regression tests locally…$(RESET)"
-	npx playwright test
+	npm run test:e2e
 
 test-serial: ## Run browser regression tests locally with a single worker
 	@echo -e "$(CYAN)Running browser regression tests locally in serial mode…$(RESET)"
-	npx playwright test --workers=1
+	npm run test:e2e:serial
 
 test-smoke: ## Run the browser smoke/harness subset only
 	@echo -e "$(CYAN)Running browser smoke tests…$(RESET)"
-	npx playwright test tests/e2e/smoke
+	npm run test:e2e:smoke
+
+test-setup: ## Install Playwright browsers and validate local test env
+	@echo -e "$(CYAN)Preparing browser test environment…$(RESET)"
+	npm run test:setup
+
+test-doctor: ## Validate local browser test prerequisites
+	@echo -e "$(CYAN)Checking browser test environment…$(RESET)"
+	npm run test:doctor
 
 test-ci: ## Optional local CI-style browser command; not used by GitHub Actions
 	@echo -e "$(CYAN)Running browser regression tests in CI mode…$(RESET)"
@@ -188,4 +195,4 @@ update-submodules: ## Update git submodules (if any)
 .PHONY: help install dev dev-docker up stop down build typecheck \
         db-up db-shell db-reset re clean logs logs-vite logs-mongo \
         kill-ports status lint lint-fix audit ci sonar update-submodules \
-        test test-serial test-smoke test-ci test-docker
+        test test-serial test-smoke test-setup test-doctor test-ci test-docker

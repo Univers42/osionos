@@ -120,7 +120,7 @@ export const dragAndDropScenarios = [
       await createParagraphs(page, ["A", "B"]);
       const dataTransfer = await startSyntheticBlockDrag(page, 0);
       await dragOverBlock(page, 1, dataTransfer, "above");
-      await expect(blockWrapper(page, 1).locator("div.pointer-events-none")).toHaveCount(1);
+      await expect(blockWrapper(page, 1).getByTestId("block-drop-indicator")).toHaveCount(1);
       await endSyntheticBlockDrag(page, 0, dataTransfer);
     },
   ),

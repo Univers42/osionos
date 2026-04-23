@@ -31,7 +31,7 @@ import {
 import { defineScenario } from "../core/scenario.mjs";
 
 function todoCheckboxes(page) {
-  return page.locator("button.w-4.h-4");
+  return page.getByTestId("todo-checkbox");
 }
 
 async function createBulletedListItem(page, text) {
@@ -56,7 +56,7 @@ async function createNumberedListItem(page, text) {
 async function createTodoListItem(page, text) {
   const editor = await activateFirstEditor(page);
   await openSlashMenuFromEditor(editor, "[] ");
-  await expect(blockLocatorForEditor(editor).locator("button.w-4.h-4")).toHaveCount(1);
+  await expect(blockLocatorForEditor(editor).getByTestId("todo-checkbox")).toHaveCount(1);
   await waitForRenderStability(page);
   await clearAndType(editor, text);
   await waitForRenderStability(page);
@@ -151,9 +151,7 @@ export const editingBehaviorScenarios = [
       const editor = await createTodoListItem(page, "Task");
       await pressEnter(editor);
       await expect(getEditors(page)).toHaveCount(2);
-      await expect(
-        blockLocatorForEditor(getEditors(page).nth(1)).locator("button.w-4.h-4"),
-      ).toHaveCount(1);
+      await expect(blockLocatorForEditor(getEditors(page).nth(1)).getByTestId("todo-checkbox")).toHaveCount(1);
     },
   ),
   defineScenario(
@@ -166,7 +164,7 @@ export const editingBehaviorScenarios = [
       await pressEnter(editor);
       const emptyItem = getEditors(page).nth(1);
       await emptyItem.waitFor();
-      const emptyItemCheckbox = blockLocatorForEditor(emptyItem).locator("button.w-4.h-4");
+      const emptyItemCheckbox = blockLocatorForEditor(emptyItem).getByTestId("todo-checkbox");
       await expect(todoCheckboxes(page)).toHaveCount(2);
       await expect(emptyItemCheckbox).toHaveCount(1);
       await emptyItemCheckbox.click({ force: true });
@@ -174,9 +172,7 @@ export const editingBehaviorScenarios = [
       await pressEnter(emptyItem);
       await expect(todoCheckboxes(page)).toHaveCount(1);
       await expect(getEditors(page)).toHaveCount(2);
-      await expect(
-        blockLocatorForEditor(getEditors(page).nth(1)).locator("button.w-4.h-4"),
-      ).toHaveCount(0);
+      await expect(blockLocatorForEditor(getEditors(page).nth(1)).getByTestId("todo-checkbox")).toHaveCount(0);
     },
   ),
   defineScenario(
@@ -221,9 +217,9 @@ export const editingBehaviorScenarios = [
       await pressEnter(editor);
       const emptyItem = getEditors(page).nth(1);
       await emptyItem.waitFor();
-      await expect(blockLocatorForEditor(emptyItem).locator("button.w-4.h-4")).toHaveCount(1);
+      await expect(blockLocatorForEditor(emptyItem).getByTestId("todo-checkbox")).toHaveCount(1);
       await pressEnter(emptyItem);
-      await expect(blockLocatorForEditor(getEditors(page).nth(1)).locator("button.w-4.h-4")).toHaveCount(0);
+      await expect(blockLocatorForEditor(getEditors(page).nth(1)).getByTestId("todo-checkbox")).toHaveCount(0);
       await expect(getEditors(page)).toHaveCount(2);
     },
   ),

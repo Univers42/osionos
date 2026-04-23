@@ -73,7 +73,8 @@ export const persistenceAndQualityScenarios = [
     "edits on an offline seeded page survive refresh and remain editable afterwards",
     async ({ page, appUrl }) => {
       const token = `persist-${Date.now().toString(36)}`;
-      await page.addInitScript(() => {
+      await page.goto(appUrl, { waitUntil: "networkidle" });
+      await page.evaluate(() => {
         localStorage.setItem(
           "pg:pages",
           JSON.stringify({
@@ -101,7 +102,6 @@ export const persistenceAndQualityScenarios = [
         );
         localStorage.setItem("pg:recents", "[]");
       });
-      await page.route("**/api/**", (route) => route.abort());
       await page.goto(appUrl, { waitUntil: "networkidle" });
       await openPageFromSidebar(page, "Getting Started");
       const editor = await activateFirstEditor(page);
@@ -126,7 +126,6 @@ export const persistenceAndQualityScenarios = [
       const title = `Local persistence ${Date.now().toString(36)}`;
       const body = `Body ${Date.now().toString(36)}`;
 
-      await page.route("**/api/**", (route) => route.abort());
       await page.goto(appUrl, { waitUntil: "networkidle" });
       await waitForSidebarReady(page);
       await sidebarNewPageButton(page).click();

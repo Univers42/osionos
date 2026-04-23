@@ -90,6 +90,9 @@ Utility layer that converts scenario objects into native Playwright tests and sp
 
 Primary commands:
 
+- `npm ci`
+- `npm run test:setup`
+- `npm run test:doctor`
 - `npm run test:e2e`
 - `npm run test:e2e:serial`
 - `npm run test:e2e:smoke`
@@ -99,6 +102,8 @@ Make targets:
 - `make test`
 - `make test-serial`
 - `make test-smoke`
+- `make test-setup`
+- `make test-doctor`
 - `make test-ci` (optional local CI-style run)
 
 Quality gates stay separate:
@@ -109,6 +114,48 @@ Quality gates stay separate:
 Environment preparation stays separate:
 
 - `npm run test:setup`
+
+## Reproducible Local Flow
+
+Official local browser flow is:
+
+1. `nvm use` (repo pins Node 22 via `.nvmrc`)
+2. `npm ci`
+3. `npm run test:setup`
+4. `npm run test:e2e`
+
+What `test:setup` does:
+
+- installs Playwright Chromium for repo-local Playwright version
+- runs `npm run test:doctor`
+- fails early if Node/deps/browsers/port are not ready
+
+Use `npm run test:doctor` by itself when a teammate wants a fast preflight check before running the suite.
+
+## Environment Invariants
+
+Browser E2E now assumes these invariants on every machine:
+
+- Playwright starts its own Vite server on `http://127.0.0.1:3004`
+- suite does **not** reuse an already-running local dev server unless `PLAYWRIGHT_REUSE_EXISTING_SERVER=1` is set explicitly
+- Playwright server forces `VITE_API_URL=""`, so browser scenarios run in offline/seed mode instead of depending on whoever happens to have an API on `:4000`
+- locale/timezone/color scheme are fixed in Playwright config to reduce host-specific rendering variance
+
+This means the official suite should not depend on:
+
+- your manually started `make dev` session
+- a local API already running on `:4000`
+- ad-hoc `.env` values
+- leftover browser state from another developer workflow
+
+## Setup Notes
+
+Important local setup rules:
+
+- official package manager is `npm`
+- `npm ci` is preferred over `npm install` for deterministic local dependency trees
+- `make dev` no longer installs `@univers42/ui-collection@latest` dynamically
+- if Chromium system dependencies are missing on Linux, run `npx playwright install --with-deps chromium` or use `make test-docker`
 
 ## CI Execution
 

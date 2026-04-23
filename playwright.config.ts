@@ -13,8 +13,10 @@ function parsePositiveInt(value: string | undefined): number | undefined {
   return parsed;
 }
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3001";
+const testPort = parsePositiveInt(process.env.PLAYWRIGHT_PORT) ?? 3004;
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${testPort}`;
 const configuredWorkers = parsePositiveInt(process.env.TEST_WORKERS);
+const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -35,14 +37,21 @@ export default defineConfig({
   use: {
     baseURL,
     viewport: { width: 1440, height: 960 },
+    locale: "en-US",
+    timezoneId: "UTC",
+    colorScheme: "light",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
   webServer: {
-    command: "npm run dev -- --host 127.0.0.1 --port 3001 --strictPort",
+    command: `npm run dev -- --host 127.0.0.1 --port ${testPort} --strictPort`,
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer,
+    env: {
+      ...process.env,
+      VITE_API_URL: "",
+    },
     stdout: "pipe",
     stderr: "pipe",
     timeout: 60_000,

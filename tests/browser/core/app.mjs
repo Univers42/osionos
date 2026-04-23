@@ -584,6 +584,7 @@ export async function clickOutside(page) {
 
 async function resolveVisibleAssetPicker(page) {
   const candidates = [
+    page.getByTestId("media-asset-picker"),
     page.getByTestId("media-block-picker"),
     page.getByTestId("page-cover-picker"),
     page.getByTestId("emoji-picker"),
