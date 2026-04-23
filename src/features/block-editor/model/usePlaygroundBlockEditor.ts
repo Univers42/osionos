@@ -722,18 +722,21 @@ export function usePlaygroundBlockEditor(pageId: string) {
     return useDatabaseStore.getState().createInlineDatabase(name);
   }, []);
 
-  const createPageInPrivateWorkspace = useCallback(async () => {
-    const session = useUserStore.getState().activeSession();
-    const privateWorkspaceId = session?.privateWorkspaces[0]?._id;
-    if (!privateWorkspaceId) return null;
+  const createPageInPrivateWorkspace = useCallback(
+    async (title = "Untitled") => {
+      const session = useUserStore.getState().activeSession();
+      const privateWorkspaceId = session?.privateWorkspaces[0]?._id;
+      if (!privateWorkspaceId) return null;
 
-    const jwt = session?.accessToken ?? "";
-    const page = await usePageStore
-      .getState()
-      .addPage(privateWorkspaceId, "Untitled", jwt);
+      const jwt = session?.accessToken ?? "";
+      const page = await usePageStore
+        .getState()
+        .addPage(privateWorkspaceId, title, jwt);
 
-    return page ? { id: page._id } : null;
-  }, []);
+      return page ? { id: page._id } : null;
+    },
+    [],
+  );
 
   const page = usePageStore((s) => s.pageById(pageId));
   const content = useMemo(() => page?.content ?? [], [page?.content]);
@@ -791,6 +794,26 @@ export function usePlaygroundBlockEditor(pageId: string) {
     },
     [pageSelector, pageId, updateBlock],
   );
+
+  const handlePageSelectorCreate = useCallback(async () => {
+    if (!pageSelector) return;
+
+    const createdPage = await createPageInPrivateWorkspace(
+      pageSelector.filter.trim() || "Untitled",
+    );
+
+    if (!createdPage) {
+      setPageSelector(null);
+      return;
+    }
+
+    handlePageSelectorSelect(createdPage.id);
+  }, [
+    pageSelector,
+    createPageInPrivateWorkspace,
+    handlePageSelectorSelect,
+    setPageSelector,
+  ]);
 
   /** Add a new blank paragraph at the end. */
   const handleAddBlock = useCallback(
@@ -853,6 +876,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
     handleSlashMediaSelect,
     handleSlashCreatePageSelect,
     handlePageSelectorSelect,
+    handlePageSelectorCreate,
     handleAddBlock,
     handleInitBlock,
     registerBlockRef,

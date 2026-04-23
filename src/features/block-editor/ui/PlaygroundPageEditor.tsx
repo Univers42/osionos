@@ -163,6 +163,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     handleSlashMediaSelect,
     handleSlashCreatePageSelect,
     handlePageSelectorSelect,
+    handlePageSelectorCreate,
     handleAddBlock,
     handleInitBlock,
     registerBlockRef,
@@ -273,6 +274,9 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
           position={pageSelector.position}
           filter={pageSelector.filter}
           onSelect={handlePageSelectorSelect}
+          onCreate={() => {
+            void handlePageSelectorCreate();
+          }}
           onClose={() => setPageSelector(null)}
         />
       )}
