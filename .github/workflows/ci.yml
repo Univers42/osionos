@@ -56,15 +56,3 @@ jobs:
         working-directory: ${{ matrix.working-directory }}
         run: ${{ matrix.lint }}
 
-  ci-required:
-    name: ci-required
-    runs-on: ubuntu-latest
-    needs: [quality]
-    if: ${{ always() }}
-    steps:
-      - name: Enforce quality success
-        run: |
-          if [ "${{ needs.quality.result }}" != "success" ]; then
-            echo "Quality checks failed: ${{ needs.quality.result }}"
-            exit 1
-          fi

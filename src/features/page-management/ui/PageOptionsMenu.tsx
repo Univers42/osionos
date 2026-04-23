@@ -9,7 +9,11 @@ import { createPortal } from "react-dom";
 import { MoreHorizontal, Trash, Copy, ArrowRight } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
-import { canDeletePage, canDuplicatePage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
+import {
+  canDeletePage,
+  canDuplicatePage,
+  getCurrentPageAccessContext,
+} from "@/shared/lib/auth/pageAccess";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import { MovePageModal } from "./MovePageModal";
 import { getAllDescendantIds } from "@/store/pageStore.helpers";
@@ -112,13 +116,17 @@ export const PageOptionsMenu: React.FC<Props> = ({
         ),
       );
 
-      const spaceBelow = viewportHeight - triggerRect.bottom - MENU_GAP - MENU_MARGIN;
+      const spaceBelow =
+        viewportHeight - triggerRect.bottom - MENU_GAP - MENU_MARGIN;
       const spaceAbove = triggerRect.top - MENU_GAP - MENU_MARGIN;
       const openAbove = spaceBelow < menuRect.height && spaceAbove > spaceBelow;
 
       const top = openAbove
         ? Math.max(MENU_MARGIN, triggerRect.top - menuRect.height - MENU_GAP)
-        : Math.min(triggerRect.bottom + MENU_GAP, viewportHeight - menuRect.height - MENU_MARGIN);
+        : Math.min(
+            triggerRect.bottom + MENU_GAP,
+            viewportHeight - menuRect.height - MENU_MARGIN,
+          );
 
       setMenuPosition({ top, left });
     };
@@ -150,7 +158,11 @@ export const PageOptionsMenu: React.FC<Props> = ({
     e.stopPropagation();
     setIsMenuOpen(false);
     if (!workspaceId) return;
-    if (!currentPage || !canDuplicatePage(currentPage, getCurrentPageAccessContext())) return;
+    if (
+      !currentPage ||
+      !canDuplicatePage(currentPage, getCurrentPageAccessContext())
+    )
+      return;
 
     try {
       await duplicatePage(pageId, workspaceId);
@@ -168,7 +180,10 @@ export const PageOptionsMenu: React.FC<Props> = ({
       return;
     }
 
-    if (!currentPage || !canDeletePage(currentPage, getCurrentPageAccessContext())) {
+    if (
+      !currentPage ||
+      !canDeletePage(currentPage, getCurrentPageAccessContext())
+    ) {
       setIsModalOpen(false);
       return;
     }
@@ -209,66 +224,72 @@ export const PageOptionsMenu: React.FC<Props> = ({
         <MoreHorizontal size={13} />
       </button>
 
-      {isMenuOpen && portalTarget && createPortal(
-        <div
-          ref={menuRef}
-          className={styles.dropdown}
-          style={{
-            top: menuPosition?.top ?? 0,
-            left: menuPosition?.left ?? 0,
-            visibility: menuPosition ? "visible" : "hidden",
-          }}
-        >
-          <button
-            type="button"
-            className={styles.menuItem}
-            onClick={handleDuplicateClick}
-          >
-            <Copy size={14} className="shrink-0" />
-            <span>Duplicate</span>
-          </button>
-
-          <button
-            type="button"
-            className={styles.menuItem}
-            onClick={handleMoveClick}
-          >
-            <ArrowRight size={14} className="shrink-0" />
-            <span>Move to</span>
-          </button>
-
-          <button
-            type="button"
-            className={[styles.menuItem, styles.danger].join(" ")}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDeleteClick(e);
+      {isMenuOpen &&
+        portalTarget &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className={styles.dropdown}
+            style={{
+              top: menuPosition?.top ?? 0,
+              left: menuPosition?.left ?? 0,
+              visibility: menuPosition ? "visible" : "hidden",
             }}
           >
-            <Trash size={14} className="shrink-0" />
-            <span>Delete</span>
-          </button>
-        </div>,
-        portalTarget,
-      )}
+            <button
+              type="button"
+              className={styles.menuItem}
+              onClick={handleDuplicateClick}
+            >
+              <Copy size={14} className="shrink-0" />
+              <span>Duplicate</span>
+            </button>
 
-      {isModalOpen && portalTarget && createPortal(
-        <ConfirmDeleteModal
-          title={pageTitle}
-          subPageCount={subPageCount}
-          onConfirm={handleConfirmDelete}
-          onCancel={() => setIsModalOpen(false)}
-        />,
-        portalTarget
-      )}
+            <button
+              type="button"
+              className={styles.menuItem}
+              onClick={handleMoveClick}
+            >
+              <ArrowRight size={14} className="shrink-0" />
+              <span>Move to</span>
+            </button>
 
-      {isMoveModalOpen && portalTarget && createPortal(
-        <MovePageModal
-          sourcePageId={pageId}
-          onClose={() => setIsMoveModalOpen(false)}
-        />,
-        portalTarget
-      )}
+            <button
+              type="button"
+              className={[styles.menuItem, styles.danger].join(" ")}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteClick(e);
+              }}
+            >
+              <Trash size={14} className="shrink-0" />
+              <span>Move to Trash</span>
+            </button>
+          </div>,
+          portalTarget,
+        )}
+
+      {isModalOpen &&
+        portalTarget &&
+        createPortal(
+          <ConfirmDeleteModal
+            title={pageTitle}
+            subPageCount={subPageCount}
+            onConfirm={handleConfirmDelete}
+            onCancel={() => setIsModalOpen(false)}
+          />,
+          portalTarget,
+        )}
+
+      {isMoveModalOpen &&
+        portalTarget &&
+        createPortal(
+          <MovePageModal
+            sourcePageId={pageId}
+            onClose={() => setIsMoveModalOpen(false)}
+          />,
+          portalTarget,
+        )}
     </div>
   );
 };

@@ -28,7 +28,7 @@ import {
   persistThemeMode,
   readStoredThemeMode,
   type ThemeMode,
-} from '@/shared/config/theme';
+} from "@/shared/config/theme";
 
 function nextThemeMode(mode: ThemeMode): ThemeMode {
   if (mode === "light") return "dark";
@@ -50,6 +50,7 @@ function themeIcon(mode: ThemeMode): React.ReactNode {
 
 interface SidebarFooterProps {
   onOpenSettings?: () => void;
+  onOpenTrash?: () => void;
   showInviteCTA: boolean;
   onDismissInvite: () => void;
 }
@@ -57,6 +58,7 @@ interface SidebarFooterProps {
 /** Bottom section: Settings / Marketplace / Trash + optional Invite CTA. */
 export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   onOpenSettings,
+  onOpenTrash,
   showInviteCTA,
   onDismissInvite,
 }) => {
@@ -103,9 +105,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
         <SidebarNavItem
           icon={<Trash2 size={16} />}
           label="Trash"
-          onClick={() => {
-            /* placeholder */
-          }}
+          onClick={() => onOpenTrash?.()}
         />
         <SidebarNavItem
           icon={themeIcon(themeMode)}

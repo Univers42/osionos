@@ -108,6 +108,12 @@ Format: `[Priority] Description → Action → Expected result`
 - [P0] **Arrow through code block** → Paragraph above, code block with content, paragraph below. ArrowDown from end of top paragraph → Cursor enters code block textarea at the start. ArrowDown navigates lines within the textarea. ArrowDown at last line of textarea → Focus moves to bottom paragraph.
 - [P0] **ArrowUp exits code block** → Cursor at the first character of code textarea, press ArrowUp → Focus moves to previous block.
 - [P1] **Arrow through database block** → ArrowDown from paragraph above a database → Focus skips over database to the next block below it.
+- [P0] Arrow through table block → Paragraph above, table block, paragraph below. ArrowDown from end of top paragraph → Focus enters first cell of table. ArrowDown from table wrapper → Focus moves to bottom paragraph.
+
+### Navigation does not interfere with block-internal editing
+
+- [P0] Typing in table cells preserves cursor → Click a table cell, type multiple characters → All characters appear in the cell without cursor loss. No need to re-click between keystrokes.
+- [P1] Typing in code block preserves cursor → Click inside code textarea, type multiple lines → Characters and newlines appear normally without jumping.
 
 ### Smooth scrolling
 
@@ -372,6 +378,13 @@ These tests verify that the registry (`blockCategories.ts`) is correctly wired:
 - [P0] **Focus enters textarea when navigating to code block** → ArrowDown into a code block → Cursor appears inside the textarea and is editable.
 - [P0] **Focus enters button when navigating to divider** → ArrowDown into a divider → Divider receives focus (visual indicator shows).
 - [P1] **Focus moves to child after toggle expand** → Expand empty toggle → Cursor in the new child paragraph.
+
+## 17. Table Block
+
+- [P0] Table cell editing works → Create a table, click a cell, type text → Text appears character by character with cursor staying in the cell.
+- [P1] Table add row/column → Click "+ Row" or "+ Column" below the table → New row or column appears.
+- [P1] Table delete row/column → Right-click a cell → Context menu with "Delete row" and "Delete column" options. Selecting one removes the row/column.
+- [P1] Table minimum size enforced → Table with 1 row and 1 column → "Delete row" and "Delete column" are disabled.
 
 ### Persistence
 

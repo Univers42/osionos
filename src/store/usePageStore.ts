@@ -34,6 +34,8 @@ import {
   createFetchPageContent,
   createAddPage,
   createDeletePage,
+  createRestorePage,
+  createPermanentlyDeletePage,
   createDuplicatePage,
   createMovePage,
 } from "./pageStore.actions";
@@ -44,7 +46,11 @@ import {
   registerPageLookup,
 } from "./pageStore.persistence";
 import type { PageStore } from "@/entities/page";
-import { canEditPage, canReadPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
+import {
+  canEditPage,
+  canReadPage,
+  getCurrentPageAccessContext,
+} from "@/shared/lib/auth/pageAccess";
 
 // Re-export types so existing imports from this module still work
 export type { PageEntry, ActivePageKind, ActivePage } from "@/entities/page";
@@ -58,6 +64,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
   recents: loadRecents(),
   loadingIds: new Set<string>(),
   seeded: false,
+  showTrash: false,
 
   seedOfflinePages: createSeedOfflinePages(set, get),
   seedOnlinePages: createSeedOnlinePages(set, get),
@@ -67,12 +74,17 @@ export const usePageStore = create<PageStore>((set, get) => ({
   duplicatePage: createDuplicatePage(set, get),
   movePage: createMovePage(set, get),
   deletePage: createDeletePage(set, get),
+  restorePage: createRestorePage(set, get),
+  permanentlyDeletePage: createPermanentlyDeletePage(set, get),
 
   openPage: (page) => {
     const context = getCurrentPageAccessContext();
     const currentPage = get().pageById(page.id);
-    if (page.kind === "page" && (!currentPage || !canReadPage(currentPage, context))) {
-      set({ activePage: null });
+    if (
+      page.kind === "page" &&
+      (!currentPage || !canReadPage(currentPage, context))
+    ) {
+      set({ activePage: null, showTrash: false });
       return;
     }
 
@@ -82,7 +94,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         ...s.recents.filter((r) => r.id !== page.id),
       ].slice(0, 10);
       saveRecents(recents);
-      return { activePage: page, recents };
+      return { activePage: page, recents, showTrash: false };
     });
     const jwt = getActiveJwt();
     if (jwt && page.kind === "page") {
@@ -97,6 +109,10 @@ export const usePageStore = create<PageStore>((set, get) => ({
       savePagesCache(pages);
       return { pages };
     });
+  },
+
+  setShowTrash: (show) => {
+    set({ showTrash: show });
   },
 
   updateBlock: (pageId, blockId, updates) => {
@@ -261,12 +277,23 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   rootPages: (workspaceId) =>
     (get().pages[workspaceId] ?? []).filter(
-      (p) => !p.parentPageId && !p.archivedAt && canReadPage(p, getCurrentPageAccessContext()),
+      (p) =>
+        !p.parentPageId &&
+        !p.archivedAt &&
+        canReadPage(p, getCurrentPageAccessContext()),
     ),
 
   childPages: (parentId, workspaceId) =>
     (get().pages[workspaceId] ?? []).filter(
-      (p) => p.parentPageId === parentId && !p.archivedAt && canReadPage(p, getCurrentPageAccessContext()),
+      (p) =>
+        p.parentPageId === parentId &&
+        !p.archivedAt &&
+        canReadPage(p, getCurrentPageAccessContext()),
+    ),
+
+  trashPages: (workspaceId) =>
+    (get().pages[workspaceId] ?? []).filter(
+      (p) => p.archivedAt && canReadPage(p, getCurrentPageAccessContext()),
     ),
 
   pageById: (pageId) => {

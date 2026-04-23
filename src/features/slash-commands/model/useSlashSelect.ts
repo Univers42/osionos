@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   useSlashSelect.ts                                  :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:14 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:04:15 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/22 11:30:02 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,6 +20,7 @@ import {
   findBlockInTree,
 } from "@/entities/block";
 import type { SlashMenuState } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
+import { focusEditableBlock } from "@/features/block-editor/model/blockDomFocus";
 
 interface UseSlashSelectOptions {
   pageId: string;
@@ -40,22 +41,8 @@ function stripSlashQuery(content: string): string {
 /**
  * Places the cursor at the start or end of a block's editable content.
  */
-export function repositionCursor(blockId: string, _content: string, atEnd = true) {
-  setTimeout(() => {
-    const el = document.querySelector(
-      `[data-block-id="${blockId}"] [contenteditable]`,
-    ) as HTMLElement;
-    if (!el) return;
-    el.focus();
-    const sel = globalThis.getSelection();
-    if (sel) {
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(!atEnd);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    }
-  }, 30);
+export function repositionCursor(blockId: string, _content: string) {
+  focusEditableBlock(blockId, "start");
 }
 
 export function useSlashSelect({

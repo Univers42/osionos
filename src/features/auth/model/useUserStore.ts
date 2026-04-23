@@ -34,44 +34,81 @@ export const useUserStore = create<UserStore>((set, get) => ({
     _initInProgress = true;
     set({ loading: true, error: null });
 
-    const updatedPersonas = [...get().personas];
-    const sessions: Record<string, UserSession> = {};
-    let firstUserId = '';
+    try {
+      const updatedPersonas = [...get().personas];
+      const sessions: Record<string, UserSession> = {};
+      let firstUserId = '';
 
-    // Try to log in the first persona as a connectivity check.
-    // If it fails, skip all remaining logins and go to offline mode.
-    const firstLogin = await loginPersona(INITIAL_PERSONAS[0]);
+      const applyOfflineFallback = () => {
+        console.info('[playground] API unreachable — running in offline mode with seed data');
+        const sharedWs: Workspace = {
+          _id: 'mock-ws-shared-team',
+          name: 'Team Workspace',
+          slug: 'team',
+          ownerId: 'mock-user-0',
+        };
 
-    if (firstLogin) {
-      // API is reachable — process first result and login the rest
-      const { userId, accessToken, refreshToken } = firstLogin;
-      updatedPersonas[0] = { ...updatedPersonas[0], id: userId };
-      const workspaces = await fetchWorkspaces(accessToken);
-      const { privateWorkspaces, sharedWorkspaces } = partition(workspaces, userId);
-      sessions[userId] = { userId, accessToken, refreshToken, privateWorkspaces, sharedWorkspaces };
-      firstUserId = userId;
+        for (let i = 0; i < updatedPersonas.length; i++) {
+          const mockId = `mock-user-${i}`;
+          updatedPersonas[i] = { ...updatedPersonas[i], id: mockId };
+          sessions[mockId] = {
+            userId: mockId,
+            accessToken: '',
+            refreshToken: '',
+            privateWorkspaces: [{
+              _id: `mock-ws-private-${i}`,
+              name: `Notion de ${updatedPersonas[i].name.split(' ')[0].toLowerCase()}`,
+              slug: updatedPersonas[i].name.toLowerCase().replaceAll(/\s+/g, '-'),
+              ownerId: mockId,
+            }],
+            sharedWorkspaces: [sharedWs],
+          };
+          if (!firstUserId) firstUserId = mockId;
+        }
+      };
 
-      // Login remaining personas
-      const remainingResults = await Promise.all(INITIAL_PERSONAS.slice(1).map(loginPersona));
-      for (let i = 0; i < remainingResults.length; i++) {
-        const lr = remainingResults[i];
-        if (!lr) continue;
-        const idx = i + 1; // offset since we already did index 0
-        updatedPersonas[idx] = { ...updatedPersonas[idx], id: lr.userId };
-        const ws = await fetchWorkspaces(lr.accessToken);
-        const parts = partition(ws, lr.userId);
-        sessions[lr.userId] = { userId: lr.userId, accessToken: lr.accessToken, refreshToken: lr.refreshToken, privateWorkspaces: parts.privateWorkspaces, sharedWorkspaces: parts.sharedWorkspaces };
+      // Try to log in the first persona as a connectivity check.
+      // If it fails, skip all remaining logins and go to offline mode.
+      const firstLogin = await loginPersona(INITIAL_PERSONAS[0]);
+
+      if (firstLogin) {
+        // API is reachable — process first result and login the rest
+        const { userId, accessToken, refreshToken } = firstLogin;
+        updatedPersonas[0] = { ...updatedPersonas[0], id: userId };
+        const workspaces = await fetchWorkspaces(accessToken);
+        const { privateWorkspaces, sharedWorkspaces } = partition(workspaces, userId);
+        sessions[userId] = { userId, accessToken, refreshToken, privateWorkspaces, sharedWorkspaces };
+        firstUserId = userId;
+
+        // Login remaining personas
+        const remainingResults = await Promise.all(INITIAL_PERSONAS.slice(1).map(loginPersona));
+        for (let i = 0; i < remainingResults.length; i++) {
+          const lr = remainingResults[i];
+          if (!lr) continue;
+          const idx = i + 1; // offset since we already did index 0
+          updatedPersonas[idx] = { ...updatedPersonas[idx], id: lr.userId };
+          const ws = await fetchWorkspaces(lr.accessToken);
+          const parts = partition(ws, lr.userId);
+          sessions[lr.userId] = { userId: lr.userId, accessToken: lr.accessToken, refreshToken: lr.refreshToken, privateWorkspaces: parts.privateWorkspaces, sharedWorkspaces: parts.sharedWorkspaces };
+        }
       }
-    }
 
-    if (Object.keys(sessions).length === 0) {
-      console.info('[playground] API unreachable — running in offline mode with seed data');
+      if (Object.keys(sessions).length === 0) {
+        applyOfflineFallback();
+      }
+
+      set({ personas: updatedPersonas, sessions, activeUserId: firstUserId, initialized: true, loading: false });
+    } catch {
+      const updatedPersonas = [...get().personas];
+      const sessions: Record<string, UserSession> = {};
+      let firstUserId = '';
       const sharedWs: Workspace = {
         _id: 'mock-ws-shared-team',
         name: 'Team Workspace',
         slug: 'team',
         ownerId: 'mock-user-0',
       };
+
       for (let i = 0; i < updatedPersonas.length; i++) {
         const mockId = `mock-user-${i}`;
         updatedPersonas[i] = { ...updatedPersonas[i], id: mockId };
@@ -89,10 +126,11 @@ export const useUserStore = create<UserStore>((set, get) => ({
         };
         if (!firstUserId) firstUserId = mockId;
       }
-    }
 
-    set({ personas: updatedPersonas, sessions, activeUserId: firstUserId, initialized: true, loading: false });
-    _initInProgress = false;
+      set({ personas: updatedPersonas, sessions, activeUserId: firstUserId, initialized: true, loading: false, error: null });
+    } finally {
+      _initInProgress = false;
+    }
   },
 
   switchUser: (userId: string) => set({ activeUserId: userId }),
