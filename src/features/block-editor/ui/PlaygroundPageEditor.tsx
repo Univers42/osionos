@@ -161,6 +161,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     handleSlashSelect,
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
+    handleSlashCreatePageSelect,
     handlePageSelectorSelect,
     handleAddBlock,
     handleInitBlock,
@@ -252,6 +253,11 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
               return;
             }
 
+            if (item.kind === "create-page") {
+              void handleSlashCreatePageSelect(blocks);
+              return;
+            }
+
             handleSlashSelect(item.blockType, blocks, item.calloutIcon);
           }}
           onMediaSelect={(kind, value) =>
@@ -338,9 +344,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
   return (
     <div
       data-testid={
-        isRoot
-          ? "block-tree-root"
-          : `${parentBlockType ?? "nested"}-children`
+        isRoot ? "block-tree-root" : `${parentBlockType ?? "nested"}-children`
       }
       data-parent-block-type={parentBlockType ?? ""}
       data-parent-block-id={parentBlockId ?? ""}

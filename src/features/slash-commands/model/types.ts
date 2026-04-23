@@ -34,6 +34,10 @@ export interface SlashTurnIntoCommand extends SlashCommandBase {
   placeholderText: string;
 }
 
+export interface SlashCreatePageCommand extends SlashCommandBase {
+  kind: "create-page";
+}
+
 export interface SlashMediaPickerCommand extends SlashCommandBase {
   kind: "media-picker";
   mediaKind: MediaBlockType;
@@ -42,6 +46,7 @@ export interface SlashMediaPickerCommand extends SlashCommandBase {
 export type SlashCommand =
   | SlashBlockCommand
   | SlashTurnIntoCommand
+  | SlashCreatePageCommand
   | SlashMediaPickerCommand;
 
 export interface SlashCommandSection {
