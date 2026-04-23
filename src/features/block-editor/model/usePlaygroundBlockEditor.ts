@@ -91,6 +91,18 @@ function isEffectivelyEmptyForDeletion(text: string): boolean {
   return text.replaceAll("\u200B", "").trim().length === 0;
 }
 
+function normalizeCreatedPageTitleFromLinkQuery(query: string): string {
+  const trimmed = query.trim();
+  if (!trimmed) return "Untitled";
+
+  if (!trimmed.endsWith("]]")) {
+    return trimmed;
+  }
+
+  const withoutClosingBrackets = trimmed.slice(0, -2).trimEnd();
+  return withoutClosingBrackets || "Untitled";
+}
+
 function toBlockUpdates(block: Block): Partial<Block> {
   return {
     content: block.content,
@@ -798,9 +810,11 @@ export function usePlaygroundBlockEditor(pageId: string) {
   const handlePageSelectorCreate = useCallback(async () => {
     if (!pageSelector) return;
 
-    const createdPage = await createPageInPrivateWorkspace(
-      pageSelector.filter.trim() || "Untitled",
+    const createdPageTitle = normalizeCreatedPageTitleFromLinkQuery(
+      pageSelector.filter,
     );
+
+    const createdPage = await createPageInPrivateWorkspace(createdPageTitle);
 
     if (!createdPage) {
       setPageSelector(null);
