@@ -105,6 +105,11 @@ export interface PageStore {
   ) => Promise<void>;
   clearWorkspace: (workspaceId: string) => void;
   setShowTrash: (show: boolean) => void;
+  /** Force a manual snapshot of the current state into history (closes edit sessions) */
+  forceHistorySnapshot: () => void;
+  /** Access to zundo's temporal store for history management */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  temporal: any;
 
   updateBlock: (
     pageId: string,
