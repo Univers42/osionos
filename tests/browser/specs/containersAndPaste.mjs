@@ -32,7 +32,7 @@ import { defineScenario } from "../core/scenario.mjs";
 
 function toggleChevron(page) {
   return page
-    .locator('[data-block-id]')
+    .locator("[data-block-id]")
     .first()
     .locator('button:not([title="Drag to reorder"])')
     .first();
@@ -159,7 +159,9 @@ export const containerAndPasteScenarios = [
       await summary.press("Backspace");
       await expect(getEditors(page)).toHaveCount(1);
       await expect(getEditors(page).first()).toHaveText("Promoted child");
-      expect(await editorLeft(getEditors(page).first())).toBeLessThan(childLeft - 8);
+      expect(await editorLeft(getEditors(page).first())).toBeLessThan(
+        childLeft - 8,
+      );
     },
   ),
   defineScenario(
@@ -174,9 +176,9 @@ export const containerAndPasteScenarios = [
       await pressEnter(callout);
       const child = getEditors(page).nth(1);
       await clearAndType(child, "Nested inside callout");
-      await expect(blockLocatorForEditor(callout).locator("[data-block-id]")).toContainText([
-        "Nested inside callout",
-      ]);
+      await expect(
+        blockLocatorForEditor(callout).locator("[data-block-id]"),
+      ).toContainText(["Nested inside callout"]);
     },
   ),
   defineScenario(
@@ -190,7 +192,9 @@ export const containerAndPasteScenarios = [
       await clearAndType(callout, "Callout");
       await pressEnter(callout);
       const child = getEditors(page).nth(1);
-      expect(await editorLeft(child)).toBeGreaterThan((await editorLeft(callout)) + 8);
+      expect(await editorLeft(child)).toBeGreaterThan(
+        (await editorLeft(callout)) + 8,
+      );
     },
   ),
   defineScenario(
@@ -233,7 +237,9 @@ export const containerAndPasteScenarios = [
       expect(await editorLeft(getEditors(page).nth(1))).toBeGreaterThan(
         (await editorLeft(getEditors(page).first())) + 8,
       );
-      expect(await editorLeft(getEditors(page).nth(1))).toBeGreaterThan(nestedLeftBefore - 4);
+      expect(await editorLeft(getEditors(page).nth(1))).toBeGreaterThan(
+        nestedLeftBefore - 4,
+      );
     },
   ),
   defineScenario(
@@ -253,7 +259,9 @@ export const containerAndPasteScenarios = [
       await callout.press("Backspace");
       await expect(getEditors(page)).toHaveCount(1);
       await expect(getEditors(page).first()).toHaveText("Promoted child");
-      expect(await editorLeft(getEditors(page).first())).toBeLessThan(childLeft - 8);
+      expect(await editorLeft(getEditors(page).first())).toBeLessThan(
+        childLeft - 8,
+      );
     },
   ),
   defineScenario(
@@ -268,9 +276,9 @@ export const containerAndPasteScenarios = [
       await pressEnter(quote);
       const child = getEditors(page).nth(1);
       await clearAndType(child, "Nested inside quote");
-      await expect(blockLocatorForEditor(quote).locator("[data-block-id]")).toContainText([
-        "Nested inside quote",
-      ]);
+      await expect(
+        blockLocatorForEditor(quote).locator("[data-block-id]"),
+      ).toContainText(["Nested inside quote"]);
     },
   ),
   defineScenario(
@@ -311,7 +319,9 @@ export const containerAndPasteScenarios = [
       await quote.press("Backspace");
       await expect(getEditors(page)).toHaveCount(1);
       await expect(getEditors(page).first()).toHaveText("Promoted quote child");
-      expect(await editorLeft(getEditors(page).first())).toBeLessThan(childLeft - 8);
+      expect(await editorLeft(getEditors(page).first())).toBeLessThan(
+        childLeft - 8,
+      );
     },
   ),
   defineScenario(
@@ -338,6 +348,30 @@ export const containerAndPasteScenarios = [
       await pasteText(editor, "```js\nconsole.log(1)\n```");
       await expect(page.locator("textarea")).toHaveCount(1);
       await expect(page.locator("textarea")).toHaveValue("console.log(1)");
+    },
+    { serial: true },
+  ),
+  defineScenario(
+    "10. Paste Handling",
+    "Paste handling",
+    "pasting heading levels 4-6 preserves each heading level style",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await pasteText(
+        editor,
+        "#### Heading 4\n##### Heading 5\n###### Heading 6",
+      );
+
+      const editors = getEditors(page);
+      await expect(editors).toHaveCount(3);
+      await expect(editors.nth(0)).toHaveText("Heading 4");
+      await expect(editors.nth(1)).toHaveText("Heading 5");
+      await expect(editors.nth(2)).toHaveText("Heading 6");
+
+      await expect(editors.nth(0)).toHaveClass(/text-base/);
+      await expect(editors.nth(1)).toHaveClass(/text-sm/);
+      await expect(editors.nth(2)).toHaveClass(/text-xs/);
     },
     { serial: true },
   ),
