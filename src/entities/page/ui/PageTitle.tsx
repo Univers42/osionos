@@ -10,7 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useLayoutEffect, useRef } from 'react';
+import { focusPageEditorStart } from '@/features/block-editor/model/blockDomFocus';
 
 interface PageTitleProps {
   /** Current page title. */
@@ -20,46 +21,39 @@ interface PageTitleProps {
 }
 
 /**
- * ContentEditable H1 title matching Notion's styling.
+ * Editable page title matching Notion's styling.
  * Pressing Enter moves focus to the first content block.
  */
 export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle }) => {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLTextAreaElement>(null);
 
-  /* Sync DOM when title changes externally */
-  useEffect(() => {
-    if (ref.current && ref.current.textContent !== title) {
-      ref.current.textContent = title;
-    }
+  useLayoutEffect(() => {
+    if (!ref.current) return;
+    ref.current.style.height = '0px';
+    ref.current.style.height = `${ref.current.scrollHeight}px`;
   }, [title]);
 
-  const handleInput = useCallback(() => {
-    if (!ref.current) return;
-    onChangeTitle(ref.current.textContent ?? '');
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    onChangeTitle(e.target.value);
   }, [onChangeTitle]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      /* Move focus to the first block editor */
-      const firstBlock = document.querySelector(
-        '[data-block-id] [contenteditable], [data-block-id] textarea',
-      ) as HTMLElement | null;
-      firstBlock?.focus();
+      focusPageEditorStart("start");
     }
   }, []);
 
   return (
-    <div
+    <textarea
       ref={ref}
-      role="textbox"
       aria-label="Page title"
-      contentEditable
-      suppressContentEditableWarning
       spellCheck
+      rows={1}
+      value={title}
+      placeholder="Untitled"
       className="notion-page-title"
-      data-placeholder="Untitled"
-      onInput={handleInput}
+      onChange={handleChange}
       onKeyDown={handleKeyDown}
     />
   );

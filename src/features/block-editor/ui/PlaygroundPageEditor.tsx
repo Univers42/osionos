@@ -196,6 +196,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     return (
       <button
         type="button"
+        data-page-editor-empty-trigger
         className="flex-1 min-h-[200px] cursor-text text-left"
         onClick={() => handleInitBlock(blocks)}
       >

@@ -71,3 +71,60 @@ export function focusEditableBlock(
 
   requestAnimationFrame(focusAttempt);
 }
+
+/**
+ * Focuses the first rendered block editor and places the caret at the start.
+ * Returns false when no rendered block is available yet.
+ */
+export function focusFirstEditableBlock(
+  placement: CaretPlacement = "start",
+): boolean {
+  const firstRenderedBlock = document.querySelector<HTMLElement>("[data-block-id]");
+  const blockId = firstRenderedBlock?.dataset.blockId;
+
+  if (!blockId) {
+    return false;
+  }
+
+  focusEditableBlock(blockId, placement);
+  return true;
+}
+
+/**
+ * Focuses the page editor start position, bootstrapping the empty editor state
+ * first when the page has no rendered blocks yet.
+ */
+export function focusPageEditorStart(
+  placement: CaretPlacement = "start",
+  remainingFrames = 10,
+): boolean {
+  if (focusFirstEditableBlock(placement)) {
+    return true;
+  }
+
+  const emptyEditorTrigger = document.querySelector<HTMLElement>(
+    "[data-page-editor-empty-trigger]",
+  );
+
+  if (!emptyEditorTrigger) {
+    return false;
+  }
+
+  emptyEditorTrigger.click();
+
+  const retryFocus = () => {
+    if (focusFirstEditableBlock(placement)) {
+      return;
+    }
+
+    if (remainingFrames <= 0) {
+      return;
+    }
+
+    remainingFrames -= 1;
+    requestAnimationFrame(retryFocus);
+  };
+
+  requestAnimationFrame(retryFocus);
+  return true;
+}
