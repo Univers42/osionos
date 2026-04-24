@@ -225,15 +225,21 @@ export const containerAndPasteScenarios = [
       const secondChild = getEditors(page).nth(2);
       await clearAndType(secondChild, "Grandchild");
       await pressTab(secondChild);
+      const parentChildLeftBefore = await editorLeft(parentChild);
       const nestedLeftBefore = await editorLeft(secondChild);
       await clearAndType(callout, "");
       await callout.press("Backspace");
-      await expect(getEditors(page).first()).toHaveText("Parent child");
-      await expect(getEditors(page).nth(1)).toHaveText("Grandchild");
-      expect(await editorLeft(getEditors(page).nth(1))).toBeGreaterThan(
-        (await editorLeft(getEditors(page).first())) + 8,
+      const promotedParent = getEditors(page).first();
+      const promotedGrandchild = getEditors(page).nth(1);
+      await expect(promotedParent).toHaveText("Parent child");
+      await expect(promotedGrandchild).toHaveText("Grandchild");
+      const nestedOffsetBefore = nestedLeftBefore - parentChildLeftBefore;
+      const promotedParentLeft = await editorLeft(promotedParent);
+      const promotedGrandchildLeft = await editorLeft(promotedGrandchild);
+      expect(promotedGrandchildLeft).toBeGreaterThan(promotedParentLeft + 8);
+      expect(promotedGrandchildLeft - promotedParentLeft).toBeGreaterThan(
+        nestedOffsetBefore - 4,
       );
-      expect(await editorLeft(getEditors(page).nth(1))).toBeGreaterThan(nestedLeftBefore - 4);
     },
   ),
   defineScenario(

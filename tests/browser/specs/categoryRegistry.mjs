@@ -19,6 +19,7 @@ import {
   createCodeBlock,
   createParagraphs,
   editorLeft,
+  focusTextareaEnd,
   getEditors,
   openFreshPage,
   pressEnter,
@@ -57,7 +58,7 @@ export const categoryRegistryScenarios = [
       await createCodeBlock(page);
       const textarea = page.locator("textarea");
       await textarea.fill("const registry = true;");
-      await textarea.click();
+      await focusTextareaEnd(textarea);
       await page.keyboard.press("Tab");
       await expect(textarea).toHaveValue("const registry = true;    ");
       await expect(getEditors(page)).toHaveCount(0);

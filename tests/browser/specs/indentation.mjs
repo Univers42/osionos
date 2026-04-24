@@ -6,6 +6,7 @@ import {
   createCodeBlock,
   createParagraphs,
   editorLeft,
+  focusTextareaEnd,
   getEditors,
   openFreshPage,
   openSlashMenuFromEditor,
@@ -227,7 +228,7 @@ export const indentationScenarios = [
       await createCodeBlock(page);
       const textarea = page.locator("textarea");
       await textarea.fill("const value = 1;");
-      await textarea.click();
+      await focusTextareaEnd(textarea);
       await page.keyboard.press("Tab");
       await expect(textarea).toHaveValue("const value = 1;    ");
       await expect(getEditors(page)).toHaveCount(0);

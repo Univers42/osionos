@@ -21,6 +21,7 @@ import {
   createParagraphs,
   editorHasFocus,
   editorLeft,
+  focusTextareaEnd,
   getEditors,
   openSlashMenuFromEditor,
   openFreshPage,
@@ -107,11 +108,8 @@ export const editingBehaviorScenarios = [
       await createBlockViaSlash(page, "code", "Code");
       const textarea = page.locator("textarea");
       await textarea.fill("const a = 1;");
-      await textarea.evaluate((node) => {
-        node.focus();
-        node.setSelectionRange(node.value.length, node.value.length);
-      });
-      await textarea.press("Enter");
+      await focusTextareaEnd(textarea);
+      await page.keyboard.press("Enter");
       await expect(textarea).toHaveValue("const a = 1;\n");
       await expect(page.locator("textarea")).toHaveCount(1);
     },

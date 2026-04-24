@@ -123,6 +123,38 @@ export async function pressTab(target, options = {}) {
   await target.page().keyboard.press(options.shift ? "Shift+Tab" : "Tab");
 }
 
+export async function focusTextareaEnd(textarea) {
+  let lastState = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await waitForRenderStability(textarea.page());
+    await textarea.focus();
+    const state = await textarea.evaluate((node) => {
+      node.focus();
+      const end = node.value.length;
+      node.setSelectionRange(end, end);
+      return {
+        active: document.activeElement === node,
+        selectionStart: node.selectionStart,
+        selectionEnd: node.selectionEnd,
+        end,
+      };
+    });
+    if (
+      state.active &&
+      state.selectionStart === state.end &&
+      state.selectionEnd === state.end
+    ) {
+      return;
+    }
+    lastState = state;
+  }
+  if (lastState) {
+    throw new Error(
+      `Could not place textarea caret at end (active=${lastState.active}, start=${lastState.selectionStart}, end=${lastState.selectionEnd}, expected=${lastState.end})`,
+    );
+  }
+}
+
 export async function waitForRenderStability(page) {
   await page.evaluate(
     () =>
