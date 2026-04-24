@@ -26,16 +26,33 @@ interface UseSlashSelectOptions {
   pageId: string;
   slashMenu: SlashMenuState | null;
   setSlashMenu: (menu: SlashMenuState | null) => void;
-  updateBlock: (pageId: string, blockId: string, updates: Partial<Block>) => void;
-  changeBlockType: (pageId: string, blockId: string, newType: BlockType) => void;
+  updateBlock: (
+    pageId: string,
+    blockId: string,
+    updates: Partial<Block>,
+  ) => void;
+  changeBlockType: (
+    pageId: string,
+    blockId: string,
+    newType: BlockType,
+  ) => void;
   insertBlock: (pageId: string, afterBlockId: string, block: Block) => void;
-  createInlineDatabase: (name?: string) => { databaseId: string; viewId: string } | null;
+  createInlineDatabase: (
+    name?: string,
+  ) => { databaseId: string; viewId: string } | null;
+  createPageInPrivateWorkspace: () => Promise<{ id: string } | null>;
   focusBlock: (blockId: string, end?: boolean) => void;
 }
 
 function stripSlashQuery(content: string): string {
   const slashIdx = content.lastIndexOf("/");
   return slashIdx >= 0 ? content.slice(0, slashIdx) : content;
+}
+
+function appendInternalPageLink(content: string, pageId: string): string {
+  const trimmed = content.replace(/\s+$/, "");
+  const separator = trimmed.length > 0 ? " " : "";
+  return `${trimmed}${separator}[[page:${pageId}]] `;
 }
 
 /**
@@ -53,6 +70,7 @@ export function useSlashSelect({
   changeBlockType,
   insertBlock,
   createInlineDatabase,
+  createPageInPrivateWorkspace,
   focusBlock,
 }: UseSlashSelectOptions) {
   const applyBlockSelection = useCallback(
@@ -197,9 +215,41 @@ export function useSlashSelect({
     ],
   );
 
+  const handleSlashCreatePageSelect = useCallback(
+    async (content: Block[]) => {
+      if (!slashMenu) return;
+      const { blockId } = slashMenu;
+
+      setSlashMenu(null);
+
+      const block = findBlockInTree(content, blockId);
+      if (!block) return;
+
+      const cleanContent = stripSlashQuery(block.content ?? "");
+      const createdPage = await createPageInPrivateWorkspace();
+      const nextContent = createdPage
+        ? appendInternalPageLink(cleanContent, createdPage.id)
+        : cleanContent;
+
+      updateBlock(pageId, blockId, {
+        content: nextContent,
+        placeholderText: undefined,
+      });
+      repositionCursor(blockId, nextContent);
+    },
+    [
+      slashMenu,
+      setSlashMenu,
+      createPageInPrivateWorkspace,
+      updateBlock,
+      pageId,
+    ],
+  );
+
   return {
     handleSlashBlockSelect,
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
+    handleSlashCreatePageSelect,
   };
 }

@@ -41,6 +41,7 @@ import {
   canReadPage,
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
+import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
 
 interface EditableContentProps {
   content: string;
@@ -400,11 +401,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
     const html = nextContent
       ? parseInlineMarkdown(nextContent, {
-          resolveInternalLinkTitle: (pageId) => {
-            const page = usePageStore.getState().pageById(pageId);
-            if (!page) return null;
-            return { title: page.title, icon: page.icon };
-          },
+          resolveInternalLinkTitle: resolveInternalPageLinkTitle,
         })
       : "";
     renderedContentCache.current = {

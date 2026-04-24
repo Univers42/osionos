@@ -13,6 +13,7 @@
 import React from "react";
 import { FileText, Database } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
+import { getInternalPageLinkMetadata } from "@/entities/page/model/internalLinkMetadata";
 
 interface InternalPageLinkProps {
   pageId: string;
@@ -21,12 +22,13 @@ interface InternalPageLinkProps {
 export const InternalPageLink: React.FC<InternalPageLinkProps> = ({ pageId }) => {
   const page = usePageStore((s) => s.pageById(pageId));
   const openPage = usePageStore((s) => s.openPage);
+  const linkMetadata = getInternalPageLinkMetadata(page);
 
   if (!page) {
     return (
       <span className="inline-flex items-center gap-1 rounded bg-[var(--color-surface-secondary)] px-1 py-0.5 text-[var(--color-ink-faint)]">
         <FileText className="h-3 w-3" />
-        <span className="text-[13px]">Deleted page</span>
+        <span className="text-[13px]">{linkMetadata.title}</span>
       </span>
     );
   }
@@ -53,10 +55,10 @@ export const InternalPageLink: React.FC<InternalPageLinkProps> = ({ pageId }) =>
       style={{ display: "inline-flex" }}
     >
       <span className="flex items-center justify-center text-[14px] mr-1">
-        {page.icon || <Icon className="h-3.5 w-3.5" />}
+        {linkMetadata.icon || <Icon className="h-3.5 w-3.5" />}
       </span>
       <span className="text-[13px]">
-        {page.title || "Untitled"}
+        {linkMetadata.title}
       </span>
     </button>
   );

@@ -10,7 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { MediaBlockType } from "@/entities/block";
 import { MediaAssetPicker } from "@/shared/ui/molecules/MediaAssetPicker";
@@ -19,15 +25,21 @@ import {
   groupSlashCommands,
 } from "@/features/slash-commands/model/slashMenuCatalog";
 import type {
+  SlashCreatePageCommand,
   SlashBlockCommand,
   SlashCommand,
+  SlashMediaPickerCommand,
   SlashTurnIntoCommand,
 } from "@/features/slash-commands/model/types";
+
+type SelectableSlashCommand = Exclude<SlashCommand, SlashMediaPickerCommand>;
 
 interface SlashCommandMenuProps {
   position: { x: number; y: number };
   filter: string;
-  onSelect: (item: SlashBlockCommand | SlashTurnIntoCommand) => void;
+  onSelect: (
+    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand,
+  ) => void;
   onMediaSelect: (kind: MediaBlockType, value: string) => void;
   onClose: () => void;
 }
@@ -71,7 +83,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
         return;
       }
 
-      onSelect(command);
+      onSelect(command as SelectableSlashCommand);
     },
     [onSelect],
   );
@@ -110,10 +122,10 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 
   // Auto-scroll active item into view when navigating with keyboard
   useEffect(() => {
-    const container = ref.current?.querySelector('.overflow-y-auto');
+    const container = ref.current?.querySelector(".overflow-y-auto");
     if (!container) return;
-    const activeEl = container.querySelectorAll('button')[effectiveActiveIdx];
-    activeEl?.scrollIntoView({ block: 'nearest' });
+    const activeEl = container.querySelectorAll("button")[effectiveActiveIdx];
+    activeEl?.scrollIntoView({ block: "nearest" });
   }, [effectiveActiveIdx]);
 
   if (filtered.length === 0 && !activeMediaKind) {

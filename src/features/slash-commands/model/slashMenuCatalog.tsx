@@ -11,11 +11,13 @@
 /* ************************************************************************** */
 
 import {
+  COLLECTION_PAGE_SLASH_ITEM,
   COLLECTION_SLASH_ITEMS,
   COLLECTION_SLASH_SECTION_LABELS,
 } from "@/shared/lib/markengine/uiCollectionAssets";
 import type { BlockType, MediaBlockType } from "@/entities/block";
 import type {
+  SlashCreatePageCommand,
   SlashCommand,
   SlashCommandSection,
   SlashTurnIntoCommand,
@@ -135,7 +137,21 @@ export const TURN_INTO_COMMANDS: SlashTurnIntoCommand[] =
     };
   });
 
+const CREATE_PAGE_COMMAND: SlashCreatePageCommand[] = COLLECTION_PAGE_SLASH_ITEM
+  ? [
+      {
+        id: `${COLLECTION_PAGE_SLASH_ITEM.section}:${COLLECTION_PAGE_SLASH_ITEM.type}`,
+        kind: "create-page",
+        section: COLLECTION_PAGE_SLASH_ITEM.section,
+        label: COLLECTION_PAGE_SLASH_ITEM.label,
+        icon: COLLECTION_PAGE_SLASH_ITEM.icon,
+        description: "Create a new page and link it from here",
+      },
+    ]
+  : [];
+
 export const SLASH_COMMANDS: SlashCommand[] = [
+  ...CREATE_PAGE_COMMAND,
   ...BASE_SLASH_COMMANDS,
   ...TURN_INTO_COMMANDS,
 ];

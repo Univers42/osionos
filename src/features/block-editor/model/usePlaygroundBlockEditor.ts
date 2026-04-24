@@ -18,6 +18,7 @@ import React, {
   useCallback,
 } from "react";
 import { usePageStore } from "@/store/usePageStore";
+import { useUserStore } from "@/features/auth";
 import {
   detectBlockType,
   getCalloutIconForKind,
@@ -41,7 +42,10 @@ import {
   handleEnterKey,
   getAdjacentRenderedBlockId,
 } from "./playgroundBlockEditor.helpers";
-import type { SlashMenuState, PageSelectorMenuState } from "./playgroundBlockEditor.helpers";
+import type {
+  SlashMenuState,
+  PageSelectorMenuState,
+} from "./playgroundBlockEditor.helpers";
 import { useBlockContextMenu } from "./useBlockContextMenu";
 import { focusEditableBlock } from "./blockDomFocus";
 
@@ -85,6 +89,18 @@ function parsePipeTable(text: string): string[][] | null {
 
 function isEffectivelyEmptyForDeletion(text: string): boolean {
   return text.replaceAll("\u200B", "").trim().length === 0;
+}
+
+function normalizeCreatedPageTitleFromLinkQuery(query: string): string {
+  const trimmed = query.trim();
+  if (!trimmed) return "Untitled";
+
+  if (!trimmed.endsWith("]]")) {
+    return trimmed;
+  }
+
+  const withoutClosingBrackets = trimmed.slice(0, -2).trimEnd();
+  return withoutClosingBrackets || "Untitled";
 }
 
 function toBlockUpdates(block: Block): Partial<Block> {
@@ -137,7 +153,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
   } = usePageStore.getState();
 
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null);
-  const [pageSelector, setPageSelector] = useState<PageSelectorMenuState | null>(null);
+  const [pageSelector, setPageSelector] =
+    useState<PageSelectorMenuState | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
   const contentRef = useRef<Block[]>([]);
 
@@ -404,7 +421,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       if (
         e.key !== "Enter" ||
         e.shiftKey ||
-        block.type !== 'to_do' ||
+        block.type !== "to_do" ||
         !isEmpty
       ) {
         return false;
@@ -604,11 +621,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
   );
 
   const handleContainerEnter = useCallback(
-    (
-      e: React.KeyboardEvent,
-      blockId: string,
-      block: Block,
-    ): boolean => {
+    (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
       if (
         e.key !== "Enter" ||
         e.shiftKey ||
@@ -619,7 +632,11 @@ export function usePlaygroundBlockEditor(pageId: string) {
       }
 
       e.preventDefault();
-      const child: Block = { id: crypto.randomUUID(), type: "paragraph", content: "" };
+      const child: Block = {
+        id: crypto.randomUUID(),
+        type: "paragraph",
+        content: "",
+      };
       const existingChildren = block.children ?? [];
       updateBlock(pageId, blockId, { children: [...existingChildren, child] });
       focusBlock(child.id);
@@ -636,7 +653,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       parentBlockId: string | null = null,
     ) => {
       const content = parentBlockId
-        ? findChildrenForParent(contentRef.current, parentBlockId) ?? []
+        ? (findChildrenForParent(contentRef.current, parentBlockId) ?? [])
         : contentRef.current;
       const block = content.find((b) => b.id === blockId);
       if (!block) return;
@@ -646,58 +663,92 @@ export function usePlaygroundBlockEditor(pageId: string) {
       const isEmpty = isEffectivelyEmpty(liveText);
       const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
 
-    const handled =
-      handleBlockIndentation(e, blockId, block, content) ||
-      handleParagraphSpaceShortcut(e, blockId, block) ||
-      handleEmptyListEnter(e, blockId, block, blockIdx, content, isEmpty) ||
-      handleEmptyTodoEnter(e, blockId, block, isEmpty) ||
-      handleEmptyListDelete(e, blockId, block, blockIdx, content, isEmpty) ||
-      handleDividerDelete(e, blockId, block, blockIdx, content) ||
-      (e.key === "Enter" && block.type === "code") ||
-      handleContainerEnter(e, blockId, block);
+      const handled =
+        handleBlockIndentation(e, blockId, block, content) ||
+        handleParagraphSpaceShortcut(e, blockId, block) ||
+        handleEmptyListEnter(e, blockId, block, blockIdx, content, isEmpty) ||
+        handleEmptyTodoEnter(e, blockId, block, isEmpty) ||
+        handleEmptyListDelete(e, blockId, block, blockIdx, content, isEmpty) ||
+        handleDividerDelete(e, blockId, block, blockIdx, content) ||
+        (e.key === "Enter" && block.type === "code") ||
+        handleContainerEnter(e, blockId, block);
 
-    if (handled) return;
+      if (handled) return;
 
-    if (e.key === "Enter" && !e.shiftKey) {
-      handleEnterKey(e, blockId, block.type, slashMenu, pageId, insertBlock, focusBlock);
-      return;
-    }
+      if (e.key === "Enter" && !e.shiftKey) {
+        handleEnterKey(
+          e,
+          blockId,
+          block.type,
+          slashMenu,
+          pageId,
+          insertBlock,
+          focusBlock,
+        );
+        return;
+      }
 
-    if (handleEmptyBackspace(e, blockId, block, blockIdx, content, parentBlockId, isEmptyForDeletion)) {
-      return;
-    }
+      if (
+        handleEmptyBackspace(
+          e,
+          blockId,
+          block,
+          blockIdx,
+          content,
+          parentBlockId,
+          isEmptyForDeletion,
+        )
+      ) {
+        return;
+      }
 
-    if (handleArrowNavigation(e, blockId, content)) {
-      return;
-    }
+      if (handleArrowNavigation(e, blockId, content)) {
+        return;
+      }
 
-    if (e.key === "Escape") {
-      if (slashMenu) setSlashMenu(null);
-      if (pageSelector) setPageSelector(null);
-    }
-  },
-  [
-    pageId,
-    slashMenu,
-    pageSelector,
-    insertBlock,
-    focusBlock,
-    handleBlockIndentation,
-    handleParagraphSpaceShortcut,
-    handleEmptyListEnter,
-    handleEmptyTodoEnter,
-    handleEmptyListDelete,
-    handleDividerDelete,
-    handleContainerEnter,
-    handleEmptyBackspace,
-    handleArrowNavigation,
-  ],
-);
+      if (e.key === "Escape") {
+        if (slashMenu) setSlashMenu(null);
+        if (pageSelector) setPageSelector(null);
+      }
+    },
+    [
+      pageId,
+      slashMenu,
+      pageSelector,
+      insertBlock,
+      focusBlock,
+      handleBlockIndentation,
+      handleParagraphSpaceShortcut,
+      handleEmptyListEnter,
+      handleEmptyTodoEnter,
+      handleEmptyListDelete,
+      handleDividerDelete,
+      handleContainerEnter,
+      handleEmptyBackspace,
+      handleArrowNavigation,
+    ],
+  );
 
   /** Create a real inline database + default view in the shared DBMS store. */
   const createInlineDatabase = useCallback((name?: string) => {
     return useDatabaseStore.getState().createInlineDatabase(name);
   }, []);
+
+  const createPageInPrivateWorkspace = useCallback(
+    async (title = "Untitled") => {
+      const session = useUserStore.getState().activeSession();
+      const privateWorkspaceId = session?.privateWorkspaces[0]?._id;
+      if (!privateWorkspaceId) return null;
+
+      const jwt = session?.accessToken ?? "";
+      const page = await usePageStore
+        .getState()
+        .addPage(privateWorkspaceId, title, jwt);
+
+      return page ? { id: page._id } : null;
+    },
+    [],
+  );
 
   const page = usePageStore((s) => s.pageById(pageId));
   const content = useMemo(() => page?.content ?? [], [page?.content]);
@@ -723,6 +774,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
     handleSlashBlockSelect,
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
+    handleSlashCreatePageSelect,
   } = useSlashSelect({
     pageId,
     slashMenu,
@@ -731,6 +783,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
     changeBlockType,
     insertBlock,
     createInlineDatabase,
+    createPageInPrivateWorkspace,
     focusBlock,
   });
 
@@ -753,6 +806,28 @@ export function usePlaygroundBlockEditor(pageId: string) {
     },
     [pageSelector, pageId, updateBlock],
   );
+
+  const handlePageSelectorCreate = useCallback(async () => {
+    if (!pageSelector) return;
+
+    const createdPageTitle = normalizeCreatedPageTitleFromLinkQuery(
+      pageSelector.filter,
+    );
+
+    const createdPage = await createPageInPrivateWorkspace(createdPageTitle);
+
+    if (!createdPage) {
+      setPageSelector(null);
+      return;
+    }
+
+    handlePageSelectorSelect(createdPage.id);
+  }, [
+    pageSelector,
+    createPageInPrivateWorkspace,
+    handlePageSelectorSelect,
+    setPageSelector,
+  ]);
 
   /** Add a new blank paragraph at the end. */
   const handleAddBlock = useCallback(
@@ -813,7 +888,9 @@ export function usePlaygroundBlockEditor(pageId: string) {
     handleSlashSelect: handleSlashBlockSelect,
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
+    handleSlashCreatePageSelect,
     handlePageSelectorSelect,
+    handlePageSelectorCreate,
     handleAddBlock,
     handleInitBlock,
     registerBlockRef,

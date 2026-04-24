@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   usePageStore.ts                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: sergio <sergio@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/19 20:10:34 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/24 10:19:05 by sergio           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,6 +34,7 @@ import {
   createFetchPages,
   createFetchPageContent,
   createAddPage,
+  createArchivePage,
   createDeletePage,
   createRestorePage,
   createPermanentlyDeletePage,
@@ -80,25 +81,17 @@ export const usePageStore = create<PageStore>()(
         seeded: false,
         showTrash: false,
 
-        seedOfflinePages: createSeedOfflinePages(structuralSet, get),
-        seedOnlinePages: createSeedOnlinePages(structuralSet, get),
-        fetchPages: createFetchPages(structuralSet, get),
-        fetchPageContent: createFetchPageContent(structuralSet, get),
-        addPage: createAddPage(structuralSet, get),
-        duplicatePage: createDuplicatePage(structuralSet, get),
-        movePage: createMovePage(structuralSet, get),
-        deletePage: createDeletePage(structuralSet, get),
-        restorePage: createRestorePage(structuralSet, get),
-        permanentlyDeletePage: createPermanentlyDeletePage(structuralSet, get),
-
-        forceHistorySnapshot: () => {
-          if (contentTimer) {
-            clearTimeout(contentTimer);
-            contentTimer = null;
-          }
-          // Trigger a structural no-op to flush the history
-          structuralSet((s) => ({ ...s }));
-        },
+  seedOfflinePages: createSeedOfflinePages(set, get),
+  seedOnlinePages: createSeedOnlinePages(set, get),
+  fetchPages: createFetchPages(set, get),
+  fetchPageContent: createFetchPageContent(set, get),
+  addPage: createAddPage(set, get),
+  duplicatePage: createDuplicatePage(set, get),
+  movePage: createMovePage(set, get),
+  archivePage: createArchivePage(set, get),
+  deletePage: createDeletePage(set, get),
+  restorePage: createRestorePage(set, get),
+  permanentlyDeletePage: createPermanentlyDeletePage(set, get),
 
         openPage: (page) => {
           const context = getCurrentPageAccessContext();
@@ -333,11 +326,10 @@ export const usePageStore = create<PageStore>()(
               canReadPage(p, getCurrentPageAccessContext()),
           ),
 
-        trashPages: (workspaceId) =>
-          (get().pages[workspaceId] ?? []).filter(
-            (p) =>
-              p.archivedAt && canReadPage(p, getCurrentPageAccessContext()),
-          ),
+  archivedPages: (workspaceId) =>
+    (get().pages[workspaceId] ?? []).filter(
+      (p) => p.archivedAt && canReadPage(p, getCurrentPageAccessContext()),
+    ),
 
         pageById: (pageId) => {
           const allPages = Object.values(get().pages).flat();

@@ -55,7 +55,7 @@ interface SidebarFooterProps {
   onDismissInvite: () => void;
 }
 
-/** Bottom section: Settings / Marketplace / Trash + optional Invite CTA. */
+/** Bottom section: Settings / Marketplace / archived files + optional Invite CTA. */
 export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   onOpenSettings,
   onOpenTrash,
@@ -104,7 +104,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
         />
         <SidebarNavItem
           icon={<Trash2 size={16} />}
-          label="Trash"
+          label="Archived files"
           onClick={() => onOpenTrash?.()}
         />
         <SidebarNavItem
