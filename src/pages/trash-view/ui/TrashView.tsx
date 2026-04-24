@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useState, useMemo } from "react";
-import { Trash2, Redo2, Trash, AlertTriangle } from "lucide-react";
+import { Archive, Redo2, Trash, AlertTriangle } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import {
@@ -122,7 +122,7 @@ export const TrashView: React.FC = () => {
     <div className="trash-view-container">
       <div className="trash-view-header">
         <div className="flex items-center gap-3 mb-6">
-          <Trash2 size={24} className="text-[var(--color-ink)]" />
+          <Archive size={24} className="text-[var(--color-ink)]" />
           <h1 className="text-2xl font-semibold text-[var(--color-ink)]">
             Archived files
           </h1>
@@ -160,7 +160,7 @@ export const TrashView: React.FC = () => {
       <div className="trash-view-content">
         {trashPages.length === 0 ? (
           <div className="trash-view-empty">
-            <Trash2 size={48} className="text-[var(--color-ink-faint)] mb-3" />
+            <Archive size={48} className="text-[var(--color-ink-faint)] mb-3" />
             <p className="text-[var(--color-ink-faint)] text-center">
               No archived pages
             </p>

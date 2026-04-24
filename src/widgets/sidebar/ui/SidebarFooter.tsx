@@ -14,7 +14,7 @@ import React from "react";
 import {
   Settings,
   LayoutGrid,
-  Trash2,
+  Archive,
   UserPlus,
   X,
   Sun,
@@ -103,7 +103,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
           }}
         />
         <SidebarNavItem
-          icon={<Trash2 size={16} />}
+          icon={<Archive size={16} />}
           label="Archived files"
           onClick={() => onOpenTrash?.()}
         />
