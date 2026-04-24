@@ -22,7 +22,12 @@ import {
   randomUiCollectionEmoji,
 } from "@/shared/lib/markengine/uiCollectionAssets";
 
-import { PageCover, PageIcon, PageTitle } from "@/entities/page";
+import {
+  PageBreadcrumbs,
+  PageCover,
+  PageIcon,
+  PageTitle,
+} from "@/entities/page";
 import { PageBody } from "./PageBody";
 
 import "./notionPage.css";
@@ -144,6 +149,10 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
     }
   }, [handleChangeCover]);
 
+  const handleOpenHome = useCallback(() => {
+    usePageStore.setState({ activePage: null, showTrash: false });
+  }, []);
+
   /* ── Render ────────────────────────────────────────────────────── */
 
   const hasCover = !!cover;
@@ -168,6 +177,8 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
             : "notion-page-header--no-cover"
         }`}
       >
+        <PageBreadcrumbs pageId={pageId} onOpenHome={handleOpenHome} />
+
         {/* Page icon */}
         {hasIcon && (
           <PageIcon
