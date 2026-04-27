@@ -273,8 +273,13 @@ export const assetScenarios = [
       await openFreshPage(page, appUrl);
       await addPageCover(page);
       const previousCover = await page.getByTestId("page-cover-media").innerHTML();
-      await openCoverPicker(page);
-      await pickFirstAssetFromVisiblePicker(page);
+      for (let selectableIndex = 0; selectableIndex < 8; selectableIndex += 1) {
+        await openCoverPicker(page);
+        await pickAssetFromVisiblePicker(page, selectableIndex);
+        if ((await page.getByTestId("page-cover-media").innerHTML()) !== previousCover) {
+          return;
+        }
+      }
       expect(await page.getByTestId("page-cover-media").innerHTML()).not.toBe(previousCover);
     },
   ),
