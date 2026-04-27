@@ -43,6 +43,14 @@ export function getEditors(page) {
   return page.locator('[role="textbox"][aria-multiline="true"]');
 }
 
+export function getCodeTextareas(page) {
+  return page.locator('textarea[placeholder="Code…"]');
+}
+
+export function getCodeTextarea(page) {
+  return getCodeTextareas(page).first();
+}
+
 export function pageTitleEditor(page) {
   return page.getByRole("textbox", { name: "Page title" });
 }
@@ -409,7 +417,7 @@ export async function createDivider(page) {
 
 export async function createCodeBlock(page) {
   await createBlockViaSlash(page, "code", "Code");
-  await page.locator("textarea").waitFor();
+  await getCodeTextarea(page).waitFor();
 }
 
 export async function createMediaBlock(page, slashCommand) {

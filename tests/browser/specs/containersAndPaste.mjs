@@ -19,6 +19,7 @@ import {
   contextMenuItem,
   createBlockViaSlash,
   editorLeft,
+  getCodeTextarea,
   getEditors,
   openBlockContextMenuForEditor,
   openFreshPage,
@@ -350,8 +351,8 @@ export const containerAndPasteScenarios = [
       await openFreshPage(page, appUrl);
       const editor = await activateFirstEditor(page);
       await pasteText(editor, "```js\nconsole.log(1)\n```");
-      await expect(page.locator("textarea")).toHaveCount(1);
-      await expect(page.locator("textarea")).toHaveValue("console.log(1)");
+      await expect(getCodeTextarea(page)).toBeVisible();
+      await expect(getCodeTextarea(page)).toHaveValue("console.log(1)");
     },
     { serial: true },
   ),
