@@ -18,6 +18,7 @@ import {
   savePagesCache,
   schedulePagesCachePersist,
   updatePageInState,
+  withTimestamp,
   applyBlockUpdate,
   applyBlockInsert,
   applyBlockDelete,
@@ -153,7 +154,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       const pages = updatePageInState(
         s.pages,
         pageId,
-        applyBlockUpdate(blockId, updates),
+        withTimestamp(applyBlockUpdate(blockId, updates)),
       );
       schedulePagesCachePersist(pages);
       return { pages };
@@ -169,7 +170,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       const pages = updatePageInState(
         s.pages,
         pageId,
-        applyBlockInsert(afterBlockId, block),
+        withTimestamp(applyBlockInsert(afterBlockId, block)),
       );
       schedulePagesCachePersist(pages);
       return { pages };
@@ -185,7 +186,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       const pages = updatePageInState(
         s.pages,
         pageId,
-        applyBlockDelete(blockId),
+        withTimestamp(applyBlockDelete(blockId)),
       );
       schedulePagesCachePersist(pages);
       return { pages };
@@ -201,7 +202,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       const pages = updatePageInState(
         s.pages,
         pageId,
-        applyBlockMove(blockId, targetIndex, parentBlockId),
+        withTimestamp(applyBlockMove(blockId, targetIndex, parentBlockId)),
       );
       schedulePagesCachePersist(pages);
       return { pages };
@@ -217,7 +218,9 @@ export const usePageStore = create<PageStore>((set, get) => ({
       const pages = updatePageInState(
         s.pages,
         pageId,
-        applyBlockMoveAcrossTree(blockId, targetParentBlockId, targetIndex),
+        withTimestamp(
+          applyBlockMoveAcrossTree(blockId, targetParentBlockId, targetIndex),
+        ),
       );
       savePagesCache(pages);
       return { pages };
@@ -233,7 +236,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       const pages = updatePageInState(
         s.pages,
         pageId,
-        applyBlockIndent(blockId),
+        withTimestamp(applyBlockIndent(blockId)),
       );
       schedulePagesCachePersist(pages);
       return { pages };
@@ -249,7 +252,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       const pages = updatePageInState(
         s.pages,
         pageId,
-        applyBlockOutdent(blockId),
+        withTimestamp(applyBlockOutdent(blockId)),
       );
       schedulePagesCachePersist(pages);
       return { pages };
@@ -265,7 +268,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       const pages = updatePageInState(
         s.pages,
         pageId,
-        applyBlockTypeChange(blockId, newType),
+        withTimestamp(applyBlockTypeChange(blockId, newType)),
       );
       schedulePagesCachePersist(pages);
       return { pages };
@@ -278,10 +281,14 @@ export const usePageStore = create<PageStore>((set, get) => ({
     if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
-      const pages = updatePageInState(s.pages, pageId, (page) => ({
-        ...page,
-        content: blocks,
-      }));
+      const pages = updatePageInState(
+        s.pages,
+        pageId,
+        withTimestamp((page) => ({
+          ...page,
+          content: blocks,
+        })),
+      );
       schedulePagesCachePersist(pages);
       return { pages };
     });
@@ -293,10 +300,14 @@ export const usePageStore = create<PageStore>((set, get) => ({
     if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
-      const pages = updatePageInState(s.pages, pageId, (page) => ({
-        ...page,
-        title,
-      }));
+      const pages = updatePageInState(
+        s.pages,
+        pageId,
+        withTimestamp((page) => ({
+          ...page,
+          title,
+        })),
+      );
       schedulePagesCachePersist(pages);
       return { pages };
     });

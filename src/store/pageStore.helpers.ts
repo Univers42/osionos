@@ -183,12 +183,23 @@ export function countSubPages(pages: PageEntry[], parentId: string): number {
   return getAllDescendantIds(pages, parentId).length;
 }
 
+/** Wraps a page updater to also set updatedAt to the current time. */
+export function withTimestamp(
+  updater: (page: PageEntry) => PageEntry,
+): (page: PageEntry) => PageEntry {
+  return (page) => ({
+    ...updater(page),
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 /** Convert seed page format to PageEntry (with content) */
 export function seedToEntry(sp: SeedPage): PageEntry {
   return {
     _id: sp._id,
     title: sp.title,
     icon: sp.icon,
+    updatedAt: sp.updatedAt ?? "2026-04-20T12:00:00.000Z",
     workspaceId: sp.workspaceId,
     ownerId: sp.ownerId ?? null,
     visibility: sp.visibility,

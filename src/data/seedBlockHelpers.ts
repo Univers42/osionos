@@ -59,6 +59,7 @@ export interface SeedPage {
   _id:           string;
   title:         string;
   icon?:         string;
+  updatedAt?:    string;
   workspaceId:   string;
   ownerId?:      string | null;
   visibility?:   'private' | 'shared' | 'public';

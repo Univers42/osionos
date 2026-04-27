@@ -141,6 +141,8 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
           content: fullPage.content ?? p.content,
           title: fullPage.title ?? p.title,
           icon: fullPage.icon ?? p.icon,
+          cover: fullPage.cover ?? p.cover,
+          updatedAt: fullPage.updatedAt ?? p.updatedAt,
         })),
       }));
       savePagesCache(get().pages);
@@ -182,14 +184,18 @@ export function createAddPage(set: SetFn, get: GetFn) {
           },
           jwt,
         );
+        const pageWithTimestamp: PageEntry = {
+          ...page,
+          updatedAt: page.updatedAt ?? new Date().toISOString(),
+        };
         set((s) => ({
           pages: {
             ...s.pages,
-            [workspaceId]: [...(s.pages[workspaceId] ?? []), page],
+            [workspaceId]: [...(s.pages[workspaceId] ?? []), pageWithTimestamp],
           },
         }));
         savePagesCache(get().pages);
-        return page;
+        return pageWithTimestamp;
       } catch {
         return null;
       }
@@ -197,6 +203,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
     const newPage: PageEntry = {
       _id: localId(),
       title,
+      updatedAt: new Date().toISOString(),
       workspaceId,
       ownerId: context.userId,
       visibility: targetVisibility,

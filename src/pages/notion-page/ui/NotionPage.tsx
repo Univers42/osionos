@@ -23,8 +23,8 @@ import {
 } from "@/shared/lib/markengine/uiCollectionAssets";
 
 import {
-  PageBreadcrumbs,
   PageCover,
+  PageHeaderBar,
   PageIcon,
   PageTitle,
 } from "@/entities/page";
@@ -149,14 +149,6 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
     }
   }, [handleChangeCover]);
 
-  const handleOpenHome = useCallback(() => {
-    usePageStore.setState({
-      activePage: null,
-      showTrash: false,
-      navigationPath: [],
-    });
-  }, []);
-
   /* ── Render ────────────────────────────────────────────────────── */
 
   const hasCover = !!cover;
@@ -164,6 +156,12 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
 
   return (
     <div className="notion-page">
+      <PageHeaderBar
+        key={pageId}
+        pageId={pageId}
+        workspaceId={activePage?.workspaceId ?? ""}
+      />
+
       {/* Cover */}
       {hasCover && (
         <PageCover
@@ -181,8 +179,6 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
             : "notion-page-header--no-cover"
         }`}
       >
-        <PageBreadcrumbs pageId={pageId} onOpenHome={handleOpenHome} />
-
         {/* Page icon */}
         {hasIcon && (
           <PageIcon

@@ -31,6 +31,8 @@ export interface PageEntry {
   icon?: string;
   /** Cover image URL or CSS gradient. */
   cover?: string;
+  /** ISO timestamp of last modification (block edit, title change, etc.) */
+  updatedAt?: string;
   workspaceId: string;
   ownerId?: string | null;
   visibility?: PageVisibility;
