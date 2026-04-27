@@ -298,20 +298,65 @@ export async function openColorPalette(page, kind) {
 
 export async function choosePaletteColor(page, index = 0) {
   const palette = await resolveVisibleInlinePalette(page);
-  const swatch = palette.locator('button[title*=": #"]:has(span)').nth(index);
-  await swatch.waitFor();
-  const label = await swatch.getAttribute("title");
-  await swatch.click();
-  return label;
+  const presetChoices = palette.locator('button[title*=": #"]:has(span)');
+  const presetCount = await presetChoices.count();
+
+  if (index < presetCount) {
+    const swatch = presetChoices.nth(index);
+    await swatch.waitFor();
+    const label = await swatch.getAttribute("title");
+    await clickInlinePaletteChoice(page, swatch);
+    return label;
+  }
+
+  const defaultLabel =
+    presetCount > 0 ? await presetChoices.first().getAttribute("title") : null;
+  const wheelChoices = palette.locator('button[title*=": #"]:not(:has(span))');
+  const wheelCount = await wheelChoices.count();
+  let matchIndex = 0;
+
+  for (let candidateIndex = 0; candidateIndex < wheelCount; candidateIndex += 1) {
+    const swatch = wheelChoices.nth(candidateIndex);
+    const label = await swatch.getAttribute("title");
+    if (!label || label === defaultLabel) {
+      continue;
+    }
+
+    if (matchIndex === index - presetCount) {
+      await clickInlinePaletteChoice(page, swatch);
+      return label;
+    }
+
+    matchIndex += 1;
+  }
+
+  throw new Error(
+    `Could not find palette color at index ${index} (presets=${presetCount}, wheel=${wheelCount})`,
+  );
 }
 
 export async function choosePaletteColorByLabel(page, label) {
   const palette = await resolveVisibleInlinePalette(page);
-  const swatch = palette.locator(`button[title="${label}"]:has(span)`);
+  const swatch = palette.locator(`button[title="${label}"]`);
   if ((await swatch.count()) === 0) {
     throw new Error(`Could not find a visible palette swatch named "${label}"`);
   }
-  await swatch.first().click();
+  await clickInlinePaletteChoice(page, swatch.first());
+}
+
+async function clickInlinePaletteChoice(page, swatch) {
+  const hasPresetSwatch = (await swatch.locator("span").count()) > 0;
+  if (hasPresetSwatch) {
+    await swatch.click();
+    return;
+  }
+
+  const box = await swatch.boundingBox();
+  if (!box) {
+    throw new Error("Could not resolve wheel swatch bounding box");
+  }
+
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 }
 
 export async function openSlashMenuFromEditor(editor, text) {
