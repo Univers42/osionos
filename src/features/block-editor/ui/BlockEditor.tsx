@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   BlockEditor.tsx                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/18 10:49:08 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/22 11:30:46 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,7 +17,6 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
 import { AssetRenderer } from "@univers42/ui-collection";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
@@ -82,15 +81,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   renderChildren,
 }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [showCalloutIconPicker, setShowCalloutIconPicker] = useState(false);
   const langPickerRef = useRef<HTMLDivElement | null>(null);
-  const [codeContextMenu, setCodeContextMenu] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-  const codeContextMenuRef = useRef<HTMLDivElement | null>(null);
   const isMermaidCode =
     block.type === "code" &&
     (block.language || "plaintext").trim().toLowerCase() === "mermaid";
@@ -98,15 +91,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     block.type === "code" &&
     !isMermaidCode &&
     (block.language || "plaintext").trim().toLowerCase() !== "plaintext";
-
-  const handleDeleteCodeBlock = () => {
-    if (!onDeleteCodeBlock) return;
-    if (!block.content.trim()) {
-      onDeleteCodeBlock();
-      return;
-    }
-    setShowDeleteConfirm(true);
-  };
 
   const handleLangSelect = useCallback(
     (language: string) => {
@@ -118,14 +102,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
   const handleCodeTextareaKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
-        e.preventDefault();
-        const rect = e.currentTarget.getBoundingClientRect();
-        setShowLangPicker(false);
-        setCodeContextMenu({ x: rect.left + 12, y: rect.top + 12 });
-        return;
-      }
-
       if (e.key === "Tab") {
         e.preventDefault();
         const ta = e.currentTarget;
@@ -140,17 +116,23 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         return;
       }
 
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const ta = e.currentTarget;
+        const { selectionStart, selectionEnd, value } = ta;
+        const next =
+          value.slice(0, selectionStart) + "\n" + value.slice(selectionEnd);
+        onChange(next);
+        requestAnimationFrame(() => {
+          ta.selectionStart = ta.selectionEnd = selectionStart + 1;
+        });
+        return;
+      }
+
       onKeyDown(e);
     },
     [onChange, onKeyDown],
   );
-
-  const openCodeContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setShowLangPicker(false);
-    setCodeContextMenu({ x: e.clientX, y: e.clientY });
-  }, []);
 
   useEffect(() => {
     if (!showLangPicker) return;
@@ -167,31 +149,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     document.addEventListener("mousedown", handleOutside);
     return () => document.removeEventListener("mousedown", handleOutside);
   }, [showLangPicker]);
-
-  useEffect(() => {
-    if (!codeContextMenu) return;
-
-    const handleMouseDown = (e: MouseEvent) => {
-      if (
-        codeContextMenuRef.current &&
-        !codeContextMenuRef.current.contains(e.target as Node)
-      ) {
-        setCodeContextMenu(null);
-      }
-    };
-
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setCodeContextMenu(null);
-    };
-
-    document.addEventListener("mousedown", handleMouseDown);
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", handleMouseDown);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [codeContextMenu]);
 
   switch (block.type) {
     case "heading_1":
@@ -407,7 +364,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               value={block.content}
               onChange={(e) => onChange(e.target.value)}
               onKeyDown={handleCodeTextareaKeyDown}
-              onContextMenu={openCodeContextMenu}
               placeholder={getBlockPlaceholder(block, "Code…")}
               spellCheck={false}
               className="w-full min-h-[120px] text-[13px] leading-relaxed font-mono text-[var(--color-ink)] whitespace-pre bg-transparent outline-none resize-y"
@@ -437,141 +393,75 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               </div>
             )}
           </div>
-          {codeContextMenu &&
-            createPortal(
-              <div
-                ref={codeContextMenuRef}
-                style={{ top: codeContextMenu.y, left: codeContextMenu.x }}
-                className="fixed z-[10000] min-w-[180px] bg-[var(--color-surface-primary)] border border-[var(--color-line)] rounded-lg shadow-lg py-1"
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCodeContextMenu(null);
-                    handleDeleteCodeBlock();
-                  }}
-                  className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
-                >
-                  Delete code block
-                </button>
-              </div>,
-              document.body,
-            )}
-          {showDeleteConfirm &&
-            createPortal(
-              <>
-                <button
-                  type="button"
-                  className="fixed inset-0 z-[9998] appearance-none border-0 bg-black/30 p-0 cursor-default"
-                  onClick={() => setShowDeleteConfirm(false)}
-                  tabIndex={-1}
-                  aria-label="Close"
-                />
-                <dialog
-                  open
-                  className="fixed z-[9999] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[360px] max-w-[calc(100vw-24px)] bg-white border border-[var(--color-line)] rounded-xl shadow-2xl overflow-hidden"
-                >
-                  <div className="p-4">
-                    <h3 className="text-sm font-semibold text-[var(--color-ink)]">
-                      Delete code block?
-                    </h3>
-                    <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
-                      This code snippet has content. Deleting it will
-                      permanently remove the text.
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-[var(--color-line)] bg-[var(--color-surface-secondary)]">
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteConfirm(false)}
-                      className="px-3 py-1.5 text-sm rounded-lg border border-[var(--color-line)] text-[var(--color-ink)] hover:bg-[var(--color-surface-primary)] transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onDeleteCodeBlock?.();
-                        setShowDeleteConfirm(false);
-                      }}
-                      className="px-3 py-1.5 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </dialog>
-              </>,
-              document.body,
-            )}
         </div>
       );
 
     case "quote":
-    return (
-      <div className="flex my-0.5">
-        <div className="w-1 bg-[var(--color-ink)] rounded-full shrink-0 mr-3" />
-        <div className="flex-1 min-w-0">
-          <EditableContent
-            content={block.content}
-            className="text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic"
-            placeholder="Quote…"
-            onChange={onChange}
-            onKeyDown={onKeyDown}
-            onPaste={onPaste}
-            onRequestSlashMenu={onRequestSlashMenu}
-          />
-          {renderChildren?.()}
+      return (
+        <div className="flex my-0.5">
+          <div className="w-1 bg-[var(--color-ink)] rounded-full shrink-0 mr-3" />
+          <div className="flex-1 min-w-0">
+            <EditableContent
+              content={block.content}
+              className="text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic"
+              placeholder="Quote…"
+              onChange={onChange}
+              onKeyDown={onKeyDown}
+              onPaste={onPaste}
+              onRequestSlashMenu={onRequestSlashMenu}
+            />
+            {renderChildren?.()}
+          </div>
         </div>
-      </div>
-    );
+      );
 
     case "callout": {
-    const icon = block.color || "💡";
-    const colors = {
-      bg: "bg-[var(--color-surface-primary)]",
-      border: "border-[var(--color-line)]",
-      text: "text-[var(--color-ink)]",
-    };
-    return (
-      <div
-        className={`flex items-start gap-3 p-3 rounded-lg border my-0.5 ${colors.bg} ${colors.border}`}
-      >
-        <div className="relative shrink-0">
-          <button
-            type="button"
-            className={`inline-flex cursor-pointer items-center justify-center rounded ${colors.text}`}
-            aria-label="Change callout icon"
-            title="Change callout icon"
-            onClick={() => setShowCalloutIconPicker((prev) => !prev)}
-          >
-            <AssetRenderer value={icon} size={20} />
-          </button>
-          {showCalloutIconPicker && (
-            <EmojiPicker
-              current={icon}
-              onSelect={(nextIcon) => {
-                updateBlock(pageId, block.id, { color: nextIcon });
-              }}
-              onRemove={() => {
-                updateBlock(pageId, block.id, { color: "💡" });
-              }}
-              onClose={() => setShowCalloutIconPicker(false)}
+      const icon = block.color || "💡";
+      const colors = {
+        bg: "bg-[var(--color-surface-primary)]",
+        border: "border-[var(--color-line)]",
+        text: "text-[var(--color-ink)]",
+      };
+      return (
+        <div
+          className={`flex items-start gap-3 p-3 rounded-lg border my-0.5 ${colors.bg} ${colors.border}`}
+        >
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              className={`inline-flex cursor-pointer items-center justify-center rounded ${colors.text}`}
+              aria-label="Change callout icon"
+              title="Change callout icon"
+              onClick={() => setShowCalloutIconPicker((prev) => !prev)}
+            >
+              <AssetRenderer value={icon} size={20} />
+            </button>
+            {showCalloutIconPicker && (
+              <EmojiPicker
+                current={icon}
+                onSelect={(nextIcon) => {
+                  updateBlock(pageId, block.id, { color: nextIcon });
+                }}
+                onRemove={() => {
+                  updateBlock(pageId, block.id, { color: "💡" });
+                }}
+                onClose={() => setShowCalloutIconPicker(false)}
+              />
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <EditableContent
+              content={block.content}
+              className={`text-sm ${colors.text} leading-relaxed py-0.5`}
+              placeholder={getBlockPlaceholder(block, "Type '/' for commands…")}
+              onChange={onChange}
+              onKeyDown={onKeyDown}
+              onPaste={onPaste}
+              onRequestSlashMenu={onRequestSlashMenu}
             />
-          )}
+            {renderChildren?.()}
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <EditableContent
-            content={block.content}
-            className={`text-sm ${colors.text} leading-relaxed py-0.5`}
-            placeholder={getBlockPlaceholder(block, "Type '/' for commands…")}
-            onChange={onChange}
-            onKeyDown={onKeyDown}
-            onPaste={onPaste}
-            onRequestSlashMenu={onRequestSlashMenu}
-          />
-          {renderChildren?.()}
-        </div>
-      </div>
       );
     }
 
@@ -580,7 +470,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <button
           type="button"
           className="w-full py-2 rounded outline-none focus:bg-[var(--color-surface-secondary)]"
-          onKeyDown={onKeyDown}
+          onKeyDown={(e) => {
+            onKeyDown(e);
+          }}
           aria-label="Divider block"
         >
           <hr className="w-full h-px border-0 bg-[var(--color-ink-faint)]" />
@@ -589,21 +481,55 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "table_block":
       return (
-        <TableBlockEditor
-          block={block}
-          pageId={pageId}
-          onDeleteTable={onDeleteCodeBlock}
-        />
+        <div // NOSONAR - keyboard navigation wrapper for non-editable block
+          onKeyDown={(e) => {
+            if (
+              e.key === "ArrowUp" ||
+              e.key === "ArrowDown" ||
+              e.key === "Backspace" ||
+              e.key === "Delete" ||
+              e.key === "Enter" ||
+              e.key === "Escape"
+            ) {
+              onKeyDown(e);
+            }
+          }}
+          tabIndex={-1}
+          aria-label="Table block"
+        >
+          <TableBlockEditor
+            block={block}
+            pageId={pageId}
+            onDeleteTable={onDeleteCodeBlock}
+          />
+        </div>
       );
 
     case "database_inline":
     case "database_full_page":
       return (
-        <DatabaseBlock
-          databaseId={block.databaseId}
-          initialViewId={block.viewId}
-          mode="inline"
-        />
+        <div // NOSONAR - keyboard navigation wrapper for non-editable block
+          onKeyDown={(e) => {
+            if (
+              e.key === "ArrowUp" ||
+              e.key === "ArrowDown" ||
+              e.key === "Backspace" ||
+              e.key === "Delete" ||
+              e.key === "Enter" ||
+              e.key === "Escape"
+            ) {
+              onKeyDown(e);
+            }
+          }}
+          tabIndex={-1}
+          aria-label="Database block"
+        >
+          <DatabaseBlock
+            databaseId={block.databaseId}
+            initialViewId={block.viewId}
+            mode="inline"
+          />
+        </div>
       );
 
     default:
@@ -731,7 +657,7 @@ const TableBlockEditor: React.FC<{
           <tbody>
             {data.map((row, ri) => (
               <tr
-                key={`row-${ri}-${row.join("¦")}`}
+                key={`row-${ri}`} // NOSONAR - positional keys are correct for table grid cells
                 className={
                   ri === 0
                     ? "bg-[var(--color-surface-secondary)] font-medium"
@@ -740,7 +666,7 @@ const TableBlockEditor: React.FC<{
               >
                 {row.map((cell, ci) => (
                   <td
-                    key={`cell-${ri}-${ci}-${cell}`}
+                    key={`cell-${ri}-${ci}`} // NOSONAR - positional keys are correct for table grid cells
                     className="border-b border-r border-[var(--color-line)] last:border-r-0 px-0 py-0 min-w-[120px] text-[var(--color-ink)]"
                     onContextMenu={(e) => openContextMenu(e, ri, ci)}
                   >

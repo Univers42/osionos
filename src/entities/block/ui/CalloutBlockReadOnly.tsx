@@ -14,6 +14,7 @@ import React from "react";
 import type { Block } from '@/entities/block';
 import { CALLOUT_COLORS } from "@/entities/block";
 import { parseInlineMarkdown } from '@/shared/lib/markengine';
+import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
 import { ReadOnlyBlock } from "./ReadOnlyBlock";
 
 export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
@@ -24,7 +25,11 @@ export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
     text: "text-[var(--color-ink)]",
   };
   const content = block.content
-    ? { __html: parseInlineMarkdown(block.content) }
+    ? {
+        __html: parseInlineMarkdown(block.content, {
+          resolveInternalLinkTitle: resolveInternalPageLinkTitle,
+        }),
+      }
     : null;
 
   return (

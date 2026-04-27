@@ -44,6 +44,8 @@ export const MediaAssetPicker: React.FC<MediaAssetPickerProps> = ({
 
   return (
     <div
+      data-testid="media-asset-picker"
+      data-media-kind={kind}
       className="flex h-full min-h-0 flex-col overflow-hidden"
       style={{ height }}
     >

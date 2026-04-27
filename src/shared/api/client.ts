@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-const BASE = (import.meta.env as Record<string, string>)['VITE_API_URL'] ?? 'http://localhost:4000';
+const BASE = ((import.meta.env as Record<string, string>)['VITE_API_URL'] ?? '').trim();
 
 async function request<T>(
   method: string,
@@ -18,6 +18,10 @@ async function request<T>(
   body?: unknown,
   jwt?: string,
 ): Promise<T> {
+  if (!BASE) {
+    throw new Error("VITE_API_URL is not configured.");
+  }
+
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (jwt) headers['Authorization'] = `Bearer ${jwt}`;
 

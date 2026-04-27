@@ -122,9 +122,27 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="relative flex h-screen w-screen overflow-hidden bg-[var(--color-surface-primary)]">
+    <div
+      data-testid="app-shell"
+      className="relative flex h-screen w-screen overflow-hidden bg-[var(--color-surface-primary)]"
+    >
       {/* Left sidebar */}
-      <Sidebar onOpenHome={() => usePageStore.setState({ activePage: null })} />
+      <Sidebar
+        onOpenHome={() =>
+          usePageStore.setState({
+            activePage: null,
+            showTrash: false,
+            navigationPath: [],
+          })
+        }
+        onOpenTrash={() =>
+          usePageStore.setState({
+            activePage: null,
+            showTrash: true,
+            navigationPath: [],
+          })
+        }
+      />
 
       {/* Floating trigger for when sidebar is closed */}
       <SidebarTrigger />

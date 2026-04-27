@@ -10,7 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { MediaBlockType } from "@/entities/block";
 import { MediaAssetPicker } from "@/shared/ui/molecules/MediaAssetPicker";
@@ -19,15 +25,21 @@ import {
   groupSlashCommands,
 } from "@/features/slash-commands/model/slashMenuCatalog";
 import type {
+  SlashCreatePageCommand,
   SlashBlockCommand,
   SlashCommand,
+  SlashMediaPickerCommand,
   SlashTurnIntoCommand,
 } from "@/features/slash-commands/model/types";
+
+type SelectableSlashCommand = Exclude<SlashCommand, SlashMediaPickerCommand>;
 
 interface SlashCommandMenuProps {
   position: { x: number; y: number };
   filter: string;
-  onSelect: (item: SlashBlockCommand | SlashTurnIntoCommand) => void;
+  onSelect: (
+    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand,
+  ) => void;
   onMediaSelect: (kind: MediaBlockType, value: string) => void;
   onClose: () => void;
 }
@@ -71,7 +83,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
         return;
       }
 
-      onSelect(command);
+      onSelect(command as SelectableSlashCommand);
     },
     [onSelect],
   );
@@ -108,6 +120,14 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     return () => document.removeEventListener("keydown", handler, true);
   }, [effectiveActiveIdx, filtered, handleCommandSelect, onClose]);
 
+  // Auto-scroll active item into view when navigating with keyboard
+  useEffect(() => {
+    const container = ref.current?.querySelector(".overflow-y-auto");
+    if (!container) return;
+    const activeEl = container.querySelectorAll("button")[effectiveActiveIdx];
+    activeEl?.scrollIntoView({ block: "nearest" });
+  }, [effectiveActiveIdx]);
+
   if (filtered.length === 0 && !activeMediaKind) {
     return null;
   }
@@ -125,6 +145,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   return (
     <div
       ref={ref}
+      data-testid="slash-command-menu"
       className="fixed z-[10000] flex max-h-[26rem] overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-2xl"
       style={{ top: position.y + 4, left: position.x }}
     >
@@ -155,6 +176,8 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                     <button
                       key={item.id}
                       type="button"
+                      data-testid="slash-command-entry"
+                      data-command-label={item.label}
                       className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${
                         isActive || isPickerSelected
                           ? "bg-[var(--color-surface-hover)]"
@@ -181,7 +204,10 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       </div>
 
       {activeMediaKind && (
-        <div className="flex w-[296px] min-w-0 flex-col border-l border-[var(--color-line)]">
+        <div
+          data-testid="slash-media-picker"
+          className="flex w-[296px] min-w-0 flex-col border-l border-[var(--color-line)]"
+        >
           <div className="flex items-center justify-between border-b border-[var(--color-line)] px-3 py-2">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-faint)]">

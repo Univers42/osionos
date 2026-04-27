@@ -71,6 +71,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   return (
     <div
       ref={panelRef}
+      data-testid="emoji-picker"
       style={{
         position: 'absolute',
         zIndex: 1000,
@@ -87,6 +88,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
       <div className="mt-2 flex justify-end">
         <button
           type="button"
+          data-testid="emoji-picker-remove"
           className={[
             'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
             'text-[var(--color-ink-muted)] hover:bg-red-50 hover:text-red-600',

@@ -6,8 +6,8 @@
   justify-content: center;
   z-index: 100;
   padding: 1rem;
-  background-color: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(1px);
+  background-color: var(--color-backdrop);
+  backdrop-filter: blur(4px);
 }
 
 .modal {

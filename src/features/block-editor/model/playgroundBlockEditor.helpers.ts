@@ -6,7 +6,7 @@
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/19 10:03:45 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/21 10:26:39 by vjan-nie         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,12 @@ import type { Block } from '@/entities/block';
 import { continuesSameType } from '@/entities/block';
 
 export interface SlashMenuState {
+  blockId: string;
+  position: { x: number; y: number };
+  filter: string;
+}
+
+export interface PageSelectorMenuState {
   blockId: string;
   position: { x: number; y: number };
   filter: string;
@@ -36,10 +42,30 @@ export function getAdjacentRenderedBlockId(
   return orderedBlocks[idx + offset]?.dataset.blockId ?? null;
 }
 
-export function handleArrowUp(blockId: string, content: Block[], focusBlock: (id: string, end?: boolean) => void): boolean {
+export function handleArrowUp(
+  blockId: string,
+  content: Block[],
+  focusBlock: (id: string, end?: boolean) => void,
+): boolean {
   const sel = globalThis.getSelection();
-  const range = sel?.getRangeAt(0);
-  if (!range?.collapsed || range.startOffset !== 0) return false;
+  if (!sel?.rangeCount) {
+    // No selection (divider, non-text blocks) — jump directly
+    const prevId = getAdjacentRenderedBlockId(blockId, 'prev');
+    if (prevId) { focusBlock(prevId, true); return true; }
+    return false;
+  }
+
+  const range = sel.getRangeAt(0);
+  if (!range.collapsed) return false;
+
+  // Check if cursor is at the very start of the editable content.
+  const blockEl = document.querySelector(`[data-block-id="${blockId}"] [contenteditable]`);
+  if (blockEl) {
+    const testRange = document.createRange();
+    testRange.setStart(blockEl, 0);
+    testRange.setEnd(range.startContainer, range.startOffset);
+    if (testRange.toString().length > 0) return false;
+  }
 
   const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, 'prev');
   if (prevRenderedBlockId) {
@@ -57,13 +83,40 @@ export function handleArrowUp(blockId: string, content: Block[], focusBlock: (id
 }
 
 export function handleArrowDown(
-  blockId: string, content: Block[], el: HTMLElement, focusBlock: (id: string, end?: boolean) => void,
+  blockId: string,
+  content: Block[],
+  el: HTMLElement,
+  focusBlock: (id: string, end?: boolean) => void,
 ): boolean {
   const sel = globalThis.getSelection();
-  const range = sel?.getRangeAt(0);
-  if (!range?.collapsed || range.endOffset !== (el.textContent?.length ?? 0)) return false;
+  const blockEl = document.querySelector(`[data-block-id="${blockId}"] [contenteditable]`);
+
+  if (!sel?.rangeCount) {
+    console.log("  → no range, jumping directly");
+    const nextId = getAdjacentRenderedBlockId(blockId, 'next');
+    if (nextId) { focusBlock(nextId); return true; }
+    return false;
+  }
+
+  const range = sel.getRangeAt(0);
+  if (!range.collapsed) {
+    console.log("  → range not collapsed, skipping");
+    return false;
+  }
+
+  if (blockEl) {
+    const testRange = document.createRange();
+    testRange.setStart(range.endContainer, range.endOffset);
+    testRange.setEnd(blockEl, blockEl.childNodes.length);
+    const remainingText = testRange.toString();
+    console.log("  → remaining text after cursor:", JSON.stringify(remainingText), "length:", remainingText.length);
+    if (remainingText.length > 0) return false;
+  } else {
+    console.log("  → no contenteditable found, jumping directly");
+  }
 
   const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, 'next');
+  console.log("  → jumping to:", nextRenderedBlockId);
   if (nextRenderedBlockId) {
     focusBlock(nextRenderedBlockId);
     return true;

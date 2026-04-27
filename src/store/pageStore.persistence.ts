@@ -15,6 +15,8 @@ import { isMongoId } from './pageStore.helpers';
 import type { PageEntry } from '@/entities/page';
 import { canEditPage, getCurrentPageAccessContext } from '@/shared/lib/auth/pageAccess';
 
+const API_BASE = ((import.meta.env as Record<string, string>)['VITE_API_URL'] ?? '').trim();
+
 /** Lazy JWT getter — avoids importing useUserStore at module top level */
 export function getActiveJwt(): string | null {
   try {
@@ -59,8 +61,8 @@ function flushPendingPersists() {
     if (!page?.content) continue;
     if (!canEditPage(page, getCurrentPageAccessContext())) continue;
     const jwt = getActiveJwt();
-    if (!jwt) continue;
-    const url = `${(import.meta.env as Record<string, string>)['VITE_API_URL'] ?? 'http://localhost:4000'}/api/pages/${pageId}`;
+    if (!jwt || !API_BASE) continue;
+    const url = `${API_BASE}/api/pages/${pageId}`;
     // sendBeacon doesn't support custom headers — fall back to sync XHR
     try {
       const xhr = new XMLHttpRequest();

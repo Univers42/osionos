@@ -82,17 +82,19 @@ export const PageCover: React.FC<PageCoverProps> = ({
   }, [onRemoveCover]);
 
   return (
-    <div className="notion-page-cover">
-      <div className="notion-page-cover-media">
+    <div data-testid="page-cover" className="notion-page-cover">
+      <div data-testid="page-cover-media" className="notion-page-cover-media">
         {isUrl ? (
           <img
             src={coverSrc}
             alt=""
+            data-testid="page-cover-image"
             className="notion-page-cover-img"
             draggable={false}
           />
         ) : (
           <div
+            data-testid="page-cover-gradient"
             className="notion-page-cover-gradient"
             style={{ background: cover }}
           />
@@ -103,6 +105,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
       <div className="notion-page-cover-controls">
         <button
           type="button"
+          data-testid="page-cover-toggle-picker"
           className="notion-page-cover-btn"
           onClick={() => setShowPicker((v) => !v)}
         >
@@ -111,6 +114,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
         </button>
         <button
           type="button"
+          data-testid="page-cover-remove"
           className="notion-page-cover-btn"
           onClick={handleRemove}
         >
@@ -122,6 +126,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
       {showPicker && (
         <div
           ref={pickerRef}
+          data-testid="page-cover-picker"
           style={{
             position: 'absolute',
             zIndex: 1000,

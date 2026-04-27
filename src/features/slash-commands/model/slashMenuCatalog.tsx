@@ -13,9 +13,11 @@
 import {
   COLLECTION_SLASH_ITEMS,
   COLLECTION_SLASH_SECTION_LABELS,
+  IconPage,
 } from "@/shared/lib/markengine/uiCollectionAssets";
 import type { BlockType, MediaBlockType } from "@/entities/block";
 import type {
+  SlashCreatePageCommand,
   SlashCommand,
   SlashCommandSection,
   SlashTurnIntoCommand,
@@ -135,7 +137,19 @@ export const TURN_INTO_COMMANDS: SlashTurnIntoCommand[] =
     };
   });
 
+const CREATE_PAGE_COMMAND: SlashCreatePageCommand[] = [
+  {
+    id: "basic:create-page",
+    kind: "create-page",
+    section: "basic",
+    label: "Page",
+    icon: <IconPage />,
+    description: "Create a new page and link it from here",
+  },
+];
+
 export const SLASH_COMMANDS: SlashCommand[] = [
+  ...CREATE_PAGE_COMMAND,
   ...BASE_SLASH_COMMANDS,
   ...TURN_INTO_COMMANDS,
 ];

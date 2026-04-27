@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   useSlashSelect.ts                                  :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:14 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:04:15 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/22 11:30:02 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,35 +17,31 @@ import {
   type Block,
   type BlockType,
   type MediaBlockType,
+  findBlockInTree,
 } from "@/entities/block";
 import type { SlashMenuState } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
+import { focusEditableBlock } from "@/features/block-editor/model/blockDomFocus";
 
 interface UseSlashSelectOptions {
   pageId: string;
   slashMenu: SlashMenuState | null;
   setSlashMenu: (menu: SlashMenuState | null) => void;
-  updateBlock: (pageId: string, blockId: string, updates: Partial<Block>) => void;
-  changeBlockType: (pageId: string, blockId: string, newType: BlockType) => void;
+  updateBlock: (
+    pageId: string,
+    blockId: string,
+    updates: Partial<Block>,
+  ) => void;
+  changeBlockType: (
+    pageId: string,
+    blockId: string,
+    newType: BlockType,
+  ) => void;
   insertBlock: (pageId: string, afterBlockId: string, block: Block) => void;
-  createInlineDatabase: (name?: string) => { databaseId: string; viewId: string } | null;
+  createInlineDatabase: (
+    name?: string,
+  ) => { databaseId: string; viewId: string } | null;
+  createPageInPrivateWorkspace: () => Promise<{ id: string } | null>;
   focusBlock: (blockId: string, end?: boolean) => void;
-}
-
-function findBlockInTree(blocks: Block[], blockId: string): Block | null {
-  for (const block of blocks) {
-    if (block.id === blockId) {
-      return block;
-    }
-
-    if (block.children?.length) {
-      const nested = findBlockInTree(block.children, blockId);
-      if (nested) {
-        return nested;
-      }
-    }
-  }
-
-  return null;
 }
 
 function stripSlashQuery(content: string): string {
@@ -53,25 +49,17 @@ function stripSlashQuery(content: string): string {
   return slashIdx >= 0 ? content.slice(0, slashIdx) : content;
 }
 
+function appendInternalPageLink(content: string, pageId: string): string {
+  const trimmed = content.replace(/\s+$/, "");
+  const separator = trimmed.length > 0 ? " " : "";
+  return `${trimmed}${separator}[[page:${pageId}]] `;
+}
+
 /**
- * Places the cursor at the start of a block's editable content.
+ * Places the cursor at the start or end of a block's editable content.
  */
 export function repositionCursor(blockId: string, _content: string) {
-  setTimeout(() => {
-    const el = document.querySelector(
-      `[data-block-id="${blockId}"] [contenteditable]`,
-    ) as HTMLElement;
-    if (!el) return;
-    el.focus();
-    const sel = globalThis.getSelection();
-    if (sel) {
-      const range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    }
-  }, 30);
+  focusEditableBlock(blockId, "start");
 }
 
 export function useSlashSelect({
@@ -82,6 +70,7 @@ export function useSlashSelect({
   changeBlockType,
   insertBlock,
   createInlineDatabase,
+  createPageInPrivateWorkspace,
   focusBlock,
 }: UseSlashSelectOptions) {
   const applyBlockSelection = useCallback(
@@ -226,9 +215,41 @@ export function useSlashSelect({
     ],
   );
 
+  const handleSlashCreatePageSelect = useCallback(
+    async (content: Block[]) => {
+      if (!slashMenu) return;
+      const { blockId } = slashMenu;
+
+      setSlashMenu(null);
+
+      const block = findBlockInTree(content, blockId);
+      if (!block) return;
+
+      const cleanContent = stripSlashQuery(block.content ?? "");
+      const createdPage = await createPageInPrivateWorkspace();
+      const nextContent = createdPage
+        ? appendInternalPageLink(cleanContent, createdPage.id)
+        : cleanContent;
+
+      updateBlock(pageId, blockId, {
+        content: nextContent,
+        placeholderText: undefined,
+      });
+      repositionCursor(blockId, nextContent);
+    },
+    [
+      slashMenu,
+      setSlashMenu,
+      createPageInPrivateWorkspace,
+      updateBlock,
+      pageId,
+    ],
+  );
+
   return {
     handleSlashBlockSelect,
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
+    handleSlashCreatePageSelect,
   };
 }

@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   usePlaygroundBlockEditor.ts                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/20 10:21:49 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/22 11:30:41 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,6 +18,7 @@ import React, {
   useCallback,
 } from "react";
 import { usePageStore } from "@/store/usePageStore";
+import { useUserStore } from "@/features/auth";
 import {
   detectBlockType,
   getCalloutIconForKind,
@@ -31,6 +32,7 @@ import {
   isListBlock,
   isEffectivelyEmpty,
   enterCreatesChild,
+  findBlockInTree,
 } from "@/entities/block";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
 import type { Block } from "@/entities/block";
@@ -38,11 +40,14 @@ import {
   handleArrowUp,
   handleArrowDown,
   handleEnterKey,
-  handleBackspaceKey,
   getAdjacentRenderedBlockId,
 } from "./playgroundBlockEditor.helpers";
-import type { SlashMenuState } from "./playgroundBlockEditor.helpers";
+import type {
+  SlashMenuState,
+  PageSelectorMenuState,
+} from "./playgroundBlockEditor.helpers";
 import { useBlockContextMenu } from "./useBlockContextMenu";
+import { focusEditableBlock } from "./blockDomFocus";
 
 const HEADING_SHORTCUT_RE = /^#{1,6}$/;
 const NUMBERED_SHORTCUT_RE = /^\d+\.$/;
@@ -84,6 +89,18 @@ function parsePipeTable(text: string): string[][] | null {
 
 function isEffectivelyEmptyForDeletion(text: string): boolean {
   return text.replaceAll("\u200B", "").trim().length === 0;
+}
+
+function normalizeCreatedPageTitleFromLinkQuery(query: string): string {
+  const trimmed = query.trim();
+  if (!trimmed) return "Untitled";
+
+  if (!trimmed.endsWith("]]")) {
+    return trimmed;
+  }
+
+  const withoutClosingBrackets = trimmed.slice(0, -2).trimEnd();
+  return withoutClosingBrackets || "Untitled";
 }
 
 function toBlockUpdates(block: Block): Partial<Block> {
@@ -136,28 +153,14 @@ export function usePlaygroundBlockEditor(pageId: string) {
   } = usePageStore.getState();
 
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null);
+  const [pageSelector, setPageSelector] =
+    useState<PageSelectorMenuState | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
   const contentRef = useRef<Block[]>([]);
 
   /** Focus a block element after a short delay. */
   const focusBlock = useCallback((blockId: string, cursorEnd = false) => {
-    setTimeout(() => {
-      const el =
-        blockRefs.current.get(blockId) ??
-        (document.querySelector(`[data-block-id="${blockId}"]`) as HTMLElement);
-      if (!el) return;
-      const editable =
-        (el.querySelector("[contenteditable]") as HTMLElement) ?? el;
-      editable.focus();
-      if (cursorEnd && editable.childNodes.length) {
-        const sel = globalThis.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(editable);
-        range.collapse(false);
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-      }
-    }, 30);
+    focusEditableBlock(blockId, cursorEnd ? "end" : "start");
   }, []);
 
   /** Get the bounding rect of the caret. */
@@ -216,9 +219,11 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
       const slashIdx = text.lastIndexOf("/");
       if (slashIdx >= 0) {
-        setSlashMenu((prev) =>
-          prev ? { ...prev, filter: text.slice(slashIdx + 1) } : null,
-        );
+        const newFilter = text.slice(slashIdx + 1);
+        setSlashMenu((prev) => {
+          if (prev?.filter === newFilter) return prev;
+          return prev ? { ...prev, filter: newFilter } : null;
+        });
       } else {
         setSlashMenu(null);
       }
@@ -226,6 +231,31 @@ export function usePlaygroundBlockEditor(pageId: string) {
       return true;
     },
     [slashMenu, getCaretRect],
+  );
+
+  const tryHandlePageSelectorMenu = useCallback(
+    (blockId: string, text: string): boolean => {
+      if (text.endsWith("[[") && !pageSelector) {
+        setPageSelector({ blockId, position: getCaretRect(), filter: "" });
+        return true;
+      }
+
+      if (pageSelector?.blockId !== blockId) return false;
+
+      const triggerIdx = text.lastIndexOf("[[");
+      if (triggerIdx >= 0) {
+        const newFilter = text.slice(triggerIdx + 2);
+        setPageSelector((prev) => {
+          if (prev?.filter === newFilter) return prev;
+          return prev ? { ...prev, filter: newFilter } : null;
+        });
+      } else {
+        setPageSelector(null);
+      }
+
+      return true;
+    },
+    [pageSelector, getCaretRect],
   );
 
   const tryHandleMarkdownShortcut = useCallback(
@@ -256,12 +286,14 @@ export function usePlaygroundBlockEditor(pageId: string) {
       persistBlockText(blockId, text);
       if (tryHandleCodeOrTable(blockId, text)) return;
       if (tryHandleSlashMenu(blockId, text)) return;
+      if (tryHandlePageSelectorMenu(blockId, text)) return;
       tryHandleMarkdownShortcut(blockId, text);
     },
     [
       persistBlockText,
       tryHandleCodeOrTable,
       tryHandleSlashMenu,
+      tryHandlePageSelectorMenu,
       tryHandleMarkdownShortcut,
     ],
   );
@@ -274,6 +306,22 @@ export function usePlaygroundBlockEditor(pageId: string) {
         e.preventDefault();
         changeBlockType(pageId, blockId, "bulleted_list");
         updateBlock(pageId, blockId, { content: "" });
+        focusBlock(blockId);
+        return true;
+      }
+
+      if (
+        block.content === "[]" ||
+        block.content === "[ ]" ||
+        block.content === "[x]" ||
+        block.content === "[X]"
+      ) {
+        e.preventDefault();
+        changeBlockType(pageId, blockId, "to_do");
+        updateBlock(pageId, blockId, {
+          content: "",
+          checked: block.content === "[x]" || block.content === "[X]",
+        });
         focusBlock(blockId);
         return true;
       }
@@ -373,7 +421,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       if (
         e.key !== "Enter" ||
         e.shiftKey ||
-        block.type !== 'to_do' ||
+        block.type !== "to_do" ||
         !isEmpty
       ) {
         return false;
@@ -447,6 +495,26 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [pageId, deleteBlock, focusBlock],
   );
 
+  const deleteAndFocusAdjacent = useCallback(
+    (e: React.KeyboardEvent, blockId: string) => {
+      e.preventDefault();
+      const nextId = getAdjacentRenderedBlockId(blockId, "next");
+      const prevId = getAdjacentRenderedBlockId(blockId, "prev");
+      deleteBlock(pageId, blockId);
+
+      const preferNext = e.key === "Delete";
+      const primaryId = preferNext ? nextId : prevId;
+      const fallbackId = preferNext ? prevId : nextId;
+
+      if (primaryId) {
+        focusBlock(primaryId, !preferNext);
+      } else if (fallbackId) {
+        focusBlock(fallbackId, preferNext);
+      }
+    },
+    [pageId, deleteBlock, focusBlock],
+  );
+
   const handleEmptyBackspace = useCallback(
     (
       e: React.KeyboardEvent,
@@ -469,15 +537,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       }
 
       if (isListBlock(block.type)) {
-        e.preventDefault();
-        const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, "next");
-        const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, "prev");
-        deleteBlock(pageId, blockId);
-        if (nextRenderedBlockId) {
-          focusBlock(nextRenderedBlockId);
-        } else if (prevRenderedBlockId) {
-          focusBlock(prevRenderedBlockId, true);
-        }
+        deleteAndFocusAdjacent(e, blockId);
         return true;
       }
 
@@ -490,14 +550,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       }
 
       if (content.length >= 1) {
-        handleBackspaceKey(
-          e,
-          blockId,
-          content,
-          pageId,
-          deleteBlock,
-          focusBlock,
-        );
+        deleteAndFocusAdjacent(e, blockId);
         return true;
       }
 
@@ -505,11 +558,11 @@ export function usePlaygroundBlockEditor(pageId: string) {
     },
     [
       pageId,
-      deleteBlock,
       changeBlockType,
       updateBlock,
       focusBlock,
       outdentBlock,
+      deleteAndFocusAdjacent,
     ],
   );
 
@@ -568,11 +621,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
   );
 
   const handleContainerEnter = useCallback(
-    (
-      e: React.KeyboardEvent,
-      blockId: string,
-      block: Block,
-    ): boolean => {
+    (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
       if (
         e.key !== "Enter" ||
         e.shiftKey ||
@@ -583,7 +632,11 @@ export function usePlaygroundBlockEditor(pageId: string) {
       }
 
       e.preventDefault();
-      const child: Block = { id: crypto.randomUUID(), type: "paragraph", content: "" };
+      const child: Block = {
+        id: crypto.randomUUID(),
+        type: "paragraph",
+        content: "",
+      };
       const existingChildren = block.children ?? [];
       updateBlock(pageId, blockId, { children: [...existingChildren, child] });
       focusBlock(child.id);
@@ -600,7 +653,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       parentBlockId: string | null = null,
     ) => {
       const content = parentBlockId
-        ? findChildrenForParent(contentRef.current, parentBlockId) ?? []
+        ? (findChildrenForParent(contentRef.current, parentBlockId) ?? [])
         : contentRef.current;
       const block = content.find((b) => b.id === blockId);
       if (!block) return;
@@ -610,56 +663,92 @@ export function usePlaygroundBlockEditor(pageId: string) {
       const isEmpty = isEffectivelyEmpty(liveText);
       const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
 
-    const handled =
-      handleBlockIndentation(e, blockId, block, content) ||
-      handleParagraphSpaceShortcut(e, blockId, block) ||
-      handleEmptyListEnter(e, blockId, block, blockIdx, content, isEmpty) ||
-      handleEmptyTodoEnter(e, blockId, block, isEmpty) ||
-      handleEmptyListDelete(e, blockId, block, blockIdx, content, isEmpty) ||
-      handleDividerDelete(e, blockId, block, blockIdx, content) ||
-      (e.key === "Enter" && block.type === "code") ||
-      handleContainerEnter(e, blockId, block);
+      const handled =
+        handleBlockIndentation(e, blockId, block, content) ||
+        handleParagraphSpaceShortcut(e, blockId, block) ||
+        handleEmptyListEnter(e, blockId, block, blockIdx, content, isEmpty) ||
+        handleEmptyTodoEnter(e, blockId, block, isEmpty) ||
+        handleEmptyListDelete(e, blockId, block, blockIdx, content, isEmpty) ||
+        handleDividerDelete(e, blockId, block, blockIdx, content) ||
+        (e.key === "Enter" && block.type === "code") ||
+        handleContainerEnter(e, blockId, block);
 
-    if (handled) return;
+      if (handled) return;
 
-    if (e.key === "Enter" && !e.shiftKey) {
-      handleEnterKey(e, blockId, block.type, slashMenu, pageId, insertBlock, focusBlock);
-      return;
-    }
+      if (e.key === "Enter" && !e.shiftKey) {
+        handleEnterKey(
+          e,
+          blockId,
+          block.type,
+          slashMenu,
+          pageId,
+          insertBlock,
+          focusBlock,
+        );
+        return;
+      }
 
-    if (handleEmptyBackspace(e, blockId, block, blockIdx, content, parentBlockId, isEmptyForDeletion)) {
-      return;
-    }
+      if (
+        handleEmptyBackspace(
+          e,
+          blockId,
+          block,
+          blockIdx,
+          content,
+          parentBlockId,
+          isEmptyForDeletion,
+        )
+      ) {
+        return;
+      }
 
-    if (handleArrowNavigation(e, blockId, content)) {
-      return;
-    }
+      if (handleArrowNavigation(e, blockId, content)) {
+        return;
+      }
 
-    if (e.key === "Escape" && slashMenu) {
-      setSlashMenu(null);
-    }
-  },
-  [
-    pageId,
-    slashMenu,
-    insertBlock,
-    focusBlock,
-    handleBlockIndentation,
-    handleParagraphSpaceShortcut,
-    handleEmptyListEnter,
-    handleEmptyTodoEnter,
-    handleEmptyListDelete,
-    handleDividerDelete,
-    handleContainerEnter,
-    handleEmptyBackspace,
-    handleArrowNavigation,
-  ],
-);
+      if (e.key === "Escape") {
+        if (slashMenu) setSlashMenu(null);
+        if (pageSelector) setPageSelector(null);
+      }
+    },
+    [
+      pageId,
+      slashMenu,
+      pageSelector,
+      insertBlock,
+      focusBlock,
+      handleBlockIndentation,
+      handleParagraphSpaceShortcut,
+      handleEmptyListEnter,
+      handleEmptyTodoEnter,
+      handleEmptyListDelete,
+      handleDividerDelete,
+      handleContainerEnter,
+      handleEmptyBackspace,
+      handleArrowNavigation,
+    ],
+  );
 
   /** Create a real inline database + default view in the shared DBMS store. */
   const createInlineDatabase = useCallback((name?: string) => {
     return useDatabaseStore.getState().createInlineDatabase(name);
   }, []);
+
+  const createPageInPrivateWorkspace = useCallback(
+    async (title = "Untitled") => {
+      const session = useUserStore.getState().activeSession();
+      const privateWorkspaceId = session?.privateWorkspaces[0]?._id;
+      if (!privateWorkspaceId) return null;
+
+      const jwt = session?.accessToken ?? "";
+      const page = await usePageStore
+        .getState()
+        .addPage(privateWorkspaceId, title, jwt);
+
+      return page ? { id: page._id } : null;
+    },
+    [],
+  );
 
   const page = usePageStore((s) => s.pageById(pageId));
   const content = useMemo(() => page?.content ?? [], [page?.content]);
@@ -685,6 +774,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
     handleSlashBlockSelect,
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
+    handleSlashCreatePageSelect,
   } = useSlashSelect({
     pageId,
     slashMenu,
@@ -693,8 +783,51 @@ export function usePlaygroundBlockEditor(pageId: string) {
     changeBlockType,
     insertBlock,
     createInlineDatabase,
+    createPageInPrivateWorkspace,
     focusBlock,
   });
+
+  const handlePageSelectorSelect = useCallback(
+    (targetPageId: string) => {
+      if (!pageSelector) return;
+      const { blockId } = pageSelector;
+      const block = findBlockInTree(contentRef.current, blockId);
+      if (!block) return;
+
+      const text = block.content;
+      const triggerIdx = text.lastIndexOf("[[");
+      if (triggerIdx >= 0) {
+        const newContent =
+          text.slice(0, triggerIdx) + `[[page:${targetPageId}]] `;
+        updateBlock(pageId, blockId, { content: newContent });
+        repositionCursor(blockId, newContent);
+      }
+      setPageSelector(null);
+    },
+    [pageSelector, pageId, updateBlock],
+  );
+
+  const handlePageSelectorCreate = useCallback(async () => {
+    if (!pageSelector) return;
+
+    const createdPageTitle = normalizeCreatedPageTitleFromLinkQuery(
+      pageSelector.filter,
+    );
+
+    const createdPage = await createPageInPrivateWorkspace(createdPageTitle);
+
+    if (!createdPage) {
+      setPageSelector(null);
+      return;
+    }
+
+    handlePageSelectorSelect(createdPage.id);
+  }, [
+    pageSelector,
+    createPageInPrivateWorkspace,
+    handlePageSelectorSelect,
+    setPageSelector,
+  ]);
 
   /** Add a new blank paragraph at the end. */
   const handleAddBlock = useCallback(
@@ -743,6 +876,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
   return {
     slashMenu,
     setSlashMenu,
+    pageSelector,
+    setPageSelector,
     contextMenu,
     contextMenuSections,
     openContextMenu,
@@ -753,6 +888,9 @@ export function usePlaygroundBlockEditor(pageId: string) {
     handleSlashSelect: handleSlashBlockSelect,
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
+    handleSlashCreatePageSelect,
+    handlePageSelectorSelect,
+    handlePageSelectorCreate,
     handleAddBlock,
     handleInitBlock,
     registerBlockRef,

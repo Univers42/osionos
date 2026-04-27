@@ -6,7 +6,7 @@
 #    By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/04/08 19:07:11 by dlesieur          #+#    #+#              #
-#    Updated: 2026/04/16 08:45:47 by rstancu          ###   ########.fr        #
+#    Updated: 2026/04/27 09:55:08 by rstancu          ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -21,6 +21,7 @@ RED   := \033[31m
 RESET := \033[0m
 
 DC := docker compose -f $(ROOT)docker-compose.yml
+TEST_WORKERS ?= 3
 
 .DEFAULT_GOAL := help
 help: ## Show available targets
@@ -31,13 +32,12 @@ help: ## Show available targets
 
 install: ## Install Node dependencies locally (requires Node 22+)
 	@echo -e "$(CYAN)Installing dependencies…$(RESET)"
-	npm install
+	npm ci
 	@echo -e "$(GREEN)✔ Dependencies installed$(RESET)"
 
 dev: update-submodules ## Start Vite dev server locally on :3001 (offline mode)
 	@echo -e "$(CYAN)Starting playground on http://localhost:3001 (offline mode)$(RESET)"
-	npm install @univers42/ui-collection@latest
-	npx vite --port 3001
+	npm run dev -- --port 3001
 
 dev-docker: ## Start full stack via Docker (Vite :3001 + MongoDB)
 	@echo -e "$(CYAN)Starting playground stack via Docker…$(RESET)"
@@ -104,7 +104,55 @@ audit: ## Full analysis: Typecheck + Lint + SonarQube (requires SonarQube up)
 		echo -e "$(YELLOW)⚠ SonarQube container not running, skipping scan$(RESET)"; \
 	fi
 
-ci: typecheck lint ## Run the same checks as GitHub Actions locally
+ci: typecheck lint ## Run the fast quality gates locally
+
+test: ## Developer-only browser regression tests run locally with Playwright Test
+	@echo -e "$(CYAN)Running browser regression tests locally…$(RESET)"
+	@if [ -n "$(strip $(TEST_FILTER))" ]; then \
+		echo -e "$(CYAN)Filter: $(TEST_FILTER)$(RESET)"; \
+		npm run test:e2e -- --grep "$(TEST_FILTER)"; \
+	else \
+		npm run test:e2e; \
+	fi
+
+test-serial: ## Run browser regression tests locally with a single worker
+	@echo -e "$(CYAN)Running browser regression tests locally in serial mode…$(RESET)"
+	@if [ -n "$(strip $(TEST_FILTER))" ]; then \
+		echo -e "$(CYAN)Filter: $(TEST_FILTER)$(RESET)"; \
+		npm run test:e2e:serial -- --grep "$(TEST_FILTER)"; \
+	else \
+		npm run test:e2e:serial; \
+	fi
+
+test-smoke: ## Run the browser smoke/harness subset only
+	@echo -e "$(CYAN)Running browser smoke tests…$(RESET)"
+	@if [ -n "$(strip $(TEST_FILTER))" ]; then \
+		echo -e "$(CYAN)Filter: $(TEST_FILTER)$(RESET)"; \
+		npm run test:e2e:smoke -- --grep "$(TEST_FILTER)"; \
+	else \
+		npm run test:e2e:smoke; \
+	fi
+
+test-setup: ## Install Playwright browsers and validate local test env
+	@echo -e "$(CYAN)Preparing browser test environment…$(RESET)"
+	npm run test:setup
+
+test-doctor: ## Validate local browser test prerequisites
+	@echo -e "$(CYAN)Checking browser test environment…$(RESET)"
+	npm run test:doctor
+
+test-ci: ## Optional local CI-style browser command; not used by GitHub Actions
+	@echo -e "$(CYAN)Running browser regression tests in CI mode…$(RESET)"
+	@if [ -n "$(strip $(TEST_FILTER))" ]; then \
+		echo -e "$(CYAN)Filter: $(TEST_FILTER)$(RESET)"; \
+		CI=1 npx playwright test --grep "$(TEST_FILTER)"; \
+	else \
+		CI=1 npx playwright test; \
+	fi
+
+test-docker: ## Run browser tests inside Docker using Playwright Test
+	@echo -e "$(CYAN)Running browser regression tests inside Docker…$(RESET)"
+	$(DC) run --rm --no-deps browser-tests
 
 # ── Database ─────────────────────────────────────────────────────────────
 
@@ -166,4 +214,5 @@ update-submodules: ## Update git submodules (if any)
 
 .PHONY: help install dev dev-docker up stop down build typecheck \
         db-up db-shell db-reset re clean logs logs-vite logs-mongo \
-        kill-ports status lint lint-fix audit ci sonar update-submodules
+        kill-ports status lint lint-fix audit ci sonar update-submodules \
+        test test-serial test-smoke test-setup test-doctor test-ci test-docker
