@@ -9,6 +9,7 @@ export default [
       "src/shared/lib/markengine/**/*",
       "src/shared/lib/markengine/dist/**/*",
       "src/shared/lib/markengine/playground/public/dist/**/*",
+      "src/components/database/**",
       "dist",
       "build",
       "node_modules",
