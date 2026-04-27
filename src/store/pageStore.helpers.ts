@@ -17,6 +17,9 @@ import type { ActivePage, PageEntry } from "@/entities/page";
 const RECENTS_KEY = "pg:recents";
 const PAGE_CACHE_KEY = "pg:pages";
 const PAGE_CACHE_SAVE_DELAY_MS = 180;
+const DUPLICATE_TITLE_SUFFIX_RE = /^(.*)\((\d{1,10})\)$/;
+// Maximum positive value for a signed 32-bit integer.
+const MAX_SIGNED_INT32 = 2147483647;
 
 /** A 24-hex-char string that looks like a MongoDB ObjectId. */
 const OBJECT_ID_RE = /^[a-f\d]{24}$/i;
@@ -24,6 +27,33 @@ const OBJECT_ID_RE = /^[a-f\d]{24}$/i;
 /** Returns `true` when `id` looks like a valid MongoDB ObjectId. */
 export function isMongoId(id: string): boolean {
   return OBJECT_ID_RE.test(id);
+}
+
+/**
+ * Generates the next duplicate title using Notion-style incremental
+ * numbering. If the title ends with ` (N)` where N is a valid positive
+ * integer below INT_MAX, increments N. Otherwise appends ` (1)`.
+ */
+export function nextDuplicateTitle(title: string): string {
+  if (title === "") {
+    return "(1)";
+  }
+
+  const match = DUPLICATE_TITLE_SUFFIX_RE.exec(title);
+  if (!match) {
+    return `${title} (1)`;
+  }
+
+  const [, prefix, duplicateNumber] = match;
+  const parsedDuplicateNumber = Number.parseInt(duplicateNumber, 10);
+  const isValidDuplicateNumber =
+    parsedDuplicateNumber > 0 && parsedDuplicateNumber < MAX_SIGNED_INT32;
+
+  if (!isValidDuplicateNumber) {
+    return `${title} (1)`;
+  }
+
+  return `${prefix}(${parsedDuplicateNumber + 1})`;
 }
 
 export function loadRecents(): ActivePage[] {
