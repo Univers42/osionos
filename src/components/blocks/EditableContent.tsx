@@ -79,6 +79,98 @@ function getInternalPageIdFromHref(href: string) {
     : null;
 }
 
+interface NavigablePage {
+  _id: string;
+  workspaceId: string;
+  databaseId?: string | null;
+  title: string;
+  icon?: string | null;
+}
+
+function openPageById(pageId: string | null | undefined): boolean {
+  if (!pageId) {
+    return false;
+  }
+
+  const page = usePageStore.getState().pageById(pageId) as NavigablePage | null;
+  if (!page) {
+    return false;
+  }
+
+  usePageStore.getState().openPage({
+    id: page._id,
+    workspaceId: page.workspaceId,
+    kind: page.databaseId ? "database" : "page",
+    title: page.title,
+    icon: page.icon ?? undefined,
+  });
+  return true;
+}
+
+function handleMentionMouseDown(
+  event: React.MouseEvent<HTMLDivElement>,
+  target: HTMLElement,
+): boolean {
+  const mention = target.closest(
+    ".page-mention-placeholder",
+  ) as HTMLElement | null;
+  if (!mention) {
+    return false;
+  }
+
+  const opened = openPageById(mention.dataset.pageId);
+  if (opened) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  return true;
+}
+
+function handleAnchorMouseDown(
+  event: React.MouseEvent<HTMLDivElement>,
+  target: HTMLElement,
+): boolean {
+  const anchor = target.closest("a[href]") as HTMLAnchorElement | null;
+  if (!anchor) {
+    return false;
+  }
+
+  const href = anchor.getAttribute("href");
+  if (!href) {
+    return true;
+  }
+
+  const normalizedHref = normalizeInlineLinkHref(href);
+  const internalPageId = getInternalPageIdFromHref(normalizedHref);
+
+  if (internalPageId) {
+    const opened = openPageById(internalPageId);
+    if (opened) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    return true;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  globalThis.open(normalizedHref, "_blank", "noopener,noreferrer");
+  return true;
+}
+
+function renderInlineHtmlPreservingLineBreaks(source: string): string {
+  const lines = source.split("\n");
+
+  return lines
+    .map((line) =>
+      parseInlineMarkdown(line, {
+        resolveInternalLinkTitle: resolveInternalPageLinkTitle,
+      }),
+    )
+    .join("<br />");
+}
+
 function normalizeInlineSource(source: string): string {
   return source.replaceAll(/[\r\n\u200B]/g, "").length === 0 ? "" : source;
 }
@@ -400,9 +492,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     }
 
     const html = nextContent
-      ? parseInlineMarkdown(nextContent, {
-          resolveInternalLinkTitle: resolveInternalPageLinkTitle,
-        })
+      ? renderInlineHtmlPreservingLineBreaks(nextContent)
       : "";
     renderedContentCache.current = {
       source: nextContent,
@@ -590,57 +680,15 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement | null;
-    if (!target) return;
-
-    // 1. Handle Wiki Links (Internal mentions)
-    const mention = target.closest(".page-mention-placeholder") as HTMLElement;
-    if (mention) {
-      const targetPageId = mention.dataset.pageId;
-      const page = targetPageId ? usePageStore.getState().pageById(targetPageId) : null;
-      if (page) {
-        e.preventDefault();
-        e.stopPropagation();
-        usePageStore.getState().openPage({
-          id: page._id,
-          workspaceId: page.workspaceId,
-          kind: page.databaseId ? "database" : "page",
-          title: page.title,
-          icon: page.icon,
-        });
-      }
+    if (!target) {
       return;
     }
 
-    // 2. Handle Standard Links (A tags)
-    const anchor = target.closest("a[href]") as HTMLAnchorElement | null;
-    if (anchor) {
-      const href = anchor.getAttribute("href");
-      if (!href) return;
-
-      const normalizedHref = normalizeInlineLinkHref(href);
-      const internalPageId = getInternalPageIdFromHref(normalizedHref);
-
-      if (internalPageId) {
-        // Internal page link from toolbar
-        const linkedPage = usePageStore.getState().pageById(internalPageId);
-        if (linkedPage) {
-          e.preventDefault();
-          e.stopPropagation();
-          usePageStore.getState().openPage({
-            id: linkedPage._id,
-            workspaceId: linkedPage.workspaceId,
-            kind: linkedPage.databaseId ? "database" : "page",
-            title: linkedPage.title,
-            icon: linkedPage.icon,
-          });
-        }
-      } else {
-        // External link
-        e.preventDefault();
-        e.stopPropagation();
-        globalThis.open(normalizedHref, "_blank", "noopener,noreferrer");
-      }
+    if (handleMentionMouseDown(e, target)) {
+      return;
     }
+
+    handleAnchorMouseDown(e, target);
   }, []);
 
   const applyInlineFormattingCommand = useCallback(
@@ -677,12 +725,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         updateSelectionSnapshot();
       });
     },
-    [
-      onChange,
-      renderContent,
-      selectionSnapshot,
-      updateSelectionSnapshot,
-    ],
+    [onChange, renderContent, selectionSnapshot, updateSelectionSnapshot],
   );
 
   const handleToggleInlineFormat = useCallback(
