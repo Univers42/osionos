@@ -30,6 +30,7 @@ import {
   savePagesCache,
   mergeWorkspacePages,
   isValidMove,
+  nextDuplicateTitle,
 } from "./pageStore.helpers";
 import type { PageEntry, PageStore, ActivePage } from "@/entities/page";
 
@@ -283,7 +284,7 @@ export function createDuplicatePage(set: SetFn, get: GetFn) {
       return {
         ...p,
         _id: newId,
-        title: isRoot ? `${p.title} (Copy)` : p.title,
+        title: isRoot ? nextDuplicateTitle(p.title) : p.title,
         ownerId: context?.userId ?? p.ownerId ?? null,
         visibility: getTargetWorkspaceMoveVisibility(
           workspaceId,
