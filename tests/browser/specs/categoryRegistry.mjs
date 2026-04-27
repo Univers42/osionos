@@ -20,6 +20,7 @@ import {
   createParagraphs,
   editorLeft,
   focusTextareaEnd,
+  getCodeTextarea,
   getEditors,
   openFreshPage,
   pressEnter,
@@ -56,10 +57,10 @@ export const categoryRegistryScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createCodeBlock(page);
-      const textarea = page.locator("textarea");
+      const textarea = getCodeTextarea(page);
       await textarea.fill("const registry = true;");
       await focusTextareaEnd(textarea);
-      await page.keyboard.press("Tab");
+      await textarea.press("Tab");
       await expect(textarea).toHaveValue("const registry = true;    ");
       await expect(getEditors(page)).toHaveCount(0);
     },
