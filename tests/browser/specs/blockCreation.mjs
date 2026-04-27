@@ -16,6 +16,7 @@ import {
   activateFirstEditor,
   blockLocatorForEditor,
   editorText,
+  getCodeTextareas,
   openFreshPage,
   openSlashMenuFromEditor,
   selectSlashMenuEntry,
@@ -213,7 +214,7 @@ export const blockCreationScenarios = [
       await openFreshPage(page, appUrl);
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "```typescript ");
-      await expect(page.locator("textarea")).toHaveCount(2);
+      await expect(getCodeTextareas(page)).toHaveCount(1);
     },
   ),
   defineScenario(

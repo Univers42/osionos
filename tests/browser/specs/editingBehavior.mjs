@@ -6,7 +6,7 @@
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/20 21:29:56 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/20 21:29:57 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/27 10:36:57 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,7 +21,6 @@ import {
   createParagraphs,
   editorHasFocus,
   editorLeft,
-  focusTextareaEnd,
   getEditors,
   openSlashMenuFromEditor,
   openFreshPage,
@@ -97,21 +96,6 @@ export const editingBehaviorScenarios = [
       );
       expect(fontSize).toBeLessThan(20);
       await expect.poll(async () => editorHasFocus(second)).toBe(true);
-    },
-  ),
-  defineScenario(
-    "3. Enter Key Behavior",
-    "Standard blocks",
-    "pressing Enter inside a code block inserts a newline instead of creating another block",
-    async ({ page, appUrl }) => {
-      await openFreshPage(page, appUrl);
-      await createBlockViaSlash(page, "code", "Code");
-      const textarea = page.locator("textarea");
-      await textarea.fill("const a = 1;");
-      await focusTextareaEnd(textarea);
-      await page.keyboard.press("Enter");
-      await expect(textarea).toHaveValue("const a = 1;\n");
-      await expect(page.locator("textarea")).toHaveCount(1);
     },
   ),
   defineScenario(

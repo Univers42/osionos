@@ -20,6 +20,7 @@ import {
   clickOutside,
   createBlockViaSlash,
   editorHtml,
+  getCodeTextarea,
   openColorPalette,
   openFreshPage,
   selectText,
@@ -125,7 +126,7 @@ export const inlineToolbarScenarios = [
       await openFreshPage(page, appUrl);
       const editor = await activateFirstEditor(page);
       await clearAndType(editor, "```typescript ");
-      const textarea = page.locator("textarea");
+      const textarea = getCodeTextarea(page);
       await textarea.waitFor();
       await textarea.fill("const value = 42;");
       await textarea.evaluate((node) => node.setSelectionRange(0, 5));
