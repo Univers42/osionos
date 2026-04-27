@@ -59,12 +59,25 @@ function checkPackageManager(pkg, results) {
 
 function checkDependenciesInstalled(results) {
   const playwrightPkg = path.join(ROOT, "node_modules", "playwright", "package.json");
-  if (fs.existsSync(playwrightPkg)) {
+  const playwrightTestPkg = path.join(
+    ROOT,
+    "node_modules",
+    "@playwright",
+    "test",
+    "package.json",
+  );
+
+  if (fs.existsSync(playwrightPkg) && fs.existsSync(playwrightTestPkg)) {
     results.push(formatResult("OK", "Local dependencies installed"));
     return true;
   }
 
-  results.push(formatResult("FAIL", "Dependencies missing. Run `npm ci` first."));
+  results.push(
+    formatResult(
+      "FAIL",
+      "Dependencies missing or incomplete (`playwright` / `@playwright/test`). Run `npm ci` first.",
+    ),
+  );
   return false;
 }
 
