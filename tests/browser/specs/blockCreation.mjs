@@ -6,7 +6,7 @@
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/20 21:29:38 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/20 21:29:39 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/27 09:45:13 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -213,7 +213,7 @@ export const blockCreationScenarios = [
       await openFreshPage(page, appUrl);
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "```typescript ");
-      await expect(page.locator("textarea")).toHaveCount(1);
+      await expect(page.locator("textarea")).toHaveCount(2);
     },
   ),
   defineScenario(
