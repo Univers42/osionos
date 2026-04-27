@@ -14,6 +14,7 @@ Does not create extra blocks upon conversion.
 Closes with Escape.
 Closes when the / is deleted.
 Can be reopened normally after previous uses.
+When navigating with arrow keys, the active menu item auto-scrolls to remain visible.
 
 ## 2. Markdown Shortcuts
 
@@ -75,6 +76,8 @@ In a paragraph, it creates a new paragraph below.
 In a heading, it creates a normal paragraph below.
 
 In a code block, it inserts a new line within the code.
+
+In a divider, Enter creates a paragraph below.
 
 Focus passes to the new block when appropriate.
 
@@ -153,10 +156,12 @@ Duplicating a parent also duplicates the subtree as a separate copy.
 Allows reordering siblings at the same level.
 Allows moving blocks between different groups/trees.
 Allows dropping a child to the root.
+Allows moving blocks between different parent nodes.
 Dragging a block with children preserves its subtree.
 Does not allow dropping onto itself.
 Displays a visual drop indicator.
 The dragged block is displayed with reduced transparency.
+Cross-tree operations use moveBlockAcrossTree, which is a distinct operation from standard block movement.
 
 ## 12. Toggle
 
@@ -390,3 +395,59 @@ In offline mode, the seed/local data is loaded and editing can continue.
 
 `make ci` passes without type or lint errors.
 No new complexity violations appear in SonarQube for the modified files.
+
+## 31. Arrow Navigation
+
+**Functionality:** Navigate between blocks and through content-rich blocks using arrow keys.
+
+**Expected Behavior:**
+
+Arrow Down at the end of a block jumps to the next block.
+Arrow Up at the start of a block jumps to the previous block.
+Focus on a divider button allows arrow keys to jump to the next or previous block.
+In a code block, the cursor enters the textarea; arrow keys move the cursor within the code.
+The cursor exits the code block at the top (Arrow Up) or bottom (Arrow Down), jumping to adjacent blocks.
+In a table or database block, focus enters the first cell; arrow keys navigate between cells.
+When navigating outside the viewport, the page smooth-scrolls to keep the focused block visible.
+
+## 32. Page Permissions ABAC
+
+**Functionality:** Control visibility and ownership of pages using Attribute-Based Access Control (ABAC).
+
+**Expected Behavior:**
+
+Only the owner can move a page from Shared to Private status.
+Non-owners cannot see private workspaces as a destination in the Move modal.
+Non-owners can duplicate pages as an alternative to moving them.
+Private pages are only visible to their owner.
+Shared pages are visible to all users with workspace access.
+Page status (private/shared) is displayed in the page listing.
+
+## 33. Table Cell Editing
+
+**Functionality:** Edit content within table cells while maintaining cursor position and structure.
+
+**Expected Behavior:**
+
+Typing in a cell keeps the cursor within that cell; it does not move after each character.
+Add Row inserts a new row below the current row.
+Add Column inserts a new column to the right of the current column.
+Delete Row removes the current row (via context menu).
+Delete Column removes the current column (via context menu).
+A table must always have at least 1 row and 1 column; deletion is prevented if it would violate this constraint.
+Cells support inline formatting (bold, italic, links, etc.).
+Pressing Tab moves to the next cell; Shift+Tab moves to the previous cell.
+Pressing Enter creates a new row below.
+
+## 34. Duplicate Title Numbering
+
+**Functionality:** Assign incremental numbering to duplicated pages.
+
+**Expected Behavior:**
+
+When duplicating a page, the title receives an incremental suffix instead of "(Copy)".
+The first duplicate is titled with " (1)".
+Each subsequent duplicate increments the number: " (2)", " (3)", etc.
+The original page title is not modified.
+If a page with the incremental suffix already exists, the next available number is used.
+The numbering is applied to the full duplicated page and all its children.
