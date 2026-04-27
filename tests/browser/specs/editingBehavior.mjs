@@ -6,7 +6,7 @@
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/20 21:29:56 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/20 21:29:57 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/27 10:19:39 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -109,6 +109,8 @@ export const editingBehaviorScenarios = [
       const textarea = page.locator("textarea");
       await textarea.fill("const a = 1;");
       await focusTextareaEnd(textarea);
+      // shift + enter should create new block
+      await page.keyboard.down("Shift");
       await page.keyboard.press("Enter");
       await expect(textarea).toHaveValue("const a = 1;\n");
       await expect(page.locator("textarea")).toHaveCount(1);

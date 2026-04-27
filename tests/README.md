@@ -106,6 +106,11 @@ Make targets:
 - `make test-doctor`
 - `make test-ci` (optional local CI-style run)
 
+Filter a subset by title with:
+
+- `TEST_FILTER='Paste handling' make test`
+- `TEST_FILTER='heading levels 4-6' make test-serial`
+
 Quality gates stay separate:
 
 - `make ci`
