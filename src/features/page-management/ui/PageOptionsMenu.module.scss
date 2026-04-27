@@ -42,10 +42,19 @@
     color: #e8e8e8;
   }
 
-  &.danger {
+  &.destructive {
+    color: #dc2626;
+
+    svg {
+      color: #dc2626;
+    }
+
     &:hover {
-      color: #ffffff;
-      svg { color: #ff6b6b; }
+      color: #ef4444;
+
+      svg {
+        color: #ef4444;
+      }
     }
   }
 }

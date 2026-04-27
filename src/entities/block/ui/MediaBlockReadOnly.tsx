@@ -15,6 +15,7 @@ import React from "react";
 import type { Block } from "@/entities/block";
 import { MediaBlockPreview } from "./MediaBlockPreview";
 import { parseInlineMarkdown } from "@/shared/lib/markengine";
+import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
 
 interface MediaBlockReadOnlyProps {
   block: Block;
@@ -22,7 +23,11 @@ interface MediaBlockReadOnlyProps {
 
 function renderInlineMarkdown(content: string) {
   if (!content) return null;
-  return { __html: parseInlineMarkdown(content) };
+  return {
+    __html: parseInlineMarkdown(content, {
+      resolveInternalLinkTitle: resolveInternalPageLinkTitle,
+    }),
+  };
 }
 
 export const MediaBlockReadOnly: React.FC<MediaBlockReadOnlyProps> = ({

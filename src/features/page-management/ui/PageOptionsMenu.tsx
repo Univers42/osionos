@@ -6,10 +6,20 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { MoreHorizontal, Trash, Copy, ArrowRight } from "lucide-react";
+import {
+  MoreHorizontal,
+  Archive,
+  Copy,
+  ArrowRight,
+  Trash2,
+} from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
-import { canDeletePage, canDuplicatePage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
+import {
+  canDeletePage,
+  canDuplicatePage,
+  getCurrentPageAccessContext,
+} from "@/shared/lib/auth/pageAccess";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import { MovePageModal } from "./MovePageModal";
 import { getAllDescendantIds } from "@/store/pageStore.helpers";
@@ -42,7 +52,9 @@ export const PageOptionsMenu: React.FC<Props> = ({
   onRedirectHome,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [confirmationMode, setConfirmationMode] = useState<
+    "archive" | "delete" | null
+  >(null);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -66,6 +78,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
   );
   const currentPage = usePageStore((s) => s.pageById(pageId));
 
+  const archivePage = usePageStore((s) => s.archivePage);
   const deletePage = usePageStore((s) => s.deletePage);
   const duplicatePage = usePageStore((s) => s.duplicatePage);
 
@@ -112,13 +125,17 @@ export const PageOptionsMenu: React.FC<Props> = ({
         ),
       );
 
-      const spaceBelow = viewportHeight - triggerRect.bottom - MENU_GAP - MENU_MARGIN;
+      const spaceBelow =
+        viewportHeight - triggerRect.bottom - MENU_GAP - MENU_MARGIN;
       const spaceAbove = triggerRect.top - MENU_GAP - MENU_MARGIN;
       const openAbove = spaceBelow < menuRect.height && spaceAbove > spaceBelow;
 
       const top = openAbove
         ? Math.max(MENU_MARGIN, triggerRect.top - menuRect.height - MENU_GAP)
-        : Math.min(triggerRect.bottom + MENU_GAP, viewportHeight - menuRect.height - MENU_MARGIN);
+        : Math.min(
+            triggerRect.bottom + MENU_GAP,
+            viewportHeight - menuRect.height - MENU_MARGIN,
+          );
 
       setMenuPosition({ top, left });
     };
@@ -134,10 +151,16 @@ export const PageOptionsMenu: React.FC<Props> = ({
     };
   }, [isMenuOpen]);
 
+  const handleArchiveClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsMenuOpen(false);
+    setConfirmationMode("archive");
+  };
+
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsMenuOpen(false);
-    setIsModalOpen(true);
+    setConfirmationMode("delete");
   };
 
   const handleMoveClick = (e: React.MouseEvent) => {
@@ -150,7 +173,11 @@ export const PageOptionsMenu: React.FC<Props> = ({
     e.stopPropagation();
     setIsMenuOpen(false);
     if (!workspaceId) return;
-    if (!currentPage || !canDuplicatePage(currentPage, getCurrentPageAccessContext())) return;
+    if (
+      !currentPage ||
+      !canDuplicatePage(currentPage, getCurrentPageAccessContext())
+    )
+      return;
 
     try {
       await duplicatePage(pageId, workspaceId);
@@ -159,34 +186,68 @@ export const PageOptionsMenu: React.FC<Props> = ({
     }
   };
 
+  const closeConfirmation = () => setConfirmationMode(null);
+
+  const redirectIfAffectedPageChanged = () => {
+    const isAffectedActive =
+      activePageId === pageId || descendantIds.includes(activePageId!);
+
+    if (isAffectedActive) {
+      onRedirectHome();
+    }
+  };
+
+  const handleConfirmArchive = async () => {
+    if (!workspaceId) {
+      console.error("[PageOptionsMenu] Missing workspaceId for archive", {
+        workspaceId,
+      });
+      closeConfirmation();
+      return;
+    }
+
+    if (
+      !currentPage ||
+      !canDeletePage(currentPage, getCurrentPageAccessContext())
+    ) {
+      closeConfirmation();
+      return;
+    }
+
+    try {
+      await archivePage(pageId, workspaceId, jwt ?? "");
+      redirectIfAffectedPageChanged();
+    } catch (err) {
+      console.error("[PageOptionsMenu] Failed to archive page", err);
+    } finally {
+      closeConfirmation();
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!workspaceId) {
       console.error("[PageOptionsMenu] Missing workspaceId for deletion", {
         workspaceId,
       });
-      setIsModalOpen(false);
+      closeConfirmation();
       return;
     }
 
-    if (!currentPage || !canDeletePage(currentPage, getCurrentPageAccessContext())) {
-      setIsModalOpen(false);
+    if (
+      !currentPage ||
+      !canDeletePage(currentPage, getCurrentPageAccessContext())
+    ) {
+      closeConfirmation();
       return;
     }
 
     try {
-      // Perform the deletion
       await deletePage(pageId, workspaceId, jwt ?? "");
-
-      // Safety: If the deleted page OR any of its sub-pages was active, redirect home
-      const isDeletedActive =
-        activePageId === pageId || descendantIds.includes(activePageId!);
-      if (isDeletedActive) {
-        onRedirectHome();
-      }
+      redirectIfAffectedPageChanged();
     } catch (err) {
       console.error("[PageOptionsMenu] Failed to delete page", err);
     } finally {
-      setIsModalOpen(false);
+      closeConfirmation();
     }
   };
 
@@ -209,66 +270,98 @@ export const PageOptionsMenu: React.FC<Props> = ({
         <MoreHorizontal size={13} />
       </button>
 
-      {isMenuOpen && portalTarget && createPortal(
-        <div
-          ref={menuRef}
-          className={styles.dropdown}
-          style={{
-            top: menuPosition?.top ?? 0,
-            left: menuPosition?.left ?? 0,
-            visibility: menuPosition ? "visible" : "hidden",
-          }}
-        >
-          <button
-            type="button"
-            className={styles.menuItem}
-            onClick={handleDuplicateClick}
-          >
-            <Copy size={14} className="shrink-0" />
-            <span>Duplicate</span>
-          </button>
-
-          <button
-            type="button"
-            className={styles.menuItem}
-            onClick={handleMoveClick}
-          >
-            <ArrowRight size={14} className="shrink-0" />
-            <span>Move to</span>
-          </button>
-
-          <button
-            type="button"
-            className={[styles.menuItem, styles.danger].join(" ")}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDeleteClick(e);
+      {isMenuOpen &&
+        portalTarget &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className={styles.dropdown}
+            style={{
+              top: menuPosition?.top ?? 0,
+              left: menuPosition?.left ?? 0,
+              visibility: menuPosition ? "visible" : "hidden",
             }}
           >
-            <Trash size={14} className="shrink-0" />
-            <span>Delete</span>
-          </button>
-        </div>,
-        portalTarget,
-      )}
+            <button
+              type="button"
+              className={styles.menuItem}
+              onClick={handleDuplicateClick}
+            >
+              <Copy size={14} className="shrink-0" />
+              <span>Duplicate</span>
+            </button>
 
-      {isModalOpen && portalTarget && createPortal(
-        <ConfirmDeleteModal
-          title={pageTitle}
-          subPageCount={subPageCount}
-          onConfirm={handleConfirmDelete}
-          onCancel={() => setIsModalOpen(false)}
-        />,
-        portalTarget
-      )}
+            <button
+              type="button"
+              className={styles.menuItem}
+              onClick={handleMoveClick}
+            >
+              <ArrowRight size={14} className="shrink-0" />
+              <span>Move to</span>
+            </button>
 
-      {isMoveModalOpen && portalTarget && createPortal(
-        <MovePageModal
-          sourcePageId={pageId}
-          onClose={() => setIsMoveModalOpen(false)}
-        />,
-        portalTarget
-      )}
+            <button
+              type="button"
+              className={styles.menuItem}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleArchiveClick(e);
+              }}
+            >
+              <Archive size={14} className="shrink-0" />
+              <span>Archive</span>
+            </button>
+
+            <button
+              type="button"
+              className={[styles.menuItem, styles.destructive].join(" ")}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteClick(e);
+              }}
+            >
+              <Trash2 size={14} className="shrink-0" />
+              <span>Delete</span>
+            </button>
+          </div>,
+          portalTarget,
+        )}
+
+      {confirmationMode &&
+        portalTarget &&
+        createPortal(
+          <ConfirmDeleteModal
+            variant={confirmationMode}
+            pageTitle={pageTitle}
+            subPageCount={subPageCount}
+            title={
+              confirmationMode === "delete" ? "¿Delete permanently?" : undefined
+            }
+            description={
+              confirmationMode === "delete"
+                ? "This action can't be undone. All information in this page will be lost."
+                : undefined
+            }
+            confirmLabel={confirmationMode === "delete" ? "Delete" : "Archive"}
+            onConfirm={
+              confirmationMode === "delete"
+                ? handleConfirmDelete
+                : handleConfirmArchive
+            }
+            onCancel={closeConfirmation}
+          />,
+          portalTarget,
+        )}
+
+      {isMoveModalOpen &&
+        portalTarget &&
+        createPortal(
+          <MovePageModal
+            sourcePageId={pageId}
+            onClose={() => setIsMoveModalOpen(false)}
+          />,
+          portalTarget,
+        )}
     </div>
   );
 };

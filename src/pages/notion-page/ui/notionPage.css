@@ -216,17 +216,19 @@
   color: var(--color-ink);
   outline: none;
   border: none;
+  background: transparent;
   padding: 3px 0;
   min-height: 1.2em;
   word-break: break-word;
   white-space: pre-wrap;
   caret-color: var(--color-ink);
+  resize: none;
+  overflow: hidden;
 }
 
-.notion-page-title:empty::before {
-  content: attr(data-placeholder);
+.notion-page-title::placeholder {
   color: var(--color-ink-faint);
-  pointer-events: none;
+  opacity: 1;
 }
 
 /* ── Properties ───────────────────────────────────────────────────── */

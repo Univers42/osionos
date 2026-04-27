@@ -161,7 +161,9 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     handleSlashSelect,
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
+    handleSlashCreatePageSelect,
     handlePageSelectorSelect,
+    handlePageSelectorCreate,
     handleAddBlock,
     handleInitBlock,
     registerBlockRef,
@@ -194,6 +196,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     return (
       <button
         type="button"
+        data-page-editor-empty-trigger
         className="flex-1 min-h-[200px] cursor-text text-left"
         onClick={() => handleInitBlock(blocks)}
       >
@@ -252,6 +255,11 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
               return;
             }
 
+            if (item.kind === "create-page") {
+              void handleSlashCreatePageSelect(blocks);
+              return;
+            }
+
             handleSlashSelect(item.blockType, blocks, item.calloutIcon);
           }}
           onMediaSelect={(kind, value) =>
@@ -267,6 +275,9 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
           position={pageSelector.position}
           filter={pageSelector.filter}
           onSelect={handlePageSelectorSelect}
+          onCreate={() => {
+            void handlePageSelectorCreate();
+          }}
           onClose={() => setPageSelector(null)}
         />
       )}
@@ -338,9 +349,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
   return (
     <div
       data-testid={
-        isRoot
-          ? "block-tree-root"
-          : `${parentBlockType ?? "nested"}-children`
+        isRoot ? "block-tree-root" : `${parentBlockType ?? "nested"}-children`
       }
       data-parent-block-type={parentBlockType ?? ""}
       data-parent-block-id={parentBlockId ?? ""}
