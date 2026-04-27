@@ -6,7 +6,7 @@
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/22 11:30:35 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/27 11:55:20 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,7 +18,10 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { ColorPickerBoard } from "@univers42/ui-collection";
+import {
+  ColorPickerBoard,
+  type ColorPickerPreset,
+} from "@univers42/ui-collection";
 import {
   applyInlineFormatting,
   areInlineEditorSelectionSnapshotsEqual,
@@ -33,7 +36,7 @@ import {
 } from "@/shared/lib/markengine";
 import {
   getInlineColorOption,
-  INLINE_COLOR_OPTIONS,
+  normalizeInlineColorToken,
   type InlineColorOption,
 } from "@/shared/lib/markengine/inlineTextStyles";
 import { usePageStore } from "@/store/usePageStore";
@@ -58,9 +61,13 @@ interface EditableContentProps {
 
 type PaletteKind = "text" | "background" | null;
 type LinkPickerMode = "chooser" | "external" | "internal";
+type ResolvedThemeName = "light" | "dark";
 
 const EMPTY_WORKSPACE_PAGES: readonly never[] = [];
-const DEFAULT_INLINE_COLOR = INLINE_COLOR_OPTIONS[0]?.id ?? "#0F172A";
+const INLINE_COLOR_RECENTS_STORAGE_KEY = "osionos:inline-color-recents";
+const MAX_INLINE_COLOR_RECENTS = 7;
+const LIGHT_THEME_DEFAULT_INLINE_COLOR = "#37352F";
+const DARK_THEME_DEFAULT_INLINE_COLOR = "#FFFFFFCF";
 
 interface LinkPickerState {
   mode: LinkPickerMode;
@@ -181,6 +188,106 @@ function isInlineSourceEmpty(source: string): boolean {
   );
 }
 
+function readResolvedThemeName(): ResolvedThemeName {
+  if (typeof document === "undefined") {
+    return "light";
+  }
+
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
+function getThemeDefaultInlineColor(theme: ResolvedThemeName) {
+  if (typeof document !== "undefined" && readResolvedThemeName() === theme) {
+    const computedInk = normalizeInlineColorToken(
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--color-ink")
+        .trim(),
+    );
+    if (computedInk) {
+      return computedInk;
+    }
+  }
+
+  return theme === "dark"
+    ? DARK_THEME_DEFAULT_INLINE_COLOR
+    : LIGHT_THEME_DEFAULT_INLINE_COLOR;
+}
+
+function loadRecentInlineColors() {
+  if (globalThis.window === undefined) {
+    return [];
+  }
+
+  try {
+    const stored = JSON.parse(
+      globalThis.localStorage.getItem(INLINE_COLOR_RECENTS_STORAGE_KEY) ?? "[]",
+    );
+    if (!Array.isArray(stored)) {
+      return [];
+    }
+
+    return stored
+      .map((value) =>
+        typeof value === "string" ? normalizeInlineColorToken(value) : null,
+      )
+      .filter((value, index, colors): value is string => {
+        return Boolean(value) && colors.indexOf(value) === index;
+      })
+      .slice(0, MAX_INLINE_COLOR_RECENTS);
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentInlineColors(colors: readonly string[]) {
+  if (globalThis.window === undefined) {
+    return;
+  }
+
+  try {
+    globalThis.localStorage.setItem(
+      INLINE_COLOR_RECENTS_STORAGE_KEY,
+      JSON.stringify(colors),
+    );
+  } catch {
+    // localStorage can be unavailable or quota-limited.
+  }
+}
+
+function recordRecentInlineColor(
+  currentColors: readonly string[],
+  nextColor: string,
+) {
+  const normalized = normalizeInlineColorToken(nextColor);
+  if (!normalized) {
+    return [...currentColors];
+  }
+
+  return [
+    normalized,
+    ...currentColors.filter((color) => color !== normalized),
+  ].slice(0, MAX_INLINE_COLOR_RECENTS);
+}
+
+function buildInlineColorPresets(
+  theme: ResolvedThemeName,
+  recentColors: readonly string[],
+): ColorPickerPreset[] {
+  const defaultColor = getThemeDefaultInlineColor(theme);
+  return [
+    {
+      label: theme === "dark" ? "Dark theme default" : "Light theme default",
+      value: defaultColor,
+    },
+    ...recentColors
+      .filter((color) => color !== defaultColor)
+      .map((value, index) => ({
+        label: `Recent ${index + 1}`,
+        value,
+      })),
+  ];
+}
+
 const TOOLBAR_BUTTON_BASE =
   "grid h-8 min-w-8 place-items-center rounded-md border border-transparent px-2 text-xs font-semibold text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-ink)]";
 
@@ -190,6 +297,8 @@ const TOOLBAR_ACTIVE_BUTTON =
 interface InlineSelectionToolbarProps {
   selection: SelectionSnapshot;
   palette: PaletteKind;
+  colorPresets: ColorPickerPreset[];
+  defaultColor: string;
   shortcutsOpen: boolean;
   onTogglePalette: (palette: Exclude<PaletteKind, null>) => void;
   onToggleShortcuts: () => void;
@@ -206,6 +315,8 @@ interface InlineSelectionToolbarProps {
 const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
   selection,
   palette,
+  colorPresets,
+  defaultColor,
   shortcutsOpen,
   onTogglePalette,
   onToggleShortcuts,
@@ -224,6 +335,12 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
     style={{
       left: selection.rect.left + selection.rect.width / 2,
       top: Math.max(12, selection.rect.top - 58),
+    }}
+    onMouseDownCapture={(event) => {
+      event.preventDefault();
+    }}
+    onPointerDownCapture={(event) => {
+      event.preventDefault();
     }}
   >
     <div className="relative rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] px-1.5 py-1 shadow-xl">
@@ -330,9 +447,9 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
           className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 w-45 h-60 shadow-xl"
         >
           <ColorPickerBoard
-            defaultValue={DEFAULT_INLINE_COLOR}
+            defaultValue={defaultColor}
             label={palette === "text" ? "Text color" : "Background color"}
-            presets={INLINE_COLOR_OPTIONS}
+            presets={colorPresets}
             showInput={false}
             size={158}
             variant="wheel"
@@ -462,6 +579,12 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const [openPalette, setOpenPalette] = useState<PaletteKind>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [linkPicker, setLinkPicker] = useState<LinkPickerState | null>(null);
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedThemeName>(() =>
+    readResolvedThemeName(),
+  );
+  const [recentInlineColors, setRecentInlineColors] = useState<string[]>(() =>
+    loadRecentInlineColors(),
+  );
   const linkPickerRef = useRef<HTMLDivElement | null>(null);
   const canonicalSourceRef = useRef(content);
   const renderedContentCache = useRef<{ source: string; html: string }>({
@@ -485,6 +608,16 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         !workspacePage.archivedAt && canReadPage(workspacePage, accessContext),
     );
   }, [workspacePages]);
+
+  const defaultInlineColor = useMemo(
+    () => getThemeDefaultInlineColor(resolvedTheme),
+    [resolvedTheme],
+  );
+
+  const inlineColorPresets = useMemo(
+    () => buildInlineColorPresets(resolvedTheme, recentInlineColors),
+    [recentInlineColors, resolvedTheme],
+  );
 
   const getRenderedInlineHtml = useCallback((nextContent: string) => {
     if (renderedContentCache.current.source === nextContent) {
@@ -745,6 +878,11 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         colorKind,
         color: color.id,
       });
+      setRecentInlineColors((currentColors) => {
+        const nextColors = recordRecentInlineColor(currentColors, color.id);
+        saveRecentInlineColors(nextColors);
+        return nextColors;
+      });
       setOpenPalette(null);
     },
     [applyInlineFormattingCommand],
@@ -875,6 +1013,26 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   }, [onRequestSlashMenu, selectionSnapshot]);
 
   useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => {
+      setResolvedTheme(readResolvedThemeName());
+    });
+
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!linkPicker) {
       return;
     }
@@ -957,6 +1115,8 @@ export const EditableContent: React.FC<EditableContentProps> = ({
             <InlineSelectionToolbar
               selection={selectionSnapshot}
               palette={openPalette}
+              colorPresets={inlineColorPresets}
+              defaultColor={defaultInlineColor}
               shortcutsOpen={showShortcuts}
               onTogglePalette={(palette) =>
                 setOpenPalette((current) =>
