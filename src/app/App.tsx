@@ -129,10 +129,18 @@ const App: React.FC = () => {
       {/* Left sidebar */}
       <Sidebar
         onOpenHome={() =>
-          usePageStore.setState({ activePage: null, showTrash: false })
+          usePageStore.setState({
+            activePage: null,
+            showTrash: false,
+            navigationPath: [],
+          })
         }
         onOpenTrash={() =>
-          usePageStore.setState({ activePage: null, showTrash: true })
+          usePageStore.setState({
+            activePage: null,
+            showTrash: true,
+            navigationPath: [],
+          })
         }
       />
 

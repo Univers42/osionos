@@ -1,15 +1,3 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   notionPage.css                                     :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/04/08 20:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/09 22:00:00 by dlesieur         ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
-
 /* ═══════════════════════════════════════════════════════════════════════════
    Notion-style page layout
    ═══════════════════════════════════════════════════════════════════════════
@@ -133,6 +121,63 @@
 
 .notion-page-header--no-cover {
   padding-top: 80px;
+}
+
+/* ── Breadcrumbs ─────────────────────────────────────────────────── */
+
+.notion-page-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  margin-bottom: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.notion-page-breadcrumbs::-webkit-scrollbar {
+  display: none;
+}
+
+.notion-page-breadcrumb {
+  border: none;
+  background: transparent;
+  padding: 2px 6px;
+  margin: 0;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.25;
+  color: var(--color-ink-muted);
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+button.notion-page-breadcrumb {
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease;
+}
+
+button.notion-page-breadcrumb:hover {
+  color: var(--color-ink);
+  background: var(--color-surface-hover);
+}
+
+.notion-page-breadcrumb--root {
+  color: var(--color-ink-faint);
+}
+
+.notion-page-breadcrumb--current {
+  color: var(--color-ink);
+  font-weight: 500;
+}
+
+.notion-page-breadcrumb-separator {
+  flex-shrink: 0;
+  color: var(--color-ink-faint);
 }
 
 /* ── Icon ─────────────────────────────────────────────────────────── */

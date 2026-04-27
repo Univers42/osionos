@@ -177,7 +177,10 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
                 activePageId={activePage?.id}
                 onOpenPage={openPage}
                 onRedirectHome={() =>
-                  usePageStore.setState({ activePage: null })
+                  usePageStore.setState({
+                    activePage: null,
+                    navigationPath: [],
+                  })
                 }
                 onAddChild={handleAddChildToRecent}
               />

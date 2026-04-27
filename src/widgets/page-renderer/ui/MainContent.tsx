@@ -51,7 +51,7 @@ export const MainContent: React.FC = () => {
 
   useEffect(() => {
     if (activePage?.kind === "page" && !pageById(activePage.id)) {
-      clearActivePage({ activePage: null });
+      clearActivePage({ activePage: null, navigationPath: [] });
     }
   }, [activePage, pageById, clearActivePage]);
 
@@ -121,7 +121,9 @@ export const MainContent: React.FC = () => {
         <button
           type="button"
           className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity"
-          onClick={() => clearActivePage({ activePage: null })}
+          onClick={() =>
+            clearActivePage({ activePage: null, navigationPath: [] })
+          }
         >
           Back to home
         </button>
