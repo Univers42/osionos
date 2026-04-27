@@ -299,6 +299,7 @@ interface InlineSelectionToolbarProps {
   palette: PaletteKind;
   colorPresets: ColorPickerPreset[];
   defaultColor: string;
+  shortcutsOpen: boolean;
   onTogglePalette: (palette: Exclude<PaletteKind, null>) => void;
   onToggleShortcuts: () => void;
   onFormatBold: () => void;
@@ -316,6 +317,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
   palette,
   colorPresets,
   defaultColor,
+  shortcutsOpen,
   onTogglePalette,
   onToggleShortcuts,
   onFormatBold,
@@ -1115,6 +1117,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
               palette={openPalette}
               colorPresets={inlineColorPresets}
               defaultColor={defaultInlineColor}
+              shortcutsOpen={showShortcuts}
               onTogglePalette={(palette) =>
                 setOpenPalette((current) =>
                   current === palette ? null : palette,
