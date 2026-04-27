@@ -108,15 +108,30 @@ ci: typecheck lint ## Run the fast quality gates locally
 
 test: ## Developer-only browser regression tests run locally with Playwright Test
 	@echo -e "$(CYAN)Running browser regression tests locally…$(RESET)"
-	npm run test:e2e
+	@if [ -n "$(strip $(TEST_FILTER))" ]; then \
+		echo -e "$(CYAN)Filter: $(TEST_FILTER)$(RESET)"; \
+		npm run test:e2e -- --grep "$(TEST_FILTER)"; \
+	else \
+		npm run test:e2e; \
+	fi
 
 test-serial: ## Run browser regression tests locally with a single worker
 	@echo -e "$(CYAN)Running browser regression tests locally in serial mode…$(RESET)"
-	npm run test:e2e:serial
+	@if [ -n "$(strip $(TEST_FILTER))" ]; then \
+		echo -e "$(CYAN)Filter: $(TEST_FILTER)$(RESET)"; \
+		npm run test:e2e:serial -- --grep "$(TEST_FILTER)"; \
+	else \
+		npm run test:e2e:serial; \
+	fi
 
 test-smoke: ## Run the browser smoke/harness subset only
 	@echo -e "$(CYAN)Running browser smoke tests…$(RESET)"
-	npm run test:e2e:smoke
+	@if [ -n "$(strip $(TEST_FILTER))" ]; then \
+		echo -e "$(CYAN)Filter: $(TEST_FILTER)$(RESET)"; \
+		npm run test:e2e:smoke -- --grep "$(TEST_FILTER)"; \
+	else \
+		npm run test:e2e:smoke; \
+	fi
 
 test-setup: ## Install Playwright browsers and validate local test env
 	@echo -e "$(CYAN)Preparing browser test environment…$(RESET)"
@@ -128,7 +143,12 @@ test-doctor: ## Validate local browser test prerequisites
 
 test-ci: ## Optional local CI-style browser command; not used by GitHub Actions
 	@echo -e "$(CYAN)Running browser regression tests in CI mode…$(RESET)"
-	CI=1 npx playwright test
+	@if [ -n "$(strip $(TEST_FILTER))" ]; then \
+		echo -e "$(CYAN)Filter: $(TEST_FILTER)$(RESET)"; \
+		CI=1 npx playwright test --grep "$(TEST_FILTER)"; \
+	else \
+		CI=1 npx playwright test; \
+	fi
 
 test-docker: ## Run browser tests inside Docker using Playwright Test
 	@echo -e "$(CYAN)Running browser regression tests inside Docker…$(RESET)"
