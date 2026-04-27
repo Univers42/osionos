@@ -46,7 +46,7 @@ import {
   getActiveJwt,
   registerPageLookup,
 } from "./pageStore.persistence";
-import type { PageStore } from "@/entities/page";
+import type { PageStore, ActivePage } from "@/entities/page";
 import {
   canEditPage,
   canReadPage,
@@ -58,6 +58,25 @@ export type { PageEntry, ActivePageKind, ActivePage } from "@/entities/page";
 
 /** Zustand store managing page tree, active page, recents, and block-level CRUD. */
 const cachedPages = loadPagesCache();
+
+/**
+ * Builds the navigation path for breadcrumb tracking.
+ * If page exists in path, truncates to that point (stack behavior).
+ * Otherwise, appends the page to the path.
+ */
+function buildNavigationPath(
+  currentPath: ActivePage[],
+  page: ActivePage,
+): ActivePage[] {
+  if (page.kind !== "page") {
+    return [];
+  }
+  const existingIndex = currentPath.findIndex((p) => p.id === page.id);
+  if (existingIndex >= 0) {
+    return currentPath.slice(0, existingIndex + 1);
+  }
+  return [...currentPath, page];
+}
 
 export const usePageStore = create<PageStore>((set, get) => ({
   pages: cachedPages,
@@ -98,11 +117,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       ].slice(0, 10);
       saveRecents(recents);
 
-      // Build navigation path by appending the new page
-      const newPath =
-        page.kind === "page"
-          ? [...s.navigationPath.filter((p) => p.id !== page.id), page]
-          : [];
+      const newPath = buildNavigationPath(s.navigationPath, page);
 
       return {
         activePage: page,
