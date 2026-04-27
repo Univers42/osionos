@@ -150,7 +150,11 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
   }, [handleChangeCover]);
 
   const handleOpenHome = useCallback(() => {
-    usePageStore.setState({ activePage: null, showTrash: false });
+    usePageStore.setState({
+      activePage: null,
+      showTrash: false,
+      navigationPath: [],
+    });
   }, []);
 
   /* ── Render ────────────────────────────────────────────────────── */

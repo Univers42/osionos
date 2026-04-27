@@ -62,6 +62,7 @@ const cachedPages = loadPagesCache();
 export const usePageStore = create<PageStore>((set, get) => ({
   pages: cachedPages,
   activePage: null,
+  navigationPath: [],
   recents: loadRecents(),
   loadingIds: new Set<string>(),
   seeded: false,
@@ -86,7 +87,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       page.kind === "page" &&
       (!currentPage || !canReadPage(currentPage, context))
     ) {
-      set({ activePage: null, showTrash: false });
+      set({ activePage: null, showTrash: false, navigationPath: [] });
       return;
     }
 
@@ -96,7 +97,19 @@ export const usePageStore = create<PageStore>((set, get) => ({
         ...s.recents.filter((r) => r.id !== page.id),
       ].slice(0, 10);
       saveRecents(recents);
-      return { activePage: page, recents, showTrash: false };
+
+      // Build navigation path by appending the new page
+      const newPath =
+        page.kind === "page"
+          ? [...s.navigationPath.filter((p) => p.id !== page.id), page]
+          : [];
+
+      return {
+        activePage: page,
+        recents,
+        showTrash: false,
+        navigationPath: newPath,
+      };
     });
     const jwt = getActiveJwt();
     if (jwt && page.kind === "page") {

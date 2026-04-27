@@ -57,6 +57,7 @@ export interface ActivePage {
 export interface PageStore {
   pages: Record<string, PageEntry[]>; // keyed by workspaceId
   activePage: ActivePage | null;
+  navigationPath: ActivePage[]; // breadcrumb path based on navigation history
   recents: ActivePage[]; // last 10 opened
   loadingIds: Set<string>; // workspaceIds currently fetching
   seeded: boolean; // true once seed data is loaded

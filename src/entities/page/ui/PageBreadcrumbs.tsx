@@ -1,15 +1,3 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   TrashView.tsx                                      :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: danfern3 <danfern3@student.42.fr>          +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/04/22 12:00:00 by danfern3          #+#    #+#             */
-/*   Updated: 2026/04/22 12:00:00 by danfern3         ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
-
 import React, { useCallback, useMemo } from "react";
 import { ChevronRight } from "lucide-react";
 
@@ -40,6 +28,7 @@ export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
 }) => {
   const page = usePageStore((s) => s.pageById(pageId));
   const activePage = usePageStore((s) => s.activePage);
+  const navigationPath = usePageStore((s) => s.navigationPath);
   const openPage = usePageStore((s) => s.openPage);
 
   const resolvedWorkspaceId = page?.workspaceId ?? activePage?.workspaceId;
@@ -50,6 +39,24 @@ export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
   });
 
   const breadcrumbs = useMemo(() => {
+    // Prefer navigation path if available and applicable
+    if (
+      navigationPath.length > 0 &&
+      navigationPath.at(-1)?.id === pageId
+    ) {
+      // Convert ActivePage to PageEntry format for consistent rendering
+      return navigationPath.map(
+        (ap) =>
+          ({
+            _id: ap.id,
+            workspaceId: ap.workspaceId,
+            title: ap.title ?? "Untitled",
+            icon: ap.icon,
+          }) as PageEntry,
+      );
+    }
+
+    // Fall back to parentPageId hierarchy
     if (!page) {
       if (activePage?.id !== pageId) return [];
       return [
@@ -76,7 +83,7 @@ export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
     }
 
     return path;
-  }, [page, workspacePages, activePage, pageId]);
+  }, [page, workspacePages, activePage, pageId, navigationPath]);
 
   const handleOpenCrumb = useCallback(
     (entry: PageEntry) => {
