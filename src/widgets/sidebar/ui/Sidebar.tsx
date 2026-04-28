@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/11 15:00:00 by danfern3         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -27,13 +27,14 @@ interface Props {
   onOpenTrash?: () => void;
 }
 
-/** Renders the Notion-style sidebar with navigation, page tree, and user switching. */
+/** Renders the osionos-style sidebar with navigation, page tree, and user switching. */
 export const Sidebar: React.FC<Props> = ({
   onOpenHome,
   onOpenSettings,
   onOpenTrash,
 }) => {
   const session = useUserStore((s) => s.activeSession());
+  const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const activePage = usePageStore((s) => s.activePage);
   const recents = usePageStore((s) => s.recents);
   const fetchPages = usePageStore((s) => s.fetchPages);
@@ -48,12 +49,12 @@ export const Sidebar: React.FC<Props> = ({
   const jwt = session?.accessToken ?? "";
 
   const privateWorkspaces = useMemo(
-    () => session?.privateWorkspaces ?? [],
-    [session?.privateWorkspaces],
+    () => activeWorkspace && activeWorkspace.ownerId === session?.userId ? [activeWorkspace] : [],
+    [activeWorkspace, session?.userId],
   );
   const sharedWorkspaces = useMemo(
-    () => session?.sharedWorkspaces ?? [],
-    [session?.sharedWorkspaces],
+    () => activeWorkspace && activeWorkspace.ownerId !== session?.userId ? [activeWorkspace] : [],
+    [activeWorkspace, session?.userId],
   );
 
   // Fetch pages whenever the active user's workspaces change

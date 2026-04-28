@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 01:31:17 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -53,9 +53,9 @@ const teamWiki: SeedPage = {
     callout('If the API isn\'t running, the playground falls back to offline mode with seed data.', getCollectionEmojiValue('idea')),
     h2('Architecture'),
     p('The project has two main parts:'),
-    bullet('src/ — The main Notion database system (components, stores, types)'),
+    bullet('src/ — The main osionos database system (components, stores, types)'),
     bullet('playground/ — A standalone Vite app for UI development and testing'),
-    code('notion-database-sys/\n├── src/           # Main project\n│   ├── components/  # React components\n│   ├── store/       # Zustand stores\n│   ├── types/       # TypeScript types\n│   └── lib/         # Engine, formula, markdown, syntax\n├── playground/    # Playground app\n│   └── src/\n│       ├── components/sidebar/  # Notion sidebar\n│       ├── store/               # Page & user stores\n│       └── data/                # Seed data\n└── packages/api/  # Fastify backend', 'plaintext'),
+    code('osionos-database-sys/\n├── src/           # Main project\n│   ├── components/  # React components\n│   ├── store/       # Zustand stores\n│   ├── types/       # TypeScript types\n│   └── lib/         # Engine, formula, markdown, syntax\n├── playground/    # Playground app\n│   └── src/\n│       ├── components/sidebar/  # osionos sidebar\n│       ├── store/               # Page & user stores\n│       └── data/                # Seed data\n└── packages/api/  # Fastify backend', 'plaintext'),
     h2('Useful commands'),
     code('# Start everything\nmake dev-all\n\n# Just the playground (offline mode)\ncd playground && make dev\n\n# Type check\nnpx tsc --noEmit\n\n# Run tests\npnpm test', 'bash'),
   ],

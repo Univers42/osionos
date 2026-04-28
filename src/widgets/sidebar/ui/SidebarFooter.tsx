@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:20:17 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,36 +17,9 @@ import {
   Archive,
   UserPlus,
   X,
-  Sun,
-  Moon,
-  Monitor,
 } from "lucide-react";
 
 import { SidebarNavItem } from "./SidebarNavItem";
-import {
-  applyTheme,
-  persistThemeMode,
-  readStoredThemeMode,
-  type ThemeMode,
-} from "@/shared/config/theme";
-
-function nextThemeMode(mode: ThemeMode): ThemeMode {
-  if (mode === "light") return "dark";
-  if (mode === "dark") return "system";
-  return "light";
-}
-
-function themeLabel(mode: ThemeMode): string {
-  if (mode === "light") return "Theme: Light";
-  if (mode === "dark") return "Theme: Dark";
-  return "Theme: System";
-}
-
-function themeIcon(mode: ThemeMode): React.ReactNode {
-  if (mode === "light") return <Sun size={16} />;
-  if (mode === "dark") return <Moon size={16} />;
-  return <Monitor size={16} />;
-}
 
 interface SidebarFooterProps {
   onOpenSettings?: () => void;
@@ -62,23 +35,6 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   showInviteCTA,
   onDismissInvite,
 }) => {
-  const [themeMode, setThemeMode] = React.useState<ThemeMode>(() =>
-    readStoredThemeMode(),
-  );
-
-  React.useEffect(() => {
-    applyTheme(themeMode);
-    persistThemeMode(themeMode);
-  }, [themeMode]);
-
-  React.useEffect(() => {
-    if (themeMode !== "system") return;
-    const media = globalThis.matchMedia("(prefers-color-scheme: dark)");
-    const listener = () => applyTheme("system");
-    media.addEventListener("change", listener);
-    return () => media.removeEventListener("change", listener);
-  }, [themeMode]);
-
   return (
     <>
       <div
@@ -106,11 +62,6 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
           icon={<Archive size={16} />}
           label="Archived files"
           onClick={() => onOpenTrash?.()}
-        />
-        <SidebarNavItem
-          icon={themeIcon(themeMode)}
-          label={themeLabel(themeMode)}
-          onClick={() => setThemeMode((mode) => nextThemeMode(mode))}
         />
       </div>
 

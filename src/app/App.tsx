@@ -6,11 +6,11 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/04 15:06:16 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:02:24 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 
 import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
@@ -18,6 +18,15 @@ import { Sidebar } from "@/widgets/sidebar";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
 import { MainContent } from "@/widgets/page-renderer";
 import { applyTheme, readStoredThemeMode } from "@/shared/config/theme";
+import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
+import {
+  applyWorkspaceAppearance,
+  clearWorkspaceAppearance,
+  resolveWorkspaceConfig,
+  useWorkspaceConfigStore,
+  workspaceConfigKey,
+} from "@/shared/config/workspaceConfigStore";
+import { SettingsCenter } from "@/features/settings/SettingsCenter";
 
 /**
  * Root of the Playground app.
@@ -31,6 +40,11 @@ import { applyTheme, readStoredThemeMode } from "@/shared/config/theme";
 const App: React.FC = () => {
   const initUsers = useUserStore((s) => s.init);
   const initialized = useUserStore((s) => s.initialized);
+  const activeUserId = useUserStore((s) => s.activeUserId);
+  const activeWorkspace = useUserStore((s) => s.activeWorkspace());
+  const workspaceKey = workspaceConfigKey(activeUserId || "anonymous", activeWorkspace?._id ?? "workspace");
+  const storedWorkspaceConfig = useWorkspaceConfigStore((s) => s.configs[workspaceKey]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const ready = initialized;
 
   // Run once on mount
@@ -110,6 +124,16 @@ const App: React.FC = () => {
       .catch(() => undefined);
   }, [initUsers, initialized]);
 
+  useEffect(() => {
+    if (!activeWorkspace?._id) return;
+    const appearance = resolveWorkspaceConfig(storedWorkspaceConfig).appearance;
+    if (appearance) {
+      applyWorkspaceAppearance(appearance);
+      return;
+    }
+    clearWorkspaceAppearance();
+  }, [activeWorkspace?._id, storedWorkspaceConfig]);
+
   if (!ready) {
     return (
       <div className="flex items-center justify-center h-screen w-screen bg-[var(--color-surface-primary)]">
@@ -128,6 +152,7 @@ const App: React.FC = () => {
     >
       {/* Left sidebar */}
       <Sidebar
+        onOpenSettings={() => setSettingsOpen(true)}
         onOpenHome={() =>
           usePageStore.setState({
             activePage: null,
@@ -151,6 +176,9 @@ const App: React.FC = () => {
       <main className="flex-1 flex min-w-0 overflow-hidden relative">
         <MainContent />
       </main>
+
+      <WorkspaceThemePanel />
+      {settingsOpen && <SettingsCenter initialTab="general" onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 };

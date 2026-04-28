@@ -20,7 +20,7 @@ function toActivePage(page: PageEntry) {
 }
 
 /**
- * Notion-style breadcrumbs for the current page hierarchy.
+ * osionos-style breadcrumbs for the current page hierarchy.
  */
 export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
   pageId,
@@ -97,19 +97,19 @@ export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
   }
 
   return (
-    <nav className="notion-page-breadcrumbs" aria-label="Page breadcrumbs">
+    <nav className="osionos-page-breadcrumbs" aria-label="Page breadcrumbs">
       {onOpenHome && (
         <>
           <button
             type="button"
-            className="notion-page-breadcrumb notion-page-breadcrumb--root"
+            className="osionos-page-breadcrumb osionos-page-breadcrumb--root"
             onClick={onOpenHome}
           >
             Home
           </button>
           <ChevronRight
             size={12}
-            className="notion-page-breadcrumb-separator"
+            className="osionos-page-breadcrumb-separator"
           />
         </>
       )}
@@ -121,7 +121,7 @@ export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
           <React.Fragment key={entry._id}>
             {isLast ? (
               <span
-                className="notion-page-breadcrumb notion-page-breadcrumb--current"
+                className="osionos-page-breadcrumb osionos-page-breadcrumb--current"
                 aria-current="page"
                 title={entry.title || "Untitled"}
               >
@@ -130,7 +130,7 @@ export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
             ) : (
               <button
                 type="button"
-                className="notion-page-breadcrumb"
+                className="osionos-page-breadcrumb"
                 onClick={() => handleOpenCrumb(entry)}
                 title={entry.title || "Untitled"}
               >
@@ -141,7 +141,7 @@ export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
             {!isLast && (
               <ChevronRight
                 size={12}
-                className="notion-page-breadcrumb-separator"
+                className="osionos-page-breadcrumb-separator"
               />
             )}
           </React.Fragment>

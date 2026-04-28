@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   pageStore.helpers.ts                               :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/19 20:09:11 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -30,7 +30,7 @@ export function isMongoId(id: string): boolean {
 }
 
 /**
- * Generates the next duplicate title using Notion-style incremental
+ * Generates the next duplicate title using osionos-style incremental
  * numbering. If the title ends with ` (N)` where N is a valid positive
  * integer below INT_MAX, increments N. Otherwise appends ` (1)`.
  */

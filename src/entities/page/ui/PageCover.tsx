@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 20:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:47:31 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,7 +29,7 @@ interface PageCoverProps {
 }
 
 /**
- * Full-width cover image/gradient at the top of a Notion page.
+ * Full-width cover image/gradient at the top of a osionos page.
  * Shows a gallery picker on "Change cover".
  */
 export const PageCover: React.FC<PageCoverProps> = ({
@@ -82,31 +82,31 @@ export const PageCover: React.FC<PageCoverProps> = ({
   }, [onRemoveCover]);
 
   return (
-    <div data-testid="page-cover" className="notion-page-cover">
-      <div data-testid="page-cover-media" className="notion-page-cover-media">
+    <div data-testid="page-cover" className="osionos-page-cover">
+      <div data-testid="page-cover-media" className="osionos-page-cover-media">
         {isUrl ? (
           <img
             src={coverSrc}
             alt=""
             data-testid="page-cover-image"
-            className="notion-page-cover-img"
+            className="osionos-page-cover-img"
             draggable={false}
           />
         ) : (
           <div
             data-testid="page-cover-gradient"
-            className="notion-page-cover-gradient"
+            className="osionos-page-cover-gradient"
             style={{ background: cover }}
           />
         )}
       </div>
 
       {/* Hover controls */}
-      <div className="notion-page-cover-controls">
+      <div className="osionos-page-cover-controls">
         <button
           type="button"
           data-testid="page-cover-toggle-picker"
-          className="notion-page-cover-btn"
+          className="osionos-page-cover-btn"
           onClick={() => setShowPicker((v) => !v)}
         >
           <IconImage />
@@ -115,7 +115,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
         <button
           type="button"
           data-testid="page-cover-remove"
-          className="notion-page-cover-btn"
+          className="osionos-page-cover-btn"
           onClick={handleRemove}
         >
           <Trash2 size={14} />

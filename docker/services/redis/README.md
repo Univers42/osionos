@@ -27,7 +27,7 @@
 
 ## How it works in this project
 
-Redis runs as a Docker container (`notion_redis`) in both `src` and `playground` profiles.
+Redis runs as a Docker container (`osionos_redis`) in both `src` and `playground` profiles.
 It's configured as a **pure in-memory cache** — no persistence, no AOF, no RDB snapshots.
 When the container stops, all data is gone. That's fine for dev — we use it for caching
 and ephemeral state, not as a database.
@@ -74,11 +74,11 @@ redis-cli
 
 ```bash
 # Run a single command
-docker exec notion_redis redis-cli PING
+docker exec osionos_redis redis-cli PING
 # → PONG
 
 # Run multiple commands
-docker exec notion_redis redis-cli <<'EOF'
+docker exec osionos_redis redis-cli <<'EOF'
 SET greeting "hello"
 GET greeting
 DEL greeting
@@ -600,25 +600,25 @@ LASTSAVE
 
 ```bash
 # View Redis container logs
-docker logs -f notion_redis
+docker logs -f osionos_redis
 
 # Restart Redis
-docker restart notion_redis
+docker restart osionos_redis
 
 # Check container health
-docker inspect --format='{{.State.Health.Status}}' notion_redis
+docker inspect --format='{{.State.Health.Status}}' osionos_redis
 
 # Quick ping from host
-docker exec notion_redis redis-cli PING
+docker exec osionos_redis redis-cli PING
 
 # Check memory usage
-docker exec notion_redis redis-cli INFO memory | grep used_memory_human
+docker exec osionos_redis redis-cli INFO memory | grep used_memory_human
 
 # Check number of keys
-docker exec notion_redis redis-cli DBSIZE
+docker exec osionos_redis redis-cli DBSIZE
 
 # Flush everything
-docker exec notion_redis redis-cli FLUSHALL
+docker exec osionos_redis redis-cli FLUSHALL
 ```
 
 ---

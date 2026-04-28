@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
-MONGO_USER="${MONGO_INITDB_ROOT_USERNAME:-notion_user}"
-MONGO_PASS="${MONGO_INITDB_ROOT_PASSWORD:-notion_pass}"
-MONGO_DB="${MONGO_INITDB_DATABASE:-notion_db}"
+MONGO_USER="${MONGO_INITDB_ROOT_USERNAME:-osionos_user}"
+MONGO_PASS="${MONGO_INITDB_ROOT_PASSWORD:-osionos_pass}"
+MONGO_DB="${MONGO_INITDB_DATABASE:-osionos_db}"
 URI="mongodb://${MONGO_USER}:${MONGO_PASS}@localhost:27017/${MONGO_DB}?authSource=admin"
 
 echo "[mongo-seed] Waiting for MongoDB to accept connections..."

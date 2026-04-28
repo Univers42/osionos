@@ -6,12 +6,12 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from "react";
-import { Plus, Mail, CalendarRange, Monitor } from "lucide-react";
+import React, { useMemo } from "react";
+import { Plus, Mail, CalendarRange, Monitor, Hash, Lock, MessageSquare, Volume2, Video, GitBranch, Archive, Bot } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
 
 import type { ActivePage, PageEntry } from "@/entities/page";
@@ -24,6 +24,12 @@ import {
   canReadPage,
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
+import { useUserStore } from "@/features/auth";
+import {
+  resolveWorkspaceConfig,
+  useWorkspaceConfigStore,
+  workspaceConfigKey,
+} from "@/shared/config/workspaceConfigStore";
 
 interface WorkspaceRef {
   _id: string;
@@ -129,7 +135,7 @@ interface SidebarPageTreeProps {
   onAddToWorkspace: (wsId: string) => void;
 }
 
-/** Scrollable page-tree area: Recents, Agents, Private, Shared, Notion apps. */
+/** Scrollable page-tree area: Recents, Agents, Private, Shared, osionos apps. */
 export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   recents,
   activePage,
@@ -142,7 +148,30 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
 }) => {
   const addPage = usePageStore((s) => s.addPage);
   const pageById = usePageStore((s) => s.pageById);
+  const activeUserId = useUserStore((s) => s.activeUserId);
+  const activeWorkspace = useUserStore((s) => s.activeWorkspace());
+  const activeWorkspaceId = activeWorkspace?._id ?? privateWorkspaces[0]?._id ?? sharedWorkspaces[0]?._id ?? "";
+  const workspaceKey = workspaceConfigKey(activeUserId || "anonymous", activeWorkspaceId || "workspace");
+  const storedWorkspaceConfig = useWorkspaceConfigStore((s) => s.configs[workspaceKey]);
+  const workspaceConfig = useMemo(() => resolveWorkspaceConfig(storedWorkspaceConfig), [storedWorkspaceConfig]);
+  const addChannel = useWorkspaceConfigStore((s) => s.addChannel);
+  const addThread = useWorkspaceConfigStore((s) => s.addThread);
+  const updateChannel = useWorkspaceConfigStore((s) => s.updateChannel);
   const accessContext = getCurrentPageAccessContext();
+
+  const rootChannels = workspaceConfig.channels.filter((channel) => !channel.parentChannelId);
+  const visibleRootChannels = rootChannels.filter((channel) => channel.visibility === "workspace" || channel.memberIds.includes(activeUserId));
+
+  function channelIcon(type: string, restricted: boolean) {
+    if (restricted) return <Lock size={14} />;
+    if (type === "thread") return <GitBranch size={14} />;
+    if (type === "forum") return <MessageSquare size={14} />;
+    if (type === "audio" || type === "stage") return <Volume2 size={14} />;
+    if (type === "video") return <Video size={14} />;
+    if (type === "archive") return <Archive size={14} />;
+    if (type === "agent") return <Bot size={14} />;
+    return <Hash size={14} />;
+  }
 
   const handleAddChildToRecent = async (
     e: React.MouseEvent,
@@ -201,6 +230,69 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
             /* placeholder */
           }}
         />
+      </SidebarSection>
+
+      <SidebarSection
+        label="Channels"
+        defaultOpen
+        onAdd={() => {
+          if (activeWorkspaceId) void addChannel(activeUserId || "anonymous", activeWorkspaceId, "general", "text");
+        }}
+      >
+        <div className="mb-1 grid grid-cols-2 gap-1 px-1 text-[11px]">
+          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && void addChannel(activeUserId || "anonymous", activeWorkspaceId, "messages", "text")}>+ messages</button>
+          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && void addChannel(activeUserId || "anonymous", activeWorkspaceId, "forum", "forum")}>+ forum</button>
+          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && void addChannel(activeUserId || "anonymous", activeWorkspaceId, "audio", "audio")}>+ audio</button>
+          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && void addChannel(activeUserId || "anonymous", activeWorkspaceId, "video", "video")}>+ video</button>
+        </div>
+        {visibleRootChannels.length === 0 ? (
+          <p className="px-2 py-1 text-xs text-[var(--color-ink-faint)] italic">
+            Add messages, threads, audio or video channels.
+          </p>
+        ) : (
+          visibleRootChannels
+            .map((channel) => (
+              <React.Fragment key={channel.id}>
+                <SidebarNavItem
+                  icon={channelIcon(channel.type, channel.visibility === "members")}
+                  label={channel.name}
+                  onClick={() => {
+                    if (!activeUserId || !activeWorkspaceId) return;
+                    const restricted = channel.visibility === "workspace";
+                    void updateChannel(activeUserId, activeWorkspaceId, channel.id, {
+                      visibility: restricted ? "members" : "workspace",
+                      memberIds: restricted ? [activeUserId] : [],
+                    });
+                  }}
+                  rightElement={
+                    <button
+                      type="button"
+                      className="mr-1 rounded px-1 text-[10px] text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
+                      title="Create thread"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (activeUserId && activeWorkspaceId) void addThread(activeUserId, activeWorkspaceId, channel.id, `${channel.name}-thread`);
+                      }}
+                    >
+                      + hilo
+                    </button>
+                  }
+                />
+                {workspaceConfig.channels
+                  .filter((thread) => thread.parentChannelId === channel.id && (thread.visibility === "workspace" || thread.memberIds.includes(activeUserId)))
+                  .map((thread) => (
+                    <div key={thread.id} className="ml-4">
+                      <SidebarNavItem
+                        icon={<GitBranch size={13} />}
+                        label={thread.name}
+                        onClick={() => undefined}
+                        rightElement={<span className="pr-2 text-[10px] text-[var(--color-ink-faint)]">thread</span>}
+                      />
+                    </div>
+                  ))}
+              </React.Fragment>
+            ))
+        )}
       </SidebarSection>
 
       {privateWorkspaces.map((ws) => {
@@ -265,24 +357,24 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         )}
       </SidebarSection>
 
-      <SidebarSection label="Notion apps">
+      <SidebarSection label="osionos apps">
         <SidebarNavItem
           icon={<Mail size={16} />}
-          label="Notion Mail"
+          label="osionos Mail"
           onClick={() => {
             /* placeholder */
           }}
         />
         <SidebarNavItem
           icon={<CalendarRange size={16} />}
-          label="Notion Calendar"
+          label="osionos Calendar"
           onClick={() => {
             /* placeholder */
           }}
         />
         <SidebarNavItem
           icon={<Monitor size={16} />}
-          label="Notion Desktop"
+          label="osionos Desktop"
           onClick={() => {
             /* placeholder */
           }}

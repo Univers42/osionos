@@ -1,20 +1,22 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   NotionPage.tsx                                     :+:      :+:    :+:   */
+/*   osionosPage.tsx                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 20:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:47:31 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 17:22:32 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import { MessageSquare } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
 
 import { usePageStore } from "@/store/usePageStore";
+import { useUserStore } from "@/features/auth";
+import { pageConfigKey, resolvePageConfig, usePageConfigStore } from "@/shared/config/pageConfigStore";
 import {
   IconImage,
   getCollectionEmojiValue,
@@ -32,12 +34,12 @@ import { PageBody } from "./PageBody";
 
 import "./notionPage.css";
 
-interface NotionPageProps {
+interface OsionosPageProps {
   pageId: string;
 }
 
 /**
- * Full Notion-style page layout.
+ * Full osionos-style page layout.
  *
  * Structure:
  *  ┌──────────────────────────────────────┐
@@ -53,11 +55,15 @@ interface NotionPageProps {
  *  │  ...                                  │
  *  └──────────────────────────────────────┘
  */
-export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
+export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
   const page = usePageStore((s) => s.pageById(pageId));
   const activePage = usePageStore((s) => s.activePage);
   const openPage = usePageStore((s) => s.openPage);
   const updatePageTitle = usePageStore((s) => s.updatePageTitle);
+  const activeUserId = useUserStore((s) => s.activeUserId);
+  const safeUserId = activeUserId || "anonymous";
+  const storedPageConfig = usePageConfigStore((s) => s.configs[pageConfigKey(safeUserId, pageId)]);
+  const pageConfig = useMemo(() => resolvePageConfig(storedPageConfig), [storedPageConfig]);
 
   /* ── Page metadata from store ──────────────────────────────────── */
   const title = page?.title ?? activePage?.title ?? "";
@@ -155,7 +161,22 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
   const hasIcon = !!icon;
 
   return (
-    <div className="notion-page">
+    <div
+      className={[
+        "osionos-page",
+        `osionos-page--font-${pageConfig.font}`,
+        pageConfig.smallText ? "osionos-page--small-text" : "",
+        pageConfig.fullWidth ? "osionos-page--full-width" : "",
+        pageConfig.locked ? "osionos-page--locked" : "",
+        pageConfig.presentationMode ? "osionos-page--present" : "",
+      ].filter(Boolean).join(" ")}
+      style={{
+        "--page-font-family": pageConfig.cssTokens.fontFamily,
+        "--page-font-size-scale": pageConfig.cssTokens.fontSizeScale,
+        "--page-content-max-width": pageConfig.cssTokens.contentMaxWidth,
+        "--page-content-padding-inline": pageConfig.cssTokens.contentPaddingInline,
+      } as React.CSSProperties}
+    >
       <PageHeaderBar
         key={pageId}
         pageId={pageId}
@@ -173,10 +194,10 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
 
       {/* Header: icon + toolbar + title */}
       <div
-        className={`notion-page-header ${
+        className={`osionos-page-header ${
           hasCover
-            ? "notion-page-header--with-cover"
-            : "notion-page-header--no-cover"
+            ? "osionos-page-header--with-cover"
+            : "osionos-page-header--no-cover"
         }`}
       >
         {/* Page icon */}
@@ -189,11 +210,11 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
         )}
 
         {/* Toolbar: Add icon / cover / comment (shown on hover) */}
-        <div className="notion-page-toolbar">
+        <div className="osionos-page-toolbar">
           {!hasIcon && (
             <button
               type="button"
-              className="notion-page-toolbar-btn"
+              className="osionos-page-toolbar-btn"
               onClick={handleAddIcon}
             >
               <AssetRenderer
@@ -206,7 +227,7 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
           {!hasCover && (
             <button
               type="button"
-              className="notion-page-toolbar-btn"
+              className="osionos-page-toolbar-btn"
               onClick={handleAddCover}
             >
               <IconImage />
@@ -215,7 +236,7 @@ export const NotionPage: React.FC<NotionPageProps> = ({ pageId }) => {
           )}
           <button
             type="button"
-            className="notion-page-toolbar-btn"
+            className="osionos-page-toolbar-btn"
             onClick={() => {
               /* Future: add comment */
             }}

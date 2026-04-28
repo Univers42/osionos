@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:47:31 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,7 +17,7 @@ import { AssetRenderer } from "@univers42/ui-collection";
 import { ErrorBoundary } from "@/shared/ui";
 import { getCollectionEmojiValue } from "@/shared/lib/markengine/uiCollectionAssets";
 import { DatabaseBlock } from "@/widgets/database-view";
-import { NotionPage } from "@/pages/notion-page";
+import { OsionosPage } from "@/pages/notion-page";
 import { TrashView } from "@/pages/trash-view";
 
 import { usePageStore } from "@/store/usePageStore";
@@ -25,7 +25,7 @@ import { useUserStore } from "@/features/auth";
 
 /**
  * Renders the right-hand content panel.
- * Shows home splash, DatabaseBlock, or the Notion-style page view.
+ * Shows home splash, DatabaseBlock, or the osionos-style page view.
  */
 export const MainContent: React.FC = () => {
   const activePage = usePageStore((s) => s.activePage);
@@ -36,10 +36,11 @@ export const MainContent: React.FC = () => {
   const openPage = usePageStore((s) => s.openPage);
   const clearActivePage = usePageStore.setState;
   const session = useUserStore((s) => s.activeSession());
+  const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const persona = useUserStore((s) => s.activePersona());
 
   const jwt = session?.accessToken ?? "";
-  const firstWsId = session?.privateWorkspaces[0]?._id ?? "";
+  const firstWsId = activeWorkspace?._id ?? session?.privateWorkspaces[0]?._id ?? "";
 
   useEffect(() => {
     if (!activePage || activePage?.kind !== "page" || !jwt) return;
@@ -79,7 +80,7 @@ export const MainContent: React.FC = () => {
             {persona?.name ?? "Welcome"}
           </h1>
           <p className="text-sm text-[var(--color-ink-muted)]">
-            {session?.privateWorkspaces[0]?.name ?? "Your workspace"} is ready.
+            {activeWorkspace?.name ?? session?.privateWorkspaces[0]?.name ?? "Your workspace"} is ready.
           </p>
         </div>
         <button
@@ -144,10 +145,10 @@ export const MainContent: React.FC = () => {
     );
   }
 
-  /* ── Page view — Notion-style layout ───────────────────────────── */
+  /* ── Page view — osionos-style layout ───────────────────────────── */
   return (
     <div className="flex-1 h-full overflow-hidden">
-      <NotionPage pageId={activePage.id} />
+      <OsionosPage pageId={activePage.id} />
     </div>
   );
 };

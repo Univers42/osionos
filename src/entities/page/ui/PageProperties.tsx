@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 20:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:47:31 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -25,7 +25,7 @@ interface PagePropertiesProps {
 }
 
 /**
- * Optional page properties bar (like Notion's database-page properties).
+ * Optional page properties bar (like osionos's database-page properties).
  * Only renders when the page has properties attached.
  */
 export const PageProperties: React.FC<PagePropertiesProps> = ({
@@ -35,11 +35,11 @@ export const PageProperties: React.FC<PagePropertiesProps> = ({
   if (properties.length === 0) return null;
 
   return (
-    <div className="notion-page-properties">
+    <div className="osionos-page-properties">
       {properties.map((prop) => (
-        <div key={prop.key} className="notion-page-property-row">
-          <span className="notion-page-property-label">{prop.label}</span>
-          <span className="notion-page-property-value">
+        <div key={prop.key} className="osionos-page-property-row">
+          <span className="osionos-page-property-label">{prop.label}</span>
+          <span className="osionos-page-property-value">
             {onChangeProperty ? (
               <input
                 type="text"

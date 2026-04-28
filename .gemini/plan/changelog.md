@@ -1,6 +1,6 @@
 # Migration Changelog: Prismatica FSD + Atomic Design
 
-This document summarizes the complete architectural transformation of the Notion Playground repository to the **Prismatica Standard** (FSD + Atomic Design).
+This document summarizes the complete architectural transformation of the osionos Playground repository to the **Prismatica Standard** (FSD + Atomic Design).
 
 **Status:** Completed  
 **Date:** April 9, 2026  
@@ -61,7 +61,7 @@ The project has been refactored from a flat components/hooks/stores structure in
 - **Database View:** Encapsulated `DatabaseBlock` into `@/widgets/database-view/`.
 
 ### Phase 8: Final Orchestration
-- **Pages Slice:** Moved `NotionPage` and `PageBody` to `@/pages/notion-page/`.
+- **Pages Slice:** Moved `osionosPage` and `PageBody` to `@/pages/osionos-page/`.
 - **App Slice:** Moved `App.tsx` and `main.tsx` to `@/app/`.
 - **Entry Point:** Updated `index.html` to point to the new FSD entry path.
 - **Structural Integrity Fix:** Moved `PlaygroundPageEditorConstants` to `@/entities/block/model/constants.ts` to resolve a cross-layer dependency violation detected during audit.
@@ -72,7 +72,7 @@ The project has been refactored from a flat components/hooks/stores structure in
 ```text
 src/
 ├── app/                # Global Providers, Styles, main.tsx
-├── pages/              # NotionPage (Orchestrator)
+├── pages/              # osionosPage (Orchestrator)
 ├── widgets/            # Sidebar, MainContent, DatabaseBlock
 ├── features/           # Auth, BlockEditor, SlashCommands
 ├── entities/           # Block, Page, User (Types + UI)

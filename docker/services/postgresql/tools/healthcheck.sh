@@ -1,3 +1,3 @@
 #!/bin/sh
 set -e
-pg_isready -U "${POSTGRES_USER:-notion_user}" -d "${POSTGRES_DB:-notion_db}" -q
+pg_isready -U "${POSTGRES_USER:-osionos_user}" -d "${POSTGRES_DB:-osionos_db}" -q

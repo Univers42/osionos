@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
-PGUSER="${POSTGRES_USER:-notion_user}"
-PGDB="${POSTGRES_DB:-notion_db}"
+PGUSER="${POSTGRES_USER:-osionos_user}"
+PGDB="${POSTGRES_DB:-osionos_db}"
 
 echo "[pg-seed] Waiting for PostgreSQL to accept connections..."
 until pg_isready -U "$PGUSER" -d "$PGDB" -q; do sleep 1; done

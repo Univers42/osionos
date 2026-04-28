@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/04 14:03:44 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,7 +23,7 @@ interface Props {
 
 /**
  * Collapsible section header used to group rows in the sidebar.
- * Matches Notion's styling: 12px font, 30px height, lowercase label,
+ * Matches osionos's styling: 12px font, 30px height, lowercase label,
  * chevron + action buttons on hover.
  */
 export const SidebarSection: React.FC<Props> = ({
@@ -33,7 +33,7 @@ export const SidebarSection: React.FC<Props> = ({
 
   return (
     <div className="mt-3">
-      {/* Section header row – matches Notion's 30px height */}
+      {/* Section header row – matches osionos's 30px height */}
       <div className="group relative flex items-center h-[30px] px-2 mb-px">
         <button
           type="button"

@@ -12,7 +12,7 @@ Before touching the code, we harden the environment so that the compiler detects
 Migrate `index.css` to a token‑based SCSS system to eliminate hardcoded (magic) values.
 
 - **Extract Tokens:** Create `src/app/styles/base/tokens/`.
-  - `_colors.scss`: Move color variables from `index.css` and `notionPage.css`.
+  - `_colors.scss`: Move color variables from `index.css` and `osionosPage.css`.
   - `_spacing.scss`: Define the 4px/8px scale for margins and paddings.
   - `_typography.scss`: Define font families and sizes.
 - **Entry Point:** Create `src/app/styles/_graphical-chart.scss` that `@forward`s all tokens. This file will be the single source of truth for design.
@@ -20,7 +20,7 @@ Migrate `index.css` to a token‑based SCSS system to eliminate hardcoded (magic
 
 # Phase 3: `shared/` Layer (Universal Tools)
 
-Here we move code that has no Notion business logic and could be used in any other project.
+Here we move code that has no osionos business logic and could be used in any other project.
 
 - **API Client:** Move `api/client.ts` to `src/shared/api/client.ts`. Ensure it uses environment variables for the base URL.
 - **Markdown Engine (MarkEngine):** The sub‑module `lib/markengine/` is purely technical. Move it to `src/shared/lib/markengine/`. This includes `shortcuts.ts` and the block parsers.
@@ -59,7 +59,7 @@ This is where Zustand state and hooks that allow the user to interact with the s
 
 Large pieces that combine entities and features to create sections of the interface.
 
-- **Sidebar Widget:** Move the remaining logic from `components/sidebar/` (such as `NotionSidebar.tsx` and `SidebarPageTree.tsx`) to `src/widgets/sidebar/ui/`. This widget orchestrates the auth feature and the page entity.
+- **Sidebar Widget:** Move the remaining logic from `components/sidebar/` (such as `osionosSidebar.tsx` and `SidebarPageTree.tsx`) to `src/widgets/sidebar/ui/`. This widget orchestrates the auth feature and the page entity.
 - **Page Renderer Widget:** Move `components/PageBlocksRenderer.tsx` and `components/MainContent.tsx` to `src/widgets/page-renderer/ui/`. It is responsible for rendering the list of blocks of a page.
 - **Database View Widget:** Move `components/DatabaseBlock.tsx` to `src/widgets/database-view/ui/`.
 
@@ -67,6 +67,6 @@ Large pieces that combine entities and features to create sections of the interf
 
 The highest level of composition where routes and global providers are assembled.
 
-- **Pages:** Move `components/page/NotionPage.tsx` to `src/pages/notion-page/ui/NotionPage.tsx`. This file must now be very thin, limited to mounting the widgets from Phase 7 in a layout.
+- **Pages:** Move `components/page/osionosPage.tsx` to `src/pages/osionos-page/ui/osionosPage.tsx`. This file must now be very thin, limited to mounting the widgets from Phase 7 in a layout.
 - **App Providers:** Create `src/app/providers/` and move there the initialisation logic of Zustand stores and the `ThemeProvider` based on `lib/theme.ts`.
 - **Entry Point:** Move `main.tsx` and `App.tsx` to `src/app/`. `App.tsx` will only contain the Router and the Providers.

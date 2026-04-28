@@ -6,40 +6,28 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 16:12:43 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import { api } from '@/shared/api/client';
-import { getCollectionEmojiValue } from '@/shared/lib/markengine/uiCollectionAssets';
+import seedUsers from '@/data/seedUsers.json';
 import type { StaticPersona, Workspace } from '@/entities/user';
 
-export const INITIAL_PERSONAS: StaticPersona[] = [
-  {
-    id: '',
-    email: 'admin@playground.local',
-    password: 'playground123', // NOSONAR - demo/playground credential
-    name: 'Dylan Admin',
-    emoji: getCollectionEmojiValue('star'),
-    roleBadge: 'Admin',
-  },
-  {
-    id: '',
-    email: 'alex@playground.local',
-    password: 'playground123', // NOSONAR - demo/playground credential
-    name: 'Alex Collaborator',
-    emoji: getCollectionEmojiValue('palette'),
-    roleBadge: 'Member',
-  },
-  {
-    id: '',
-    email: 'sam@playground.local',
-    password: 'playground123', // NOSONAR - demo/playground credential
-    name: 'Sam Guest',
-    emoji: getCollectionEmojiValue('cool'),
-    roleBadge: 'Guest',
-  },
-];
+type SeedUsersFile = {
+  users?: StaticPersona[];
+  workspaces?: Workspace[];
+};
+
+const seed = seedUsers as SeedUsersFile;
+
+export const INITIAL_PERSONAS: StaticPersona[] = (seed.users ?? []).map((user) => ({
+  ...user,
+  id: user.id || '',
+  persistInSessions: user.persistInSessions ?? true,
+}));
+
+export const SEEDED_WORKSPACES: Workspace[] = seed.workspaces ?? [];
 
 /** Resolved API base URL — empty string means "no API configured → offline" */
 export const API_BASE: string = ((import.meta.env as Record<string, string>)['VITE_API_URL'] ?? '').trim();
@@ -67,6 +55,33 @@ export async function loginPersona(persona: StaticPersona) {
   }
 }
 
+export async function signupPersona(persona: StaticPersona) {
+  if (!API_BASE) return null;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch(
+      `${API_BASE}/api/auth/signup`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: persona.email,
+          password: persona.password,
+          name: persona.name,
+        }),
+        signal: controller.signal,
+      },
+    );
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return { userId: data.user.id as string, accessToken: data.accessToken as string, refreshToken: data.refreshToken as string };
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchWorkspaces(jwt: string): Promise<Workspace[]> {
   if (!jwt || !API_BASE) return [];  // offline mode — skip network call
   try {
@@ -79,6 +94,30 @@ export async function fetchWorkspaces(jwt: string): Promise<Workspace[]> {
 export function partition(workspaces: Workspace[], ownerId: string) {
   return {
     privateWorkspaces: workspaces.filter(w => w.ownerId === ownerId),
-    sharedWorkspaces:  workspaces.filter(w => w.ownerId !== ownerId),
+    sharedWorkspaces:  workspaces.filter(w => w.ownerId !== ownerId && (!w.memberIds || w.memberIds.includes(ownerId))),
+  };
+}
+
+export function seededWorkspaceSession(userId: string) {
+  const privateWorkspaces = SEEDED_WORKSPACES.filter((w) => w.ownerId === userId);
+  const sharedWorkspaces = SEEDED_WORKSPACES.filter(
+    (w) => w.ownerId !== userId && (w.memberIds?.includes(userId) ?? false),
+  );
+
+  return { privateWorkspaces, sharedWorkspaces };
+}
+
+export function createOfflineWorkspace(userId: string, name: string): Workspace {
+  const slug = name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-').replaceAll(/^-|-$/g, '') || userId;
+  return {
+    _id: `mock-ws-${userId}-${Date.now()}`,
+    name,
+    slug,
+    ownerId: userId,
+    memberIds: [userId],
+    settings: {
+      plan: 'Playground',
+      memberCount: 1,
+    },
   };
 }

@@ -70,8 +70,8 @@ First-time login: **admin / admin** — you'll be asked to change the password.
 ### Creating a local project
 
 1. Go to `http://localhost:9000` → **Create Project** → **Manually**
-2. Project key: `Univers42_notion-database-sys` (must match `sonar-project.properties`)
-3. Display name: `Notion Database System`
+2. Project key: `Univers42_osionos-database-sys` (must match `sonar-project.properties`)
+3. Display name: `osionos Database System`
 4. Go to **My Account** → **Security** → **Generate Token**
 5. Save the token — you'll need it for the scanner
 
@@ -127,7 +127,7 @@ runs the scanner on every push and pull request.
 ### Setup (one-time)
 
 1. Go to [sonarcloud.io](https://sonarcloud.io) → **Sign in with GitHub**
-2. Import the repository (`Univers42/notion-database-sys`)
+2. Import the repository (`Univers42/osionos-database-sys`)
 3. Note the **project key** and **organization** (must match `sonar-project.properties`)
 4. Go to **My Account** → **Security** → **Generate Token** (type: `Project Analysis Token`)
 5. In GitHub repo → **Settings** → **Secrets** → Add `SONAR_TOKEN` with the token value
@@ -241,8 +241,8 @@ This is the main config file. Here's what each section does:
 
 ```properties
 # === Identity (must match SonarCloud project exactly) ===
-sonar.projectKey=Univers42_notion-database-sys   # CASE-SENSITIVE!
-sonar.projectName=Notion Database System
+sonar.projectKey=Univers42_osionos-database-sys   # CASE-SENSITIVE!
+sonar.projectName=osionos Database System
 sonar.projectVersion=1.0.0
 sonar.organization=univers42
 
@@ -290,18 +290,18 @@ the gate status is "Failed" and the CI check goes red.
 
 ```bash
 # Via the web API
-curl -sf "http://localhost:9000/api/qualitygates/project_status?projectKey=Univers42_notion-database-sys" \
+curl -sf "http://localhost:9000/api/qualitygates/project_status?projectKey=Univers42_osionos-database-sys" \
   -H "Authorization: Bearer YOUR_TOKEN" | python3 -m json.tool
 
 # Or check in the browser
-open "http://localhost:9000/dashboard?id=Univers42_notion-database-sys"
+open "http://localhost:9000/dashboard?id=Univers42_osionos-database-sys"
 ```
 
 ### On SonarCloud
 
 ```bash
 # Quality gate status
-curl -sf "https://sonarcloud.io/api/qualitygates/project_status?projectKey=Univers42_notion-database-sys" \
+curl -sf "https://sonarcloud.io/api/qualitygates/project_status?projectKey=Univers42_osionos-database-sys" \
   -H "Authorization: Bearer YOUR_TOKEN" | python3 -m json.tool
 ```
 
@@ -331,7 +331,7 @@ Severities (from worst to meh):
 
 ```bash
 # Get all issues for the project (paginated)
-curl -sf "http://localhost:9000/api/issues/search?projectKeys=Univers42_notion-database-sys&ps=50" \
+curl -sf "http://localhost:9000/api/issues/search?projectKeys=Univers42_osionos-database-sys&ps=50" \
   -H "Authorization: Bearer YOUR_TOKEN" | python3 -m json.tool
 
 # Filter by type
@@ -343,10 +343,10 @@ curl -sf "...&types=CODE_SMELL"
 curl -sf "...&severities=CRITICAL,BLOCKER"
 
 # Filter by file
-curl -sf "...&componentKeys=Univers42_notion-database-sys:src/store/useStore.ts"
+curl -sf "...&componentKeys=Univers42_osionos-database-sys:src/store/useStore.ts"
 
 # Count by rule
-curl -sf "http://localhost:9000/api/issues/search?projectKeys=Univers42_notion-database-sys&facets=rules&ps=1" \
+curl -sf "http://localhost:9000/api/issues/search?projectKeys=Univers42_osionos-database-sys&facets=rules&ps=1" \
   -H "Authorization: Bearer YOUR_TOKEN" | python3 -m json.tool | grep -A2 '"val"'
 ```
 
@@ -361,7 +361,7 @@ you can do via API.
 
 ```bash
 BASE="http://localhost:9000"  # or https://sonarcloud.io
-KEY="Univers42_notion-database-sys"
+KEY="Univers42_osionos-database-sys"
 TOKEN="your-token"
 
 # Server health
@@ -462,7 +462,7 @@ But be careful — if you suppress everything, you lose the point of static anal
 | Scanner can't find TypeScript files   | Check `sonar.sources` and `sonar.inclusions` in `sonar-project.properties`.                                                                   |
 | Scanner fails with invalid URL        | `sonar.host.url` might be set both in properties AND env var. We keep it out of the properties file on purpose — see the comment in the file. |
 | Quality gate always fails on coverage | We have no tests yet → 0% coverage. Either add tests or customize the quality gate to relax the coverage threshold.                           |
-| Local SonarQube won't start           | Needs ~1 GB RAM. Check `docker logs notion_sonarqube` and increase JVM heap in `conf/sonar.properties`.                                       |
+| Local SonarQube won't start           | Needs ~1 GB RAM. Check `docker logs osionos_sonarqube` and increase JVM heap in `conf/sonar.properties`.                                       |
 | SonarQube takes forever to boot       | Normal — first boot takes 60-90s. Use `wait-sonarqube.sh` to wait.                                                                            |
 | `Elasticsearch exception`             | ES needs `vm.max_map_count >= 262144`. On Linux: `sudo sysctl -w vm.max_map_count=262144`.                                                    |
 | Analysis runs but shows 0 lines       | `sonar.sources` doesn't point to the right directories, or `sonar.exclusions` is too aggressive.                                              |
@@ -481,13 +481,13 @@ curl -sf "https://sonarcloud.io/api/authentication/validate" \
 # 2. Check if the project exists
 curl -sf "https://sonarcloud.io/api/projects/search?organization=univers42" \
   -H "Authorization: Bearer $SONAR_TOKEN" | python3 -m json.tool
-# Look for "Univers42_notion-database-sys" in the results
+# Look for "Univers42_osionos-database-sys" in the results
 
 # 3. If the project doesn't exist, create it
 curl -sf "https://sonarcloud.io/api/projects/create" \
   -X POST \
   -H "Authorization: Bearer $SONAR_TOKEN" \
-  -d "name=Notion Database System&project=Univers42_notion-database-sys&organization=univers42"
+  -d "name=osionos Database System&project=Univers42_osionos-database-sys&organization=univers42"
 
 # 4. If the token is invalid, generate a new one
 # Go to: https://sonarcloud.io/account/security

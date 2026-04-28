@@ -1,7 +1,7 @@
 # MongoDB 7 — Cheatsheet
 
 > **Image**: `mongo:7.0` · **Port**: 27017 · **Shell**: `mongosh`  
-> Default creds: `notion_user` / `notion_pass` · DB: `notion_db`
+> Default creds: `osionos_user` / `osionos_pass` · DB: `osionos_db`
 
 ---
 
@@ -22,13 +22,13 @@
 
 ## How it works in this project
 
-MongoDB runs as a Docker container (`notion_mongodb`). On first start, the init script
+MongoDB runs as a Docker container (`osionos_mongodb`). On first start, the init script
 at `tools/init-collections.js` creates 6 collections (tasks, contacts, content, inventory,
 projects, products) with useful indexes.
 
 Two databases are used:
-- **`notion_src_db`** — for the src app (`:3000`)
-- **`notion_playground_db`** — for the playground app (`:3001` + API `:4000`)
+- **`osionos_src_db`** — for the src app (`:3000`)
+- **`osionos_playground_db`** — for the playground app (`:3001` + API `:4000`)
 
 The seed data lives in `src/store/dbms/mongodb/*.seed.json` and is imported via `mongoimport`.
 
@@ -51,15 +51,15 @@ docker-compose.yml
 make mongo-shell
 
 # One-liner from anywhere
-docker exec -it notion_mongodb mongosh \
-  "mongodb://notion_user:notion_pass@localhost:27017/notion_db?authSource=admin"
+docker exec -it osionos_mongodb mongosh \
+  "mongodb://osionos_user:osionos_pass@localhost:27017/osionos_db?authSource=admin"
 ```
 
 ### From inside a container
 
 ```bash
 # From the src-app container (uses Docker network hostnames)
-mongosh "mongodb://notion_user:notion_pass@mongodb:27017/notion_db?authSource=admin"
+mongosh "mongodb://osionos_user:osionos_pass@mongodb:27017/osionos_db?authSource=admin"
 ```
 
 ### Connection string anatomy
@@ -88,7 +88,7 @@ It's a full JavaScript/Node.js REPL with autocomplete and syntax highlighting.
 show dbs
 
 // Switch to a database (creates it if it doesn't exist)
-use notion_src_db
+use osionos_src_db
 
 // Show current database
 db
@@ -459,11 +459,11 @@ db.tasks.aggregate([
 
 ```bash
 # Import a JSON array file into a collection (drop existing)
-mongoimport --uri="mongodb://notion_user:notion_pass@localhost:27017/notion_db?authSource=admin" \
+mongoimport --uri="mongodb://osionos_user:osionos_pass@localhost:27017/osionos_db?authSource=admin" \
   --collection=tasks --jsonArray --drop --file=tasks.seed.json
 
 # Export a collection to JSON
-mongoexport --uri="mongodb://notion_user:notion_pass@localhost:27017/notion_db?authSource=admin" \
+mongoexport --uri="mongodb://osionos_user:osionos_pass@localhost:27017/osionos_db?authSource=admin" \
   --collection=tasks --jsonArray --out=tasks-backup.json
 
 # Export with a query filter
@@ -479,7 +479,7 @@ mongoimport --uri="..." --collection=products \
 
 ```bash
 # Full database backup
-mongodump --uri="mongodb://notion_user:notion_pass@localhost:27017/notion_db?authSource=admin" \
+mongodump --uri="mongodb://osionos_user:osionos_pass@localhost:27017/osionos_db?authSource=admin" \
   --out=./backup/
 
 # Backup a single collection
@@ -489,7 +489,7 @@ mongodump --uri="..." --collection=tasks --out=./backup/
 mongorestore --uri="..." --drop ./backup/
 
 # Restore a single collection
-mongorestore --uri="..." --collection=tasks --drop ./backup/notion_db/tasks.bson
+mongorestore --uri="..." --collection=tasks --drop ./backup/osionos_db/tasks.bson
 ```
 
 ### Using our Makefile
@@ -537,7 +537,7 @@ db.getUsers()
 db.createUser({
   user: "readonly",
   pwd: "readonly_pass",
-  roles: [{ role: "read", db: "notion_db" }]
+  roles: [{ role: "read", db: "osionos_db" }]
 })
 ```
 
@@ -545,22 +545,22 @@ db.createUser({
 
 ```bash
 # View MongoDB container logs
-docker logs -f notion_mongodb
+docker logs -f osionos_mongodb
 
 # Restart MongoDB
-docker restart notion_mongodb
+docker restart osionos_mongodb
 
 # Check container health
-docker inspect --format='{{.State.Health.Status}}' notion_mongodb
+docker inspect --format='{{.State.Health.Status}}' osionos_mongodb
 
 # Open a raw shell in the container
-docker exec -it notion_mongodb bash
+docker exec -it osionos_mongodb bash
 
 # Check disk usage of data volume
-docker exec notion_mongodb du -sh /data/db
+docker exec osionos_mongodb du -sh /data/db
 
 # Run the seed script manually
-docker exec notion_mongodb /usr/local/bin/seed.sh
+docker exec osionos_mongodb /usr/local/bin/seed.sh
 ```
 
 ---

@@ -12,9 +12,9 @@
 ## Tabla de contenidos
 
 1. [Contexto y motivación](#1-contexto-y-motivación)
-2. [Análisis comparativo: Osionos vs Notion](#2-análisis-comparativo-osionos-vs-notion)
+2. [Análisis comparativo: Osionos vs osionos](#2-análisis-comparativo-osionos-vs-osionos)
 3. [Auditoría de deuda técnica actual](#3-auditoría-de-deuda-técnica-actual)
-4. [Puntos de flaqueo de Notion que podemos superar](#4-puntos-de-flaqueo-de-notion-que-podemos-superar)
+4. [Puntos de flaqueo de osionos que podemos superar](#4-puntos-de-flaqueo-de-osionos-que-podemos-superar)
 5. [Optimización del markengine y su integración con el UI engine](#5-optimización-del-markengine-y-su-integración-con-el-ui-engine)
 6. [Evaluación de estrategias alternativas](#6-evaluación-de-estrategias-alternativas)
 7. [Plan de implementación: Estrategia A — Normalización total](#7-plan-de-implementación-estrategia-a--normalización-total)
@@ -24,25 +24,25 @@
 
 ## 1. Contexto y motivación
 
-Osionos es un editor de bloques Notion-inspired con 19+ tipos de bloque, slash commands, detección de markdown shortcuts, drag-and-drop, y un backend Fastify + MongoDB. El proyecto aspira a la flexibilidad y polimorfismo de Notion, pero tomando decisiones propias donde el enfoque de Notion tenga debilidades.
+Osionos es un editor de bloques osionos-inspired con 19+ tipos de bloque, slash commands, detección de markdown shortcuts, drag-and-drop, y un backend Fastify + MongoDB. El proyecto aspira a la flexibilidad y polimorfismo de osionos, pero tomando decisiones propias donde el enfoque de osionos tenga debilidades.
 
 El problema central es que **no tenemos una jerarquía clara de bloques padres e hijos**. El modelo actual es un array plano de bloques por página, con la única excepción del toggle block que maneja hijos como caso especial. Esto bloquea funcionalidades fundamentales: indentación estructural, sub-tareas, anidamiento genérico, y collaborative editing.
 
-Este documento presenta un análisis exhaustivo del estado actual, identifica todos los puntos de deuda técnica, compara nuestro enfoque con el de Notion (identificando sus propias debilidades), y cierra con un plan de implementación completo para la migración a un modelo normalizado.
+Este documento presenta un análisis exhaustivo del estado actual, identifica todos los puntos de deuda técnica, compara nuestro enfoque con el de osionos (identificando sus propias debilidades), y cierra con un plan de implementación completo para la migración a un modelo normalizado.
 
 ### Fuentes de referencia
 
-- Artículo oficial de Notion: *"The data model behind Notion's flexibility"* (Mayo 2021)
+- Artículo oficial de osionos: *"The data model behind osionos's flexibility"* (Mayo 2021)
 - Código fuente del repositorio osionos (revisión completa de Abril 2026)
 - Documentación interna: `TOGGLE_IMPLEMENTATION_NOTES.md`, `SHELL_UI_LAYOUT.md`
 
 ---
 
-## 2. Análisis comparativo: Osionos vs Notion
+## 2. Análisis comparativo: Osionos vs osionos
 
-### 2.1 — El modelo de datos de Notion
+### 2.1 — El modelo de datos de osionos
 
-Notion implementa un modelo donde absolutamente todo es un **bloque** con cinco atributos fundamentales:
+osionos implementa un modelo donde absolutamente todo es un **bloque** con cinco atributos fundamentales:
 
 - **`id`** — UUID v4 único
 - **`type`** — Define cómo se renderiza (paragraph, heading, to_do, toggle, page, etc.)
@@ -65,7 +65,7 @@ Nuestro modelo tiene estas características:
 
 ### 2.3 — Tabla de semejanzas y diferencias
 
-| Aspecto | Notion | Osionos | Alineación |
+| Aspecto | osionos | Osionos | Alineación |
 |---------|--------|---------|------------|
 | Todo es un bloque | Sí — páginas, texto, listas, embeds son bloques | Sí — 19+ tipos, páginas son contenedores de bloques | ✅ Alineados |
 | Tipo + properties desacoplados | `type` define rendering; `properties` persisten independiente del tipo | Todas las properties están en la interfaz base `Block` con index signature | ⚠️ Parcial — necesita discriminated unions |
@@ -109,7 +109,7 @@ export interface Block {
 
 1. **`[key: string]: unknown`** permite cualquier propiedad sin error de compilación. Un `heading_1` acepta `block.tableData = [["foo"]]` sin quejarse. Contradice directamente el principio de "strict typing, no `any`" y SonarQube no puede detectar propiedades fantasma
 2. **Todas las propiedades específicas de tipo** (`checked`, `language`, `tableData`, `databaseId`, `viewId`) viven al mismo nivel. Un `paragraph` tiene `checked?: boolean` en su tipo aunque nunca lo use. Cada nuevo tipo de bloque requiere modificar la interfaz base — violación del principio Open/Closed
-3. **`content: string`** colisiona semánticamente con el `content: string[]` de Notion (array de IDs hijos). Si migramos, hay que renombrar
+3. **`content: string`** colisiona semánticamente con el `content: string[]` de osionos (array de IDs hijos). Si migramos, hay que renombrar
 4. **`children?: Block[]`** embebe objetos completos en vez de referenciar IDs. Hace que cada mutación requiera deep clone y que la serialización a BD sea costosa
 
 ### 3.2 — CRÍTICO: Deep clone en cada mutación del árbol
@@ -214,11 +214,11 @@ Cada `EditableBlock` recibe el array `blocks` completo solo para que los handler
 
 ---
 
-## 4. Puntos de flaqueo de Notion que podemos superar
+## 4. Puntos de flaqueo de osionos que podemos superar
 
 ### 4.1 — Properties sin tipado fuerte → Discriminated unions en compile-time
 
-Notion usa un bag genérico de properties donde el tipo del bloque define cómo se interpretan en runtime. Al hacer "Turn Into", las properties del tipo anterior se ignoran pero **no se eliminan**. Un bloque que fue `to_do → heading → code → paragraph` arrastra `checked`, `language`, y propiedades de todos los tipos anteriores indefinidamente (data bloat).
+osionos usa un bag genérico de properties donde el tipo del bloque define cómo se interpretan en runtime. Al hacer "Turn Into", las properties del tipo anterior se ignoran pero **no se eliminan**. Un bloque que fue `to_do → heading → code → paragraph` arrastra `checked`, `language`, y propiedades de todos los tipos anteriores indefinidamente (data bloat).
 
 **Nuestra ventaja:** TypeScript permite discriminated unions que validan en compile-time:
 
@@ -278,7 +278,7 @@ Sin basura residual, con validación en compile-time.
 
 ### 4.2 — Puntero `parent` duplicado y desincronizable → `parentId` derivado
 
-Notion mantiene dos fuentes de verdad para la relación padre-hijo: el array `content` (descendente) y el campo `parent` (ascendente). El artículo admite que "se espejan mutuamente, salvo algunos edge cases que estamos arreglando". Dos fuentes de verdad para la misma relación siempre divergen eventualmente.
+osionos mantiene dos fuentes de verdad para la relación padre-hijo: el array `content` (descendente) y el campo `parent` (ascendente). El artículo admite que "se espejan mutuamente, salvo algunos edge cases que estamos arreglando". Dos fuentes de verdad para la misma relación siempre divergen eventualmente.
 
 **Nuestra ventaja:** Con un store normalizado donde la fuente de verdad es `childrenIds`, podemos **derivar** el parent como un índice invertido calculado una sola vez y actualizado reactivamente:
 
@@ -311,9 +311,9 @@ function getAncestors(blockId: string, parentIndex: Map<string, string>): string
 
 Una sola fuente de verdad (`childrenIds`), cero riesgo de desincronización. Si necesitamos traversal ascendente (permisos, breadcrumbs), derivamos la cadena de ancestros del índice invertido.
 
-### 4.3 — Notion permite referencias múltiples (DAG) → Nosotros: árbol estricto
+### 4.3 — osionos permite referencias múltiples (DAG) → Nosotros: árbol estricto
 
-El artículo de Notion dice que inicialmente permitieron que un bloque estuviera en múltiples arrays `content`. Esto creó un DAG (directed acyclic graph) en vez de un árbol, lo cual rompió el sistema de permisos porque la herencia se volvió ambigua.
+El artículo de osionos dice que inicialmente permitieron que un bloque estuviera en múltiples arrays `content`. Esto creó un DAG (directed acyclic graph) en vez de un árbol, lo cual rompió el sistema de permisos porque la herencia se volvió ambigua.
 
 **Nuestra ventaja:** Si definimos como invariante que un bloque solo puede estar en un `childrenIds`, nuestro modelo es un **árbol estricto**, no un DAG. Beneficios:
 
@@ -324,11 +324,11 @@ El artículo de Notion dice que inicialmente permitieron que un bloque estuviera
 
 Para casos donde un usuario quiera "reutilizar" un bloque en dos lugares, el patrón correcto es un **synced block** (referencia explícita, no multi-parent implícito). Esto lo podemos implementar como un tipo de bloque especial `synced_reference` que apunta a otro bloque pero no lo posee.
 
-### 4.4 — Notion no tiene AST-first markdown → Nuestro markengine es un diferenciador
+### 4.4 — osionos no tiene AST-first markdown → Nuestro markengine es un diferenciador
 
-El markengine de Notion es un detector de shortcuts simple que convierte prefijos a tipos de bloque. El nuestro es un motor AST con dos pasadas (block → inline), múltiples renderers (HTML, React, Terminal), y detección de shortcuts integrada en el parser.
+El markengine de osionos es un detector de shortcuts simple que convierte prefijos a tipos de bloque. El nuestro es un motor AST con dos pasadas (block → inline), múltiples renderers (HTML, React, Terminal), y detección de shortcuts integrada en el parser.
 
-Esto nos permite capacidades que Notion no tiene de forma nativa:
+Esto nos permite capacidades que osionos no tiene de forma nativa:
 
 - **Paste inteligente:** Markdown completo del clipboard → conversión a árbol de bloques en una sola operación (ya tenemos `parseMarkdownToBlocks`)
 - **Export fiel:** Árbol de bloques → markdown sin pérdida de información estructural
@@ -512,7 +512,7 @@ Select blocks (by IDs)
   → Clipboard / archivo .md
 ```
 
-Esto da **copy/paste de subárboles completos** preservando la jerarquía, algo que en Notion funciona pero requiere su formato propietario. Nosotros lo hacemos con markdown estándar.
+Esto da **copy/paste de subárboles completos** preservando la jerarquía, algo que en osionos funciona pero requiere su formato propietario. Nosotros lo hacemos con markdown estándar.
 
 ### 5.6 — Plan de acción para el markengine
 

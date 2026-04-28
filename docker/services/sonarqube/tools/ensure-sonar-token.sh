@@ -4,7 +4,7 @@
 # On first boot the default credentials are admin/admin.  This script:
 #   1. Checks if SONAR_TOKEN is already present (and valid) in .env — exits early.
 #   2. Authenticates with admin/<SONAR_ADMIN_PASSWORD|admin>.
-#   3. Generates a GLOBAL_ANALYSIS_TOKEN named "notion-dbms-local".
+#   3. Generates a GLOBAL_ANALYSIS_TOKEN named "osionos-dbms-local".
 #   4. Appends SONAR_TOKEN=<value> to .env so future runs pick it up.
 #
 # Usage:
@@ -14,7 +14,7 @@ set -euo pipefail
 ENV_FILE="${1:-.env}"
 SONAR_PORT="${SONAR_PORT:-9000}"
 SONAR_URL="${SONAR_HOST_URL:-http://localhost:${SONAR_PORT}}"
-TOKEN_NAME="notion-dbms-local"
+TOKEN_NAME="osionos-dbms-local"
 
 # ── 1. Already set? ──────────────────────────────────────────────────────────
 if [ -f "$ENV_FILE" ]; then

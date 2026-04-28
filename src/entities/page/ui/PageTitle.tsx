@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 20:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:47:31 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,7 +21,7 @@ interface PageTitleProps {
 }
 
 /**
- * Editable page title matching Notion's styling.
+ * Editable page title matching osionos's styling.
  * Pressing Enter moves focus to the first content block.
  */
 export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle }) => {
@@ -52,7 +52,7 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle }) =>
       rows={1}
       value={title}
       placeholder="Untitled"
-      className="notion-page-title"
+      className="osionos-page-title"
       onChange={handleChange}
       onKeyDown={handleKeyDown}
     />

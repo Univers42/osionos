@@ -1,6 +1,6 @@
-# Notion Playground — GEMINI Context
+# osionos Playground — GEMINI Context
 
-A multi-user sandbox and playground for the Notion Database System. It simulates a collaborative, block-based workspace environment with support for both online (API-backed) and offline (local-first seed data) modes.
+A multi-user sandbox and playground for the osionos Database System. It simulates a collaborative, block-based workspace environment with support for both online (API-backed) and offline (local-first seed data) modes.
 
 ## Project Overview
 

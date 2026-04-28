@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Created `PageOptionsMenu` feature slice (`src/features/page-management`) for the dropdown options menu containing the "Delete" action.
   - Created `ConfirmDeleteModal` for safe deletion confirmation.
   - Integrated deletion into both "Private" workspace pages and the "Recents" list.
-- **Side Panel Hide Functionality**: Implemented the ability to collapse and expand the Notion-style sidebar.
+- **Side Panel Hide Functionality**: Implemented the ability to collapse and expand the osionos-style sidebar.
   - Added a "Close sidebar" button in the `WorkspaceSwitcher` component.
   - Added a floating `SidebarTrigger` component that appears when the sidebar is closed.
   - Added `$sidebar-width` to spacing tokens (`src/app/styles/base/tokens/_spacing.scss`).
@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored `PageTreeItem` and `SidebarNavItem` from native `<button>` elements to `<div role="button">` to resolve nested button DOM hierarchy errors while maintaining accessibility.
 - Updated `SidebarPageTree` to support hover actions ("Add child page" and "Options") in the "Recents" section, aligning its functionality with the "Private" section.
 - Improved `usePageStore` delete action to automatically filter and persist the updated `recents` list when a page is deleted.
-- Refactored `NotionSidebar.tsx` to `Sidebar.tsx`, integrating the new `useUIStore` to conditionally apply CSS classes for the closed state.
+- Refactored `osionosSidebar.tsx` to `Sidebar.tsx`, integrating the new `useUIStore` to conditionally apply CSS classes for the closed state.
 - Updated `App.tsx` layout to include the `SidebarTrigger` and handle dynamic sidebar resizing.
 
 ### Fixed

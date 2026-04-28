@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/04 22:31:03 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,8 +24,8 @@ interface Props {
 }
 
 /**
- * A single 30 px-tall row in the Notion-style left sidebar.
- * Matches Notion's exact dimensions: 30px height, 6px border-radius,
+ * A single 30 px-tall row in the osionos-style left sidebar.
+ * Matches osionos's exact dimensions: 30px height, 6px border-radius,
  * 14px font-size, 8px horizontal padding, 22×22 icon slot.
  */
 export const SidebarNavItem: React.FC<Props> = ({

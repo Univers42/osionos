@@ -52,8 +52,8 @@ All mounted as read-only (`:ro`). Data persists in named Docker volumes (`postgr
 
 | Service | User | Password | Database | Port |
 |---|---|---|---|---|
-| PostgreSQL | `notion_user` | `notion_pass` | `notion_db` | 5432 |
-| MongoDB | `notion_user` | `notion_pass` | `notion_db` | 27017 |
+| PostgreSQL | `osionos_user` | `osionos_pass` | `osionos_db` | 5432 |
+| MongoDB | `osionos_user` | `osionos_pass` | `osionos_db` | 27017 |
 
 All configurable via `.env` at project root.
 
@@ -63,7 +63,7 @@ Both containers have built-in health checks (defined in `docker-compose.yml`):
 
 ```bash
 # PostgreSQL
-pg_isready -U notion_user -d notion_db
+pg_isready -U osionos_user -d osionos_db
 
 # MongoDB
 mongosh --quiet --eval "db.adminCommand('ping')"

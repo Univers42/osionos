@@ -54,7 +54,7 @@ pnpm install --frozen-lockfile
 pnpm add -w lodash
 
 # Add a dev dependency to a specific workspace
-pnpm add -D --filter @notion-db/api vitest
+pnpm add -D --filter @osionos-db/api vitest
 
 # Remove a dependency
 pnpm remove -w lodash
@@ -75,14 +75,14 @@ This monorepo has 4 workspaces defined in `pnpm-workspace.yaml`:
 
 | Workspace | Path | What it is |
 |---|---|---|
-| `@notion-db/types` | `packages/types` | Shared TypeScript types |
-| `@notion-db/core` | `packages/core` | Business logic, Mongoose models |
-| `@notion-db/api` | `packages/api` | Fastify API server |
+| `@osionos-db/types` | `packages/types` | Shared TypeScript types |
+| `@osionos-db/core` | `packages/core` | Business logic, Mongoose models |
+| `@osionos-db/api` | `packages/api` | Fastify API server |
 | *(root)* | `.` | src app + playground + scripts |
 
 ```bash
 # Run a script in a specific workspace
-pnpm --filter @notion-db/api dev
+pnpm --filter @osionos-db/api dev
 
 # Run a script in ALL workspaces that have it
 pnpm -r run build
@@ -97,7 +97,7 @@ pnpm -r ls --depth -1
 pnpm why react
 
 # Check why in a specific workspace
-pnpm why --filter @notion-db/api mongoose
+pnpm why --filter @osionos-db/api mongoose
 
 # Execute a binary from node_modules
 pnpm exec tsc --version
@@ -147,7 +147,7 @@ pnpm turbo run build
 pnpm turbo run build --filter='./packages/*'
 
 # Build a single package and all its dependencies
-pnpm turbo run build --filter=@notion-db/api...
+pnpm turbo run build --filter=@osionos-db/api...
 
 # Build only what changed since main
 pnpm turbo run build --filter='...[main]'
@@ -204,9 +204,9 @@ pnpm turbo run build --graph
 
 | Pattern | Meaning |
 |---|---|
-| `--filter=@notion-db/api` | Just this package |
-| `--filter=@notion-db/api...` | This package + all deps |
-| `--filter=...@notion-db/api` | This package + all dependents |
+| `--filter=@osionos-db/api` | Just this package |
+| `--filter=@osionos-db/api...` | This package + all deps |
+| `--filter=...@osionos-db/api` | This package + all dependents |
 | `--filter='./packages/*'` | All packages in packages/ |
 | `--filter='...[HEAD~1]'` | Everything changed in last commit |
 | `--filter='...[main]'` | Everything changed since main branch |
@@ -324,7 +324,7 @@ Why these system packages?
 
 ```bash
 # Open a shell inside the running src container
-docker exec -it notion_src sh
+docker exec -it osionos_src sh
 
 # Run a one-off command
 docker compose run --rm src-app pnpm tsc --noEmit
@@ -333,7 +333,7 @@ docker compose run --rm src-app pnpm tsc --noEmit
 docker compose run --rm src-app ls -la /app/node_modules/.pnpm
 
 # View entrypoint logs
-docker compose logs -f notion_src 2>&1 | head -20
+docker compose logs -f osionos_src 2>&1 | head -20
 ```
 
 ---
@@ -343,7 +343,7 @@ docker compose logs -f notion_src 2>&1 | head -20
 | Problem | Fix |
 |---|---|
 | `FROZEN_LOCKFILE_ERROR` | Lockfile outdated. Run `pnpm install` locally, commit the updated `pnpm-lock.yaml`. |
-| `Cannot find module '@notion-db/types'` | Packages not built. Run `make typecheck` or `pnpm turbo run build --filter='./packages/*'`. |
+| `Cannot find module '@osionos-db/types'` | Packages not built. Run `make typecheck` or `pnpm turbo run build --filter='./packages/*'`. |
 | `FULL TURBO` but code seems stale | Cache is stale. `rm -rf node_modules/.cache/turbo/` and retry. |
 | Node modules gone after rebuild | Expected — named volume was wiped. Entrypoint will re-install automatically. |
 | pnpm version mismatch warning | Update `corepack prepare pnpm@X.Y.Z` in the Dockerfile to match `package.json`'s `packageManager` field. |

@@ -22,7 +22,7 @@ export const CoverAssetPicker: React.FC<CoverAssetPickerProps> = ({
   }
 
   return (
-    <div className="notion-cover-picker">
+    <div className="osionos-cover-picker">
       <AssetPickerBoard
         {...COVER_PICKER_BOARD_PROPS}
         tabs={COVER_PICKER_TABS}

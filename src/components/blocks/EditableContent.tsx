@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   EditableContent.tsx                                :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/27 11:55:20 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -1066,7 +1066,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
   return (
     <>
-      <div // NOSONAR - contentEditable is required for this Notion-like editor UX
+      <div // NOSONAR - contentEditable is required for this osionos-like editor UX
         ref={ref}
         role="textbox"
         aria-multiline="true"

@@ -3,14 +3,14 @@
 /*                                                        :::      ::::::::   */
 /*   WorkspaceSwitcher.tsx                              :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/14 12:40:17 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ChevronDown, PanelLeftClose, PenSquare } from 'lucide-react';
 import { AssetRenderer } from '@univers42/ui-collection';
 import { useUserStore , UserSwitcherPanel } from '@/features/auth';
@@ -27,20 +27,22 @@ interface Props {
 /**
  * The header button at the very top of the sidebar.
  * Shows: [avatar] [workspace name] [compose button] [chevron dropdown]
- * Matches Notion's exact layout: 32px height, 6px radius, 6px margin top, 8px margin inline.
+ * Matches osionos's exact layout: 32px height, 6px radius, 6px margin top, 8px margin inline.
  */
 export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
   const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
 
   const persona         = useUserStore(s => s.activePersona());
   const session         = useUserStore(s => s.activeSession());
-  const workspaceName   = session?.privateWorkspaces[0]?.name ?? 'My Workspace';
+  const activeWorkspace = useUserStore(s => s.activeWorkspace());
+  const workspaceName   = activeWorkspace?.name ?? session?.privateWorkspaces[0]?.name ?? 'My Workspace';
   const addPage         = usePageStore(s => s.addPage);
   const openPage        = usePageStore(s => s.openPage);
   const setSidebarOpen  = useUIStore(s => s.setSidebarOpen);
 
   const jwt       = session?.accessToken ?? '';
-  const firstWsId = session?.privateWorkspaces[0]?._id ?? '';
+  const firstWsId = activeWorkspace?._id ?? session?.privateWorkspaces[0]?._id ?? '';
 
   async function handleNewPage() {
     if (onNewPage) { onNewPage(); return; }
@@ -50,7 +52,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
   }
 
   return (
-    <div className="relative mx-2 mt-1.5 mb-1.5">
+    <div ref={anchorRef} className="relative mx-2 mt-1.5 mb-1.5">
       <div className="flex items-center h-8 w-full">
         {/* Workspace name button (opens switcher) */}
         <button
@@ -64,7 +66,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
               : 'hover:bg-[var(--color-surface-hover)]',
           ].join(' ')}
         >
-          {/* Avatar (rounded square, like Notion) */}
+          {/* Avatar (rounded square, like osionos) */}
           <span className="flex items-center justify-center w-[22px] h-[22px] shrink-0 rounded text-base leading-none">
             <AssetRenderer
               value={persona?.emoji ?? getCollectionEmojiValue('package')}
@@ -128,7 +130,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
         </div>
       </div>
 
-      {open && <UserSwitcherPanel onClose={() => setOpen(false)} />}
+      {open && <UserSwitcherPanel onClose={() => setOpen(false)} anchorElement={anchorRef.current} />}
     </div>
   );
 };

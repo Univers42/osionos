@@ -1,0 +1,81 @@
+{
+  "users": [
+    {
+      "id": "mock-user-0",
+      "email": "admin@playground.local",
+      "password": "playground123",
+      "name": "Dylan Admin",
+      "emoji": "⭐",
+      "roleBadge": "Admin",
+      "persistInSessions": true,
+      "workspaceIds": ["mock-ws-private-0", "mock-ws-shared-team"]
+    },
+    {
+      "id": "mock-user-1",
+      "email": "alex@playground.local",
+      "password": "playground123",
+      "name": "Alex Collaborator",
+      "emoji": "🎨",
+      "roleBadge": "Member",
+      "persistInSessions": true,
+      "workspaceIds": ["mock-ws-private-1", "mock-ws-shared-team"]
+    },
+    {
+      "id": "mock-user-2",
+      "email": "sam@playground.local",
+      "password": "playground123",
+      "name": "Sam Guest",
+      "emoji": "😎",
+      "roleBadge": "Guest",
+      "persistInSessions": true,
+      "workspaceIds": ["mock-ws-private-2", "mock-ws-shared-team"]
+    }
+  ],
+  "workspaces": [
+    {
+      "_id": "mock-ws-private-0",
+      "name": "Dylan Admin's workspace",
+      "slug": "dylan-admin",
+      "ownerId": "mock-user-0",
+      "memberIds": ["mock-user-0"],
+      "settings": {
+        "plan": "Playground",
+        "memberCount": 1
+      }
+    },
+    {
+      "_id": "mock-ws-private-1",
+      "name": "Alex Collaborator's workspace",
+      "slug": "alex-collaborator",
+      "ownerId": "mock-user-1",
+      "memberIds": ["mock-user-1"],
+      "settings": {
+        "plan": "Playground",
+        "memberCount": 1
+      }
+    },
+    {
+      "_id": "mock-ws-private-2",
+      "name": "Sam Guest's workspace",
+      "slug": "sam-guest",
+      "ownerId": "mock-user-2",
+      "memberIds": ["mock-user-2"],
+      "settings": {
+        "plan": "Playground",
+        "memberCount": 1
+      }
+    },
+    {
+      "_id": "mock-ws-shared-team",
+      "name": "Team Workspace",
+      "slug": "team",
+      "ownerId": "mock-user-0",
+      "memberIds": ["mock-user-0", "mock-user-1", "mock-user-2"],
+      "settings": {
+        "plan": "Playground",
+        "memberCount": 3
+      }
+    }
+  ],
+  "pageConfigurations": []
+}

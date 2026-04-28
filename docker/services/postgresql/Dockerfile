@@ -1,7 +1,7 @@
 FROM postgres:16-alpine
 
 LABEL maintainer="dlesieur"
-LABEL description="Notion DBMS — PostgreSQL 16 with custom config & tooling"
+LABEL description="osionos DBMS — PostgreSQL 16 with custom config & tooling"
 
 # Custom configuration
 COPY conf/postgresql.conf /etc/postgresql/postgresql.conf

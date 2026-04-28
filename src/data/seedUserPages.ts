@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -107,8 +107,8 @@ export const quickNotes: SeedPage = {
     p('A place to jot down ideas and thoughts.'),
     divider(),
     h2('April 2026'),
-    p('Started exploring the Notion playground. The offline mode works great!'),
-    bullet('Sidebar looks exactly like the real Notion'),
+    p('Started exploring the osionos playground. The offline mode works great!'),
+    bullet('Sidebar looks exactly like the real osionos'),
     bullet('Block rendering is clean and readable'),
     bullet('User switching is instant'),
     divider(),

@@ -12,4 +12,4 @@
 FROM sonarqube:community
 
 LABEL maintainer="dlesieur" \
-      description="SonarQube CE for notion-database-sys"
+      description="SonarQube CE for osionos-database-sys"

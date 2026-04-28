@@ -8,18 +8,18 @@
 
 ## The problem
 
-Comparing the Notion screenshot against osionos side by side reveals four issues:
+Comparing the osionos screenshot against osionos side by side reveals four issues:
 
 1. **Content too narrow** — the 708px max-width with fixed 96px padding leaves too much dead space on large screens (1854px viewport = 57% wasted)
 2. **No fluid scaling** — fixed padding means the layout jumps at breakpoints instead of scaling smoothly across team members' different screens
-3. **Blocks are compressed** — 2-4px vertical gaps everywhere where Notion uses 8-28px
+3. **Blocks are compressed** — 2-4px vertical gaps everywhere where osionos uses 8-28px
 4. **Font size too small** — 14px body text with tight line-height compounds the compressed feeling
 
 ---
 
-## Part 1 — Fluid content width (Notion's strategy)
+## Part 1 — Fluid content width (osionos's strategy)
 
-Notion doesn't use fixed max-width + fixed padding. It uses proportional padding that scales with the available space, capped at reasonable limits. The content breathes on large screens and tightens gracefully on small ones — no jumps.
+osionos doesn't use fixed max-width + fixed padding. It uses proportional padding that scales with the available space, capped at reasonable limits. The content breathes on large screens and tightens gracefully on small ones — no jumps.
 
 ### The formula
 
@@ -45,16 +45,16 @@ One rule, zero breakpoints, works on every screen.
 
 ### Implementation
 
-**File:** `src/pages/notion-page/ui/notionPage.css`
+**File:** `src/pages/osionos-page/ui/osionosPage.css`
 
 Replace the three width/padding blocks for header, properties, and body with:
 
 ```css
-/* ── Fluid layout (Notion-style) ─────────────────────────────── */
+/* ── Fluid layout (osionos-style) ─────────────────────────────── */
 
-.notion-page-header,
-.notion-page-properties,
-.notion-page-body {
+.osionos-page-header,
+.osionos-page-properties,
+.osionos-page-body {
   max-width: 900px;
   width: 100%;
   margin-left: auto;
@@ -67,15 +67,15 @@ Replace the three width/padding blocks for header, properties, and body with:
 Then update each section's specific vertical values:
 
 ```css
-.notion-page-header--with-cover {
+.osionos-page-header--with-cover {
   margin-top: -42px;
 }
 
-.notion-page-header--no-cover {
+.osionos-page-header--no-cover {
   padding-top: 80px;
 }
 
-.notion-page-body {
+.osionos-page-body {
   padding-top: 16px;       /* was 4px — gap between title and first block */
   padding-bottom: 120px;   /* unchanged — scroll past end */
   flex: 1;
@@ -86,22 +86,22 @@ Remove the old `@media` rules for padding — `clamp()` replaces all of them. Th
 
 ```css
 @media (max-width: 768px) {
-  .notion-page-title {
+  .osionos-page-title {
     font-size: 30px;
   }
 
-  .notion-page-icon {
+  .osionos-page-icon {
     width: 54px;
     height: 54px;
     font-size: 54px;
   }
 
-  .notion-page-icon svg {
+  .osionos-page-icon svg {
     width: 54px;
     height: 54px;
   }
 
-  .notion-page-cover {
+  .osionos-page-cover {
     min-height: 120px;
     max-height: 180px;
   }
@@ -141,8 +141,8 @@ className="text-2xl font-bold text-[var(--color-ink)] mt-8 mb-2 leading-tight"
 
 | Type | Before | After | What changes |
 |------|--------|-------|-------------|
-| paragraph | `py-0.5` | `py-[3px]` | 2px → 3px each side (Notion's exact value) |
-| bulleted_list wrapper | `pl-5` | `pl-1.5` | 20px → 6px indent (Notion uses less) |
+| paragraph | `py-0.5` | `py-[3px]` | 2px → 3px each side (osionos's exact value) |
+| bulleted_list wrapper | `pl-5` | `pl-1.5` | 20px → 6px indent (osionos uses less) |
 | numbered_list wrapper | `pl-5` | `pl-1.5` | Same |
 | code block wrapper | `my-1` | `my-3` | 4px → 12px vertical margin |
 | callout wrapper | `my-0.5` | `my-3` | 2px → 12px vertical margin |
@@ -183,9 +183,9 @@ Example — quote:
 
 ## Part 3 — Font size (optional but recommended)
 
-Notion uses 16px body text. Osionos uses 14px (`text-sm`). This is a style decision, but the smaller size makes the compressed spacing feel worse.
+osionos uses 16px body text. Osionos uses 14px (`text-sm`). This is a style decision, but the smaller size makes the compressed spacing feel worse.
 
-**Option A — Match Notion (16px):**
+**Option A — Match osionos (16px):**
 
 Change every `text-sm` in paragraph, list items, callout content, and quote content to `text-base`:
 
@@ -213,7 +213,7 @@ Either option works. The spacing fixes in Part 2 are effective regardless.
 
 ## Summary — All changes by file
 
-### `notionPage.css`
+### `osionosPage.css`
 
 | What | Before | After |
 |------|--------|-------|
@@ -245,7 +245,7 @@ Either option works. The spacing fixes in Part 2 are effective regardless.
 
 ## Testing
 
-1. Apply `notionPage.css` changes first → verify content width scales when resizing the browser window (drag edge). No jumps, smooth scaling.
+1. Apply `osionosPage.css` changes first → verify content width scales when resizing the browser window (drag edge). No jumps, smooth scaling.
 2. Apply `BlockEditor.tsx` heading margins → headings should create clear visual section breaks.
 3. Apply code/callout/quote/divider margins → blocks should stop touching each other.
 4. (Optional) Apply font size change → text should feel more readable.
@@ -287,7 +287,7 @@ At the moment, its layout has a fixed wisth defined in App.tsx:
 
 ```tsx
 <div className="flex h-screen w-screen overflow-hidden">
-  <NotionSidebar />           {/* fixed width, always visible */}
+  <osionosSidebar />           {/* fixed width, always visible */}
   <main className="flex-1">
     <MainContent />
   </main>

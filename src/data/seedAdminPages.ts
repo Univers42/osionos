@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -27,10 +27,10 @@ export const gettingStarted: SeedPage = {
   ownerId: 'mock-user-0',
   content: [
     h1('Welcome to the Playground'),
-    p('This is a local-first Notion clone playground. Everything runs in the browser — no backend required.'),
+    p('This is a local-first osionos clone playground. Everything runs in the browser — no backend required.'),
     divider(),
     h2('Quick overview'),
-    p('The sidebar mirrors the real Notion layout. You can navigate pages, create new ones, and switch between users.'),
+    p('The sidebar mirrors the real osionos layout. You can navigate pages, create new ones, and switch between users.'),
     callout('This playground uses the exact same Block rendering pipeline as the main dashboard.', '💡'),
     h2('What you can do'),
     bullet('Browse and open pages in the sidebar'),
@@ -80,7 +80,7 @@ export const projectRoadmap: SeedPage = {
     todo('MongoDB adapter for workspace CRUD', true),
     todo('PostgreSQL adapter for analytics queries', true),
     todo('Multi-user auth with JWT refresh tokens', true),
-    todo('Sidebar redesign matching real Notion layout', true),
+    todo('Sidebar redesign matching real osionos layout', true),
     divider(),
     h2('🔄 In progress'),
     todo('Offline-first page store with seed data'),

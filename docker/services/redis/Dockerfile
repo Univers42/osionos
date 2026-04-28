@@ -9,4 +9,4 @@ EXPOSE 6379
 CMD ["redis-server", "/usr/local/etc/redis/redis.conf"]
 
 LABEL maintainer="dlesieur" \
-      description="Redis cache for notion-database-sys services"
+      description="Redis cache for osionos-database-sys services"

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Notion-style page layout
+   osionos-style page layout
    ═══════════════════════════════════════════════════════════════════════════
    
    Content width strategy (fluid, no breakpoints for layout):
@@ -17,7 +17,7 @@
 
 /* ── Page shell ───────────────────────────────────────────────────────── */
 
-.notion-page {
+.osionos-page {
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -25,25 +25,59 @@
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--color-surface-primary);
+  font-family: var(--page-font-family, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   position: relative;
+}
+
+.osionos-page--font-serif {
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.osionos-page--font-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.osionos-page--small-text {
+  font-size: calc(1rem * var(--page-font-size-scale, 0.92));
+}
+
+.osionos-page--locked .osionos-page-body [contenteditable="true"] {
+  pointer-events: none;
+}
+
+.osionos-page--present .osionos-page-toolbar,
+.osionos-page--present .osionos-page-cover-controls {
+  display: none;
+}
+
+.osionos-page--present {
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 34rem),
+    var(--color-surface-primary);
 }
 
 /* ── Fluid content width (shared by header, properties, body) ─────── */
 
-.notion-page-header,
-.notion-page-properties,
-.notion-page-body {
-  max-width: 900px;
+.osionos-page-header,
+.osionos-page-properties,
+.osionos-page-body {
+  max-width: var(--page-content-max-width, 900px);
   width: 100%;
   margin-left: auto;
   margin-right: auto;
-  padding-left: clamp(16px, 11%, 96px);
-  padding-right: clamp(16px, 11%, 96px);
+  padding-left: var(--page-content-padding-inline, clamp(16px, 11%, 96px));
+  padding-right: var(--page-content-padding-inline, clamp(16px, 11%, 96px));
+}
+
+.osionos-page--full-width .osionos-page-header,
+.osionos-page--full-width .osionos-page-properties,
+.osionos-page--full-width .osionos-page-body {
+  max-width: none;
 }
 
 /* ── Cover ────────────────────────────────────────────────────────────── */
 
-.notion-page-cover {
+.osionos-page-cover {
   position: relative;
   width: 100%;
   height: 30vh;
@@ -54,13 +88,13 @@
   cursor: default;
 }
 
-.notion-page-cover-media {
+.osionos-page-cover-media {
   width: 100%;
   height: 100%;
   overflow: hidden;
 }
 
-.notion-page-cover-img {
+.osionos-page-cover-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -68,12 +102,12 @@
   display: block;
 }
 
-.notion-page-cover-gradient {
+.osionos-page-cover-gradient {
   width: 100%;
   height: 100%;
 }
 
-.notion-page-cover-controls {
+.osionos-page-cover-controls {
   position: absolute;
   right: 16px;
   bottom: 12px;
@@ -83,11 +117,11 @@
   transition: opacity 150ms ease;
 }
 
-.notion-page-cover:hover .notion-page-cover-controls {
+.osionos-page-cover:hover .osionos-page-cover-controls {
   opacity: 1;
 }
 
-.notion-page-cover-btn {
+.osionos-page-cover-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -105,27 +139,27 @@
   transition: background 120ms ease;
 }
 
-.notion-page-cover-btn:hover {
+.osionos-page-cover-btn:hover {
   background: rgba(255, 255, 255, 1);
 }
 
 /* ── Header area (icon + toolbar + title) ─────────────────────────── */
 
-.notion-page-header {
+.osionos-page-header {
   position: relative;
 }
 
-.notion-page-header--with-cover {
+.osionos-page-header--with-cover {
   margin-top: -42px;
 }
 
-.notion-page-header--no-cover {
+.osionos-page-header--no-cover {
   padding-top: 80px;
 }
 
 /* ── Breadcrumbs ─────────────────────────────────────────────────── */
 
-.notion-page-breadcrumbs {
+.osionos-page-breadcrumbs {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -135,11 +169,11 @@
   scrollbar-width: none;
 }
 
-.notion-page-breadcrumbs::-webkit-scrollbar {
+.osionos-page-breadcrumbs::-webkit-scrollbar {
   display: none;
 }
 
-.notion-page-breadcrumb {
+.osionos-page-breadcrumb {
   border: none;
   background: transparent;
   padding: 2px 6px;
@@ -154,41 +188,41 @@
   text-overflow: ellipsis;
 }
 
-button.notion-page-breadcrumb {
+button.osionos-page-breadcrumb {
   cursor: pointer;
   transition:
     color 120ms ease,
     background 120ms ease;
 }
 
-button.notion-page-breadcrumb:hover {
+button.osionos-page-breadcrumb:hover {
   color: var(--color-ink);
   background: var(--color-surface-hover);
 }
 
-.notion-page-breadcrumb--root {
+.osionos-page-breadcrumb--root {
   color: var(--color-ink-faint);
 }
 
-.notion-page-breadcrumb--current {
+.osionos-page-breadcrumb--current {
   color: var(--color-ink);
   font-weight: 500;
 }
 
-.notion-page-breadcrumb-separator {
+.osionos-page-breadcrumb-separator {
   flex-shrink: 0;
   color: var(--color-ink-faint);
 }
 
 /* ── Icon ─────────────────────────────────────────────────────────── */
 
-.notion-page-icon-wrapper {
+.osionos-page-icon-wrapper {
   position: relative;
   display: inline-flex;
   margin-bottom: 8px;
 }
 
-.notion-page-icon {
+.osionos-page-icon {
   width: 78px;
   height: 78px;
   display: flex;
@@ -202,11 +236,11 @@ button.notion-page-breadcrumb:hover {
   user-select: none;
 }
 
-.notion-page-icon:hover {
+.osionos-page-icon:hover {
   background: var(--color-surface-hover);
 }
 
-.notion-page-icon svg {
+.osionos-page-icon svg {
   width: 78px;
   height: 78px;
   color: var(--color-ink);
@@ -214,7 +248,7 @@ button.notion-page-breadcrumb:hover {
 
 /* ── Toolbar (add icon / add cover / add comment) ────────────────── */
 
-.notion-page-toolbar {
+.osionos-page-toolbar {
   display: flex;
   gap: 4px;
   opacity: 0;
@@ -224,12 +258,12 @@ button.notion-page-breadcrumb:hover {
   height: 28px;
 }
 
-.notion-page-header:hover .notion-page-toolbar,
-.notion-page-toolbar--visible {
+.osionos-page-header:hover .osionos-page-toolbar,
+.osionos-page-toolbar--visible {
   opacity: 1;
 }
 
-.notion-page-toolbar-btn {
+.osionos-page-toolbar-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -245,14 +279,14 @@ button.notion-page-breadcrumb:hover {
     color 120ms ease;
 }
 
-.notion-page-toolbar-btn:hover {
+.osionos-page-toolbar-btn:hover {
   background: var(--color-surface-hover);
   color: var(--color-ink);
 }
 
 /* ── Title ────────────────────────────────────────────────────────── */
 
-.notion-page-title {
+.osionos-page-title {
   display: block;
   width: 100%;
   font-size: 40px;
@@ -271,14 +305,14 @@ button.notion-page-breadcrumb:hover {
   overflow: hidden;
 }
 
-.notion-page-title::placeholder {
+.osionos-page-title::placeholder {
   color: var(--color-ink-faint);
   opacity: 1;
 }
 
 /* ── Properties ───────────────────────────────────────────────────── */
 
-.notion-page-property-row {
+.osionos-page-property-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -288,44 +322,44 @@ button.notion-page-breadcrumb:hover {
   border-bottom: 1px solid var(--color-line);
 }
 
-.notion-page-property-label {
+.osionos-page-property-label {
   flex-shrink: 0;
   width: 160px;
   color: var(--color-ink-muted);
   font-size: 13px;
 }
 
-.notion-page-property-value {
+.osionos-page-property-value {
   flex: 1;
   min-width: 0;
 }
 
 /* ── Body (content area) ──────────────────────────────────────────── */
 
-.notion-page-body {
+.osionos-page-body {
   padding-top: 16px;
   padding-bottom: 120px;
   flex: 1;
 }
 
-.notion-page-body a {
+.osionos-page-body a {
   color: var(--color-accent);
   text-decoration: underline;
   text-decoration-color: currentColor;
   text-underline-offset: 0.14em;
 }
 
-.notion-page-body a:hover {
+.osionos-page-body a:hover {
   color: color-mix(in srgb, var(--color-accent) 86%, black);
 }
 
-.notion-page-body a:visited {
+.osionos-page-body a:visited {
   color: color-mix(in srgb, var(--color-accent) 88%, #6b21a8);
 }
 
 /* ── Emoji picker ─────────────────────────────────────────────────── */
 
-.notion-emoji-picker {
+.osionos-emoji-picker {
   position: absolute;
   z-index: 1000;
   top: 100%;
@@ -343,18 +377,18 @@ button.notion-page-breadcrumb:hover {
   overflow: hidden;
 }
 
-.notion-emoji-picker-tabs {
+.osionos-emoji-picker-tabs {
   display: flex;
   border-bottom: 1px solid var(--color-line);
   overflow-x: auto;
   scrollbar-width: none;
 }
 
-.notion-emoji-picker-tabs::-webkit-scrollbar {
+.osionos-emoji-picker-tabs::-webkit-scrollbar {
   display: none;
 }
 
-.notion-emoji-picker-tab {
+.osionos-emoji-picker-tab {
   padding: 8px 12px;
   font-size: 12px;
   white-space: nowrap;
@@ -368,16 +402,16 @@ button.notion-page-breadcrumb:hover {
     border-color 120ms ease;
 }
 
-.notion-emoji-picker-tab:hover {
+.osionos-emoji-picker-tab:hover {
   color: var(--color-ink);
 }
 
-.notion-emoji-picker-tab--active {
+.osionos-emoji-picker-tab--active {
   color: var(--color-ink);
   border-bottom-color: var(--color-ink);
 }
 
-.notion-emoji-picker-search {
+.osionos-emoji-picker-search {
   margin: 8px;
   padding: 6px 10px;
   border-radius: 4px;
@@ -389,11 +423,11 @@ button.notion-page-breadcrumb:hover {
   width: calc(100% - 16px);
 }
 
-.notion-emoji-picker-search:focus {
+.osionos-emoji-picker-search:focus {
   border-color: var(--color-accent);
 }
 
-.notion-emoji-picker-grid {
+.osionos-emoji-picker-grid {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   gap: 2px;
@@ -402,7 +436,7 @@ button.notion-page-breadcrumb:hover {
   flex: 1;
 }
 
-.notion-emoji-picker-item {
+.osionos-emoji-picker-item {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -417,11 +451,11 @@ button.notion-page-breadcrumb:hover {
   line-height: 1;
 }
 
-.notion-emoji-picker-item:hover {
+.osionos-emoji-picker-item:hover {
   background: var(--color-surface-hover);
 }
 
-.notion-emoji-picker-svg-grid {
+.osionos-emoji-picker-svg-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 4px;
@@ -430,7 +464,7 @@ button.notion-page-breadcrumb:hover {
   flex: 1;
 }
 
-.notion-emoji-picker-svg-item {
+.osionos-emoji-picker-svg-item {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -443,11 +477,11 @@ button.notion-page-breadcrumb:hover {
   transition: background 80ms ease;
 }
 
-.notion-emoji-picker-svg-item:hover {
+.osionos-emoji-picker-svg-item:hover {
   background: var(--color-surface-hover);
 }
 
-.notion-emoji-picker-svg-item svg {
+.osionos-emoji-picker-svg-item svg {
   width: 24px;
   height: 24px;
   color: var(--color-ink);
@@ -458,7 +492,7 @@ button.notion-page-breadcrumb:hover {
   stroke-linejoin: round;
 }
 
-.notion-emoji-picker-footer {
+.osionos-emoji-picker-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -468,7 +502,7 @@ button.notion-page-breadcrumb:hover {
   color: var(--color-ink-muted);
 }
 
-.notion-emoji-picker-remove-btn {
+.osionos-emoji-picker-remove-btn {
   padding: 4px 8px;
   border-radius: 4px;
   border: none;
@@ -481,14 +515,14 @@ button.notion-page-breadcrumb:hover {
     color 120ms ease;
 }
 
-.notion-emoji-picker-remove-btn:hover {
+.osionos-emoji-picker-remove-btn:hover {
   background: rgba(255, 0, 0, 0.06);
   color: #e53e3e;
 }
 
 /* ── Cover picker (gallery) ───────────────────────────────────────── */
 
-.notion-cover-picker {
+.osionos-cover-picker {
   width: min(420px, calc(100vw - 32px));
   max-height: min(360px, calc(100vh - 96px));
   overflow-y: auto;
@@ -499,31 +533,31 @@ button.notion-page-breadcrumb:hover {
 /* ── Responsive (visual adjustments only — layout is fluid) ──────── */
 
 @media (max-width: 768px) {
-  .notion-page-title {
+  .osionos-page-title {
     font-size: 30px;
   }
 
-  .notion-page-icon {
+  .osionos-page-icon {
     width: 54px;
     height: 54px;
     font-size: 54px;
   }
 
-  .notion-page-icon svg {
+  .osionos-page-icon svg {
     width: 54px;
     height: 54px;
   }
 
-  .notion-page-cover {
+  .osionos-page-cover {
     min-height: 120px;
     max-height: 180px;
   }
 
-  .notion-emoji-picker {
+  .osionos-emoji-picker {
     width: 300px;
   }
 
-  .notion-emoji-picker-grid {
+  .osionos-emoji-picker-grid {
     grid-template-columns: repeat(7, 1fr);
   }
 }

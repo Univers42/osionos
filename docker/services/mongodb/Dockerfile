@@ -1,7 +1,7 @@
 FROM mongo:7.0
 
 LABEL maintainer="dlesieur"
-LABEL description="Notion DBMS — MongoDB 7 with init scripts & tooling"
+LABEL description="osionos DBMS — MongoDB 7 with init scripts & tooling"
 
 # Init scripts (auto-run on first container start)
 COPY tools/init-collections.js /docker-entrypoint-initdb.d/01-init-collections.js

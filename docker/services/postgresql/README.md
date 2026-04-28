@@ -1,7 +1,7 @@
 # PostgreSQL 16 — Cheatsheet
 
 > **Image**: `postgres:16-alpine` · **Port**: 5432 · **Shell**: `psql`  
-> Default creds: `notion_user` / `notion_pass` · DB: `notion_db`
+> Default creds: `osionos_user` / `osionos_pass` · DB: `osionos_db`
 
 ---
 
@@ -26,11 +26,11 @@
 
 ## How it works in this project
 
-PostgreSQL runs as a Docker container (`notion_postgres`) using the `src` profile only.
+PostgreSQL runs as a Docker container (`osionos_postgres`) using the `src` profile only.
 On first start, two things happen:
 
-1. Docker creates the default `notion_db` database (from `POSTGRES_DB` env var)
-2. `docker/init-databases.sql` runs and creates `notion_src_db` for isolated src data
+1. Docker creates the default `osionos_db` database (from `POSTGRES_DB` env var)
+2. `docker/init-databases.sql` runs and creates `osionos_src_db` for isolated src data
 
 The seed data lives in `src/store/dbms/relational/` (SQL files mounted at `/seed/`).
 
@@ -55,8 +55,8 @@ docker-compose.yml
 make psql
 
 # Connect to a specific database
-docker exec -it notion_postgres \
-  psql -U notion_user -d notion_src_db
+docker exec -it osionos_postgres \
+  psql -U osionos_user -d osionos_src_db
 ```
 
 ### Connection string anatomy
@@ -74,7 +74,7 @@ postgresql://USER:PASS@HOST:PORT/DATABASE
 
 ```bash
 # The env var used by our PostgresDbAdapter
-DATABASE_URL=postgresql://notion_user:notion_pass@postgres:5432/notion_db
+DATABASE_URL=postgresql://osionos_user:osionos_pass@postgres:5432/osionos_db
 ```
 
 ---
@@ -123,24 +123,24 @@ backslash meta-commands (start with `\`).
 
 ```bash
 # Run a single SQL command from the host
-docker exec -it notion_postgres \
-  psql -U notion_user -d notion_db -c "SELECT count(*) FROM tasks;"
+docker exec -it osionos_postgres \
+  psql -U osionos_user -d osionos_db -c "SELECT count(*) FROM tasks;"
 
 # Run a SQL file
-docker exec -i notion_postgres \
-  psql -U notion_user -d notion_db < /seed/001_schema.sql
+docker exec -i osionos_postgres \
+  psql -U osionos_user -d osionos_db < /seed/001_schema.sql
 
 # Run a query and get CSV output
-docker exec -it notion_postgres \
-  psql -U notion_user -d notion_db -A -F',' -c "SELECT * FROM tasks LIMIT 5;"
+docker exec -it osionos_postgres \
+  psql -U osionos_user -d osionos_db -A -F',' -c "SELECT * FROM tasks LIMIT 5;"
 
 # List databases (non-interactive)
-docker exec notion_postgres \
-  psql -U notion_user -d notion_db -c "\l"
+docker exec osionos_postgres \
+  psql -U osionos_user -d osionos_db -c "\l"
 
 # Check connection health
-docker exec notion_postgres \
-  pg_isready -U notion_user -d notion_db
+docker exec osionos_postgres \
+  pg_isready -U osionos_user -d osionos_db
 ```
 
 ---
@@ -576,42 +576,42 @@ BEGIN;
 
 ```bash
 # Export a table to CSV
-docker exec -it notion_postgres \
-  psql -U notion_user -d notion_db \
+docker exec -it osionos_postgres \
+  psql -U osionos_user -d osionos_db \
   -c "\COPY tasks TO STDOUT WITH CSV HEADER" > tasks.csv
 
 # Import CSV into a table
-docker exec -i notion_postgres \
-  psql -U notion_user -d notion_db \
+docker exec -i osionos_postgres \
+  psql -U osionos_user -d osionos_db \
   -c "\COPY tasks(title,status,priority) FROM STDIN WITH CSV HEADER" < tasks.csv
 
 # Dump entire database (SQL format)
-docker exec notion_postgres \
-  pg_dump -U notion_user -d notion_db > backup.sql
+docker exec osionos_postgres \
+  pg_dump -U osionos_user -d osionos_db > backup.sql
 
 # Dump in custom format (compressed, supports parallel restore)
-docker exec notion_postgres \
-  pg_dump -U notion_user -d notion_db -Fc > backup.dump
+docker exec osionos_postgres \
+  pg_dump -U osionos_user -d osionos_db -Fc > backup.dump
 
 # Dump only schema (no data)
-docker exec notion_postgres \
-  pg_dump -U notion_user -d notion_db --schema-only > schema.sql
+docker exec osionos_postgres \
+  pg_dump -U osionos_user -d osionos_db --schema-only > schema.sql
 
 # Dump only data (no schema)
-docker exec notion_postgres \
-  pg_dump -U notion_user -d notion_db --data-only > data.sql
+docker exec osionos_postgres \
+  pg_dump -U osionos_user -d osionos_db --data-only > data.sql
 
 # Dump a single table
-docker exec notion_postgres \
-  pg_dump -U notion_user -d notion_db -t tasks > tasks.sql
+docker exec osionos_postgres \
+  pg_dump -U osionos_user -d osionos_db -t tasks > tasks.sql
 
 # Restore from SQL dump
-docker exec -i notion_postgres \
-  psql -U notion_user -d notion_db < backup.sql
+docker exec -i osionos_postgres \
+  psql -U osionos_user -d osionos_db < backup.sql
 
 # Restore from custom format
-docker exec -i notion_postgres \
-  pg_restore -U notion_user -d notion_db --clean backup.dump
+docker exec -i osionos_postgres \
+  pg_restore -U osionos_user -d osionos_db --clean backup.dump
 ```
 
 ### Using our Makefile
@@ -678,22 +678,22 @@ ORDER BY pg_relation_size(indexrelid) DESC;
 
 ```bash
 # View PostgreSQL container logs
-docker logs -f notion_postgres
+docker logs -f osionos_postgres
 
 # Restart PostgreSQL
-docker restart notion_postgres
+docker restart osionos_postgres
 
 # Check container health
-docker inspect --format='{{.State.Health.Status}}' notion_postgres
+docker inspect --format='{{.State.Health.Status}}' osionos_postgres
 
 # Check pg_isready
-docker exec notion_postgres pg_isready -U notion_user
+docker exec osionos_postgres pg_isready -U osionos_user
 
 # Open a raw shell in the container
-docker exec -it notion_postgres bash
+docker exec -it osionos_postgres bash
 
 # Check disk usage of data directory
-docker exec notion_postgres du -sh /var/lib/postgresql/data
+docker exec osionos_postgres du -sh /var/lib/postgresql/data
 ```
 
 ---
@@ -702,7 +702,7 @@ docker exec notion_postgres du -sh /var/lib/postgresql/data
 
 | Problem | Fix |
 |---|---|
-| `FATAL: password authentication failed` | Check user/password in `.env`. Default: `notion_user` / `notion_pass`. |
+| `FATAL: password authentication failed` | Check user/password in `.env`. Default: `osionos_user` / `osionos_pass`. |
 | `FATAL: database "xxx" does not exist` | The database wasn't created. Check `docker/init-databases.sql` or create it: `CREATE DATABASE xxx;` |
 | `ECONNREFUSED 127.0.0.1:5432` | Container not running. `docker compose --profile src up -d postgres`. |
 | `could not connect to server: Connection refused` | Same as above — or port 5432 is already in use on your host. |

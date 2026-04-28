@@ -3,10 +3,10 @@
 #                                                         :::      ::::::::    #
 #    Makefile                                           :+:      :+:    :+:    #
 #                                                     +:+ +:+         +:+      #
-#    By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+         #
+#    By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/04/08 19:07:11 by dlesieur          #+#    #+#              #
-#    Updated: 2026/04/27 09:55:08 by rstancu          ###   ########.fr        #
+#    Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -165,7 +165,7 @@ db-up: ## Start only MongoDB
 	@echo -e "$(GREEN)✔ MongoDB running on :$${MONGO_PORT:-27017}$(RESET)"
 
 db-shell: ## Open mongosh in the running MongoDB container
-	$(DC) exec mongodb mongosh -u $${MONGO_USER:-notion_user} -p $${MONGO_PASS:-notion_pass} --authenticationDatabase admin $${MONGO_DB:-playground_db}
+	$(DC) exec mongodb mongosh -u $${MONGO_USER:-osionos_user} -p $${MONGO_PASS:-osionos_pass} --authenticationDatabase admin $${MONGO_DB:-playground_db}
 
 db-reset: ## Wipe MongoDB data and restart
 	@echo -e "$(RED)Wiping MongoDB data…$(RESET)"

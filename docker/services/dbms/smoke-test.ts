@@ -117,11 +117,11 @@ async function main(): Promise<void> {
 
   // Optionally test remote adapters
   if (testAll) {
-    const mongoUri = process.env.MONGO_URI ?? 'mongodb://notion_user:notion_pass@localhost:27017/notion_db?authSource=admin';
-    const mongoDb = process.env.MONGO_DB ?? 'notion_db';
+    const mongoUri = process.env.MONGO_URI ?? 'mongodb://osionos_user:osionos_pass@localhost:27017/osionos_db?authSource=admin';
+    const mongoDb = process.env.MONGO_DB ?? 'osionos_db';
     await testAdapter(new MongoDbAdapter({ mongoUri, mongoDb }));
 
-    const databaseUrl = process.env.DATABASE_URL ?? 'postgresql://notion_user:notion_pass@localhost:5432/notion_db';
+    const databaseUrl = process.env.DATABASE_URL ?? 'postgresql://osionos_user:osionos_pass@localhost:5432/osionos_db';
     await testAdapter(new PostgresDbAdapter({ databaseUrl }));
   }
 

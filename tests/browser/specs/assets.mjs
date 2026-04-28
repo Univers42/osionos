@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   assets.mjs                                         :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/20 21:29:32 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/20 21:29:33 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -70,7 +70,7 @@ async function openCalloutIconPicker(page) {
 async function addPageCover(page) {
   await addCoverButton(page).click();
   await expect(changeCoverButton(page)).toBeVisible();
-  await expect(page.locator(".notion-page-cover")).toHaveCount(1);
+  await expect(page.locator(".osionos-page-cover")).toHaveCount(1);
 }
 
 async function openCoverPicker(page) {
@@ -342,7 +342,7 @@ export const assetScenarios = [
       await addPageCover(page);
       await removeCoverButton(page).click();
       await expect(addCoverButton(page)).toBeVisible();
-      await expect(page.locator(".notion-page-cover")).toHaveCount(0);
+      await expect(page.locator(".osionos-page-cover")).toHaveCount(0);
     },
   ),
   defineScenario(
