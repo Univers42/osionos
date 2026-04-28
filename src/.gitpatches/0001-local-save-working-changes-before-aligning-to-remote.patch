@@ -1,0 +1,140 @@
+From 66a2935629e69889e603f43a7c31f39089654d1c Mon Sep 17 00:00:00 2001
+From: LESdylan <dev.pro.photo@gmail.com>
+Date: Tue, 28 Apr 2026 22:18:39 +0200
+Subject: [PATCH] local: save working changes before aligning to remote
+
+---
+ index.ts              |  6 +++---
+ renderers/terminal.ts |  1 -
+ shortcuts.ts          | 37 ++++++++++++++++++++++++-------------
+ shortcutsDetect.ts    |  3 ++-
+ 4 files changed, 29 insertions(+), 18 deletions(-)
+
+diff --git a/index.ts b/index.ts
+index 43db41f..1bb7319 100644
+--- a/index.ts
++++ b/index.ts
+@@ -6,18 +6,18 @@
+ /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+ /*                                                +#+#+#+#+#+   +#+           */
+ /*   Created: 2026/04/01 16:40:48 by dlesieur          #+#    #+#             */
+-/*   Updated: 2026/04/01 16:40:49 by dlesieur         ###   ########.fr       */
++/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
+ /*                                                                            */
+ /* ************************************************************************** */
+ 
+ // ═══════════════════════════════════════════════════════════════════════════════
+-// @notion/markdown — standalone markdown library
++// @osionos/markdown — standalone markdown library
+ // ═══════════════════════════════════════════════════════════════════════════════
+ //
+ // Architecture:
+ //   1. Parser: markdown string → AST (BlockNode[])
+ //   2. Renderers: AST → HTML string | React elements | ANSI terminal string
+-//   3. Shortcuts: block detection for the Notion-style block editor
++//   3. Shortcuts: block detection for the osionos-style block editor
+ //
+ // This library is framework-agnostic at its core. Only the React renderer
+ // depends on React. The parser, AST types, HTML renderer, and terminal
+diff --git a/renderers/terminal.ts b/renderers/terminal.ts
+index aecf472..23941cf 100644
+--- a/renderers/terminal.ts
++++ b/renderers/terminal.ts
+@@ -69,7 +69,6 @@ function renderBlock(node: BlockNode, ctx: RenderCtx): string {
+         const innerCtx: RenderCtx = { ...ctx, depth: ctx.depth + 1 };
+         const body = item.children.map(ch => renderBlock(ch, innerCtx)).join('').trimEnd();
+         // Replace first line's indent with bullet
+-        const _firstLinePrefix = ind(ctx) + ' ';
+         const lines = body.split('\n');
+         if (lines[0]) {
+           lines[0] = `${prefix}${bullet} ${lines[0].trimStart()}`;
+diff --git a/shortcuts.ts b/shortcuts.ts
+index 5a1d7e8..748d293 100644
+--- a/shortcuts.ts
++++ b/shortcuts.ts
+@@ -1,32 +1,43 @@
+ // Markdown shortcuts — inline parsing and block conversion
+-import type { BlockType, Block } from '../../types/database';
++import type { BlockType, Block } from '@/entities/block';
+ import type { InlineNode } from './ast';
+ import { parse, parseInline } from './parser';
+ 
+ export type { BlockDetection } from './shortcutsDetect';
+ export { BLOCK_SHORTCUTS, detectBlockType } from './shortcutsDetect';
+ 
+-export function parseInlineMarkdown(text: string): string {
++export interface InlineHtmlOptions {
++  resolveInternalLinkTitle?: (pageId: string) => { title: string; icon?: string } | null;
++  renderInlineMath?: (source: string) => string;
++  renderInlineMathAsSource?: boolean;
++}
++
++export function parseInlineMarkdown(text: string, options?: InlineHtmlOptions): string {
+   // Use the full parser's inline engine → convert to HTML
+   const nodes = parseInline(text);
+-  return renderInlineNodesToHtml(nodes);
++  return renderInlineNodesToHtml(nodes, options);
+ }
+ 
+-function renderInlineNodesToHtml(nodes: InlineNode[]): string {
++function renderInlineNodesToHtml(nodes: InlineNode[], options?: InlineHtmlOptions): string {
+   const inlineCodeStyle = 'background:var(--color-surface-tertiary-soft2);border:1px solid var(--color-line);border-radius:6px;padding:0 0.35em;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:0.92em;color:var(--color-ink-strong);';
+   return nodes.map(node => {
+     switch (node.type) {
+       case 'text': return escHtml(node.value);
+-      case 'bold': return `<strong>${renderInlineNodesToHtml(node.children)}</strong>`;
+-      case 'italic': return `<em style="font-style:italic">${renderInlineNodesToHtml(node.children)}</em>`;
+-      case 'bold_italic': return `<strong><em style="font-style:italic">${renderInlineNodesToHtml(node.children)}</em></strong>`;
+-      case 'strikethrough': return `<del>${renderInlineNodesToHtml(node.children)}</del>`;
+-      case 'underline': return `<u>${renderInlineNodesToHtml(node.children)}</u>`;
++      case 'bold': return `<strong>${renderInlineNodesToHtml(node.children, options)}</strong>`;
++      case 'italic': return `<em style="font-style:italic">${renderInlineNodesToHtml(node.children, options)}</em>`;
++      case 'bold_italic': return `<strong><em style="font-style:italic">${renderInlineNodesToHtml(node.children, options)}</em></strong>`;
++      case 'strikethrough': return `<del>${renderInlineNodesToHtml(node.children, options)}</del>`;
++      case 'underline': return `<u>${renderInlineNodesToHtml(node.children, options)}</u>`;
+       case 'code': return `<code class="inline-code" style="${inlineCodeStyle}">${escHtml(node.value)}</code>`;
+-      case 'link': return `<a href="${escHtml(node.href)}">${renderInlineNodesToHtml(node.children)}</a>`;
++      case 'link': return `<a href="${escHtml(node.href)}">${renderInlineNodesToHtml(node.children, options)}</a>`;
+       case 'image': return `<img src="${escHtml(node.src)}" alt="${escHtml(node.alt)}" />`;
+-      case 'highlight': return `<mark>${renderInlineNodesToHtml(node.children)}</mark>`;
+-      case 'math_inline': return `<span class="math-inline">${escHtml(node.value)}</span>`;
++      case 'highlight': return `<mark>${renderInlineNodesToHtml(node.children, options)}</mark>`;
++      case 'math_inline': {
++        if (options?.renderInlineMathAsSource) return escHtml(`$${node.value}$`);
++        const rendered = options?.renderInlineMath?.(node.value);
++        if (rendered) return `<span class="math-inline" data-inline-type="math_inline" data-inline-math-source="${escHtml(node.value)}" contenteditable="false">${rendered}</span>`;
++        return `<span class="math-inline">${escHtml(node.value)}</span>`;
++      }
+       case 'emoji': return node.value;
+       case 'line_break': return '<br />';
+       case 'footnote_ref': return `<sup>[${escHtml(node.label)}]</sup>`;
+@@ -40,7 +51,7 @@ function escHtml(s: string): string {
+ }
+ 
+ /**
+- * Convert a full markdown string into an array of Notion-style blocks.
++ * Convert a full markdown string into an array of osionos-style blocks.
+  * Uses the full AST parser, then maps to Block types.
+  */
+ export function parseMarkdownToBlocks(markdown: string): Block[] {
+diff --git a/shortcutsDetect.ts b/shortcutsDetect.ts
+index 35c4bb1..cc02356 100644
+--- a/shortcutsDetect.ts
++++ b/shortcutsDetect.ts
+@@ -1,11 +1,12 @@
+ // Markdown shortcuts — block detection and shortcut map
+-import type { BlockType } from '../../types/database';
++import type { BlockType } from '@/entities/block';
+ 
+ export interface BlockDetection {
+   type: BlockType;
+   content: string;
+   remainingContent: string;
+   checked?: boolean;
++  headingLevel?: number;
+ }
+ 
+ export const BLOCK_SHORTCUTS: Record<string, string> = {
+-- 
+2.43.0
+

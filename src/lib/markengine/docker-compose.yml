@@ -1,0 +1,26 @@
+services:
+  prod:
+    build:
+      context: .
+      target: prod
+    image: markengine-prod:latest
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    environment:
+      PORT: ${PORT:-3000}
+
+  dev:
+    build:
+      context: .
+      target: dev
+    image: markengine-dev:latest
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    environment:
+      PORT: ${PORT:-3000}
+    volumes:
+      - .:/app
+      - markengine_node_modules:/app/node_modules
+
+volumes:
+  markengine_node_modules:
