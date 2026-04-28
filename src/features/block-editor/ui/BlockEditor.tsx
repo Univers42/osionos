@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 21:45:39 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 22:27:01 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -1391,7 +1391,7 @@ const LayoutBlockEditor: React.FC<{ block: Block; pageId: string }> = ({
             color: detection.type === "callout"
               ? getCalloutIconForKind(detection.kind ?? "note")
               : nestedBlock.color,
-            headingLevel: detection.headingLevel,
+            headingLevel: detection.headingLevel as Block["headingLevel"],
           }));
           focusLayoutCellBlock(blockId);
         }

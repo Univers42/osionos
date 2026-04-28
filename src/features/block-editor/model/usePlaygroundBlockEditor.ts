@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 22:27:01 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -279,7 +279,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
           ? { color: getCalloutIconForKind(detection.kind ?? "note") }
           : {}),
         ...(detection.headingLevel
-          ? { headingLevel: detection.headingLevel }
+          ? { headingLevel: detection.headingLevel as Block["headingLevel"] }
           : { headingLevel: undefined }),
       });
       repositionCursor(blockId, detection.remainingContent);

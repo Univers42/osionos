@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   index.ts                                           :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/28 22:24:19 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/04/28 22:24:20 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import { api } from "@/shared/api/client";
 import { parseMarkdownToBlocks } from "@/shared/lib/markengine";
 import type { Block } from "@/entities/block";
