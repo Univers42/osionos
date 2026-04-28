@@ -113,8 +113,12 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
 
   useEffect(() => {
     if (active) {
-      setQuery("");
-      setOpenSubmenu(null);
+      // schedule state updates to avoid synchronous setState inside effect
+      const id = setTimeout(() => {
+        setQuery("");
+        setOpenSubmenu(null);
+      }, 0);
+      return () => clearTimeout(id);
     }
   }, [active]);
 

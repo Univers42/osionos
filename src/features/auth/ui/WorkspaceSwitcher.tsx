@@ -51,6 +51,13 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
     if (page) openPage({ id: page._id, workspaceId: firstWsId, kind: 'page', title: page.title });
   }
 
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+
+  React.useEffect(() => {
+    if (open) setAnchorEl(anchorRef.current);
+    else setAnchorEl(null);
+  }, [open]);
+
   return (
     <div ref={anchorRef} className="relative mx-2 mt-1.5 mb-1.5">
       <div className="flex items-center h-8 w-full">
@@ -130,7 +137,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
         </div>
       </div>
 
-      {open && <UserSwitcherPanel onClose={() => setOpen(false)} anchorElement={anchorRef.current} />}
+      {open && <UserSwitcherPanel onClose={() => setOpen(false)} anchorElement={anchorEl} />}
     </div>
   );
 };

@@ -1151,6 +1151,8 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
     focusBlock,
     onContextMenu,
     onRequestSlashMenu,
+    numberedDepth,
+    selectedBlockIds,
   ]);
 
   return (
