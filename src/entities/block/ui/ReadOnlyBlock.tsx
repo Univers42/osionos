@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useState, useMemo } from "react";
-import type { Block } from '@/entities/block';
+import { CONTAINER_HEADING_CLASSES, type Block } from '@/entities/block';
 import { ChevronRight } from "lucide-react";
 import { DatabaseBlock } from '@/widgets/database-view';
 import { CalloutBlockReadOnly } from "./CalloutBlockReadOnly";
@@ -68,6 +68,10 @@ function renderNestedChildren(block: Block) {
 }
 
 export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
+  const containerHeadingClassName = block.headingLevel
+    ? CONTAINER_HEADING_CLASSES[block.headingLevel]
+    : null;
+
   switch (block.type) {
     case "paragraph":
       return (
@@ -228,7 +232,12 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
         <>
           <div className="flex my-0.5">
             <div className="w-1 bg-[var(--color-ink)] rounded-full shrink-0 mr-3" />
-            <span className="text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic flex-1">
+            <span
+              className={
+                containerHeadingClassName ??
+                "text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic flex-1"
+              }
+            >
               <InlineMarkdown content={block.content} />
             </span>
           </div>

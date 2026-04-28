@@ -92,31 +92,23 @@ export function handleArrowDown(
   const blockEl = document.querySelector(`[data-block-id="${blockId}"] [contenteditable]`);
 
   if (!sel?.rangeCount) {
-    console.log("  → no range, jumping directly");
     const nextId = getAdjacentRenderedBlockId(blockId, 'next');
     if (nextId) { focusBlock(nextId); return true; }
     return false;
   }
 
   const range = sel.getRangeAt(0);
-  if (!range.collapsed) {
-    console.log("  → range not collapsed, skipping");
-    return false;
-  }
+  if (!range.collapsed) return false;
 
   if (blockEl) {
     const testRange = document.createRange();
     testRange.setStart(range.endContainer, range.endOffset);
     testRange.setEnd(blockEl, blockEl.childNodes.length);
     const remainingText = testRange.toString();
-    console.log("  → remaining text after cursor:", JSON.stringify(remainingText), "length:", remainingText.length);
     if (remainingText.length > 0) return false;
-  } else {
-    console.log("  → no contenteditable found, jumping directly");
   }
 
   const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, 'next');
-  console.log("  → jumping to:", nextRenderedBlockId);
   if (nextRenderedBlockId) {
     focusBlock(nextRenderedBlockId);
     return true;

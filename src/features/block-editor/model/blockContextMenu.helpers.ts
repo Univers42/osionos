@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Block, BlockType } from "@/entities/block";
+import { titleCanBeHeading, type Block, type BlockType } from "@/entities/block";
 import { COLLECTION_SLASH_ITEMS } from "@/shared/lib/markengine/uiCollectionAssets";
 
 export interface BlockContextMenuState {
@@ -215,10 +215,30 @@ export function changeBlockTypeInTree(
   blockId: string,
   nextType: BlockType,
 ): { blocks: Block[]; focusBlockId?: string } {
+  const headingMatch = /^heading_([1-6])$/.exec(nextType);
+
   const transform = (list: Block[]): Block[] =>
     list.map((block) => ({
       ...(block.id === blockId
-        ? normalizeBlockForType(block, nextType)
+        ? (() => {
+            if (titleCanBeHeading(block.type)) {
+              if (headingMatch) {
+                return {
+                  ...block,
+                  headingLevel: Number(headingMatch[1]) as 1 | 2 | 3 | 4 | 5 | 6,
+                };
+              }
+
+              if (nextType === "paragraph") {
+                return {
+                  ...block,
+                  headingLevel: undefined,
+                };
+              }
+            }
+
+            return normalizeBlockForType(block, nextType);
+          })()
         : block),
       children: block.children ? transform(block.children) : undefined,
     }));

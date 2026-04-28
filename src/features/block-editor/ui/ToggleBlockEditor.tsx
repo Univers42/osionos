@@ -14,7 +14,7 @@ import React, { useState, useCallback } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
-import type { Block } from "@/entities/block";
+import { CONTAINER_HEADING_CLASSES, type Block } from "@/entities/block";
 import { usePageStore } from "@/store/usePageStore";
 
 /* ── Types ──────────────────────────────────────────────────────────── */
@@ -49,6 +49,9 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
 }) => {
   const [expanded, setExpanded] = useState(!block.collapsed);
   const updateBlock = usePageStore((s) => s.updateBlock);
+  const titleClassName = block.headingLevel
+    ? CONTAINER_HEADING_CLASSES[block.headingLevel]
+    : "text-sm text-[var(--color-ink)] leading-relaxed py-0.5";
 
   /* ── Expand / collapse ──────────────────────────────────────────── */
 
@@ -128,7 +131,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
         <div className="flex-1">
           <EditableContent
             content={block.content}
-            className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5"
+            className={titleClassName}
             placeholder="Toggle"
             pageId={pageId}
             onChange={onChange}

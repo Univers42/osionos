@@ -21,7 +21,11 @@ import { AssetRenderer } from "@univers42/ui-collection";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
 import { DatabaseBlock } from "@/widgets/database-view";
-import { getBlockPlaceholder, type Block } from "@/entities/block";
+import {
+  CONTAINER_HEADING_CLASSES,
+  getBlockPlaceholder,
+  type Block,
+} from "@/entities/block";
 
 import { usePageStore } from "@/store/usePageStore";
 import { MermaidDiagram, CodeSyntaxHighlight, EmojiPicker } from "@/shared/ui";
@@ -91,6 +95,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     block.type === "code" &&
     !isMermaidCode &&
     (block.language || "plaintext").trim().toLowerCase() !== "plaintext";
+  const containerHeadingClassName = block.headingLevel
+    ? CONTAINER_HEADING_CLASSES[block.headingLevel]
+    : null;
 
   const handleLangSelect = useCallback(
     (language: string) => {
@@ -403,7 +410,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <div className="flex-1 min-w-0">
             <EditableContent
               content={block.content}
-              className="text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic"
+              className={
+                containerHeadingClassName ??
+                "text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic"
+              }
               placeholder="Quote…"
               onChange={onChange}
               onKeyDown={onKeyDown}
@@ -452,7 +462,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <div className="flex-1 min-w-0">
             <EditableContent
               content={block.content}
-              className={`text-sm ${colors.text} leading-relaxed py-0.5`}
+              className={
+                containerHeadingClassName ??
+                `text-sm ${colors.text} leading-relaxed py-0.5`
+              }
               placeholder={getBlockPlaceholder(block, "Type '/' for commands…")}
               onChange={onChange}
               onKeyDown={onKeyDown}

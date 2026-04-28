@@ -6,19 +6,25 @@
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/22 11:30:52 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/28 00:00:00 by codex             ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useEffect, useMemo, useCallback, useState } from "react";
-import { Plus } from "lucide-react";
+import { GripVertical, Plus } from "lucide-react";
 
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { PageSelectorMenu } from "./PageSelectorMenu";
 import type { Block } from "@/entities/block";
 
 import { usePageStore } from "@/store/usePageStore";
-import { usePlaygroundBlockEditor, BlockEditor } from "@/features/block-editor";
+import {
+  BLOCK_DRAG_TYPE,
+  BLOCK_INDENT_PX,
+  useBlockDragDrop,
+  usePlaygroundBlockEditor,
+  BlockEditor,
+} from "@/features/block-editor";
 import { BlockContextMenu } from "./BlockContextMenu";
 
 import { selfRendersChildren } from "@/entities/block";
@@ -27,8 +33,12 @@ interface PlaygroundPageEditorProps {
   pageId: string;
 }
 
-type DropPosition = "above" | "below" | null;
-const DND_TYPE = "application/x-playground-block-id";
+interface DropTargetViewModel {
+  referenceBlockId: string;
+  position: "before" | "after";
+  indentLevel: number;
+  targetParentId: string | null;
+}
 
 /** Returns true when a block's children should be rendered by BlockTree. */
 function shouldRenderChildren(block: Block): boolean {
@@ -61,8 +71,6 @@ function getNestedTreeClassName(
     return "ml-6 mt-0.5 pl-3 border-l-2 border-[var(--color-line)]";
   }
 
-  // Generic indentation for all other block types (paragraph, headings,
-  // quote, callout, code, etc.) that have children via indent/outdent.
   return "ml-6 mt-0.5";
 }
 
@@ -107,14 +115,21 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
 }) => {
   const page = usePageStore((s) => s.pageById(pageId));
   const deleteBlock = usePageStore((s) => s.deleteBlock);
-  const moveBlock = usePageStore((s) => s.moveBlock);
   const blocks = useMemo(() => page?.content ?? [], [page?.content]);
-  const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const highlightedRootBlockId = useMemo(
     () => getHighlightedRootBlockId(blocks, focusedBlockId),
     [blocks, focusedBlockId],
   );
+  const {
+    draggedBlockId,
+    dropTarget,
+    handleDragStart,
+    handleDragOver,
+    handleDragEnd,
+    handleDrop,
+    handleDragLeave,
+  } = useBlockDragDrop(pageId, blocks);
 
   useEffect(() => {
     const syncFocusedBlock = () => {
@@ -208,15 +223,22 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
   }
 
   return (
-    <div className="flex flex-col">
+    <div // NOSONAR — onDragLeave is a native drag-and-drop cleanup handler, not user interaction
+      className="flex flex-col"
+      data-page-editor
+      onDragLeave={handleDragLeave}
+    >
       <BlockTree
         blocks={blocks}
         pageId={pageId}
         isRoot
         highlightedRootBlockId={highlightedRootBlockId}
-        moveBlock={moveBlock}
         draggedBlockId={draggedBlockId}
-        setDraggedBlockId={setDraggedBlockId}
+        dropTarget={dropTarget}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        onDrop={handleDrop}
         onChange={handleBlockChange}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
@@ -299,14 +321,12 @@ interface BlockTreeProps {
   parentBlockId?: string | null;
   highlightedRootBlockId: string | null;
   isHighlightedBranch?: boolean;
-  moveBlock: (
-    pageId: string,
-    blockId: string,
-    targetIndex: number,
-    parentBlockId?: string | null,
-  ) => void;
   draggedBlockId: string | null;
-  setDraggedBlockId: (id: string | null) => void;
+  dropTarget: DropTargetViewModel | null;
+  onDragStart: (blockId: string) => void;
+  onDragOver: (e: React.DragEvent, blockId: string) => void;
+  onDragEnd: () => void;
+  onDrop: (e: React.DragEvent) => void;
   onChange: (blockId: string, text: string) => void;
   onKeyDown: (
     e: React.KeyboardEvent,
@@ -332,9 +352,12 @@ const BlockTree: React.FC<BlockTreeProps> = ({
   parentBlockId = null,
   highlightedRootBlockId,
   isHighlightedBranch = false,
-  moveBlock,
   draggedBlockId,
-  setDraggedBlockId,
+  dropTarget,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  onDrop,
   onChange,
   onKeyDown,
   onPaste,
@@ -368,12 +391,12 @@ const BlockTree: React.FC<BlockTreeProps> = ({
           <div key={block.id} className="group/block-branch rounded-md">
             <DraggablePlaygroundBlock
               block={block}
-              blocks={blocks}
-              pageId={pageId}
-              parentBlockId={parentBlockId}
-              moveBlock={moveBlock}
               draggedBlockId={draggedBlockId}
-              setDraggedBlockId={setDraggedBlockId}
+              dropTarget={dropTarget}
+              onDragStart={onDragStart}
+              onDragOver={onDragOver}
+              onDragEnd={onDragEnd}
+              onDrop={onDrop}
               onContextMenu={onContextMenu}
             >
               <EditableBlock
@@ -382,6 +405,12 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 parentBlockId={parentBlockId}
                 numberedIndex={numberedIndex}
                 isHighlighted={isHighlighted}
+                draggedBlockId={draggedBlockId}
+                dropTarget={dropTarget}
+                onDragStart={onDragStart}
+                onDragOver={onDragOver}
+                onDragEnd={onDragEnd}
+                onDrop={onDrop}
                 onChange={onChange}
                 onKeyDown={onKeyDown}
                 onPaste={onPaste}
@@ -389,9 +418,6 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 registerRef={registerRef}
                 onRequestSlashMenu={onRequestSlashMenu}
                 focusBlock={focusBlock}
-                moveBlock={moveBlock}
-                draggedBlockId={draggedBlockId}
-                setDraggedBlockId={setDraggedBlockId}
                 onContextMenu={onContextMenu}
               />
             </DraggablePlaygroundBlock>
@@ -411,9 +437,12 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                   parentBlockId={block.id}
                   highlightedRootBlockId={highlightedRootBlockId}
                   isHighlightedBranch={isHighlighted}
-                  moveBlock={moveBlock}
                   draggedBlockId={draggedBlockId}
-                  setDraggedBlockId={setDraggedBlockId}
+                  dropTarget={dropTarget}
+                  onDragStart={onDragStart}
+                  onDragOver={onDragOver}
+                  onDragEnd={onDragEnd}
+                  onDrop={onDrop}
                   onChange={onChange}
                   onKeyDown={onKeyDown}
                   onPaste={onPaste}
@@ -434,142 +463,87 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 
 interface DraggablePlaygroundBlockProps {
   block: Block;
-  blocks: Block[];
-  pageId: string;
-  parentBlockId: string | null;
-  moveBlock: (
-    pageId: string,
-    blockId: string,
-    targetIndex: number,
-    parentBlockId?: string | null,
-  ) => void;
   draggedBlockId: string | null;
-  setDraggedBlockId: (id: string | null) => void;
+  dropTarget: DropTargetViewModel | null;
+  onDragStart: (blockId: string) => void;
+  onDragOver: (e: React.DragEvent, blockId: string) => void;
+  onDragEnd: () => void;
+  onDrop: (e: React.DragEvent) => void;
   onContextMenu: (e: React.MouseEvent, blockId: string) => void;
   children: React.ReactNode;
 }
 
 const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
   block,
-  blocks,
-  pageId,
-  parentBlockId,
-  moveBlock,
   draggedBlockId,
-  setDraggedBlockId,
+  dropTarget,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  onDrop,
   onContextMenu,
   children,
 }) => {
-  const [dropPosition, setDropPosition] = useState<DropPosition>(null);
-
-  const handleDragStart = useCallback(
-    (e: React.DragEvent<HTMLButtonElement>) => {
-      e.dataTransfer.setData(DND_TYPE, block.id);
-      e.dataTransfer.effectAllowed = "move";
-      setDraggedBlockId(block.id);
-    },
-    [block.id, setDraggedBlockId],
-  );
-
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    if (!e.dataTransfer.types.includes(DND_TYPE)) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    const rect = e.currentTarget.getBoundingClientRect();
-    const midY = rect.top + rect.height / 2;
-    setDropPosition(e.clientY < midY ? "above" : "below");
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setDropPosition(null);
-    }
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      setDropPosition(null);
-      const draggedId = e.dataTransfer.getData(DND_TYPE);
-      if (!draggedId || draggedId === block.id) return;
-
-      const targetIdx = blocks.findIndex((b) => b.id === block.id);
-      if (targetIdx < 0) return;
-
-      const rect = e.currentTarget.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      const insertionIdx = e.clientY < midY ? targetIdx : targetIdx + 1;
-
-      // Check if the dragged block is in the same sibling array
-      const isSameLevel = blocks.some((b) => b.id === draggedId);
-
-      if (isSameLevel) {
-        // Same parent — simple reorder
-        moveBlock(pageId, draggedId, insertionIdx, parentBlockId);
-      } else {
-        // Cross-tree move — extract from old position, insert here
-        usePageStore
-          .getState()
-          .moveBlockAcrossTree(pageId, draggedId, parentBlockId, insertionIdx);
-      }
-
-      setDraggedBlockId(null);
-    },
-    [block.id, blocks, moveBlock, pageId, parentBlockId, setDraggedBlockId],
-  );
-
-  const handleDragEnd = useCallback(() => {
-    setDraggedBlockId(null);
-    setDropPosition(null);
-  }, [setDraggedBlockId]);
-
+  const isDropReference = dropTarget?.referenceBlockId === block.id;
   const isDragged = draggedBlockId === block.id;
 
   return (
-    <div // NOSONAR - drag/drop wrapper cannot be a native interactive element due nested contentEditable controls
+    <div// NOSONAR
+      role="group"
       data-testid="draggable-block"
       data-draggable-block-id={block.id}
       data-block-type={block.type}
-      className={`group/block relative rounded-md transition-colors transition-opacity hover:bg-[var(--color-surface-secondary)] focus-within:bg-[var(--color-surface-secondary)] ${isDragged ? "opacity-40" : ""}`}
+      className={[
+        "group/block relative rounded-md pl-7 transition-colors transition-opacity hover:bg-[var(--color-surface-secondary)] focus-within:bg-[var(--color-surface-secondary)]",
+        isDragged ? "opacity-30" : "",
+      ].join(" ")}
       onContextMenu={(e) => onContextMenu(e, block.id)}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      onDragOver={(e) => {
+        e.stopPropagation();
+        onDragOver(e, block.id);
+      }}
+      onDrop={(e) => {
+        e.stopPropagation();
+        onDrop(e);
+      }}
     >
+      {/* Drop indicator — BEFORE */}
+      {isDropReference && dropTarget.position === "before" && (
+        <div
+          data-testid="block-drop-indicator"
+          className="absolute right-0 -top-px z-10 h-0.5 rounded-full bg-blue-500 pointer-events-none"
+          style={{ left: `${dropTarget.indentLevel * BLOCK_INDENT_PX}px` }}
+        />
+      )}
+
       <button
         type="button"
         draggable
         data-testid="block-drag-handle"
         onClick={(e) => onContextMenu(e, block.id)}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        className="absolute -left-7 top-2 p-0.5 rounded text-[var(--color-ink-faint)] hover:text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-secondary)] transition-colors opacity-0 group-hover/block:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+        onDragStart={(e) => {
+          e.dataTransfer.setData(BLOCK_DRAG_TYPE, block.id);
+          e.dataTransfer.effectAllowed = "move";
+          onDragStart(block.id);
+        }}
+        onDragEnd={onDragEnd}
+        className="absolute left-0 top-2 flex h-5 w-5 items-center justify-center rounded text-[var(--color-ink-faint)] opacity-0 transition-colors transition-opacity hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-ink-muted)] group-hover/block:opacity-100 cursor-grab active:cursor-grabbing"
         aria-label="Drag to reorder block"
         title="Drag to reorder"
       >
-        <svg
-          className="w-4 h-4"
-          viewBox="0 0 16 16"
-          fill="currentColor"
-          aria-hidden
-        >
-          <circle cx="5.5" cy="3.5" r="1.5" />
-          <circle cx="10.5" cy="3.5" r="1.5" />
-          <circle cx="5.5" cy="8" r="1.5" />
-          <circle cx="10.5" cy="8" r="1.5" />
-          <circle cx="5.5" cy="12.5" r="1.5" />
-          <circle cx="10.5" cy="12.5" r="1.5" />
-        </svg>
+        <GripVertical size={14} />
       </button>
 
-      {dropPosition && (
+      {children}
+
+      {/* Drop indicator — AFTER */}
+      {isDropReference && dropTarget.position === "after" && (
         <div
           data-testid="block-drop-indicator"
-          className={`absolute left-0 right-0 h-0.5 bg-[var(--color-accent)] rounded-full pointer-events-none z-10 ${dropPosition === "above" ? "-top-px" : "-bottom-px"}`}
+          className="absolute right-0 -bottom-px z-10 h-0.5 rounded-full bg-blue-500 pointer-events-none"
+          style={{ left: `${dropTarget.indentLevel * BLOCK_INDENT_PX}px` }}
         />
       )}
-
-      {children}
     </div>
   );
 };
@@ -580,6 +554,12 @@ interface EditableBlockProps {
   parentBlockId?: string | null;
   numberedIndex: number;
   isHighlighted: boolean;
+  draggedBlockId: string | null;
+  dropTarget: DropTargetViewModel | null;
+  onDragStart: (blockId: string) => void;
+  onDragOver: (e: React.DragEvent, blockId: string) => void;
+  onDragEnd: () => void;
+  onDrop: (e: React.DragEvent) => void;
   onChange: (blockId: string, text: string) => void;
   onKeyDown: (
     e: React.KeyboardEvent,
@@ -594,14 +574,6 @@ interface EditableBlockProps {
     blockId: string,
     position: { x: number; y: number },
   ) => void;
-  moveBlock: (
-    pageId: string,
-    blockId: string,
-    targetIndex: number,
-    parentBlockId?: string | null,
-  ) => void;
-  draggedBlockId: string | null;
-  setDraggedBlockId: (id: string | null) => void;
   onContextMenu: (e: React.MouseEvent, blockId: string) => void;
 }
 
@@ -611,6 +583,12 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
   parentBlockId = null,
   numberedIndex,
   isHighlighted,
+  draggedBlockId,
+  dropTarget,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  onDrop,
   onChange,
   onKeyDown,
   onPaste,
@@ -618,9 +596,6 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
   registerRef,
   focusBlock,
   onRequestSlashMenu,
-  moveBlock,
-  draggedBlockId,
-  setDraggedBlockId,
   onContextMenu,
 }) => {
   const handleChange = useCallback(
@@ -643,7 +618,6 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
     [block.id, registerRef],
   );
 
-  // NEW: callback for callout/quote to render children inside their container
   const renderChildren = useCallback(() => {
     if (!block.children?.length) return null;
 
@@ -655,9 +629,12 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
         parentBlockId={block.id}
         highlightedRootBlockId={isHighlighted ? block.id : null}
         isHighlightedBranch={isHighlighted}
-        moveBlock={moveBlock}
         draggedBlockId={draggedBlockId}
-        setDraggedBlockId={setDraggedBlockId}
+        dropTarget={dropTarget}
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDragEnd={onDragEnd}
+        onDrop={onDrop}
         onChange={onChange}
         onKeyDown={onKeyDown}
         onPaste={onPaste}
@@ -674,9 +651,12 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
     block.id,
     isHighlighted,
     pageId,
-    moveBlock,
     draggedBlockId,
-    setDraggedBlockId,
+    dropTarget,
+    onDragStart,
+    onDragOver,
+    onDragEnd,
+    onDrop,
     onChange,
     onKeyDown,
     onPaste,

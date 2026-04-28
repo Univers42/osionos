@@ -32,7 +32,9 @@ import {
   isListBlock,
   isEffectivelyEmpty,
   enterCreatesChild,
+  enterOnSummaryExpands,
   findBlockInTree,
+  titleCanBeHeading,
 } from "@/entities/block";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
 import type { Block } from "@/entities/block";
@@ -87,10 +89,6 @@ function parsePipeTable(text: string): string[][] | null {
   return table.length ? table : null;
 }
 
-function isEffectivelyEmptyForDeletion(text: string): boolean {
-  return text.replaceAll("\u200B", "").trim().length === 0;
-}
-
 function normalizeCreatedPageTitleFromLinkQuery(query: string): string {
   const trimmed = query.trim();
   if (!trimmed) return "Untitled";
@@ -108,6 +106,7 @@ function toBlockUpdates(block: Block): Partial<Block> {
     content: block.content,
     children: block.children,
     checked: block.checked,
+    headingLevel: block.headingLevel,
     language: block.language,
     color: block.color,
     collapsed: block.collapsed,
@@ -116,28 +115,6 @@ function toBlockUpdates(block: Block): Partial<Block> {
     databaseId: block.databaseId,
     viewId: block.viewId,
   };
-}
-
-function findChildrenForParent(
-  blocks: Block[],
-  parentBlockId: string,
-): Block[] | null {
-  for (const block of blocks) {
-    if (block.id === parentBlockId) {
-      return block.children ?? [];
-    }
-
-    if (!block.children) {
-      continue;
-    }
-
-    const nestedChildren = findChildrenForParent(block.children, parentBlockId);
-    if (nestedChildren) {
-      return nestedChildren;
-    }
-  }
-
-  return null;
 }
 
 /** Manages block editing, slash commands, and keyboard navigation for playground pages. */
@@ -261,6 +238,20 @@ export function usePlaygroundBlockEditor(pageId: string) {
   const tryHandleMarkdownShortcut = useCallback(
     (blockId: string, text: string): void => {
       if (!(text.endsWith(" ") || text === "---" || text === "```")) return;
+
+      const block = findBlockInTree(contentRef.current, blockId);
+      if (
+        block &&
+        titleCanBeHeading(block.type) &&
+        HEADING_SHORTCUT_RE.test(text.trim())
+      ) {
+        updateBlock(pageId, blockId, {
+          content: "",
+          headingLevel: text.trim().length as 1 | 2 | 3 | 4 | 5 | 6,
+        });
+        repositionCursor(blockId, "");
+        return;
+      }
 
       const detection = detectBlockType(text);
       if (!detection) return;
@@ -402,34 +393,10 @@ export function usePlaygroundBlockEditor(pageId: string) {
       e.preventDefault();
 
       changeBlockType(pageId, blockId, "paragraph");
-      updateBlock(pageId, blockId, { content: "" });
-      focusBlock(blockId);
-      repositionCursor(blockId, "");
-
-      return true;
-    },
-    [pageId, changeBlockType, updateBlock, focusBlock],
-  );
-
-  const handleEmptyTodoEnter = useCallback(
-    (
-      e: React.KeyboardEvent,
-      blockId: string,
-      block: Block,
-      isEmpty: boolean,
-    ): boolean => {
-      if (
-        e.key !== "Enter" ||
-        e.shiftKey ||
-        block.type !== "to_do" ||
-        !isEmpty
-      ) {
-        return false;
-      }
-
-      e.preventDefault();
-      changeBlockType(pageId, blockId, "paragraph");
-      updateBlock(pageId, blockId, { content: "", checked: false });
+      updateBlock(pageId, blockId, {
+        content: "",
+        ...(block.type === "to_do" ? { checked: false } : {}),
+      });
       focusBlock(blockId);
       repositionCursor(blockId, "");
 
@@ -527,6 +494,13 @@ export function usePlaygroundBlockEditor(pageId: string) {
     ): boolean => {
       if ((e.key !== "Backspace" && e.key !== "Delete") || !isEmpty)
         return false;
+
+      if (block.headingLevel && titleCanBeHeading(block.type)) {
+        e.preventDefault();
+        updateBlock(pageId, blockId, { headingLevel: undefined });
+        focusBlock(blockId);
+        return true;
+      }
 
       if (isHeadingBlock(block.type)) {
         e.preventDefault();
@@ -626,7 +600,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
         e.key !== "Enter" ||
         e.shiftKey ||
         !enterCreatesChild(block.type) ||
-        block.type === "toggle"
+        enterOnSummaryExpands(block.type)
       ) {
         return false;
       }
@@ -653,7 +627,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       parentBlockId: string | null = null,
     ) => {
       const content = parentBlockId
-        ? (findChildrenForParent(contentRef.current, parentBlockId) ?? [])
+        ? (findBlockInTree(contentRef.current, parentBlockId)?.children ?? [])
         : contentRef.current;
       const block = content.find((b) => b.id === blockId);
       if (!block) return;
@@ -661,13 +635,11 @@ export function usePlaygroundBlockEditor(pageId: string) {
       const liveText =
         (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
       const isEmpty = isEffectivelyEmpty(liveText);
-      const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
 
       const handled =
         handleBlockIndentation(e, blockId, block, content) ||
         handleParagraphSpaceShortcut(e, blockId, block) ||
         handleEmptyListEnter(e, blockId, block, blockIdx, content, isEmpty) ||
-        handleEmptyTodoEnter(e, blockId, block, isEmpty) ||
         handleEmptyListDelete(e, blockId, block, blockIdx, content, isEmpty) ||
         handleDividerDelete(e, blockId, block, blockIdx, content) ||
         (e.key === "Enter" && block.type === "code") ||
@@ -696,7 +668,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
           blockIdx,
           content,
           parentBlockId,
-          isEmptyForDeletion,
+          isEmpty,
         )
       ) {
         return;
@@ -720,7 +692,6 @@ export function usePlaygroundBlockEditor(pageId: string) {
       handleBlockIndentation,
       handleParagraphSpaceShortcut,
       handleEmptyListEnter,
-      handleEmptyTodoEnter,
       handleEmptyListDelete,
       handleDividerDelete,
       handleContainerEnter,

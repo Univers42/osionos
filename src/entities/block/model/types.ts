@@ -46,6 +46,7 @@ export interface Block {
   type: BlockType;
   content: string;
   children?: Block[];		/** Children blocks (for toggle, nested lists, etc.) */
+  headingLevel?: 1 | 2 | 3 | 4 | 5 | 6; /** Heading style for container titles */
   checked?: boolean;		/** Whether a to_do is checked */
   language?: string;		/** Programming language for code blocks */		
   color?: string;			/** Color for callouts, etc. */

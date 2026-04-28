@@ -44,6 +44,11 @@ import {
   canReadPage,
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
+import {
+  buildInternalPageHref,
+  getInternalPageIdFromHref,
+  navigateToInternalPage,
+} from "@/shared/lib/internalPageNavigation";
 import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
 
 interface EditableContentProps {
@@ -74,46 +79,6 @@ interface LinkPickerState {
   query: string;
 }
 
-const INTERNAL_PAGE_LINK_PREFIX = "page://";
-
-function buildInternalPageHref(pageId: string) {
-  return `${INTERNAL_PAGE_LINK_PREFIX}${pageId}`;
-}
-
-function getInternalPageIdFromHref(href: string) {
-  return href.startsWith(INTERNAL_PAGE_LINK_PREFIX)
-    ? href.slice(INTERNAL_PAGE_LINK_PREFIX.length)
-    : null;
-}
-
-interface NavigablePage {
-  _id: string;
-  workspaceId: string;
-  databaseId?: string | null;
-  title: string;
-  icon?: string | null;
-}
-
-function openPageById(pageId: string | null | undefined): boolean {
-  if (!pageId) {
-    return false;
-  }
-
-  const page = usePageStore.getState().pageById(pageId) as NavigablePage | null;
-  if (!page) {
-    return false;
-  }
-
-  usePageStore.getState().openPage({
-    id: page._id,
-    workspaceId: page.workspaceId,
-    kind: page.databaseId ? "database" : "page",
-    title: page.title,
-    icon: page.icon ?? undefined,
-  });
-  return true;
-}
-
 function handleMentionMouseDown(
   event: React.MouseEvent<HTMLDivElement>,
   target: HTMLElement,
@@ -125,7 +90,8 @@ function handleMentionMouseDown(
     return false;
   }
 
-  const opened = openPageById(mention.dataset.pageId);
+  const pageId = mention.dataset.pageId;
+  const opened = pageId ? navigateToInternalPage(pageId) : false;
   if (opened) {
     event.preventDefault();
     event.stopPropagation();
@@ -152,7 +118,7 @@ function handleAnchorMouseDown(
   const internalPageId = getInternalPageIdFromHref(normalizedHref);
 
   if (internalPageId) {
-    const opened = openPageById(internalPageId);
+    const opened = navigateToInternalPage(internalPageId);
     if (opened) {
       event.preventDefault();
       event.stopPropagation();
@@ -632,38 +598,6 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       html,
     };
     return html;
-  }, []);
-
-  useEffect(() => {
-    const root = ref.current;
-    if (!root) return;
-
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const mention = target.closest(
-        ".page-mention-placeholder",
-      ) as HTMLElement;
-      if (mention) {
-        const targetPageId = mention.dataset.pageId;
-        const page = targetPageId
-          ? usePageStore.getState().pageById(targetPageId)
-          : null;
-        if (page) {
-          e.preventDefault();
-          e.stopPropagation();
-          usePageStore.getState().openPage({
-            id: page._id,
-            workspaceId: page.workspaceId,
-            kind: page.databaseId ? "database" : "page",
-            title: page.title,
-            icon: page.icon,
-          });
-        }
-      }
-    };
-
-    root.addEventListener("click", handleClick);
-    return () => root.removeEventListener("click", handleClick);
   }, []);
 
   useEffect(() => {

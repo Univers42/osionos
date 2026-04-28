@@ -71,6 +71,12 @@ interface BlockCategory {
  
   /** Is this a heading block? (h1-h6) */
   heading: boolean;
+
+  /** Does Enter on the summary expand/focus children instead of creating a child directly? */
+  enterOnSummaryExpands: boolean;
+
+  /** Can this container title/summary be styled as a heading? */
+  titleCanBeHeading: boolean;
 }
  
 /* ── Shared presets ──────────────────────────────────────────────── */
@@ -84,6 +90,8 @@ const HEADING_BASE: BlockCategory = {
   backspaceConvertsToParagraph: true,
   list: false,
   heading: true,
+  enterOnSummaryExpands: false,
+  titleCanBeHeading: false,
 };
  
 const LIST_BASE: BlockCategory = {
@@ -95,6 +103,8 @@ const LIST_BASE: BlockCategory = {
   backspaceConvertsToParagraph: false,
   list: true,
   heading: false,
+  enterOnSummaryExpands: false,
+  titleCanBeHeading: false,
 };
  
 const LEAF_BASE: BlockCategory = {
@@ -106,6 +116,8 @@ const LEAF_BASE: BlockCategory = {
   backspaceConvertsToParagraph: false,
   list: false,
   heading: false,
+  enterOnSummaryExpands: false,
+  titleCanBeHeading: false,
 };
  
 /* ── Registry ────────────────────────────────────────────────────── */
@@ -121,6 +133,8 @@ const BLOCK_CATEGORIES: Record<BlockType, BlockCategory> = {
     backspaceConvertsToParagraph: false,
     list: false,
     heading: false,
+    enterOnSummaryExpands: false,
+    titleCanBeHeading: false,
   },
  
   // ─── Headings ────────────────────────────────────────
@@ -146,6 +160,8 @@ const BLOCK_CATEGORIES: Record<BlockType, BlockCategory> = {
     backspaceConvertsToParagraph: true,
     list: false,
     heading: false,
+    enterOnSummaryExpands: true,
+    titleCanBeHeading: true,
   },
   callout: {
     indentable: true,
@@ -156,6 +172,8 @@ const BLOCK_CATEGORIES: Record<BlockType, BlockCategory> = {
     backspaceConvertsToParagraph: true,
     list: false,
     heading: false,
+    enterOnSummaryExpands: false,
+    titleCanBeHeading: true,
   },
   quote: {
     indentable: true,
@@ -166,6 +184,8 @@ const BLOCK_CATEGORIES: Record<BlockType, BlockCategory> = {
     backspaceConvertsToParagraph: true,
     list: false,
     heading: false,
+    enterOnSummaryExpands: false,
+    titleCanBeHeading: true,
   },
  
   // ─── Specialized / leaf blocks ──────────────────────
@@ -225,4 +245,19 @@ export function isListBlock(type: BlockType): boolean {
 /** Is this a heading block (h1-h6)? */
 export function isHeadingBlock(type: BlockType): boolean {
   return BLOCK_CATEGORIES[type].heading;
+}
+
+/** Does Enter on the summary expand/focus content instead of creating a child directly? */
+export function enterOnSummaryExpands(type: BlockType): boolean {
+  return BLOCK_CATEGORIES[type].enterOnSummaryExpands;
+}
+
+/** Can this block title/summary be styled as a heading? */
+export function titleCanBeHeading(type: BlockType): boolean {
+  return BLOCK_CATEGORIES[type].titleCanBeHeading;
+}
+
+/** Returns true when text is effectively empty for contenteditable flows. */
+export function isEffectivelyEmpty(text: string): boolean {
+  return text.replaceAll("\u200B", "").trim().length === 0;
 }

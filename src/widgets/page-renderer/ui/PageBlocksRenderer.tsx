@@ -13,19 +13,11 @@
 import React, { useEffect, useRef } from "react";
 import type { Block } from "@/entities/block";
 import { ReadOnlyBlock } from "@/entities/block";
-import { usePageStore } from "@/store/usePageStore";
-
-const INTERNAL_PAGE_LINK_PREFIX = "page://";
-
-function getInternalPageIdFromHref(href: string) {
-  return href.startsWith(INTERNAL_PAGE_LINK_PREFIX)
-    ? href.slice(INTERNAL_PAGE_LINK_PREFIX.length)
-    : null;
-}
-
-function isExternalHref(href: string) {
-  return /^https?:\/\//i.test(href);
-}
+import {
+  getInternalPageIdFromHref,
+  isExternalHref,
+  navigateToInternalPage,
+} from "@/shared/lib/internalPageNavigation";
 
 interface PageBlocksRendererProps {
   blocks: Block[];
@@ -38,8 +30,6 @@ interface PageBlocksRendererProps {
 export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
   blocks,
 }) => {
-  const openPage = usePageStore((s) => s.openPage);
-  const pageById = usePageStore((s) => s.pageById);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -58,16 +48,8 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
       const href = anchor.getAttribute("href") ?? "";
       const internalPageId = getInternalPageIdFromHref(href);
       if (internalPageId) {
-        const linkedPage = pageById(internalPageId);
-        if (linkedPage) {
+        if (navigateToInternalPage(internalPageId)) {
           event.preventDefault();
-          openPage({
-            id: linkedPage._id,
-            workspaceId: linkedPage.workspaceId,
-            kind: linkedPage.databaseId ? "database" : "page",
-            title: linkedPage.title,
-            icon: linkedPage.icon,
-          });
         }
         return;
       }
@@ -80,7 +62,7 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
 
     root.addEventListener("click", handleClick);
     return () => root.removeEventListener("click", handleClick);
-  }, [openPage, pageById]);
+  }, []);
 
   let numberedIndex = 0;
 

@@ -24,3 +24,12 @@ export const CALLOUT_COLORS: Record<string, { bg: string; border: string; text: 
   '🎯': { bg: 'bg-cyan-100',   border: 'border-cyan-300',   text: 'text-cyan-950' },
   '⭐': { bg: 'bg-yellow-100', border: 'border-yellow-300', text: 'text-yellow-950' },
 };
+
+export const CONTAINER_HEADING_CLASSES: Record<1 | 2 | 3 | 4 | 5 | 6, string> = {
+  1: "text-2xl font-bold text-[var(--color-ink)] mt-6 mb-1 leading-tight",
+  2: "text-xl font-semibold text-[var(--color-ink)] mt-5 mb-1 leading-tight",
+  3: "text-lg font-semibold text-[var(--color-ink)] mt-4 mb-0.5 leading-snug",
+  4: "text-base font-semibold text-[var(--color-ink)] mt-3 mb-0.5 leading-snug",
+  5: "text-sm font-semibold text-[var(--color-ink)] mt-2 mb-0.5 leading-snug",
+  6: "text-xs font-semibold text-[var(--color-ink-muted)] mt-2 mb-0.5 leading-snug tracking-wide",
+};

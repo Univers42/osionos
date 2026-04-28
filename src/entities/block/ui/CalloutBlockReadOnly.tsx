@@ -11,8 +11,11 @@
 /* ************************************************************************** */
 
 import React from "react";
-import type { Block } from '@/entities/block';
-import { CALLOUT_COLORS } from "@/entities/block";
+import {
+  CALLOUT_COLORS,
+  CONTAINER_HEADING_CLASSES,
+  type Block,
+} from "@/entities/block";
 import { parseInlineMarkdown } from '@/shared/lib/markengine';
 import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
 import { ReadOnlyBlock } from "./ReadOnlyBlock";
@@ -31,6 +34,9 @@ export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
         }),
       }
     : null;
+  const titleClassName = block.headingLevel
+    ? CONTAINER_HEADING_CLASSES[block.headingLevel]
+    : `text-sm ${colors.text} leading-relaxed py-0.5`;
 
   return (
     <div
@@ -39,7 +45,7 @@ export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
       <span className={`text-lg shrink-0 ${colors.text}`}>{icon}</span>
       <div className="flex-1 min-w-0">
         <span
-          className={`text-sm ${colors.text} leading-relaxed py-0.5`}
+          className={titleClassName}
           dangerouslySetInnerHTML={content ?? undefined}
         />
         {block.children?.length ? (
