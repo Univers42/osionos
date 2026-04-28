@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   slashMenuCatalog.tsx                               :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/14 00:00:00 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/14 20:34:54 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -42,6 +42,10 @@ const SLASH_DESCRIPTIONS: Partial<Record<BlockType, string>> = {
   code: "Code block",
   quote: "Block quote",
   callout: "Callout block",
+  equation: "LaTeX equation block",
+  layout: "Advanced CSS grid layout",
+  column_list: "Side-by-side columns",
+  column: "Column container",
   divider: "Horizontal divider",
   table_block: "Simple table",
   database_inline: "Inline database",
@@ -70,6 +74,9 @@ const TURN_INTO_BLOCK_TYPES = new Set<BlockType>([
   "code",
   "quote",
   "callout",
+  "equation",
+  "layout",
+  "column_list",
 ]);
 
 const EXTRA_SECTION_LABELS: Record<string, string> = {
@@ -118,24 +125,95 @@ const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.map(
   },
 );
 
-export const TURN_INTO_COMMANDS: SlashTurnIntoCommand[] =
-  COLLECTION_SLASH_ITEMS.filter(
-    (item) => item.section === "basic" && TURN_INTO_BLOCK_TYPES.has(item.type),
-  ).map((item) => {
-    const normalizedLabel = item.type === "callout" ? "Callout" : item.label;
+const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
+  {
+    id: "advanced:equation-inline",
+    kind: "inline",
+    section: "advanced",
+    label: "Equation inline",
+    icon: "∑",
+    description: "Insert an inline LaTeX equation",
+    insertText: "$E = mc^2$ ",
+  },
+  {
+    id: "advanced:equation",
+    kind: "block",
+    section: "advanced",
+    label: "Block equation",
+    icon: "∑",
+    description: "Write a display equation with LaTeX",
+    blockType: "equation",
+  },
+  {
+    id: "layout:layout",
+    kind: "block",
+    section: "layout",
+    label: "Layout",
+    icon: "▦",
+    description: "Design a custom grid layout",
+    blockType: "layout",
+  },
+  {
+    id: "layout:column_list",
+    kind: "block",
+    section: "layout",
+    label: "2 columns",
+    icon: "▥",
+    description: "Create two side-by-side columns",
+    blockType: "column_list",
+  },
+];
 
-    return {
-      id: `turn-into:${item.type}:${normalizedLabel}`,
+export const TURN_INTO_COMMANDS: SlashTurnIntoCommand[] =
+  [
+    ...COLLECTION_SLASH_ITEMS.filter(
+      (item) => item.section === "basic" && TURN_INTO_BLOCK_TYPES.has(item.type),
+    ).map((item): SlashTurnIntoCommand => {
+      const normalizedLabel = item.type === "callout" ? "Callout" : item.label;
+
+      return {
+        id: `turn-into:${item.type}:${normalizedLabel}`,
+        kind: "turn-into",
+        section: "turn-into",
+        label: normalizedLabel,
+        icon: item.icon,
+        description: `Transform the current line into ${normalizedLabel.toLowerCase()}`,
+        blockType: item.type,
+        calloutIcon: item.calloutIcon,
+        placeholderText: normalizedLabel,
+      };
+    }),
+    {
+      id: "turn-into:equation",
       kind: "turn-into",
       section: "turn-into",
-      label: normalizedLabel,
-      icon: item.icon,
-      description: `Transform the current line into ${normalizedLabel.toLowerCase()}`,
-      blockType: item.type,
-      calloutIcon: item.calloutIcon,
-      placeholderText: normalizedLabel,
-    };
-  });
+      label: "Block equation",
+      icon: "∑",
+      description: "Transform the current line into a LaTeX equation",
+      blockType: "equation",
+      placeholderText: "Equation",
+    },
+    {
+      id: "turn-into:layout",
+      kind: "turn-into",
+      section: "turn-into",
+      label: "Layout",
+      icon: "▦",
+      description: "Transform the current block into a grid layout",
+      blockType: "layout",
+      placeholderText: "Layout",
+    },
+    {
+      id: "turn-into:column_list",
+      kind: "turn-into",
+      section: "turn-into",
+      label: "2 columns",
+      icon: "▥",
+      description: "Transform the current block into two columns",
+      blockType: "column_list",
+      placeholderText: "Columns",
+    },
+  ];
 
 const CREATE_PAGE_COMMAND: SlashCreatePageCommand[] = [
   {
@@ -151,6 +229,7 @@ const CREATE_PAGE_COMMAND: SlashCreatePageCommand[] = [
 export const SLASH_COMMANDS: SlashCommand[] = [
   ...CREATE_PAGE_COMMAND,
   ...BASE_SLASH_COMMANDS,
+  ...LOCAL_SLASH_COMMANDS,
   ...TURN_INTO_COMMANDS,
 ];
 

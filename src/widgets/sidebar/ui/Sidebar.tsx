@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -43,6 +43,8 @@ export const Sidebar: React.FC<Props> = ({
   const pagesByWorkspace = usePageStore((s) => s.pages);
 
   const isSidebarOpen = useUIStore((s) => s.isSidebarOpen);
+  const sidebarWidth = useUIStore((s) => s.sidebarWidth);
+  const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
 
   const [showInviteCTA, setShowInviteCTA] = useState(true);
 
@@ -77,12 +79,35 @@ export const Sidebar: React.FC<Props> = ({
     });
   }
 
+  function handleResizePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      setSidebarWidth(startWidth + moveEvent.clientX - startX);
+    };
+
+    const handlePointerUp = () => {
+      globalThis.removeEventListener("pointermove", handlePointerMove);
+      globalThis.removeEventListener("pointerup", handlePointerUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    globalThis.addEventListener("pointermove", handlePointerMove);
+    globalThis.addEventListener("pointerup", handlePointerUp, { once: true });
+  }
+
   return (
     <aside
       className={[
         styles.sidebar,
         isSidebarOpen ? "" : styles.sidebarClosed,
       ].join(" ")}
+      style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
     >
       <WorkspaceSwitcher />
 
@@ -118,6 +143,16 @@ export const Sidebar: React.FC<Props> = ({
         showInviteCTA={showInviteCTA}
         onDismissInvite={() => setShowInviteCTA(false)}
       />
+      {isSidebarOpen ? (
+        <div
+          className={styles.resizeHandle}
+          data-sidebar-resize-handle
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          onPointerDown={handleResizePointerDown}
+        />
+      ) : null}
     </aside>
   );
 };

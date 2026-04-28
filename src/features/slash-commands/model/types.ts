@@ -3,6 +3,18 @@
 /*                                                        :::      ::::::::   */
 /*   types.ts                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/28 20:17:07 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/04/28 21:26:12 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   types.ts                                           :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/14 00:00:00 by rstancu          #+#    #+#             */
@@ -38,6 +50,11 @@ export interface SlashCreatePageCommand extends SlashCommandBase {
   kind: "create-page";
 }
 
+export interface SlashInlineCommand extends SlashCommandBase {
+  kind: "inline";
+  insertText: string;
+}
+
 export interface SlashMediaPickerCommand extends SlashCommandBase {
   kind: "media-picker";
   mediaKind: MediaBlockType;
@@ -47,6 +64,7 @@ export type SlashCommand =
   | SlashBlockCommand
   | SlashTurnIntoCommand
   | SlashCreatePageCommand
+  | SlashInlineCommand
   | SlashMediaPickerCommand;
 
 export interface SlashCommandSection {

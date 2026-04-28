@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:21 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:29:07 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 21:26:12 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -28,6 +28,7 @@ import type {
   SlashCreatePageCommand,
   SlashBlockCommand,
   SlashCommand,
+  SlashInlineCommand,
   SlashMediaPickerCommand,
   SlashTurnIntoCommand,
 } from "@/features/slash-commands/model/types";
@@ -38,7 +39,7 @@ interface SlashCommandMenuProps {
   position: { x: number; y: number };
   filter: string;
   onSelect: (
-    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand,
+    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand,
   ) => void;
   onMediaSelect: (kind: MediaBlockType, value: string) => void;
   onClose: () => void;

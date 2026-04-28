@@ -11,6 +11,8 @@
 /* ************************************************************************** */
 
 import React, { useState, useMemo } from "react";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import type { Block } from '@/entities/block';
 import { ChevronRight } from "lucide-react";
 import { DatabaseBlock } from '@/widgets/database-view';
@@ -36,6 +38,14 @@ const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
   return <>{renderedContent}</>;
 };
 
+function renderEquationToHtml(source: string): string {
+  return katex.renderToString(source || "E = mc^2", {
+    displayMode: true,
+    throwOnError: false,
+    strict: "ignore",
+  });
+}
+
 function getNestedChildrenClassName(type: Block["type"]) {
   if (type === "bulleted_list" || type === "numbered_list") {
     return "ml-[3.25rem] mt-0.5";
@@ -47,6 +57,10 @@ function getNestedChildrenClassName(type: Block["type"]) {
 
   if (type === "toggle") {
     return "ml-6 mt-0.5 pl-3 border-l-2 border-[var(--color-line)]";
+  }
+
+  if (type === "column") {
+    return "mt-0.5";
   }
 
   // Generic indentation for all other block types with children.
@@ -216,6 +230,40 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
 
     case "code":
       return <CodeBlockReadOnly block={block} />;
+
+    case "equation":
+      return (
+        <div
+          className="my-2 overflow-x-auto rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-3 text-[var(--color-ink)]"
+          dangerouslySetInnerHTML={{ __html: renderEquationToHtml(block.content) }}
+        />
+      );
+
+    case "column_list":
+      return (
+        <div className="my-2 flex gap-3">
+          {(block.children ?? []).map((column) => (
+            <div
+              key={column.id}
+              className="min-w-0"
+              style={{
+                flexGrow:
+                  typeof column.widthRatio === "number"
+                    ? column.widthRatio
+                    : 1 / Math.max(block.children?.length ?? 1, 1),
+                flexBasis: 0,
+              }}
+            >
+              {(column.children ?? []).map((child, childIndex) => (
+                <ReadOnlyBlock key={child.id} block={child} index={childIndex} />
+              ))}
+            </div>
+          ))}
+        </div>
+      );
+
+    case "column":
+      return renderNestedChildren(block);
 
     case "image":
     case "video":

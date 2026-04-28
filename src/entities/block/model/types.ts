@@ -1,12 +1,12 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   database.ts                                        :+:      :+:    :+:   */
+/*   types.ts                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:03:32 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:03:33 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,6 +35,10 @@ export type BlockType =
   | 'code'
   | 'quote'
   | 'callout'
+  | 'equation'
+  | 'layout'
+  | 'column_list'
+  | 'column'
   | 'divider'
   | 'table_block'
   | 'database_inline'
@@ -49,6 +53,10 @@ export interface Block {
   checked?: boolean;		/** Whether a to_do is checked */
   language?: string;		/** Programming language for code blocks */		
   color?: string;			/** Color for callouts, etc. */
+  textColor?: string;		/** Optional block text color */
+  backgroundColor?: string; /** Optional block background color */
+  headingLevel?: 1 | 2 | 3 | 4 | 5 | 6; /** Optional heading style inside composed blocks */
+  widthRatio?: number;      /** Relative width for column blocks */
   collapsed?: boolean;		/** Whether a toggle is collapsed */
   asset?: string;           /** Serialized ui-collection asset value for media blocks */
   placeholderText?: string; /** Temporary placeholder hint for empty transformed blocks */

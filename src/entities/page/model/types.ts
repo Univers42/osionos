@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   types.ts                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/19 20:11:32 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/28 20:16:02 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -45,7 +45,7 @@ export interface PageEntry {
 }
 
 /** Discriminator for the type of page currently active. */
-export type ActivePageKind = "page" | "database" | "home";
+export type ActivePageKind = "page" | "database" | "home" | "channel";
 
 /** Currently selected page reference for the content panel. */
 export interface ActivePage {

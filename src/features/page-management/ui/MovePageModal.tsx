@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   MovePageModal.tsx                                  :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/28 20:16:50 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/04/28 20:16:51 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import React, { useState, useMemo, useCallback } from "react";
 import { Search, X, FileText, ChevronRight, Hash } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";

@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   usePlaygroundBlockEditor.ts                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/22 11:30:41 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -115,6 +115,10 @@ function toBlockUpdates(block: Block): Partial<Block> {
     tableData: block.tableData,
     databaseId: block.databaseId,
     viewId: block.viewId,
+    textColor: block.textColor,
+    backgroundColor: block.backgroundColor,
+    headingLevel: block.headingLevel,
+    widthRatio: block.widthRatio,
   };
 }
 
@@ -260,7 +264,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
   const tryHandleMarkdownShortcut = useCallback(
     (blockId: string, text: string): void => {
-      if (!(text.endsWith(" ") || text === "---" || text === "```")) return;
+      if (!(text.endsWith(" ") || text === "---" || text === "```" || text === "$$")) return;
 
       const detection = detectBlockType(text);
       if (!detection) return;
@@ -274,6 +278,9 @@ export function usePlaygroundBlockEditor(pageId: string) {
         ...(detection.type === "callout"
           ? { color: getCalloutIconForKind(detection.kind ?? "note") }
           : {}),
+        ...(detection.headingLevel
+          ? { headingLevel: detection.headingLevel }
+          : { headingLevel: undefined }),
       });
       repositionCursor(blockId, detection.remainingContent);
     },
@@ -346,6 +353,22 @@ export function usePlaygroundBlockEditor(pageId: string) {
       return false;
     },
     [pageId, changeBlockType, updateBlock, focusBlock],
+  );
+
+  const handleToggleHeadingSpaceShortcut = useCallback(
+    (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
+      if (e.key !== " " || block.type !== "toggle") return false;
+      if (!HEADING_SHORTCUT_RE.test(block.content)) return false;
+
+      e.preventDefault();
+      updateBlock(pageId, blockId, {
+        content: "",
+        headingLevel: block.content.length as 1 | 2 | 3 | 4 | 5 | 6,
+      });
+      focusBlock(blockId);
+      return true;
+    },
+    [pageId, updateBlock, focusBlock],
   );
 
   const handleBlockIndentation = useCallback(
@@ -666,6 +689,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       const handled =
         handleBlockIndentation(e, blockId, block, content) ||
         handleParagraphSpaceShortcut(e, blockId, block) ||
+        handleToggleHeadingSpaceShortcut(e, blockId, block) ||
         handleEmptyListEnter(e, blockId, block, blockIdx, content, isEmpty) ||
         handleEmptyTodoEnter(e, blockId, block, isEmpty) ||
         handleEmptyListDelete(e, blockId, block, blockIdx, content, isEmpty) ||
@@ -719,6 +743,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       focusBlock,
       handleBlockIndentation,
       handleParagraphSpaceShortcut,
+      handleToggleHeadingSpaceShortcut,
       handleEmptyListEnter,
       handleEmptyTodoEnter,
       handleEmptyListDelete,
@@ -775,6 +800,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
     handleSlashCreatePageSelect,
+    handleSlashInlineSelect,
   } = useSlashSelect({
     pageId,
     slashMenu,
@@ -889,6 +915,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
     handleSlashCreatePageSelect,
+    handleSlashInlineSelect,
     handlePageSelectorSelect,
     handlePageSelectorCreate,
     handleAddBlock,

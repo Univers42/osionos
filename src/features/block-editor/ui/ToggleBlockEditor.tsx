@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   ToggleBlockEditor.tsx                              :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/16 10:35:46 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/28 21:45:39 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,6 +22,8 @@ import { usePageStore } from "@/store/usePageStore";
 interface ToggleBlockEditorProps {
   block: Block;
   pageId: string;
+  style?: React.CSSProperties;
+  onUpdateBlock?: (blockId: string, updates: Partial<Block>) => void;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
@@ -39,9 +41,26 @@ interface ToggleBlockEditorProps {
  * communicates it to the store so BlockTree knows whether to render
  * the children subtree.
  */
+function getToggleHeadingClass(headingLevel: Block["headingLevel"]): string {
+  switch (headingLevel) {
+    case 1:
+      return "text-2xl font-bold";
+    case 2:
+      return "text-xl font-semibold";
+    case 3:
+      return "text-lg font-semibold";
+    case 4:
+      return "text-base font-semibold";
+    default:
+      return "text-sm";
+  }
+}
+
 export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
   block,
   pageId,
+  style,
+  onUpdateBlock,
   onChange,
   onKeyDown,
   focusBlock,
@@ -49,6 +68,21 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
 }) => {
   const [expanded, setExpanded] = useState(!block.collapsed);
   const updateBlock = usePageStore((s) => s.updateBlock);
+  const summaryClassName = [
+    "text-[var(--color-ink)] leading-relaxed py-0.5",
+    getToggleHeadingClass(block.headingLevel),
+  ].join(" ");
+  const commitBlockUpdate = useCallback(
+    (updates: Partial<Block>) => {
+      if (onUpdateBlock) {
+        onUpdateBlock(block.id, updates);
+        return;
+      }
+
+      updateBlock(pageId, block.id, updates);
+    },
+    [block.id, onUpdateBlock, pageId, updateBlock],
+  );
 
   /* ── Expand / collapse ──────────────────────────────────────────── */
 
@@ -61,17 +95,16 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
         type: "paragraph",
         content: "",
       };
-      updateBlock(pageId, block.id, { children: [child] });
-      updateBlock(pageId, block.id, { collapsed: false });
+      commitBlockUpdate({ children: [child], collapsed: false });
       setExpanded(true);
 
       focusBlock(child.id);
       return;
     }
 
-    updateBlock(pageId, block.id, { collapsed: !opening });
+    commitBlockUpdate({ collapsed: !opening });
     setExpanded(opening);
-  }, [expanded, block.id, block.children?.length, pageId, updateBlock, focusBlock]);
+  }, [expanded, block.children?.length, commitBlockUpdate, focusBlock]);
 
   /* ── Summary key handler ────────────────────────────────────────── */
 
@@ -82,7 +115,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
 
         if (block.children?.length) {
           if (!expanded) {
-            updateBlock(pageId, block.id, { collapsed: false });
+            commitBlockUpdate({ collapsed: false });
             setExpanded(true);
           }
 
@@ -94,8 +127,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
             type: "paragraph",
             content: "",
           };
-          updateBlock(pageId, block.id, { children: [child] });
-          updateBlock(pageId, block.id, { collapsed: false });
+          commitBlockUpdate({ children: [child], collapsed: false });
           setExpanded(true);
 
           focusBlock(child.id);
@@ -104,7 +136,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
       }
       onKeyDown(e);
     },
-    [expanded, block.id, block.children, pageId, updateBlock, focusBlock, onKeyDown],
+    [expanded, block.children, commitBlockUpdate, focusBlock, onKeyDown],
   );
 
   /* ── Render ─────────────────────────────────────────────────────── */
@@ -128,7 +160,8 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
         <div className="flex-1">
           <EditableContent
             content={block.content}
-            className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5"
+            className={summaryClassName}
+            style={style}
             placeholder="Toggle"
             pageId={pageId}
             onChange={onChange}

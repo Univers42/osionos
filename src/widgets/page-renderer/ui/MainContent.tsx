@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 20:16:02 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,6 +17,7 @@ import { AssetRenderer } from "@univers42/ui-collection";
 import { ErrorBoundary } from "@/shared/ui";
 import { getCollectionEmojiValue } from "@/shared/lib/markengine/uiCollectionAssets";
 import { DatabaseBlock } from "@/widgets/database-view";
+import { ChannelMessagesView } from "@/widgets/channel-messages";
 import { OsionosPage } from "@/pages/notion-page";
 import { TrashView } from "@/pages/trash-view";
 
@@ -60,7 +61,7 @@ export const MainContent: React.FC = () => {
   if (showTrash) {
     return (
       <ErrorBoundary>
-        <div className="flex-1 h-full overflow-auto bg-[var(--color-surface-primary)]">
+        <div className="flex-1 min-w-0 h-full overflow-auto bg-[var(--color-surface-primary)]">
           <TrashView />
         </div>
       </ErrorBoundary>
@@ -70,7 +71,7 @@ export const MainContent: React.FC = () => {
   /* ── Home splash (no page selected) ────────────────────────────── */
   if (!activePage) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 h-full bg-[var(--color-surface-primary)]">
+      <div className="flex-1 min-w-0 flex flex-col items-center justify-center gap-6 h-full bg-[var(--color-surface-primary)]">
         <AssetRenderer
           value={persona?.emoji ?? getCollectionEmojiValue("party")}
           size={40}
@@ -112,7 +113,7 @@ export const MainContent: React.FC = () => {
 
   if (activePage.kind === "page" && !pageById(activePage.id)) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-4 h-full bg-[var(--color-surface-primary)]">
+      <div className="flex-1 min-w-0 flex flex-col items-center justify-center gap-4 h-full bg-[var(--color-surface-primary)]">
         <h1 className="text-2xl font-bold text-[var(--color-ink)]">
           Page unavailable
         </h1>
@@ -137,7 +138,7 @@ export const MainContent: React.FC = () => {
     return (
       <ErrorBoundary>
         <Suspense fallback={<LoadingPane />}>
-          <div className="flex-1 h-full overflow-auto bg-[var(--color-surface-primary)]">
+          <div className="flex-1 min-w-0 h-full overflow-auto bg-[var(--color-surface-primary)]">
             <DatabaseBlock databaseId={activePage.id} mode="full" />
           </div>
         </Suspense>
@@ -145,9 +146,23 @@ export const MainContent: React.FC = () => {
     );
   }
 
+  if (activePage.kind === "channel") {
+    return (
+      <ErrorBoundary>
+        <div className="flex-1 min-w-0 h-full overflow-hidden bg-[var(--color-surface-primary)]">
+          <ChannelMessagesView
+            channelId={activePage.id}
+            workspaceId={activePage.workspaceId}
+            title={activePage.title}
+          />
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
   /* ── Page view — osionos-style layout ───────────────────────────── */
   return (
-    <div className="flex-1 h-full overflow-hidden">
+    <div className="flex-1 min-w-0 h-full overflow-hidden">
       <OsionosPage pageId={activePage.id} />
     </div>
   );

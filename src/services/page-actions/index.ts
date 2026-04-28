@@ -1,5 +1,5 @@
 import { api } from "@/shared/api/client";
-import { parseMarkdownToBlocks } from "@/lib/markengine/shortcuts";
+import { parseMarkdownToBlocks } from "@/shared/lib/markengine";
 import type { Block } from "@/entities/block";
 import type { PageEntry } from "@/entities/page";
 import type { PageConfig } from "@/shared/config/pageConfigStore";

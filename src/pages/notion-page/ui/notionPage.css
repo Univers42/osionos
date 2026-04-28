@@ -22,6 +22,8 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--color-surface-primary);
@@ -61,8 +63,10 @@
 .osionos-page-header,
 .osionos-page-properties,
 .osionos-page-body {
+  box-sizing: border-box;
   max-width: var(--page-content-max-width, 900px);
   width: 100%;
+  min-width: 0;
   margin-left: auto;
   margin-right: auto;
   padding-left: var(--page-content-padding-inline, clamp(16px, 11%, 96px));

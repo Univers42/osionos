@@ -6,11 +6,12 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 21:45:39 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, {
+  type CSSProperties,
   useCallback,
   useEffect,
   useMemo,
@@ -18,6 +19,7 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import katex from "katex";
 import {
   ColorPickerBoard,
   type ColorPickerPreset,
@@ -49,6 +51,7 @@ import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInter
 interface EditableContentProps {
   content: string;
   className?: string;
+  style?: CSSProperties;
   placeholder?: string;
   pageId?: string;
   onChange: (text: string) => void;
@@ -166,13 +169,33 @@ function handleAnchorMouseDown(
   return true;
 }
 
-function renderInlineHtmlPreservingLineBreaks(source: string): string {
+function renderInlineMathToHtml(source: string): string {
+  try {
+    return katex.renderToString(source, {
+      displayMode: false,
+      throwOnError: false,
+      strict: "ignore",
+    });
+  } catch {
+    return katex.renderToString(String.raw`\text{Invalid equation}`, {
+      displayMode: false,
+      throwOnError: false,
+    });
+  }
+}
+
+function renderInlineHtmlPreservingLineBreaks(
+  source: string,
+  renderSourceForEditing: boolean,
+): string {
   const lines = source.split("\n");
 
   return lines
     .map((line) =>
       parseInlineMarkdown(line, {
         resolveInternalLinkTitle: resolveInternalPageLinkTitle,
+        renderInlineMath: renderInlineMathToHtml,
+        renderInlineMathAsSource: renderSourceForEditing,
       }),
     )
     .join("<br />");
@@ -559,6 +582,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
 export const EditableContent: React.FC<EditableContentProps> = ({
   content,
   className = "",
+  style,
   placeholder = "",
   pageId,
   onChange,
@@ -619,16 +643,17 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     [recentInlineColors, resolvedTheme],
   );
 
-  const getRenderedInlineHtml = useCallback((nextContent: string) => {
-    if (renderedContentCache.current.source === nextContent) {
+  const getRenderedInlineHtml = useCallback((nextContent: string, renderMathAsSource: boolean) => {
+    const cacheKey = `${renderMathAsSource ? "source" : "rendered"}:${nextContent}`;
+    if (renderedContentCache.current.source === cacheKey) {
       return renderedContentCache.current.html;
     }
 
     const html = nextContent
-      ? renderInlineHtmlPreservingLineBreaks(nextContent)
+      ? renderInlineHtmlPreservingLineBreaks(nextContent, renderMathAsSource)
       : "";
     renderedContentCache.current = {
-      source: nextContent,
+      source: cacheKey,
       html,
     };
     return html;
@@ -671,14 +696,14 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   }, [content]);
 
   const renderContent = useCallback(
-    (nextContent: string) => {
+    (nextContent: string, renderMathAsSource = isFocused.current) => {
       const root = ref.current;
       if (!root) {
         return;
       }
 
       canonicalSourceRef.current = nextContent;
-      const nextHtml = getRenderedInlineHtml(nextContent);
+      const nextHtml = getRenderedInlineHtml(nextContent, renderMathAsSource);
       if (root.innerHTML !== nextHtml) {
         root.innerHTML = nextHtml;
       }
@@ -769,7 +794,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     canonicalSourceRef.current = normalizedSource;
 
     if (requiresNormalization) {
-      const parsedHtml = getRenderedInlineHtml(normalizedSource);
+      const parsedHtml = getRenderedInlineHtml(normalizedSource, true);
 
       if (root.innerHTML !== parsedHtml) {
         root.innerHTML = parsedHtml;
@@ -1077,6 +1102,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         data-placeholder={hasFocus ? placeholder : ""}
         data-empty={hasFocus && isPlaceholderVisible}
         className={`outline-none whitespace-pre-wrap break-words data-[empty=true]:before:content-[attr(data-placeholder)] data-[empty=true]:before:text-[var(--color-ink-faint)] data-[empty=true]:before:pointer-events-none ${className}`}
+        style={style}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
@@ -1086,7 +1112,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
           onFocus?.(event);
           isFocused.current = true;
           setHasFocus(true);
-          renderContent(content);
+          renderContent(content, true);
         }}
         onBlur={(event) => {
           onBlur?.(event);
@@ -1098,7 +1124,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
             setOpenPalette((current) => (current ? null : current));
           }
           const syncedContent = syncContentFromDom();
-          renderContent(syncedContent ?? content);
+          renderContent(syncedContent ?? content, false);
         }}
         onMouseUp={updateSelectionSnapshot}
         onCompositionStart={() => {

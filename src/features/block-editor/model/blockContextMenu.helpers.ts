@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   blockContextMenu.helpers.ts                        :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/28 20:16:16 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import type { ReactNode } from "react";
 import type { Block, BlockType } from "@/entities/block";
 import { COLLECTION_SLASH_ITEMS } from "@/shared/lib/markengine/uiCollectionAssets";
@@ -21,6 +33,9 @@ export interface BlockContextMenuItem {
   onClick: () => void;
   active?: boolean;
   danger?: boolean;
+  shortcut?: string;
+  disabled?: boolean;
+  subItems?: BlockContextMenuItem[];
 }
 
 export interface BlockContextMenuSection {
@@ -32,6 +47,37 @@ export interface BlockTransformOption {
   type: BlockType;
   label: string;
   icon: ReactNode;
+}
+
+function createEmptyParagraph(): Block {
+  return { id: crypto.randomUUID(), type: "paragraph", content: "" };
+}
+
+function createColumn(children: Block[], widthRatio: number): Block {
+  return {
+    id: crypto.randomUUID(),
+    type: "column",
+    content: "",
+    widthRatio,
+    children,
+  };
+}
+
+function createColumnsFromBlock(block: Block, count: number): Block[] {
+  const widthRatio = 1 / count;
+  return Array.from({ length: count }, (_, index) =>
+    createColumn(
+      index === 0
+        ? [
+            {
+              ...cloneBlock(block, true),
+              type: block.type === "column_list" ? "paragraph" : block.type,
+            },
+          ]
+        : [createEmptyParagraph()],
+      widthRatio,
+    ),
+  );
 }
 
 const CONTEXT_MENU_TRANSFORM_TYPES = new Set<BlockType>([
@@ -49,17 +95,25 @@ const CONTEXT_MENU_TRANSFORM_TYPES = new Set<BlockType>([
   "quote",
   "code",
   "callout",
+  "equation",
+  "layout",
+  "column_list",
   "divider",
 ]);
 
 export const BLOCK_TRANSFORM_OPTIONS: readonly BlockTransformOption[] =
-  COLLECTION_SLASH_ITEMS.filter((item) =>
-    CONTEXT_MENU_TRANSFORM_TYPES.has(item.type),
-  ).map((item) => ({
-    type: item.type,
-    label: item.label,
-    icon: item.icon,
-  }));
+  [
+    ...COLLECTION_SLASH_ITEMS.filter((item) =>
+      CONTEXT_MENU_TRANSFORM_TYPES.has(item.type),
+    ).map((item) => ({
+      type: item.type,
+      label: item.label,
+      icon: item.icon,
+    })),
+    { type: "equation" as BlockType, label: "Block equation", icon: "∑" },
+    { type: "layout" as BlockType, label: "Layout", icon: "▦" },
+    { type: "column_list" as BlockType, label: "2 columns", icon: "▥" },
+  ];
 
 export function cloneBlock(block: Block, regenerateIds = false): Block {
   const nextId = regenerateIds ? crypto.randomUUID() : block.id;
@@ -203,11 +257,73 @@ function normalizeBlockForType(block: Block, nextType: BlockType): Block {
             ? block.language
             : "typescript",
       };
+    case "equation":
+      return { ...base, content: block.content || "E = mc^2" };
+    case "layout":
+      return {
+        ...base,
+        content: "",
+        layoutConfig: {
+          columns: 12,
+          rows: 6,
+          columnGap: 16,
+          rowGap: 16,
+          rowHeight: 120,
+          wrap: true,
+          showGuides: true,
+          preview: false,
+        },
+        layoutCells: [],
+      };
+    case "column_list":
+      return {
+        ...base,
+        content: "",
+        children: createColumnsFromBlock(block, 2),
+      };
     case "divider":
       return { ...base, content: "" };
     default:
       return base;
   }
+}
+
+export function changeBlockToToggleHeadingInTree(
+  blocks: Block[],
+  blockId: string,
+  headingLevel: 1 | 2 | 3 | 4,
+): { blocks: Block[]; focusBlockId?: string } {
+  const transform = (list: Block[]): Block[] =>
+    list.map((block) => ({
+      ...(block.id === blockId
+        ? { ...block, type: "toggle" as BlockType, headingLevel }
+        : block),
+      children: block.children ? transform(block.children) : undefined,
+    }));
+
+  return { blocks: transform(blocks), focusBlockId: blockId };
+}
+
+export function changeBlockToColumnsInTree(
+  blocks: Block[],
+  blockId: string,
+  count: number,
+): { blocks: Block[]; focusBlockId?: string } {
+  const safeCount = Math.min(5, Math.max(2, Math.round(count)));
+  const transform = (list: Block[]): Block[] =>
+    list.map((block) => ({
+      ...(block.id === blockId
+        ? {
+            ...block,
+            type: "column_list" as BlockType,
+            content: "",
+            children: createColumnsFromBlock(block, safeCount),
+          }
+        : block),
+      children: block.children ? transform(block.children) : undefined,
+    }));
+
+  return { blocks: transform(blocks), focusBlockId: blockId };
 }
 
 export function changeBlockTypeInTree(

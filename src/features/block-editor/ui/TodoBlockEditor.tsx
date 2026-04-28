@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:04:59 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 21:45:39 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,17 +20,24 @@ import { usePageStore } from "@/store/usePageStore";
 export const TodoBlockEditor: React.FC<{
   block: Block;
   pageId: string;
+  style?: React.CSSProperties;
+  onUpdateBlock?: (blockId: string, updates: Partial<Block>) => void;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onRequestSlashMenu?: (position: { x: number; y: number }) => void;
-}> = ({ block, pageId, onChange, onKeyDown, onRequestSlashMenu }) => {
+}> = ({ block, pageId, style, onUpdateBlock, onChange, onKeyDown, onRequestSlashMenu }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
   const page = usePageStore((s) => s.activePage);
 
   const toggleChecked = useCallback(() => {
+    if (onUpdateBlock) {
+      onUpdateBlock(block.id, { checked: !block.checked });
+      return;
+    }
+
     if (!page) return;
     updateBlock(page.id, block.id, { checked: !block.checked });
-  }, [page, block.id, block.checked, updateBlock]);
+  }, [page, block.id, block.checked, onUpdateBlock, updateBlock]);
 
   return (
     <div className="flex items-start gap-2 pl-5">
@@ -66,6 +73,7 @@ export const TodoBlockEditor: React.FC<{
               ? "text-[var(--color-ink-muted)] line-through"
               : "text-[var(--color-ink)]",
           ].join(" ")}
+          style={style}
           placeholder={getBlockPlaceholder(block, "To-do")}
           pageId={pageId}
           onChange={onChange}

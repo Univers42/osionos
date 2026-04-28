@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/04/28 20:16:02 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -256,26 +256,43 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
                 <SidebarNavItem
                   icon={channelIcon(channel.type, channel.visibility === "members")}
                   label={channel.name}
-                  onClick={() => {
-                    if (!activeUserId || !activeWorkspaceId) return;
-                    const restricted = channel.visibility === "workspace";
-                    void updateChannel(activeUserId, activeWorkspaceId, channel.id, {
-                      visibility: restricted ? "members" : "workspace",
-                      memberIds: restricted ? [activeUserId] : [],
-                    });
-                  }}
+                  active={activePage?.kind === "channel" && activePage.id === channel.id}
+                  onClick={() => openPage({
+                    id: channel.id,
+                    workspaceId: activeWorkspaceId,
+                    kind: "channel",
+                    title: channel.name,
+                  })}
                   rightElement={
-                    <button
-                      type="button"
-                      className="mr-1 rounded px-1 text-[10px] text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
-                      title="Create thread"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (activeUserId && activeWorkspaceId) void addThread(activeUserId, activeWorkspaceId, channel.id, `${channel.name}-thread`);
-                      }}
-                    >
-                      + hilo
-                    </button>
+                    <div className="mr-1 flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="rounded px-1 text-[10px] text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
+                        title="Toggle channel visibility"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (!activeUserId || !activeWorkspaceId) return;
+                          const isWorkspaceVisible = channel.visibility === "workspace";
+                          void updateChannel(activeUserId, activeWorkspaceId, channel.id, {
+                            visibility: isWorkspaceVisible ? "members" : "workspace",
+                            memberIds: isWorkspaceVisible ? [activeUserId] : [],
+                          });
+                        }}
+                      >
+                        {channel.visibility === "members" ? "lock" : "open"}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded px-1 text-[10px] text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
+                        title="Create thread"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (activeUserId && activeWorkspaceId) void addThread(activeUserId, activeWorkspaceId, channel.id, `${channel.name}-thread`);
+                        }}
+                      >
+                        + hilo
+                      </button>
+                    </div>
                   }
                 />
                 {workspaceConfig.channels
@@ -285,7 +302,13 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
                       <SidebarNavItem
                         icon={<GitBranch size={13} />}
                         label={thread.name}
-                        onClick={() => undefined}
+                        active={activePage?.kind === "channel" && activePage.id === thread.id}
+                        onClick={() => openPage({
+                          id: thread.id,
+                          workspaceId: activeWorkspaceId,
+                          kind: "channel",
+                          title: thread.name,
+                        })}
                         rightElement={<span className="pr-2 text-[10px] text-[var(--color-ink-faint)]">thread</span>}
                       />
                     </div>

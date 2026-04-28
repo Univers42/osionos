@@ -10,13 +10,18 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useMemo } from "react";
-import { MessageSquare } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { MessageSquare, Send } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
 
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { pageConfigKey, resolvePageConfig, usePageConfigStore } from "@/shared/config/pageConfigStore";
+import {
+  initRealtimeMessagesBridge,
+  type RealtimeMessage,
+  useRealtimeMessagesStore,
+} from "@/services/realtime-messages";
 import {
   IconImage,
   getCollectionEmojiValue,
@@ -37,6 +42,8 @@ import "./notionPage.css";
 interface OsionosPageProps {
   pageId: string;
 }
+
+const EMPTY_MESSAGES: RealtimeMessage[] = [];
 
 /**
  * Full osionos-style page layout.
@@ -61,9 +68,31 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
   const openPage = usePageStore((s) => s.openPage);
   const updatePageTitle = usePageStore((s) => s.updatePageTitle);
   const activeUserId = useUserStore((s) => s.activeUserId);
+  const persona = useUserStore((s) => s.activePersona());
   const safeUserId = activeUserId || "anonymous";
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentDraft, setCommentDraft] = useState("");
+  const comments = useRealtimeMessagesStore(
+    (s) => s.messagesByThread[`page:${pageId}:comments`] ?? EMPTY_MESSAGES,
+  );
+  const sendMessage = useRealtimeMessagesStore((s) => s.sendMessage);
   const storedPageConfig = usePageConfigStore((s) => s.configs[pageConfigKey(safeUserId, pageId)]);
   const pageConfig = useMemo(() => resolvePageConfig(storedPageConfig), [storedPageConfig]);
+
+  useEffect(() => {
+    initRealtimeMessagesBridge();
+  }, []);
+
+  useEffect(() => {
+    const handleAddPageComment = (event: Event) => {
+      const detail = (event as CustomEvent<{ pageId?: string }>).detail;
+      if (detail?.pageId && detail.pageId !== pageId) return;
+      setCommentsOpen(true);
+    };
+
+    globalThis.addEventListener("osionos:add-page-comment", handleAddPageComment);
+    return () => globalThis.removeEventListener("osionos:add-page-comment", handleAddPageComment);
+  }, [pageId]);
 
   /* ── Page metadata from store ──────────────────────────────────── */
   const title = page?.title ?? activePage?.title ?? "";
@@ -155,6 +184,20 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
     }
   }, [handleChangeCover]);
 
+  const handleSubmitComment = useCallback(
+    (event: { preventDefault: () => void }) => {
+      event.preventDefault();
+      const sent = sendMessage(
+        `page:${pageId}:comments`,
+        safeUserId,
+        persona?.name ?? safeUserId,
+        commentDraft,
+      );
+      if (sent) setCommentDraft("");
+    },
+    [commentDraft, pageId, persona?.name, safeUserId, sendMessage],
+  );
+
   /* ── Render ────────────────────────────────────────────────────── */
 
   const hasCover = !!cover;
@@ -237,14 +280,61 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
           <button
             type="button"
             className="osionos-page-toolbar-btn"
-            onClick={() => {
-              /* Future: add comment */
-            }}
+            onClick={() => setCommentsOpen((value) => !value)}
           >
             <MessageSquare size={14} />
-            Add comment
+            Add comment{comments.length ? ` (${comments.length})` : ""}
           </button>
         </div>
+
+        {commentsOpen ? (
+          <section className="mb-4 max-w-xl rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-3">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-medium text-[var(--color-ink)]">Page comments</p>
+              <button
+                type="button"
+                className="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+                onClick={() => setCommentsOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            <div className="mb-3 max-h-44 space-y-2 overflow-y-auto">
+              {comments.length === 0 ? (
+                <p className="text-xs text-[var(--color-ink-muted)]">No comments yet.</p>
+              ) : (
+                comments.map((comment) => (
+                  <article key={comment.id} className="rounded-lg bg-[var(--color-surface-primary)] px-3 py-2">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-medium text-[var(--color-ink)]">{comment.authorName}</span>
+                      <span className="text-[var(--color-ink-faint)]">
+                        {new Date(comment.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--color-ink)]">{comment.body}</p>
+                  </article>
+                ))
+              )}
+            </div>
+            <form className="flex items-end gap-2" onSubmit={handleSubmitComment}>
+              <textarea
+                value={commentDraft}
+                onChange={(event) => setCommentDraft(event.target.value)}
+                rows={2}
+                placeholder="Write a comment…"
+                className="min-h-10 flex-1 resize-none rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-primary)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
+              />
+              <button
+                type="submit"
+                disabled={!commentDraft.trim()}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-accent)] text-white disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Send comment"
+              >
+                <Send size={16} />
+              </button>
+            </form>
+          </section>
+        ) : null}
 
         {/* Title */}
         <PageTitle title={title} onChangeTitle={handleChangeTitle} />

@@ -159,6 +159,10 @@ dist
 !.vscode/extensions.json
 !.vscode/*.code-snippets
 
+prompts/*
+prompts/*.md
+prompts
+
 # Local History for Visual Studio Code
 .history/
 

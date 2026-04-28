@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   blockCategories.ts                                 :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/19 09:50:36 by vjan-nie          #+#    #+#             */
-/*   Updated: 2026/04/19 09:50:41 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -77,7 +77,7 @@ interface BlockCategory {
  
 const HEADING_BASE: BlockCategory = {
   indentable: true,
-  parentable: false,
+  parentable: true,
   enterCreatesChild: false,
   continuesSameType: false,
   selfRendersChildren: false,
@@ -167,9 +167,31 @@ const BLOCK_CATEGORIES: Record<BlockType, BlockCategory> = {
     list: false,
     heading: false,
   },
+  column_list: {
+    indentable: true,
+    parentable: true,
+    enterCreatesChild: false,
+    continuesSameType: false,
+    selfRendersChildren: true,
+    backspaceConvertsToParagraph: true,
+    list: false,
+    heading: false,
+  },
+  column: {
+    indentable: false,
+    parentable: true,
+    enterCreatesChild: true,
+    continuesSameType: false,
+    selfRendersChildren: true,
+    backspaceConvertsToParagraph: false,
+    list: false,
+    heading: false,
+  },
  
   // ─── Specialized / leaf blocks ──────────────────────
   code: { ...LEAF_BASE },
+  equation: { ...LEAF_BASE, indentable: true, backspaceConvertsToParagraph: true },
+  layout: { ...LEAF_BASE, indentable: true, backspaceConvertsToParagraph: true },
   divider: { ...LEAF_BASE },
   table_block: { ...LEAF_BASE },
   database_inline: { ...LEAF_BASE },

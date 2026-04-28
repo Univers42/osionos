@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   useSlashSelect.ts                                  :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:14 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/22 11:30:02 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -53,6 +53,12 @@ function appendInternalPageLink(content: string, pageId: string): string {
   const trimmed = content.replace(/\s+$/, "");
   const separator = trimmed.length > 0 ? " " : "";
   return `${trimmed}${separator}[[page:${pageId}]] `;
+}
+
+function appendInlineText(content: string, insertText: string): string {
+  const cleanContent = stripSlashQuery(content);
+  const separator = cleanContent.length > 0 && !/\s$/.test(cleanContent) ? " " : "";
+  return `${cleanContent}${separator}${insertText}`;
 }
 
 /**
@@ -127,6 +133,54 @@ export function useSlashSelect({
         return;
       }
 
+      if (selectedType === "column_list") {
+        const newBlock: Block = {
+          id: crypto.randomUUID(),
+          type: "column_list",
+          content: "",
+          children: [
+            {
+              id: crypto.randomUUID(),
+              type: "column",
+              content: "",
+              widthRatio: 0.5,
+              children: [{ id: crypto.randomUUID(), type: "paragraph", content: "" }],
+            },
+            {
+              id: crypto.randomUUID(),
+              type: "column",
+              content: "",
+              widthRatio: 0.5,
+              children: [{ id: crypto.randomUUID(), type: "paragraph", content: "" }],
+            },
+          ],
+        };
+        insertBlock(pageId, blockId, newBlock);
+        focusBlock(newBlock.children?.[0]?.children?.[0]?.id ?? newBlock.id);
+        return;
+      }
+
+      if (selectedType === "layout") {
+        changeBlockType(pageId, blockId, selectedType);
+        updateBlock(pageId, blockId, {
+          content: "",
+          layoutConfig: {
+            columns: 12,
+            rows: 6,
+            columnGap: 16,
+            rowGap: 16,
+            rowHeight: 120,
+            wrap: true,
+            showGuides: true,
+            preview: false,
+          },
+          layoutCells: [],
+          placeholderText: undefined,
+        });
+        focusBlock(blockId);
+        return;
+      }
+
       changeBlockType(pageId, blockId, selectedType);
 
       if (selectedType === "callout") {
@@ -135,6 +189,10 @@ export function useSlashSelect({
 
       if (selectedType === "code") {
         updateBlock(pageId, blockId, { language: "typescript" });
+      }
+
+      if (selectedType === "equation") {
+        updateBlock(pageId, blockId, { content: cleanContent || "E = mc^2" });
       }
 
       repositionCursor(blockId, "");
@@ -246,10 +304,30 @@ export function useSlashSelect({
     ],
   );
 
+  const handleSlashInlineSelect = useCallback(
+    (insertText: string, content: Block[]) => {
+      if (!slashMenu) return;
+      const { blockId } = slashMenu;
+      setSlashMenu(null);
+
+      const block = findBlockInTree(content, blockId);
+      if (!block) return;
+
+      const nextContent = appendInlineText(block.content ?? "", insertText);
+      updateBlock(pageId, blockId, {
+        content: nextContent,
+        placeholderText: undefined,
+      });
+      repositionCursor(blockId, nextContent);
+    },
+    [pageId, setSlashMenu, slashMenu, updateBlock],
+  );
+
   return {
     handleSlashBlockSelect,
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
     handleSlashCreatePageSelect,
+    handleSlashInlineSelect,
   };
 }

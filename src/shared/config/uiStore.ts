@@ -3,7 +3,9 @@ import { persist } from 'zustand/middleware';
 
 interface UIStore {
   isSidebarOpen: boolean;
+  sidebarWidth: number;
   setSidebarOpen: (open: boolean) => void;
+  setSidebarWidth: (width: number) => void;
   toggleSidebar: () => void;
 }
 
@@ -15,7 +17,9 @@ export const useUIStore = create<UIStore>()(
   persist(
     (set) => ({
       isSidebarOpen: true,
+      sidebarWidth: 260,
       setSidebarOpen: (open) => set({ isSidebarOpen: open }),
+      setSidebarWidth: (width) => set({ sidebarWidth: Math.min(420, Math.max(220, width)) }),
       toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
     }),
     {
