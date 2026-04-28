@@ -197,10 +197,9 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
     return () => clearInterval(id);
   }, []);
 
-  const editedLabel = useMemo(
-    () => formatEditedLabel(page?.updatedAt),
-    [page?.updatedAt, tick],
-  );
+  // `tick` is intentionally present in deps to refresh the label periodically.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const editedLabel = useMemo(() => formatEditedLabel(page?.updatedAt), [page?.updatedAt, tick]);
 
   async function logAction(action: PageActionName, message: string, metadata: Record<string, unknown> = {}) {
     await recordAction(safeUserId, pageId, action, metadata);
