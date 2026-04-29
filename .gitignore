@@ -1,5 +1,5 @@
 temp/
-playwright-report/
+playwright-report*
 test-results/
 
 # Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,node,dotenv
