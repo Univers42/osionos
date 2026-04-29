@@ -1,0 +1,3 @@
+[submodule "vendor/scripts"]
+	path = vendor/scripts
+	url = git@github.com:Univers42/scripts.git
