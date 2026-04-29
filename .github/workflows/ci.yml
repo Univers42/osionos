@@ -44,6 +44,11 @@ jobs:
         working-directory: ${{ matrix.working-directory }}
         run: npm ci
 
+      - name: Build database component package folder
+        if: matrix.name == 'root'
+        working-directory: src/components/database/src
+        run: make build
+
       - name: Typecheck ${{ matrix.name }}
         working-directory: ${{ matrix.working-directory }}
         run: ${{ matrix.typecheck }}
