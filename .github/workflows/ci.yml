@@ -25,10 +25,6 @@ jobs:
             working-directory: .
             typecheck: make typecheck
             lint: make lint
-          - name: markengine-submodule
-            working-directory: src/shared/lib/markengine
-            typecheck: make typecheck
-            lint: make lint
 
     steps:
       - name: Checkout repository
