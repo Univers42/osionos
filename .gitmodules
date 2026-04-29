@@ -1,0 +1,3 @@
+[submodule "src/components/database"]
+	path = src/components/database
+	url = https://github.com/Univers42/notion-database-sys.git
