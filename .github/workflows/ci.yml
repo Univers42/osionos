@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop, "fix/**", "feat/**", "migrate/**"]
+  pull_request:
+    branches: [main, master, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: quality (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: root
+            working-directory: .
+            typecheck: make typecheck
+            lint: make lint
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.working-directory }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.working-directory }}
+        run: npm ci
+
+      - name: Setup pnpm
+        if: matrix.name == 'root'
+        run: corepack enable && corepack prepare pnpm@10.32.1 --activate
+
+      - name: Install database component dependencies
+        if: matrix.name == 'root'
+        working-directory: src/components/database
+        run: pnpm install --frozen-lockfile
+
+      - name: Build database component package folder
+        if: matrix.name == 'root'
+        working-directory: src/components/database/src
+        run: make build
+
+      - name: Typecheck ${{ matrix.name }}
+        working-directory: ${{ matrix.working-directory }}
+        run: ${{ matrix.typecheck }}
+
+      - name: Lint ${{ matrix.name }}
+        working-directory: ${{ matrix.working-directory }}
+        run: ${{ matrix.lint }}
+
+  e2e:
+    name: e2e (develop)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "1"
+      TEST_WORKERS: 3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Validate test environment
+        run: npm run test:doctor
+
+      - name: Run browser E2E suite
+        run: npm run test:e2e
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-develop-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
