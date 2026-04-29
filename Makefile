@@ -35,7 +35,7 @@ install: ## Install Node dependencies locally (requires Node 22+)
 	npm ci
 	@echo -e "$(GREEN)✔ Dependencies installed$(RESET)"
 
-dev: update-submodules ## Start Vite dev server locally on :3001 (offline mode)
+dev: #update-submodules ## Start Vite dev server locally on :3001 (offline mode)
 	@echo -e "$(CYAN)Starting playground on http://localhost:3001 (offline mode)$(RESET)"
 	npm run dev -- --port 3001
 
