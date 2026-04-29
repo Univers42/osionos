@@ -652,6 +652,7 @@ interface BlockTreeProps {
   parentBlockType?: Block["type"] | null;
   parentBlockId?: string | null;
   numberedDepth?: number;
+  bulletDepth?: number;
   highlightedRootBlockId: string | null;
   selectedBlockIds: Set<string>;
   isHighlightedBranch?: boolean;
@@ -687,6 +688,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
   parentBlockType = null,
   parentBlockId = null,
   numberedDepth = 0,
+  bulletDepth = 0,
   highlightedRootBlockId,
   selectedBlockIds,
   isHighlightedBranch = false,
@@ -719,6 +721,8 @@ const BlockTree: React.FC<BlockTreeProps> = ({
         if (block.type !== "numbered_list") numberedCounter = 0;
         const nextNumberedDepth =
           block.type === "numbered_list" ? numberedDepth + 1 : numberedDepth;
+        const nextBulletDepth =
+          block.type === "bulleted_list" ? bulletDepth + 1 : bulletDepth;
         const isHighlighted =
           isHighlightedBranch ||
           (highlightedRootBlockId !== null &&
@@ -743,6 +747,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                 parentBlockId={parentBlockId}
                 numberedIndex={numberedIndex}
                 numberedDepth={numberedDepth}
+                bulletDepth={bulletDepth}
                 isHighlighted={isHighlighted}
                 onChange={onChange}
                 onKeyDown={onKeyDown}
@@ -773,6 +778,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
                   parentBlockType={block.type}
                   parentBlockId={block.id}
                   numberedDepth={nextNumberedDepth}
+                  bulletDepth={nextBulletDepth}
                   highlightedRootBlockId={highlightedRootBlockId}
                   selectedBlockIds={selectedBlockIds}
                   isHighlightedBranch={isHighlighted}
@@ -990,6 +996,7 @@ interface EditableBlockProps {
   parentBlockId?: string | null;
   numberedIndex: number;
   numberedDepth: number;
+  bulletDepth: number;
   isHighlighted: boolean;
   onChange: (blockId: string, text: string) => void;
   onKeyDown: (
@@ -1023,6 +1030,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
   parentBlockId = null,
   numberedIndex,
   numberedDepth,
+  bulletDepth,
   isHighlighted,
   onChange,
   onKeyDown,
@@ -1080,6 +1088,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
                   parentBlockType="column"
                   parentBlockId={column.id}
                   numberedDepth={numberedDepth}
+                  bulletDepth={bulletDepth}
                   highlightedRootBlockId={isHighlighted ? block.id : null}
                   selectedBlockIds={selectedBlockIds}
                   isHighlightedBranch={isHighlighted}
@@ -1118,6 +1127,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
         parentBlockType={block.type}
         parentBlockId={block.id}
         numberedDepth={block.type === "numbered_list" ? numberedDepth + 1 : numberedDepth}
+        bulletDepth={block.type === "bulleted_list" ? bulletDepth + 1 : bulletDepth}
         highlightedRootBlockId={isHighlighted ? block.id : null}
         selectedBlockIds={selectedBlockIds}
         isHighlightedBranch={isHighlighted}
@@ -1152,6 +1162,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
     onContextMenu,
     onRequestSlashMenu,
     numberedDepth,
+    bulletDepth,
     selectedBlockIds,
   ]);
 
@@ -1168,6 +1179,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
         block={block}
         numberedIndex={numberedIndex}
         numberedDepth={numberedDepth}
+        bulletDepth={bulletDepth}
         isSelected={selectedBlockIds.has(block.id)}
         onChange={handleChange}
         onKeyDown={handleKey}
