@@ -14,6 +14,7 @@ import React, { useState, useMemo } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import type { Block } from '@/entities/block';
+import { getNumberedMarker, getBulletMarker } from '@/entities/block/model/listMarkers';
 import { ChevronRight } from "lucide-react";
 import { DatabaseBlock } from '@/widgets/database-view';
 import { CalloutBlockReadOnly } from "./CalloutBlockReadOnly";
@@ -25,6 +26,8 @@ import { InternalPageLink } from "@/entities/page";
 interface BlockProps {
   block: Block;
   index: number;
+  bulletDepth?: number;
+  numberedDepth?: number;
 }
 
 const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
@@ -67,21 +70,30 @@ function getNestedChildrenClassName(type: Block["type"]) {
   return "ml-6 mt-0.5";
 }
 
-function renderNestedChildren(block: Block) {
+function renderNestedChildren(block: Block, bulletDepth: number, numberedDepth: number) {
   if (!block.children?.length) {
     return null;
   }
 
+  const nextBulletDepth = block.type === "bulleted_list" ? bulletDepth + 1 : bulletDepth;
+  const nextNumberedDepth = block.type === "numbered_list" ? numberedDepth + 1 : numberedDepth;
+
   return (
     <div className={getNestedChildrenClassName(block.type)}>
       {block.children.map((child, index) => (
-        <ReadOnlyBlock key={child.id} block={child} index={index} />
+        <ReadOnlyBlock
+          key={child.id}
+          block={child}
+          index={index}
+          bulletDepth={nextBulletDepth}
+          numberedDepth={nextNumberedDepth}
+        />
       ))}
     </div>
   );
 }
 
-export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
+export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0 }) => {
   switch (block.type) {
     case "paragraph":
       return (
@@ -95,7 +107,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
               <span className="text-[var(--color-ink-faint)]">&nbsp;</span>
             </p>
           )}
-          {renderNestedChildren(block)}
+          {renderNestedChildren(block, bulletDepth, numberedDepth)}
         </>
       );
 
@@ -105,7 +117,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
           <h1 className="text-2xl font-bold text-[var(--color-ink)] mt-6 mb-1 leading-tight">
             <InlineMarkdown content={block.content} />
           </h1>
-          {renderNestedChildren(block)}
+          {renderNestedChildren(block, bulletDepth, numberedDepth)}
         </>
       );
 
@@ -115,7 +127,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
           <h2 className="text-xl font-semibold text-[var(--color-ink)] mt-5 mb-1 leading-tight">
             <InlineMarkdown content={block.content} />
           </h2>
-          {renderNestedChildren(block)}
+          {renderNestedChildren(block, bulletDepth, numberedDepth)}
         </>
       );
 
@@ -125,7 +137,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
           <h3 className="text-lg font-semibold text-[var(--color-ink)] mt-4 mb-0.5 leading-snug">
             <InlineMarkdown content={block.content} />
           </h3>
-          {renderNestedChildren(block)}
+          {renderNestedChildren(block, bulletDepth, numberedDepth)}
         </>
       );
 
@@ -135,7 +147,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
           <h4 className="text-base font-semibold text-[var(--color-ink)] mt-3 mb-0.5 leading-snug">
             <InlineMarkdown content={block.content} />
           </h4>
-          {renderNestedChildren(block)}
+          {renderNestedChildren(block, bulletDepth, numberedDepth)}
         </>
       );
 
@@ -145,7 +157,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
           <h5 className="text-sm font-semibold text-[var(--color-ink)] mt-2 mb-0.5 leading-snug">
             <InlineMarkdown content={block.content} />
           </h5>
-          {renderNestedChildren(block)}
+          {renderNestedChildren(block, bulletDepth, numberedDepth)}
         </>
       );
 
@@ -155,37 +167,47 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
           <h6 className="text-xs font-semibold text-[var(--color-ink-muted)] mt-2 mb-0.5 leading-snug uppercase tracking-wide">
             <InlineMarkdown content={block.content} />
           </h6>
-          {renderNestedChildren(block)}
+          {renderNestedChildren(block, bulletDepth, numberedDepth)}
         </>
       );
 
-    case "bulleted_list":
+    case "bulleted_list": {
+      const bulletStyle = getBulletMarker(bulletDepth);
       return (
         <>
           <div className="flex items-start gap-2 pl-5">
             <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-ink-faint)] mt-[7px]" />
+              {bulletStyle === "disc" && (
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-ink-faint)] mt-[7px]" />
+              )}
+              {bulletStyle === "circle" && (
+                <span className="inline-block w-1.5 h-1.5 rounded-full border border-[var(--color-ink-faint)] mt-[7px]" />
+              )}
+              {bulletStyle === "square" && (
+                <span className="inline-block w-1.5 h-1.5 bg-[var(--color-ink-faint)] mt-[7px]" />
+              )}
             </span>
             <span className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1">
               <InlineMarkdown content={block.content} />
             </span>
           </div>
-          {renderNestedChildren(block)}
+          {renderNestedChildren(block, bulletDepth, numberedDepth)}
         </>
       );
+    }
 
     case "numbered_list":
       return (
         <>
           <div className="flex items-start gap-2 pl-5">
             <span className="text-sm leading-relaxed py-0.5 text-[var(--color-ink-muted)] select-none shrink-0 w-6 text-center font-medium">
-              {index + 1}.
+              {getNumberedMarker(index + 1, numberedDepth)}
             </span>
             <span className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1">
               <InlineMarkdown content={block.content} />
             </span>
           </div>
-          {renderNestedChildren(block)}
+          {renderNestedChildren(block, bulletDepth, numberedDepth)}
         </>
       );
 
@@ -224,7 +246,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
               <InlineMarkdown content={block.content} />
             </span>
           </div>
-          {renderNestedChildren(block)}
+          {renderNestedChildren(block, bulletDepth, numberedDepth)}
         </>
       );
 
@@ -255,7 +277,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
               }}
             >
               {(column.children ?? []).map((child, childIndex) => (
-                <ReadOnlyBlock key={child.id} block={child} index={childIndex} />
+                <ReadOnlyBlock key={child.id} block={child} index={childIndex} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />
               ))}
             </div>
           ))}
@@ -263,7 +285,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
       );
 
     case "column":
-      return renderNestedChildren(block);
+      return renderNestedChildren(block, bulletDepth, numberedDepth);
 
     case "image":
     case "video":
@@ -280,7 +302,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
               <InlineMarkdown content={block.content} />
             </span>
           </div>
-          {renderNestedChildren(block)}
+          {renderNestedChildren(block, bulletDepth, numberedDepth)}
         </>
       );
 
@@ -288,7 +310,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
       return (
         <>
           <CalloutBlockReadOnly block={block} />
-          {renderNestedChildren(block)}
+          {renderNestedChildren(block, bulletDepth, numberedDepth)}
         </>
       );
 
@@ -313,7 +335,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
       );
 
     case "toggle":
-      return <ToggleBlockReadOnly block={block} />;
+      return <ToggleBlockReadOnly block={block} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />;
 
     default:
       return (
@@ -321,7 +343,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
           <p className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5">
             {block.content}
           </p>
-          {renderNestedChildren(block)}
+          {renderNestedChildren(block, bulletDepth, numberedDepth)}
         </>
       );
   }
@@ -332,7 +354,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
  * Children use the same renderNestedChildren path as all other block types.
  * Local expanded state controls visibility (read-only has no store mutation).
  */
-const ToggleBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
+const ToggleBlockReadOnly: React.FC<{ block: Block; bulletDepth: number; numberedDepth: number }> = ({ block, bulletDepth, numberedDepth }) => {
   const [expanded, setExpanded] = useState(!block.collapsed);
 
   return (
@@ -359,7 +381,7 @@ const ToggleBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
           <InlineMarkdown content={block.content} />
         </button>
       </div>
-      {expanded && renderNestedChildren(block)}
+      {expanded && renderNestedChildren(block, bulletDepth, numberedDepth)}
       {expanded && !block.children?.length && (
         <div className="ml-6 mt-0.5 pl-3 border-l-2 border-[var(--color-line)]">
           <span className="text-xs text-[var(--color-ink-faint)] py-1 italic">
