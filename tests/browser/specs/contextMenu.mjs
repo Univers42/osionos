@@ -13,8 +13,10 @@
 import { expect } from "@playwright/test";
 
 import {
+  blockContextMenu,
   clearAndType,
   contextMenuItem,
+  contextSubmenuItem,
   createBlockViaSlash,
   createParagraphs,
   editorHasFocus,
@@ -40,9 +42,10 @@ export const contextMenuScenarios = [
       await openFreshPage(page, appUrl);
       await createParagraphs(page, ["Context target"]);
       await openBlockContextMenuForEditor(getEditors(page).first());
+      await expect(blockContextMenu(page)).toBeVisible();
       await expect(contextMenuItem(page, "Insert text above")).toBeVisible();
       await expect(contextMenuItem(page, "Move up")).toHaveCount(0);
-      await expect(contextMenuItem(page, "Heading 1")).toBeVisible();
+      await expect(contextMenuItem(page, "Turn into")).toBeVisible();
       await expect(contextMenuItem(page, "Duplicate")).toBeVisible();
       await expect(contextMenuItem(page, "Delete")).toBeVisible();
     },
@@ -169,7 +172,9 @@ export const contextMenuScenarios = [
       await createParagraphs(page, ["Turn me"]);
       const editor = getEditors(page).first();
       await openBlockContextMenuForEditor(editor);
-      await contextMenuItem(page, "Heading 1").click();
+      await contextMenuItem(page, "Turn into").hover();
+      await expect(contextSubmenuItem(page, "Heading 1")).toBeVisible();
+      await contextSubmenuItem(page, "Heading 1").click();
       const fontSize = await editor.evaluate((node) =>
         Number.parseFloat(getComputedStyle(node).fontSize),
       );

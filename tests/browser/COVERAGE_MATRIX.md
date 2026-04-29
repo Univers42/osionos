@@ -1,6 +1,6 @@
 # Browser Coverage Matrix
 
-Objetivo: mantener cobertura explícita `30/30` sobre la lista funcional del editor, aunque algunos escenarios fallen legítimamente mientras la implementación no cumpla el comportamiento esperado.
+Objetivo: mantener cobertura explícita `34/34` sobre la lista funcional del editor, aunque algunos escenarios fallen legítimamente mientras la implementación no cumpla el comportamiento esperado.
 
 | Punto | Área | Cobertura principal |
 | --- | --- | --- |
@@ -34,3 +34,7 @@ Objetivo: mantener cobertura explícita `30/30` sobre la lista funcional del edi
 | 28 | Gestión de foco | `specs/focusManagement.mjs` |
 | 29 | Persistencia local | `specs/persistenceAndQuality.mjs` |
 | 30 | Calidad técnica de integración | `specs/persistenceAndQuality.mjs` |
+| 31 | Navegación por flechas | `specs/arrowNavigation.mjs` |
+| 32 | Permisos ABAC de páginas | `specs/pagePermissions.mjs` |
+| 33 | Edición de celdas de tabla | `specs/tableCellEditing.mjs` |
+| 34 | Numeración de títulos duplicados | `specs/duplicateTitleNumbering.mjs` |

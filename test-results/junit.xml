@@ -1,350 +1,1601 @@
-<testsuites id="" name="" tests="162" failures="0" skipped="0" errors="0" time="150.37724400000002">
-<testsuite name="functional/assets.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="31" failures="0" skipped="0" time="75.399" errors="0">
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: Add icon assigns a page icon when the page starts without one" classname="functional/assets.spec.mjs" time="2.428">
+<testsuites id="" name="" tests="185" failures="7" skipped="3" errors="15" time="339.44836799999996">
+<testsuite name="functional/arrowNavigation.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="7" failures="1" skipped="0" time="55.833" errors="1">
+<testcase name="arrow-navigation › 31. Arrow Navigation / Between paragraphs :: Arrow Down at block end focuses next paragraph" classname="functional/arrowNavigation.spec.mjs" time="3.922">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: clicking the page icon opens the asset picker and Escape closes it" classname="functional/assets.spec.mjs" time="2.54">
+<testcase name="arrow-navigation › 31. Arrow Navigation / Between paragraphs :: Arrow Up at block start focuses previous paragraph" classname="functional/arrowNavigation.spec.mjs" time="3.863">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: selecting an asset updates the page icon immediately" classname="functional/assets.spec.mjs" time="3.33">
+<testcase name="arrow-navigation › 31. Arrow Navigation / Divider navigation :: focused divider uses Arrow Up and Arrow Down to jump to adjacent blocks" classname="functional/arrowNavigation.spec.mjs" time="5.186">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: clicking outside the page icon picker closes it" classname="functional/assets.spec.mjs" time="1.8">
+<testcase name="arrow-navigation › 31. Arrow Navigation / Table entry :: Arrow Down from paragraph end enters first table cell" classname="functional/arrowNavigation.spec.mjs" time="33.36">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-arrowNavigation-6cbce-end-enters-first-table-cell/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-arrowNavigation-6cbce-end-enters-first-table-cell/video.webm]]
+
+[[ATTACHMENT|playwright/functional-arrowNavigation-6cbce-end-enters-first-table-cell/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-arrowNavigation-6cbce-end-enters-first-table-cell/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/arrowNavigation.spec.mjs:16:5 › arrow-navigation › 31. Arrow Navigation / Table entry :: Arrow Down from paragraph end enters first table cell 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="table-arrow-page"]') to be visible
+
+
+       at ../browser/core/app.mjs:463
+
+      461 | export async function openSidebarPage(page, pageId) {
+      462 |   const row = sidebarPageRow(page, pageId);
+    > 463 |   await row.waitFor();
+          |             ^
+      464 |   await row.scrollIntoViewIfNeeded();
+      465 |   await row.getByTestId("sidebar-page-open").click();
+      466 | }
+        at openSidebarPage (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:463:13)
+        at setupParagraphAndTablePage (/home/settes/cursus/trascendence/osionos/tests/browser/specs/arrowNavigation.mjs:76:9)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/arrowNavigation.mjs:130:7)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-arrowNavigation-6cbce-end-enters-first-table-cell/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-arrowNavigation-6cbce-end-enters-first-table-cell/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-arrowNavigation-6cbce-end-enters-first-table-cell/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-arrowNavigation-6cbce-end-enters-first-table-cell/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-arrowNavigation-6cbce-end-enters-first-table-cell/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: the page icon picker can be reopened after closing it once" classname="functional/assets.spec.mjs" time="1.967">
+<testcase name="arrow-navigation › 31. Arrow Navigation / Code blocks :: Arrow Down enters code textarea and Arrow Up stays inside while another line exists" classname="functional/arrowNavigation.spec.mjs" time="3.454">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-arrowNavigation-1135e-e-while-another-line-exists/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-arrowNavigation-1135e-e-while-another-line-exists/video.webm]]
+
+[[ATTACHMENT|playwright/functional-arrowNavigation-1135e-e-while-another-line-exists/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-arrowNavigation-1135e-e-while-another-line-exists/trace.zip]]
+]]>
+</system-out>
+<failure message="expect(received).toBeLessThan(expected)" type="expect.toBeLessThan">
+<![CDATA[  functional/arrowNavigation.spec.mjs:16:5 › arrow-navigation › 31. Arrow Navigation / Code blocks :: Arrow Down enters code textarea and Arrow Up stays inside while another line exists 
+
+    Error: expect(received).toBeLessThan(expected)
+
+    Expected: < 13
+    Received:   13
+
+       at ../browser/specs/arrowNavigation.mjs:154
+
+      152 |
+      153 |       const selection = await textControlSelection(code);
+    > 154 |       expect(selection.start).toBeLessThan(value.length);
+          |                               ^
+      155 |       await expect(code).toBeFocused();
+      156 |     },
+      157 |   ),
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/arrowNavigation.mjs:154:31)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-arrowNavigation-1135e-e-while-another-line-exists/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-arrowNavigation-1135e-e-while-another-line-exists/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-arrowNavigation-1135e-e-while-another-line-exists/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-arrowNavigation-1135e-e-while-another-line-exists/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-arrowNavigation-1135e-e-while-another-line-exists/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: Remove icon clears the page icon and restores the Add icon action" classname="functional/assets.spec.mjs" time="1.874">
+<testcase name="arrow-navigation › 31. Arrow Navigation / Code blocks :: Arrow Up at top of code textarea exits to previous block" classname="functional/arrowNavigation.spec.mjs" time="2.919">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: clicking a custom page icon reopens its picker after the icon has already been changed" classname="functional/assets.spec.mjs" time="2.276">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: new callout blocks start with the default light bulb icon" classname="functional/assets.spec.mjs" time="2.395">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: clicking a callout icon opens its picker and Escape closes it" classname="functional/assets.spec.mjs" time="2.516">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: clicking outside the callout icon picker closes it" classname="functional/assets.spec.mjs" time="2.582">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: selecting an asset updates the callout icon immediately" classname="functional/assets.spec.mjs" time="2.972">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: the callout icon picker can be reopened after being closed" classname="functional/assets.spec.mjs" time="2.695">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: clicking a custom callout icon reopens its picker after the icon has already changed" classname="functional/assets.spec.mjs" time="3.411">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: Remove icon resets the callout icon back to the default light bulb" classname="functional/assets.spec.mjs" time="3.65">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: Add cover assigns a cover to a page that starts without one" classname="functional/assets.spec.mjs" time="1.419">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: selecting a cover from the picker updates the page cover immediately" classname="functional/assets.spec.mjs" time="1.784">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: clicking Change cover opens the cover picker and outside click closes it" classname="functional/assets.spec.mjs" time="1.789">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: pressing Escape closes the cover picker" classname="functional/assets.spec.mjs" time="1.699">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: the cover picker can be reopened after it has been closed" classname="functional/assets.spec.mjs" time="1.726">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: closing the cover picker without selecting anything keeps the current cover in place" classname="functional/assets.spec.mjs" time="1.705">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: Remove cover clears the current cover and restores Add cover" classname="functional/assets.spec.mjs" time="1.637">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: creating an image from an empty paragraph converts the current block without leaving an extra paragraph behind" classname="functional/assets.spec.mjs" time="2.416">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: an image block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.455">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: a video block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.597">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: an audio block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.491">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: a file block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.421">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: selecting media in a paragraph with existing text inserts a new media block below" classname="functional/assets.spec.mjs" time="3.322">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: changing an image asset updates the image preview without changing block type" classname="functional/assets.spec.mjs" time="2.76">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: pressing Escape closes a media picker without changing the current block" classname="functional/assets.spec.mjs" time="2.565">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: clicking outside a media picker closes it without changing the current block" classname="functional/assets.spec.mjs" time="2.782">
-</testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: the media caption remains inline-editable and still opens the formatting toolbar on selection" classname="functional/assets.spec.mjs" time="3.395">
+<testcase name="arrow-navigation › 31. Arrow Navigation / Code blocks :: Arrow Down at bottom of code textarea exits to next block" classname="functional/arrowNavigation.spec.mjs" time="3.129">
 </testcase>
 </testsuite>
-<testsuite name="functional/blockCreation.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="15" failures="0" skipped="0" time="30.085" errors="0">
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: typing / in an empty paragraph opens the slash menu" classname="functional/blockCreation.spec.mjs" time="1.683">
+<testsuite name="functional/assets.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="31" failures="0" skipped="0" time="65.665" errors="0">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: Add icon assigns a page icon when the page starts without one" classname="functional/assets.spec.mjs" time="1.296">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: typing /hea filters the slash menu down to heading options" classname="functional/blockCreation.spec.mjs" time="2.014">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: clicking the page icon opens the asset picker and Escape closes it" classname="functional/assets.spec.mjs" time="1.453">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: pressing Enter on /quote converts the block without leaving extra slash text behind" classname="functional/blockCreation.spec.mjs" time="2.1">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: selecting an asset updates the page icon immediately" classname="functional/assets.spec.mjs" time="1.876">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: clicking Bulleted List converts the current block and cleans the slash text" classname="functional/blockCreation.spec.mjs" time="1.916">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: clicking outside the page icon picker closes it" classname="functional/assets.spec.mjs" time="1.649">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: backspacing past the slash trigger closes the slash menu" classname="functional/blockCreation.spec.mjs" time="2.11">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: the page icon picker can be reopened after closing it once" classname="functional/assets.spec.mjs" time="1.583">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: pressing Escape closes the slash menu and keeps the typed slash text" classname="functional/blockCreation.spec.mjs" time="1.736">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: Remove icon clears the page icon and restores the Add icon action" classname="functional/assets.spec.mjs" time="1.66">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: the slash menu can be reopened normally after a previous cancelled use" classname="functional/blockCreation.spec.mjs" time="2.002">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: clicking a custom page icon reopens its picker after the icon has already been changed" classname="functional/assets.spec.mjs" time="2.115">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing # and a space turns the paragraph into a heading" classname="functional/blockCreation.spec.mjs" time="1.986">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: new callout blocks start with the default light bulb icon" classname="functional/assets.spec.mjs" time="1.941">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing - and a space turns the paragraph into a bulleted list item" classname="functional/blockCreation.spec.mjs" time="2.159">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: clicking a callout icon opens its picker and Escape closes it" classname="functional/assets.spec.mjs" time="2.147">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing [] and a space turns the paragraph into a to-do item" classname="functional/blockCreation.spec.mjs" time="2.122">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: clicking outside the callout icon picker closes it" classname="functional/assets.spec.mjs" time="2.304">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing [ ] and a space also turns the paragraph into a to-do item" classname="functional/blockCreation.spec.mjs" time="2.108">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: selecting an asset updates the callout icon immediately" classname="functional/assets.spec.mjs" time="2.597">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing 1. and a space turns the paragraph into a numbered list item" classname="functional/blockCreation.spec.mjs" time="2.246">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: the callout icon picker can be reopened after being closed" classname="functional/assets.spec.mjs" time="2.312">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing --- converts the paragraph into a divider" classname="functional/blockCreation.spec.mjs" time="1.711">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: clicking a custom callout icon reopens its picker after the icon has already changed" classname="functional/assets.spec.mjs" time="2.767">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing a fenced code marker turns the paragraph into a code block" classname="functional/blockCreation.spec.mjs" time="2.013">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: Remove icon resets the callout icon back to the default light bulb" classname="functional/assets.spec.mjs" time="2.895">
 </testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: markdown shortcuts remove the typed prefix instead of keeping it in the final content" classname="functional/blockCreation.spec.mjs" time="2.179">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: Add cover assigns a cover to a page that starts without one" classname="functional/assets.spec.mjs" time="1.341">
 </testcase>
-</testsuite>
-<testsuite name="functional/categoryRegistry.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="4" failures="0" skipped="0" time="10.617" errors="0">
-<testcase name="category-registry › 27. Block Category Registry / NON_PARENTABLE :: blocks marked as non-parentable reject child indentation via Tab" classname="functional/categoryRegistry.spec.mjs" time="3.232">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: selecting a cover from the picker updates the page cover immediately" classname="functional/assets.spec.mjs" time="1.684">
 </testcase>
-<testcase name="category-registry › 27. Block Category Registry / NON_INDENTABLE :: blocks marked as non-indentable keep Tab behavior local instead of structural" classname="functional/categoryRegistry.spec.mjs" time="2.31">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: clicking Change cover opens the cover picker and outside click closes it" classname="functional/assets.spec.mjs" time="1.715">
 </testcase>
-<testcase name="category-registry › 27. Block Category Registry / enterCreatesChild :: blocks marked enterCreatesChild create nested children on Enter" classname="functional/categoryRegistry.spec.mjs" time="2.926">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: pressing Escape closes the cover picker" classname="functional/assets.spec.mjs" time="1.564">
 </testcase>
-<testcase name="category-registry › 27. Block Category Registry / sibling enter behavior :: blocks not marked enterCreatesChild create siblings rather than nested children" classname="functional/categoryRegistry.spec.mjs" time="2.149">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: the cover picker can be reopened after it has been closed" classname="functional/assets.spec.mjs" time="1.711">
 </testcase>
-</testsuite>
-<testsuite name="functional/containersAndPaste.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="19" failures="0" skipped="0" time="62.894" errors="0">
-<testcase name="containers-and-paste › 7. Toggle Block / Basic toggle behavior :: an empty expanded toggle shows the Empty toggle hint" classname="functional/containersAndPaste.spec.mjs" time="3.241">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: closing the cover picker without selecting anything keeps the current cover in place" classname="functional/assets.spec.mjs" time="1.645">
 </testcase>
-<testcase name="containers-and-paste › 7. Toggle Block / Basic toggle behavior :: clicking the chevron collapses and re-expands toggle children without losing them" classname="functional/containersAndPaste.spec.mjs" time="4.679">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: Remove cover clears the current cover and restores Add cover" classname="functional/assets.spec.mjs" time="1.394">
 </testcase>
-<testcase name="containers-and-paste › 7. Toggle Block / Toggle children as full blocks :: the slash menu works inside a toggle child" classname="functional/containersAndPaste.spec.mjs" time="3.978">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: creating an image from an empty paragraph converts the current block without leaving an extra paragraph behind" classname="functional/assets.spec.mjs" time="2.21">
 </testcase>
-<testcase name="containers-and-paste › 7. Toggle Block / Toggle children as full blocks :: markdown shortcuts still work inside a toggle child" classname="functional/containersAndPaste.spec.mjs" time="4.265">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: an image block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.178">
 </testcase>
-<testcase name="containers-and-paste › 7. Toggle Block / Toggle children as full blocks :: Tab indents one toggle child under another inside the toggle tree" classname="functional/containersAndPaste.spec.mjs" time="4.185">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: a video block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.239">
 </testcase>
-<testcase name="containers-and-paste › 7. Toggle Block / Toggle + external interactions :: a root block can be moved into a collapsed toggle and remains hidden until the toggle is expanded" classname="functional/containersAndPaste.spec.mjs" time="4.56">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: an audio block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.209">
 </testcase>
-<testcase name="containers-and-paste › 7. Toggle Block / Toggle + external interactions :: deleting an empty toggle summary promotes its child blocks to the parent level" classname="functional/containersAndPaste.spec.mjs" time="4.795">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: a file block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.266">
 </testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: callout children are rendered inside the callout box" classname="functional/containersAndPaste.spec.mjs" time="3.222">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: selecting media in a paragraph with existing text inserts a new media block below" classname="functional/assets.spec.mjs" time="3.121">
 </testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: indenting a paragraph under a callout renders it as a child inside the container" classname="functional/containersAndPaste.spec.mjs" time="2.727">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: changing an image asset updates the image preview without changing block type" classname="functional/assets.spec.mjs" time="2.743">
 </testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: slash menu commands work inside callout children" classname="functional/containersAndPaste.spec.mjs" time="2.894">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: pressing Escape closes a media picker without changing the current block" classname="functional/assets.spec.mjs" time="2.819">
 </testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: deleting an empty callout keeps nested grandchildren under their promoted parent" classname="functional/containersAndPaste.spec.mjs" time="4.193">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: clicking outside a media picker closes it without changing the current block" classname="functional/assets.spec.mjs" time="2.805">
 </testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: deleting an empty callout promotes its children instead of deleting their content" classname="functional/containersAndPaste.spec.mjs" time="3.423">
-</testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Quote :: quote children are rendered inside the quote branch" classname="functional/containersAndPaste.spec.mjs" time="3.163">
-</testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Quote :: a quote can contain multiple child blocks rendered inside the quote branch" classname="functional/containersAndPaste.spec.mjs" time="3.339">
-</testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Quote :: deleting an empty quote promotes its children according to editor rules" classname="functional/containersAndPaste.spec.mjs" time="3.641">
-</testcase>
-<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting multiline markdown creates multiple corresponding blocks" classname="functional/containersAndPaste.spec.mjs" time="1.78">
-</testcase>
-<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting a fenced code block creates a code block with the pasted content" classname="functional/containersAndPaste.spec.mjs" time="1.703">
-</testcase>
-<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting heading levels 4-6 preserves each heading level style" classname="functional/containersAndPaste.spec.mjs" time="1.542">
-</testcase>
-<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting a single short line keeps it as inline text in the current block" classname="functional/containersAndPaste.spec.mjs" time="1.564">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: the media caption remains inline-editable and still opens the formatting toolbar on selection" classname="functional/assets.spec.mjs" time="3.426">
 </testcase>
 </testsuite>
-<testsuite name="functional/contextMenu.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="13" failures="0" skipped="0" time="33.922" errors="0">
-<testcase name="context-menu › 5. Context Menu / Basic operations :: right-clicking a block opens the block context menu with its main sections" classname="functional/contextMenu.spec.mjs" time="2.36">
+<testsuite name="functional/blockCreation.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="15" failures="0" skipped="0" time="30.298" errors="0">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: typing / in an empty paragraph opens the slash menu" classname="functional/blockCreation.spec.mjs" time="1.708">
 </testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: clicking the drag handle opens the same block context menu" classname="functional/contextMenu.spec.mjs" time="2.288">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: typing /hea filters the slash menu down to heading options" classname="functional/blockCreation.spec.mjs" time="2.038">
 </testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: Insert text above creates a new paragraph above the current block and focuses it" classname="functional/contextMenu.spec.mjs" time="2.239">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: pressing Enter on /quote converts the block without leaving extra slash text behind" classname="functional/blockCreation.spec.mjs" time="2.021">
 </testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: Insert text below creates a new paragraph below the current block and focuses it" classname="functional/contextMenu.spec.mjs" time="2.289">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: clicking Bulleted List converts the current block and cleans the slash text" classname="functional/blockCreation.spec.mjs" time="1.935">
 </testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: Duplicate creates an identical leaf block below the original" classname="functional/contextMenu.spec.mjs" time="2.395">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: backspacing past the slash trigger closes the slash menu" classname="functional/blockCreation.spec.mjs" time="2.102">
 </testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: Move up swaps the selected block with the one above it" classname="functional/contextMenu.spec.mjs" time="2.604">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: pressing Escape closes the slash menu and keeps the typed slash text" classname="functional/blockCreation.spec.mjs" time="1.711">
 </testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: Move down swaps the selected block with the one below it" classname="functional/contextMenu.spec.mjs" time="2.624">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: the slash menu can be reopened normally after a previous cancelled use" classname="functional/blockCreation.spec.mjs" time="2.068">
 </testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: Turn into Heading 1 transforms the block while preserving its text" classname="functional/contextMenu.spec.mjs" time="2.181">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing # and a space turns the paragraph into a heading" classname="functional/blockCreation.spec.mjs" time="2.102">
 </testcase>
-<testcase name="context-menu › 5. Context Menu / Context menu + children :: Delete removes only the selected leaf block when it has no children" classname="functional/contextMenu.spec.mjs" time="2.272">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing - and a space turns the paragraph into a bulleted list item" classname="functional/blockCreation.spec.mjs" time="2.165">
 </testcase>
-<testcase name="context-menu › 5. Context Menu / Context menu + children :: Delete on a parent block removes its whole subtree" classname="functional/contextMenu.spec.mjs" time="2.569">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing [] and a space turns the paragraph into a to-do item" classname="functional/blockCreation.spec.mjs" time="2.073">
 </testcase>
-<testcase name="context-menu › 5. Context Menu / Context menu + children :: Delete on a toggle parent removes the whole toggle subtree" classname="functional/contextMenu.spec.mjs" time="4.83">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing [ ] and a space also turns the paragraph into a to-do item" classname="functional/blockCreation.spec.mjs" time="2.145">
+</testcase>
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing 1. and a space turns the paragraph into a numbered list item" classname="functional/blockCreation.spec.mjs" time="2.161">
+</testcase>
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing --- converts the paragraph into a divider" classname="functional/blockCreation.spec.mjs" time="1.816">
+</testcase>
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing a fenced code marker turns the paragraph into a code block" classname="functional/blockCreation.spec.mjs" time="2.107">
+</testcase>
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: markdown shortcuts remove the typed prefix instead of keeping it in the final content" classname="functional/blockCreation.spec.mjs" time="2.146">
+</testcase>
+</testsuite>
+<testsuite name="functional/categoryRegistry.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="4" failures="1" skipped="0" time="10.344" errors="0">
+<testcase name="category-registry › 27. Block Category Registry / NON_PARENTABLE :: blocks marked as non-parentable reject child indentation via Tab" classname="functional/categoryRegistry.spec.mjs" time="3.336">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-categoryRegistr-881c2-t-child-indentation-via-Tab/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-categoryRegistr-881c2-t-child-indentation-via-Tab/video.webm]]
+
+[[ATTACHMENT|playwright/functional-categoryRegistr-881c2-t-child-indentation-via-Tab/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-categoryRegistr-881c2-t-child-indentation-via-Tab/trace.zip]]
+]]>
+</system-out>
+<failure message="expect(received).toBeLessThanOrEqual(expected)" type="expect.toBeLessThanOrEqual">
+<![CDATA[  functional/categoryRegistry.spec.mjs:16:5 › category-registry › 27. Block Category Registry / NON_PARENTABLE :: blocks marked as non-parentable reject child indentation via Tab 
+
+    Error: expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 2
+    Received:    24
+
+       at ../browser/specs/categoryRegistry.mjs:32
+
+      30 |
+      31 | function expectNearlyEqual(left, right, delta = 2) {
+    > 32 |   expect(Math.abs(left - right)).toBeLessThanOrEqual(delta);
+         |                                  ^
+      33 | }
+      34 |
+      35 | export const categoryRegistryScenarios = [
+        at expectNearlyEqual (/home/settes/cursus/trascendence/osionos/tests/browser/specs/categoryRegistry.mjs:32:34)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/categoryRegistry.mjs:50:7)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-categoryRegistr-881c2-t-child-indentation-via-Tab/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-categoryRegistr-881c2-t-child-indentation-via-Tab/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-categoryRegistr-881c2-t-child-indentation-via-Tab/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-categoryRegistr-881c2-t-child-indentation-via-Tab/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-categoryRegistr-881c2-t-child-indentation-via-Tab/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+</testcase>
+<testcase name="category-registry › 27. Block Category Registry / NON_INDENTABLE :: blocks marked as non-indentable keep Tab behavior local instead of structural" classname="functional/categoryRegistry.spec.mjs" time="2.307">
+</testcase>
+<testcase name="category-registry › 27. Block Category Registry / enterCreatesChild :: blocks marked enterCreatesChild create nested children on Enter" classname="functional/categoryRegistry.spec.mjs" time="2.53">
+</testcase>
+<testcase name="category-registry › 27. Block Category Registry / sibling enter behavior :: blocks not marked enterCreatesChild create siblings rather than nested children" classname="functional/categoryRegistry.spec.mjs" time="2.171">
+</testcase>
+</testsuite>
+<testsuite name="functional/containersAndPaste.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="19" failures="2" skipped="3" time="74.918" errors="0">
+<testcase name="containers-and-paste › 7. Toggle Block / Basic toggle behavior :: an empty expanded toggle shows the Empty toggle hint" classname="functional/containersAndPaste.spec.mjs" time="3.101">
+</testcase>
+<testcase name="containers-and-paste › 7. Toggle Block / Basic toggle behavior :: clicking the chevron collapses and re-expands toggle children without losing them" classname="functional/containersAndPaste.spec.mjs" time="3.914">
+</testcase>
+<testcase name="containers-and-paste › 7. Toggle Block / Toggle children as full blocks :: the slash menu works inside a toggle child" classname="functional/containersAndPaste.spec.mjs" time="3.603">
+</testcase>
+<testcase name="containers-and-paste › 7. Toggle Block / Toggle children as full blocks :: markdown shortcuts still work inside a toggle child" classname="functional/containersAndPaste.spec.mjs" time="14.054">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-containersAndPa-84796--work-inside-a-toggle-child/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-containersAndPa-84796--work-inside-a-toggle-child/video.webm]]
+
+[[ATTACHMENT|playwright/functional-containersAndPa-84796--work-inside-a-toggle-child/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-containersAndPa-84796--work-inside-a-toggle-child/trace.zip]]
+]]>
+</system-out>
+<failure message="expect(locator).toHaveCount(expected) failed" type="expect.toHaveCount">
+<![CDATA[  functional/containersAndPaste.spec.mjs:16:5 › containers-and-paste › 7. Toggle Block / Toggle children as full blocks :: markdown shortcuts still work inside a toggle child 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('.rounded-full')
+    Expected: 1
+    Received: 2
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 10000ms
+      - waiting for locator('.rounded-full')
+        14 × locator resolved to 2 elements
+           - unexpected value "2"
+
+
+       at ../browser/specs/containersAndPaste.mjs:102
+
+      100 |       await clearAndType(child, "- ");
+      101 |       await page.keyboard.type("Nested bullet");
+    > 102 |       await expect(page.locator(".rounded-full")).toHaveCount(1);
+          |                                                   ^
+      103 |     },
+      104 |   ),
+      105 |   defineScenario(
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/containersAndPaste.mjs:102:51)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-containersAndPa-84796--work-inside-a-toggle-child/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-containersAndPa-84796--work-inside-a-toggle-child/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-containersAndPa-84796--work-inside-a-toggle-child/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-containersAndPa-84796--work-inside-a-toggle-child/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-containersAndPa-84796--work-inside-a-toggle-child/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+</testcase>
+<testcase name="containers-and-paste › 7. Toggle Block / Toggle children as full blocks :: Tab indents one toggle child under another inside the toggle tree" classname="functional/containersAndPaste.spec.mjs" time="3.772">
+</testcase>
+<testcase name="containers-and-paste › 7. Toggle Block / Toggle + external interactions :: a root block can be moved into a collapsed toggle and remains hidden until the toggle is expanded" classname="functional/containersAndPaste.spec.mjs" time="4.219">
+</testcase>
+<testcase name="containers-and-paste › 7. Toggle Block / Toggle + external interactions :: deleting an empty toggle summary promotes its child blocks to the parent level" classname="functional/containersAndPaste.spec.mjs" time="4.491">
+</testcase>
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: callout children are rendered inside the callout box" classname="functional/containersAndPaste.spec.mjs" time="3.054">
+</testcase>
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: indenting a paragraph under a callout renders it as a child inside the container" classname="functional/containersAndPaste.spec.mjs" time="2.383">
+</testcase>
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: slash menu commands work inside callout children" classname="functional/containersAndPaste.spec.mjs" time="2.626">
+</testcase>
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: deleting an empty callout keeps nested grandchildren under their promoted parent" classname="functional/containersAndPaste.spec.mjs" time="4.058">
+</testcase>
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: deleting an empty callout promotes its children instead of deleting their content" classname="functional/containersAndPaste.spec.mjs" time="3.732">
+</testcase>
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Quote :: quote children are rendered inside the quote branch" classname="functional/containersAndPaste.spec.mjs" time="3.171">
+</testcase>
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Quote :: a quote can contain multiple child blocks rendered inside the quote branch" classname="functional/containersAndPaste.spec.mjs" time="3.286">
+</testcase>
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Quote :: deleting an empty quote promotes its children according to editor rules" classname="functional/containersAndPaste.spec.mjs" time="3.579">
+</testcase>
+<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting multiline markdown creates multiple corresponding blocks" classname="functional/containersAndPaste.spec.mjs" time="11.875">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-containersAndPa-ec690-ltiple-corresponding-blocks/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-containersAndPa-ec690-ltiple-corresponding-blocks/video.webm]]
+
+[[ATTACHMENT|playwright/functional-containersAndPa-ec690-ltiple-corresponding-blocks/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-containersAndPa-ec690-ltiple-corresponding-blocks/trace.zip]]
+]]>
+</system-out>
+<failure message="expect(locator).toHaveCount(expected) failed" type="expect.toHaveCount">
+<![CDATA[  functional/containersAndPaste.spec.mjs:24:5 › containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting multiline markdown creates multiple corresponding blocks 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('.rounded-full')
+    Expected: 1
+    Received: 2
+    Timeout:  10000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 10000ms
+      - waiting for locator('.rounded-full')
+        14 × locator resolved to 2 elements
+           - unexpected value "2"
+
+
+       at ../browser/specs/containersAndPaste.mjs:342
+
+      340 |       await expect(getEditors(page)).toHaveCount(3);
+      341 |       await expect(getEditors(page).first()).toHaveText("Title");
+    > 342 |       await expect(page.locator(".rounded-full")).toHaveCount(1);
+          |                                                   ^
+      343 |     },
+      344 |     { serial: true },
+      345 |   ),
+        at Object.defineScenario.serial (/home/settes/cursus/trascendence/osionos/tests/browser/specs/containersAndPaste.mjs:342:51)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-containersAndPa-ec690-ltiple-corresponding-blocks/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-containersAndPa-ec690-ltiple-corresponding-blocks/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-containersAndPa-ec690-ltiple-corresponding-blocks/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-containersAndPa-ec690-ltiple-corresponding-blocks/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-containersAndPa-ec690-ltiple-corresponding-blocks/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+</testcase>
+<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting a fenced code block creates a code block with the pasted content" classname="functional/containersAndPaste.spec.mjs">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting heading levels 4-6 preserves each heading level style" classname="functional/containersAndPaste.spec.mjs">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting a single short line keeps it as inline text in the current block" classname="functional/containersAndPaste.spec.mjs">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+<testsuite name="functional/contextMenu.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="13" failures="0" skipped="0" time="34.139" errors="0">
+<testcase name="context-menu › 5. Context Menu / Basic operations :: right-clicking a block opens the block context menu with its main sections" classname="functional/contextMenu.spec.mjs" time="2.368">
+</testcase>
+<testcase name="context-menu › 5. Context Menu / Basic operations :: clicking the drag handle opens the same block context menu" classname="functional/contextMenu.spec.mjs" time="2.343">
+</testcase>
+<testcase name="context-menu › 5. Context Menu / Basic operations :: Insert text above creates a new paragraph above the current block and focuses it" classname="functional/contextMenu.spec.mjs" time="2.231">
+</testcase>
+<testcase name="context-menu › 5. Context Menu / Basic operations :: Insert text below creates a new paragraph below the current block and focuses it" classname="functional/contextMenu.spec.mjs" time="2.226">
+</testcase>
+<testcase name="context-menu › 5. Context Menu / Basic operations :: Duplicate creates an identical leaf block below the original" classname="functional/contextMenu.spec.mjs" time="2.249">
+</testcase>
+<testcase name="context-menu › 5. Context Menu / Basic operations :: Move up swaps the selected block with the one above it" classname="functional/contextMenu.spec.mjs" time="2.694">
+</testcase>
+<testcase name="context-menu › 5. Context Menu / Basic operations :: Move down swaps the selected block with the one below it" classname="functional/contextMenu.spec.mjs" time="2.625">
+</testcase>
+<testcase name="context-menu › 5. Context Menu / Basic operations :: Turn into Heading 1 transforms the block while preserving its text" classname="functional/contextMenu.spec.mjs" time="2.286">
+</testcase>
+<testcase name="context-menu › 5. Context Menu / Context menu + children :: Delete removes only the selected leaf block when it has no children" classname="functional/contextMenu.spec.mjs" time="2.313">
+</testcase>
+<testcase name="context-menu › 5. Context Menu / Context menu + children :: Delete on a parent block removes its whole subtree" classname="functional/contextMenu.spec.mjs" time="2.665">
+</testcase>
+<testcase name="context-menu › 5. Context Menu / Context menu + children :: Delete on a toggle parent removes the whole toggle subtree" classname="functional/contextMenu.spec.mjs" time="4.837">
 </testcase>
 <testcase name="context-menu › 5. Context Menu / Context menu + children :: Duplicate on a parent block duplicates its subtree as independent copies" classname="functional/contextMenu.spec.mjs" time="3.204">
 </testcase>
-<testcase name="context-menu (serial) › 5. Context Menu / Basic operations :: Copy text writes the current block text to the clipboard" classname="functional/contextMenu.spec.mjs" time="2.067">
+<testcase name="context-menu (serial) › 5. Context Menu / Basic operations :: Copy text writes the current block text to the clipboard" classname="functional/contextMenu.spec.mjs" time="2.098">
 </testcase>
 </testsuite>
-<testsuite name="functional/dragAndDrop.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="8" failures="0" skipped="0" time="22.552" errors="0">
-<testcase name="drag-and-drop › 6. Drag and Drop / Same-level reorder :: dragging a root block above another root block reorders siblings" classname="functional/dragAndDrop.spec.mjs" time="2.525">
+<testsuite name="functional/dragAndDrop.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="8" failures="0" skipped="0" time="21.797" errors="0">
+<testcase name="drag-and-drop › 6. Drag and Drop / Same-level reorder :: dragging a root block above another root block reorders siblings" classname="functional/dragAndDrop.spec.mjs" time="2.471">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Same-level reorder :: dragging a nested child above another nested child reorders siblings inside the same parent" classname="functional/dragAndDrop.spec.mjs" time="3.417">
+<testcase name="drag-and-drop › 6. Drag and Drop / Same-level reorder :: dragging a nested child above another nested child reorders siblings inside the same parent" classname="functional/dragAndDrop.spec.mjs" time="3.286">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Cross-level moves :: dragging a child block below its parent at root level moves it out of the hierarchy" classname="functional/dragAndDrop.spec.mjs" time="2.314">
+<testcase name="drag-and-drop › 6. Drag and Drop / Cross-level moves :: dragging a child block below its parent at root level moves it out of the hierarchy" classname="functional/dragAndDrop.spec.mjs" time="2.336">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Cross-level moves :: dragging a child between parent groups moves it into the new parent subtree" classname="functional/dragAndDrop.spec.mjs" time="3.528">
+<testcase name="drag-and-drop › 6. Drag and Drop / Cross-level moves :: dragging a child between parent groups moves it into the new parent subtree" classname="functional/dragAndDrop.spec.mjs" time="3.281">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Cross-level moves :: dragging a parent block keeps its nested subtree together" classname="functional/dragAndDrop.spec.mjs" time="3.722">
+<testcase name="drag-and-drop › 6. Drag and Drop / Cross-level moves :: dragging a parent block keeps its nested subtree together" classname="functional/dragAndDrop.spec.mjs" time="3.524">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Safety checks :: starting a drag marks the dragged block with reduced opacity" classname="functional/dragAndDrop.spec.mjs" time="2.313">
+<testcase name="drag-and-drop › 6. Drag and Drop / Safety checks :: starting a drag marks the dragged block with reduced opacity" classname="functional/dragAndDrop.spec.mjs" time="2.216">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Safety checks :: dragging over another block shows a visible drop indicator" classname="functional/dragAndDrop.spec.mjs" time="2.082">
+<testcase name="drag-and-drop › 6. Drag and Drop / Safety checks :: dragging over another block shows a visible drop indicator" classname="functional/dragAndDrop.spec.mjs" time="2.163">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Safety checks :: dropping a block onto itself leaves the order unchanged" classname="functional/dragAndDrop.spec.mjs" time="2.651">
-</testcase>
-</testsuite>
-<testsuite name="functional/editingBehavior.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="19" failures="0" skipped="0" time="50.616" errors="0">
-<testcase name="editing-behavior › 3. Enter Key Behavior / Standard blocks :: pressing Enter in a paragraph creates a new paragraph below and moves focus to it" classname="functional/editingBehavior.spec.mjs" time="2.141">
-</testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / Standard blocks :: pressing Enter in a heading creates a normal paragraph below" classname="functional/editingBehavior.spec.mjs" time="2.235">
-</testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter in a bulleted list item creates a new bullet below" classname="functional/editingBehavior.spec.mjs" time="2.839">
-</testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter in a numbered list item creates the next number" classname="functional/editingBehavior.spec.mjs" time="2.967">
-</testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter in a to-do item creates a new unchecked to-do below" classname="functional/editingBehavior.spec.mjs" time="2.197">
-</testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on a checked empty to-do item converts it into a paragraph and clears the checked state" classname="functional/editingBehavior.spec.mjs" time="2.513">
-</testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on an empty bulleted list item converts it into a paragraph" classname="functional/editingBehavior.spec.mjs" time="2.886">
-</testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on an empty numbered list item converts it into a paragraph" classname="functional/editingBehavior.spec.mjs" time="2.994">
-</testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on an empty to-do item converts it into a paragraph" classname="functional/editingBehavior.spec.mjs" time="2.387">
-</testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / Container blocks :: pressing Enter in a callout creates a child paragraph inside the callout" classname="functional/editingBehavior.spec.mjs" time="2.883">
-</testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / Container blocks :: pressing Enter in a quote creates a child paragraph inside the quote container" classname="functional/editingBehavior.spec.mjs" time="2.526">
-</testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / Container blocks :: pressing Enter in a toggle summary expands it and focuses the first child" classname="functional/editingBehavior.spec.mjs" time="3.955">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty bulleted list item deletes it and keeps focus on a logical sibling" classname="functional/editingBehavior.spec.mjs" time="2.085">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty root paragraph deletes it and focuses the previous block" classname="functional/editingBehavior.spec.mjs" time="2.708">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Delete on the first empty root paragraph deletes it and focuses the next logical block" classname="functional/editingBehavior.spec.mjs" time="3.184">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty heading converts it into a paragraph instead of deleting it" classname="functional/editingBehavior.spec.mjs" time="2.386">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty indented paragraph outdents it instead of deleting it" classname="functional/editingBehavior.spec.mjs" time="3.132">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Divider deletion :: Backspace on a focused divider removes it from the page" classname="functional/editingBehavior.spec.mjs" time="2.3">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Divider deletion :: Delete on a focused divider removes it from the page" classname="functional/editingBehavior.spec.mjs" time="2.298">
+<testcase name="drag-and-drop › 6. Drag and Drop / Safety checks :: dropping a block onto itself leaves the order unchanged" classname="functional/dragAndDrop.spec.mjs" time="2.52">
 </testcase>
 </testsuite>
-<testsuite name="functional/focusManagement.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="3" failures="0" skipped="0" time="8.578" errors="0">
-<testcase name="focus-management › 28. Focus management / Enter transitions :: after Enter on a heading the focus moves into the new paragraph below" classname="functional/focusManagement.spec.mjs" time="2.212">
+<testsuite name="functional/duplicateTitleNumbering.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="4" failures="0" skipped="0" time="131.549" errors="4">
+<testcase name="duplicate-title-numbering › 34. Duplicate Title Numbering / First duplicate :: duplicating a page appends (1) and preserves the original title" classname="functional/duplicateTitleNumbering.spec.mjs" time="32.624">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-duplicateTitleN-ba664-reserves-the-original-title/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-duplicateTitleN-ba664-reserves-the-original-title/video.webm]]
+
+[[ATTACHMENT|playwright/functional-duplicateTitleN-ba664-reserves-the-original-title/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-duplicateTitleN-ba664-reserves-the-original-title/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/duplicateTitleNumbering.spec.mjs:16:5 › duplicate-title-numbering › 34. Duplicate Title Numbering / First duplicate :: duplicating a page appends (1) and preserves the original title 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="duplicate-root"]') to be visible
+
+
+       at ../browser/core/app.mjs:455
+
+      453 | export async function openSidebarPageOptions(page, pageId) {
+      454 |   const row = sidebarPageRow(page, pageId);
+    > 455 |   await row.waitFor();
+          |             ^
+      456 |   await row.scrollIntoViewIfNeeded();
+      457 |   await row.hover();
+      458 |   await row.getByRole("button", { name: "Page options" }).click();
+        at openSidebarPageOptions (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:455:13)
+        at duplicatePageFromSidebar (/home/settes/cursus/trascendence/osionos/tests/browser/specs/duplicateTitleNumbering.mjs:62:9)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/duplicateTitleNumbering.mjs:81:13)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-duplicateTitleN-ba664-reserves-the-original-title/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-duplicateTitleN-ba664-reserves-the-original-title/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-duplicateTitleN-ba664-reserves-the-original-title/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-duplicateTitleN-ba664-reserves-the-original-title/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-duplicateTitleN-ba664-reserves-the-original-title/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
 </testcase>
-<testcase name="focus-management › 28. Focus management / Delete transitions :: after deleting the first empty root block the focus moves to the next logical block" classname="functional/focusManagement.spec.mjs" time="2.845">
+<testcase name="duplicate-title-numbering › 34. Duplicate Title Numbering / Incremental numbering :: each new duplicate increments to the next number instead of reusing earlier titles" classname="functional/duplicateTitleNumbering.spec.mjs" time="32.574">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-duplicateTitleN-3803b-d-of-reusing-earlier-titles/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-duplicateTitleN-3803b-d-of-reusing-earlier-titles/video.webm]]
+
+[[ATTACHMENT|playwright/functional-duplicateTitleN-3803b-d-of-reusing-earlier-titles/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-duplicateTitleN-3803b-d-of-reusing-earlier-titles/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/duplicateTitleNumbering.spec.mjs:16:5 › duplicate-title-numbering › 34. Duplicate Title Numbering / Incremental numbering :: each new duplicate increments to the next number instead of reusing earlier titles 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="duplicate-root"]') to be visible
+
+
+       at ../browser/core/app.mjs:455
+
+      453 | export async function openSidebarPageOptions(page, pageId) {
+      454 |   const row = sidebarPageRow(page, pageId);
+    > 455 |   await row.waitFor();
+          |             ^
+      456 |   await row.scrollIntoViewIfNeeded();
+      457 |   await row.hover();
+      458 |   await row.getByRole("button", { name: "Page options" }).click();
+        at openSidebarPageOptions (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:455:13)
+        at duplicatePageFromSidebar (/home/settes/cursus/trascendence/osionos/tests/browser/specs/duplicateTitleNumbering.mjs:62:9)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/duplicateTitleNumbering.mjs:103:13)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-duplicateTitleN-3803b-d-of-reusing-earlier-titles/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-duplicateTitleN-3803b-d-of-reusing-earlier-titles/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-duplicateTitleN-3803b-d-of-reusing-earlier-titles/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-duplicateTitleN-3803b-d-of-reusing-earlier-titles/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-duplicateTitleN-3803b-d-of-reusing-earlier-titles/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
 </testcase>
-<testcase name="focus-management › 28. Focus management / Container transitions :: pressing Enter on an empty toggle summary moves focus into the newly created child" classname="functional/focusManagement.spec.mjs" time="3.521">
+<testcase name="duplicate-title-numbering › 34. Duplicate Title Numbering / Existing suffixes :: when a numbered duplicate already exists the next free number is used" classname="functional/duplicateTitleNumbering.spec.mjs" time="33.002">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-duplicateTitleN-30960-he-next-free-number-is-used/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-duplicateTitleN-30960-he-next-free-number-is-used/video.webm]]
+
+[[ATTACHMENT|playwright/functional-duplicateTitleN-30960-he-next-free-number-is-used/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-duplicateTitleN-30960-he-next-free-number-is-used/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/duplicateTitleNumbering.spec.mjs:16:5 › duplicate-title-numbering › 34. Duplicate Title Numbering / Existing suffixes :: when a numbered duplicate already exists the next free number is used 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="duplicate-root"]') to be visible
+
+
+       at ../browser/core/app.mjs:455
+
+      453 | export async function openSidebarPageOptions(page, pageId) {
+      454 |   const row = sidebarPageRow(page, pageId);
+    > 455 |   await row.waitFor();
+          |             ^
+      456 |   await row.scrollIntoViewIfNeeded();
+      457 |   await row.hover();
+      458 |   await row.getByRole("button", { name: "Page options" }).click();
+        at openSidebarPageOptions (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:455:13)
+        at duplicatePageFromSidebar (/home/settes/cursus/trascendence/osionos/tests/browser/specs/duplicateTitleNumbering.mjs:62:9)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/duplicateTitleNumbering.mjs:126:13)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-duplicateTitleN-30960-he-next-free-number-is-used/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-duplicateTitleN-30960-he-next-free-number-is-used/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-duplicateTitleN-30960-he-next-free-number-is-used/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-duplicateTitleN-30960-he-next-free-number-is-used/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-duplicateTitleN-30960-he-next-free-number-is-used/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
+</testcase>
+<testcase name="duplicate-title-numbering › 34. Duplicate Title Numbering / Subtree duplication :: duplicate numbering applies to the duplicated page while child pages clone under the new parent" classname="functional/duplicateTitleNumbering.spec.mjs" time="33.349">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-duplicateTitleN-5ec0a--clone-under-the-new-parent/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-duplicateTitleN-5ec0a--clone-under-the-new-parent/video.webm]]
+
+[[ATTACHMENT|playwright/functional-duplicateTitleN-5ec0a--clone-under-the-new-parent/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-duplicateTitleN-5ec0a--clone-under-the-new-parent/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/duplicateTitleNumbering.spec.mjs:16:5 › duplicate-title-numbering › 34. Duplicate Title Numbering / Subtree duplication :: duplicate numbering applies to the duplicated page while child pages clone under the new parent 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="duplicate-root"]') to be visible
+
+
+       at ../browser/core/app.mjs:455
+
+      453 | export async function openSidebarPageOptions(page, pageId) {
+      454 |   const row = sidebarPageRow(page, pageId);
+    > 455 |   await row.waitFor();
+          |             ^
+      456 |   await row.scrollIntoViewIfNeeded();
+      457 |   await row.hover();
+      458 |   await row.getByRole("button", { name: "Page options" }).click();
+        at openSidebarPageOptions (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:455:13)
+        at duplicatePageFromSidebar (/home/settes/cursus/trascendence/osionos/tests/browser/specs/duplicateTitleNumbering.mjs:62:9)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/duplicateTitleNumbering.mjs:149:13)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-duplicateTitleN-5ec0a--clone-under-the-new-parent/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-duplicateTitleN-5ec0a--clone-under-the-new-parent/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-duplicateTitleN-5ec0a--clone-under-the-new-parent/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-duplicateTitleN-5ec0a--clone-under-the-new-parent/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-duplicateTitleN-5ec0a--clone-under-the-new-parent/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
 </testcase>
 </testsuite>
-<testsuite name="functional/indentation.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="13" failures="0" skipped="0" time="38.356" errors="0">
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Tab indents a paragraph under the previous sibling" classname="functional/indentation.spec.mjs" time="2.238">
+<testsuite name="functional/editingBehavior.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="19" failures="0" skipped="0" time="43.918" errors="0">
+<testcase name="editing-behavior › 3. Enter Key Behavior / Standard blocks :: pressing Enter in a paragraph creates a new paragraph below and moves focus to it" classname="functional/editingBehavior.spec.mjs" time="2.173">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Shift+Tab outdents an indented paragraph back to root level" classname="functional/indentation.spec.mjs" time="2.628">
+<testcase name="editing-behavior › 3. Enter Key Behavior / Standard blocks :: pressing Enter in a heading creates a normal paragraph below" classname="functional/editingBehavior.spec.mjs" time="2.155">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: repeated Tab builds hierarchy one level at a time instead of skipping directly to deep nesting" classname="functional/indentation.spec.mjs" time="2.825">
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter in a bulleted list item creates a new bullet below" classname="functional/editingBehavior.spec.mjs" time="2.394">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: Shift+Tab only outdents one level at a time from a deep hierarchy" classname="functional/indentation.spec.mjs" time="3.096">
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter in a numbered list item creates the next number" classname="functional/editingBehavior.spec.mjs" time="2.376">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Tab on the first root block does nothing" classname="functional/indentation.spec.mjs" time="2.281">
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter in a to-do item creates a new unchecked to-do below" classname="functional/editingBehavior.spec.mjs" time="2.036">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Shift+Tab on a root paragraph does nothing" classname="functional/indentation.spec.mjs" time="2.196">
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on a checked empty to-do item converts it into a paragraph and clears the checked state" classname="functional/editingBehavior.spec.mjs" time="2.316">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a heading can be indented under a paragraph and keeps its heading styling" classname="functional/indentation.spec.mjs" time="3.163">
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on an empty bulleted list item converts it into a paragraph" classname="functional/editingBehavior.spec.mjs" time="2.454">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph cannot be indented under a heading" classname="functional/indentation.spec.mjs" time="3.26">
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on an empty numbered list item converts it into a paragraph" classname="functional/editingBehavior.spec.mjs" time="2.516">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph cannot be indented under a code block" classname="functional/indentation.spec.mjs" time="3.76">
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on an empty to-do item converts it into a paragraph" classname="functional/editingBehavior.spec.mjs" time="2.118">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph cannot be indented under a divider" classname="functional/indentation.spec.mjs" time="3.636">
+<testcase name="editing-behavior › 3. Enter Key Behavior / Container blocks :: pressing Enter in a callout creates a child paragraph inside the callout" classname="functional/editingBehavior.spec.mjs" time="2.264">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph can be indented under a callout container" classname="functional/indentation.spec.mjs" time="3.677">
+<testcase name="editing-behavior › 3. Enter Key Behavior / Container blocks :: pressing Enter in a quote creates a child paragraph inside the quote container" classname="functional/editingBehavior.spec.mjs" time="2.221">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph can be indented under a quote container" classname="functional/indentation.spec.mjs" time="3.35">
+<testcase name="editing-behavior › 3. Enter Key Behavior / Container blocks :: pressing Enter in a toggle summary expands it and focuses the first child" classname="functional/editingBehavior.spec.mjs" time="3.614">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: pressing Tab inside a code block inserts spaces instead of changing hierarchy" classname="functional/indentation.spec.mjs" time="2.246">
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty bulleted list item deletes it and keeps focus on a logical sibling" classname="functional/editingBehavior.spec.mjs" time="1.905">
 </testcase>
-</testsuite>
-<testsuite name="functional/inlineToolbar.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="31" failures="0" skipped="0" time="92.153" errors="0">
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting visible text opens the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="2.435">
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty root paragraph deletes it and focuses the previous block" classname="functional/editingBehavior.spec.mjs" time="2.409">
 </testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting text inside a heading also opens the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="2.407">
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Delete on the first empty root paragraph deletes it and focuses the next logical block" classname="functional/editingBehavior.spec.mjs" time="2.534">
 </testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting text inside a callout opens the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="3.136">
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty heading converts it into a paragraph instead of deleting it" classname="functional/editingBehavior.spec.mjs" time="2.031">
 </testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: placing only the caret keeps the inline toolbar hidden" classname="functional/inlineToolbar.spec.mjs" time="2.212">
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty indented paragraph outdents it instead of deleting it" classname="functional/editingBehavior.spec.mjs" time="2.292">
 </testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: clearing the selection closes the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="2.544">
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Divider deletion :: Backspace on a focused divider removes it from the page" classname="functional/editingBehavior.spec.mjs" time="2.054">
 </testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: clicking outside the editor closes the inline toolbar on blur" classname="functional/inlineToolbar.spec.mjs" time="2.557">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting inside a code block uses the native textarea selection only" classname="functional/inlineToolbar.spec.mjs" time="2.143">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: the text color button opens the text color palette" classname="functional/inlineToolbar.spec.mjs" time="2.608">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: the background color button opens the background palette" classname="functional/inlineToolbar.spec.mjs" time="2.632">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying text color changes only the selected text" classname="functional/inlineToolbar.spec.mjs" time="2.914">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying background color changes only the selected text" classname="functional/inlineToolbar.spec.mjs" time="2.954">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: text color survives additional typing without stacking wrappers" classname="functional/inlineToolbar.spec.mjs" time="3.108">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: background color survives additional typing without stacking wrappers" classname="functional/inlineToolbar.spec.mjs" time="3.201">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying the same text color twice removes the text color wrapper" classname="functional/inlineToolbar.spec.mjs" time="3.327">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying the same background color twice removes the background wrapper" classname="functional/inlineToolbar.spec.mjs" time="3.286">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: background color excludes trailing whitespace from the highlighted wrapper" classname="functional/inlineToolbar.spec.mjs" time="2.672">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: text color and background color can coexist with bold and italic while typing" classname="functional/inlineToolbar.spec.mjs" time="4.246">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the bold button toggles bold on and off" classname="functional/inlineToolbar.spec.mjs" time="2.979">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the italic button toggles italic on and off" classname="functional/inlineToolbar.spec.mjs" time="3.153">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the strikethrough button toggles strikethrough on and off" classname="functional/inlineToolbar.spec.mjs" time="3.425">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: bold and italic can coexist on the same selection" classname="functional/inlineToolbar.spec.mjs" time="2.971">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the inline code button wraps the selection as inline code" classname="functional/inlineToolbar.spec.mjs" time="2.742">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: inline code keeps inherited custom text and background colors" classname="functional/inlineToolbar.spec.mjs" time="4.659">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: mixed inline formats remain stable after typing and deleting inside the same region" classname="functional/inlineToolbar.spec.mjs" time="4.84">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: the Add link button opens the link type chooser" classname="functional/inlineToolbar.spec.mjs" time="2.587">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: a web link can be applied to the selected text" classname="functional/inlineToolbar.spec.mjs" time="2.867">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: a page link can be applied from the page picker" classname="functional/inlineToolbar.spec.mjs" time="2.886">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: page link search filters matching results and shows a no-result state" classname="functional/inlineToolbar.spec.mjs" time="2.764">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: pressing Escape closes the link picker without creating a link" classname="functional/inlineToolbar.spec.mjs" time="2.742">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: Cancel closes the link picker without changing the selection" classname="functional/inlineToolbar.spec.mjs" time="2.631">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: the slash button closes the toolbar and opens the slash menu" classname="functional/inlineToolbar.spec.mjs" time="2.525">
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Divider deletion :: Delete on a focused divider removes it from the page" classname="functional/editingBehavior.spec.mjs" time="2.056">
 </testcase>
 </testsuite>
-<testsuite name="persistence/localPersistence.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="2" failures="0" skipped="0" time="10.227" errors="0">
-<testcase name="local-persistence › 29. Local persistence / Seeded offline pages :: edits on an offline seeded page survive refresh and remain editable afterwards" classname="persistence/localPersistence.spec.mjs" time="5.315">
+<testsuite name="functional/focusManagement.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="3" failures="0" skipped="0" time="7.58" errors="0">
+<testcase name="focus-management › 28. Focus management / Enter transitions :: after Enter on a heading the focus moves into the new paragraph below" classname="functional/focusManagement.spec.mjs" time="1.917">
 </testcase>
-<testcase name="local-persistence › 29. Local persistence / Local pages :: a locally created page survives refresh and can be reopened with its content intact" classname="persistence/localPersistence.spec.mjs" time="4.912">
+<testcase name="focus-management › 28. Focus management / Delete transitions :: after deleting the first empty root block the focus moves to the next logical block" classname="functional/focusManagement.spec.mjs" time="2.425">
+</testcase>
+<testcase name="focus-management › 28. Focus management / Container transitions :: pressing Enter on an empty toggle summary moves focus into the newly created child" classname="functional/focusManagement.spec.mjs" time="3.238">
 </testcase>
 </testsuite>
-<testsuite name="smoke/harnessCoverage.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="4" failures="0" skipped="0" time="3.745" errors="0">
-<testcase name="harness-coverage › 15. Read-only Rendering / Block rendering :: read-only mode renders the main block families correctly" classname="smoke/harnessCoverage.spec.mjs" time="0.936">
+<testsuite name="functional/indentation.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="13" failures="1" skipped="0" time="36.992" errors="0">
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Tab indents a paragraph under the previous sibling" classname="functional/indentation.spec.mjs" time="2.168">
 </testcase>
-<testcase name="harness-coverage › 15. Read-only Rendering / Hierarchy and containers :: callout and quote children remain rendered inside their read-only containers" classname="smoke/harnessCoverage.spec.mjs" time="0.937">
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Shift+Tab outdents an indented paragraph back to root level" classname="functional/indentation.spec.mjs" time="2.23">
 </testcase>
-<testcase name="harness-coverage › 15. Read-only Rendering / Toggle and numbering :: read-only toggles still expand or collapse and numbered lists reset by context" classname="smoke/harnessCoverage.spec.mjs" time="1.057">
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: repeated Tab builds hierarchy one level at a time instead of skipping directly to deep nesting" classname="functional/indentation.spec.mjs" time="2.575">
 </testcase>
-<testcase name="harness-coverage › 26. Media blocks / Placeholder rendering :: media blocks without an asset show their placeholder preview" classname="smoke/harnessCoverage.spec.mjs" time="0.815">
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: Shift+Tab only outdents one level at a time from a deep hierarchy" classname="functional/indentation.spec.mjs" time="2.903">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Tab on the first root block does nothing" classname="functional/indentation.spec.mjs" time="2.084">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Shift+Tab on a root paragraph does nothing" classname="functional/indentation.spec.mjs" time="2.086">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a heading can be indented under a paragraph and keeps its heading styling" classname="functional/indentation.spec.mjs" time="3.168">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph cannot be indented under a heading" classname="functional/indentation.spec.mjs" time="3.224">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-indentation-ind-4d7d2-be-indented-under-a-heading/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-indentation-ind-4d7d2-be-indented-under-a-heading/video.webm]]
+
+[[ATTACHMENT|playwright/functional-indentation-ind-4d7d2-be-indented-under-a-heading/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-indentation-ind-4d7d2-be-indented-under-a-heading/trace.zip]]
+]]>
+</system-out>
+<failure message="expect(received).toBeLessThanOrEqual(expected)" type="expect.toBeLessThanOrEqual">
+<![CDATA[  functional/indentation.spec.mjs:16:5 › indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph cannot be indented under a heading 
+
+    Error: expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 2
+    Received:    24
+
+       at ../browser/specs/indentation.mjs:33
+
+      31 |
+      32 | function expectNearlyEqual(left, right, delta = 2) {
+    > 33 |   expect(Math.abs(left - right)).toBeLessThanOrEqual(delta);
+         |                                  ^
+      34 | }
+      35 |
+      36 | export const indentationScenarios = [
+        at expectNearlyEqual (/home/settes/cursus/trascendence/osionos/tests/browser/specs/indentation.mjs:33:34)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/indentation.mjs:167:7)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-indentation-ind-4d7d2-be-indented-under-a-heading/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-indentation-ind-4d7d2-be-indented-under-a-heading/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-indentation-ind-4d7d2-be-indented-under-a-heading/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-indentation-ind-4d7d2-be-indented-under-a-heading/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-indentation-ind-4d7d2-be-indented-under-a-heading/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph cannot be indented under a code block" classname="functional/indentation.spec.mjs" time="3.332">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph cannot be indented under a divider" classname="functional/indentation.spec.mjs" time="3.725">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph can be indented under a callout container" classname="functional/indentation.spec.mjs" time="3.703">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph can be indented under a quote container" classname="functional/indentation.spec.mjs" time="3.39">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: pressing Tab inside a code block inserts spaces instead of changing hierarchy" classname="functional/indentation.spec.mjs" time="2.404">
+</testcase>
+</testsuite>
+<testsuite name="functional/inlineToolbar.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="31" failures="0" skipped="0" time="90.023" errors="0">
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting visible text opens the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="2.453">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting text inside a heading also opens the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="2.484">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting text inside a callout opens the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="3.175">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: placing only the caret keeps the inline toolbar hidden" classname="functional/inlineToolbar.spec.mjs" time="2.174">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: clearing the selection closes the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="2.428">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: clicking outside the editor closes the inline toolbar on blur" classname="functional/inlineToolbar.spec.mjs" time="2.64">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting inside a code block uses the native textarea selection only" classname="functional/inlineToolbar.spec.mjs" time="2.068">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: the text color button opens the text color palette" classname="functional/inlineToolbar.spec.mjs" time="2.554">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: the background color button opens the background palette" classname="functional/inlineToolbar.spec.mjs" time="2.597">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying text color changes only the selected text" classname="functional/inlineToolbar.spec.mjs" time="2.687">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying background color changes only the selected text" classname="functional/inlineToolbar.spec.mjs" time="2.885">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: text color survives additional typing without stacking wrappers" classname="functional/inlineToolbar.spec.mjs" time="3.06">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: background color survives additional typing without stacking wrappers" classname="functional/inlineToolbar.spec.mjs" time="3.126">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying the same text color twice removes the text color wrapper" classname="functional/inlineToolbar.spec.mjs" time="3.287">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying the same background color twice removes the background wrapper" classname="functional/inlineToolbar.spec.mjs" time="3.339">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: background color excludes trailing whitespace from the highlighted wrapper" classname="functional/inlineToolbar.spec.mjs" time="2.613">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: text color and background color can coexist with bold and italic while typing" classname="functional/inlineToolbar.spec.mjs" time="4.132">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the bold button toggles bold on and off" classname="functional/inlineToolbar.spec.mjs" time="2.888">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the italic button toggles italic on and off" classname="functional/inlineToolbar.spec.mjs" time="3.113">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the strikethrough button toggles strikethrough on and off" classname="functional/inlineToolbar.spec.mjs" time="3.329">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: bold and italic can coexist on the same selection" classname="functional/inlineToolbar.spec.mjs" time="2.853">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the inline code button wraps the selection as inline code" classname="functional/inlineToolbar.spec.mjs" time="2.73">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: inline code keeps inherited custom text and background colors" classname="functional/inlineToolbar.spec.mjs" time="4.474">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: mixed inline formats remain stable after typing and deleting inside the same region" classname="functional/inlineToolbar.spec.mjs" time="4.596">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: the Add link button opens the link type chooser" classname="functional/inlineToolbar.spec.mjs" time="2.499">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: a web link can be applied to the selected text" classname="functional/inlineToolbar.spec.mjs" time="2.68">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: a page link can be applied from the page picker" classname="functional/inlineToolbar.spec.mjs" time="2.757">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: page link search filters matching results and shows a no-result state" classname="functional/inlineToolbar.spec.mjs" time="2.727">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: pressing Escape closes the link picker without creating a link" classname="functional/inlineToolbar.spec.mjs" time="2.623">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: Cancel closes the link picker without changing the selection" classname="functional/inlineToolbar.spec.mjs" time="2.58">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: the slash button closes the toolbar and opens the slash menu" classname="functional/inlineToolbar.spec.mjs" time="2.472">
+</testcase>
+</testsuite>
+<testsuite name="functional/pagePermissions.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="5" failures="2" skipped="0" time="121.373" errors="3">
+<testcase name="page-permissions › 32. Page Permissions ABAC / Sidebar visibility :: shared pages stay visible to workspace members while private team pages stay hidden from non-owners" classname="functional/pagePermissions.spec.mjs" time="11.974">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-pagePermissions-8f3d3-stay-hidden-from-non-owners/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-8f3d3-stay-hidden-from-non-owners/video.webm]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-8f3d3-stay-hidden-from-non-owners/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-8f3d3-stay-hidden-from-non-owners/trace.zip]]
+]]>
+</system-out>
+<failure message="expect(locator).toBeVisible() failed" type="expect.toBeVisible">
+<![CDATA[  functional/pagePermissions.spec.mjs:16:5 › page-permissions › 32. Page Permissions ABAC / Sidebar visibility :: shared pages stay visible to workspace members while private team pages stay hidden from non-owners 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-testid="sidebar-page-row"][data-page-id="team-shared"]')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="team-shared"]')
+
+
+       at ../browser/specs/pagePermissions.mjs:121
+
+      119 |       await page.goto(appUrl, { waitUntil: "networkidle" });
+      120 |
+    > 121 |       await expect(sidebarPageRow(page, "team-shared")).toBeVisible();
+          |                                                         ^
+      122 |       await expect(
+      123 |         sidebarPageRow(page, "team-shared").getByTestId("page-visibility-badge"),
+      124 |       ).toHaveText("Shared");
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/pagePermissions.mjs:121:57)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-8f3d3-stay-hidden-from-non-owners/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-8f3d3-stay-hidden-from-non-owners/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-pagePermissions-8f3d3-stay-hidden-from-non-owners/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-8f3d3-stay-hidden-from-non-owners/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-pagePermissions-8f3d3-stay-hidden-from-non-owners/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+</testcase>
+<testcase name="page-permissions › 32. Page Permissions ABAC / Sidebar visibility :: page owner sees both private and shared entries with explicit status badges" classname="functional/pagePermissions.spec.mjs" time="12.245">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-pagePermissions-cda82-with-explicit-status-badges/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-cda82-with-explicit-status-badges/video.webm]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-cda82-with-explicit-status-badges/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-cda82-with-explicit-status-badges/trace.zip]]
+]]>
+</system-out>
+<failure message="expect(locator).toBeVisible() failed" type="expect.toBeVisible">
+<![CDATA[  functional/pagePermissions.spec.mjs:16:5 › page-permissions › 32. Page Permissions ABAC / Sidebar visibility :: page owner sees both private and shared entries with explicit status badges 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-testid="sidebar-page-row"][data-page-id="team-shared"]')
+    Expected: visible
+    Timeout: 10000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 10000ms
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="team-shared"]')
+
+
+       at ../browser/specs/pagePermissions.mjs:136
+
+      134 |       await page.goto(appUrl, { waitUntil: "networkidle" });
+      135 |
+    > 136 |       await expect(sidebarPageRow(page, "team-shared")).toBeVisible();
+          |                                                         ^
+      137 |       await expect(sidebarPageRow(page, "team-private")).toBeVisible();
+      138 |       await expect(
+      139 |         sidebarPageRow(page, "team-private").getByTestId("page-visibility-badge"),
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/pagePermissions.mjs:136:57)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-cda82-with-explicit-status-badges/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-cda82-with-explicit-status-badges/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-pagePermissions-cda82-with-explicit-status-badges/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-cda82-with-explicit-status-badges/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-pagePermissions-cda82-with-explicit-status-badges/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</failure>
+</testcase>
+<testcase name="page-permissions › 32. Page Permissions ABAC / Move modal restrictions :: non-owners keep Duplicate but cannot see private workspaces as move destinations" classname="functional/pagePermissions.spec.mjs" time="32.223">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-pagePermissions-b7265-spaces-as-move-destinations/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-b7265-spaces-as-move-destinations/video.webm]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-b7265-spaces-as-move-destinations/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-b7265-spaces-as-move-destinations/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/pagePermissions.spec.mjs:16:5 › page-permissions › 32. Page Permissions ABAC / Move modal restrictions :: non-owners keep Duplicate but cannot see private workspaces as move destinations 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="team-shared"]') to be visible
+
+
+       at ../browser/core/app.mjs:455
+
+      453 | export async function openSidebarPageOptions(page, pageId) {
+      454 |   const row = sidebarPageRow(page, pageId);
+    > 455 |   await row.waitFor();
+          |             ^
+      456 |   await row.scrollIntoViewIfNeeded();
+      457 |   await row.hover();
+      458 |   await row.getByRole("button", { name: "Page options" }).click();
+        at openSidebarPageOptions (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:455:13)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/pagePermissions.mjs:151:13)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-b7265-spaces-as-move-destinations/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-b7265-spaces-as-move-destinations/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-pagePermissions-b7265-spaces-as-move-destinations/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-b7265-spaces-as-move-destinations/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-pagePermissions-b7265-spaces-as-move-destinations/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
+</testcase>
+<testcase name="page-permissions › 32. Page Permissions ABAC / Duplicate fallback :: non-owners can duplicate shared pages into an owned shared copy" classname="functional/pagePermissions.spec.mjs" time="32.334">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-pagePermissions-af51e-s-into-an-owned-shared-copy/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-af51e-s-into-an-owned-shared-copy/video.webm]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-af51e-s-into-an-owned-shared-copy/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-af51e-s-into-an-owned-shared-copy/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/pagePermissions.spec.mjs:16:5 › page-permissions › 32. Page Permissions ABAC / Duplicate fallback :: non-owners can duplicate shared pages into an owned shared copy 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="team-shared"]') to be visible
+
+
+       at ../browser/core/app.mjs:455
+
+      453 | export async function openSidebarPageOptions(page, pageId) {
+      454 |   const row = sidebarPageRow(page, pageId);
+    > 455 |   await row.waitFor();
+          |             ^
+      456 |   await row.scrollIntoViewIfNeeded();
+      457 |   await row.hover();
+      458 |   await row.getByRole("button", { name: "Page options" }).click();
+        at openSidebarPageOptions (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:455:13)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/pagePermissions.mjs:179:13)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-af51e-s-into-an-owned-shared-copy/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-af51e-s-into-an-owned-shared-copy/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-pagePermissions-af51e-s-into-an-owned-shared-copy/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-af51e-s-into-an-owned-shared-copy/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-pagePermissions-af51e-s-into-an-owned-shared-copy/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
+</testcase>
+<testcase name="page-permissions › 32. Page Permissions ABAC / Owner move rights :: owner can move a shared page into a private workspace and it becomes private there" classname="functional/pagePermissions.spec.mjs" time="32.597">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-pagePermissions-97ca1-nd-it-becomes-private-there/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-97ca1-nd-it-becomes-private-there/video.webm]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-97ca1-nd-it-becomes-private-there/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-pagePermissions-97ca1-nd-it-becomes-private-there/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/pagePermissions.spec.mjs:16:5 › page-permissions › 32. Page Permissions ABAC / Owner move rights :: owner can move a shared page into a private workspace and it becomes private there 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="team-shared"]') to be visible
+
+
+       at ../browser/core/app.mjs:455
+
+      453 | export async function openSidebarPageOptions(page, pageId) {
+      454 |   const row = sidebarPageRow(page, pageId);
+    > 455 |   await row.waitFor();
+          |             ^
+      456 |   await row.scrollIntoViewIfNeeded();
+      457 |   await row.hover();
+      458 |   await row.getByRole("button", { name: "Page options" }).click();
+        at openSidebarPageOptions (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:455:13)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/pagePermissions.mjs:212:13)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-97ca1-nd-it-becomes-private-there/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-97ca1-nd-it-becomes-private-there/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-pagePermissions-97ca1-nd-it-becomes-private-there/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-pagePermissions-97ca1-nd-it-becomes-private-there/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-pagePermissions-97ca1-nd-it-becomes-private-there/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
+</testcase>
+</testsuite>
+<testsuite name="functional/tableCellEditing.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="7" failures="0" skipped="0" time="226.4" errors="7">
+<testcase name="table-cell-editing › 33. Table Cell Editing / Cell focus :: typing in a cell keeps focus inside that same cell" classname="functional/tableCellEditing.spec.mjs" time="32.197">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-tableCellEditin-cd8a7-focus-inside-that-same-cell/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-cd8a7-focus-inside-that-same-cell/video.webm]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-cd8a7-focus-inside-that-same-cell/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-cd8a7-focus-inside-that-same-cell/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/tableCellEditing.spec.mjs:16:5 › table-cell-editing › 33. Table Cell Editing / Cell focus :: typing in a cell keeps focus inside that same cell 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="table-fixture-page"]') to be visible
+
+
+       at ../browser/core/app.mjs:463
+
+      461 | export async function openSidebarPage(page, pageId) {
+      462 |   const row = sidebarPageRow(page, pageId);
+    > 463 |   await row.waitFor();
+          |             ^
+      464 |   await row.scrollIntoViewIfNeeded();
+      465 |   await row.getByTestId("sidebar-page-open").click();
+      466 | }
+        at openSidebarPage (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:463:13)
+        at openFreshTable (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:58:9)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:81:7)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-cd8a7-focus-inside-that-same-cell/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-cd8a7-focus-inside-that-same-cell/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-tableCellEditin-cd8a7-focus-inside-that-same-cell/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-cd8a7-focus-inside-that-same-cell/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-tableCellEditin-cd8a7-focus-inside-that-same-cell/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
+</testcase>
+<testcase name="table-cell-editing › 33. Table Cell Editing / Keyboard movement :: Tab and Shift+Tab move focus to next and previous cells" classname="functional/tableCellEditing.spec.mjs" time="32.269">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-tableCellEditin-ccdda--to-next-and-previous-cells/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-ccdda--to-next-and-previous-cells/video.webm]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-ccdda--to-next-and-previous-cells/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-ccdda--to-next-and-previous-cells/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/tableCellEditing.spec.mjs:16:5 › table-cell-editing › 33. Table Cell Editing / Keyboard movement :: Tab and Shift+Tab move focus to next and previous cells 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="table-fixture-page"]') to be visible
+
+
+       at ../browser/core/app.mjs:463
+
+      461 | export async function openSidebarPage(page, pageId) {
+      462 |   const row = sidebarPageRow(page, pageId);
+    > 463 |   await row.waitFor();
+          |             ^
+      464 |   await row.scrollIntoViewIfNeeded();
+      465 |   await row.getByTestId("sidebar-page-open").click();
+      466 | }
+        at openSidebarPage (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:463:13)
+        at openFreshTable (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:58:9)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:96:7)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-ccdda--to-next-and-previous-cells/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-ccdda--to-next-and-previous-cells/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-tableCellEditin-ccdda--to-next-and-previous-cells/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-ccdda--to-next-and-previous-cells/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-tableCellEditin-ccdda--to-next-and-previous-cells/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
+</testcase>
+<testcase name="table-cell-editing › 33. Table Cell Editing / Add row :: Add Row inserts a new row below the active row instead of only appending at the end" classname="functional/tableCellEditing.spec.mjs" time="32.509">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-tableCellEditin-5a18f-f-only-appending-at-the-end/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-5a18f-f-only-appending-at-the-end/video.webm]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-5a18f-f-only-appending-at-the-end/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-5a18f-f-only-appending-at-the-end/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/tableCellEditing.spec.mjs:16:5 › table-cell-editing › 33. Table Cell Editing / Add row :: Add Row inserts a new row below the active row instead of only appending at the end 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="table-fixture-page"]') to be visible
+
+
+       at ../browser/core/app.mjs:463
+
+      461 | export async function openSidebarPage(page, pageId) {
+      462 |   const row = sidebarPageRow(page, pageId);
+    > 463 |   await row.waitFor();
+          |             ^
+      464 |   await row.scrollIntoViewIfNeeded();
+      465 |   await row.getByTestId("sidebar-page-open").click();
+      466 | }
+        at openSidebarPage (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:463:13)
+        at openFreshTable (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:58:9)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:111:7)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-5a18f-f-only-appending-at-the-end/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-5a18f-f-only-appending-at-the-end/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-tableCellEditin-5a18f-f-only-appending-at-the-end/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-5a18f-f-only-appending-at-the-end/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-tableCellEditin-5a18f-f-only-appending-at-the-end/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
+</testcase>
+<testcase name="table-cell-editing › 33. Table Cell Editing / Add column :: Add Column inserts a new column to the right of the active cell" classname="functional/tableCellEditing.spec.mjs" time="32.167">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-tableCellEditin-74931-he-right-of-the-active-cell/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-74931-he-right-of-the-active-cell/video.webm]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-74931-he-right-of-the-active-cell/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-74931-he-right-of-the-active-cell/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/tableCellEditing.spec.mjs:16:5 › table-cell-editing › 33. Table Cell Editing / Add column :: Add Column inserts a new column to the right of the active cell 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="table-fixture-page"]') to be visible
+
+
+       at ../browser/core/app.mjs:463
+
+      461 | export async function openSidebarPage(page, pageId) {
+      462 |   const row = sidebarPageRow(page, pageId);
+    > 463 |   await row.waitFor();
+          |             ^
+      464 |   await row.scrollIntoViewIfNeeded();
+      465 |   await row.getByTestId("sidebar-page-open").click();
+      466 | }
+        at openSidebarPage (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:463:13)
+        at openFreshTable (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:58:9)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:130:7)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-74931-he-right-of-the-active-cell/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-74931-he-right-of-the-active-cell/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-tableCellEditin-74931-he-right-of-the-active-cell/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-74931-he-right-of-the-active-cell/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-tableCellEditin-74931-he-right-of-the-active-cell/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
+</testcase>
+<testcase name="table-cell-editing › 33. Table Cell Editing / Context menu deletion :: Delete Row and Delete Column remove the targeted structure from the table" classname="functional/tableCellEditing.spec.mjs" time="32.38">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-tableCellEditin-daa66-ed-structure-from-the-table/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-daa66-ed-structure-from-the-table/video.webm]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-daa66-ed-structure-from-the-table/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-daa66-ed-structure-from-the-table/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/tableCellEditing.spec.mjs:16:5 › table-cell-editing › 33. Table Cell Editing / Context menu deletion :: Delete Row and Delete Column remove the targeted structure from the table 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="table-fixture-page"]') to be visible
+
+
+       at ../browser/core/app.mjs:463
+
+      461 | export async function openSidebarPage(page, pageId) {
+      462 |   const row = sidebarPageRow(page, pageId);
+    > 463 |   await row.waitFor();
+          |             ^
+      464 |   await row.scrollIntoViewIfNeeded();
+      465 |   await row.getByTestId("sidebar-page-open").click();
+      466 | }
+        at openSidebarPage (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:463:13)
+        at openFreshTable (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:58:9)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:149:7)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-daa66-ed-structure-from-the-table/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-daa66-ed-structure-from-the-table/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-tableCellEditin-daa66-ed-structure-from-the-table/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-daa66-ed-structure-from-the-table/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-tableCellEditin-daa66-ed-structure-from-the-table/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
+</testcase>
+<testcase name="table-cell-editing › 33. Table Cell Editing / Minimum size guards :: Delete Row and Delete Column disable themselves once the table reaches 1x1" classname="functional/tableCellEditing.spec.mjs" time="32.665">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-tableCellEditin-9e184--once-the-table-reaches-1x1/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-9e184--once-the-table-reaches-1x1/video.webm]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-9e184--once-the-table-reaches-1x1/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-9e184--once-the-table-reaches-1x1/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/tableCellEditing.spec.mjs:16:5 › table-cell-editing › 33. Table Cell Editing / Minimum size guards :: Delete Row and Delete Column disable themselves once the table reaches 1x1 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="table-fixture-page"]') to be visible
+
+
+       at ../browser/core/app.mjs:463
+
+      461 | export async function openSidebarPage(page, pageId) {
+      462 |   const row = sidebarPageRow(page, pageId);
+    > 463 |   await row.waitFor();
+          |             ^
+      464 |   await row.scrollIntoViewIfNeeded();
+      465 |   await row.getByTestId("sidebar-page-open").click();
+      466 | }
+        at openSidebarPage (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:463:13)
+        at openFreshTable (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:58:9)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:165:7)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-9e184--once-the-table-reaches-1x1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-9e184--once-the-table-reaches-1x1/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-tableCellEditin-9e184--once-the-table-reaches-1x1/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-9e184--once-the-table-reaches-1x1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-tableCellEditin-9e184--once-the-table-reaches-1x1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
+</testcase>
+<testcase name="table-cell-editing › 33. Table Cell Editing / Enter behavior :: Enter on a cell inserts a new row directly below the focused row and keeps column position" classname="functional/tableCellEditing.spec.mjs" time="32.213">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|playwright/functional-tableCellEditin-9c663-w-and-keeps-column-position/test-failed-1.png]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-9c663-w-and-keeps-column-position/video.webm]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-9c663-w-and-keeps-column-position/error-context.md]]
+
+[[ATTACHMENT|playwright/functional-tableCellEditin-9c663-w-and-keeps-column-position/trace.zip]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  functional/tableCellEditing.spec.mjs:16:5 › table-cell-editing › 33. Table Cell Editing / Enter behavior :: Enter on a cell inserts a new row directly below the focused row and keeps column position 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.waitFor: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-testid="sidebar-page-row"][data-page-id="table-fixture-page"]') to be visible
+
+
+       at ../browser/core/app.mjs:463
+
+      461 | export async function openSidebarPage(page, pageId) {
+      462 |   const row = sidebarPageRow(page, pageId);
+    > 463 |   await row.waitFor();
+          |             ^
+      464 |   await row.scrollIntoViewIfNeeded();
+      465 |   await row.getByTestId("sidebar-page-open").click();
+      466 | }
+        at openSidebarPage (/home/settes/cursus/trascendence/osionos/tests/browser/core/app.mjs:463:13)
+        at openFreshTable (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:58:9)
+        at Object.run (/home/settes/cursus/trascendence/osionos/tests/browser/specs/tableCellEditing.mjs:190:7)
+        at /home/settes/cursus/trascendence/osionos/tests/e2e/support/scenarioTestUtils.mjs:21:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-9c663-w-and-keeps-column-position/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-9c663-w-and-keeps-column-position/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../test-results/playwright/functional-tableCellEditin-9c663-w-and-keeps-column-position/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../test-results/playwright/functional-tableCellEditin-9c663-w-and-keeps-column-position/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../test-results/playwright/functional-tableCellEditin-9c663-w-and-keeps-column-position/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+]]>
+</error>
+</testcase>
+</testsuite>
+<testsuite name="persistence/localPersistence.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="2" failures="0" skipped="0" time="9.896" errors="0">
+<testcase name="local-persistence › 29. Local persistence / Seeded offline pages :: edits on an offline seeded page survive refresh and remain editable afterwards" classname="persistence/localPersistence.spec.mjs" time="4.981">
+</testcase>
+<testcase name="local-persistence › 29. Local persistence / Local pages :: a locally created page survives refresh and can be reopened with its content intact" classname="persistence/localPersistence.spec.mjs" time="4.915">
+</testcase>
+</testsuite>
+<testsuite name="smoke/harnessCoverage.spec.mjs" timestamp="2026-04-29T11:27:48.446Z" hostname="" tests="4" failures="0" skipped="0" time="3.794" errors="0">
+<testcase name="harness-coverage › 15. Read-only Rendering / Block rendering :: read-only mode renders the main block families correctly" classname="smoke/harnessCoverage.spec.mjs" time="0.947">
+</testcase>
+<testcase name="harness-coverage › 15. Read-only Rendering / Hierarchy and containers :: callout and quote children remain rendered inside their read-only containers" classname="smoke/harnessCoverage.spec.mjs" time="0.918">
+</testcase>
+<testcase name="harness-coverage › 15. Read-only Rendering / Toggle and numbering :: read-only toggles still expand or collapse and numbered lists reset by context" classname="smoke/harnessCoverage.spec.mjs" time="1.09">
+</testcase>
+<testcase name="harness-coverage › 26. Media blocks / Placeholder rendering :: media blocks without an asset show their placeholder preview" classname="smoke/harnessCoverage.spec.mjs" time="0.839">
 </testcase>
 </testsuite>
 </testsuites>

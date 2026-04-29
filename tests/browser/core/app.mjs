@@ -20,6 +20,39 @@ export async function openFreshPage(page, appUrl) {
   await page.getByRole("textbox", { name: "Page title" }).waitFor();
 }
 
+export async function primeLocalState(
+  page,
+  {
+    activeUserId = "mock-user-0",
+    activeWorkspaceByUser = {},
+    pages = {},
+    recents = [],
+  } = {},
+) {
+  await page.addInitScript(
+    ({ seededActiveUserId, seededWorkspaceMap, seededPages, seededRecents }) => {
+      localStorage.clear();
+      localStorage.setItem("pg:pages", JSON.stringify(seededPages));
+      localStorage.setItem("pg:recents", JSON.stringify(seededRecents));
+      localStorage.setItem(
+        "osionos:user-context",
+        JSON.stringify({
+          activeUserId: seededActiveUserId,
+          activeWorkspaceByUser: seededWorkspaceMap,
+        }),
+      );
+      localStorage.removeItem("osionos:user-workspaces");
+      localStorage.removeItem("osionos:active-accounts");
+    },
+    {
+      seededActiveUserId: activeUserId,
+      seededWorkspaceMap: activeWorkspaceByUser,
+      seededPages: pages,
+      seededRecents: recents,
+    },
+  );
+}
+
 export async function openHarnessPage(page, appUrl, relativePath) {
   await page.goto(new URL(relativePath, appUrl).toString(), {
     waitUntil: "domcontentloaded",
@@ -53,6 +86,12 @@ export function getCodeTextarea(page) {
 
 export function pageTitleEditor(page) {
   return page.getByRole("textbox", { name: "Page title" });
+}
+
+export async function readPagesCache(page) {
+  return page.evaluate(() =>
+    JSON.parse(localStorage.getItem("pg:pages") ?? "{}"),
+  );
 }
 
 export async function editorText(editor) {
@@ -161,6 +200,24 @@ export async function focusTextareaEnd(textarea) {
       `Could not place textarea caret at end (active=${lastState.active}, start=${lastState.selectionStart}, end=${lastState.selectionEnd}, expected=${lastState.end})`,
     );
   }
+}
+
+export async function setTextControlSelection(control, start, end = start) {
+  await control.evaluate(
+    (node, range) => {
+      node.focus();
+      node.setSelectionRange(range.start, range.end);
+    },
+    { start, end },
+  );
+}
+
+export async function textControlSelection(control) {
+  return control.evaluate((node) => ({
+    start: node.selectionStart,
+    end: node.selectionEnd,
+    value: node.value,
+  }));
 }
 
 export async function waitForRenderStability(page) {
@@ -387,6 +444,27 @@ export function blockLocator(page, index) {
   return page.getByTestId("draggable-block").nth(index);
 }
 
+export function sidebarPageRow(page, pageId) {
+  return page.locator(
+    `[data-testid="sidebar-page-row"][data-page-id="${pageId}"]`,
+  );
+}
+
+export async function openSidebarPageOptions(page, pageId) {
+  const row = sidebarPageRow(page, pageId);
+  await row.waitFor();
+  await row.scrollIntoViewIfNeeded();
+  await row.hover();
+  await row.getByRole("button", { name: "Page options" }).click();
+}
+
+export async function openSidebarPage(page, pageId) {
+  const row = sidebarPageRow(page, pageId);
+  await row.waitFor();
+  await row.scrollIntoViewIfNeeded();
+  await row.getByTestId("sidebar-page-open").click();
+}
+
 export function blockWrapper(page, index) {
   return page.getByTestId("draggable-block").nth(index);
 }
@@ -556,8 +634,43 @@ export async function openBlockContextMenuForEditor(editor) {
   await block.click({ button: "right" });
 }
 
+export function movePageModal(page) {
+  return page.getByTestId("move-page-modal");
+}
+
+export function blockContextMenu(page) {
+  return page
+    .getByRole("button", { name: "Close block context menu" })
+    .locator("xpath=following-sibling::div[1]");
+}
+
+export function movePageItem(
+  page,
+  { workspaceId, targetType, title } = {},
+) {
+  const selector = [
+    '[data-testid="move-page-item"]',
+    workspaceId ? `[data-workspace-id="${workspaceId}"]` : "",
+    targetType ? `[data-target-type="${targetType}"]` : "",
+  ].join("");
+
+  const locator = page.locator(selector);
+  if (!title) {
+    return locator;
+  }
+  return locator.filter({ hasText: new RegExp(escapeRegex(title), "i") });
+}
+
 export function contextMenuItem(page, label) {
-  return page.getByRole("button", { name: new RegExp(`^${escapeRegex(label)}$`) });
+  return blockContextMenu(page).getByRole("menuitem", {
+    name: new RegExp(`^${escapeRegex(label)}(?:\\s|$)`),
+  });
+}
+
+export function contextSubmenuItem(page, label) {
+  return blockContextMenu(page).getByRole("button", {
+    name: new RegExp(`^${escapeRegex(label)}(?:\\s|$)`),
+  });
 }
 
 export async function pasteText(editor, text) {
@@ -660,6 +773,16 @@ export async function blockOpacity(page, index) {
 export async function visibleBlockTexts(page) {
   return getEditors(page).evaluateAll((nodes) =>
     nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim() ?? ""),
+  );
+}
+
+export function tableCells(page) {
+  return page.getByTestId("table-cell-input");
+}
+
+export function tableCell(page, row, col) {
+  return page.locator(
+    `[data-testid="table-cell-input"][data-row="${row}"][data-col="${col}"]`,
   );
 }
 
