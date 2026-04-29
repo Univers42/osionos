@@ -1020,7 +1020,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <DatabaseBlock
             databaseId={block.databaseId}
             initialViewId={block.viewId}
-            mode="inline"
+            mode={block.type === "database_full_page" ? "full" : "inline"}
           />
         </div>
       );

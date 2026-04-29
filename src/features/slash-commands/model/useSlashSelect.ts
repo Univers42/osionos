@@ -102,12 +102,15 @@ export function useSlashSelect({
         });
       }
 
-      if (selectedType === "database_inline") {
+      if (
+        selectedType === "database_inline" ||
+        selectedType === "database_full_page"
+      ) {
         const result = createInlineDatabase();
         if (result) {
           const newBlock: Block = {
             id: crypto.randomUUID(),
-            type: "database_inline",
+            type: selectedType,
             content: "",
             databaseId: result.databaseId,
             viewId: result.viewId,

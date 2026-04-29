@@ -308,7 +308,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index }) => {
         <DatabaseBlock
           databaseId={block.databaseId}
           initialViewId={block.viewId}
-          mode="inline"
+          mode={block.type === "database_full_page" ? "full" : "inline"}
         />
       );
 
