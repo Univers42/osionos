@@ -1,4 +1,6 @@
+node_modules/
 temp/
+
 playwright-report/
 playwright-report.stale/
 test-results/
