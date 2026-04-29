@@ -444,25 +444,50 @@ export function blockLocator(page, index) {
   return page.getByTestId("draggable-block").nth(index);
 }
 
-export function sidebarPageRow(page, pageId) {
-  return page.locator(
-    `[data-testid="sidebar-page-row"][data-page-id="${pageId}"]`,
+export function sidebarPageButton(page, title) {
+  return page.getByRole("button", {
+    name: new RegExp(`^${escapeRegex(title || "Untitled")}$`),
+  }).first();
+}
+
+async function cachedPageEntry(page, pageId) {
+  return page.evaluate((targetPageId) => {
+    const pages = JSON.parse(localStorage.getItem("pg:pages") ?? "{}");
+    return Object.values(pages)
+      .flat()
+      .find((entry) => entry && entry._id === targetPageId) ?? null;
+  }, pageId);
+}
+
+export function sidebarPageRow(page, title) {
+  return sidebarPageButton(page, title).locator(
+    "xpath=ancestor::div[.//button[@title='Page options']][1]",
   );
 }
 
 export async function openSidebarPageOptions(page, pageId) {
-  const row = sidebarPageRow(page, pageId);
+  const entry = await cachedPageEntry(page, pageId);
+  if (!entry) {
+    throw new Error(`Could not find sidebar page '${pageId}' in local cache`);
+  }
+
+  const row = sidebarPageRow(page, entry.title || "Untitled");
   await row.waitFor();
   await row.scrollIntoViewIfNeeded();
   await row.hover();
-  await row.getByRole("button", { name: "Page options" }).click();
+  await row.getByTitle("Page options").click();
 }
 
 export async function openSidebarPage(page, pageId) {
-  const row = sidebarPageRow(page, pageId);
-  await row.waitFor();
-  await row.scrollIntoViewIfNeeded();
-  await row.getByTestId("sidebar-page-open").click();
+  const entry = await cachedPageEntry(page, pageId);
+  if (!entry) {
+    throw new Error(`Could not find sidebar page '${pageId}' in local cache`);
+  }
+
+  const button = sidebarPageButton(page, entry.title || "Untitled");
+  await button.waitFor();
+  await button.scrollIntoViewIfNeeded();
+  await button.click();
 }
 
 export function blockWrapper(page, index) {
@@ -635,7 +660,7 @@ export async function openBlockContextMenuForEditor(editor) {
 }
 
 export function movePageModal(page) {
-  return page.getByTestId("move-page-modal");
+  return page.getByPlaceholder("Search for a page to move to...");
 }
 
 export function blockContextMenu(page) {
@@ -646,19 +671,14 @@ export function blockContextMenu(page) {
 
 export function movePageItem(
   page,
-  { workspaceId, targetType, title } = {},
+  { title } = {},
 ) {
-  const selector = [
-    '[data-testid="move-page-item"]',
-    workspaceId ? `[data-workspace-id="${workspaceId}"]` : "",
-    targetType ? `[data-target-type="${targetType}"]` : "",
-  ].join("");
-
-  const locator = page.locator(selector);
   if (!title) {
-    return locator;
+    throw new Error("movePageItem requires a title when product markup has no stable test id");
   }
-  return locator.filter({ hasText: new RegExp(escapeRegex(title), "i") });
+  return page.getByRole("button", {
+    name: new RegExp(`^${escapeRegex(title)}(?:\\s|$)`, "i"),
+  });
 }
 
 export function contextMenuItem(page, label) {
@@ -777,13 +797,11 @@ export async function visibleBlockTexts(page) {
 }
 
 export function tableCells(page) {
-  return page.getByTestId("table-cell-input");
+  return page.locator("table tbody input");
 }
 
 export function tableCell(page, row, col) {
-  return page.locator(
-    `[data-testid="table-cell-input"][data-row="${row}"][data-col="${col}"]`,
-  );
+  return page.locator("table tbody tr").nth(row).locator("input").nth(col);
 }
 
 export async function clickOutside(page) {

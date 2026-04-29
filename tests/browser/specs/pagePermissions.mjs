@@ -18,6 +18,7 @@ import {
   openSidebarPageOptions,
   primeLocalState,
   readPagesCache,
+  sidebarPageButton,
   sidebarPageRow,
 } from "../core/app.mjs";
 import { defineScenario } from "../core/scenario.mjs";
@@ -29,6 +30,9 @@ function blockParagraph(id, content) {
     content,
   };
 }
+
+const SHARED_TITLE = "Roadmap Alpha";
+const PRIVATE_TITLE = "Ops Notes";
 
 function pageEntry({
   id,
@@ -58,14 +62,14 @@ function teamPagesFixture() {
     "mock-ws-shared-team": [
       pageEntry({
         id: "team-shared",
-        title: "Shared Spec Page",
+        title: SHARED_TITLE,
         workspaceId: "mock-ws-shared-team",
         ownerId: "mock-user-0",
         visibility: "shared",
       }),
       pageEntry({
         id: "team-private",
-        title: "Private Spec Page",
+        title: PRIVATE_TITLE,
         workspaceId: "mock-ws-shared-team",
         ownerId: "mock-user-0",
         visibility: "private",
@@ -80,7 +84,7 @@ function ownerSharedOnlyFixture() {
     "mock-ws-shared-team": [
       pageEntry({
         id: "team-shared",
-        title: "Shared Spec Page",
+        title: SHARED_TITLE,
         workspaceId: "mock-ws-shared-team",
         ownerId: "mock-user-0",
         visibility: "shared",
@@ -118,11 +122,9 @@ export const pagePermissionsScenarios = [
       await openAsAlexInTeamWorkspace(page);
       await page.goto(appUrl, { waitUntil: "networkidle" });
 
-      await expect(sidebarPageRow(page, "team-shared")).toBeVisible();
-      await expect(
-        sidebarPageRow(page, "team-shared").getByTestId("page-visibility-badge"),
-      ).toHaveText("Shared");
-      await expect(sidebarPageRow(page, "team-private")).toHaveCount(0);
+      await expect(sidebarPageButton(page, SHARED_TITLE)).toBeVisible();
+      await expect(sidebarPageRow(page, SHARED_TITLE)).toContainText("Shared");
+      await expect(sidebarPageButton(page, PRIVATE_TITLE)).toHaveCount(0);
     },
   ),
   defineScenario(
@@ -133,11 +135,9 @@ export const pagePermissionsScenarios = [
       await openAsDylanInTeamWorkspace(page);
       await page.goto(appUrl, { waitUntil: "networkidle" });
 
-      await expect(sidebarPageRow(page, "team-shared")).toBeVisible();
-      await expect(sidebarPageRow(page, "team-private")).toBeVisible();
-      await expect(
-        sidebarPageRow(page, "team-private").getByTestId("page-visibility-badge"),
-      ).toHaveText("Private");
+      await expect(sidebarPageButton(page, SHARED_TITLE)).toBeVisible();
+      await expect(sidebarPageButton(page, PRIVATE_TITLE)).toBeVisible();
+      await expect(sidebarPageRow(page, PRIVATE_TITLE)).toContainText("Private");
     },
   ),
   defineScenario(
@@ -155,15 +155,12 @@ export const pagePermissionsScenarios = [
       await expect(movePageModal(page)).toBeVisible();
       await expect(
         movePageItem(page, {
-          workspaceId: "mock-ws-private-1",
-          targetType: "root",
+          title: "Move to Alex Collaborator's workspace Root",
         }),
       ).toHaveCount(0);
       await expect(
         movePageItem(page, {
-          workspaceId: "mock-ws-shared-team",
-          targetType: "root",
-          title: "Team Workspace Root",
+          title: "Move to Team Workspace Root",
         }),
       ).toHaveCount(1);
     },
@@ -179,15 +176,11 @@ export const pagePermissionsScenarios = [
       await openSidebarPageOptions(page, "team-shared");
       await page.getByRole("button", { name: "Duplicate" }).click();
 
-      await expect(
-        page.getByTestId("sidebar-page-row").filter({
-          hasText: /Shared Spec Page \(1\)/,
-        }),
-      ).toHaveCount(1);
+      await expect(sidebarPageButton(page, `${SHARED_TITLE} (1)`)).toHaveCount(1);
 
       const pages = await readPagesCache(page);
       const duplicate = (pages["mock-ws-shared-team"] ?? []).find(
-        (entry) => entry.title === "Shared Spec Page (1)",
+        (entry) => entry.title === `${SHARED_TITLE} (1)`,
       );
 
       expect(duplicate).toBeTruthy();
@@ -212,12 +205,10 @@ export const pagePermissionsScenarios = [
       await openSidebarPageOptions(page, "team-shared");
       await page.getByRole("button", { name: "Move to" }).click();
       await movePageItem(page, {
-        workspaceId: "mock-ws-private-0",
-        targetType: "root",
-        title: "Dylan Admin's workspace Root",
+        title: "Move to Dylan Admin's workspace Root",
       }).click();
 
-      await expect(sidebarPageRow(page, "team-shared")).toHaveCount(0);
+      await expect(sidebarPageButton(page, SHARED_TITLE)).toHaveCount(0);
 
       const pages = await readPagesCache(page);
       const teamPages = pages["mock-ws-shared-team"] ?? [];

@@ -60,9 +60,9 @@ async function openFreshTable(page, appUrl) {
 }
 
 async function tableDimensions(page) {
-  const rows = await page.locator('[data-testid="table-block"] table tr').count();
+  const rows = await page.locator("table tr").count();
   const cols = rows
-    ? await page.locator('[data-testid="table-block"] table tr').first().locator("input").count()
+    ? await page.locator("table tr").first().locator("input").count()
     : 0;
   return { rows, cols };
 }
@@ -70,6 +70,12 @@ async function tableDimensions(page) {
 async function openCellContextMenu(page, row, col) {
   const cell = tableCell(page, row, col);
   await cell.click({ button: "right" });
+}
+
+function tableBlock(page) {
+  return page.locator("table").first().locator(
+    "xpath=ancestor::div[contains(@class,'group/table')][1]",
+  );
 }
 
 export const tableCellEditingScenarios = [
@@ -113,8 +119,8 @@ export const tableCellEditingScenarios = [
       await tableCell(page, 1, 0).fill("anchor");
       await tableCell(page, 2, 0).fill("tail");
       await tableCell(page, 1, 0).click();
-      await page.getByTestId("table-block").hover();
-      await page.getByTestId("table-add-row").click();
+      await tableBlock(page).hover();
+      await page.getByRole("button", { name: "Add row" }).click();
 
       await expect(tableCell(page, 2, 0)).toBeVisible();
       await expect(tableCell(page, 2, 0)).toHaveValue("");
@@ -132,8 +138,8 @@ export const tableCellEditingScenarios = [
       await tableCell(page, 0, 1).fill("anchor");
       await tableCell(page, 0, 2).fill("tail");
       await tableCell(page, 0, 1).click();
-      await page.getByTestId("table-block").hover();
-      await page.getByTestId("table-add-column").click();
+      await tableBlock(page).hover();
+      await page.getByRole("button", { name: "Add column" }).click();
 
       await expect(tableCell(page, 0, 2)).toBeVisible();
       await expect(tableCell(page, 0, 2)).toHaveValue("");

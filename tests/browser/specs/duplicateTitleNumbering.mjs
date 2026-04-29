@@ -16,7 +16,7 @@ import {
   openSidebarPageOptions,
   primeLocalState,
   readPagesCache,
-  sidebarPageRow,
+  sidebarPageButton,
 } from "../core/app.mjs";
 import { defineScenario } from "../core/scenario.mjs";
 
@@ -80,10 +80,8 @@ export const duplicateTitleNumberingScenarios = [
 
       await duplicatePageFromSidebar(page, "duplicate-root");
 
-      await expect(sidebarPageRow(page, "duplicate-root")).toContainText("Release plan");
-      await expect(
-        page.getByTestId("sidebar-page-row").filter({ hasText: /^Release plan \(1\)/ }),
-      ).toHaveCount(1);
+      await expect(sidebarPageButton(page, "Release plan")).toBeVisible();
+      await expect(sidebarPageButton(page, "Release plan (1)")).toHaveCount(1);
 
       const pages = await workspacePages(page);
       expect(pages.some((entry) => entry.title === "Release plan")).toBe(true);
