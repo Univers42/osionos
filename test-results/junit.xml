@@ -1,350 +1,350 @@
-<testsuites id="" name="" tests="162" failures="0" skipped="0" errors="0" time="150.37724400000002">
-<testsuite name="functional/assets.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="31" failures="0" skipped="0" time="75.399" errors="0">
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: Add icon assigns a page icon when the page starts without one" classname="functional/assets.spec.mjs" time="2.428">
+<testsuites id="" name="" tests="162" failures="0" skipped="0" errors="0" time="129.943049">
+<testsuite name="functional/assets.spec.mjs" timestamp="2026-04-30T10:08:32.479Z" hostname="" tests="31" failures="0" skipped="0" time="65.092" errors="0">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: Add icon assigns a page icon when the page starts without one" classname="functional/assets.spec.mjs" time="1.879">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: clicking the page icon opens the asset picker and Escape closes it" classname="functional/assets.spec.mjs" time="2.54">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: clicking the page icon opens the asset picker and Escape closes it" classname="functional/assets.spec.mjs" time="1.956">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: selecting an asset updates the page icon immediately" classname="functional/assets.spec.mjs" time="3.33">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: selecting an asset updates the page icon immediately" classname="functional/assets.spec.mjs" time="2.664">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: clicking outside the page icon picker closes it" classname="functional/assets.spec.mjs" time="1.8">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: clicking outside the page icon picker closes it" classname="functional/assets.spec.mjs" time="1.607">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: the page icon picker can be reopened after closing it once" classname="functional/assets.spec.mjs" time="1.967">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: the page icon picker can be reopened after closing it once" classname="functional/assets.spec.mjs" time="1.704">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: Remove icon clears the page icon and restores the Add icon action" classname="functional/assets.spec.mjs" time="1.874">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: Remove icon clears the page icon and restores the Add icon action" classname="functional/assets.spec.mjs" time="1.556">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: clicking a custom page icon reopens its picker after the icon has already been changed" classname="functional/assets.spec.mjs" time="2.276">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page icons :: clicking a custom page icon reopens its picker after the icon has already been changed" classname="functional/assets.spec.mjs" time="2.154">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: new callout blocks start with the default light bulb icon" classname="functional/assets.spec.mjs" time="2.395">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: new callout blocks start with the default light bulb icon" classname="functional/assets.spec.mjs" time="1.979">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: clicking a callout icon opens its picker and Escape closes it" classname="functional/assets.spec.mjs" time="2.516">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: clicking a callout icon opens its picker and Escape closes it" classname="functional/assets.spec.mjs" time="2.157">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: clicking outside the callout icon picker closes it" classname="functional/assets.spec.mjs" time="2.582">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: clicking outside the callout icon picker closes it" classname="functional/assets.spec.mjs" time="2.212">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: selecting an asset updates the callout icon immediately" classname="functional/assets.spec.mjs" time="2.972">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: selecting an asset updates the callout icon immediately" classname="functional/assets.spec.mjs" time="2.512">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: the callout icon picker can be reopened after being closed" classname="functional/assets.spec.mjs" time="2.695">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: the callout icon picker can be reopened after being closed" classname="functional/assets.spec.mjs" time="2.274">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: clicking a custom callout icon reopens its picker after the icon has already changed" classname="functional/assets.spec.mjs" time="3.411">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: clicking a custom callout icon reopens its picker after the icon has already changed" classname="functional/assets.spec.mjs" time="2.773">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: Remove icon resets the callout icon back to the default light bulb" classname="functional/assets.spec.mjs" time="3.65">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Callout icons :: Remove icon resets the callout icon back to the default light bulb" classname="functional/assets.spec.mjs" time="3.01">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: Add cover assigns a cover to a page that starts without one" classname="functional/assets.spec.mjs" time="1.419">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: Add cover assigns a cover to a page that starts without one" classname="functional/assets.spec.mjs" time="1.231">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: selecting a cover from the picker updates the page cover immediately" classname="functional/assets.spec.mjs" time="1.784">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: selecting a cover from the picker updates the page cover immediately" classname="functional/assets.spec.mjs" time="1.691">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: clicking Change cover opens the cover picker and outside click closes it" classname="functional/assets.spec.mjs" time="1.789">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: clicking Change cover opens the cover picker and outside click closes it" classname="functional/assets.spec.mjs" time="1.732">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: pressing Escape closes the cover picker" classname="functional/assets.spec.mjs" time="1.699">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: pressing Escape closes the cover picker" classname="functional/assets.spec.mjs" time="1.515">
 </testcase>
 <testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: the cover picker can be reopened after it has been closed" classname="functional/assets.spec.mjs" time="1.726">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: closing the cover picker without selecting anything keeps the current cover in place" classname="functional/assets.spec.mjs" time="1.705">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: closing the cover picker without selecting anything keeps the current cover in place" classname="functional/assets.spec.mjs" time="1.498">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: Remove cover clears the current cover and restores Add cover" classname="functional/assets.spec.mjs" time="1.637">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Page cover :: Remove cover clears the current cover and restores Add cover" classname="functional/assets.spec.mjs" time="1.517">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: creating an image from an empty paragraph converts the current block without leaving an extra paragraph behind" classname="functional/assets.spec.mjs" time="2.416">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: creating an image from an empty paragraph converts the current block without leaving an extra paragraph behind" classname="functional/assets.spec.mjs" time="2.14">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: an image block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.455">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: an image block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.109">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: a video block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.597">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: a video block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.181">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: an audio block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.491">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: an audio block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.107">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: a file block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.421">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: a file block can be created from the slash menu on an empty paragraph" classname="functional/assets.spec.mjs" time="2.08">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: selecting media in a paragraph with existing text inserts a new media block below" classname="functional/assets.spec.mjs" time="3.322">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: selecting media in a paragraph with existing text inserts a new media block below" classname="functional/assets.spec.mjs" time="2.766">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: changing an image asset updates the image preview without changing block type" classname="functional/assets.spec.mjs" time="2.76">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: changing an image asset updates the image preview without changing block type" classname="functional/assets.spec.mjs" time="2.439">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: pressing Escape closes a media picker without changing the current block" classname="functional/assets.spec.mjs" time="2.565">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: pressing Escape closes a media picker without changing the current block" classname="functional/assets.spec.mjs" time="2.383">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: clicking outside a media picker closes it without changing the current block" classname="functional/assets.spec.mjs" time="2.782">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: clicking outside a media picker closes it without changing the current block" classname="functional/assets.spec.mjs" time="2.429">
 </testcase>
-<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: the media caption remains inline-editable and still opens the formatting toolbar on selection" classname="functional/assets.spec.mjs" time="3.395">
-</testcase>
-</testsuite>
-<testsuite name="functional/blockCreation.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="15" failures="0" skipped="0" time="30.085" errors="0">
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: typing / in an empty paragraph opens the slash menu" classname="functional/blockCreation.spec.mjs" time="1.683">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: typing /hea filters the slash menu down to heading options" classname="functional/blockCreation.spec.mjs" time="2.014">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: pressing Enter on /quote converts the block without leaving extra slash text behind" classname="functional/blockCreation.spec.mjs" time="2.1">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: clicking Bulleted List converts the current block and cleans the slash text" classname="functional/blockCreation.spec.mjs" time="1.916">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: backspacing past the slash trigger closes the slash menu" classname="functional/blockCreation.spec.mjs" time="2.11">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: pressing Escape closes the slash menu and keeps the typed slash text" classname="functional/blockCreation.spec.mjs" time="1.736">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: the slash menu can be reopened normally after a previous cancelled use" classname="functional/blockCreation.spec.mjs" time="2.002">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing # and a space turns the paragraph into a heading" classname="functional/blockCreation.spec.mjs" time="1.986">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing - and a space turns the paragraph into a bulleted list item" classname="functional/blockCreation.spec.mjs" time="2.159">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing [] and a space turns the paragraph into a to-do item" classname="functional/blockCreation.spec.mjs" time="2.122">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing [ ] and a space also turns the paragraph into a to-do item" classname="functional/blockCreation.spec.mjs" time="2.108">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing 1. and a space turns the paragraph into a numbered list item" classname="functional/blockCreation.spec.mjs" time="2.246">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing --- converts the paragraph into a divider" classname="functional/blockCreation.spec.mjs" time="1.711">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing a fenced code marker turns the paragraph into a code block" classname="functional/blockCreation.spec.mjs" time="2.013">
-</testcase>
-<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: markdown shortcuts remove the typed prefix instead of keeping it in the final content" classname="functional/blockCreation.spec.mjs" time="2.179">
+<testcase name="assets › 12. Emojis, Icons &amp; Media / Media blocks :: the media caption remains inline-editable and still opens the formatting toolbar on selection" classname="functional/assets.spec.mjs" time="3.111">
 </testcase>
 </testsuite>
-<testsuite name="functional/categoryRegistry.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="4" failures="0" skipped="0" time="10.617" errors="0">
-<testcase name="category-registry › 27. Block Category Registry / NON_PARENTABLE :: blocks marked as non-parentable reject child indentation via Tab" classname="functional/categoryRegistry.spec.mjs" time="3.232">
+<testsuite name="functional/blockCreation.spec.mjs" timestamp="2026-04-30T10:08:32.479Z" hostname="" tests="15" failures="0" skipped="0" time="26.662" errors="0">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: typing / in an empty paragraph opens the slash menu" classname="functional/blockCreation.spec.mjs" time="1.604">
 </testcase>
-<testcase name="category-registry › 27. Block Category Registry / NON_INDENTABLE :: blocks marked as non-indentable keep Tab behavior local instead of structural" classname="functional/categoryRegistry.spec.mjs" time="2.31">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: typing /hea filters the slash menu down to heading options" classname="functional/blockCreation.spec.mjs" time="1.811">
 </testcase>
-<testcase name="category-registry › 27. Block Category Registry / enterCreatesChild :: blocks marked enterCreatesChild create nested children on Enter" classname="functional/categoryRegistry.spec.mjs" time="2.926">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: pressing Enter on /quote converts the block without leaving extra slash text behind" classname="functional/blockCreation.spec.mjs" time="1.881">
 </testcase>
-<testcase name="category-registry › 27. Block Category Registry / sibling enter behavior :: blocks not marked enterCreatesChild create siblings rather than nested children" classname="functional/categoryRegistry.spec.mjs" time="2.149">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: clicking Bulleted List converts the current block and cleans the slash text" classname="functional/blockCreation.spec.mjs" time="1.73">
 </testcase>
-</testsuite>
-<testsuite name="functional/containersAndPaste.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="19" failures="0" skipped="0" time="62.894" errors="0">
-<testcase name="containers-and-paste › 7. Toggle Block / Basic toggle behavior :: an empty expanded toggle shows the Empty toggle hint" classname="functional/containersAndPaste.spec.mjs" time="3.241">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: backspacing past the slash trigger closes the slash menu" classname="functional/blockCreation.spec.mjs" time="1.867">
 </testcase>
-<testcase name="containers-and-paste › 7. Toggle Block / Basic toggle behavior :: clicking the chevron collapses and re-expands toggle children without losing them" classname="functional/containersAndPaste.spec.mjs" time="4.679">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: pressing Escape closes the slash menu and keeps the typed slash text" classname="functional/blockCreation.spec.mjs" time="1.465">
 </testcase>
-<testcase name="containers-and-paste › 7. Toggle Block / Toggle children as full blocks :: the slash menu works inside a toggle child" classname="functional/containersAndPaste.spec.mjs" time="3.978">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Slash menu :: the slash menu can be reopened normally after a previous cancelled use" classname="functional/blockCreation.spec.mjs" time="1.753">
 </testcase>
-<testcase name="containers-and-paste › 7. Toggle Block / Toggle children as full blocks :: markdown shortcuts still work inside a toggle child" classname="functional/containersAndPaste.spec.mjs" time="4.265">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing # and a space turns the paragraph into a heading" classname="functional/blockCreation.spec.mjs" time="1.766">
 </testcase>
-<testcase name="containers-and-paste › 7. Toggle Block / Toggle children as full blocks :: Tab indents one toggle child under another inside the toggle tree" classname="functional/containersAndPaste.spec.mjs" time="4.185">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing - and a space turns the paragraph into a bulleted list item" classname="functional/blockCreation.spec.mjs" time="1.848">
 </testcase>
-<testcase name="containers-and-paste › 7. Toggle Block / Toggle + external interactions :: a root block can be moved into a collapsed toggle and remains hidden until the toggle is expanded" classname="functional/containersAndPaste.spec.mjs" time="4.56">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing [] and a space turns the paragraph into a to-do item" classname="functional/blockCreation.spec.mjs" time="1.85">
 </testcase>
-<testcase name="containers-and-paste › 7. Toggle Block / Toggle + external interactions :: deleting an empty toggle summary promotes its child blocks to the parent level" classname="functional/containersAndPaste.spec.mjs" time="4.795">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing [ ] and a space also turns the paragraph into a to-do item" classname="functional/blockCreation.spec.mjs" time="1.889">
 </testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: callout children are rendered inside the callout box" classname="functional/containersAndPaste.spec.mjs" time="3.222">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing 1. and a space turns the paragraph into a numbered list item" classname="functional/blockCreation.spec.mjs" time="1.833">
 </testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: indenting a paragraph under a callout renders it as a child inside the container" classname="functional/containersAndPaste.spec.mjs" time="2.727">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing --- converts the paragraph into a divider" classname="functional/blockCreation.spec.mjs" time="1.604">
 </testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: slash menu commands work inside callout children" classname="functional/containersAndPaste.spec.mjs" time="2.894">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: typing a fenced code marker turns the paragraph into a code block" classname="functional/blockCreation.spec.mjs" time="1.816">
 </testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: deleting an empty callout keeps nested grandchildren under their promoted parent" classname="functional/containersAndPaste.spec.mjs" time="4.193">
-</testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: deleting an empty callout promotes its children instead of deleting their content" classname="functional/containersAndPaste.spec.mjs" time="3.423">
-</testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Quote :: quote children are rendered inside the quote branch" classname="functional/containersAndPaste.spec.mjs" time="3.163">
-</testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Quote :: a quote can contain multiple child blocks rendered inside the quote branch" classname="functional/containersAndPaste.spec.mjs" time="3.339">
-</testcase>
-<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Quote :: deleting an empty quote promotes its children according to editor rules" classname="functional/containersAndPaste.spec.mjs" time="3.641">
-</testcase>
-<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting multiline markdown creates multiple corresponding blocks" classname="functional/containersAndPaste.spec.mjs" time="1.78">
-</testcase>
-<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting a fenced code block creates a code block with the pasted content" classname="functional/containersAndPaste.spec.mjs" time="1.703">
-</testcase>
-<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting heading levels 4-6 preserves each heading level style" classname="functional/containersAndPaste.spec.mjs" time="1.542">
-</testcase>
-<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting a single short line keeps it as inline text in the current block" classname="functional/containersAndPaste.spec.mjs" time="1.564">
+<testcase name="block-creation › 1. Block Creation &amp; Type Selection / Markdown shortcuts :: markdown shortcuts remove the typed prefix instead of keeping it in the final content" classname="functional/blockCreation.spec.mjs" time="1.945">
 </testcase>
 </testsuite>
-<testsuite name="functional/contextMenu.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="13" failures="0" skipped="0" time="33.922" errors="0">
-<testcase name="context-menu › 5. Context Menu / Basic operations :: right-clicking a block opens the block context menu with its main sections" classname="functional/contextMenu.spec.mjs" time="2.36">
+<testsuite name="functional/categoryRegistry.spec.mjs" timestamp="2026-04-30T10:08:32.479Z" hostname="" tests="4" failures="0" skipped="0" time="8.965" errors="0">
+<testcase name="category-registry › 27. Block Category Registry / NON_PARENTABLE :: blocks marked as non-parentable reject child indentation via Tab" classname="functional/categoryRegistry.spec.mjs" time="2.681">
 </testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: clicking the drag handle opens the same block context menu" classname="functional/contextMenu.spec.mjs" time="2.288">
+<testcase name="category-registry › 27. Block Category Registry / NON_INDENTABLE :: blocks marked as non-indentable keep Tab behavior local instead of structural" classname="functional/categoryRegistry.spec.mjs" time="2.031">
 </testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: Insert text above creates a new paragraph above the current block and focuses it" classname="functional/contextMenu.spec.mjs" time="2.239">
+<testcase name="category-registry › 27. Block Category Registry / enterCreatesChild :: blocks marked enterCreatesChild create nested children on Enter" classname="functional/categoryRegistry.spec.mjs" time="2.286">
 </testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: Insert text below creates a new paragraph below the current block and focuses it" classname="functional/contextMenu.spec.mjs" time="2.289">
-</testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: Duplicate creates an identical leaf block below the original" classname="functional/contextMenu.spec.mjs" time="2.395">
-</testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: Move up swaps the selected block with the one above it" classname="functional/contextMenu.spec.mjs" time="2.604">
-</testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: Move down swaps the selected block with the one below it" classname="functional/contextMenu.spec.mjs" time="2.624">
-</testcase>
-<testcase name="context-menu › 5. Context Menu / Basic operations :: Turn into Heading 1 transforms the block while preserving its text" classname="functional/contextMenu.spec.mjs" time="2.181">
-</testcase>
-<testcase name="context-menu › 5. Context Menu / Context menu + children :: Delete removes only the selected leaf block when it has no children" classname="functional/contextMenu.spec.mjs" time="2.272">
-</testcase>
-<testcase name="context-menu › 5. Context Menu / Context menu + children :: Delete on a parent block removes its whole subtree" classname="functional/contextMenu.spec.mjs" time="2.569">
-</testcase>
-<testcase name="context-menu › 5. Context Menu / Context menu + children :: Delete on a toggle parent removes the whole toggle subtree" classname="functional/contextMenu.spec.mjs" time="4.83">
-</testcase>
-<testcase name="context-menu › 5. Context Menu / Context menu + children :: Duplicate on a parent block duplicates its subtree as independent copies" classname="functional/contextMenu.spec.mjs" time="3.204">
-</testcase>
-<testcase name="context-menu (serial) › 5. Context Menu / Basic operations :: Copy text writes the current block text to the clipboard" classname="functional/contextMenu.spec.mjs" time="2.067">
+<testcase name="category-registry › 27. Block Category Registry / sibling enter behavior :: blocks not marked enterCreatesChild create siblings rather than nested children" classname="functional/categoryRegistry.spec.mjs" time="1.967">
 </testcase>
 </testsuite>
-<testsuite name="functional/dragAndDrop.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="8" failures="0" skipped="0" time="22.552" errors="0">
-<testcase name="drag-and-drop › 6. Drag and Drop / Same-level reorder :: dragging a root block above another root block reorders siblings" classname="functional/dragAndDrop.spec.mjs" time="2.525">
+<testsuite name="functional/containersAndPaste.spec.mjs" timestamp="2026-04-30T10:08:32.479Z" hostname="" tests="19" failures="0" skipped="0" time="53.825" errors="0">
+<testcase name="containers-and-paste › 7. Toggle Block / Basic toggle behavior :: an empty expanded toggle shows the Empty toggle hint" classname="functional/containersAndPaste.spec.mjs" time="2.959">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Same-level reorder :: dragging a nested child above another nested child reorders siblings inside the same parent" classname="functional/dragAndDrop.spec.mjs" time="3.417">
+<testcase name="containers-and-paste › 7. Toggle Block / Basic toggle behavior :: clicking the chevron collapses and re-expands toggle children without losing them" classname="functional/containersAndPaste.spec.mjs" time="3.738">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Cross-level moves :: dragging a child block below its parent at root level moves it out of the hierarchy" classname="functional/dragAndDrop.spec.mjs" time="2.314">
+<testcase name="containers-and-paste › 7. Toggle Block / Toggle children as full blocks :: the slash menu works inside a toggle child" classname="functional/containersAndPaste.spec.mjs" time="3.487">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Cross-level moves :: dragging a child between parent groups moves it into the new parent subtree" classname="functional/dragAndDrop.spec.mjs" time="3.528">
+<testcase name="containers-and-paste › 7. Toggle Block / Toggle children as full blocks :: markdown shortcuts still work inside a toggle child" classname="functional/containersAndPaste.spec.mjs" time="3.549">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Cross-level moves :: dragging a parent block keeps its nested subtree together" classname="functional/dragAndDrop.spec.mjs" time="3.722">
+<testcase name="containers-and-paste › 7. Toggle Block / Toggle children as full blocks :: Tab indents one toggle child under another inside the toggle tree" classname="functional/containersAndPaste.spec.mjs" time="3.631">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Safety checks :: starting a drag marks the dragged block with reduced opacity" classname="functional/dragAndDrop.spec.mjs" time="2.313">
+<testcase name="containers-and-paste › 7. Toggle Block / Toggle + external interactions :: a root block can be moved into a collapsed toggle and remains hidden until the toggle is expanded" classname="functional/containersAndPaste.spec.mjs" time="4.039">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Safety checks :: dragging over another block shows a visible drop indicator" classname="functional/dragAndDrop.spec.mjs" time="2.082">
+<testcase name="containers-and-paste › 7. Toggle Block / Toggle + external interactions :: deleting an empty toggle summary promotes its child blocks to the parent level" classname="functional/containersAndPaste.spec.mjs" time="4.191">
 </testcase>
-<testcase name="drag-and-drop › 6. Drag and Drop / Safety checks :: dropping a block onto itself leaves the order unchanged" classname="functional/dragAndDrop.spec.mjs" time="2.651">
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: callout children are rendered inside the callout box" classname="functional/containersAndPaste.spec.mjs" time="2.764">
 </testcase>
-</testsuite>
-<testsuite name="functional/editingBehavior.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="19" failures="0" skipped="0" time="50.616" errors="0">
-<testcase name="editing-behavior › 3. Enter Key Behavior / Standard blocks :: pressing Enter in a paragraph creates a new paragraph below and moves focus to it" classname="functional/editingBehavior.spec.mjs" time="2.141">
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: indenting a paragraph under a callout renders it as a child inside the container" classname="functional/containersAndPaste.spec.mjs" time="2.199">
 </testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / Standard blocks :: pressing Enter in a heading creates a normal paragraph below" classname="functional/editingBehavior.spec.mjs" time="2.235">
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: slash menu commands work inside callout children" classname="functional/containersAndPaste.spec.mjs" time="2.53">
 </testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter in a bulleted list item creates a new bullet below" classname="functional/editingBehavior.spec.mjs" time="2.839">
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: deleting an empty callout keeps nested grandchildren under their promoted parent" classname="functional/containersAndPaste.spec.mjs" time="3.322">
 </testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter in a numbered list item creates the next number" classname="functional/editingBehavior.spec.mjs" time="2.967">
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Callout :: deleting an empty callout promotes its children instead of deleting their content" classname="functional/containersAndPaste.spec.mjs" time="2.961">
 </testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter in a to-do item creates a new unchecked to-do below" classname="functional/editingBehavior.spec.mjs" time="2.197">
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Quote :: quote children are rendered inside the quote branch" classname="functional/containersAndPaste.spec.mjs" time="2.829">
 </testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on a checked empty to-do item converts it into a paragraph and clears the checked state" classname="functional/editingBehavior.spec.mjs" time="2.513">
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Quote :: a quote can contain multiple child blocks rendered inside the quote branch" classname="functional/containersAndPaste.spec.mjs" time="2.949">
 </testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on an empty bulleted list item converts it into a paragraph" classname="functional/editingBehavior.spec.mjs" time="2.886">
+<testcase name="containers-and-paste › 8. Callout &amp; Quote as Containers / Quote :: deleting an empty quote promotes its children according to editor rules" classname="functional/containersAndPaste.spec.mjs" time="3.099">
 </testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on an empty numbered list item converts it into a paragraph" classname="functional/editingBehavior.spec.mjs" time="2.994">
+<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting multiline markdown creates multiple corresponding blocks" classname="functional/containersAndPaste.spec.mjs" time="1.527">
 </testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on an empty to-do item converts it into a paragraph" classname="functional/editingBehavior.spec.mjs" time="2.387">
+<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting a fenced code block creates a code block with the pasted content" classname="functional/containersAndPaste.spec.mjs" time="1.342">
 </testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / Container blocks :: pressing Enter in a callout creates a child paragraph inside the callout" classname="functional/editingBehavior.spec.mjs" time="2.883">
+<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting heading levels 4-6 preserves each heading level style" classname="functional/containersAndPaste.spec.mjs" time="1.4">
 </testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / Container blocks :: pressing Enter in a quote creates a child paragraph inside the quote container" classname="functional/editingBehavior.spec.mjs" time="2.526">
-</testcase>
-<testcase name="editing-behavior › 3. Enter Key Behavior / Container blocks :: pressing Enter in a toggle summary expands it and focuses the first child" classname="functional/editingBehavior.spec.mjs" time="3.955">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty bulleted list item deletes it and keeps focus on a logical sibling" classname="functional/editingBehavior.spec.mjs" time="2.085">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty root paragraph deletes it and focuses the previous block" classname="functional/editingBehavior.spec.mjs" time="2.708">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Delete on the first empty root paragraph deletes it and focuses the next logical block" classname="functional/editingBehavior.spec.mjs" time="3.184">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty heading converts it into a paragraph instead of deleting it" classname="functional/editingBehavior.spec.mjs" time="2.386">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty indented paragraph outdents it instead of deleting it" classname="functional/editingBehavior.spec.mjs" time="3.132">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Divider deletion :: Backspace on a focused divider removes it from the page" classname="functional/editingBehavior.spec.mjs" time="2.3">
-</testcase>
-<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Divider deletion :: Delete on a focused divider removes it from the page" classname="functional/editingBehavior.spec.mjs" time="2.298">
+<testcase name="containers-and-paste (serial) › 10. Paste Handling / Paste handling :: pasting a single short line keeps it as inline text in the current block" classname="functional/containersAndPaste.spec.mjs" time="1.309">
 </testcase>
 </testsuite>
-<testsuite name="functional/focusManagement.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="3" failures="0" skipped="0" time="8.578" errors="0">
-<testcase name="focus-management › 28. Focus management / Enter transitions :: after Enter on a heading the focus moves into the new paragraph below" classname="functional/focusManagement.spec.mjs" time="2.212">
+<testsuite name="functional/contextMenu.spec.mjs" timestamp="2026-04-30T10:08:32.479Z" hostname="" tests="13" failures="0" skipped="0" time="29.787" errors="0">
+<testcase name="context-menu › 5. Context Menu / Basic operations :: right-clicking a block opens the block context menu with its main sections" classname="functional/contextMenu.spec.mjs" time="2.064">
 </testcase>
-<testcase name="focus-management › 28. Focus management / Delete transitions :: after deleting the first empty root block the focus moves to the next logical block" classname="functional/focusManagement.spec.mjs" time="2.845">
+<testcase name="context-menu › 5. Context Menu / Basic operations :: clicking the drag handle opens the same block context menu" classname="functional/contextMenu.spec.mjs" time="2.073">
 </testcase>
-<testcase name="focus-management › 28. Focus management / Container transitions :: pressing Enter on an empty toggle summary moves focus into the newly created child" classname="functional/focusManagement.spec.mjs" time="3.521">
+<testcase name="context-menu › 5. Context Menu / Basic operations :: Insert text above creates a new paragraph above the current block and focuses it" classname="functional/contextMenu.spec.mjs" time="2.085">
 </testcase>
-</testsuite>
-<testsuite name="functional/indentation.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="13" failures="0" skipped="0" time="38.356" errors="0">
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Tab indents a paragraph under the previous sibling" classname="functional/indentation.spec.mjs" time="2.238">
+<testcase name="context-menu › 5. Context Menu / Basic operations :: Insert text below creates a new paragraph below the current block and focuses it" classname="functional/contextMenu.spec.mjs" time="1.979">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Shift+Tab outdents an indented paragraph back to root level" classname="functional/indentation.spec.mjs" time="2.628">
+<testcase name="context-menu › 5. Context Menu / Basic operations :: Duplicate creates an identical leaf block below the original" classname="functional/contextMenu.spec.mjs" time="2.014">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: repeated Tab builds hierarchy one level at a time instead of skipping directly to deep nesting" classname="functional/indentation.spec.mjs" time="2.825">
+<testcase name="context-menu › 5. Context Menu / Basic operations :: Move up swaps the selected block with the one above it" classname="functional/contextMenu.spec.mjs" time="2.257">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: Shift+Tab only outdents one level at a time from a deep hierarchy" classname="functional/indentation.spec.mjs" time="3.096">
+<testcase name="context-menu › 5. Context Menu / Basic operations :: Move down swaps the selected block with the one below it" classname="functional/contextMenu.spec.mjs" time="2.173">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Tab on the first root block does nothing" classname="functional/indentation.spec.mjs" time="2.281">
+<testcase name="context-menu › 5. Context Menu / Basic operations :: Turn into Heading 1 transforms the block while preserving its text" classname="functional/contextMenu.spec.mjs" time="1.974">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Shift+Tab on a root paragraph does nothing" classname="functional/indentation.spec.mjs" time="2.196">
+<testcase name="context-menu › 5. Context Menu / Context menu + children :: Delete removes only the selected leaf block when it has no children" classname="functional/contextMenu.spec.mjs" time="2.036">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a heading can be indented under a paragraph and keeps its heading styling" classname="functional/indentation.spec.mjs" time="3.163">
+<testcase name="context-menu › 5. Context Menu / Context menu + children :: Delete on a parent block removes its whole subtree" classname="functional/contextMenu.spec.mjs" time="2.217">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph cannot be indented under a heading" classname="functional/indentation.spec.mjs" time="3.26">
+<testcase name="context-menu › 5. Context Menu / Context menu + children :: Delete on a toggle parent removes the whole toggle subtree" classname="functional/contextMenu.spec.mjs" time="4.338">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph cannot be indented under a code block" classname="functional/indentation.spec.mjs" time="3.76">
+<testcase name="context-menu › 5. Context Menu / Context menu + children :: Duplicate on a parent block duplicates its subtree as independent copies" classname="functional/contextMenu.spec.mjs" time="2.762">
 </testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph cannot be indented under a divider" classname="functional/indentation.spec.mjs" time="3.636">
-</testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph can be indented under a callout container" classname="functional/indentation.spec.mjs" time="3.677">
-</testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph can be indented under a quote container" classname="functional/indentation.spec.mjs" time="3.35">
-</testcase>
-<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: pressing Tab inside a code block inserts spaces instead of changing hierarchy" classname="functional/indentation.spec.mjs" time="2.246">
+<testcase name="context-menu (serial) › 5. Context Menu / Basic operations :: Copy text writes the current block text to the clipboard" classname="functional/contextMenu.spec.mjs" time="1.815">
 </testcase>
 </testsuite>
-<testsuite name="functional/inlineToolbar.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="31" failures="0" skipped="0" time="92.153" errors="0">
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting visible text opens the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="2.435">
+<testsuite name="functional/dragAndDrop.spec.mjs" timestamp="2026-04-30T10:08:32.479Z" hostname="" tests="8" failures="0" skipped="0" time="19.221" errors="0">
+<testcase name="drag-and-drop › 6. Drag and Drop / Same-level reorder :: dragging a root block above another root block reorders siblings" classname="functional/dragAndDrop.spec.mjs" time="2.113">
 </testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting text inside a heading also opens the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="2.407">
+<testcase name="drag-and-drop › 6. Drag and Drop / Same-level reorder :: dragging a nested child above another nested child reorders siblings inside the same parent" classname="functional/dragAndDrop.spec.mjs" time="3.001">
 </testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting text inside a callout opens the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="3.136">
+<testcase name="drag-and-drop › 6. Drag and Drop / Cross-level moves :: dragging a child block below its parent at root level moves it out of the hierarchy" classname="functional/dragAndDrop.spec.mjs" time="2.103">
 </testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: placing only the caret keeps the inline toolbar hidden" classname="functional/inlineToolbar.spec.mjs" time="2.212">
+<testcase name="drag-and-drop › 6. Drag and Drop / Cross-level moves :: dragging a child between parent groups moves it into the new parent subtree" classname="functional/dragAndDrop.spec.mjs" time="2.888">
 </testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: clearing the selection closes the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="2.544">
+<testcase name="drag-and-drop › 6. Drag and Drop / Cross-level moves :: dragging a parent block keeps its nested subtree together" classname="functional/dragAndDrop.spec.mjs" time="3.016">
 </testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: clicking outside the editor closes the inline toolbar on blur" classname="functional/inlineToolbar.spec.mjs" time="2.557">
+<testcase name="drag-and-drop › 6. Drag and Drop / Safety checks :: starting a drag marks the dragged block with reduced opacity" classname="functional/dragAndDrop.spec.mjs" time="1.988">
 </testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting inside a code block uses the native textarea selection only" classname="functional/inlineToolbar.spec.mjs" time="2.143">
+<testcase name="drag-and-drop › 6. Drag and Drop / Safety checks :: dragging over another block shows a visible drop indicator" classname="functional/dragAndDrop.spec.mjs" time="1.881">
 </testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: the text color button opens the text color palette" classname="functional/inlineToolbar.spec.mjs" time="2.608">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: the background color button opens the background palette" classname="functional/inlineToolbar.spec.mjs" time="2.632">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying text color changes only the selected text" classname="functional/inlineToolbar.spec.mjs" time="2.914">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying background color changes only the selected text" classname="functional/inlineToolbar.spec.mjs" time="2.954">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: text color survives additional typing without stacking wrappers" classname="functional/inlineToolbar.spec.mjs" time="3.108">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: background color survives additional typing without stacking wrappers" classname="functional/inlineToolbar.spec.mjs" time="3.201">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying the same text color twice removes the text color wrapper" classname="functional/inlineToolbar.spec.mjs" time="3.327">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying the same background color twice removes the background wrapper" classname="functional/inlineToolbar.spec.mjs" time="3.286">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: background color excludes trailing whitespace from the highlighted wrapper" classname="functional/inlineToolbar.spec.mjs" time="2.672">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: text color and background color can coexist with bold and italic while typing" classname="functional/inlineToolbar.spec.mjs" time="4.246">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the bold button toggles bold on and off" classname="functional/inlineToolbar.spec.mjs" time="2.979">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the italic button toggles italic on and off" classname="functional/inlineToolbar.spec.mjs" time="3.153">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the strikethrough button toggles strikethrough on and off" classname="functional/inlineToolbar.spec.mjs" time="3.425">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: bold and italic can coexist on the same selection" classname="functional/inlineToolbar.spec.mjs" time="2.971">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the inline code button wraps the selection as inline code" classname="functional/inlineToolbar.spec.mjs" time="2.742">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: inline code keeps inherited custom text and background colors" classname="functional/inlineToolbar.spec.mjs" time="4.659">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: mixed inline formats remain stable after typing and deleting inside the same region" classname="functional/inlineToolbar.spec.mjs" time="4.84">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: the Add link button opens the link type chooser" classname="functional/inlineToolbar.spec.mjs" time="2.587">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: a web link can be applied to the selected text" classname="functional/inlineToolbar.spec.mjs" time="2.867">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: a page link can be applied from the page picker" classname="functional/inlineToolbar.spec.mjs" time="2.886">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: page link search filters matching results and shows a no-result state" classname="functional/inlineToolbar.spec.mjs" time="2.764">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: pressing Escape closes the link picker without creating a link" classname="functional/inlineToolbar.spec.mjs" time="2.742">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: Cancel closes the link picker without changing the selection" classname="functional/inlineToolbar.spec.mjs" time="2.631">
-</testcase>
-<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: the slash button closes the toolbar and opens the slash menu" classname="functional/inlineToolbar.spec.mjs" time="2.525">
+<testcase name="drag-and-drop › 6. Drag and Drop / Safety checks :: dropping a block onto itself leaves the order unchanged" classname="functional/dragAndDrop.spec.mjs" time="2.231">
 </testcase>
 </testsuite>
-<testsuite name="persistence/localPersistence.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="2" failures="0" skipped="0" time="10.227" errors="0">
-<testcase name="local-persistence › 29. Local persistence / Seeded offline pages :: edits on an offline seeded page survive refresh and remain editable afterwards" classname="persistence/localPersistence.spec.mjs" time="5.315">
+<testsuite name="functional/editingBehavior.spec.mjs" timestamp="2026-04-30T10:08:32.479Z" hostname="" tests="19" failures="0" skipped="0" time="42.869" errors="0">
+<testcase name="editing-behavior › 3. Enter Key Behavior / Standard blocks :: pressing Enter in a paragraph creates a new paragraph below and moves focus to it" classname="functional/editingBehavior.spec.mjs" time="1.999">
 </testcase>
-<testcase name="local-persistence › 29. Local persistence / Local pages :: a locally created page survives refresh and can be reopened with its content intact" classname="persistence/localPersistence.spec.mjs" time="4.912">
+<testcase name="editing-behavior › 3. Enter Key Behavior / Standard blocks :: pressing Enter in a heading creates a normal paragraph below" classname="functional/editingBehavior.spec.mjs" time="2.024">
+</testcase>
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter in a bulleted list item creates a new bullet below" classname="functional/editingBehavior.spec.mjs" time="2.387">
+</testcase>
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter in a numbered list item creates the next number" classname="functional/editingBehavior.spec.mjs" time="2.297">
+</testcase>
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter in a to-do item creates a new unchecked to-do below" classname="functional/editingBehavior.spec.mjs" time="1.961">
+</testcase>
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on a checked empty to-do item converts it into a paragraph and clears the checked state" classname="functional/editingBehavior.spec.mjs" time="2.192">
+</testcase>
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on an empty bulleted list item converts it into a paragraph" classname="functional/editingBehavior.spec.mjs" time="2.357">
+</testcase>
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on an empty numbered list item converts it into a paragraph" classname="functional/editingBehavior.spec.mjs" time="2.445">
+</testcase>
+<testcase name="editing-behavior › 3. Enter Key Behavior / List continuation :: pressing Enter on an empty to-do item converts it into a paragraph" classname="functional/editingBehavior.spec.mjs" time="2.122">
+</testcase>
+<testcase name="editing-behavior › 3. Enter Key Behavior / Container blocks :: pressing Enter in a callout creates a child paragraph inside the callout" classname="functional/editingBehavior.spec.mjs" time="2.364">
+</testcase>
+<testcase name="editing-behavior › 3. Enter Key Behavior / Container blocks :: pressing Enter in a quote creates a child paragraph inside the quote container" classname="functional/editingBehavior.spec.mjs" time="2.149">
+</testcase>
+<testcase name="editing-behavior › 3. Enter Key Behavior / Container blocks :: pressing Enter in a toggle summary expands it and focuses the first child" classname="functional/editingBehavior.spec.mjs" time="3.614">
+</testcase>
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty bulleted list item deletes it and keeps focus on a logical sibling" classname="functional/editingBehavior.spec.mjs" time="1.722">
+</testcase>
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty root paragraph deletes it and focuses the previous block" classname="functional/editingBehavior.spec.mjs" time="2.175">
+</testcase>
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Delete on the first empty root paragraph deletes it and focuses the next logical block" classname="functional/editingBehavior.spec.mjs" time="2.527">
+</testcase>
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty heading converts it into a paragraph instead of deleting it" classname="functional/editingBehavior.spec.mjs" time="2.01">
+</testcase>
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Empty block deletion :: Backspace on an empty indented paragraph outdents it instead of deleting it" classname="functional/editingBehavior.spec.mjs" time="2.451">
+</testcase>
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Divider deletion :: Backspace on a focused divider removes it from the page" classname="functional/editingBehavior.spec.mjs" time="2.053">
+</testcase>
+<testcase name="editing-behavior › 4. Backspace / Delete Behavior / Divider deletion :: Delete on a focused divider removes it from the page" classname="functional/editingBehavior.spec.mjs" time="2.02">
 </testcase>
 </testsuite>
-<testsuite name="smoke/harnessCoverage.spec.mjs" timestamp="2026-04-27T10:50:29.727Z" hostname="" tests="4" failures="0" skipped="0" time="3.745" errors="0">
-<testcase name="harness-coverage › 15. Read-only Rendering / Block rendering :: read-only mode renders the main block families correctly" classname="smoke/harnessCoverage.spec.mjs" time="0.936">
+<testsuite name="functional/focusManagement.spec.mjs" timestamp="2026-04-30T10:08:32.479Z" hostname="" tests="3" failures="0" skipped="0" time="7.486" errors="0">
+<testcase name="focus-management › 28. Focus management / Enter transitions :: after Enter on a heading the focus moves into the new paragraph below" classname="functional/focusManagement.spec.mjs" time="1.973">
 </testcase>
-<testcase name="harness-coverage › 15. Read-only Rendering / Hierarchy and containers :: callout and quote children remain rendered inside their read-only containers" classname="smoke/harnessCoverage.spec.mjs" time="0.937">
+<testcase name="focus-management › 28. Focus management / Delete transitions :: after deleting the first empty root block the focus moves to the next logical block" classname="functional/focusManagement.spec.mjs" time="2.244">
 </testcase>
-<testcase name="harness-coverage › 15. Read-only Rendering / Toggle and numbering :: read-only toggles still expand or collapse and numbered lists reset by context" classname="smoke/harnessCoverage.spec.mjs" time="1.057">
+<testcase name="focus-management › 28. Focus management / Container transitions :: pressing Enter on an empty toggle summary moves focus into the newly created child" classname="functional/focusManagement.spec.mjs" time="3.269">
 </testcase>
-<testcase name="harness-coverage › 26. Media blocks / Placeholder rendering :: media blocks without an asset show their placeholder preview" classname="smoke/harnessCoverage.spec.mjs" time="0.815">
+</testsuite>
+<testsuite name="functional/indentation.spec.mjs" timestamp="2026-04-30T10:08:32.479Z" hostname="" tests="13" failures="0" skipped="0" time="32.597" errors="0">
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Tab indents a paragraph under the previous sibling" classname="functional/indentation.spec.mjs" time="1.953">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Shift+Tab outdents an indented paragraph back to root level" classname="functional/indentation.spec.mjs" time="2.173">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: repeated Tab builds hierarchy one level at a time instead of skipping directly to deep nesting" classname="functional/indentation.spec.mjs" time="2.371">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: Shift+Tab only outdents one level at a time from a deep hierarchy" classname="functional/indentation.spec.mjs" time="2.515">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Tab on the first root block does nothing" classname="functional/indentation.spec.mjs" time="1.917">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Basic indentation :: pressing Shift+Tab on a root paragraph does nothing" classname="functional/indentation.spec.mjs" time="1.906">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a heading can be indented under a paragraph and keeps its heading styling" classname="functional/indentation.spec.mjs" time="2.68">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph cannot be indented under a heading" classname="functional/indentation.spec.mjs" time="2.756">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph cannot be indented under a code block" classname="functional/indentation.spec.mjs" time="3.049">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph cannot be indented under a divider" classname="functional/indentation.spec.mjs" time="3.044">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph can be indented under a callout container" classname="functional/indentation.spec.mjs" time="3.098">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: a paragraph can be indented under a quote container" classname="functional/indentation.spec.mjs" time="2.985">
+</testcase>
+<testcase name="indentation › 2. Indentation (Tab / Shift+Tab) / Type-specific indentation :: pressing Tab inside a code block inserts spaces instead of changing hierarchy" classname="functional/indentation.spec.mjs" time="2.15">
+</testcase>
+</testsuite>
+<testsuite name="functional/inlineToolbar.spec.mjs" timestamp="2026-04-30T10:08:32.479Z" hostname="" tests="31" failures="0" skipped="0" time="80.88" errors="0">
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting visible text opens the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="2.239">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting text inside a heading also opens the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="2.173">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting text inside a callout opens the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="2.751">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: placing only the caret keeps the inline toolbar hidden" classname="functional/inlineToolbar.spec.mjs" time="2.004">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: clearing the selection closes the inline toolbar" classname="functional/inlineToolbar.spec.mjs" time="2.276">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: clicking outside the editor closes the inline toolbar on blur" classname="functional/inlineToolbar.spec.mjs" time="2.323">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Toolbar visibility :: selecting inside a code block uses the native textarea selection only" classname="functional/inlineToolbar.spec.mjs" time="1.932">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: the text color button opens the text color palette" classname="functional/inlineToolbar.spec.mjs" time="2.289">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: the background color button opens the background palette" classname="functional/inlineToolbar.spec.mjs" time="2.299">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying text color changes only the selected text" classname="functional/inlineToolbar.spec.mjs" time="2.564">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying background color changes only the selected text" classname="functional/inlineToolbar.spec.mjs" time="2.756">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: text color survives additional typing without stacking wrappers" classname="functional/inlineToolbar.spec.mjs" time="2.795">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: background color survives additional typing without stacking wrappers" classname="functional/inlineToolbar.spec.mjs" time="2.783">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying the same text color twice removes the text color wrapper" classname="functional/inlineToolbar.spec.mjs" time="2.839">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: applying the same background color twice removes the background wrapper" classname="functional/inlineToolbar.spec.mjs" time="2.896">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: background color excludes trailing whitespace from the highlighted wrapper" classname="functional/inlineToolbar.spec.mjs" time="2.435">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Color actions :: text color and background color can coexist with bold and italic while typing" classname="functional/inlineToolbar.spec.mjs" time="3.712">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the bold button toggles bold on and off" classname="functional/inlineToolbar.spec.mjs" time="2.525">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the italic button toggles italic on and off" classname="functional/inlineToolbar.spec.mjs" time="2.695">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the strikethrough button toggles strikethrough on and off" classname="functional/inlineToolbar.spec.mjs" time="2.916">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: bold and italic can coexist on the same selection" classname="functional/inlineToolbar.spec.mjs" time="2.503">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: the inline code button wraps the selection as inline code" classname="functional/inlineToolbar.spec.mjs" time="2.406">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: inline code keeps inherited custom text and background colors" classname="functional/inlineToolbar.spec.mjs" time="3.956">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Format actions :: mixed inline formats remain stable after typing and deleting inside the same region" classname="functional/inlineToolbar.spec.mjs" time="4.213">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: the Add link button opens the link type chooser" classname="functional/inlineToolbar.spec.mjs" time="2.232">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: a web link can be applied to the selected text" classname="functional/inlineToolbar.spec.mjs" time="2.501">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: a page link can be applied from the page picker" classname="functional/inlineToolbar.spec.mjs" time="2.553">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: page link search filters matching results and shows a no-result state" classname="functional/inlineToolbar.spec.mjs" time="2.472">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: pressing Escape closes the link picker without creating a link" classname="functional/inlineToolbar.spec.mjs" time="2.424">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: Cancel closes the link picker without changing the selection" classname="functional/inlineToolbar.spec.mjs" time="2.284">
+</testcase>
+<testcase name="inline-toolbar › 11. Inline Text Selection &amp; Formatting Toolbar / Link and slash actions :: the slash button closes the toolbar and opens the slash menu" classname="functional/inlineToolbar.spec.mjs" time="2.134">
+</testcase>
+</testsuite>
+<testsuite name="persistence/localPersistence.spec.mjs" timestamp="2026-04-30T10:08:32.479Z" hostname="" tests="2" failures="0" skipped="0" time="9.107" errors="0">
+<testcase name="local-persistence › 29. Local persistence / Seeded offline pages :: edits on an offline seeded page survive refresh and remain editable afterwards" classname="persistence/localPersistence.spec.mjs" time="4.768">
+</testcase>
+<testcase name="local-persistence › 29. Local persistence / Local pages :: a locally created page survives refresh and can be reopened with its content intact" classname="persistence/localPersistence.spec.mjs" time="4.339">
+</testcase>
+</testsuite>
+<testsuite name="smoke/harnessCoverage.spec.mjs" timestamp="2026-04-30T10:08:32.479Z" hostname="" tests="4" failures="0" skipped="0" time="3.391" errors="0">
+<testcase name="harness-coverage › 15. Read-only Rendering / Block rendering :: read-only mode renders the main block families correctly" classname="smoke/harnessCoverage.spec.mjs" time="0.847">
+</testcase>
+<testcase name="harness-coverage › 15. Read-only Rendering / Hierarchy and containers :: callout and quote children remain rendered inside their read-only containers" classname="smoke/harnessCoverage.spec.mjs" time="0.876">
+</testcase>
+<testcase name="harness-coverage › 15. Read-only Rendering / Toggle and numbering :: read-only toggles still expand or collapse and numbered lists reset by context" classname="smoke/harnessCoverage.spec.mjs" time="0.902">
+</testcase>
+<testcase name="harness-coverage › 26. Media blocks / Placeholder rendering :: media blocks without an asset show their placeholder preview" classname="smoke/harnessCoverage.spec.mjs" time="0.766">
 </testcase>
 </testsuite>
 </testsuites>

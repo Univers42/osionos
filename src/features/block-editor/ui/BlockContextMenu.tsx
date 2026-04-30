@@ -180,7 +180,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             className="h-8 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-2 text-sm text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-accent)]"
           />
         </div>
-        <div className="max-h-[430px] overflow-visible">
+        <div className="max-h-[430px] overflow-visible" role="menu">
         {visibleSections.map((section, index) => (
           <div key={`${section.label ?? "section"}-${index}`}>
             {section.label ? (

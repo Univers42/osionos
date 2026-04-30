@@ -99,7 +99,7 @@ export const containerAndPasteScenarios = [
       const child = getEditors(page).nth(1);
       await clearAndType(child, "- ");
       await page.keyboard.type("Nested bullet");
-      await expect(page.locator(".rounded-full")).toHaveCount(1);
+      await expect(page.locator(".inline-block.w-1\\.5.h-1\\.5")).toHaveCount(1);
     },
   ),
   defineScenario(
@@ -339,7 +339,7 @@ export const containerAndPasteScenarios = [
       await pasteText(editor, "# Title\n\nParagraph\n\n- Item");
       await expect(getEditors(page)).toHaveCount(3);
       await expect(getEditors(page).first()).toHaveText("Title");
-      await expect(page.locator(".rounded-full")).toHaveCount(1);
+      await expect(page.locator(".inline-block.w-1\\.5.h-1\\.5")).toHaveCount(1);
     },
     { serial: true },
   ),
