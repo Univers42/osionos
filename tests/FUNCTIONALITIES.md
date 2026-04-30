@@ -83,7 +83,7 @@ Focus passes to the new block when appropriate.
 
 ## 6. Automatic Continuation of Lists
 
-**Functionality:** Maintaining the list type when pressing Enter.
+**Functionality:** Maintaining the list type when pressing Enter. 
 
 **Expected Behavior:**
 
