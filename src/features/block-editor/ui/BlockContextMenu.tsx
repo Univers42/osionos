@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { createRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { createRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type {
   BlockContextMenuItem,
@@ -101,13 +101,9 @@ const SubmenuPanel: React.FC<SubmenuPanelProps> = ({
   parentLabel,
   onSelect,
 }) => {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [style, setStyle] = useState<React.CSSProperties>({ opacity: 0 });
-
-  useLayoutEffect(() => {
+  const style = useMemo<React.CSSProperties>(() => {
     const anchor = anchorRef.current;
-    const panel = panelRef.current;
-    if (!anchor || !panel) return;
+    if (!anchor) return { position: "fixed", opacity: 0 };
 
     const rect = anchor.getBoundingClientRect();
     const vw = window.innerWidth;
@@ -116,34 +112,31 @@ const SubmenuPanel: React.FC<SubmenuPanelProps> = ({
     // Prefer opening to the right of the parent menu
     let left = rect.right + 8;
     if (left + SUBMENU_WIDTH + VIEWPORT_PAD > vw) {
-      // Not enough space on the right — open to the left
       left = rect.left - SUBMENU_WIDTH - 8;
     }
     left = Math.max(VIEWPORT_PAD, Math.min(left, vw - SUBMENU_WIDTH - VIEWPORT_PAD));
 
-    // Vertical: start aligned to the anchor top, clamp to viewport
+    // Vertical: align to anchor top, clamp so the panel stays in viewport
     const maxH = vh - VIEWPORT_PAD * 2;
-    const panelH = Math.min(panel.scrollHeight, maxH);
     let top = rect.top;
-    if (top + panelH + VIEWPORT_PAD > vh) {
-      top = vh - panelH - VIEWPORT_PAD;
+    if (top + maxH > vh) {
+      top = vh - maxH - VIEWPORT_PAD;
     }
     top = Math.max(VIEWPORT_PAD, top);
 
-    setStyle({
+    return {
       position: "fixed",
       top,
       left,
       width: SUBMENU_WIDTH,
       maxHeight: maxH,
-      opacity: 1,
       zIndex: 10002,
-    });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anchorRef, parentWidth]);
 
   return (
     <div
-      ref={panelRef}
       className="overflow-y-auto rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] py-1 shadow-xl"
       style={style}
     >
