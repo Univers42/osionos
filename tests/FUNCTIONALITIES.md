@@ -95,6 +95,10 @@ In `to_do`, create another unchecked item.
 If the item is empty, `Enter` converts it to a paragraph.
 In an empty `to_do`, it also clears the checked state when converting to a paragraph.
 
+Bulleted list markers cycle based on indentation depth: filled circle (●) at level 0, hollow circle (○) at level 1, filled square (■) at level 2. The pattern repeats from level 3 onward.
+Numbered list markers rotate style based on indentation depth: decimal (1.) at level 0, lowercase alpha (a.) at level 1, lowercase roman (i.) at level 2, uppercase alpha (A.) at level 3, uppercase roman (I.) at level 4, and shape markers at level 5. The pattern repeats from level 6 onward.
+This is a visual rendering detail of existing list functionality, not a new interaction pattern. Adding it to §6 and §15 keeps the document organized without inflating the section count.
+
 ## 7. Enter in container blocks
 
 **Functionality:** Create children within the container block itself.
@@ -209,7 +213,10 @@ Callout children are visible within the box.
 
 Quote children appear within the border.
 Toggles can still expand and collapse.
-Numbered lists reset numbering by context/level.
+Numbered lists rotate marker style by indentation depth (decimal → alpha → roman), matching editor behavior.
+
+Bulleted lists cycle marker shape by indentation depth (● → ○ → ■), matching editor behavior.
+This is a visual rendering detail of existing list functionality, not a new interaction pattern. Adding it to §6 and §15 keeps the document organized without inflating the section count.
 
 ## 16. Pasting Content
 

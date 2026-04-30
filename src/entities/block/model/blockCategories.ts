@@ -77,7 +77,7 @@ interface BlockCategory {
  
 const HEADING_BASE: BlockCategory = {
   indentable: true,
-  parentable: true,
+  parentable: false,
   enterCreatesChild: false,
   continuesSameType: false,
   selfRendersChildren: false,
