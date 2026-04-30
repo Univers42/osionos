@@ -40,12 +40,29 @@ function nextRenderId() {
   return `osionos-mermaid-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
+/**
+ * Remove any orphaned SVG or iframe that mermaid.render() may have
+ * injected into document.body before throwing a parse error.
+ */
+function cleanupMermaidOrphans(renderId: string) {
+  const orphan = document.getElementById(renderId);
+  if (orphan && !orphan.closest(".mermaid-diagram")) {
+    orphan.remove();
+  }
+  // Mermaid may also leave a sibling container with id `d${renderId}`
+  const dOrphan = document.getElementById(`d${renderId}`);
+  if (dOrphan && !dOrphan.closest(".mermaid-diagram")) {
+    dOrphan.remove();
+  }
+}
+
 export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
   chart,
   className,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const renderTokenRef = useRef(0);
+  const lastRenderIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -59,22 +76,30 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
 
     const currentToken = ++renderTokenRef.current;
     let cancelled = false;
+    const renderId = nextRenderId();
+    lastRenderIdRef.current = renderId;
 
     container.innerHTML = "";
 
     void (async () => {
       try {
         ensureMermaidInitialized();
-        const renderId = nextRenderId();
         const { svg, bindFunctions } = await mermaid.render(renderId, source);
 
-        if (cancelled || renderTokenRef.current !== currentToken) return;
+        if (cancelled || renderTokenRef.current !== currentToken) {
+          cleanupMermaidOrphans(renderId);
+          return;
+        }
+
         container.innerHTML = svg;
         bindFunctions?.(container);
       } catch {
-        if (cancelled || renderTokenRef.current !== currentToken) return;
-        container.innerHTML = "";
+        // Clean up any SVG/iframe that mermaid injected before the error.
+        cleanupMermaidOrphans(renderId);
 
+        if (cancelled || renderTokenRef.current !== currentToken) return;
+
+        container.innerHTML = "";
         const fallback = document.createElement("pre");
         fallback.className =
           "text-[12px] leading-relaxed font-mono text-red-600 whitespace-pre-wrap";
@@ -85,6 +110,11 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
 
     return () => {
       cancelled = true;
+      // Clean up on unmount or re-render to prevent orphaned nodes
+      // persisting across page navigations.
+      if (lastRenderIdRef.current) {
+        cleanupMermaidOrphans(lastRenderIdRef.current);
+      }
     };
   }, [chart]);
 
