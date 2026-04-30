@@ -20,7 +20,6 @@ import {
   Trash2,
 } from "lucide-react";
 
-import { PageOptionsMenu } from "@/features/page-management";
 import { useUserStore } from "@/features/auth";
 import {
   pageConfigKey,
@@ -367,13 +366,6 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
               </div>
             )}
           </div>
-          <PageOptionsMenu
-            pageId={pageId}
-            workspaceId={workspaceId}
-            pageTitle={page?.title || "Untitled"}
-            isActivePage
-            onRedirectHome={handleOpenHome}
-          />
         </div>
       </div>
     </div>

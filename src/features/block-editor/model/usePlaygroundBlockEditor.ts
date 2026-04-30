@@ -292,6 +292,11 @@ export function usePlaygroundBlockEditor(pageId: string) {
     (blockId: string, text: string) => {
       persistBlockText(blockId, text);
       if (tryHandleCodeOrTable(blockId, text)) return;
+
+      // Code blocks are plain-text editors: no slash menu or markdown shortcuts.
+      const block = findBlockInTree(contentRef.current, blockId);
+      if (block?.type === "code") return;
+
       if (tryHandleSlashMenu(blockId, text)) return;
       if (tryHandlePageSelectorMenu(blockId, text)) return;
       tryHandleMarkdownShortcut(blockId, text);

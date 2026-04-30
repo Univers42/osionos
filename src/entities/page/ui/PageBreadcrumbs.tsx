@@ -45,7 +45,7 @@ export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
       navigationPath.at(-1)?.id === pageId
     ) {
       // Convert ActivePage to PageEntry format for consistent rendering
-      return navigationPath.map(
+      const entries = navigationPath.map(
         (ap) =>
           ({
             _id: ap.id,
@@ -54,6 +54,15 @@ export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
             icon: ap.icon,
           }) as PageEntry,
       );
+
+      // Use the reactive page title for the current page (last crumb)
+      // so the breadcrumb updates when the user edits the title.
+      if (page && entries.length > 0) {
+        const last = entries[entries.length - 1];
+        entries[entries.length - 1] = { ...last, title: page.title || "Untitled" };
+      }
+
+      return entries;
     }
 
     // Fall back to parentPageId hierarchy
