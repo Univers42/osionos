@@ -51,7 +51,7 @@ function astToBlocks(node: BlockNode): Block[] {
         {
           id: crypto.randomUUID(),
           type: headingType,
-          content: inlineToPlain(node.children),
+          content: inlineToMarkdown(node.children),
         },
       ];
     }
@@ -60,7 +60,7 @@ function astToBlocks(node: BlockNode): Block[] {
         {
           id: crypto.randomUUID(),
           type: "paragraph",
-          content: inlineToPlain(node.children),
+          content: inlineToMarkdown(node.children),
         },
       ];
     case "thematic_break":
@@ -70,7 +70,7 @@ function astToBlocks(node: BlockNode): Block[] {
         {
           id: crypto.randomUUID(),
           type: "quote",
-          content: node.children.map((c) => blockToPlain(c)).join("\n"),
+          content: node.children.map((c) => blockToMarkdown(c)).join("\n"),
         },
       ];
     case "code_block":
@@ -99,15 +99,15 @@ function astToBlocks(node: BlockNode): Block[] {
         {
           id: crypto.randomUUID(),
           type: "callout" as BlockType,
-          content: node.children.map((c) => blockToPlain(c)).join("\n"),
+          content: node.children.map((c) => blockToMarkdown(c)).join("\n"),
         },
       ];
     case "table": {
       const header = node.head.cells.map((cell) =>
-        inlineToPlain(cell.children),
+        inlineToMarkdown(cell.children),
       );
       const rows = node.rows.map((row) =>
-        row.cells.map((cell) => inlineToPlain(cell.children)),
+        row.cells.map((cell) => inlineToMarkdown(cell.children)),
       );
 
       return [
@@ -149,7 +149,7 @@ function listItemToBlock(
   const block: Block = {
     id: crypto.randomUUID(),
     type,
-    content: item.children.map((child) => blockToPlain(child)).join("\n"),
+    content: item.children.map((child) => blockToMarkdown(child)).join("\n"),
   };
 
   if (checked !== undefined) {
@@ -208,6 +208,75 @@ function blockToPlain(node: BlockNode): string {
       return inlineToPlain(node.children);
     case "blockquote":
       return node.children.map((child) => blockToPlain(child)).join("\n");
+    default:
+      return "";
+  }
+}
+
+/**
+ * Reconstruct markdown source from inline AST nodes, preserving
+ * formatting delimiters so the editor can re-parse them for rendering.
+ */
+function inlineToMarkdown(nodes: InlineNode[]): string {
+  return nodes
+    .map((n) => {
+      switch (n.type) {
+        case "text":
+          return n.value;
+        case "bold":
+          return `**${inlineToMarkdown(n.children)}**`;
+        case "italic":
+          return `*${inlineToMarkdown(n.children)}*`;
+        case "bold_italic":
+          return `***${inlineToMarkdown(n.children)}***`;
+        case "strikethrough":
+          return `~~${inlineToMarkdown(n.children)}~~`;
+        case "underline":
+          return `__${inlineToMarkdown(n.children)}__`;
+        case "highlight":
+          return `==${inlineToMarkdown(n.children)}==`;
+        case "text_color":
+          return `[color=${n.color}]${inlineToMarkdown(n.children)}[/color]`;
+        case "background_color":
+          return `[bg=${n.color}]${inlineToMarkdown(n.children)}[/bg]`;
+        case "code_rich":
+          return `[code]${inlineToMarkdown(n.children)}[/code]`;
+        case "code":
+          return `\`${n.value}\``;
+        case "link": {
+          const label = inlineToMarkdown(n.children);
+          const title = n.title ? ` "${n.title}"` : "";
+          return `[${label}](${n.href}${title})`;
+        }
+        case "image": {
+          const title = n.title ? ` "${n.title}"` : "";
+          return `![${n.alt}](${n.src}${title})`;
+        }
+        case "emoji":
+          return `:${n.raw}:`;
+        case "line_break":
+          return "\n";
+        case "math_inline":
+          return `$${n.value}$`;
+        case "footnote_ref":
+          return `[^${n.label}]`;
+        case "internal_link":
+          return `[[page:${n.pageId}]]`;
+        default:
+          return "";
+      }
+    })
+    .join("");
+}
+
+function blockToMarkdown(node: BlockNode): string {
+  switch (node.type) {
+    case "paragraph":
+      return inlineToMarkdown(node.children);
+    case "heading":
+      return inlineToMarkdown(node.children);
+    case "blockquote":
+      return node.children.map((child) => blockToMarkdown(child)).join("\n");
     default:
       return "";
   }
