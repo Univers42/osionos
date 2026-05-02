@@ -6,7 +6,7 @@
 /*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/20 21:29:48 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/20 21:29:49 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/04/29 16:07:55 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@ import { expect } from "@playwright/test";
 
 import {
   blockContextMenu,
+  blockLocatorForEditor,
   clearAndType,
   contextMenuItem,
   contextSubmenuItem,
@@ -25,6 +26,7 @@ import {
   openFreshPage,
   pressEnter,
   pressTab,
+  readClipboardText,
   visibleBlockTexts,
 } from "../core/app.mjs";
 import { defineScenario } from "../core/scenario.mjs";
@@ -68,32 +70,12 @@ export const contextMenuScenarios = [
     "Basic operations",
     "Copy text writes the current block text to the clipboard",
     async ({ page, appUrl }) => {
-      await page.addInitScript(() => {
-        const clipboard = navigator.clipboard;
-        (window).__copiedText = null;
-        if (!clipboard?.writeText) {
-          return;
-        }
-
-        const originalWriteText = clipboard.writeText.bind(clipboard);
-        Object.defineProperty(clipboard, "writeText", {
-          configurable: true,
-          value: async (value) => {
-            (window).__copiedText = value;
-            try {
-              return await originalWriteText(value);
-            } catch {
-              return undefined;
-            }
-          },
-        });
-      });
       await openFreshPage(page, appUrl);
       await createParagraphs(page, ["Copy me"]);
       await expect(getEditors(page).first()).toHaveText("Copy me");
       await openBlockContextMenuForEditor(getEditors(page).first());
       await contextMenuItem(page, "Copy text").click();
-      await expect.poll(() => page.evaluate(() => window.__copiedText)).toBe("Copy me");
+      await expect.poll(() => readClipboardText(page)).toBe("Copy me");
     },
     { serial: true },
   ),
@@ -166,6 +148,17 @@ export const contextMenuScenarios = [
   defineScenario(
     "5. Context Menu",
     "Basic operations",
+    "Move down stays hidden on the last root block",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createParagraphs(page, ["A", "B", "C"]);
+      await openBlockContextMenuForEditor(getEditors(page).nth(2));
+      await expect(contextMenuItem(page, "Move down")).toHaveCount(0);
+    },
+  ),
+  defineScenario(
+    "5. Context Menu",
+    "Basic operations",
     "Turn into Heading 1 transforms the block while preserving its text",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
@@ -175,11 +168,8 @@ export const contextMenuScenarios = [
       await contextMenuItem(page, "Turn into").hover();
       await expect(contextSubmenuItem(page, "Heading 1")).toBeVisible();
       await contextSubmenuItem(page, "Heading 1").click();
-      const fontSize = await editor.evaluate((node) =>
-        Number.parseFloat(getComputedStyle(node).fontSize),
-      );
+      await expect(blockLocatorForEditor(editor)).toHaveAttribute("data-block-type", "heading_1");
       await expect(editor).toHaveText("Turn me");
-      expect(fontSize).toBeGreaterThan(20);
     },
   ),
   defineScenario(
