@@ -12,6 +12,10 @@
 
 import React, { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import {
+  curatedImageCollections,
+  curatedVideoCollections,
+} from "@univers42/ui-collection";
 
 import "@/app/styles/global.css";
 import { CoverAssetPicker } from "@/entities/page/ui/CoverAssetPicker";
@@ -21,6 +25,12 @@ import {
   getSlashMediaPickerTabs,
   resolveCollectionMediaAsset,
 } from "@/shared/lib/markengine/uiCollectionAssets";
+
+function countUniqueItems(collections) {
+  return new Set(
+    collections.flatMap((collection) => (collection.items ?? []).map((item) => item.id)),
+  ).size;
+}
 
 function AssetSelectionState({ prefix, value, tabs, kind }) {
   const resolved = useMemo(
@@ -77,9 +87,15 @@ function App() {
   const [coverValue, setCoverValue] = useState();
   const [imageValue, setImageValue] = useState();
   const [videoValue, setVideoValue] = useState();
+  const expectedImageCount = countUniqueItems(curatedImageCollections);
+  const expectedVideoCount = countUniqueItems(curatedVideoCollections);
 
   return (
     <main className="min-h-screen bg-[var(--color-surface-secondary)] p-6">
+      <div className="hidden">
+        <span data-testid="package-image-count">{expectedImageCount}</span>
+        <span data-testid="package-video-count">{expectedVideoCount}</span>
+      </div>
       <div className="mx-auto grid max-w-7xl gap-6">
         <Section
           testId="cover-panel-section"
