@@ -15,9 +15,11 @@ import { AssetPickerBoard } from "@univers42/ui-collection";
 
 import type { MediaBlockType } from "@/entities/block";
 import {
+  IMAGE_PICKER_TABS,
   SLASH_MEDIA_PICKER_BOARD_PROPS,
   getSlashMediaPickerTabs,
 } from "@/shared/lib/markengine/uiCollectionAssets";
+import { ImageAssetPickerPanel } from "./ImageAssetPickerPanel";
 
 interface MediaAssetPickerProps {
   kind: MediaBlockType;
@@ -25,6 +27,7 @@ interface MediaAssetPickerProps {
   label?: string;
   width?: number | string;
   height?: number | string;
+  testId?: string;
   onSelect: (value: string) => void;
 }
 
@@ -34,17 +37,33 @@ export const MediaAssetPicker: React.FC<MediaAssetPickerProps> = ({
   label,
   width = "100%",
   height = 332,
+  testId = "media-asset-picker",
   onSelect,
 }) => {
-  const tabs = getSlashMediaPickerTabs(kind);
+  const tabs = kind === "image" ? IMAGE_PICKER_TABS : getSlashMediaPickerTabs(kind);
 
   if (tabs.length === 0) {
     return null;
   }
 
+  if (kind === "image") {
+    return (
+      <ImageAssetPickerPanel
+        testId={testId}
+        tabs={tabs}
+        value={value}
+        label={label}
+        width={width}
+        height={height}
+        boardProps={SLASH_MEDIA_PICKER_BOARD_PROPS}
+        onSelect={onSelect}
+      />
+    );
+  }
+
   return (
     <div
-      data-testid="media-asset-picker"
+      data-testid={testId}
       data-media-kind={kind}
       className="flex h-full min-h-0 flex-col overflow-hidden"
       style={{ height }}

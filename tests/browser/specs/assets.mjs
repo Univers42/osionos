@@ -20,6 +20,7 @@ import {
   createMediaBlock,
   getEditors,
   mediaBlockPicker,
+  openHarnessPage,
   openFreshPage,
   pickAssetFromVisiblePicker,
   pickFirstAssetFromVisiblePicker,
@@ -78,6 +79,12 @@ async function openCoverPicker(page) {
   await button.click();
   await expect(page.getByTestId("page-cover-picker")).toBeVisible();
   return button;
+}
+
+async function pickFirstPanelAsset(panel) {
+  const firstAsset = panel.locator('button[title]').first();
+  await expect(firstAsset).toBeVisible();
+  await firstAsset.click();
 }
 
 export const assetScenarios = [
@@ -473,6 +480,73 @@ export const assetScenarios = [
       await clearAndType(caption, "Caption text");
       await selectText(caption, "Caption");
       await expect(toolbarButton(page, "Bold")).toBeVisible();
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Picker panels",
+    "cover picker exposes thumbnail and larger selected URLs separately",
+    async ({ page, appUrl }) => {
+      await openHarnessPage(page, appUrl, "tests/browser/pickableImagePanelHarness.html");
+      await pickFirstPanelAsset(page.getByTestId("cover-asset-picker"));
+
+      const serialized = await page.getByTestId("cover-serialized").textContent();
+      const url = await page.getByTestId("cover-url").textContent();
+      const fullUrl = await page.getByTestId("cover-full-url").textContent();
+      const previewUrl = await page.getByTestId("cover-preview-url").textContent();
+      const thumbnailUrl = await page.getByTestId("cover-thumbnail-url").textContent();
+
+      expect(serialized?.startsWith("url:https://images.unsplash.com/")).toBe(true);
+      expect(url).toBeTruthy();
+      expect(fullUrl).toBeTruthy();
+      expect(previewUrl).toBeTruthy();
+      expect(thumbnailUrl).toBeTruthy();
+      expect(previewUrl).not.toBe(thumbnailUrl);
+      expect(fullUrl).not.toBe(thumbnailUrl);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Picker panels",
+    "image picker resolves preview and full image URLs independently from the thumbnail",
+    async ({ page, appUrl }) => {
+      await openHarnessPage(page, appUrl, "tests/browser/pickableImagePanelHarness.html");
+      await pickFirstPanelAsset(page.getByTestId("image-panel-picker"));
+
+      const serialized = await page.getByTestId("image-serialized").textContent();
+      const url = await page.getByTestId("image-url").textContent();
+      const fullUrl = await page.getByTestId("image-full-url").textContent();
+      const previewUrl = await page.getByTestId("image-preview-url").textContent();
+      const thumbnailUrl = await page.getByTestId("image-thumbnail-url").textContent();
+
+      expect(serialized?.startsWith("url:https://images.unsplash.com/")).toBe(true);
+      expect(url).toBeTruthy();
+      expect(fullUrl).toBeTruthy();
+      expect(previewUrl).toBeTruthy();
+      expect(thumbnailUrl).toBeTruthy();
+      expect(previewUrl).not.toBe(thumbnailUrl);
+      expect(fullUrl).not.toBe(thumbnailUrl);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Picker panels",
+    "video picker keeps video source separate from poster and thumbnail",
+    async ({ page, appUrl }) => {
+      await openHarnessPage(page, appUrl, "tests/browser/pickableImagePanelHarness.html");
+      await pickFirstPanelAsset(page.getByTestId("video-panel-picker"));
+
+      const url = await page.getByTestId("video-url").textContent();
+      const fullUrl = await page.getByTestId("video-full-url").textContent();
+      const thumbnailUrl = await page.getByTestId("video-thumbnail-url").textContent();
+      const posterUrl = await page.getByTestId("video-poster-url").textContent();
+
+      expect(url).toContain(".mp4");
+      expect(fullUrl).toContain(".mp4");
+      expect(thumbnailUrl).toBeTruthy();
+      expect(posterUrl).toBeTruthy();
+      expect(url).not.toBe(thumbnailUrl);
+      expect(fullUrl).not.toBe(posterUrl);
     },
   ),
 ];

@@ -23,6 +23,15 @@ import {
 } from '@univers42/ui-collection';
 export { SECTION_LABELS as COLLECTION_SLASH_SECTION_LABELS } from '@univers42/ui-collection';
 import type { BlockType, MediaBlockType } from '@/entities/block';
+import {
+  COLLECTION_AUDIO_ITEMS,
+  COLLECTION_COVER_ITEMS,
+  COLLECTION_FILE_ITEMS,
+  COLLECTION_IMAGE_ITEMS,
+  COLLECTION_VIDEO_ITEMS,
+  type UiCollectionMediaCatalogItem,
+  type UiCollectionMediaKind,
+} from './uiCollectionMediaCatalog';
 
 const DEFAULT_PAGE_EMOJI_PRESET_IDS = [
   'rocket',
@@ -79,14 +88,10 @@ const EMOJI_GROUP_LABELS: Record<string, string> = {
 };
 
 const BOARD_ACTIVE_BACKGROUND = 'rgba(35, 131, 226, 0.12)';
+
 // Media collections have been removed from @univers42/ui-collection
 // Using empty arrays to preserve API compatibility
 const COLLECTION_SVG_ITEMS: Array<unknown> = [];
-const COLLECTION_COVER_ITEMS: Array<unknown> = [];
-const COLLECTION_IMAGE_ITEMS: Array<unknown> = [];
-const COLLECTION_VIDEO_ITEMS: Array<unknown> = [];
-const COLLECTION_AUDIO_ITEMS: Array<unknown> = [];
-const COLLECTION_FILE_ITEMS: Array<unknown> = [];
 
 const BOARD_CLASS_NAMES: NonNullable<AssetPickerBoardProps['classNames']> = {
   root: 'w-full',
@@ -235,36 +240,36 @@ export const PAGE_ICON_PICKER_TABS: AssetPickerBoardTab[] =
     },
   });
 
-export const COVER_PICKER_TABS: AssetPickerBoardTab[] =
-  COLLECTION_COVER_ITEMS.length > 0
-    ? [
-        createMediaCollectionPickerTab('photos', COLLECTION_COVER_ITEMS, {
-          label: 'Photos',
-          columns: 2,
-          itemLabelVisibility: 'hidden',
-          activeBackground: BOARD_ACTIVE_BACKGROUND,
-          searchLabel: 'Search photos',
-          searchPlaceholder: 'Search by mood, category or tag',
-        }),
-      ]
-    : [];
+export const COVER_PICKER_TABS: AssetPickerBoardTab[] = [
+  createMediaCollectionPickerTab('photos', COLLECTION_COVER_ITEMS, {
+    label: 'Photos',
+    columns: 2,
+    layout: 'cover',
+    itemLabelVisibility: 'visible',
+    activeBackground: BOARD_ACTIVE_BACKGROUND,
+    searchLabel: 'Search covers',
+    searchPlaceholder: 'Search by mood, category or tag',
+  }),
+];
 
 const MEDIA_PICKER_TAB_OPTIONS = {
   activeBackground: BOARD_ACTIVE_BACKGROUND,
-  itemLabelVisibility: 'hidden',
+  itemLabelVisibility: 'visible',
 } as const;
 
+export const IMAGE_PICKER_TABS: AssetPickerBoardTab[] = [
+  createMediaCollectionPickerTab('photos', COLLECTION_IMAGE_ITEMS, {
+    label: 'Images',
+    columns: 2,
+    layout: 'cover',
+    searchLabel: 'Search images',
+    searchPlaceholder: 'Search by mood, category or tag',
+    ...MEDIA_PICKER_TAB_OPTIONS,
+  }),
+];
+
 export const SLASH_MEDIA_PICKER_TABS: Record<MediaBlockType, AssetPickerBoardTab[]> = {
-  image: [
-    createMediaCollectionPickerTab('photos', COLLECTION_IMAGE_ITEMS, {
-      label: 'Images',
-      columns: 2,
-      layout: 'cover',
-      searchLabel: 'Search images',
-      searchPlaceholder: 'Search photos by mood or keyword',
-      ...MEDIA_PICKER_TAB_OPTIONS,
-    }),
-  ],
+  image: IMAGE_PICKER_TABS,
   video: [
     createMediaCollectionPickerTab('videos', COLLECTION_VIDEO_ITEMS, {
       label: 'Videos',
@@ -306,13 +311,48 @@ export function getSlashMediaPickerTabs(kind: MediaBlockType): AssetPickerBoardT
 export interface ResolvedCollectionMediaAsset {
   label?: string;
   url?: string;
+  fullUrl?: string;
+  previewUrl?: string;
   thumbnailUrl?: string;
+  posterUrl?: string;
+  mediaKind?: UiCollectionMediaKind;
+}
+
+function resolveRemoteValue(ref?: string): string | undefined {
+  if (!ref) {
+    return undefined;
+  }
+
+  if (ref.startsWith('url:')) {
+    return ref.slice('url:'.length);
+  }
+
+  if (/^https?:\/\//i.test(ref)) {
+    return ref;
+  }
+
+  return undefined;
+}
+
+function normalizeCollectionMediaKind(
+  kind?: UiCollectionMediaKind | MediaBlockType | 'cover',
+): UiCollectionMediaKind | 'cover' | undefined {
+  if (!kind) {
+    return undefined;
+  }
+
+  if (kind === 'image' || kind === 'video' || kind === 'audio' || kind === 'file') {
+    return kind;
+  }
+
+  return 'cover';
 }
 
 export function resolveCollectionMediaAsset(
   value: string | undefined,
   tabs: AssetPickerBoardTab[],
   fallbackLabel?: string,
+  kind?: UiCollectionMediaKind | MediaBlockType | 'cover',
 ): ResolvedCollectionMediaAsset | null {
   if (!value) {
     return null;
@@ -323,13 +363,33 @@ export function resolveCollectionMediaAsset(
     return null;
   }
 
-  const previewImageUrl =
-    resolved.preview?.kind === 'image' ? resolved.preview.src : undefined;
+  const itemData = resolved.item?.data as UiCollectionMediaCatalogItem | undefined;
+  const resolvedKind = itemData?.kind ?? normalizeCollectionMediaKind(kind);
+  const fallbackUrl = resolveRemoteValue(resolved.serializedValue);
+  const previewImageUrl = resolved.preview?.kind === 'image' ? resolved.preview.src : undefined;
+  const fullUrl = resolveRemoteValue(itemData?.ref) ?? fallbackUrl;
+  const previewUrl =
+    resolveRemoteValue(itemData?.previewRef) ??
+    (resolvedKind === 'video' ? undefined : fullUrl ?? previewImageUrl);
+  const thumbnailUrl =
+    resolveRemoteValue(itemData?.thumbnailRef) ??
+    (resolvedKind === 'image' || resolvedKind === 'cover' ? previewImageUrl : undefined);
+  const posterUrl =
+    resolveRemoteValue(itemData?.posterRef) ??
+    resolveRemoteValue(itemData?.thumbnailRef) ??
+    (resolvedKind === 'video' ? previewImageUrl : undefined);
 
   return {
     label: resolved.item?.label ?? fallbackLabel,
-    url: previewImageUrl,
-    thumbnailUrl: previewImageUrl,
+    url:
+      resolvedKind === 'video' || resolvedKind === 'audio' || resolvedKind === 'file'
+        ? fullUrl
+        : previewUrl ?? fullUrl ?? previewImageUrl,
+    fullUrl,
+    previewUrl,
+    thumbnailUrl,
+    posterUrl,
+    mediaKind: resolvedKind === 'cover' ? 'image' : resolvedKind,
   };
 }
 
@@ -346,7 +406,12 @@ export function randomUiCollectionEmoji(): string {
 }
 
 export function randomUiCollectionCover(): string | undefined {
-  return undefined;
+  if (COLLECTION_COVER_ITEMS.length === 0) {
+    return undefined;
+  }
+  const randomImage =
+    COLLECTION_COVER_ITEMS[Math.floor(Math.random() * COLLECTION_COVER_ITEMS.length)];
+  return randomImage?.ref;
 }
 
 const SUPPORTED_SLASH_TYPES = new Set<BlockType>([

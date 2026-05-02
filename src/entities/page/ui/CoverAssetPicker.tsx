@@ -1,10 +1,10 @@
 import React from "react";
-import { AssetPickerBoard } from "@univers42/ui-collection";
 
 import {
   COVER_PICKER_BOARD_PROPS,
   COVER_PICKER_TABS,
 } from "@/shared/lib/markengine/uiCollectionAssets";
+import { ImageAssetPickerPanel } from "@/shared/ui/molecules/MediaAssetPicker/ImageAssetPickerPanel";
 
 interface CoverAssetPickerProps {
   value?: string;
@@ -17,19 +17,15 @@ export const CoverAssetPicker: React.FC<CoverAssetPickerProps> = ({
   label = "Cover assets",
   onSelect,
 }) => {
-  if (COVER_PICKER_TABS.length === 0) {
-    return null;
-  }
-
   return (
     <div className="osionos-cover-picker">
-      <AssetPickerBoard
-        {...COVER_PICKER_BOARD_PROPS}
+      <ImageAssetPickerPanel
+        testId="cover-asset-picker"
+        boardProps={COVER_PICKER_BOARD_PROPS}
         tabs={COVER_PICKER_TABS}
         value={value}
-        width="100%"
         label={label}
-        onSerializedValueChange={onSelect}
+        onSelect={onSelect}
       />
     </div>
   );
