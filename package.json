@@ -22,7 +22,7 @@
     "test:setup": "npx playwright install chromium && npm run test:doctor"
   },
   "dependencies": {
-    "@univers42/ui-collection": "^2.4.6",
+    "@univers42/ui-collection": "^2.5.1",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.45",
     "lucide-react": "^0.474.0",
