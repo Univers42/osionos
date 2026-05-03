@@ -42,6 +42,7 @@ import {
   handleEnterKey,
   getAdjacentRenderedBlockId,
 } from "./playgroundBlockEditor.helpers";
+import { useBlockHistory } from "./useBlockHistory";
 import type {
   SlashMenuState,
   PageSelectorMenuState,
@@ -166,6 +167,12 @@ export function usePlaygroundBlockEditor(pageId: string) {
   const focusBlock = useCallback((blockId: string, cursorEnd = false) => {
     focusEditableBlock(blockId, cursorEnd ? "end" : "start");
   }, []);
+
+  const { pushSnapshot, undo, redo } = useBlockHistory(
+    pageId,
+    updatePageContent,
+    focusBlock,
+  );
 
   /** Get the bounding rect of the caret. */
   const getCaretRect = useCallback((): { x: number; y: number } => {
@@ -673,6 +680,26 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [pageId, updateBlock, focusBlock],
   );
 
+  /** Handle Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z for undo/redo. Returns true if handled. */
+  const handleUndoRedo = useCallback(
+    (e: React.KeyboardEvent): boolean => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return false;
+
+      if (e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo(contentRef.current);
+        return true;
+      }
+      if ((e.key === "z" && e.shiftKey) || e.key === "y") {
+        e.preventDefault();
+        redo(contentRef.current);
+        return true;
+      }
+      return false;
+    },
+    [undo, redo],
+  );
+
   /** Handle key presses — Enter, Backspace, Arrow navigation. */
   const handleKeyDown = useCallback(
     (
@@ -680,6 +707,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
       blockId: string,
       parentBlockId: string | null = null,
     ) => {
+      if (handleUndoRedo(e)) return;
+
       const content = parentBlockId
         ? (findChildrenForParent(contentRef.current, parentBlockId) ?? [])
         : contentRef.current;
@@ -690,6 +719,12 @@ export function usePlaygroundBlockEditor(pageId: string) {
         (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
       const isEmpty = isEffectivelyEmpty(liveText);
       const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
+
+      const isStructuralKey =
+        e.key === "Tab" || e.key === "Enter" || e.key === "Backspace" || e.key === "Delete";
+      if (isStructuralKey) {
+        pushSnapshot(contentRef.current);
+      }
 
       const handled =
         handleBlockIndentation(e, blockId, block, content) ||
@@ -702,7 +737,9 @@ export function usePlaygroundBlockEditor(pageId: string) {
         (e.key === "Enter" && block.type === "code") ||
         handleContainerEnter(e, blockId, block);
 
-      if (handled) return;
+      if (handled) {
+        return;
+      }
 
       if (e.key === "Enter" && !e.shiftKey) {
         handleEnterKey(
@@ -746,6 +783,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
       pageSelector,
       insertBlock,
       focusBlock,
+      handleUndoRedo,
+      pushSnapshot,
       handleBlockIndentation,
       handleParagraphSpaceShortcut,
       handleToggleHeadingSpaceShortcut,
@@ -787,6 +826,15 @@ export function usePlaygroundBlockEditor(pageId: string) {
     contentRef.current = content;
   }, [content]);
 
+  /** Wrap updatePageContent so context menu operations push undo snapshots. */
+  const updatePageContentWithHistory = useCallback(
+    (pid: string, blocks: Block[]) => {
+      pushSnapshot(contentRef.current);
+      updatePageContent(pid, blocks);
+    },
+    [pushSnapshot, updatePageContent],
+  );
+
   const {
     contextMenu,
     contextMenuSections,
@@ -795,7 +843,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
   } = useBlockContextMenu({
     pageId,
     content,
-    updatePageContent,
+    updatePageContent: updatePageContentWithHistory,
     focusBlock,
   });
 
@@ -927,5 +975,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
     handleInitBlock,
     registerBlockRef,
     focusBlock,
+    undo,
+    redo,
+    pushSnapshot,
   };
 }
