@@ -711,6 +711,39 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [undo, redo],
   );
 
+  /** Push an undo snapshot if the key will trigger a structural block mutation. */
+  const maybePushStructuralSnapshot = useCallback(
+    (e: React.KeyboardEvent, isEmptyForDeletion: boolean) => {
+      const isStructural =
+        e.key === "Tab" || e.key === "Enter" ||
+        ((e.key === "Backspace" || e.key === "Delete") && isEmptyForDeletion);
+      if (isStructural) {
+        pushSnapshot(contentRef.current);
+      }
+    },
+    [pushSnapshot],
+  );
+
+  /** Try Enter-key actions (new block creation). Returns true if handled. */
+  const handleEnterAction = useCallback(
+    (e: React.KeyboardEvent, blockId: string, blockType: Block["type"]) => {
+      if (e.key !== "Enter" || e.shiftKey) return false;
+      handleEnterKey(e, blockId, blockType, slashMenu, pageId, insertBlock, focusBlock);
+      return true;
+    },
+    [slashMenu, pageId, insertBlock, focusBlock],
+  );
+
+  /** Try Escape-key actions (close menus). */
+  const handleEscapeAction = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (slashMenu) setSlashMenu(null);
+      if (pageSelector) setPageSelector(null);
+    },
+    [slashMenu, pageSelector],
+  );
+
   /** Handle key presses — Enter, Backspace, Arrow navigation. */
   const handleKeyDown = useCallback(
     (
@@ -731,12 +764,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
       const isEmpty = isEffectivelyEmpty(liveText);
       const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
 
-      const isStructuralKey =
-        e.key === "Tab" || e.key === "Enter" ||
-        ((e.key === "Backspace" || e.key === "Delete") && isEmptyForDeletion);
-      if (isStructuralKey) {
-        pushSnapshot(contentRef.current);
-      }
+      maybePushStructuralSnapshot(e, isEmptyForDeletion);
 
       const handled =
         handleBlockIndentation(e, blockId, block, content) ||
@@ -749,54 +777,15 @@ export function usePlaygroundBlockEditor(pageId: string) {
         (e.key === "Enter" && block.type === "code") ||
         handleContainerEnter(e, blockId, block);
 
-      if (handled) {
-        return;
-      }
-
-      if (e.key === "Enter" && !e.shiftKey) {
-        handleEnterKey(
-          e,
-          blockId,
-          block.type,
-          slashMenu,
-          pageId,
-          insertBlock,
-          focusBlock,
-        );
-        return;
-      }
-
-      if (
-        handleEmptyBackspace(
-          e,
-          blockId,
-          block,
-          blockIdx,
-          content,
-          parentBlockId,
-          isEmptyForDeletion,
-        )
-      ) {
-        return;
-      }
-
-      if (handleArrowNavigation(e, blockId, content)) {
-        return;
-      }
-
-      if (e.key === "Escape") {
-        if (slashMenu) setSlashMenu(null);
-        if (pageSelector) setPageSelector(null);
-      }
+      if (handled) return;
+      if (handleEnterAction(e, blockId, block.type)) return;
+      if (handleEmptyBackspace(e, blockId, block, blockIdx, content, parentBlockId, isEmptyForDeletion)) return;
+      if (handleArrowNavigation(e, blockId, content)) return;
+      handleEscapeAction(e);
     },
     [
-      pageId,
-      slashMenu,
-      pageSelector,
-      insertBlock,
-      focusBlock,
       handleUndoRedo,
-      pushSnapshot,
+      maybePushStructuralSnapshot,
       handleBlockIndentation,
       handleParagraphSpaceShortcut,
       handleToggleHeadingSpaceShortcut,
@@ -805,8 +794,10 @@ export function usePlaygroundBlockEditor(pageId: string) {
       handleEmptyListDelete,
       handleDividerDelete,
       handleContainerEnter,
+      handleEnterAction,
       handleEmptyBackspace,
       handleArrowNavigation,
+      handleEscapeAction,
     ],
   );
 
