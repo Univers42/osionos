@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   uiCollectionAssets.ts                              :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:26:09 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:26:10 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/02 10:26:32 by rstancu          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,12 +16,9 @@ import {
   SLASH_ITEMS as PACKAGE_SLASH_ITEMS,
   createDefaultAssetPickerTabs,
   createMediaCollectionPickerTab,
-  getMediaCollection,
   resolveAssetValue,
-  resolveMediaUrl,
   type AssetPickerBoardProps,
   type AssetPickerBoardTab,
-  type MediaItem,
   type SlashMenuItem as PackageSlashMenuItem,
 } from '@univers42/ui-collection';
 export { SECTION_LABELS as COLLECTION_SLASH_SECTION_LABELS } from '@univers42/ui-collection';
@@ -82,26 +79,14 @@ const EMOJI_GROUP_LABELS: Record<string, string> = {
 };
 
 const BOARD_ACTIVE_BACKGROUND = 'rgba(35, 131, 226, 0.12)';
-const MEDIA_PROVIDER_ALLOWLIST = new Set(['url', 'package']);
-const COLLECTION_SVG_ITEMS = getMediaCollection('svg').filter(
-  (item) => !item.ref.startsWith('local:'),
-);
-const COLLECTION_COVER_ITEMS = getMediaCollection('photos').filter(
-  (item) => !item.ref.startsWith('local:'),
-);
-const COLLECTION_IMAGE_ITEMS = getMediaCollection('photos').filter(isResolvableMediaItem);
-const COLLECTION_VIDEO_ITEMS = getMediaCollection('videos').filter(isResolvableMediaItem);
-const COLLECTION_AUDIO_ITEMS = getMediaCollection('other-media').filter(
-  (item) => item.kind === 'audio' && isResolvableMediaItem(item),
-);
-const COLLECTION_FILE_ITEMS = getMediaCollection('other-media').filter(
-  (item) => item.kind === 'document' && isResolvableMediaItem(item),
-);
-
-function isResolvableMediaItem(item: MediaItem): boolean {
-  const provider = item.ref.split(':', 1)[0];
-  return MEDIA_PROVIDER_ALLOWLIST.has(provider);
-}
+// Media collections have been removed from @univers42/ui-collection
+// Using empty arrays to preserve API compatibility
+const COLLECTION_SVG_ITEMS: Array<unknown> = [];
+const COLLECTION_COVER_ITEMS: Array<unknown> = [];
+const COLLECTION_IMAGE_ITEMS: Array<unknown> = [];
+const COLLECTION_VIDEO_ITEMS: Array<unknown> = [];
+const COLLECTION_AUDIO_ITEMS: Array<unknown> = [];
+const COLLECTION_FILE_ITEMS: Array<unknown> = [];
 
 const BOARD_CLASS_NAMES: NonNullable<AssetPickerBoardProps['classNames']> = {
   root: 'w-full',
@@ -338,16 +323,13 @@ export function resolveCollectionMediaAsset(
     return null;
   }
 
-  const mediaItem = resolved.mediaItem;
   const previewImageUrl =
     resolved.preview?.kind === 'image' ? resolved.preview.src : undefined;
 
   return {
-    label: resolved.item?.label ?? mediaItem?.label ?? fallbackLabel,
-    url: mediaItem ? resolveMediaUrl(mediaItem.ref) : previewImageUrl,
-    thumbnailUrl: mediaItem?.thumbnailRef
-      ? resolveMediaUrl(mediaItem.thumbnailRef)
-      : previewImageUrl,
+    label: resolved.item?.label ?? fallbackLabel,
+    url: previewImageUrl,
+    thumbnailUrl: previewImageUrl,
   };
 }
 
@@ -364,13 +346,7 @@ export function randomUiCollectionEmoji(): string {
 }
 
 export function randomUiCollectionCover(): string | undefined {
-  if (COLLECTION_COVER_ITEMS.length === 0) {
-    return undefined;
-  }
-
-  return COLLECTION_COVER_ITEMS[
-    Math.floor(Math.random() * COLLECTION_COVER_ITEMS.length)
-  ]?.ref;
+  return undefined;
 }
 
 const SUPPORTED_SLASH_TYPES = new Set<BlockType>([

@@ -24,7 +24,7 @@
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-popover": "^1.1.15",
-    "@univers42/ui-collection": "^2.4.6",
+    "@univers42/ui-collection": "^2.5.1",
     "date-fns": "^4.1.0",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.45",

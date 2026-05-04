@@ -1,3 +1,6 @@
+[submodule "vendor/scripts"]
+	path = vendor/scripts
+	url = https://github.com/Univers42/scripts.git
 [submodule "src/components/database"]
 	path = src/components/database
 	url = https://github.com/Univers42/notion-database-sys.git

@@ -557,7 +557,15 @@ export async function openBlockContextMenuForEditor(editor) {
 }
 
 export function contextMenuItem(page, label) {
-  return page.getByRole("button", { name: new RegExp(`^${escapeRegex(label)}$`) });
+  return page.locator(`[role="menuitem"]`).filter({
+    has: page.locator(".text-sm.flex-1", { hasText: new RegExp(`^${escapeRegex(label)}$`) }),
+  });
+}
+
+export function contextSubMenuItem(page, label) {
+  return page.locator(`[role="menu"] button`).filter({
+    has: page.locator(".text-sm.flex-1", { hasText: new RegExp(`^${escapeRegex(label)}$`) }),
+  });
 }
 
 export async function pasteText(editor, text) {

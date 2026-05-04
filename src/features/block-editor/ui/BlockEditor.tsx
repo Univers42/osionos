@@ -40,6 +40,7 @@ import {
   parseMarkdownToBlocks,
 } from "@/shared/lib/markengine";
 import { MermaidDiagram, CodeSyntaxHighlight, EmojiPicker } from "@/shared/ui";
+import { getNumberedMarker, getBulletMarker } from "@/entities/block/model/listMarkers";
 import { MediaBlockEditor } from "./MediaBlockEditor";
 import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
@@ -86,61 +87,7 @@ function renderEquationToHtml(source: string): string {
   }
 }
 
-function toAlphabetic(index: number): string {
-  let value = Math.max(1, index);
-  let output = "";
-  while (value > 0) {
-    value -= 1;
-    output = String.fromCodePoint(97 + (value % 26)) + output;
-    value = Math.floor(value / 26);
-  }
-  return output;
-}
 
-function toRoman(index: number): string {
-  const numerals: Array<[number, string]> = [
-    [1000, "m"],
-    [900, "cm"],
-    [500, "d"],
-    [400, "cd"],
-    [100, "c"],
-    [90, "xc"],
-    [50, "l"],
-    [40, "xl"],
-    [10, "x"],
-    [9, "ix"],
-    [5, "v"],
-    [4, "iv"],
-    [1, "i"],
-  ];
-  let value = Math.max(1, Math.min(index, 3999));
-  let output = "";
-  for (const [amount, numeral] of numerals) {
-    while (value >= amount) {
-      output += numeral;
-      value -= amount;
-    }
-  }
-  return output;
-}
-
-function getNumberedMarker(index: number, depth: number): string {
-  const shapes = ["◆", "◇", "●", "○", "■", "□"];
-  switch (depth % 6) {
-    case 0:
-      return `${index}.`;
-    case 1:
-      return `${toAlphabetic(index)}.`;
-    case 2:
-      return `${toRoman(index)}.`;
-    case 3:
-      return `${toAlphabetic(index).toUpperCase()}.`;
-    case 4:
-      return `${toRoman(index).toUpperCase()}.`;
-    default:
-      return shapes[(index - 1) % shapes.length];
-  }
-}
 
 interface LayoutConfig {
   columns: number;
@@ -441,6 +388,7 @@ interface BlockEditorProps {
   block: Block;
   numberedIndex: number;
   numberedDepth: number;
+  bulletDepth: number;
   isSelected?: boolean;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
@@ -457,6 +405,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   block,
   numberedIndex,
   numberedDepth,
+  bulletDepth,
   isSelected = false,
   onChange,
   onKeyDown,
@@ -668,11 +617,20 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         />
       );
 
-    case "bulleted_list":
+    case "bulleted_list": {
+      const bulletStyle = getBulletMarker(bulletDepth);
       return (
         <div className="flex items-start gap-2 pl-5">
           <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-ink-faint)] mt-[7px]" />
+            {bulletStyle === "disc" && (
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-ink-faint)] mt-[7px]" />
+            )}
+            {bulletStyle === "circle" && (
+              <span className="inline-block w-1.5 h-1.5 rounded-full border border-[var(--color-ink-faint)] mt-[7px]" />
+            )}
+            {bulletStyle === "square" && (
+              <span className="inline-block w-1.5 h-1.5 bg-[var(--color-ink-faint)] mt-[7px]" />
+            )}
           </span>
           <div className="flex-1">
             <EditableContent
@@ -689,6 +647,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           </div>
         </div>
       );
+    }
 
     case "numbered_list":
       return (
@@ -1672,6 +1631,7 @@ interface LayoutCellBlockTreeProps {
   isPreview: boolean;
   parentBlockType?: Block["type"] | null;
   numberedDepth?: number;
+  bulletDepth?: number;
   onChange: (cell: LayoutCell, blockId: string, text: string) => void;
   onKeyDown: (event: React.KeyboardEvent, cell: LayoutCell, block: Block) => void;
   onPaste: (event: React.ClipboardEvent, cell: LayoutCell, blockId: string) => void;
@@ -1686,6 +1646,7 @@ const LayoutCellBlockTree: React.FC<LayoutCellBlockTreeProps> = ({
   isPreview,
   parentBlockType = null,
   numberedDepth = 0,
+  bulletDepth = 0,
   onChange,
   onKeyDown,
   onPaste,
@@ -1700,6 +1661,7 @@ const LayoutCellBlockTree: React.FC<LayoutCellBlockTreeProps> = ({
         const numberedIndex = nestedBlock.type === "numbered_list" ? ++numberedCounter : 0;
         if (nestedBlock.type !== "numbered_list") numberedCounter = 0;
         const nextNumberedDepth = nestedBlock.type === "numbered_list" ? numberedDepth + 1 : numberedDepth;
+        const nextBulletDepth = nestedBlock.type === "bulleted_list" ? bulletDepth + 1 : bulletDepth;
         const renderChildren = () => {
           if (!nestedBlock.children?.length) return null;
           return (
@@ -1711,6 +1673,7 @@ const LayoutCellBlockTree: React.FC<LayoutCellBlockTreeProps> = ({
                 isPreview={isPreview}
                 parentBlockType={nestedBlock.type}
                 numberedDepth={nextNumberedDepth}
+                bulletDepth={nextBulletDepth}
                 onChange={onChange}
                 onKeyDown={onKeyDown}
                 onPaste={onPaste}
@@ -1735,6 +1698,7 @@ const LayoutCellBlockTree: React.FC<LayoutCellBlockTreeProps> = ({
               block={nestedBlock}
               numberedIndex={numberedIndex}
               numberedDepth={numberedDepth}
+              bulletDepth={bulletDepth}
               onChange={(text) => onChange(cell, nestedBlock.id, text)}
               onKeyDown={(event) => onKeyDown(event, cell, nestedBlock)}
               onPaste={(event) => onPaste(event, cell, nestedBlock.id)}

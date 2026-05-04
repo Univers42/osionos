@@ -10,13 +10,16 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { createRef, useCallback, useEffect, useMemo, useState } from "react";
+import React, { createRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type {
   BlockContextMenuItem,
   BlockContextMenuSection,
   BlockContextMenuState,
 } from "../model/blockContextMenu.helpers";
+
+const SUBMENU_WIDTH = 224; // w-56 = 14rem = 224px
+const VIEWPORT_PAD = 12;
 
 interface BlockContextMenuProps {
   menu: BlockContextMenuState | null;
@@ -75,6 +78,150 @@ const SubmenuButton: React.FC<SubmenuButtonProps> = ({
       <span className="flex-1 text-sm">{item.label}</span>
       {item.active ? <span className="text-xs">✓</span> : null}
     </button>
+  );
+};
+
+/**
+ * Submenu panel that positions itself using fixed coordinates clamped
+ * to the viewport, so it never extends beyond the visible area.
+ * It measures the parent menuitem via anchorRef to decide placement.
+ */
+interface SubmenuPanelProps {
+  anchorRef: React.RefObject<HTMLDivElement | null>;
+  parentWidth: number;
+  items: BlockContextMenuItem[];
+  parentLabel: string;
+  onSelect: (event: React.MouseEvent, onClick: () => void) => void;
+}
+
+const SubmenuPanel: React.FC<SubmenuPanelProps> = ({
+  anchorRef,
+  parentWidth,
+  items,
+  parentLabel,
+  onSelect,
+}) => {
+  const style = useMemo<React.CSSProperties>(() => {
+    const anchor = anchorRef.current;
+    if (!anchor) return { position: "fixed", opacity: 0 };
+
+    const rect = anchor.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Prefer opening to the right of the parent menu
+    let left = rect.right + 8;
+    if (left + SUBMENU_WIDTH + VIEWPORT_PAD > vw) {
+      left = rect.left - SUBMENU_WIDTH - 8;
+    }
+    left = Math.max(VIEWPORT_PAD, Math.min(left, vw - SUBMENU_WIDTH - VIEWPORT_PAD));
+
+    // Vertical: align to anchor top, clamp so the panel stays in viewport
+    const maxH = vh - VIEWPORT_PAD * 2;
+    let top = rect.top;
+    if (top + maxH > vh) {
+      top = vh - maxH - VIEWPORT_PAD;
+    }
+    top = Math.max(VIEWPORT_PAD, top);
+
+    return {
+      position: "fixed",
+      top,
+      left,
+      width: SUBMENU_WIDTH,
+      maxHeight: maxH,
+      zIndex: 10002,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anchorRef, parentWidth]);
+
+  return (
+    <div
+      className="overflow-y-auto rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] py-1 shadow-xl"
+      style={style}
+    >
+      {items.map((subItem) => (
+        <SubmenuButton
+          key={`${parentLabel}-${subItem.label}`}
+          parentLabel={parentLabel}
+          item={subItem}
+          onSelect={onSelect}
+        />
+      ))}
+    </div>
+  );
+};
+
+/**
+ * Single menu item row with optional submenu support.
+ * Provides a ref to its own DOM node so SubmenuPanel can measure
+ * the anchor position for viewport-clamped placement.
+ */
+interface MenuItemRowProps {
+  item: BlockContextMenuItem;
+  openSubmenu: string | null;
+  setOpenSubmenu: (label: string | null) => void;
+  parentWidth: number;
+  onSubItemClick: (event: React.MouseEvent, onClick: () => void) => void;
+}
+
+const MenuItemRow: React.FC<MenuItemRowProps> = ({
+  item,
+  openSubmenu,
+  setOpenSubmenu,
+  parentWidth,
+  onSubItemClick,
+}) => {
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div
+      ref={rowRef}
+      role="menuitem"
+      tabIndex={item.disabled ? -1 : 0}
+      onMouseEnter={() => setOpenSubmenu(item.subItems ? item.label : null)}
+      onClick={() => {
+        if (item.disabled) return;
+        if (item.subItems) {
+          setOpenSubmenu(openSubmenu === item.label ? null : item.label);
+          return;
+        }
+        item.onClick();
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        if (item.disabled) return;
+        if (item.subItems) {
+          setOpenSubmenu(openSubmenu === item.label ? null : item.label);
+          return;
+        }
+        item.onClick();
+      }}
+      className={getItemClassName(item)}
+    >
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--color-surface-secondary)] text-[var(--color-ink-muted)]">
+        {item.icon}
+      </span>
+      <span className="min-w-0 flex-1 text-sm">{item.label}</span>
+      {item.shortcut ? (
+        <span className="text-[11px] text-[var(--color-ink-faint)]">
+          {item.shortcut}
+        </span>
+      ) : null}
+      {item.subItems ? (
+        <span className="text-[var(--color-ink-faint)]">›</span>
+      ) : null}
+      {item.subItems && openSubmenu === item.label ? (
+        <SubmenuPanel
+          anchorRef={rowRef}
+          parentWidth={parentWidth}
+          items={item.subItems}
+          parentLabel={item.label}
+          onSelect={onSubItemClick}
+        />
+      ) : null}
+    </div>
   );
 };
 
@@ -180,7 +327,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             className="h-8 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-2 text-sm text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-accent)]"
           />
         </div>
-        <div className="max-h-[430px] overflow-visible">
+        <div className="max-h-[430px] overflow-visible" role="menu">
         {visibleSections.map((section, index) => (
           <div key={`${section.label ?? "section"}-${index}`}>
             {section.label ? (
@@ -189,56 +336,14 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
               </p>
             ) : null}
             {section.items.map((item) => (
-              <div
+              <MenuItemRow
                 key={`${section.label ?? "section"}-${item.label}`}
-                role="menuitem"
-                tabIndex={item.disabled ? -1 : 0}
-                onMouseEnter={() => setOpenSubmenu(item.subItems ? item.label : null)}
-                onClick={() => {
-                  if (item.disabled) return;
-                  if (item.subItems) {
-                    setOpenSubmenu(openSubmenu === item.label ? null : item.label);
-                    return;
-                  }
-                  item.onClick();
-                }}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter" && event.key !== " ") return;
-                  event.preventDefault();
-                  if (item.disabled) return;
-                  if (item.subItems) {
-                    setOpenSubmenu(openSubmenu === item.label ? null : item.label);
-                    return;
-                  }
-                  item.onClick();
-                }}
-                className={getItemClassName(item)}
-              >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--color-surface-secondary)] text-[var(--color-ink-muted)]">
-                  {item.icon}
-                </span>
-                <span className="min-w-0 flex-1 text-sm">{item.label}</span>
-                {item.shortcut ? (
-                  <span className="text-[11px] text-[var(--color-ink-faint)]">
-                    {item.shortcut}
-                  </span>
-                ) : null}
-                {item.subItems ? (
-                  <span className="text-[var(--color-ink-faint)]">›</span>
-                ) : null}
-                {item.subItems && openSubmenu === item.label ? (
-                  <div className="absolute left-full top-0 z-10 ml-2 max-h-[70vh] w-56 overflow-y-auto rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] py-1 shadow-xl">
-                    {item.subItems.map((subItem) => (
-                      <SubmenuButton
-                        key={`${item.label}-${subItem.label}`}
-                        parentLabel={item.label}
-                        item={subItem}
-                        onSelect={handleSubItemClick}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+                item={item}
+                openSubmenu={openSubmenu}
+                setOpenSubmenu={setOpenSubmenu}
+                parentWidth={width}
+                onSubItemClick={handleSubItemClick}
+              />
             ))}
             {index < visibleSections.length - 1 ? (
               <div className="my-1 border-t border-[var(--color-line)]" />
