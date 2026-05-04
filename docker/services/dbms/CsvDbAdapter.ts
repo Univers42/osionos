@@ -16,6 +16,43 @@ function coerceValue(value: string): unknown {
   const num = Number(value);
   if (!Number.isNaN(num) && value.trim() !== '') return num;
   return value;
+/**
+ * Parse a CSV cell value back to its original type.
+ * Supports JSON objects/arrays, pipe-separated arrays, booleans, numbers, null, and text.
+ */
+function coerceValue(value: string): unknown {
+  // Handle empty/null
+  if (value === '' || value === 'null') return null;
+
+  // Handle booleans (strict matching only)
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+
+  // Handle JSON objects and arrays
+  if ((value.startsWith('{') || value.startsWith('[')) && (value.endsWith('}') || value.endsWith(']'))) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+
+  // Handle pipe-separated arrays (only if not JSON)
+  if (value.includes('|') && !value.includes('[') && !value.includes('{')) {
+    const parts = value.split('|');
+    if (parts.every((p) => !p.startsWith('{') && !p.startsWith('['))) {
+      return parts.map((p) => p.trim()).filter((p) => p !== '');
+    }
+  }
+
+  // Handle numbers (strict numeric regex)
+  if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(value)) {
+    const num = Number(value);
+    if (!Number.isNaN(num)) return num;
+  }
+
+  // Everything else is a string
+  return value;
 }
 
 export class CsvDbAdapter implements DbAdapter {
@@ -103,6 +140,7 @@ export class CsvDbAdapter implements DbAdapter {
       fields: inferSchema(records),
       recordCount: records.length,
     };
+    }
   }
 
   async ping(): Promise<boolean> {

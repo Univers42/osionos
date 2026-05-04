@@ -1,37 +1,41 @@
-import tailwindcss from '@tailwindcss/vite';
-import react from '@vitejs/plugin-react';
-import path from 'node:path';
-import { defineConfig, loadEnv } from 'vite';
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import path from "node:path";
+import { defineConfig, loadEnv } from "vite";
 
 export default defineConfig(({ mode }) => {
   const root = __dirname;
+  const databaseRoot = path.resolve(root, "src/components/database");
 
-  const env = loadEnv(mode, root, '');
+  const env = loadEnv(mode, root, "");
   return {
     root,
-    plugins: [
-      react(),
-      tailwindcss(),
-    ],
+    plugins: [react(), tailwindcss()],
     define: {
-      'import.meta.env.VITE_API_URL': JSON.stringify(
-        env.VITE_API_URL ?? '',
-      ),
+      "import.meta.env.VITE_API_URL": JSON.stringify(env.VITE_API_URL ?? ""),
     },
     resolve: {
       alias: [
         {
-          find: '@',
-          replacement: path.resolve(root, 'src'),
+          find: "@",
+          replacement: path.resolve(root, "src"),
+        },
+        {
+          find: "@src",
+          replacement: path.resolve(databaseRoot, "src"),
+        },
+        {
+          find: "@markdown",
+          replacement: path.resolve(databaseRoot, "src/lib/markdown"),
         },
       ],
     },
     build: {
-      outDir: path.resolve(root, 'build'),
+      outDir: path.resolve(root, "build"),
     },
     server: {
       port: 3001,
-      host: '0.0.0.0',
+      host: "0.0.0.0",
       watch: {
         usePolling: true,
       },

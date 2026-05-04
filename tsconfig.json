@@ -18,7 +18,10 @@
     "types": ["vite/client", "node"],
     "ignoreDeprecations": "5.0",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@src/*": ["./src/components/database/src/*"],
+      "@markdown": ["./src/components/database/src/lib/markdown/index.ts"],
+      "@markdown/*": ["./src/components/database/src/lib/markdown/*"]
     }
   },
   "include": ["src"],
