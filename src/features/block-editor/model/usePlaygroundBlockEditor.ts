@@ -168,11 +168,16 @@ export function usePlaygroundBlockEditor(pageId: string) {
     focusEditableBlock(blockId, cursorEnd ? "end" : "start");
   }, []);
 
-  const { pushSnapshot, undo, redo } = useBlockHistory(
+  const { pushSnapshot, undo, redo, clearHistory } = useBlockHistory(
     pageId,
     updatePageContent,
     focusBlock,
   );
+
+  // Clear undo/redo history when navigating to a different page.
+  useEffect(() => {
+    clearHistory();
+  }, [pageId, clearHistory]);
 
   /** Get the bounding rect of the caret. */
   const getCaretRect = useCallback((): { x: number; y: number } => {
@@ -686,14 +691,20 @@ export function usePlaygroundBlockEditor(pageId: string) {
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return false;
 
       if (e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        undo(contentRef.current);
-        return true;
+        // Only intercept if we have structural history; otherwise let
+        // the browser handle native text undo.
+        if (undo(contentRef.current)) {
+          e.preventDefault();
+          return true;
+        }
+        return false;
       }
       if ((e.key === "z" && e.shiftKey) || e.key === "y") {
-        e.preventDefault();
-        redo(contentRef.current);
-        return true;
+        if (redo(contentRef.current)) {
+          e.preventDefault();
+          return true;
+        }
+        return false;
       }
       return false;
     },
@@ -721,7 +732,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
       const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
 
       const isStructuralKey =
-        e.key === "Tab" || e.key === "Enter" || e.key === "Backspace" || e.key === "Delete";
+        e.key === "Tab" || e.key === "Enter" ||
+        ((e.key === "Backspace" || e.key === "Delete") && isEmptyForDeletion);
       if (isStructuralKey) {
         pushSnapshot(contentRef.current);
       }

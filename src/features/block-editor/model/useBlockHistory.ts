@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   useBlockHistory.ts                                 :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: claude <claude@anthropic.com>              +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/03 12:00:00 by claude            #+#    #+#             */
+/*   Updated: 2026/05/03 12:00:00 by claude           ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 /**
  * Lightweight undo/redo history for block-level operations.
  *
@@ -50,12 +62,12 @@ export function useBlockHistory(
 
   /**
    * Undo: restore the previous snapshot and push the current state
-   * onto the redo stack.
+   * onto the redo stack. Returns true if a snapshot was restored.
    */
   const undo = useCallback(
-    (currentContent: Block[]) => {
+    (currentContent: Block[]): boolean => {
       const h = historyRef.current;
-      if (h.undoStack.length === 0) return;
+      if (h.undoStack.length === 0) return false;
 
       h.redoStack.push(structuredClone(currentContent));
       const previous = h.undoStack.pop()!;
@@ -65,18 +77,19 @@ export function useBlockHistory(
       if (previous.length > 0) {
         focusBlock(previous[0].id);
       }
+      return true;
     },
     [pageId, applyContent, focusBlock],
   );
 
   /**
    * Redo: restore the next snapshot and push the current state
-   * back onto the undo stack.
+   * back onto the undo stack. Returns true if a snapshot was restored.
    */
   const redo = useCallback(
-    (currentContent: Block[]) => {
+    (currentContent: Block[]): boolean => {
       const h = historyRef.current;
-      if (h.redoStack.length === 0) return;
+      if (h.redoStack.length === 0) return false;
 
       h.undoStack.push(structuredClone(currentContent));
       const next = h.redoStack.pop()!;
@@ -85,6 +98,7 @@ export function useBlockHistory(
       if (next.length > 0) {
         focusBlock(next[0].id);
       }
+      return true;
     },
     [pageId, applyContent, focusBlock],
   );
