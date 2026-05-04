@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { useUserStore, WorkspaceSwitcher } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
@@ -49,23 +49,13 @@ export const Sidebar: React.FC<Props> = ({
   const [showInviteCTA, setShowInviteCTA] = useState(true);
 
   const jwt = session?.accessToken ?? "";
+  const activeWorkspaceId = activeWorkspace?._id ?? "";
+  const activeWorkspaceName = activeWorkspace?.name ?? "My Workspace";
 
-  const privateWorkspaces = useMemo(
-    () => activeWorkspace && activeWorkspace.ownerId === session?.userId ? [activeWorkspace] : [],
-    [activeWorkspace, session?.userId],
-  );
-  const sharedWorkspaces = useMemo(
-    () => activeWorkspace && activeWorkspace.ownerId !== session?.userId ? [activeWorkspace] : [],
-    [activeWorkspace, session?.userId],
-  );
-
-  // Fetch pages whenever the active user's workspaces change
+  // Fetch pages for the active workspace
   useEffect(() => {
-    const allWs = [...privateWorkspaces, ...sharedWorkspaces];
-    for (const ws of allWs) {
-      if (jwt) fetchPages(ws._id, jwt);
-    }
-  }, [privateWorkspaces, sharedWorkspaces, jwt, fetchPages]);
+    if (jwt && activeWorkspaceId) fetchPages(activeWorkspaceId, jwt);
+  }, [activeWorkspaceId, jwt, fetchPages]);
 
   function handleAddToWorkspace(wsId: string) {
     addPage(wsId, "Untitled", jwt).then((page) => {
@@ -129,8 +119,8 @@ export const Sidebar: React.FC<Props> = ({
           recents={recents}
           activePage={activePage}
           openPage={openPage}
-          privateWorkspaces={privateWorkspaces}
-          sharedWorkspaces={sharedWorkspaces}
+          activeWorkspaceId={activeWorkspaceId}
+          activeWorkspaceName={activeWorkspaceName}
           pagesByWorkspace={pagesByWorkspace}
           jwt={jwt}
           onAddToWorkspace={handleAddToWorkspace}
@@ -144,10 +134,9 @@ export const Sidebar: React.FC<Props> = ({
         onDismissInvite={() => setShowInviteCTA(false)}
       />
       {isSidebarOpen ? (
-        <div
+        <hr
           className={styles.resizeHandle}
           data-sidebar-resize-handle
-          role="separator"
           aria-orientation="vertical"
           aria-label="Resize sidebar"
           onPointerDown={handleResizePointerDown}

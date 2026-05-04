@@ -808,14 +808,15 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
   const createPageInPrivateWorkspace = useCallback(
     async (title = "Untitled") => {
-      const session = useUserStore.getState().activeSession();
-      const privateWorkspaceId = session?.privateWorkspaces[0]?._id;
-      if (!privateWorkspaceId) return null;
+      const activeWorkspace = useUserStore.getState().activeWorkspace();
+      const workspaceId = activeWorkspace?._id;
+      if (!workspaceId) return null;
 
+      const session = useUserStore.getState().activeSession();
       const jwt = session?.accessToken ?? "";
       const page = await usePageStore
         .getState()
-        .addPage(privateWorkspaceId, title, jwt);
+        .addPage(workspaceId, title, jwt);
 
       return page ? { id: page._id } : null;
     },

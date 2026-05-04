@@ -31,10 +31,6 @@ import {
   workspaceConfigKey,
 } from "@/shared/config/workspaceConfigStore";
 
-interface WorkspaceRef {
-  _id: string;
-}
-
 interface RecentPageActionsProps {
   recent: ActivePage;
   active: boolean;
@@ -128,8 +124,8 @@ interface SidebarPageTreeProps {
   recents: ActivePage[];
   activePage: ActivePage | null;
   openPage: (page: ActivePage) => void;
-  privateWorkspaces: WorkspaceRef[];
-  sharedWorkspaces: WorkspaceRef[];
+  activeWorkspaceId: string;
+  activeWorkspaceName: string;
   pagesByWorkspace: Record<string, PageEntry[]>;
   jwt: string;
   onAddToWorkspace: (wsId: string) => void;
@@ -140,8 +136,8 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   recents,
   activePage,
   openPage,
-  privateWorkspaces,
-  sharedWorkspaces,
+  activeWorkspaceId,
+  activeWorkspaceName,
   pagesByWorkspace,
   jwt,
   onAddToWorkspace,
@@ -149,8 +145,6 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   const addPage = usePageStore((s) => s.addPage);
   const pageById = usePageStore((s) => s.pageById);
   const activeUserId = useUserStore((s) => s.activeUserId);
-  const activeWorkspace = useUserStore((s) => s.activeWorkspace());
-  const activeWorkspaceId = activeWorkspace?._id ?? privateWorkspaces[0]?._id ?? sharedWorkspaces[0]?._id ?? "";
   const workspaceKey = workspaceConfigKey(activeUserId || "anonymous", activeWorkspaceId || "workspace");
   const storedWorkspaceConfig = useWorkspaceConfigStore((s) => s.configs[workspaceKey]);
   const workspaceConfig = useMemo(() => resolveWorkspaceConfig(storedWorkspaceConfig), [storedWorkspaceConfig]);
@@ -318,16 +312,15 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         )}
       </SidebarSection>
 
-      {privateWorkspaces.map((ws) => {
-        const pages = (pagesByWorkspace[ws._id] ?? []).filter(
+      {activeWorkspaceId && (() => {
+        const pages = (pagesByWorkspace[activeWorkspaceId] ?? []).filter(
           (p) => !p.parentPageId && !p.archivedAt,
         );
         return (
           <SidebarSection
-            key={ws._id}
-            label="Private"
+            label={activeWorkspaceName}
             defaultOpen
-            onAdd={() => onAddToWorkspace(ws._id)}
+            onAdd={() => onAddToWorkspace(activeWorkspaceId)}
             onMore={() => {
               /* placeholder */
             }}
@@ -341,7 +334,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
               <PageTreeItem
                 key={page._id}
                 page={page}
-                workspaceId={ws._id}
+                workspaceId={activeWorkspaceId}
                 jwt={jwt}
                 depth={0}
                 activeId={activePage?.id}
@@ -349,36 +342,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
             ))}
           </SidebarSection>
         );
-      })}
-
-      <SidebarSection label="Shared">
-        {sharedWorkspaces.length > 0 ? (
-          sharedWorkspaces.map((ws) => {
-            const pages = (pagesByWorkspace[ws._id] ?? []).filter(
-              (p) => !p.parentPageId && !p.archivedAt,
-            );
-            return pages.map((page) => (
-              <PageTreeItem
-                key={page._id}
-                page={page}
-                workspaceId={ws._id}
-                jwt={jwt}
-                depth={0}
-                activeId={activePage?.id}
-              />
-            ));
-          })
-        ) : (
-          <SidebarNavItem
-            icon={<Plus size={14} className="text-[var(--color-accent)]" />}
-            label="Start collaborating"
-            subtle
-            onClick={() => {
-              /* placeholder */
-            }}
-          />
-        )}
-      </SidebarSection>
+      })()}
 
       <SidebarSection label="osionos apps">
         <SidebarNavItem
