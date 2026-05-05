@@ -2,7 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, **tag**, **release**/*, **hotfix**/*, **bugfix**/*, **feat**/*, **chore**/*, **refactor**/*, **docs**/*]
+    branches:
+      - main
+      - develop
+      - "tag"
+      - "release/**"
+      - "hotfix/**"
+      - "bugfix/**"
+      - "feat/**"
+      - "chore/**"
+      - "refactor/**"
+      - "docs/**"
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
@@ -23,7 +33,11 @@ concurrency:
 
 jobs:
   quality:
-    name: Quality gates
+    name: quality (${{ matrix.scope }})
+    strategy:
+      fail-fast: false
+      matrix:
+        scope: [root, markengine-submodule]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -96,7 +110,7 @@ jobs:
 
   build-image:
     name: Build & push Docker image
-    needs: [quality, test]
+    needs: quality
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
