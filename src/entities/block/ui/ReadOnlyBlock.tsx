@@ -30,11 +30,15 @@ interface BlockProps {
   numberedDepth?: number;
 }
 
+function renderInternalPageLink(pageId: string) {
+  return <InternalPageLink pageId={pageId} />;
+}
+
 const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
   const renderedContent = useMemo(() => {
     if (!content) return null;
     return renderInlineToReact(content, {
-      internalLinkRenderer: (pageId: string) => <InternalPageLink pageId={pageId} />,
+      internalLinkRenderer: renderInternalPageLink,
     });
   }, [content]);
 

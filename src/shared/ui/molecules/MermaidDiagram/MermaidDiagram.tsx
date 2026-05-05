@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:26:44 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:26:45 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -37,7 +37,7 @@ function nextRenderId() {
   ) {
     return `osionos-mermaid-${crypto.randomUUID()}`;
   }
-  return `osionos-mermaid-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `osionos-mermaid-${Date.now().toString(36)}`;
 }
 
 /**
@@ -67,10 +67,11 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    const target = container;
 
     const source = chart.trim();
     if (!source) {
-      container.innerHTML = "";
+      target.innerHTML = "";
       return;
     }
 
@@ -79,9 +80,9 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
     const renderId = nextRenderId();
     lastRenderIdRef.current = renderId;
 
-    container.innerHTML = "";
+    target.innerHTML = "";
 
-    void (async () => {
+    async function renderDiagram() {
       try {
         ensureMermaidInitialized();
         const { svg, bindFunctions } = await mermaid.render(renderId, source);
@@ -91,22 +92,26 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
           return;
         }
 
-        container.innerHTML = svg;
-        bindFunctions?.(container);
+        target.innerHTML = svg;
+        bindFunctions?.(target);
       } catch {
         // Clean up any SVG/iframe that mermaid injected before the error.
         cleanupMermaidOrphans(renderId);
 
         if (cancelled || renderTokenRef.current !== currentToken) return;
 
-        container.innerHTML = "";
+        target.innerHTML = "";
         const fallback = document.createElement("pre");
         fallback.className =
           "text-[12px] leading-relaxed font-mono text-red-600 whitespace-pre-wrap";
         fallback.textContent = source;
-        container.appendChild(fallback);
+        target.appendChild(fallback);
       }
-    })();
+    }
+
+    renderDiagram().catch((error: unknown) => {
+      console.error("[MermaidDiagram] Failed to render diagram", error);
+    });
 
     return () => {
       cancelled = true;

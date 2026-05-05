@@ -3,23 +3,24 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "packageManager": "npm@11.11.0",
+  "packageManager": "pnpm@10.32.1",
   "engines": {
-    "node": ">=22.0.0",
-    "npm": ">=10.0.0"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
+    "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:e2e",
-    "test:e2e": "npx playwright test",
-    "test:e2e:serial": "npx playwright test --workers=1",
-    "test:e2e:smoke": "npx playwright test tests/e2e/smoke",
+    "lint": "eslint src/ --max-warnings=0",
+    "lint:fix": "eslint src/ --fix",
+    "test": "pnpm run test:e2e",
+    "test:e2e": "playwright test",
+    "test:e2e:serial": "playwright test --workers=1",
+    "test:e2e:smoke": "playwright test tests/e2e/smoke",
     "test:doctor": "node scripts/test-env-doctor.mjs",
-    "test:quality": "make ci",
-    "test:setup": "npx playwright install chromium && npm run test:doctor"
+    "test:quality": "pnpm run typecheck && pnpm run lint",
+    "test:setup": "playwright install chromium && pnpm run test:doctor"
   },
   "dependencies": {
     "@univers42/ui-collection": "^2.5.1",
