@@ -1,0 +1,110 @@
+#!/usr/bin/hellish
+
+R="\033[31m"
+G="\033[32m"
+Y="\033[33m"
+C="\033[36m"
+M="\033[35m"
+B="\033[1m"
+D="\033[2m"
+X="\033[0m"
+
+# ── build your vibe ──────────────────────────────
+
+score=0
+total=10
+
+ask() {
+    question=$1
+    a=$2
+    b=$3
+    c=$4
+    correct=$5
+    points=$6
+
+    printf "  ${B}$question${X}\n"
+    printf "  ${Y}a)${X} $a\n"
+    printf "  ${Y}b)${X} $b\n"
+    printf "  ${Y}c)${X} $c\n"
+    printf "  ${D}your answer: ${X}"
+    read ANS
+
+    if [ "$ANS" = "$correct" ]; then
+        score=$((score + points))
+        printf "  ${G}✓ correct  +${points}pts${X}\n\n"
+    else
+        printf "  ${R}✗ wrong    (was: $correct)${X}\n\n"
+    fi
+}
+
+printf "\n"
+printf "  ${M}${B}hellish quiz${X}  ${D}how well do you know your shell?${X}\n"
+printf "  ${D}written in hellish — a shell built from scratch in C${X}\n"
+printf "\n"
+printf "  ${D}────────────────────────────────────────${X}\n"
+printf "\n"
+
+ask "what does \$? contain?" \
+    "your username" \
+    "exit code of last command" \
+    "current pid" \
+    "b" 1
+
+ask "what does | do?" \
+    "redirects to a file" \
+    "runs commands in background" \
+    "pipes stdout of one cmd into stdin of next" \
+    "c" 1
+
+ask "echo \$((2 ** 10)) prints what?" \
+    "20" \
+    "1024" \
+    "210" \
+    "b" 2
+
+ask "what is a heredoc?" \
+    "a doc about heroes" \
+    "multiline string passed as stdin" \
+    "a file redirect" \
+    "b" 1
+
+ask "diff <(ls /bin) <(ls /usr/bin) uses what?" \
+    "file redirection" \
+    "process substitution" \
+    "subshell" \
+    "b" 2
+
+ask "what does unset do?" \
+    "clears the screen" \
+    "kills a process" \
+    "removes a variable" \
+    "c" 1
+
+ask "what prints \$((17 % 5))?" \
+    "3" \
+    "2" \
+    "1" \
+    "2" 2
+
+printf "  ${D}────────────────────────────────────────${X}\n"
+printf "\n"
+
+pct=$((score * 100 / total))
+
+if [ $score -ge 9 ]; then
+    msg="${G}${B}shell wizard. go build a kernel next.${X}"
+elif [ $score -ge 6 ]; then
+    msg="${Y}solid. you actually read the man pages.${X}"
+elif [ $score -ge 3 ]; then
+    msg="${R}not bad. keep living in the terminal.${X}"
+else
+    msg="${R}${B}close the GUI and open a book.${X}"
+fi
+
+printf "  score   ${B}$score${X}${D}/$total${X}\n"
+printf "  grade   ${Y}${pct}%%${X}\n"
+printf "  vibe    $msg\n"
+printf "\n"
+printf "  ${D}this quiz runs on a shell i wrote in C${X}\n"
+printf "  ${D}no python. no node. pure hellish.${X}\n"
+printf "\n"
