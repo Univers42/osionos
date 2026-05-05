@@ -85,7 +85,8 @@ jobs:
 
   test:
     name: Browser tests
-    needs: quality
+    needs: [quality, build-image]
+    if: ${{ always() && needs.quality.result == 'success' && (needs.build-image.result == 'success' || needs.build-image.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -116,7 +117,6 @@ jobs:
 
   build-image:
     name: Build & push Docker image
-    needs: quality
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
