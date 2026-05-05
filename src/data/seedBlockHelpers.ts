@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:04:59 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,7 +14,7 @@ import type { Block } from '@/entities/block';
 
 let _counter = 0;
 export function bid(): string {
-  return `block-${++_counter}-${Math.random().toString(36).slice(2, 8)}`;
+  return `block-${++_counter}`;
 }
 
 export function p(text: string): Block {

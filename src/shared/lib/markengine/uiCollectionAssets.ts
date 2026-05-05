@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   uiCollectionAssets.ts                              :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:26:09 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/02 10:26:32 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/05/05 01:56:06 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -81,12 +81,43 @@ const EMOJI_GROUP_LABELS: Record<string, string> = {
 const BOARD_ACTIVE_BACKGROUND = 'rgba(35, 131, 226, 0.12)';
 // Media collections have been removed from @univers42/ui-collection
 // Using empty arrays to preserve API compatibility
+const FALLBACK_COVER_ITEMS = [
+  { id: 'cover-aurora', label: 'Aurora', ref: 'linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%)' },
+  { id: 'cover-sunset', label: 'Sunset', ref: 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)' },
+  { id: 'cover-forest', label: 'Forest', ref: 'linear-gradient(135deg, #16a34a 0%, #0f766e 100%)' },
+  { id: 'cover-slate', label: 'Slate', ref: 'linear-gradient(135deg, #334155 0%, #0f172a 100%)' },
+  { id: 'cover-lagoon', label: 'Lagoon', ref: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)' },
+  { id: 'cover-rose', label: 'Rose', ref: 'linear-gradient(135deg, #fb7185 0%, #be123c 100%)' },
+  { id: 'cover-gold', label: 'Gold', ref: 'linear-gradient(135deg, #facc15 0%, #ca8a04 100%)' },
+  { id: 'cover-night', label: 'Night', ref: 'radial-gradient(circle at top, #475569 0%, #020617 70%)' },
+] as const;
+
+const FALLBACK_MEDIA_PREVIEW =
+  'url:data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 640 360%22%3E%3Crect width=%22640%22 height=%22360%22 fill=%22%232383e2%22/%3E%3Ccircle cx=%22320%22 cy=%22180%22 r=%2280%22 fill=%22%23ffffff%22 fill-opacity=%220.28%22/%3E%3C/svg%3E';
+
+const FALLBACK_IMAGE_ITEMS = [
+  { id: 'image-blue', label: 'Blue abstract', ref: FALLBACK_MEDIA_PREVIEW, previewUrl: FALLBACK_MEDIA_PREVIEW },
+  { id: 'image-green', label: 'Green abstract', ref: 'url:data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 640 360%22%3E%3Crect width=%22640%22 height=%22360%22 fill=%22%2316a34a%22/%3E%3C/svg%3E', previewUrl: 'url:data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 640 360%22%3E%3Crect width=%22640%22 height=%22360%22 fill=%22%2316a34a%22/%3E%3C/svg%3E' },
+] as const;
+
+const FALLBACK_VIDEO_ITEMS = [
+  { id: 'video-demo', label: 'Demo video', ref: 'url:data:video/mp4;base64,', previewUrl: FALLBACK_MEDIA_PREVIEW },
+] as const;
+
+const FALLBACK_AUDIO_ITEMS = [
+  { id: 'audio-demo', label: 'Demo audio', ref: 'url:data:audio/mpeg;base64,', previewUrl: FALLBACK_MEDIA_PREVIEW },
+] as const;
+
+const FALLBACK_FILE_ITEMS = [
+  { id: 'file-demo', label: 'Demo file', ref: 'url:data:text/plain;base64,RGVtbyBmaWxl', previewUrl: FALLBACK_MEDIA_PREVIEW },
+] as const;
+
 const COLLECTION_SVG_ITEMS: Array<unknown> = [];
-const COLLECTION_COVER_ITEMS: Array<unknown> = [];
-const COLLECTION_IMAGE_ITEMS: Array<unknown> = [];
-const COLLECTION_VIDEO_ITEMS: Array<unknown> = [];
-const COLLECTION_AUDIO_ITEMS: Array<unknown> = [];
-const COLLECTION_FILE_ITEMS: Array<unknown> = [];
+const COLLECTION_COVER_ITEMS: Array<unknown> = [...FALLBACK_COVER_ITEMS];
+const COLLECTION_IMAGE_ITEMS: Array<unknown> = [...FALLBACK_IMAGE_ITEMS];
+const COLLECTION_VIDEO_ITEMS: Array<unknown> = [...FALLBACK_VIDEO_ITEMS];
+const COLLECTION_AUDIO_ITEMS: Array<unknown> = [...FALLBACK_AUDIO_ITEMS];
+const COLLECTION_FILE_ITEMS: Array<unknown> = [...FALLBACK_FILE_ITEMS];
 
 const BOARD_CLASS_NAMES: NonNullable<AssetPickerBoardProps['classNames']> = {
   root: 'w-full',
@@ -346,7 +377,10 @@ export function randomUiCollectionEmoji(): string {
 }
 
 export function randomUiCollectionCover(): string | undefined {
-  return undefined;
+  const item = FALLBACK_COVER_ITEMS[
+    Math.floor(Math.random() * FALLBACK_COVER_ITEMS.length)
+  ];
+  return item.ref;
 }
 
 const SUPPORTED_SLASH_TYPES = new Set<BlockType>([

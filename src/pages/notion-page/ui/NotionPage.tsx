@@ -97,7 +97,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
   /* ── Page metadata from store ──────────────────────────────────── */
   const title = page?.title ?? activePage?.title ?? "";
   const icon = page?.icon ?? activePage?.icon;
-  const cover = page?.cover;
+  const cover = page?.cover ?? activePage?.cover;
 
   /* ── Handlers ──────────────────────────────────────────────────── */
 
@@ -161,8 +161,11 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
         }
         return { pages: newPages };
       });
+      if (activePage?.id === pageId) {
+        openPage({ ...activePage, cover: newCover });
+      }
     },
-    [pageId],
+    [pageId, activePage, openPage],
   );
 
   const handleRemoveCover = useCallback(() => {
@@ -175,7 +178,10 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
       }
       return { pages: newPages };
     });
-  }, [pageId]);
+    if (activePage?.id === pageId) {
+      openPage({ ...activePage, cover: undefined });
+    }
+  }, [pageId, activePage, openPage]);
 
   const handleAddCover = useCallback(() => {
     const nextCover = randomUiCollectionCover();

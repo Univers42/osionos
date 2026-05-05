@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:04:12 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -455,6 +455,12 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     focusBlock,
   } = usePlaygroundBlockEditor(pageId);
 
+  const runEditorAction = useCallback((action: Promise<unknown>) => {
+    action.catch((error: unknown) => {
+      console.error("[PlaygroundPageEditor] Async editor action failed", error);
+    });
+  }, []);
+
   const handleRequestSlashMenu = useCallback(
     (blockId: string, position: { x: number; y: number }) => {
       setSlashMenu({ blockId, position, filter: "" });
@@ -593,7 +599,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
             }
 
             if (item.kind === "create-page") {
-              void handleSlashCreatePageSelect(blocks);
+              runEditorAction(handleSlashCreatePageSelect(blocks));
               return;
             }
 
@@ -618,7 +624,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
           filter={pageSelector.filter}
           onSelect={handlePageSelectorSelect}
           onCreate={() => {
-            void handlePageSelectorCreate();
+            runEditorAction(handlePageSelectorCreate());
           }}
           onClose={() => setPageSelector(null)}
         />

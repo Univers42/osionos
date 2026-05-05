@@ -82,7 +82,10 @@ First-time login: **admin / admin** — you'll be asked to change the password.
 bash docker/services/sonarqube/tools/run-scan.sh
 
 # Or run the scanner directly
-npx -y sonarqube-scanner \
+docker run --rm --network host \
+  -e SONAR_TOKEN=YOUR_TOKEN_HERE \
+  -v "$PWD:/usr/src" \
+  sonarsource/sonar-scanner-cli \
   -Dsonar.host.url=http://localhost:9000 \
   -Dsonar.token=YOUR_TOKEN_HERE
 
@@ -177,25 +180,24 @@ they can conflict. Disable it:
 
 ---
 
-## sonar-scanner — the CLI
+## sonar-scanner — the Docker CLI
 
 The scanner is the client that collects source code and sends it to the server.
-It can run as a standalone binary or via `npx`.
+In this project it runs from the official Docker image so no local Node package
+manager or scanner binary is required.
 
-### Installation
+### Usage
 
 ```bash
-# Via npx (no install, uses project's Node)
-npx -y sonarqube-scanner -Dsonar.host.url=http://localhost:9000
+# Wrapper used by this repository
+make sonar
 
-# Via npm (global install)
-npm install -g sonarqube-scanner
-
-# Via Homebrew
-brew install sonar-scanner
-
-# Check version
-sonar-scanner --version
+# Direct Docker invocation
+docker run --rm --network host \
+  -e SONAR_TOKEN=YOUR_TOKEN \
+  -v "$PWD:/usr/src" \
+  sonarsource/sonar-scanner-cli \
+  -Dsonar.host.url=http://localhost:9000
 ```
 
 ### Key command-line flags
