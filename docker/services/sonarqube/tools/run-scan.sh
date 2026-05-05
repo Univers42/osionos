@@ -15,7 +15,7 @@
 #   SONAR_TOKEN     Authentication token.  Required for SonarCloud,
 #                   optional for local Community Edition.
 #
-# The script installs sonar-scanner via npx if it is not already on PATH.
+# The scanner runs from the official Docker image. No local JavaScript toolchain is used.
 set -euo pipefail
 
 # Load .env if present (for SONAR_TOKEN)
@@ -43,9 +43,8 @@ if [ "$CLOUD_MODE" = true ]; then
   SONAR_URL="https://sonarcloud.io"
 fi
 
-# Use the official SonarSource npm package (sonarqube-scanner).
-# The old 'sonar-scanner' 3.x npm package is abandoned and fails on SonarCloud.
-SCANNER="npx -y sonarqube-scanner"
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+SCANNER_IMAGE="${SONAR_SCANNER_IMAGE:-sonarsource/sonar-scanner-cli}"
 
 # Build command-line arguments
 ARGS=(
@@ -65,6 +64,13 @@ echo "Running SonarQube analysis"
 echo "  URL   : ${SONAR_URL}"
 echo "  Token : $([ -n "$SONAR_TOKEN" ] && echo "(set)" || echo "(not set)")"
 echo "  Mode  : $([ "$CLOUD_MODE" = true ] && echo "cloud" || echo "local")"
+echo "  Image : ${SCANNER_IMAGE}"
 echo ""
 
-$SCANNER "${ARGS[@]}"
+docker run --rm \
+  --network host \
+  -e SONAR_HOST_URL="${SONAR_URL}" \
+  -e SONAR_TOKEN="${SONAR_TOKEN}" \
+  -v "${PROJECT_ROOT}:/usr/src" \
+  "${SCANNER_IMAGE}" \
+  "${ARGS[@]}"

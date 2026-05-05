@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 20:16:02 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -135,6 +135,12 @@ interface SidebarPageTreeProps {
   onAddToWorkspace: (wsId: string) => void;
 }
 
+function runWorkspaceAction(action: Promise<unknown>) {
+  action.catch((error: unknown) => {
+    console.error("[SidebarPageTree] Workspace action failed", error);
+  });
+}
+
 /** Scrollable page-tree area: Recents, Agents, Private, Shared, osionos apps. */
 export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   recents,
@@ -236,14 +242,14 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         label="Channels"
         defaultOpen
         onAdd={() => {
-          if (activeWorkspaceId) void addChannel(activeUserId || "anonymous", activeWorkspaceId, "general", "text");
+          if (activeWorkspaceId) runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "general", "text"));
         }}
       >
         <div className="mb-1 grid grid-cols-2 gap-1 px-1 text-[11px]">
-          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && void addChannel(activeUserId || "anonymous", activeWorkspaceId, "messages", "text")}>+ messages</button>
-          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && void addChannel(activeUserId || "anonymous", activeWorkspaceId, "forum", "forum")}>+ forum</button>
-          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && void addChannel(activeUserId || "anonymous", activeWorkspaceId, "audio", "audio")}>+ audio</button>
-          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && void addChannel(activeUserId || "anonymous", activeWorkspaceId, "video", "video")}>+ video</button>
+          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "messages", "text"))}>+ messages</button>
+          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "forum", "forum"))}>+ forum</button>
+          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "audio", "audio"))}>+ audio</button>
+          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "video", "video"))}>+ video</button>
         </div>
         {visibleRootChannels.length === 0 ? (
           <p className="px-2 py-1 text-xs text-[var(--color-ink-faint)] italic">
@@ -273,10 +279,10 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
                           event.stopPropagation();
                           if (!activeUserId || !activeWorkspaceId) return;
                           const isWorkspaceVisible = channel.visibility === "workspace";
-                          void updateChannel(activeUserId, activeWorkspaceId, channel.id, {
+                          runWorkspaceAction(updateChannel(activeUserId, activeWorkspaceId, channel.id, {
                             visibility: isWorkspaceVisible ? "members" : "workspace",
                             memberIds: isWorkspaceVisible ? [activeUserId] : [],
-                          });
+                          }));
                         }}
                       >
                         {channel.visibility === "members" ? "lock" : "open"}
@@ -287,7 +293,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
                         title="Create thread"
                         onClick={(event) => {
                           event.stopPropagation();
-                          if (activeUserId && activeWorkspaceId) void addThread(activeUserId, activeWorkspaceId, channel.id, `${channel.name}-thread`);
+                          if (activeUserId && activeWorkspaceId) runWorkspaceAction(addThread(activeUserId, activeWorkspaceId, channel.id, `${channel.name}-thread`));
                         }}
                       >
                         + hilo

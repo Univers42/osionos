@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -144,10 +144,9 @@ export const Sidebar: React.FC<Props> = ({
         onDismissInvite={() => setShowInviteCTA(false)}
       />
       {isSidebarOpen ? (
-        <div
+        <hr
           className={styles.resizeHandle}
           data-sidebar-resize-handle
-          role="separator"
           aria-orientation="vertical"
           aria-label="Resize sidebar"
           onPointerDown={handleResizePointerDown}

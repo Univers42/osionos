@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 20:16:02 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 01:56:06 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -54,6 +54,7 @@ export interface ActivePage {
   kind: ActivePageKind;
   title?: string;
   icon?: string;
+  cover?: string;
 }
 
 export interface PageStore {

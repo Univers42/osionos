@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:16:55 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 20:16:56 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -202,7 +202,8 @@ export const PageOptionsMenu: React.FC<Props> = ({
 
   const redirectIfAffectedPageChanged = () => {
     const isAffectedActive =
-      activePageId === pageId || descendantIds.includes(activePageId!);
+      activePageId === pageId ||
+      (activePageId ? descendantIds.includes(activePageId) : false);
 
     if (isAffectedActive) {
       onRedirectHome();

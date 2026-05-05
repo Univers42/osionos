@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:14 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -50,14 +50,14 @@ function stripSlashQuery(content: string): string {
 }
 
 function appendInternalPageLink(content: string, pageId: string): string {
-  const trimmed = content.replace(/\s+$/, "");
+  const trimmed = content.trimEnd();
   const separator = trimmed.length > 0 ? " " : "";
   return `${trimmed}${separator}[[page:${pageId}]] `;
 }
 
 function appendInlineText(content: string, insertText: string): string {
   const cleanContent = stripSlashQuery(content);
-  const separator = cleanContent.length > 0 && !/\s$/.test(cleanContent) ? " " : "";
+  const separator = cleanContent.length > 0 && cleanContent === cleanContent.trimEnd() ? " " : "";
   return `${cleanContent}${separator}${insertText}`;
 }
 

@@ -16,6 +16,12 @@ interface WorkspaceThemeControlsProps {
   compact?: boolean;
 }
 
+function runThemeAction(action: Promise<unknown>) {
+  action.catch((error: unknown) => {
+    console.error('[WorkspaceThemeControls] Theme action failed', error);
+  });
+}
+
 export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ compact = false }) => {
   const [themeJson, setThemeJson] = useState('');
   const activeUserId = useUserStore((s) => s.activeUserId);
@@ -82,7 +88,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
             ? 'border-[var(--color-accent)] bg-[var(--color-surface-secondary)]'
             : 'border-[var(--color-line)] hover:bg-[var(--color-surface-hover)]'
         }`}
-        onClick={() => void resetToAppTheme()}
+        onClick={() => runThemeAction(resetToAppTheme())}
       >
         <span className="text-sm font-medium text-[var(--color-ink)]">App light/dark/system</span>
         <p className="mt-2 text-xs text-[var(--color-ink-muted)]">
@@ -102,7 +108,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
                   ? 'border-[var(--color-accent)] bg-[var(--color-surface-secondary)]'
                   : 'border-[var(--color-line)] hover:bg-[var(--color-surface-hover)]'
               }`}
-              onClick={() => void applyPreset(preset)}
+              onClick={() => runThemeAction(applyPreset(preset))}
             >
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-[var(--color-ink)]">{preset.themeName}</span>
@@ -127,7 +133,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
           <button
             type="button"
             className="rounded-md px-2 py-1 text-xs text-[var(--color-accent)] hover:bg-[var(--color-surface-hover)]"
-            onClick={() => void copyThemeJson()}
+            onClick={() => runThemeAction(copyThemeJson())}
           >
             Copy current
           </button>
@@ -141,7 +147,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
         <button
           type="button"
           className="mt-2 w-full rounded-lg bg-[var(--color-accent)] px-3 py-2 text-xs font-medium text-white hover:opacity-90"
-          onClick={() => void applyJsonTheme()}
+          onClick={() => runThemeAction(applyJsonTheme())}
         >
           Apply JSON tokens
         </button>

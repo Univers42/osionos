@@ -22,26 +22,18 @@ The playground reuses UI components from `src/` via the `@src` path alias (confi
 
 ## How to run
 
-You need 3 things running: Docker (databases), the API, and the playground frontend.
+Only Docker, Docker Compose, Make, and Git are expected on the host. Node.js, pnpm,
+Vite, ESLint, TypeScript, and Playwright all run inside Docker.
 
 ```bash
-# Option 1: All at once (from playground/)
-make dev-all
+# Start the full Docker stack: Vite on :3001 + MongoDB
+make up
 
-# Option 2: Manually (3 terminals)
-make up              # from root — start Docker
-cd packages/api && pnpm dev   # terminal 1 — API on :4000
-cd playground && make dev      # terminal 2 — UI on :3001
-```
+# Run quality gates inside Docker
+make ci
 
-First time? Seed the database:
-
-```bash
-# From playground/
-make seed
-
-# Or from root
-pnpm seed:playground
+# Run browser tests inside Docker
+make test
 ```
 
 Full reset (wipe DB + re-seed):
@@ -49,6 +41,16 @@ Full reset (wipe DB + re-seed):
 ```bash
 make re
 ```
+
+Build and release the production image:
+
+```bash
+make tag VERSION=v1.0.0
+```
+
+The release target builds `dlesieur/osionos:<VERSION>` with a multi-stage Docker
+build, pushes `dlesieur/osionos:<VERSION>` and `dlesieur/osionos:latest`, creates
+the git tag, and pushes the current branch plus the tag.
 
 ## Pre-seeded users
 

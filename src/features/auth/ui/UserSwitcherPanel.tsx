@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:04:12 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -149,6 +149,26 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
 
 // SettingsPanel removed — use `SettingsCenter` component instead.
 
+function toWorkspaceSlug(value: string): string {
+  let slug = "";
+  let previousWasSeparator = true;
+
+  for (const char of value.toLowerCase()) {
+    const isAlphaNumeric =
+      (char >= "a" && char <= "z") || (char >= "0" && char <= "9");
+
+    if (isAlphaNumeric) {
+      slug += char;
+      previousWasSeparator = false;
+    } else if (!previousWasSeparator) {
+      slug += "-";
+      previousWasSeparator = true;
+    }
+  }
+
+  return slug.endsWith("-") ? slug.slice(0, -1) : slug || "workspace";
+}
+
 /**
  * Floating dropdown that lists all 3 pre-logged-in personas.
  * Click a row → switch active user.
@@ -234,7 +254,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
   async function handleNewWorkspace() {
     if (!activePersona) return;
     const name = `${activePersona.name}'s workspace`;
-    const slug = name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-').replaceAll(/^-+|-+$/g, '');
+    const slug = toWorkspaceSlug(name);
     await createWorkspace(name, slug);
   }
 

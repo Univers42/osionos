@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/22 12:00:00 by danfern3          #+#    #+#             */
-/*   Updated: 2026/04/28 22:24:15 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -135,10 +135,14 @@ export const TrashView: React.FC = () => {
 
       {userWorkspaces.length > 1 && (
         <div className="trash-view-workspace-selector mb-6">
-          <label className="text-xs font-medium text-[var(--color-ink-faint)] block mb-2">
+          <label
+            htmlFor="trash-workspace-selector"
+            className="text-xs font-medium text-[var(--color-ink-faint)] block mb-2"
+          >
             Workspace
           </label>
           <select
+            id="trash-workspace-selector"
             value={selectedWorkspaceId || ""}
             onChange={(e) =>
               setPreferredWorkspaceId(

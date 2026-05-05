@@ -11,7 +11,12 @@ FROM node:22-alpine
 RUN apk add --no-cache python3 make g++ cmake git bash
 
 # Enable pnpm via corepack (built into Node 22)
-RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+RUN corepack enable \
+	&& corepack prepare pnpm@10.32.1 --activate \
+	&& mkdir -p /pnpm/store \
+	&& pnpm config set store-dir /pnpm/store
 
 WORKDIR /app
 
