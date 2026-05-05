@@ -110,7 +110,7 @@ jobs:
 
   build-image:
     name: Build & push Docker image
-    needs: [quality, test]
+    needs: quality
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:
