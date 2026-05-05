@@ -2,12 +2,32 @@ name: CI
 
 on:
   push:
-    branches: [main, master, develop, "fix/**", "feat/**", "migrate/**"]
+    branches:
+      - main
+      - develop
+      - "release/**"
+      - "hotfix/**"
+      - "bugfix/**"
+      - "feat/**"
+      - "feature/**"
+      - "chore/**"
+      - "refactor/**"
+      - "docs/**"
   pull_request:
-    branches: [main, master, develop]
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
 
 permissions:
   contents: read
+  packages: write
+
+env:
+  IMAGE: dlesieur/osionos
+  GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/osionos
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10.32.1"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -15,21 +35,8 @@ concurrency:
 
 jobs:
   quality:
-    name: quality (${{ matrix.name }})
+    name: Quality gates
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: root
-            working-directory: .
-            command: |
-              make typecheck
-              make lint
-          - name: markengine-submodule
-            working-directory: src/shared/lib/markengine
-            command: docker build --target build .
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -37,13 +44,39 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Run quality checks for ${{ matrix.name }}
-        working-directory: ${{ matrix.working-directory }}
-        run: ${{ matrix.command }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-  e2e:
-    name: e2e (develop)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-buildx-
+
+      - name: Build dev image
+        run: |
+          docker compose -f docker-compose.base.yml -f docker-compose.dev.yml \
+            build playground
+
+      - name: Build MarkEngine image
+        run: docker build --target build src/shared/lib/markengine
+
+      - name: Typecheck
+        run: make typecheck
+
+      - name: Lint
+        run: make lint
+
+      - name: SonarQube scan
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+        run: make sonar
+
+  test:
+    name: Browser tests
     needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -58,18 +91,75 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Validate Docker test environment
-        run: make test-doctor
+      - name: Run browser E2E suite
+        run: |
+          docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up -d mongodb
+          make test
 
-      - name: Run browser E2E suite in Docker
-        run: make test
-
-      - name: Upload Playwright artifacts
-        if: always()
+      - name: Upload test report
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-develop-${{ github.run_id }}
+          name: playwright-report
           path: |
             playwright-report
             test-results
           if-no-files-found: ignore
+
+  build-image:
+    name: Build & push Docker image
+    needs: [quality, test]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-release-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-buildx-
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PAT }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.IMAGE }}
+            ${{ env.GHCR_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/services/node/Dockerfile.prod
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max

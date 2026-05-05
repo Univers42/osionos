@@ -1,0 +1,44 @@
+# MongoDB connection and collection configuration.
+# Connection string is assembled at runtime from .env values.
+
+[mongodb]
+host        = "localhost"
+port        = 27017
+database    = "playground_db"
+auth_source = "admin"
+
+[mongodb.pool]
+max_pool_size            = 10
+min_pool_size            = 2
+connect_timeout          = 5000
+server_selection_timeout = 3000
+
+[mongodb.collections]
+users                  = "users"
+workspaces             = "workspaces"
+pages                  = "pages"
+page_configurations    = "pageConfigurations"
+page_versions          = "pageVersions"
+page_action_events     = "pageActionEvents"
+page_connections       = "pageConnections"
+page_import_exports    = "pageImportExports"
+workspace_configs      = "workspaceConfigurations"
+workspace_channels     = "workspaceChannels"
+workspace_theme_tokens = "workspaceThemeTokens"
+
+[mongodb.indexes]
+
+[[mongodb.indexes.entry]]
+collection = "pageConfigurations"
+keys       = { userId = 1, pageId = 1 }
+unique     = true
+
+[[mongodb.indexes.entry]]
+collection = "pageVersions"
+keys       = { userId = 1, pageId = 1, createdAt = -1 }
+unique     = false
+
+[[mongodb.indexes.entry]]
+collection = "workspaceChannels"
+keys       = { workspaceId = 1, parentChannelId = 1 }
+unique     = false
