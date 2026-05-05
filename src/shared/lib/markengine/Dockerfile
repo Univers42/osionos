@@ -7,22 +7,24 @@ ENV npm_config_audit=false
 ENV npm_config_update_notifier=false
 
 FROM base AS deps
-COPY package.json ./
-RUN --mount=type=cache,target=/root/.npm npm install --include=dev
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --include=dev
 
 FROM deps AS build
-COPY tsconfig.json markdown.ts ./
+COPY tsconfig.json vite.config.ts markdown.ts ./
+COPY src ./src
 COPY markdown ./markdown
+COPY playground/public ./playground/public
 RUN npm run build
 
-FROM base AS prod
+FROM deps AS prod
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/dist ./dist
-COPY playground/server.js ./playground/server.js
-COPY playground/public ./playground/public
+COPY --from=build /app/playground/public ./playground/public
+COPY --from=build /app/vite.config.ts ./vite.config.ts
 EXPOSE 3000
-CMD ["node", "playground/server.js"]
+CMD ["npm", "run", "start"]
 
 FROM deps AS dev
 WORKDIR /app
