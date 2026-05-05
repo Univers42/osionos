@@ -2,9 +2,21 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, **tag**, **release**/*, **hotfix**/*, **bugfix**/*, **feat**/*, **chore**/*, **refactor**/*, **docs**/*]
+    branches:
+      - main
+      - develop
+      - "release/**"
+      - "hotfix/**"
+      - "bugfix/**"
+      - "feat/**"
+      - "feature/**"
+      - "chore/**"
+      - "refactor/**"
+      - "docs/**"
   pull_request:
-    branches: [main, develop]
+    branches:
+      - main
+      - develop
   workflow_dispatch:
 
 permissions:
