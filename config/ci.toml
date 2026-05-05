@@ -1,0 +1,27 @@
+# Settings for GitHub Actions and local CI.
+
+[ci]
+node_version = "22"
+pnpm_version = "10.32.1"
+docker_image = "dlesieur/osionos"
+
+[ci.quality_gates]
+typecheck     = true
+lint          = true
+sonarqube     = true
+browser_tests = true
+test_workers  = 1
+
+[ci.sonarqube]
+project_key            = "Univers42_osionos"
+organization           = "univers42"
+quality_gate_timeout_s = 120
+
+[ci.registry]
+dockerhub_repo  = "dlesieur/osionos"
+github_registry = "ghcr.io/univers42/osionos"
+
+[ci.release]
+tag_pattern  = "v*.*.*"
+sign_commits = false
+push_latest  = true

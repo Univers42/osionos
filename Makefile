@@ -6,7 +6,7 @@
 #    By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/04/08 19:07:11 by dlesieur          #+#    #+#              #
-#    Updated: 2026/05/05 02:24:32 by dlesieur         ###   ########.fr        #
+#    Updated: 2026/05/05 17:34:14 by dlesieur         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -21,9 +21,14 @@ RED   := \033[31m
 YELLOW := \033[33m
 RESET := \033[0m
 
-DC := docker compose -f $(ROOT)docker-compose.yml
+DC_BASE := docker compose -f $(ROOT)docker-compose.base.yml
+DC      := $(DC_BASE) -f $(ROOT)docker-compose.dev.yml
+DC_PROD := $(DC_BASE) -f $(ROOT)docker-compose.prod.yml
 TEST_WORKERS ?= 1
 IMAGE ?= dlesieur/osionos
+GITHUB_IMAGE ?= ghcr.io/univers42/osionos
+VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")
+GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 .DEFAULT_GOAL := help
 help: ## Show available targets
@@ -57,6 +62,11 @@ up: update-submodules ## Start full stack via Docker (Vite :3001 + MongoDB)
 	@echo -e "  Playground: http://localhost:$${VITE_PORT:-3001}"
 	@echo -e "  MongoDB:    localhost:$${MONGO_PORT:-27017}"
 
+up-prod: ## Start the production stack
+	@echo -e "$(CYAN)Starting production stack via Docker…$(RESET)"
+	$(DC_PROD) up -d
+	@echo -e "$(GREEN)✔ Production stack running on :$${APP_PORT:-80}$(RESET)"
+
 stop: ## Stop Docker stack
 	$(DC) stop
 	@echo -e "$(GREEN)✔ Stack stopped$(RESET)"
@@ -64,6 +74,10 @@ stop: ## Stop Docker stack
 down: ## Stop and remove Docker containers + networks
 	$(DC) down
 	@echo -e "$(GREEN)✔ Stack removed$(RESET)"
+
+down-prod: ## Stop and remove the production stack
+	$(DC_PROD) down
+	@echo -e "$(GREEN)✔ Production stack removed$(RESET)"
 
 shell: ## Open a shell in the Docker Node service
 	$(DC) exec playground sh
@@ -100,11 +114,14 @@ lint-fix: ## Automatically fix linting errors inside Docker where possible
 
 sonar: ## Run SonarQube Scan (requires SonarQube container up)
 	@echo -e "$(CYAN)Step: SonarQube Scan…$(RESET)"
-	@if [ "$$(docker ps -q -f name=sonarqube)" ]; then \
+	@if [ -n "$${SONAR_TOKEN:-}" ]; then \
+		echo -e "$(CYAN)Running Sonar scanner in Docker…$(RESET)"; \
+		docker run --rm -e SONAR_HOST_URL="$${SONAR_HOST_URL:-https://sonarcloud.io}" -e SONAR_TOKEN="$${SONAR_TOKEN}" -v "$(ROOT):/usr/src" sonarsource/sonar-scanner-cli; \
+	elif [ "$$(docker ps -q -f name=playground_sonar)" ]; then \
 		echo -e "$(CYAN)Running Sonar scanner in Docker…$(RESET)"; \
 		docker run --rm --network host -e SONAR_HOST_URL="$${SONAR_HOST_URL:-http://localhost:9000}" -e SONAR_TOKEN="$${SONAR_TOKEN:-}" -v "$(ROOT):/usr/src" sonarsource/sonar-scanner-cli || echo -e "$(RED)✘ Sonar scan failed$(RESET)"; \
 	else \
-		echo -e "$(YELLOW)⚠ SonarQube container not running, skipping scan$(RESET)"; \
+		echo -e "$(YELLOW)⚠ SONAR_TOKEN not set and SonarQube container not running, skipping scan$(RESET)"; \
 	fi
 
 audit: ## Full analysis: Typecheck + Lint + SonarQube (requires SonarQube up)
@@ -187,8 +204,8 @@ clean: ## Remove build artifacts and node_modules
 # ── Release ──────────────────────────────────────────────────────────────
 
 guard-version:
-	@if [ -z "$(VERSION)" ]; then \
-		echo -e "$(RED)✘ VERSION is required. Usage: make tag VERSION=v1.0.0$(RESET)"; \
+	@if [ "$(origin VERSION)" != "command line" ]; then \
+		echo -e "$(RED)✘ Explicit VERSION is required. Usage: make tag VERSION=v1.0.0$(RESET)"; \
 		exit 1; \
 	fi
 
@@ -198,23 +215,41 @@ guard-docker-credentials:
 		exit 1; \
 	fi
 
-tag: guard-version guard-docker-credentials ## Build, tag, push git and Docker image (VERSION=vX.Y.Z)
-	@echo -e "$(CYAN)Building release image $(IMAGE):$(VERSION)…$(RESET)"
-	docker build -f $(ROOT)docker/services/node/Dockerfile.prod -t $(IMAGE):$(VERSION) -t $(IMAGE):latest $(ROOT)
+guard-github-credentials:
+	@if [ -z "$${GITHUB_USER:-}" ] || [ -z "$${GITHUB_PAT:-}" ]; then \
+		echo -e "$(RED)✘ GITHUB_USER and GITHUB_PAT must be set in .env$(RESET)"; \
+		exit 1; \
+	fi
+
+tag: guard-version guard-docker-credentials guard-github-credentials ## Build, tag, push git and Docker image (VERSION=vX.Y.Z)
+	@echo -e "$(CYAN)Building $(IMAGE):$(VERSION) (sha=$(GIT_SHA))…$(RESET)"
+	docker build \
+		-f $(ROOT)docker/services/node/Dockerfile.prod \
+		-t $(IMAGE):$(VERSION) \
+		-t $(IMAGE):latest \
+		-t $(GITHUB_IMAGE):$(VERSION) \
+		-t $(GITHUB_IMAGE):latest \
+		--label "org.opencontainers.image.revision=$(GIT_SHA)" \
+		--label "org.opencontainers.image.version=$(VERSION)" \
+		$(ROOT)
 	@echo -e "$(CYAN)Committing release changes if needed…$(RESET)"
 	@if ! git diff --quiet || ! git diff --cached --quiet; then \
-		git add -A && git commit -m "release: $(VERSION)"; \
+		git add -A && git commit -m "chore: release $(VERSION)"; \
 	else \
 		echo "Working tree already clean; no release commit needed."; \
 	fi
 	@git tag -a $(VERSION) -m "Release $(VERSION)"
-	@echo -e "$(CYAN)Logging in to Docker registry…$(RESET)"
+	@echo -e "$(CYAN)Logging in to Docker Hub…$(RESET)"
 	@printf '%s' "$${DOCKER_PAT}" | docker login -u "$${DOCKER_USER}" --password-stdin
 	docker push $(IMAGE):$(VERSION)
 	docker push $(IMAGE):latest
+	@echo -e "$(CYAN)Logging in to ghcr.io…$(RESET)"
+	@printf '%s' "$${GITHUB_PAT}" | docker login ghcr.io -u "$${GITHUB_USER}" --password-stdin
+	docker push $(GITHUB_IMAGE):$(VERSION)
+	docker push $(GITHUB_IMAGE):latest
 	git push origin HEAD
 	git push origin $(VERSION)
-	@echo -e "$(GREEN)✔ Released $(VERSION) as $(IMAGE):$(VERSION)$(RESET)"
+	@echo -e "$(GREEN)✔ Released $(VERSION)$(RESET)"
 
 # ── Logs ─────────────────────────────────────────────────────────────────
 
@@ -247,8 +282,8 @@ update-submodules: ## Update git submodules (if any)
 	@git submodule update --init --recursive
 	@echo -e "$(GREEN)✔ Submodules updated$(RESET)"
 
-.PHONY: help pnpm-lock install pnpm-install dev dev-docker up stop down shell build typecheck image-build \
+.PHONY: help pnpm-lock install pnpm-install dev dev-docker up up-prod stop down down-prod shell build typecheck image-build \
         db-up db-shell db-reset re clean logs logs-vite logs-mongo \
         kill-ports status lint lint-fix audit ci sonar update-submodules \
 	test test-serial test-smoke test-setup test-doctor test-ci test-docker \
-	guard-version guard-docker-credentials tag
+	guard-version guard-docker-credentials guard-github-credentials tag

@@ -1,0 +1,33 @@
+# Settings for connecting osionos to the Prismatica Backend-as-a-Service.
+# Safe to commit — secrets stay in .env.
+
+[baas]
+enabled = false
+name    = "prismatica"
+
+[baas.gateway]
+host     = "localhost"
+port     = 8000
+protocol = "http"
+
+[baas.services]
+auth     = "/auth/v1"
+rest     = "/rest/v1"
+realtime = "/realtime/v1"
+storage  = "/storage/v1"
+query    = "/query/v1"
+
+[baas.auth]
+jwt_expiry_seconds     = 3600
+refresh_token_rotation = true
+
+[baas.databases]
+pages        = "mongodb"
+users        = "postgresql"
+analytics    = "mongodb"
+search_index = "postgresql"
+
+[baas.network]
+shared_network     = "osionos_network"
+request_timeout_ms = 5000
+retry_attempts     = 3

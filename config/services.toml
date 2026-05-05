@@ -1,0 +1,32 @@
+# Single source of truth for service port assignments.
+
+[services.osionos]
+vite_dev   = 3001
+nginx_prod = 80
+
+[services.prismatica_baas]
+kong_proxy       = 8000
+kong_admin       = 8001
+kong_https       = 8443
+gotrue_auth      = 9999
+postgrest        = 3000
+realtime         = 4000
+storage          = 5000
+query_router     = 4100
+permission_engine = 4200
+schema_service   = 4300
+
+[services.databases]
+mongodb    = 27017
+postgresql = 5432
+redis      = 6379
+
+[services.observability]
+prometheus = 9090
+grafana    = 3030
+loki       = 3100
+sonarqube  = 9000
+
+[services.prismatica_website]
+dev  = 3000
+prod = 443
