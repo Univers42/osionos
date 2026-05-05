@@ -1,0 +1,39 @@
+# Production stack: pre-built nginx image, no bind mounts.
+# Usage: docker compose -f docker-compose.base.yml -f docker-compose.prod.yml up
+
+services:
+  playground:
+    image: ${IMAGE:-dlesieur/osionos}:${VERSION:-latest}
+    container_name: playground_app
+    restart: always
+    ports:
+      - "${APP_PORT:-80}:80"
+    environment:
+      NODE_ENV: production
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - osionos_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Prismatica BaaS runs in its own stack and joins osionos_network.
+  # osionos reaches Kong through VITE_BAAS_URL / config/baas.toml.
