@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   persistenceAndQuality.mjs                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/27 10:00:29 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/27 10:00:30 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/05/06 00:08:25 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,7 +24,7 @@ import { defineScenario } from "../core/scenario.mjs";
 import { runLocalCommand } from "../core/system.mjs";
 
 function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 function sidebarNewPageButton(page) {
