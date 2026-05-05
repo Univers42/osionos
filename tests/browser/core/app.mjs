@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   app.mjs                                            :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/20 21:29:15 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/20 21:29:16 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/05/06 00:08:25 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -93,7 +93,7 @@ export async function focusEditorStart(editor) {
 export async function focusEditorEnd(editor) {
   await editor.click();
   await editor.evaluate((node) => {
-    const selection = window.getSelection();
+    const selection = globalThis.getSelection();
     const range = document.createRange();
     range.selectNodeContents(node);
     range.collapse(false);
@@ -107,7 +107,7 @@ export async function focusEditorEnd(editor) {
 
   try {
     await editor.page().waitForFunction((node) => {
-      const selection = window.getSelection();
+      const selection = globalThis.getSelection();
       return Boolean(
         selection &&
           selection.rangeCount > 0 &&
@@ -164,14 +164,8 @@ export async function focusTextareaEnd(textarea) {
 }
 
 export async function waitForRenderStability(page) {
-  await page.evaluate(
-    () =>
-      new Promise((resolve) => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => resolve(true));
-        });
-      }),
-  );
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
 }
 
 export async function selectText(editor, text, occurrence = 0) {
@@ -195,7 +189,10 @@ export async function selectText(editor, text, occurrence = 0) {
   }
 
   await editor.page().keyboard.down("Shift");
-  for (let index = 0; index < text.length; index += 1) {
+  for (const character of text) {
+    if (character.length === 0) {
+      continue;
+    }
     await editor.press("ArrowRight");
   }
   await editor.page().keyboard.up("Shift");
@@ -208,7 +205,7 @@ export async function selectText(editor, text, occurrence = 0) {
   try {
     await editor.page().waitForFunction(
       ([node, expectedText]) => {
-        const selection = window.getSelection();
+        const selection = globalThis.getSelection();
         return Boolean(
           selection &&
             selection.toString() === expectedText &&
@@ -243,7 +240,7 @@ export async function setCaretInsideText(editor, text, offsetFromStart) {
 
   try {
     await editor.page().waitForFunction((node) => {
-      const selection = window.getSelection();
+      const selection = globalThis.getSelection();
       return Boolean(
         selection &&
           selection.rangeCount > 0 &&
@@ -667,7 +664,7 @@ export async function blockOpacity(page, index) {
 
 export async function visibleBlockTexts(page) {
   return getEditors(page).evaluateAll((nodes) =>
-    nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim() ?? ""),
+    nodes.map((node) => node.textContent?.replaceAll(/\s+/g, " ").trim() ?? ""),
   );
 }
 
@@ -724,7 +721,7 @@ function capitalize(value) {
 }
 
 function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 function modifier() {

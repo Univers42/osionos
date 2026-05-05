@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:16:25 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 23:43:38 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -173,14 +173,14 @@ export function useBlockContextMenu({
 
   const handleCopyText = useCallback(() => {
     if (!blockLocation?.block.content.trim()) return;
-    void navigator.clipboard?.writeText(blockLocation.block.content);
+    navigator.clipboard?.writeText(blockLocation.block.content).catch(() => undefined);
     closeContextMenu();
   }, [blockLocation, closeContextMenu]);
 
   const handleCopyLink = useCallback(() => {
     if (!contextMenu) return;
     const url = `${globalThis.location.origin}${globalThis.location.pathname}#block-${contextMenu.blockId}`;
-    void navigator.clipboard?.writeText(url);
+    navigator.clipboard?.writeText(url).catch(() => undefined);
     closeContextMenu();
   }, [closeContextMenu, contextMenu]);
 
