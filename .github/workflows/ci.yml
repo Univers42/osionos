@@ -23,12 +23,12 @@ jobs:
         include:
           - name: root
             working-directory: .
-            typecheck: make typecheck
-            lint: make lint
+            command: |
+              make typecheck
+              make lint
           - name: markengine-submodule
             working-directory: src/shared/lib/markengine
-            typecheck: make typecheck
-            lint: make lint
+            command: docker build --target build .
 
     steps:
       - name: Checkout repository
@@ -37,24 +37,9 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: ${{ matrix.working-directory }}/package-lock.json
-
-      - name: Install dependencies
+      - name: Run quality checks for ${{ matrix.name }}
         working-directory: ${{ matrix.working-directory }}
-        run: npm ci
-
-      - name: Typecheck ${{ matrix.name }}
-        working-directory: ${{ matrix.working-directory }}
-        run: ${{ matrix.typecheck }}
-
-      - name: Lint ${{ matrix.name }}
-        working-directory: ${{ matrix.working-directory }}
-        run: ${{ matrix.lint }}
+        run: ${{ matrix.command }}
 
   e2e:
     name: e2e (develop)
@@ -73,24 +58,11 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
+      - name: Validate Docker test environment
+        run: make test-doctor
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Validate test environment
-        run: npm run test:doctor
-
-      - name: Run browser E2E suite
-        run: npm run test:e2e
+      - name: Run browser E2E suite in Docker
+        run: make test
 
       - name: Upload Playwright artifacts
         if: always()
