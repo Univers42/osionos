@@ -18,15 +18,37 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 
 COPY index.html tsconfig.json vite.config.ts eslint.config.js ./
 COPY src ./src
+COPY config ./config
+
+ARG VITE_API_URL=""
+ARG VITE_APP_VERSION="dev"
+ARG VITE_BAAS_ENABLED="false"
+ARG VITE_BAAS_URL=""
+ARG VITE_BAAS_ANON_KEY=""
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_APP_VERSION=$VITE_APP_VERSION
+ENV VITE_BAAS_ENABLED=$VITE_BAAS_ENABLED
+ENV VITE_BAAS_URL=$VITE_BAAS_URL
+ENV VITE_BAAS_ANON_KEY=$VITE_BAAS_ANON_KEY
 
 RUN pnpm run build
 
-FROM nginx:alpine AS runtime
+FROM nginx:1.27-alpine AS runtime
+
+LABEL org.opencontainers.image.title="osionos"
+LABEL org.opencontainers.image.description="Notion-inspired workspace — Univers42"
+LABEL org.opencontainers.image.source="https://github.com/univers42/osionos"
+LABEL maintainer="dlesieur@student.42.fr"
 
 COPY docker/services/node/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/build /usr/share/nginx/html
+COPY --from=builder /app/config /app/config
+
+RUN addgroup -S osionos && adduser -S osionos -G osionos \
+  && chown -R osionos:osionos /usr/share/nginx/html \
+  && chmod -R 755 /usr/share/nginx/html
 
 EXPOSE 80
 
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 --start-period=5s \
   CMD wget -qO- http://127.0.0.1/ >/dev/null || exit 1

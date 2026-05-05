@@ -1,0 +1,40 @@
+# Shared infrastructure — extended by dev and prod compose overlays.
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: playground_mongodb
+    restart: unless-stopped
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-osionos_user}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASS:-osionos_pass}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-playground_db}
+    volumes:
+      - mongodb_data:/data/db
+      - ./docker/services/mongodb/tools/init-collections.js:/docker-entrypoint-initdb.d/01-init-collections.js:ro
+      - ./src/data/seedUsers.json:/docker-entrypoint-initdb.d/seedUsers.json:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - osionos_net
+
+volumes:
+  mongodb_data:
+  playground_node_modules:
+  playground_pnpm_store:
+  browser_test_node_modules:
+  browser_test_pnpm_store:
+
+networks:
+  osionos_net:
+    name: osionos_network
+    # Shared with the Prismatica BaaS project.
+    # For a shared host, create it once with:
+    #   docker network create osionos_network
+    # then set this network to external in the production environment.
