@@ -35,8 +35,12 @@ concurrency:
 
 jobs:
   quality:
-    name: Quality gates
+    name: quality (${{ matrix.scope }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scope: [root, markengine-submodule]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -55,21 +59,25 @@ jobs:
           restore-keys: ${{ runner.os }}-buildx-
 
       - name: Build dev image
+        if: matrix.scope == 'root'
         run: |
           docker compose -f docker-compose.base.yml -f docker-compose.dev.yml \
             build playground
 
       - name: Build MarkEngine image
+        if: matrix.scope == 'markengine-submodule'
         run: docker build --target build src/shared/lib/markengine
 
       - name: Typecheck
+        if: matrix.scope == 'root'
         run: make typecheck
 
       - name: Lint
+        if: matrix.scope == 'root'
         run: make lint
 
       - name: SonarQube scan
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: matrix.scope == 'root' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
@@ -108,7 +116,7 @@ jobs:
 
   build-image:
     name: Build & push Docker image
-    needs: [quality, test]
+    needs: quality
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     steps:

@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   containersAndPaste.mjs                             :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/20 21:29:45 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/27 08:45:06 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/05/06 00:08:25 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -99,7 +99,7 @@ export const containerAndPasteScenarios = [
       const child = getEditors(page).nth(1);
       await clearAndType(child, "- ");
       await page.keyboard.type("Nested bullet");
-      await expect(page.locator(".inline-block.w-1\\.5.h-1\\.5")).toHaveCount(1);
+      await expect(page.locator('.inline-block[class~="w-1.5"][class~="h-1.5"]')).toHaveCount(1);
     },
   ),
   defineScenario(
@@ -339,7 +339,7 @@ export const containerAndPasteScenarios = [
       await pasteText(editor, "# Title\n\nParagraph\n\n- Item");
       await expect(getEditors(page)).toHaveCount(3);
       await expect(getEditors(page).first()).toHaveText("Title");
-      await expect(page.locator(".inline-block.w-1\\.5.h-1\\.5")).toHaveCount(1);
+      await expect(page.locator('.inline-block[class~="w-1.5"][class~="h-1.5"]')).toHaveCount(1);
     },
     { serial: true },
   ),
