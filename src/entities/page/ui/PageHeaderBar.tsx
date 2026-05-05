@@ -282,7 +282,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
   function restoreVersion(version: PageVersion) {
     updatePageTitle(pageId, version.title);
     updatePageContent(pageId, version.content as Parameters<typeof updatePageContent>[1]);
-    void logAction("version_history", "Version restored", { versionId: version.id });
+    logAction("version_history", "Version restored", { versionId: version.id }).catch(() => undefined);
   }
 
   return (
@@ -350,8 +350,8 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
                 </div>
 
                 <div className="border-t border-[var(--color-line)] py-1">
-                  <MenuButton icon={<Clock size={16} />} label="Updates & analytics" onClick={() => { setDetailPanel(detailPanel === "analytics" ? null : "analytics"); void logAction("updates_analytics", "Analytics opened"); }} />
-                  <MenuButton icon={<History size={16} />} label="Version history" onClick={() => { setDetailPanel(detailPanel === "versions" ? null : "versions"); void logAction("version_history", "Version history opened"); }} />
+                  <MenuButton icon={<Clock size={16} />} label="Updates & analytics" onClick={() => { setDetailPanel(detailPanel === "analytics" ? null : "analytics"); logAction("updates_analytics", "Analytics opened").catch(() => undefined); }} />
+                  <MenuButton icon={<History size={16} />} label="Version history" onClick={() => { setDetailPanel(detailPanel === "versions" ? null : "versions"); logAction("version_history", "Version history opened").catch(() => undefined); }} />
                   <MenuButton icon={<Bell size={16} />} label="Notify me" checked={config.notifications.comments} trailing="Comments" onClick={() => updatePageSetting({ notifications: { comments: !config.notifications.comments } }, "notify_me", config.notifications.comments ? "Notifications disabled" : "Notifications enabled")} />
                   <MenuButton icon={<Plug size={16} />} label="Connections" trailing={config.connections.length ? "MongoDB" : "None"} checked={config.connections.length > 0} onClick={handleConnections} />
                 </div>

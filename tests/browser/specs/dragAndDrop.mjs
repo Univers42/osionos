@@ -3,17 +3,16 @@
 /*                                                        :::      ::::::::   */
 /*   dragAndDrop.mjs                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/20 21:29:52 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/20 21:29:53 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/05/06 00:08:25 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import { expect } from "@playwright/test";
 
 import {
-  blockLocator,
   blockWrapper,
   blockOpacity,
   createParagraphs,
