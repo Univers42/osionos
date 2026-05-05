@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:24:19 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:24:20 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -56,11 +56,25 @@ function pageUrl(pageId: string): string {
 }
 
 function safeFileName(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9-_]+/gi, "-")
-    .replaceAll(/^-+|-+$/g, "") || "page";
+  let fileName = "";
+  let previousWasSeparator = true;
+
+  for (const char of value.trim().toLowerCase()) {
+    const isSafeChar =
+      (char >= "a" && char <= "z") ||
+      (char >= "0" && char <= "9") ||
+      char === "_";
+
+    if (isSafeChar) {
+      fileName += char;
+      previousWasSeparator = false;
+    } else if (!previousWasSeparator) {
+      fileName += "-";
+      previousWasSeparator = true;
+    }
+  }
+
+  return fileName.endsWith("-") ? fileName.slice(0, -1) : fileName || "page";
 }
 
 function blockToMarkdown(block: Block, depth = 0): string {
@@ -130,8 +144,10 @@ export async function importPageFile(file: File): Promise<ImportedPagePayload> {
     };
   }
 
+  const extensionIndex = file.name.lastIndexOf(".");
+
   return {
-    title: file.name.replaceAll(/\.[^.]+$/g, ""),
+    title: extensionIndex > 0 ? file.name.slice(0, extensionIndex) : file.name,
     content: parseMarkdownToBlocks(text),
   };
 }

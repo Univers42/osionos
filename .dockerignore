@@ -1,0 +1,15 @@
+.git
+.env
+node_modules
+build
+dist
+.vite
+coverage
+playwright-report
+playwright-report.stale
+test-results
+*.log
+*.pid
+Dockerfile*
+docker-compose*.yml
+vendor

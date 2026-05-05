@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:27:01 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -203,12 +203,24 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
   const tryHandleCodeOrTable = useCallback(
     (blockId: string, text: string): boolean => {
-      const fencedCodeMatch = /^```\s*([A-Za-z0-9_+-]+)?\s*$/.exec(text);
-      if (fencedCodeMatch) {
+      const trimmedText = text.trim();
+      const language = trimmedText.startsWith("```")
+        ? trimmedText.slice(3).trim().toLowerCase()
+        : "";
+      const isLanguageSafe = [...language].every(
+        (char) =>
+          (char >= "a" && char <= "z") ||
+          (char >= "0" && char <= "9") ||
+          char === "_" ||
+          char === "+" ||
+          char === "-",
+      );
+
+      if (trimmedText.startsWith("```") && isLanguageSafe) {
         changeBlockType(pageId, blockId, "code");
         updateBlock(pageId, blockId, {
           content: "",
-          language: fencedCodeMatch[1]?.toLowerCase() || "plaintext",
+          language: language || "plaintext",
         });
         repositionCursor(blockId, "");
         return true;

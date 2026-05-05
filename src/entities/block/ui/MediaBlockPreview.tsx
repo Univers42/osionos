@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   MediaBlockPreview.tsx                              :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/14 00:00:00 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/15 11:37:41 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -83,6 +83,7 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
         className="block max-h-[24rem] w-full rounded-lg border border-[var(--color-line)] bg-black/90"
       >
         <source src={resolved.url} />
+        <track kind="captions" />
       </video>
     );
   }
@@ -105,6 +106,7 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
         </div>
         <audio controls preload="metadata" className="w-full">
           <source src={resolved.url} />
+          <track kind="captions" />
         </audio>
       </div>
     );
