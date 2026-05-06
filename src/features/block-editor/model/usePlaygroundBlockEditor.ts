@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/06 23:05:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,7 +34,10 @@ import {
   enterCreatesChild,
   findBlockInTree,
 } from "@/entities/block";
-import { useDatabaseStore } from "@/store/useDatabaseStore";
+import {
+  DEFAULT_OBJECT_DATABASE_ID,
+  useDatabaseStore,
+} from "@/store/useDatabaseStore";
 import type { Block } from "@/entities/block";
 import {
   handleArrowUp,
@@ -834,6 +837,38 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [],
   );
 
+  const createDatabasePageInPrivateWorkspace = useCallback(
+    async (title = "Untitled database") => {
+      const session = useUserStore.getState().activeSession();
+      const privateWorkspaceId = session?.privateWorkspaces[0]?._id;
+      if (!privateWorkspaceId) return null;
+
+      const jwt = session?.accessToken ?? "";
+      const page = await usePageStore
+        .getState()
+        .addDatabasePage(
+          privateWorkspaceId,
+          title,
+          jwt,
+          DEFAULT_OBJECT_DATABASE_ID,
+        );
+
+      if (!page) return null;
+
+      usePageStore.getState().openPage({
+        id: page._id,
+        workspaceId: privateWorkspaceId,
+        kind: "database",
+        title: page.title,
+        icon: page.icon,
+        databaseId: page.databaseId ?? DEFAULT_OBJECT_DATABASE_ID,
+      });
+
+      return { id: page._id };
+    },
+    [],
+  );
+
   const page = usePageStore((s) => s.pageById(pageId));
   const content = useMemo(() => page?.content ?? [], [page?.content]);
 
@@ -878,6 +913,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
     insertBlock,
     createInlineDatabase,
     createPageInPrivateWorkspace,
+    createDatabasePageInPrivateWorkspace,
     focusBlock,
   });
 

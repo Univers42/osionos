@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/14 00:00:00 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/06 23:31:25 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -50,6 +50,11 @@ const SLASH_DESCRIPTIONS: Partial<Record<BlockType, string>> = {
   table_block: "Simple table",
   database_inline: "Inline database",
   database_full_page: "Full-page database",
+};
+
+const SLASH_ALIASES: Partial<Record<BlockType, string[]>> = {
+  database_inline: ["database inline"],
+  database_full_page: ["database full page"],
 };
 
 const MEDIA_PICKER_TYPES = new Set<MediaBlockType>([
@@ -106,6 +111,7 @@ const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.map(
         kind: "media-picker",
         section: item.section,
         label: normalizedLabel,
+        aliases: SLASH_ALIASES[item.type as BlockType],
         icon: item.icon,
         description,
         mediaKind: item.type as MediaBlockType,
@@ -117,6 +123,7 @@ const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.map(
       kind: "block",
       section: item.section,
       label: normalizedLabel,
+      aliases: SLASH_ALIASES[item.type],
       icon: item.icon,
       description,
       blockType: item.type,
@@ -242,6 +249,7 @@ export function filterSlashCommands(filter: string): SlashCommand[] {
   return SLASH_COMMANDS.filter((item) => {
     return (
       item.label.toLowerCase().includes(lower) ||
+      item.aliases?.some((alias) => alias.toLowerCase().includes(lower)) ||
       item.description.toLowerCase().includes(lower) ||
       ("blockType" in item && item.blockType.toLowerCase().includes(lower)) ||
       item.id.toLowerCase().includes(lower)

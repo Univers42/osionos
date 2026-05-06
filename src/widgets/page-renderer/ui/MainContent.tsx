@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 20:16:02 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/06 23:05:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -139,7 +139,7 @@ export const MainContent: React.FC = () => {
       <ErrorBoundary>
         <Suspense fallback={<LoadingPane />}>
           <div className="flex-1 min-w-0 h-full overflow-auto bg-[var(--color-surface-primary)]">
-            <DatabaseBlock databaseId={activePage.id} mode="full" />
+            <DatabaseBlock databaseId={activePage.databaseId ?? activePage.id} mode="full" />
           </div>
         </Suspense>
       </ErrorBoundary>
