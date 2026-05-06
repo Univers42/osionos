@@ -28,7 +28,11 @@ export default defineConfig(({ mode }) => {
         },
         {
           find: /^@notion-db\/object-database\/theme\.css$/,
-          replacement: path.resolve(root, 'src/shared/notion-database-sys/src/theme.css'),
+          replacement: path.resolve(root, 'src/shared/notion-database-sys/src/index.css'),
+        },
+        {
+          find: /^@notion-db\/object-database\/styles\.css$/,
+          replacement: path.resolve(root, 'src/shared/notion-database-sys/src/index.css'),
         },
         {
           find: /^@notion-db\/contract-types$/,
