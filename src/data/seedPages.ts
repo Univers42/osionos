@@ -19,7 +19,7 @@ import {
 } from './seedBlockHelpers';
 
 import {
-  gettingStarted, projectRoadmap, meetingNotes, dylanTasksDatabase,
+  gettingStarted, projectRoadmap, meetingNotes, dylanTasksDatabase, dylanProjectsDatabase,
 } from './seedAdminPages';
 import {
   designSystem, sprintReview, alexTasksDatabase, quickNotes, readingList, samTasksDatabase,
@@ -70,6 +70,7 @@ export const SEED_PAGES: SeedPage[] = [
   projectRoadmap,
   meetingNotes,
   dylanTasksDatabase,
+  dylanProjectsDatabase,
   // Alex
   designSystem,
   sprintReview,

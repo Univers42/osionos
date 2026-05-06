@@ -44,8 +44,9 @@ export function createSeedOfflinePages(set: SetFn, get: GetFn) {
     if (get().seeded) return;
     const existingPages = get().pages;
     if (Object.keys(existingPages).length > 0) {
-      set({ seeded: true });
-      savePagesCache(existingPages);
+      const mergedPages = mergeMissingSeedPages(existingPages);
+      set({ pages: mergedPages, seeded: true });
+      savePagesCache(mergedPages);
       return;
     }
     const grouped: Record<string, PageEntry[]> = {};
@@ -56,6 +57,16 @@ export function createSeedOfflinePages(set: SetFn, get: GetFn) {
     set({ pages: grouped, seeded: true });
     savePagesCache(grouped);
   };
+}
+
+function mergeMissingSeedPages(existingPages: Record<string, PageEntry[]>): Record<string, PageEntry[]> {
+  const pages = { ...existingPages };
+  for (const seedPage of SEED_PAGES) {
+    const workspacePages = pages[seedPage.workspaceId] ?? [];
+    if (workspacePages.some((page) => page._id === seedPage._id)) continue;
+    pages[seedPage.workspaceId] = [...workspacePages, seedToEntry(seedPage)];
+  }
+  return pages;
 }
 
 export function createSeedOnlinePages(set: SetFn, get: GetFn) {

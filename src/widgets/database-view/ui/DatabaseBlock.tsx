@@ -13,10 +13,15 @@
 import React from 'react';
 import { ObjectDatabase, type ObjectDatabaseProps } from '@notion-db/object-database';
 
+import type { Block } from '@/entities/block';
+import type { PageEntry } from '@/entities/page';
+import { useUserStore } from '@/features/auth';
+import { OsionosPage } from '@/pages/notion-page/ui/NotionPage';
 import {
   DEFAULT_OBJECT_DATABASE_ID,
   DEFAULT_OBJECT_DATABASE_VIEW_ID,
 } from '@/store/useDatabaseStore';
+import { usePageStore } from '@/store/usePageStore';
 import { getObjectDatabaseAdapter } from '../model/objectDatabaseAdapter';
 
 interface DatabaseBlockProps {
@@ -32,7 +37,8 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
 }) => {
   const resolvedMode = mode === 'full' ? 'page' : 'inline';
   const resolvedDatabaseId = databaseId ?? DEFAULT_OBJECT_DATABASE_ID;
-  const resolvedInitialView = initialViewId ?? DEFAULT_OBJECT_DATABASE_VIEW_ID;
+  const resolvedInitialView = initialViewId
+    ?? (resolvedDatabaseId === DEFAULT_OBJECT_DATABASE_ID ? DEFAULT_OBJECT_DATABASE_VIEW_ID : undefined);
   const renderPage = React.useCallback<NonNullable<ObjectDatabaseProps['renderPage']>>(
     (pageId, state, onClose) => <DatabaseObjectPage pageId={pageId} state={state} onClose={onClose} />,
     [],
@@ -64,12 +70,53 @@ type DatabaseObjectPageProps = {
 };
 
 const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, onClose }) => {
-  const page = state.pages[pageId];
-  const database = page ? state.databases[page.databaseId] : null;
-  const title = page ? state.getPageTitle(page) : 'Page unavailable';
-  const properties = database && page
-    ? Object.values(database.properties).filter(property => property.id !== database.titlePropertyId)
-    : [];
+  const databasePage = state.pages[pageId];
+  const database = databasePage ? state.databases[databasePage.databaseId] : null;
+  const title = databasePage ? String(state.getPageTitle(databasePage) || 'Untitled') : 'Page unavailable';
+  const activePage = usePageStore(s => s.activePage);
+  const osionosPage = usePageStore(s => s.pageById(pageId));
+  const activeUserId = useUserStore(s => s.activeUserId);
+  const activeWorkspace = useUserStore(s => s.activeWorkspace());
+  const workspaceId = activePage?.workspaceId ?? activeWorkspace?._id;
+
+  React.useEffect(() => {
+    if (!databasePage || !workspaceId) return;
+    const nextEntry: PageEntry = {
+      _id: pageId,
+      title,
+      icon: databasePage.icon ?? database?.icon ?? '📄',
+      cover: databasePage.cover,
+      updatedAt: databasePage.updatedAt,
+      workspaceId,
+      ownerId: activeUserId || null,
+      visibility: 'private',
+      collaborators: [],
+      parentPageId: activePage?.id ?? '__database_rows__',
+      databaseId: databasePage.databaseId,
+      archivedAt: null,
+      content: toOsionosBlocks(databasePage.content),
+    };
+
+    usePageStore.setState((current) => ({
+      pages: upsertOsionosDatabasePage(current.pages, workspaceId, nextEntry),
+    }));
+  }, [activePage?.id, activeUserId, database?.icon, databasePage, pageId, title, workspaceId]);
+
+  React.useEffect(() => {
+    if (!databasePage || !database || !osionosPage) return;
+    if (osionosPage.title !== databasePage.properties[database.titlePropertyId]) {
+      state.updatePageProperty(pageId, database.titlePropertyId, osionosPage.title);
+    }
+  }, [database, databasePage, osionosPage, pageId, state]);
+
+  const osionosContentKey = JSON.stringify(osionosPage?.content ?? []);
+
+  React.useEffect(() => {
+    if (!databasePage || !osionosPage) return;
+    if (osionosContentKey !== JSON.stringify(databasePage.content ?? [])) {
+      state.updatePageContent(pageId, (osionosPage.content ?? []) as DatabasePageContent);
+    }
+  }, [databasePage, osionosContentKey, osionosPage, pageId, state]);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/20">
@@ -79,10 +126,10 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
         className="fixed inset-0 cursor-default bg-transparent"
         onClick={onClose}
       />
-      <aside className="relative z-[60] h-full w-full max-w-2xl overflow-auto border-l border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-2xl">
+      <aside className="relative z-[60] h-full w-full max-w-5xl overflow-auto border-l border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-2xl">
         <div className="sticky top-0 flex items-center justify-between border-b border-[var(--color-line)] bg-[var(--color-surface-primary)] px-6 py-3">
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-ink-muted)]">
-            {database?.name ?? 'Database page'}
+            {database?.name ?? 'Database page'} · osionos page
           </span>
           <button
             type="button"
@@ -92,35 +139,54 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
             Close
           </button>
         </div>
-        <div className="mx-auto max-w-3xl px-10 py-10">
-          <h1 className="mb-8 text-4xl font-bold tracking-tight text-[var(--color-ink)]">
-            {title || 'Untitled'}
-          </h1>
-          {page && properties.length > 0 && (
-            <dl className="mb-8 divide-y divide-[var(--color-line)] rounded-xl border border-[var(--color-line)]">
-              {properties.map((property) => (
-                <div key={property.id} className="grid grid-cols-[160px_1fr] gap-4 px-4 py-3 text-sm">
-                  <dt className="text-[var(--color-ink-muted)]">{property.name}</dt>
-                  <dd className="min-w-0 text-[var(--color-ink)]">{formatDatabaseValue(page.properties[property.id])}</dd>
-                </div>
-              ))}
-            </dl>
-          )}
-          <div className="rounded-xl border border-dashed border-[var(--color-line)] p-6 text-sm text-[var(--color-ink-muted)]">
-            This row is opened with the osionos host page surface, not the embedded database modal.
+        {osionosPage ? <OsionosPage pageId={pageId} /> : (
+          <div className="mx-auto max-w-3xl px-10 py-10 text-sm text-[var(--color-ink-muted)]">
+            Page unavailable
           </div>
-        </div>
+        )}
       </aside>
     </div>
   );
 };
 
-function formatDatabaseValue(value: unknown): string {
-  if (value == null || value === '') return 'Empty';
-  if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : 'Empty';
-  if (value instanceof Date) return value.toLocaleString();
-  if (typeof value === 'object') return JSON.stringify(value);
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return value.toString();
-  return 'Unsupported value';
+type DatabasePageContent = DatabaseObjectPageProps['state']['pages'][string]['content'];
+
+function toOsionosBlocks(blocks: DatabasePageContent | undefined): Block[] {
+  return (blocks ?? []).map((block) => ({
+    ...block,
+    type: block.type as Block['type'],
+    children: toOsionosBlocks(block.children),
+  }));
+}
+
+function upsertOsionosDatabasePage(
+  pages: Record<string, PageEntry[]>,
+  workspaceId: string,
+  nextEntry: PageEntry,
+): Record<string, PageEntry[]> {
+  let found = false;
+  const nextPages: Record<string, PageEntry[]> = {};
+
+  for (const [currentWorkspaceId, entries] of Object.entries(pages)) {
+    nextPages[currentWorkspaceId] = entries.map((entry) => {
+      if (entry._id !== nextEntry._id) return entry;
+      found = true;
+      return mergeOsionosDatabasePage(entry, nextEntry);
+    });
+  }
+
+  if (!found) {
+    nextPages[workspaceId] = [...(nextPages[workspaceId] ?? []), nextEntry];
+  }
+
+  return nextPages;
+}
+
+function mergeOsionosDatabasePage(entry: PageEntry, nextEntry: PageEntry): PageEntry {
+  return {
+    ...entry,
+    ...nextEntry,
+    title: entry.title || nextEntry.title,
+    content: entry.content?.length ? entry.content : nextEntry.content,
+  };
 }
