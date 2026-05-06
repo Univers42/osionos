@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/06 23:05:59 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/07 00:51:16 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,10 +34,7 @@ import {
   enterCreatesChild,
   findBlockInTree,
 } from "@/entities/block";
-import {
-  DEFAULT_OBJECT_DATABASE_ID,
-  useDatabaseStore,
-} from "@/store/useDatabaseStore";
+import { useDatabaseStore } from "@/store/useDatabaseStore";
 import type { Block } from "@/entities/block";
 import {
   handleArrowUp,
@@ -844,13 +841,14 @@ export function usePlaygroundBlockEditor(pageId: string) {
       if (!privateWorkspaceId) return null;
 
       const jwt = session?.accessToken ?? "";
+      const databaseReference = useDatabaseStore.getState().createInlineDatabase(title);
       const page = await usePageStore
         .getState()
         .addDatabasePage(
           privateWorkspaceId,
           title,
           jwt,
-          DEFAULT_OBJECT_DATABASE_ID,
+          databaseReference.databaseId,
         );
 
       if (!page) return null;
@@ -861,7 +859,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
         kind: "database",
         title: page.title,
         icon: page.icon,
-        databaseId: page.databaseId ?? DEFAULT_OBJECT_DATABASE_ID,
+        databaseId: page.databaseId ?? databaseReference.databaseId,
       });
 
       return { id: page._id };

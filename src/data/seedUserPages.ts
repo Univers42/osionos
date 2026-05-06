@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/07 00:51:17 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -93,6 +93,16 @@ export const sprintReview: SeedPage = {
   ],
 };
 
+export const alexTasksDatabase: SeedPage = {
+  _id: 'page-alex-tasks-database',
+  title: 'Tasks database',
+  icon: 'icon:table',
+  workspaceId: alexWsId,
+  ownerId: 'mock-user-1',
+  databaseId: 'db-tasks',
+  content: [],
+};
+
 
 const samWsId = 'mock-ws-private-2';
 
@@ -144,4 +154,14 @@ export const readingList: SeedPage = {
     divider(),
     quote('"A reader lives a thousand lives before he dies. The man who never reads lives only one." — George R.R. Martin'),
   ],
+};
+
+export const samTasksDatabase: SeedPage = {
+  _id: 'page-sam-tasks-database',
+  title: 'Tasks database',
+  icon: 'icon:table',
+  workspaceId: samWsId,
+  ownerId: 'mock-user-2',
+  databaseId: 'db-tasks',
+  content: [],
 };
