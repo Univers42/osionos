@@ -14,7 +14,9 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
     ],
     define: {
-      __OBJECT_DATABASE_DISABLE_WASM__: 'true',
+      __OBJECT_DATABASE_DISABLE_WASM__: JSON.stringify(
+        env.VITE_OBJECT_DATABASE_DISABLE_WASM === 'true',
+      ),
       'import.meta.env.VITE_API_URL': JSON.stringify(
         env.VITE_API_URL ?? '',
       ),

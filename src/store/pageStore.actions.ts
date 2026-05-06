@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/06 23:05:59 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/07 00:51:16 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -73,6 +73,7 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
             workspaceId: realWsId,
             title: sp.title,
             icon: sp.icon,
+            databaseId: sp.databaseId ?? undefined,
             content: sp.content,
             ownerId: sp.ownerId ?? undefined,
             visibility: sp.visibility,

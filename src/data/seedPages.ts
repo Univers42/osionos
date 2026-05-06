@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/07 00:51:17 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,9 +18,11 @@ import {
   h1, h2, p, bullet, numbered, code, callout, divider,
 } from './seedBlockHelpers';
 
-import { gettingStarted, projectRoadmap, meetingNotes } from './seedAdminPages';
 import {
-  designSystem, sprintReview, quickNotes, readingList,
+  gettingStarted, projectRoadmap, meetingNotes, dylanTasksDatabase,
+} from './seedAdminPages';
+import {
+  designSystem, sprintReview, alexTasksDatabase, quickNotes, readingList, samTasksDatabase,
 } from './seedUserPages';
 
 /** Mock workspace ID for the shared team workspace. */
@@ -67,12 +69,15 @@ export const SEED_PAGES: SeedPage[] = [
   gettingStarted,
   projectRoadmap,
   meetingNotes,
+  dylanTasksDatabase,
   // Alex
   designSystem,
   sprintReview,
+  alexTasksDatabase,
   // Sam
   quickNotes,
   readingList,
+  samTasksDatabase,
   // Shared
   teamWiki,
 ];
