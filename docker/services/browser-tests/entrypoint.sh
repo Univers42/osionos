@@ -4,6 +4,7 @@ set -euo pipefail
 cd /app
 
 git config --global --add safe.directory /app 2>/dev/null || true
+export OSIONOS_IN_DOCKER=1
 
 LOCKFILES=("/app/package.json" "/app/pnpm-lock.yaml")
 STAMP_DIR="/app/node_modules/.cache"

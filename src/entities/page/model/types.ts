@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/05 01:56:06 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/06 23:05:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -55,6 +55,7 @@ export interface ActivePage {
   title?: string;
   icon?: string;
   cover?: string;
+  databaseId?: string | null;
 }
 
 export interface PageStore {
@@ -81,6 +82,13 @@ export interface PageStore {
     workspaceId: string,
     title: string,
     jwt: string,
+    parentPageId?: string,
+  ) => Promise<PageEntry | null>;
+  addDatabasePage: (
+    workspaceId: string,
+    title: string,
+    jwt: string,
+    databaseId: string,
     parentPageId?: string,
   ) => Promise<PageEntry | null>;
   duplicatePage: (

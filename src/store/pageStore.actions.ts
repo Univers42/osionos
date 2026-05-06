@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 03:57:43 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/06 23:05:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -210,6 +210,84 @@ export function createAddPage(set: SetFn, get: GetFn) {
       collaborators: [],
       parentPageId: parentPageId ?? null,
       databaseId: null,
+      archivedAt: null,
+      content: [],
+    };
+    set((s) => ({
+      pages: {
+        ...s.pages,
+        [workspaceId]: [...(s.pages[workspaceId] ?? []), newPage],
+      },
+    }));
+    savePagesCache(get().pages);
+    return newPage;
+  };
+}
+
+export function createAddDatabasePage(set: SetFn, get: GetFn) {
+  return async (
+    workspaceId: string,
+    title: string,
+    jwt: string,
+    databaseId: string,
+    parentPageId?: string,
+  ): Promise<PageEntry | null> => {
+    const context = getCurrentPageAccessContext();
+    if (!context?.workspaceIds.includes(workspaceId)) {
+      return null;
+    }
+    const targetVisibility = getTargetWorkspaceMoveVisibility(
+      workspaceId,
+      context,
+      "private",
+    );
+
+    if (jwt) {
+      try {
+        const page = await api.post<PageEntry>(
+          "/api/pages",
+          {
+            workspaceId,
+            title,
+            parentPageId,
+            databaseId,
+            content: [],
+            icon: "icon:table",
+            ownerId: context.userId,
+            visibility: targetVisibility,
+            collaborators: [],
+          },
+          jwt,
+        );
+        const pageWithTimestamp: PageEntry = {
+          ...page,
+          databaseId: page.databaseId ?? databaseId,
+          updatedAt: page.updatedAt ?? new Date().toISOString(),
+        };
+        set((s) => ({
+          pages: {
+            ...s.pages,
+            [workspaceId]: [...(s.pages[workspaceId] ?? []), pageWithTimestamp],
+          },
+        }));
+        savePagesCache(get().pages);
+        return pageWithTimestamp;
+      } catch {
+        return null;
+      }
+    }
+
+    const newPage: PageEntry = {
+      _id: localId(),
+      title,
+      icon: "icon:table",
+      updatedAt: new Date().toISOString(),
+      workspaceId,
+      ownerId: context.userId,
+      visibility: targetVisibility,
+      collaborators: [],
+      parentPageId: parentPageId ?? null,
+      databaseId,
       archivedAt: null,
       content: [],
     };

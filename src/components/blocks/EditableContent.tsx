@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 21:45:39 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/06 23:05:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -113,6 +113,7 @@ function openPageById(pageId: string | null | undefined): boolean {
     kind: page.databaseId ? "database" : "page",
     title: page.title,
     icon: page.icon ?? undefined,
+    databaseId: page.databaseId,
   });
   return true;
 }
@@ -682,6 +683,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
             kind: page.databaseId ? "database" : "page",
             title: page.title,
             icon: page.icon,
+            databaseId: page.databaseId,
           });
         }
       }

@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   usePageStore.ts                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/19 20:10:34 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/05/06 23:05:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,6 +34,7 @@ import {
   createFetchPages,
   createFetchPageContent,
   createAddPage,
+  createAddDatabasePage,
   createArchivePage,
   createDeletePage,
   createRestorePage,
@@ -93,6 +94,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
   fetchPages: createFetchPages(set, get),
   fetchPageContent: createFetchPageContent(set, get),
   addPage: createAddPage(set, get),
+  addDatabasePage: createAddDatabasePage(set, get),
   duplicatePage: createDuplicatePage(set, get),
   movePage: createMovePage(set, get),
   archivePage: createArchivePage(set, get),

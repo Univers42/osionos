@@ -6,7 +6,7 @@
 #    By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/04/08 19:07:11 by dlesieur          #+#    #+#              #
-#    Updated: 2026/05/05 17:34:14 by dlesieur         ###   ########.fr        #
+#    Updated: 2026/05/06 23:46:20 by dlesieur         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -25,6 +25,7 @@ DC_BASE := docker compose -f $(ROOT)docker-compose.base.yml
 DC      := $(DC_BASE) -f $(ROOT)docker-compose.dev.yml
 DC_PROD := $(DC_BASE) -f $(ROOT)docker-compose.prod.yml
 TEST_WORKERS ?= 1
+MONGO_PORT ?= 27018
 IMAGE ?= dlesieur/osionos
 GITHUB_IMAGE ?= ghcr.io/univers42/osionos
 VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null || echo "dev")

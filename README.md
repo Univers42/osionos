@@ -26,8 +26,11 @@ Only Docker, Docker Compose, Make, and Git are expected on the host. Node.js, pn
 Vite, ESLint, TypeScript, and Playwright all run inside Docker.
 
 ```bash
-# Start the full Docker stack: Vite on :3001 + MongoDB
+# Start the Docker stack: Vite on :3001 + MongoDB
 make up
+
+# Also Docker-only: starts the playground and ObjectDatabase contract bridge
+pnpm run dev
 
 # Run quality gates inside Docker
 make ci

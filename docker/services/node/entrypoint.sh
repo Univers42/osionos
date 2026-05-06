@@ -3,6 +3,7 @@ set -e
 
 # ── Trust /app so git-based tooling works inside container ───────────────────
 git config --global --add safe.directory /app 2>/dev/null || true
+export OSIONOS_IN_DOCKER=1
 
 # ── Install dependencies if needed ──────────────────────────────────────────
 # Uses a package.json + pnpm-lock.yaml hash to detect staleness.
