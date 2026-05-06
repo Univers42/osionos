@@ -22,7 +22,10 @@
         "./src/shared/notion-database-sys/src/component/index.ts"
       ],
       "@notion-db/object-database/theme.css": [
-        "./src/shared/notion-database-sys/src/theme.css"
+        "./src/shared/notion-database-sys/src/index.css"
+      ],
+      "@notion-db/object-database/styles.css": [
+        "./src/shared/notion-database-sys/src/index.css"
       ],
       "@notion-db/contract-types": [
         "./src/shared/notion-database-sys/packages/contract-types/src/index.ts"
