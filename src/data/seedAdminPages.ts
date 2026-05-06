@@ -144,3 +144,13 @@ export const dylanTasksDatabase: SeedPage = {
   databaseId: 'db-tasks',
   content: [],
 };
+
+export const dylanProjectsDatabase: SeedPage = {
+  _id: 'page-admin-projects-database',
+  title: 'Projects & Sprints',
+  icon: getCollectionEmojiValue('rocket'),
+  workspaceId: adminWsId,
+  ownerId: 'mock-user-0',
+  databaseId: 'db-projects',
+  content: [],
+};
