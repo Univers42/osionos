@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   PageSelectorMenu.tsx                               :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/20 12:00:00 by vjan-nie          #+#    #+#             */
-/*   Updated: 2026/04/20 12:00:00 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/05/07 16:29:52 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
