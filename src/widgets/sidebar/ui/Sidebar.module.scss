@@ -6,8 +6,8 @@
   height: 100%;
   flex-shrink: 0;
   overflow: hidden;
-  background-color: var(--color-surface-secondary);
-  box-shadow: inset -1px 0 0 0 var(--color-line);
+  background-color: var(--osio-bg-subtle);
+  box-shadow: inset -1px 0 0 0 var(--osio-border-default);
   transition: transform 0.3s ease, width 0.3s ease, margin-left 0.3s ease;
   display: flex;
   flex-direction: column;
@@ -26,7 +26,7 @@
   top: 0;
   right: -3px;
   bottom: 0;
-  z-index: 40;
+  z-index: var(--osio-z-popover);
   width: 6px;
   cursor: col-resize;
   background: transparent;
@@ -44,5 +44,5 @@
 }
 
 .resizeHandle:hover::after {
-  background: var(--color-accent);
+  background: var(--osio-accent);
 }

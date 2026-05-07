@@ -54,78 +54,78 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[var(--color-backdrop)] px-4">
+    <div className="fixed inset-0 z-[var(--osio-z-modal)] flex items-center justify-center bg-[var(--osio-overlay)] px-4">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-4 shadow-2xl"
+        className="w-full max-w-sm rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 shadow-2xl"
       >
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-[var(--color-ink)]">
+            <h2 className="text-lg font-semibold text-[var(--osio-fg-default)]">
               {mode === 'login' ? 'Connexion' : 'Créer un compte'}
             </h2>
-            <p className="text-xs text-[var(--color-ink-muted)]">
+            <p className="text-xs text-[var(--osio-fg-muted)]">
               Les comptes persistés restent dans les sessions actives.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="rounded p-1 hover:bg-[var(--color-surface-hover)]">
+          <button type="button" onClick={onClose} className="rounded p-1 hover:bg-[var(--osio-bg-hover)]">
             <X size={16} />
           </button>
         </div>
 
-        <div className="mb-3 grid grid-cols-2 rounded-md bg-[var(--color-surface-secondary)] p-1 text-sm">
+        <div className="mb-3 grid grid-cols-2 rounded-md bg-[var(--osio-bg-subtle)] p-1 text-sm">
           <button
             type="button"
             onClick={() => setMode('login')}
-            className={`rounded px-2 py-1 ${mode === 'login' ? 'bg-[var(--color-surface-primary)] shadow-sm' : ''}`}
+            className={`rounded px-2 py-1 ${mode === 'login' ? 'bg-[var(--osio-bg-surface)] shadow-sm' : ''}`}
           >
             Se connecter
           </button>
           <button
             type="button"
             onClick={() => setMode('signup')}
-            className={`rounded px-2 py-1 ${mode === 'signup' ? 'bg-[var(--color-surface-primary)] shadow-sm' : ''}`}
+            className={`rounded px-2 py-1 ${mode === 'signup' ? 'bg-[var(--osio-bg-surface)] shadow-sm' : ''}`}
           >
             Créer
           </button>
         </div>
 
         {mode === 'signup' && (
-          <label className="mb-3 block text-xs font-medium text-[var(--color-ink-muted)]">
+          <label className="mb-3 block text-xs font-medium text-[var(--osio-fg-muted)]">
             <span>Nom</span>
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              className="mt-1 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface-primary)] px-3 py-2 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+              className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
               placeholder="Nom affiché"
             />
           </label>
         )}
 
-        <label className="mb-3 block text-xs font-medium text-[var(--color-ink-muted)]">
+        <label className="mb-3 block text-xs font-medium text-[var(--osio-fg-muted)]">
           <span>Email</span>
           <input
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface-primary)] px-3 py-2 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+            className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
             placeholder="name@example.com"
             required
           />
         </label>
 
-        <label className="mb-3 block text-xs font-medium text-[var(--color-ink-muted)]">
+        <label className="mb-3 block text-xs font-medium text-[var(--osio-fg-muted)]">
           <span>Mot de passe</span>
           <input
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface-primary)] px-3 py-2 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+            className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
             required
           />
         </label>
 
-        <label className="mb-4 flex items-start gap-2 text-xs text-[var(--color-ink-muted)]">
+        <label className="mb-4 flex items-start gap-2 text-xs text-[var(--osio-fg-muted)]">
           <input
             type="checkbox"
             checked={persistInSessions}
@@ -138,7 +138,7 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+          className="w-full rounded-md bg-[var(--osio-accent)] px-3 py-2 text-sm font-medium text-[var(--osio-accent-fg)] disabled:opacity-60"
         >
           {submitLabel}
         </button>
@@ -270,22 +270,22 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
         ref={ref}
         style={panelStyle}
         className={[
-          'z-50 w-[300px]',
-          'bg-[var(--color-surface-primary)] border border-[var(--color-line)]',
+          'z-[var(--osio-z-popover)] w-[300px]',
+          'bg-[var(--osio-bg-surface)] border border-[var(--osio-border-default)]',
           'rounded-xl shadow-xl',
           'max-h-[calc(100vh-80px)] overflow-y-auto overflow-x-hidden',
         ].join(' ')}
       >
-      <header className="bg-[var(--color-surface-secondary)] p-3">
+      <header className="bg-[var(--osio-bg-subtle)] p-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--color-surface-tertiary)]">
+          <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--osio-bg-muted)]">
             <AssetRenderer value={activePersona?.emoji ?? '🌏'} size={28} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-[var(--color-ink)]">
+            <p className="truncate text-sm font-semibold text-[var(--osio-fg-default)]">
               {activeWorkspace?.name ?? 'Workspace'}
             </p>
-            <p className="truncate text-xs text-[var(--color-ink-muted)]">
+            <p className="truncate text-xs text-[var(--osio-fg-muted)]">
               {(activeWorkspace?.settings?.plan as string | undefined) ?? 'Playground'} · {personas.length} member{personas.length > 1 ? 's' : ''}
             </p>
           </div>
@@ -294,24 +294,24 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
           <button
             type="button"
             onClick={() => setSettingsTab('settings')}
-            className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-[var(--color-line)] px-2 py-1 text-xs hover:bg-[var(--color-surface-hover)]"
+            className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-[var(--osio-border-default)] px-2 py-1 text-xs hover:bg-[var(--osio-bg-hover)]"
           >
             <Settings size={13} /> Settings
           </button>
           <button
             type="button"
             onClick={() => setSettingsTab('people')}
-            className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-[var(--color-line)] px-2 py-1 text-xs hover:bg-[var(--color-surface-hover)]"
+            className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-[var(--osio-border-default)] px-2 py-1 text-xs hover:bg-[var(--osio-bg-hover)]"
           >
             <Users size={13} /> People
           </button>
         </div>
       </header>
 
-      <div className="border-t border-[var(--color-line)] py-2">
-        <div className="mb-1 flex items-center justify-between px-3 text-xs font-medium text-[var(--color-ink-muted)]">
+      <div className="border-t border-[var(--osio-border-default)] py-2">
+        <div className="mb-1 flex items-center justify-between px-3 text-xs font-medium text-[var(--osio-fg-muted)]">
           <span className="truncate">{activePersona?.email ?? 'No account selected'}</span>
-          <button type="button" className="rounded p-1 hover:bg-[var(--color-surface-hover)]" aria-label="Account settings">
+          <button type="button" className="rounded p-1 hover:bg-[var(--osio-bg-hover)]" aria-label="Account settings">
             <MoreHorizontal size={16} />
           </button>
         </div>
@@ -321,25 +321,25 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
             key={workspace._id}
             type="button"
             onClick={() => switchWorkspace(workspace._id)}
-            className="flex h-8 w-full items-center gap-2 px-3 text-left text-sm hover:bg-[var(--color-surface-hover)]"
+            className="flex h-8 w-full items-center gap-2 px-3 text-left text-sm hover:bg-[var(--osio-bg-hover)]"
           >
-            <span className="flex h-5 w-5 items-center justify-center rounded bg-[var(--color-surface-tertiary)] text-xs">
+            <span className="flex h-5 w-5 items-center justify-center rounded bg-[var(--osio-bg-muted)] text-xs">
               {(workspace.name[0] ?? 'W').toUpperCase()}
             </span>
             <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
-            {workspace._id === activeWorkspace?._id && <Check size={14} className="text-[var(--color-accent)]" />}
+            {workspace._id === activeWorkspace?._id && <Check size={14} className="text-[var(--osio-accent)]" />}
           </button>
         ))}
         <button
           type="button"
           onClick={handleNewWorkspace}
-          className="flex h-8 w-full items-center gap-2 px-3 text-left text-sm text-[var(--color-accent)] hover:bg-[var(--color-surface-hover)]"
+          className="flex h-8 w-full items-center gap-2 px-3 text-left text-sm text-[var(--osio-accent)] hover:bg-[var(--osio-bg-hover)]"
         >
           <Plus size={16} /> New workspace
         </button>
       </div>
 
-      <div className="border-t border-[var(--color-line)] py-2">
+      <div className="border-t border-[var(--osio-border-default)] py-2">
         {personas.map(p => {
           const session  = sessions[p.id ?? ''];
           const isLoggedIn = Boolean(session);
@@ -354,8 +354,8 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
                 'transition-colors duration-100',
                 isLoggedIn ? '' : 'opacity-60',
                 isActive
-                  ? 'bg-[var(--color-surface-tertiary)]'
-                  : 'hover:bg-[var(--color-surface-hover)]',
+                  ? 'bg-[var(--osio-bg-muted)]'
+                  : 'hover:bg-[var(--osio-bg-hover)]',
               ].join(' ')}
             >
               <button
@@ -370,7 +370,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
 
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1">
-                    <span className="truncate text-sm font-medium text-[var(--color-ink)]">
+                    <span className="truncate text-sm font-medium text-[var(--osio-fg-default)]">
                       {p.name}
                     </span>
                     <span className="shrink-0">
@@ -383,13 +383,13 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
                       />
                     </span>
                   </span>
-                  <span className="block truncate text-xs text-[var(--color-ink-muted)]">
+                  <span className="block truncate text-xs text-[var(--osio-fg-muted)]">
                     {p.email}
                   </span>
                 </span>
 
                 {isActive && (
-                  <Check size={16} className="shrink-0 text-[var(--color-accent)]" />
+                  <Check size={16} className="shrink-0 text-[var(--osio-accent)]" />
                 )}
               </button>
 
@@ -400,7 +400,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
                     event.stopPropagation();
                     logoutUser(p.id);
                   }}
-                  className="ml-auto shrink-0 text-xs font-medium text-[var(--color-text-danger)]"
+                  className="ml-auto shrink-0 text-xs font-medium text-[var(--osio-danger)]"
                 >
                   Log out
                 </button>
@@ -410,37 +410,37 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
         })}
       </div>
 
-      <footer className="border-t border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 text-sm font-medium">
+      <footer className="border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-2 text-sm font-medium">
         <button
           type="button"
           onClick={() => setAuthOpen(true)}
-          className="flex h-8 w-full items-center px-2 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]"
+          className="flex h-8 w-full items-center px-2 text-left text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
         >
           Add another account
         </button>
         <button
           type="button"
           onClick={() => activeId && logoutUser(activeId)}
-          className="flex h-8 w-full items-center px-2 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]"
+          className="flex h-8 w-full items-center px-2 text-left text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
         >
           Log out
         </button>
         <button
           type="button"
           onClick={() => setNewSidebarEnabled((value) => !value)}
-          className="mt-1 flex w-full items-center gap-3 rounded-md border border-[var(--color-line)] p-2 text-left hover:bg-[var(--color-surface-hover)]"
+          className="mt-1 flex w-full items-center gap-3 rounded-md border border-[var(--osio-border-default)] p-2 text-left hover:bg-[var(--osio-bg-hover)]"
         >
           <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-1 text-[var(--color-ink)]">
+            <span className="flex items-center gap-1 text-[var(--osio-fg-default)]">
               <span>Try the new sidebar</span>
-              <span className="rounded bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[10px] text-[var(--color-accent)]">New</span>
+              <span className="rounded bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-xs text-[var(--osio-accent)]">New</span>
             </span>
-            <span className="block text-xs font-normal text-[var(--color-ink-muted)]">
+            <span className="block text-xs font-normal text-[var(--osio-fg-muted)]">
               Keep your pages, meetings, and AI within reach.
             </span>
           </span>
-          <span className={`relative h-4 w-7 rounded-full ${newSidebarEnabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-surface-tertiary)]'}`}>
-            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${newSidebarEnabled ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+          <span className={`relative h-4 w-7 rounded-full ${newSidebarEnabled ? 'bg-[var(--osio-accent)]' : 'bg-[var(--osio-bg-muted)]'}`}>
+            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-[var(--osio-accent-fg)] transition-transform ${newSidebarEnabled ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
           </span>
         </button>
       </footer>

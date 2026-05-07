@@ -69,8 +69,8 @@ type ResolvedThemeName = "light" | "dark";
 const EMPTY_WORKSPACE_PAGES: readonly never[] = [];
 const INLINE_COLOR_RECENTS_STORAGE_KEY = "osionos:inline-color-recents";
 const MAX_INLINE_COLOR_RECENTS = 7;
-const LIGHT_THEME_DEFAULT_INLINE_COLOR = "#37352F";
-const DARK_THEME_DEFAULT_INLINE_COLOR = "#FFFFFFCF";
+const LIGHT_THEME_DEFAULT_INLINE_COLOR = "var(--osio-fg-default)";
+const DARK_THEME_DEFAULT_INLINE_COLOR = "var(--osio-fg-default)";
 
 interface LinkPickerState {
   mode: LinkPickerMode;
@@ -224,7 +224,7 @@ function getThemeDefaultInlineColor(theme: ResolvedThemeName) {
   if (typeof document !== "undefined" && readResolvedThemeName() === theme) {
     const computedInk = normalizeInlineColorToken(
       getComputedStyle(document.documentElement)
-        .getPropertyValue("--color-ink")
+        .getPropertyValue("--osio-fg-default")
         .trim(),
     );
     if (computedInk) {
@@ -313,10 +313,10 @@ function buildInlineColorPresets(
 }
 
 const TOOLBAR_BUTTON_BASE =
-  "grid h-8 min-w-8 place-items-center rounded-md border border-transparent px-2 text-xs font-semibold text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-ink)]";
+  "grid h-8 min-w-8 place-items-center rounded-md border border-transparent px-2 text-xs font-semibold text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]";
 
 const TOOLBAR_ACTIVE_BUTTON =
-  "border-[var(--color-line)] bg-[var(--color-surface-secondary)] text-[var(--color-ink)]";
+  "border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]";
 
 interface InlineSelectionToolbarProps {
   selection: SelectionSnapshot;
@@ -355,7 +355,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
 }) => (
   <div
     data-testid="inline-selection-toolbar"
-    className="fixed z-[10001] -translate-x-1/2"
+    className="fixed z-[var(--osio-z-max)] -translate-x-1/2"
     style={{
       left: selection.rect.left + selection.rect.width / 2,
       top: Math.max(12, selection.rect.top - 58),
@@ -367,7 +367,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
       event.preventDefault();
     }}
   >
-    <div className="relative rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] px-1.5 py-1 shadow-xl">
+    <div className="relative rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-1.5 py-1 shadow-xl">
       <div className="flex items-center gap-1">
         <button
           type="button"
@@ -468,7 +468,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
               ? "inline-text-color-palette"
               : "inline-background-color-palette"
           }
-          className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 w-45 h-60 shadow-xl"
+          className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-2 w-45 h-60 shadow-xl"
         >
           <ColorPickerBoard
             defaultValue={defaultColor}
@@ -538,38 +538,38 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
       )}
 
       {shortcutsOpen && (
-        <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 shadow-xl">
-          <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]">
+        <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-2 shadow-xl">
+          <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
             Keyboard shortcuts
           </p>
           <ul className="space-y-1">
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
               <span>Bold</span>
-              <span className="text-[var(--color-ink-muted)]">
+              <span className="text-[var(--osio-fg-muted)]">
                 Ctrl/Cmd + B
               </span>
             </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
               <span>Italic</span>
-              <span className="text-[var(--color-ink-muted)]">
+              <span className="text-[var(--osio-fg-muted)]">
                 Ctrl/Cmd + I
               </span>
             </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
               <span>Inline code</span>
-              <span className="text-[var(--color-ink-muted)]">
+              <span className="text-[var(--osio-fg-muted)]">
                 Ctrl/Cmd + E
               </span>
             </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
               <span>Strikethrough</span>
-              <span className="text-[var(--color-ink-muted)]">
+              <span className="text-[var(--osio-fg-muted)]">
                 Ctrl/Cmd + Shift + X
               </span>
             </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--color-ink)]">
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
               <span>Add link</span>
-              <span className="text-[var(--color-ink-muted)]">
+              <span className="text-[var(--osio-fg-muted)]">
                 Ctrl/Cmd + Shift + L
               </span>
             </li>
@@ -1103,7 +1103,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         spellCheck
         data-placeholder={hasFocus ? placeholder : ""}
         data-empty={hasFocus && isPlaceholderVisible}
-        className={`outline-none whitespace-pre-wrap break-words data-[empty=true]:before:content-[attr(data-placeholder)] data-[empty=true]:before:text-[var(--color-ink-faint)] data-[empty=true]:before:pointer-events-none ${className}`}
+        className={`outline-none whitespace-pre-wrap break-words data-[empty=true]:before:content-[attr(data-placeholder)] data-[empty=true]:before:text-[var(--osio-fg-subtle)] data-[empty=true]:before:pointer-events-none ${className}`}
         style={style}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
@@ -1175,7 +1175,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
             <div
               ref={linkPickerRef}
               data-testid="inline-link-picker"
-              className="fixed z-[10002] w-80 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-xl"
+              className="fixed z-[var(--osio-z-max)] w-80 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-xl"
               style={{
                 left: selectionSnapshot.rect.left,
                 top: Math.max(12, selectionSnapshot.rect.bottom + 8),
@@ -1183,13 +1183,13 @@ export const EditableContent: React.FC<EditableContentProps> = ({
             >
               {linkPicker.mode === "chooser" && (
                 <div className="p-2">
-                  <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]">
+                  <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
                     Link type
                   </p>
                   <div className="flex flex-col gap-1">
                     <button
                       type="button"
-                      className="rounded-lg px-3 py-2 text-left text-sm text-[var(--color-ink)] hover:bg-[var(--color-surface-secondary)]"
+                      className="rounded-lg px-3 py-2 text-left text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-subtle)]"
                       onClick={() =>
                         setLinkPicker({ mode: "external", query: "https://" })
                       }
@@ -1198,7 +1198,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                     </button>
                     <button
                       type="button"
-                      className="rounded-lg px-3 py-2 text-left text-sm text-[var(--color-ink)] hover:bg-[var(--color-surface-secondary)]"
+                      className="rounded-lg px-3 py-2 text-left text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-subtle)]"
                       onClick={() =>
                         setLinkPicker({ mode: "internal", query: "" })
                       }
@@ -1219,7 +1219,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                 >
                   <div
                     id="external-link-label"
-                    className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]"
+                    className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]"
                   >
                     Web URL
                   </div>
@@ -1234,20 +1234,20 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                           : current,
                       )
                     }
-                    className="w-full rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-3 py-2 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+                    className="w-full rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
                     placeholder="https://example.com"
                   />
                   <div className="mt-2 flex items-center justify-end gap-2">
                     <button
                       type="button"
-                      className="rounded-lg px-3 py-2 text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-secondary)]"
+                      className="rounded-lg px-3 py-2 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)]"
                       onClick={() => setLinkPicker(null)}
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="rounded-lg bg-[var(--color-accent)] px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+                      className="rounded-lg bg-[var(--osio-accent)] px-3 py-2 text-sm font-medium text-[var(--osio-accent-fg)] hover:opacity-90"
                     >
                       Apply
                     </button>
@@ -1259,7 +1259,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                 <div className="p-2">
                   <div
                     id="page-link-label"
-                    className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]"
+                    className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]"
                   >
                     Page reference
                   </div>
@@ -1274,12 +1274,12 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                           : current,
                       )
                     }
-                    className="w-full rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-3 py-2 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+                    className="w-full rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
                     placeholder="Search pages"
                   />
                   <div
                     data-testid="inline-page-link-results"
-                    className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-[var(--color-line)]"
+                    className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-[var(--osio-border-default)]"
                   >
                     {selectablePages
                       .filter((workspacePage) => {
@@ -1294,12 +1294,12 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                         <button
                           key={workspacePage._id}
                           type="button"
-                          className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-[var(--color-ink)] hover:bg-[var(--color-surface-secondary)]"
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-subtle)]"
                           onClick={() =>
                             handleApplyInternalLink(workspacePage._id)
                           }
                         >
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-secondary)] text-xs text-[var(--color-ink-muted)]">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--osio-bg-subtle)] text-xs text-[var(--osio-fg-muted)]">
                             {workspacePage.icon ?? "□"}
                           </span>
                           <span className="min-w-0 flex-1 truncate">
@@ -1312,7 +1312,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                       if (!lower) return true;
                       return workspacePage.title.toLowerCase().includes(lower);
                     }).length === 0 && (
-                      <p className="px-3 py-2 text-sm text-[var(--color-ink-faint)]">
+                      <p className="px-3 py-2 text-sm text-[var(--osio-fg-subtle)]">
                         No pages match your search.
                       </p>
                     )}
@@ -1320,7 +1320,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                   <div className="mt-2 flex items-center justify-end gap-2">
                     <button
                       type="button"
-                      className="rounded-lg px-3 py-2 text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-secondary)]"
+                      className="rounded-lg px-3 py-2 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)]"
                       onClick={() => setLinkPicker(null)}
                     >
                       Cancel

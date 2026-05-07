@@ -69,7 +69,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
   const [expanded, setExpanded] = useState(!block.collapsed);
   const updateBlock = usePageStore((s) => s.updateBlock);
   const summaryClassName = [
-    "text-[var(--color-ink)] leading-relaxed py-0.5",
+    "text-[var(--osio-fg-default)] leading-relaxed py-0.5",
     getToggleHeadingClass(block.headingLevel),
   ].join(" ");
   const commitBlockUpdate = useCallback(
@@ -147,12 +147,12 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
         <button
           type="button"
           onClick={handleToggle}
-          className="shrink-0 mt-[3px] w-5 h-5 rounded hover:bg-[var(--color-surface-hover)] flex items-center justify-center"
+          className="shrink-0 mt-[3px] w-5 h-5 rounded hover:bg-[var(--osio-bg-hover)] flex items-center justify-center"
         >
           <ChevronRight
             size={14}
             className={[
-              "text-[var(--color-ink-muted)] transition-transform duration-150",
+              "text-[var(--osio-fg-muted)] transition-transform duration-150",
               expanded ? "rotate-90" : "",
             ].join(" ")}
           />
@@ -174,8 +174,8 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
       {/* Empty toggle hint — only shown when expanded with no children.
           Children themselves are rendered by BlockTree externally. */}
       {expanded && !block.children?.length && (
-        <div className="ml-6 mt-0.5 pl-3 border-l-2 border-[var(--color-line)]">
-          <span className="text-xs text-[var(--color-ink-faint)] py-1 italic">
+        <div className="ml-6 mt-0.5 pl-3 border-l-2 border-[var(--osio-border-default)]">
+          <span className="text-xs text-[var(--osio-fg-subtle)] py-1 italic">
             Empty toggle
           </span>
         </div>

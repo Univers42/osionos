@@ -190,14 +190,14 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
 
   return (
     <div
-      className="flex flex-col overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)]"
+      className="flex flex-col overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
       style={{
         width,
         height,
         boxShadow: '0 18px 48px rgba(15, 23, 42, 0.16)',
       }}
     >
-      <div className="border-b border-[var(--color-line)] px-2 py-2">
+      <div className="border-b border-[var(--osio-border-default)] px-2 py-2">
         <div className="flex flex-wrap gap-1.5">
           {SOURCE_OPTIONS.map((option) => {
             const isActive = option.id === activeSource;
@@ -208,8 +208,8 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
                 className={[
                   'h-8 rounded-md border px-3 text-xs font-medium transition-colors',
                   isActive
-                    ? 'border-[var(--color-accent)] bg-[rgba(35,131,226,0.12)] text-[var(--color-accent)]'
-                    : 'border-transparent text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-ink)]',
+                    ? 'border-[var(--osio-accent)] bg-[color-mix(in_srgb,var(--osio-accent)_12%,transparent)] text-[var(--osio-accent)]'
+                    : 'border-transparent text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]',
                 ].join(' ')}
                 onClick={() => setActiveSource(option.id)}
               >
@@ -232,8 +232,8 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
                   className={[
                     'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors',
                     isActive
-                      ? 'border-[var(--color-line)] bg-[var(--color-surface-secondary)] text-[var(--color-ink)]'
-                      : 'border-transparent text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-ink)]',
+                      ? 'border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]'
+                      : 'border-transparent text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]',
                   ].join(' ')}
                   onClick={() => setActiveEmojiCategory(category.id)}
                 >

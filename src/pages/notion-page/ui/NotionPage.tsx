@@ -294,12 +294,12 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
         </div>
 
         {commentsOpen ? (
-          <section className="mb-4 max-w-xl rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-3">
+          <section className="mb-4 max-w-xl rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-3">
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-medium text-[var(--color-ink)]">Page comments</p>
+              <p className="text-sm font-medium text-[var(--osio-fg-default)]">Page comments</p>
               <button
                 type="button"
-                className="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+                className="text-xs text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]"
                 onClick={() => setCommentsOpen(false)}
               >
                 Close
@@ -307,17 +307,17 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
             </div>
             <div className="mb-3 max-h-44 space-y-2 overflow-y-auto">
               {comments.length === 0 ? (
-                <p className="text-xs text-[var(--color-ink-muted)]">No comments yet.</p>
+                <p className="text-xs text-[var(--osio-fg-muted)]">No comments yet.</p>
               ) : (
                 comments.map((comment) => (
-                  <article key={comment.id} className="rounded-lg bg-[var(--color-surface-primary)] px-3 py-2">
+                  <article key={comment.id} className="rounded-lg bg-[var(--osio-bg-surface)] px-3 py-2">
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="font-medium text-[var(--color-ink)]">{comment.authorName}</span>
-                      <span className="text-[var(--color-ink-faint)]">
+                      <span className="font-medium text-[var(--osio-fg-default)]">{comment.authorName}</span>
+                      <span className="text-[var(--osio-fg-subtle)]">
                         {new Date(comment.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </span>
                     </div>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--color-ink)]">{comment.body}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--osio-fg-default)]">{comment.body}</p>
                   </article>
                 ))
               )}
@@ -328,12 +328,12 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
                 onChange={(event) => setCommentDraft(event.target.value)}
                 rows={2}
                 placeholder="Write a comment…"
-                className="min-h-10 flex-1 resize-none rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-primary)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
+                className="min-h-10 flex-1 resize-none rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--osio-accent)]"
               />
               <button
                 type="submit"
                 disabled={!commentDraft.trim()}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-accent)] text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Send comment"
               >
                 <Send size={16} />

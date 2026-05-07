@@ -136,10 +136,10 @@ const App: React.FC = () => {
 
   if (!ready) {
     return (
-      <div className="flex items-center justify-center h-screen w-screen bg-[var(--color-surface-primary)]">
+      <div className="flex items-center justify-center h-screen w-screen bg-[var(--osio-bg-page)]">
         <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin w-8 h-8 border-2 border-[var(--color-accent)] border-t-transparent rounded-full" />
-          <p className="text-sm text-[var(--color-ink-muted)]">Signing in...</p>
+          <div className="animate-spin w-8 h-8 border-2 border-[var(--osio-accent)] border-t-transparent rounded-full" />
+          <p className="text-sm text-[var(--osio-fg-muted)]">Signing in...</p>
         </div>
       </div>
     );
@@ -148,7 +148,7 @@ const App: React.FC = () => {
   return (
     <div
       data-testid="app-shell"
-      className="relative flex h-screen w-screen overflow-hidden bg-[var(--color-surface-primary)]"
+      className="relative flex h-screen w-screen overflow-hidden bg-[var(--osio-bg-page)]"
     >
       {/* Left sidebar */}
       <Sidebar

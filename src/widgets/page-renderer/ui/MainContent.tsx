@@ -61,7 +61,7 @@ export const MainContent: React.FC = () => {
   if (showTrash) {
     return (
       <ErrorBoundary>
-        <div className="flex-1 min-w-0 h-full overflow-auto bg-[var(--color-surface-primary)]">
+        <div className="flex-1 min-w-0 h-full overflow-auto bg-[var(--osio-bg-page)]">
           <TrashView />
         </div>
       </ErrorBoundary>
@@ -71,16 +71,16 @@ export const MainContent: React.FC = () => {
   /* ── Home splash (no page selected) ────────────────────────────── */
   if (!activePage) {
     return (
-      <div className="flex-1 min-w-0 flex flex-col items-center justify-center gap-6 h-full bg-[var(--color-surface-primary)]">
+      <div className="flex-1 min-w-0 flex flex-col items-center justify-center gap-6 h-full bg-[var(--osio-bg-page)]">
         <AssetRenderer
           value={persona?.emoji ?? getCollectionEmojiValue("party")}
           size={40}
         />
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-[var(--color-ink)] mb-1">
+          <h1 className="text-2xl font-bold text-[var(--osio-fg-default)] mb-1">
             {persona?.name ?? "Welcome"}
           </h1>
-          <p className="text-sm text-[var(--color-ink-muted)]">
+          <p className="text-sm text-[var(--osio-fg-muted)]">
             {activeWorkspace?.name ?? session?.privateWorkspaces[0]?.name ?? "Your workspace"} is ready.
           </p>
         </div>
@@ -89,7 +89,7 @@ export const MainContent: React.FC = () => {
           disabled={!firstWsId}
           className={[
             "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium",
-            "bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity",
+            "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] hover:opacity-90 transition-opacity",
             "disabled:opacity-40 disabled:cursor-not-allowed",
           ].join(" ")}
           onClick={async () => {
@@ -113,16 +113,16 @@ export const MainContent: React.FC = () => {
 
   if (activePage.kind === "page" && !pageById(activePage.id)) {
     return (
-      <div className="flex-1 min-w-0 flex flex-col items-center justify-center gap-4 h-full bg-[var(--color-surface-primary)]">
-        <h1 className="text-2xl font-bold text-[var(--color-ink)]">
+      <div className="flex-1 min-w-0 flex flex-col items-center justify-center gap-4 h-full bg-[var(--osio-bg-page)]">
+        <h1 className="text-2xl font-bold text-[var(--osio-fg-default)]">
           Page unavailable
         </h1>
-        <p className="text-sm text-[var(--color-ink-muted)] text-center max-w-sm">
+        <p className="text-sm text-[var(--osio-fg-muted)] text-center max-w-sm">
           You do not have access to this page in the current session.
         </p>
         <button
           type="button"
-          className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--color-accent)] text-white hover:opacity-90 transition-opacity"
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] hover:opacity-90 transition-opacity"
           onClick={() =>
             clearActivePage({ activePage: null, navigationPath: [] })
           }
@@ -138,7 +138,7 @@ export const MainContent: React.FC = () => {
     return (
       <ErrorBoundary>
         <Suspense fallback={<LoadingPane />}>
-          <div className="flex-1 min-w-0 h-full overflow-auto bg-[var(--color-surface-primary)]">
+          <div className="flex-1 min-w-0 h-full overflow-auto bg-[var(--osio-bg-page)]">
             <DatabaseBlock databaseId={activePage.databaseId ?? activePage.id} mode="full" />
           </div>
         </Suspense>
@@ -149,7 +149,7 @@ export const MainContent: React.FC = () => {
   if (activePage.kind === "channel") {
     return (
       <ErrorBoundary>
-        <div className="flex-1 min-w-0 h-full overflow-hidden bg-[var(--color-surface-primary)]">
+        <div className="flex-1 min-w-0 h-full overflow-hidden bg-[var(--osio-bg-page)]">
           <ChannelMessagesView
             channelId={activePage.id}
             workspaceId={activePage.workspaceId}
@@ -170,6 +170,6 @@ export const MainContent: React.FC = () => {
 
 const LoadingPane: React.FC = () => (
   <div className="flex-1 flex items-center justify-center h-full">
-    <div className="animate-spin w-6 h-6 border-2 border-[var(--color-accent)] border-t-transparent rounded-full" />
+    <div className="animate-spin w-6 h-6 border-2 border-[var(--osio-accent)] border-t-transparent rounded-full" />
   </div>
 );

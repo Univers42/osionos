@@ -361,28 +361,26 @@ export function clearWorkspaceAppearance() {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
   [
-    '--color-ink',
-    '--color-ink-muted',
-    '--color-surface-primary',
-    '--color-surface-secondary',
-    '--color-surface-hover',
-    '--color-accent',
-    '--color-line',
-    '--color-border',
-    '--color-surface',
+    '--osio-fg-default',
+    '--osio-fg-muted',
+    '--osio-bg-page',
+    '--osio-bg-surface',
+    '--osio-bg-subtle',
+    '--osio-bg-hover',
+    '--osio-accent',
+    '--osio-border-default',
   ].forEach((name) => root.style.removeProperty(name));
 }
 
 export function applyWorkspaceAppearance(appearance: WorkspaceAppearance) {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
-  root.style.setProperty('--color-ink', appearance.tokens.ink);
-  root.style.setProperty('--color-ink-muted', appearance.tokens.muted);
-  root.style.setProperty('--color-surface-primary', appearance.tokens.surface);
-  root.style.setProperty('--color-surface-secondary', appearance.tokens.surfaceSecondary);
-  root.style.setProperty('--color-surface-hover', appearance.tokens.surfaceHover);
-  root.style.setProperty('--color-accent', appearance.tokens.accent);
-  root.style.setProperty('--color-line', appearance.tokens.line);
-  root.style.setProperty('--color-border', appearance.tokens.line);
-  root.style.setProperty('--color-surface', appearance.tokens.surface);
+  root.style.setProperty('--osio-fg-default', appearance.tokens.ink);
+  root.style.setProperty('--osio-fg-muted', appearance.tokens.muted);
+  root.style.setProperty('--osio-bg-page', appearance.tokens.surface);
+  root.style.setProperty('--osio-bg-surface', appearance.tokens.surface);
+  root.style.setProperty('--osio-bg-subtle', appearance.tokens.surfaceSecondary);
+  root.style.setProperty('--osio-bg-hover', appearance.tokens.surfaceHover);
+  root.style.setProperty('--osio-accent', appearance.tokens.accent);
+  root.style.setProperty('--osio-border-default', appearance.tokens.line);
 }

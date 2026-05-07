@@ -129,14 +129,14 @@ const prompts: Record<SettingsTab, { title: string; subtitle: string }> = {
   plans: { title: 'Explore plans', subtitle: 'Compare all osionos plans' },
 };
 
-const rowBorder = 'border-t border-[var(--color-line)]';
+const rowBorder = 'border-t border-[var(--osio-border-default)]';
 
 const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 'default' | 'primary' | 'danger' | 'ghost' }> = ({ className = '', tone = 'default', ...props }) => {
   const toneClass = {
-    default: 'border border-[var(--color-line)] bg-[var(--color-surface-primary)] text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)]',
-    primary: 'bg-[var(--color-accent)] text-white hover:opacity-90',
-    danger: 'bg-red-500/10 text-red-500 hover:bg-red-500/15',
-    ghost: 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]',
+    default: 'border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]',
+    primary: 'bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] hover:opacity-90',
+    danger: 'bg-[var(--osio-danger)]/10 text-[var(--osio-danger)] hover:bg-[var(--osio-danger)]/15',
+    ghost: 'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]',
   }[tone];
 
   return <button type="button" className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${toneClass} ${className}`} {...props} />;
@@ -150,14 +150,14 @@ const SelectButton: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 );
 
 const Switch: React.FC<{ checked?: boolean }> = ({ checked = false }) => (
-  <span className={`flex h-[18px] w-[34px] rounded-full p-0.5 transition ${checked ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-surface-tertiary)]'}`}>
-    <span className={`h-3.5 w-3.5 rounded-full bg-white transition ${checked ? 'translate-x-4' : ''}`} />
+  <span className={`flex h-[18px] w-[34px] rounded-full p-0.5 transition ${checked ? 'bg-[var(--osio-accent)]' : 'bg-[var(--osio-bg-muted)]'}`}>
+    <span className={`h-3.5 w-3.5 rounded-full bg-[var(--osio-accent-fg)] transition ${checked ? 'translate-x-4' : ''}`} />
   </span>
 );
 
 const Section: React.FC<{ title: string; children: React.ReactNode; className?: string }> = ({ title, children, className = '' }) => (
   <section className={`space-y-4 ${className}`}>
-    <h3 className="border-b border-[var(--color-line)] pb-3 text-base font-medium text-[var(--color-ink)]">{title}</h3>
+    <h3 className="border-b border-[var(--osio-border-default)] pb-3 text-base font-medium text-[var(--osio-fg-default)]">{title}</h3>
     <div>{children}</div>
   </section>
 );
@@ -171,26 +171,26 @@ const SettingRow: React.FC<{
 }> = ({ title, description, action, stack = false, danger = false }) => (
   <div className={`flex w-full gap-3 py-3 ${rowBorder} ${stack ? 'flex-col items-start' : 'flex-wrap items-center justify-between'}`}>
     <div className="min-w-[220px] flex-1">
-      <div className={`text-sm font-medium ${danger ? 'text-red-500' : 'text-[var(--color-ink)]'}`}>{title}</div>
-      {description && <div className="mt-1 text-[13px] leading-[18px] text-[var(--color-ink-muted)]">{description}</div>}
+      <div className={`text-sm font-medium ${danger ? 'text-[var(--osio-danger)]' : 'text-[var(--osio-fg-default)]'}`}>{title}</div>
+      {description && <div className="mt-1 text-sm leading-[18px] text-[var(--osio-fg-muted)]">{description}</div>}
     </div>
     {action && <div className="flex shrink-0 items-center justify-end gap-2">{action}</div>}
   </div>
 );
 
 const DataTable: React.FC<{ headers: string[]; rows: React.ReactNode[][]; className?: string }> = ({ headers, rows, className = '' }) => (
-  <div className={`overflow-x-auto rounded-lg border border-[var(--color-line)] ${className}`}>
+  <div className={`overflow-x-auto rounded-lg border border-[var(--osio-border-default)] ${className}`}>
     <table className="w-full min-w-[560px] table-fixed text-sm">
-      <thead className="bg-[var(--color-surface-secondary)] text-left text-xs font-medium text-[var(--color-ink-muted)]">
+      <thead className="bg-[var(--osio-bg-subtle)] text-left text-xs font-medium text-[var(--osio-fg-muted)]">
         <tr>{headers.map((header) => <th key={header} className="px-3 py-2">{header}</th>)}</tr>
       </thead>
-      <tbody className="divide-y divide-[var(--color-line)]">
+      <tbody className="divide-y divide-[var(--osio-border-default)]">
         {rows.map((row) => {
           const firstCell = row[0];
           const rowKey = React.isValidElement(firstCell) && firstCell.key ? String(firstCell.key) : row.map(String).join('|');
           return (
-          <tr key={rowKey} className="hover:bg-[var(--color-surface-hover)]">
-            {row.map((cell, cellIndex) => <td key={headers[cellIndex] ?? String(cell)} className="px-3 py-2 align-middle text-[var(--color-ink)]">{cell}</td>)}
+          <tr key={rowKey} className="hover:bg-[var(--osio-bg-hover)]">
+            {row.map((cell, cellIndex) => <td key={`${rowKey}-${cellIndex}`} className="px-3 py-2 align-middle text-[var(--osio-fg-default)]">{cell}</td>)}
           </tr>
           );
         })}
@@ -200,32 +200,32 @@ const DataTable: React.FC<{ headers: string[]; rows: React.ReactNode[][]; classN
 );
 
 const MiniTabs: React.FC<{ tabs: Array<{ label: string; count?: number }>; active?: string }> = ({ tabs, active }) => (
-  <div className="flex flex-wrap items-center gap-1 rounded-lg bg-[var(--color-surface-secondary)] p-1">
+  <div className="flex flex-wrap items-center gap-1 rounded-lg bg-[var(--osio-bg-subtle)] p-1">
     {tabs.map((tab) => (
       <button
         key={tab.label}
         type="button"
-        className={`rounded-md px-3 py-1.5 text-sm font-medium ${active === tab.label ? 'bg-[var(--color-surface-primary)] text-[var(--color-ink)] shadow-sm' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]'}`}
+        className={`rounded-md px-3 py-1.5 text-sm font-medium ${active === tab.label ? 'bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-sm' : 'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]'}`}
       >
-        {tab.label}{typeof tab.count === 'number' && <span className="ml-1 text-[var(--color-ink-faint)]">{tab.count}</span>}
+        {tab.label}{typeof tab.count === 'number' && <span className="ml-1 text-[var(--osio-fg-subtle)]">{tab.count}</span>}
       </button>
     ))}
   </div>
 );
 
 const Avatar: React.FC<{ value?: string; label?: string; size?: number }> = ({ value = '👤', label, size = 28 }) => (
-  <span className="flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--color-line)] bg-[var(--color-surface-secondary)]" style={{ width: size, height: size }}>
+  <span className="flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)]" style={{ width: size, height: size }}>
     <AssetRenderer value={value} size={Math.max(16, size - 8)} aria-label={label} />
   </span>
 );
 
 const FeatureCard: React.FC<{ icon?: React.ReactNode; title: string; description: string; action?: React.ReactNode }> = ({ icon, title, description, action }) => (
-  <div className="rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-4">
+  <div className="rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4">
     <div className="flex items-start gap-3">
-      {icon && <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-surface-secondary)] text-[var(--color-accent)]">{icon}</span>}
+      {icon && <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--osio-bg-subtle)] text-[var(--osio-accent)]">{icon}</span>}
       <div className="min-w-0 flex-1">
-        <h4 className="text-sm font-medium text-[var(--color-ink)]">{title}</h4>
-        <p className="mt-1 text-[13px] leading-[18px] text-[var(--color-ink-muted)]">{description}</p>
+        <h4 className="text-sm font-medium text-[var(--osio-fg-default)]">{title}</h4>
+        <p className="mt-1 text-sm leading-[18px] text-[var(--osio-fg-muted)]">{description}</p>
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -246,7 +246,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
         <Avatar value={member.emoji} label={member.name} />
         <div className="min-w-0">
           <div className="truncate font-medium">{member.name}</div>
-          <div className="truncate text-xs text-[var(--color-ink-muted)]">{member.email}</div>
+          <div className="truncate text-xs text-[var(--osio-fg-muted)]">{member.email}</div>
         </div>
       </div>,
       <SelectButton key={`${member.email}-access`}>{index % 3 === 0 ? '2 pages' : '1 page'}</SelectButton>,
@@ -256,14 +256,14 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
   );
 
   return (
-    <div className="fixed inset-0 z-[9000] flex items-center justify-center bg-[var(--color-backdrop)] px-4 py-6">
-      <div className="flex h-[min(900px,94vh)] w-full max-w-6xl overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-2xl">
-        <aside className="w-[240px] shrink-0 overflow-y-auto border-r border-[var(--color-line)] bg-[var(--color-surface-secondary)]">
+    <div className="fixed inset-0 z-[var(--osio-z-modal)] flex items-center justify-center bg-[var(--osio-overlay)] px-4 py-6">
+      <div className="flex h-[min(900px,94vh)] w-full max-w-6xl overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl">
+        <aside className="w-[240px] shrink-0 overflow-y-auto border-r border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)]">
           <div className="flex min-h-full flex-col justify-between">
             <div className="space-y-4 p-2">
               {tabGroups.map((group) => (
                 <div key={group.label}>
-                  <p className="px-2 py-1.5 text-xs font-medium text-[var(--color-ink-faint)]">{group.label}</p>
+                  <p className="px-2 py-1.5 text-xs font-medium text-[var(--osio-fg-subtle)]">{group.label}</p>
                   <div className="space-y-0.5">
                     {group.tabs.map((tab) => (
                       <button
@@ -272,7 +272,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
                         role="tab"
                         aria-selected={activeTab === tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm ${activeTab === tab.id ? 'bg-[var(--color-surface-tertiary)] text-[var(--color-ink)]' : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]'}`}
+                        className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm ${activeTab === tab.id ? 'bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]' : 'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]'}`}
                       >
                         {tab.id === 'profile' ? <Avatar value={persona?.emoji} label={persona?.name} size={22} /> : <span className="flex h-5 w-5 items-center justify-center">{tab.icon}</span>}
                         <span className="truncate">{tab.id === 'profile' ? persona?.name ?? tab.label : tab.label}</span>
@@ -282,7 +282,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
                 </div>
               ))}
             </div>
-            <div className="sticky bottom-0 border-t border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-4">
+            <div className="sticky bottom-0 border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
               <Button className="w-full" onClick={() => setActiveTab('ai')}>
                 <Sparkles size={15} /> Get osionos AI
               </Button>
@@ -290,11 +290,11 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
           </div>
         </aside>
 
-        <section className="relative flex-1 overflow-hidden bg-[var(--color-surface-primary)]" role="tabpanel" aria-label={current.title}>
+        <section className="relative flex-1 overflow-hidden bg-[var(--osio-bg-surface)]" role="tabpanel" aria-label={current.title}>
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-3 top-3 z-10 rounded-full bg-[var(--color-surface-secondary)] p-1.5 text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]"
+            className="absolute right-3 top-3 z-[var(--osio-z-raised)] rounded-full bg-[var(--osio-bg-subtle)] p-1.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
             aria-label="Close settings"
           >
             <X size={16} />
@@ -302,8 +302,8 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
           <div className="h-full overflow-y-auto px-[clamp(18px,5vw,60px)] py-9">
             <div className="mx-auto flex w-full max-w-[800px] flex-col gap-9">
               <header className="space-y-2">
-                <h2 className="text-[26px] font-semibold leading-8 text-[var(--color-ink)]">{current.title}</h2>
-                <p className="text-base leading-6 text-[var(--color-ink)]">{current.subtitle}</p>
+                <h2 className="text-2xl font-semibold leading-8 text-[var(--osio-fg-default)]">{current.title}</h2>
+                <p className="text-base leading-6 text-[var(--osio-fg-default)]">{current.subtitle}</p>
               </header>
 
               {activeTab === 'profile' && <ProfilePanel persona={persona} />}
@@ -335,12 +335,12 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
     <Section title="Account">
       <div className="flex items-center gap-5 pb-3">
         <Avatar value={persona?.emoji} label={persona?.name} size={60} />
-        <label className="w-[260px] text-xs text-[var(--color-ink-muted)]">
+        <label className="w-[260px] text-xs text-[var(--osio-fg-muted)]">
           <span>Preferred name</span>
-          <input className="mt-1 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-3 py-2 text-sm text-[var(--color-ink)] outline-none" defaultValue={persona?.name ?? ''} />
+          <input className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none" defaultValue={persona?.name ?? ''} />
         </label>
       </div>
-      <p className="text-sm text-[var(--color-ink-muted)]"><span className="text-[var(--color-accent)]">Create a custom self-portrait</span> with osionos Faces</p>
+      <p className="text-sm text-[var(--osio-fg-muted)]"><span className="text-[var(--osio-accent)]">Create a custom self-portrait</span> with osionos Faces</p>
     </Section>
     <Section title="Account security">
       <SettingRow title="Email" description={persona?.email ?? 'dev.pro.photo@gmail.com'} action={<Button>Manage emails</Button>} />
@@ -371,7 +371,7 @@ const PreferencesPanel = () => (
   <>
     <Section title="Appearance">
       <SettingRow title="Theme" description="Choose a theme for osionos on this device" action={<SelectButton>Use system setting</SelectButton>} />
-      <div className="mt-4 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-4">
+      <div className="mt-4 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
         <WorkspaceThemeControls compact />
       </div>
     </Section>
@@ -401,12 +401,12 @@ const PreferencesPanel = () => (
 const GeneralPanel: React.FC<{ workspaceName?: string; workspaceId?: string; membersCount: number }> = ({ workspaceName = '42 school', workspaceId = '1edd3106-e5a4-4068-92a1-6b6e55a61ee6', membersCount }) => (
   <>
     <Section title="Workspace settings">
-      <SettingRow stack title="Workspace name" description="Your workspace name can be up to 65 characters" action={<input className="w-full max-w-[400px] rounded-md border border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-3 py-2 text-sm outline-none" defaultValue={workspaceName} maxLength={65} />} />
-      <SettingRow stack title="Icon" description="Upload an image or pick an emoji. This icon will appear in your sidebar and notifications." action={<div className="flex h-[72px] w-[72px] items-center justify-center rounded-md border border-[var(--color-line)] text-5xl">🌏</div>} />
+      <SettingRow stack title="Workspace name" description="Your workspace name can be up to 65 characters" action={<input className="w-full max-w-[400px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" defaultValue={workspaceName} maxLength={65} />} />
+      <SettingRow stack title="Icon" description="Upload an image or pick an emoji. This icon will appear in your sidebar and notifications." action={<div className="flex h-[72px] w-[72px] items-center justify-center rounded-md border border-[var(--osio-border-default)] text-5xl">🌏</div>} />
       <SettingRow title="Custom landing page" description={<>When a new member joins this workspace, a copy of this page will be added to their <b>Private</b> pages</>} action={<SelectButton>Select page</SelectButton>} />
     </Section>
     <Section title="Sidebar">
-      <SettingRow title={<span className="inline-flex items-center gap-2">Try the new sidebar <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-xs text-blue-500">New</span></span>} description="Keep your pages, meetings, and AI within reach." action={<Switch checked />} />
+      <SettingRow title={<span className="inline-flex items-center gap-2">Try the new sidebar <span className="rounded bg-[var(--osio-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--osio-accent)]">New</span></span>} description="Keep your pages, meetings, and AI within reach." action={<Switch checked />} />
       <SettingRow title="Show other osionos apps in sidebar" description="Show osionos Calendar and osionos Mail in your sidebar" action={<Switch checked />} />
     </Section>
     <Section title="Export">
@@ -498,11 +498,11 @@ const ImportPanel = () => {
     <>
       <MiniTabs active="Discover" tabs={[{ label: 'Discover' }, { label: 'Completed' }]} />
       <Section title="Import your content">
-        <div className="rounded-xl border border-dashed border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-8 text-center">
-          <Upload className="mx-auto text-[var(--color-accent)]" size={28} />
-          <h4 className="mt-3 font-medium text-[var(--color-ink)]">Import your content to osionos</h4>
-          <p className="mt-2 text-sm text-[var(--color-ink-muted)]">Drag and drop ZIP, CSV, PDF, text, markdown, or HTML files, or <span className="text-[var(--color-accent)]">choose a file</span>.</p>
-          <p className="mt-1 text-xs text-[var(--color-ink-faint)]">ZIP files can be a maximum of 5GB</p>
+        <div className="rounded-xl border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center">
+          <Upload className="mx-auto text-[var(--osio-accent)]" size={28} />
+          <h4 className="mt-3 font-medium text-[var(--osio-fg-default)]">Import your content to osionos</h4>
+          <p className="mt-2 text-sm text-[var(--osio-fg-muted)]">Drag and drop ZIP, CSV, PDF, text, markdown, or HTML files, or <span className="text-[var(--osio-accent)]">choose a file</span>.</p>
+          <p className="mt-1 text-xs text-[var(--osio-fg-subtle)]">ZIP files can be a maximum of 5GB</p>
         </div>
       </Section>
       <Section title="File-based imports"><div className="grid gap-3 sm:grid-cols-2">{files.map((file) => <FeatureCard key={file} icon={<FileText size={16} />} title={file} description={`Import ${file.toLowerCase()} content from files`} />)}</div></Section>
@@ -522,7 +522,7 @@ const PageSettingsPanel = () => (
     <Section title="Page switches"><SettingRow title="Small text" action={<Switch />} /><SettingRow title="Full width" action={<Switch />} /><SettingRow title="Lock page" action={<Switch />} /></Section>
     <Section title="History & connections">
       {['Updates & analytics', 'Version history', 'Notify me', 'Comments', 'Connections · None'].map((label) => <SettingRow key={label} title={label} action={<ChevronDown size={16} />} />)}
-      <p className="pt-3 text-xs text-[var(--color-ink-faint)]">Word count: 34 words · Last edited by dylan lesieur · Apr 13, 2026, 8:08 PM</p>
+      <p className="pt-3 text-xs text-[var(--osio-fg-subtle)]">Word count: 34 words · Last edited by dylan lesieur · Apr 13, 2026, 8:08 PM</p>
     </Section>
   </>
 );
@@ -547,14 +547,14 @@ const PublicPagesPanel = () => (
     <Section title="osionos Sites"><FeatureCard icon={<Globe size={16} />} title="puzzled-basil-cc8.osionos.site" description="Published workspace site domain" action={<Button>Settings</Button>} /></Section>
     <Section title="Public forms"><FeatureCard title="New member here !" description="Anyone with the link · Universe42" action={<Button>Open</Button>} /></Section>
     <Section title="Shared AI chats"><SettingRow title="No shared chats" description="Shared conversations will appear here." /></Section>
-    <Section title="Domains"><DataTable headers={['Domain', 'Homepage', 'Status']} rows={[[ 'puzzled-basil-cc8.osionos.site', 'Universe42', <span key="site-live" className="text-green-500">Live</span> ]]} /><Button className="mt-4">New domain</Button></Section>
+    <Section title="Domains"><DataTable headers={['Domain', 'Homepage', 'Status']} rows={[[ 'puzzled-basil-cc8.osionos.site', 'Universe42', <span key="site-live" className="text-[var(--osio-accent)]">Live</span> ]]} /><Button className="mt-4">New domain</Button></Section>
     <Section title="Settings"><SettingRow title="Always indicate that a page is live as a osionos Site" action={<Switch checked />} /></Section>
   </>
 );
 
 const LibraryPanel = () => (
   <>
-    <Section title="Emoji"><div className="grid gap-3 sm:grid-cols-3">{['😀', '🚀', '🌏', '🧠', '📚', '✨'].map((emoji) => <button key={emoji} type="button" className="rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-5 text-3xl hover:bg-[var(--color-surface-hover)]">{emoji}</button>)}</div><Button className="mt-4"><Upload size={15} /> Upload emoji</Button></Section>
+    <Section title="Emoji"><div className="grid gap-3 sm:grid-cols-3">{['😀', '🚀', '🌏', '🧠', '📚', '✨'].map((emoji) => <button key={emoji} type="button" className="rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-5 text-3xl hover:bg-[var(--osio-bg-hover)]">{emoji}</button>)}</div><Button className="mt-4"><Upload size={15} /> Upload emoji</Button></Section>
     <Section title="Photos"><div className="grid gap-3 sm:grid-cols-3">{['Cover image', 'Workspace icon', 'Avatar photo'].map((item) => <FeatureCard key={item} icon={<Upload size={16} />} title={item} description="Upload, preview, and reuse media in the workspace library." />)}</div></Section>
   </>
 );
@@ -562,7 +562,7 @@ const LibraryPanel = () => (
 const TeamspacesPanel: React.FC<{ workspaceName?: string }> = ({ workspaceName = '42 school HQ' }) => (
   <>
     <Section title="Default teamspaces"><SettingRow title={workspaceName} description="Default workspace teamspace" action={<Button>Update</Button>} /><SettingRow title="Limit teamspace creation to workspace owners" description="Allow only workspace owners to create teamspaces" action={<Switch />} /></Section>
-    <Section title="Teamspaces"><p className="mb-3 text-sm text-[var(--color-ink-muted)]">Manage all teamspaces you have access to here.</p><MiniTabs active="Active" tabs={[{ label: 'Active' }, { label: 'Owner' }, { label: 'Access' }, { label: 'Security' }]} /><DataTable className="mt-4" headers={['Teamspace', 'Owners', 'Access', 'Updated']} rows={[[workspaceName, 'dylan lesieur', 'Default · 1 member • Joined', '9/11/24']]} /><Button className="mt-4">New teamspace</Button></Section>
+    <Section title="Teamspaces"><p className="mb-3 text-sm text-[var(--osio-fg-muted)]">Manage all teamspaces you have access to here.</p><MiniTabs active="Active" tabs={[{ label: 'Active' }, { label: 'Owner' }, { label: 'Access' }, { label: 'Security' }]} /><DataTable className="mt-4" headers={['Teamspace', 'Owners', 'Access', 'Updated']} rows={[[workspaceName, 'dylan lesieur', 'Default · 1 member • Joined', '9/11/24']]} /><Button className="mt-4">New teamspace</Button></Section>
   </>
 );
 
@@ -583,9 +583,9 @@ const PlansPanel = () => {
   ];
   return (
     <>
-      <FeatureCard title="Your current plan" description="Education Plus · For students & educators" action={<Check size={18} className="text-green-500" />} />
+      <FeatureCard title="Your current plan" description="Education Plus · For students & educators" action={<Check size={18} className="text-[var(--osio-accent)]" />} />
       <FeatureCard icon={<Sparkles size={16} />} title="osionos AI" description="Upgrade to search everywhere, automate meeting notes & more" action={<Button tone="primary">Upgrade</Button>} />
-      <Section title="Compare all plans"><div className="grid gap-3 md:grid-cols-2">{plans.map(([name, description]) => <div key={name} className="rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-4"><div className="flex items-center justify-between"><h4 className="font-semibold text-[var(--color-ink)]">{name}</h4>{name !== 'Free' && <span className="text-xs text-[var(--color-ink-muted)]">billed monthly</span>}</div><p className="mt-3 text-sm leading-5 text-[var(--color-ink-muted)]">{description}</p><Button className="mt-4 w-full">Upgrade</Button></div>)}</div></Section>
+      <Section title="Compare all plans"><div className="grid gap-3 md:grid-cols-2">{plans.map(([name, description]) => <div key={name} className="rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4"><div className="flex items-center justify-between"><h4 className="font-semibold text-[var(--osio-fg-default)]">{name}</h4>{name !== 'Free' && <span className="text-xs text-[var(--osio-fg-muted)]">billed monthly</span>}</div><p className="mt-3 text-sm leading-5 text-[var(--osio-fg-muted)]">{description}</p><Button className="mt-4 w-full">Upgrade</Button></div>)}</div></Section>
       <Section title="FAQ"><SettingRow title="Plans, Billing & Payment" action={<ChevronDown size={16} />} /><SettingRow title="Message support" action={<ChevronDown size={16} />} /></Section>
     </>
   );

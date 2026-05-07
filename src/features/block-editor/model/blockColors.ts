@@ -2,15 +2,15 @@ import type { CSSProperties } from "react";
 import type { Block } from "@/entities/block";
 
 export const BLOCK_COLOR_OPTIONS = [
-  { label: "Gray", text: "#4b5563", background: "#e5e7eb" },
-  { label: "Brown", text: "#7c2d12", background: "#fed7aa" },
-  { label: "Orange", text: "#9a3412", background: "#ffedd5" },
-  { label: "Yellow", text: "#854d0e", background: "#fef08a" },
-  { label: "Green", text: "#166534", background: "#bbf7d0" },
-  { label: "Blue", text: "#1d4ed8", background: "#bfdbfe" },
-  { label: "Purple", text: "#6b21a8", background: "#e9d5ff" },
-  { label: "Pink", text: "#9d174d", background: "#fbcfe8" },
-  { label: "Red", text: "#b91c1c", background: "#fecaca" },
+  { label: "Gray", text: "var(--osio-block-tint-gray-fg)", background: "var(--osio-block-tint-gray-bg)" },
+  { label: "Brown", text: "var(--osio-block-tint-brown-fg)", background: "var(--osio-block-tint-brown-bg)" },
+  { label: "Orange", text: "var(--osio-block-tint-orange-fg)", background: "var(--osio-block-tint-orange-bg)" },
+  { label: "Yellow", text: "var(--osio-block-tint-yellow-fg)", background: "var(--osio-block-tint-yellow-bg)" },
+  { label: "Green", text: "var(--osio-block-tint-green-fg)", background: "var(--osio-block-tint-green-bg)" },
+  { label: "Blue", text: "var(--osio-block-tint-blue-fg)", background: "var(--osio-block-tint-blue-bg)" },
+  { label: "Purple", text: "var(--osio-block-tint-purple-fg)", background: "var(--osio-block-tint-purple-bg)" },
+  { label: "Pink", text: "var(--osio-block-tint-pink-fg)", background: "var(--osio-block-tint-pink-bg)" },
+  { label: "Red", text: "var(--osio-block-tint-red-fg)", background: "var(--osio-block-tint-red-bg)" },
 ] as const;
 
 const RGAA_TEXT_CONTRAST = 4.5;
@@ -19,12 +19,17 @@ const DEFAULT_LIGHT_TEXT = "#ffffff";
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   const normalized = hex.trim().replace(/^#/, "");
-  if (!/^[0-9a-f]{6}$/i.test(normalized)) return null;
+  if (!/^[0-9a-f]{6}([0-9a-f]{2})?$/i.test(normalized)) return null;
+  const rgb = normalized.slice(0, 6);
   return {
-    r: Number.parseInt(normalized.slice(0, 2), 16),
-    g: Number.parseInt(normalized.slice(2, 4), 16),
-    b: Number.parseInt(normalized.slice(4, 6), 16),
+    r: Number.parseInt(rgb.slice(0, 2), 16),
+    g: Number.parseInt(rgb.slice(2, 4), 16),
+    b: Number.parseInt(rgb.slice(4, 6), 16),
   };
+}
+
+function isCssVariable(value: string): boolean {
+  return value.trim().startsWith("var(");
 }
 
 function toLinear(value: number): number {
@@ -51,6 +56,7 @@ export function contrastRatio(foreground: string, background: string): number {
 
 export function getAccessibleTextColor(backgroundColor?: string): string | undefined {
   if (!backgroundColor) return undefined;
+  if (isCssVariable(backgroundColor)) return undefined;
   const darkContrast = contrastRatio(DEFAULT_DARK_TEXT, backgroundColor);
   const lightContrast = contrastRatio(DEFAULT_LIGHT_TEXT, backgroundColor);
   return darkContrast >= lightContrast ? DEFAULT_DARK_TEXT : DEFAULT_LIGHT_TEXT;

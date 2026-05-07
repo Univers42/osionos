@@ -147,22 +147,22 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     <div
       ref={ref}
       data-testid="slash-command-menu"
-      className="fixed z-[10000] flex max-h-[26rem] overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-2xl"
+      className="fixed z-[var(--osio-z-popover)] flex max-h-[26rem] overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl"
       style={{ top: position.y + 4, left: position.x }}
     >
       <div className="flex w-64 min-w-0 flex-col">
         <div className="max-h-[26rem] overflow-y-auto py-1.5">
           {sections.length === 0 ? (
-            <div className="px-3 py-5 text-xs text-[var(--color-ink-faint)]">
+            <div className="px-3 py-5 text-xs text-[var(--osio-fg-subtle)]">
               No commands match “{filter}”.
             </div>
           ) : (
             sections.map((section, sectionIndex) => (
               <React.Fragment key={section.id}>
                 {sectionIndex > 0 && (
-                  <div className="mx-3 my-1 border-t border-[var(--color-line)]" />
+                  <div className="mx-3 my-1 border-t border-[var(--osio-border-default)]" />
                 )}
-                <p className="px-3 py-1 text-[9px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]">
+                <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
                   {section.label}
                 </p>
                 {section.items.map((item) => {
@@ -181,17 +181,17 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                       data-command-label={item.label}
                       className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${
                         isActive || isPickerSelected
-                          ? "bg-[var(--color-surface-hover)]"
-                          : "hover:bg-[var(--color-surface-hover)]"
+                          ? "bg-[var(--osio-bg-hover)]"
+                          : "hover:bg-[var(--osio-bg-hover)]"
                       }`}
                       onMouseEnter={() => setActiveIdx(idx)}
                       onClick={() => handleCommandSelect(item)}
                     >
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-secondary)] text-[12px] text-[var(--color-ink-muted)] [&>svg]:h-3.5 [&>svg]:w-3.5">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--osio-bg-subtle)] text-xs text-[var(--osio-fg-muted)] [&>svg]:h-3.5 [&>svg]:w-3.5">
                         {item.icon}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[13px] text-[var(--color-ink)]">
+                        <span className="block text-sm text-[var(--osio-fg-default)]">
                           {item.label}
                         </span>
                       </span>
@@ -207,20 +207,20 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       {activeMediaKind && (
         <div
           data-testid="slash-media-picker"
-          className="flex w-[296px] min-w-0 flex-col border-l border-[var(--color-line)]"
+          className="flex w-[296px] min-w-0 flex-col border-l border-[var(--osio-border-default)]"
         >
-          <div className="flex items-center justify-between border-b border-[var(--color-line)] px-3 py-2">
+          <div className="flex items-center justify-between border-b border-[var(--osio-border-default)] px-3 py-2">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-faint)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--osio-fg-subtle)]">
                 Media
               </p>
-              <p className="text-[13px] text-[var(--color-ink)]">
+              <p className="text-sm text-[var(--osio-fg-default)]">
                 {activeMediaCommand?.label ?? activeMediaKind}
               </p>
             </div>
             <button
               type="button"
-              className="rounded-md px-2 py-1 text-[11px] font-medium text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-ink)]"
+              className="rounded-md px-2 py-1 text-xs font-medium text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]"
               onClick={() => setActiveMediaKind(null)}
             >
               Close

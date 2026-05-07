@@ -48,8 +48,8 @@ export const TodoBlockEditor: React.FC<{
         className={[
           "shrink-0 mt-[3px] w-4 h-4 rounded border flex items-center justify-center cursor-pointer",
           block.checked
-            ? "bg-[var(--color-accent)] border-[var(--color-accent)] text-white"
-            : "border-[var(--color-line)] bg-[var(--color-surface-primary)] hover:border-[var(--color-ink-muted)]",
+            ? "bg-[var(--osio-accent)] border-[var(--osio-accent)] text-[var(--osio-accent-fg)]"
+            : "border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] hover:border-[var(--osio-fg-muted)]",
         ].join(" ")}
       >
         {block.checked && (
@@ -70,8 +70,8 @@ export const TodoBlockEditor: React.FC<{
           className={[
             "text-sm leading-relaxed py-0.5",
             block.checked
-              ? "text-[var(--color-ink-muted)] line-through"
-              : "text-[var(--color-ink)]",
+              ? "text-[var(--osio-fg-muted)] line-through"
+              : "text-[var(--osio-fg-default)]",
           ].join(" ")}
           style={style}
           placeholder={getBlockPlaceholder(block, "To-do")}

@@ -38,15 +38,15 @@ export const SidebarSection: React.FC<Props> = ({
         <button
           type="button"
           onClick={() => setOpen(o => !o)}
-          className="flex items-center gap-1 flex-1 min-w-0 rounded-[6px] h-full hover:bg-[var(--color-surface-hover)] px-1.5 -mx-1.5"
+          className="flex items-center gap-1 flex-1 min-w-0 rounded-[6px] h-full hover:bg-[var(--osio-bg-hover)] px-1.5 -mx-1.5"
         >
-          <span className="text-[12px] leading-none font-medium text-[var(--color-ink-faint)] truncate">
+          <span className="text-xs leading-none font-medium text-[var(--osio-fg-subtle)] truncate">
             {label}
           </span>
           <ChevronDown
             size={12}
             className={[
-              'text-[var(--color-ink-faint)] shrink-0 transition-transform duration-100',
+              'text-[var(--osio-fg-subtle)] shrink-0 transition-transform duration-100',
               'opacity-0 group-hover:opacity-100',
               open ? '' : '-rotate-90',
             ].join(' ')}
@@ -59,7 +59,7 @@ export const SidebarSection: React.FC<Props> = ({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onMore(); }}
-              className="p-0.5 rounded text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]"
+              className="p-0.5 rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
               title="Open menu"
             >
               <MoreHorizontal size={14} />
@@ -69,7 +69,7 @@ export const SidebarSection: React.FC<Props> = ({
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onAdd(); }}
-              className="p-0.5 rounded text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]"
+              className="p-0.5 rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
               title={`Add to ${label}`}
             >
               <Plus size={14} />

@@ -159,12 +159,12 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
   return (
     <div
       ref={ref}
-      className="fixed z-[10000] flex max-h-[26rem] w-72 overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-2xl"
+      className="fixed z-[var(--osio-z-popover)] flex max-h-[26rem] w-72 overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl"
       style={{ top: position.y + 4, left: position.x }}
     >
       <div className="flex flex-1 flex-col">
         <div className="max-h-[26rem] overflow-y-auto py-1.5">
-          <p className="px-3 py-1 text-[9px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]">
+          <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
             Link to page
           </p>
           {selectorOptions.map((option, idx) => {
@@ -190,8 +190,8 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
                 type="button"
                 className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${
                   isActive
-                    ? "bg-[var(--color-surface-hover)]"
-                    : "hover:bg-[var(--color-surface-hover)]"
+                    ? "bg-[var(--osio-bg-hover)]"
+                    : "hover:bg-[var(--osio-bg-hover)]"
                 }`}
                 onMouseEnter={() => setActiveIdx(idx)}
                 onClick={() => {
@@ -203,15 +203,15 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
                   onSelect(option.pageId);
                 }}
               >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-secondary)] text-[14px]">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--osio-bg-subtle)] text-base">
                   {option.kind === "page" && option.icon ? (
                     option.icon
                   ) : (
-                    <Icon className="h-3.5 w-3.5 text-[var(--color-ink-muted)]" />
+                    <Icon className="h-3.5 w-3.5 text-[var(--osio-fg-muted)]" />
                   )}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] text-[var(--color-ink)]">
+                  <span className="block truncate text-sm text-[var(--osio-fg-default)]">
                     {label}
                   </span>
                 </span>

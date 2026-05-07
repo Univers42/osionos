@@ -345,7 +345,7 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
                                 return (
                                   <Hash
                                     size={14}
-                                    className="text-[var(--color-ink-faint)]"
+                                    className="text-[var(--osio-fg-subtle)]"
                                   />
                                 );
                               }
@@ -361,7 +361,7 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
                           {item.hasChildren && (
                             <ChevronRight
                               size={12}
-                              className="text-[var(--color-ink-faint)]"
+                              className="text-[var(--osio-fg-subtle)]"
                             />
                           )}
                         </button>

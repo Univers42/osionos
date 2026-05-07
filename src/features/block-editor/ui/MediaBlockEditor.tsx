@@ -82,17 +82,17 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
   }, [showPicker]);
 
   return (
-    <div data-testid="media-block-editor" className="my-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)]">
+    <div data-testid="media-block-editor" className="my-3 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
       <div className="p-3">
         <MediaBlockPreview block={block} />
       </div>
 
-      <div className="flex items-center justify-between gap-3 border-t border-[var(--color-line)] px-3 py-2">
+      <div className="flex items-center justify-between gap-3 border-t border-[var(--osio-border-default)] px-3 py-2">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-ink-faint)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--osio-fg-subtle)]">
             {label}
           </p>
-          <p className="text-xs text-[var(--color-ink-muted)]">
+          <p className="text-xs text-[var(--osio-fg-muted)]">
             Library asset
           </p>
         </div>
@@ -101,7 +101,7 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
           <button
             type="button"
             data-testid="media-block-change-asset"
-            className="rounded-md border border-[var(--color-line)] px-3 py-1.5 text-xs font-medium text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-secondary)]"
+            className="rounded-md border border-[var(--osio-border-default)] px-3 py-1.5 text-xs font-medium text-[var(--osio-fg-default)] transition-colors hover:bg-[var(--osio-bg-subtle)]"
             onClick={() => setShowPicker((current) => !current)}
           >
             Change {label.toLowerCase()}
@@ -110,7 +110,7 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
           {showPicker && (
             <div
               data-testid="media-block-picker"
-              className="absolute right-0 top-full z-50 mt-2 w-[320px] overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-2xl"
+              className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 w-[320px] overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl"
             >
               <MediaAssetPicker
                 kind={kind}
@@ -123,10 +123,10 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
         </div>
       </div>
 
-      <div className="border-t border-[var(--color-line)] px-3 py-2">
+      <div className="border-t border-[var(--osio-border-default)] px-3 py-2">
         <EditableContent
           content={block.content}
-          className="min-h-[1.5em] text-sm text-[var(--color-ink-muted)] leading-relaxed"
+          className="min-h-[1.5em] text-sm text-[var(--osio-fg-muted)] leading-relaxed"
           placeholder="Write a caption..."
           onChange={onChange}
           onKeyDown={onKeyDown}

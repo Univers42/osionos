@@ -38,7 +38,7 @@ export const MediaBlockReadOnly: React.FC<MediaBlockReadOnlyProps> = ({
       <MediaBlockPreview block={block} />
       {block.content.trim() && (
         <p
-          className="px-1 text-sm text-[var(--color-ink-muted)]"
+          className="px-1 text-sm text-[var(--osio-fg-muted)]"
           dangerouslySetInnerHTML={
             renderInlineMarkdown(block.content) ?? undefined
           }

@@ -117,7 +117,7 @@ export const Sidebar: React.FC<Props> = ({
       />
 
       <div
-        className="h-px w-full shrink-0 -mt-px z-[99]"
+        className="h-px w-full shrink-0 -mt-px z-[var(--osio-z-raised)]"
         style={{
           boxShadow: "transparent 0px 0px 0px",
           transition: "box-shadow 300ms",

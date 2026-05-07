@@ -26,9 +26,9 @@ export const InternalPageLink: React.FC<InternalPageLinkProps> = ({ pageId }) =>
 
   if (!page) {
     return (
-      <span className="inline-flex items-center gap-1 rounded bg-[var(--color-surface-secondary)] px-1 py-0.5 text-[var(--color-ink-faint)]">
+      <span className="inline-flex items-center gap-1 rounded bg-[var(--osio-bg-subtle)] px-1 py-0.5 text-[var(--osio-fg-subtle)]">
         <FileText className="h-3 w-3" />
-        <span className="text-[13px]">{linkMetadata.title}</span>
+        <span className="text-sm">{linkMetadata.title}</span>
       </span>
     );
   }
@@ -54,10 +54,10 @@ export const InternalPageLink: React.FC<InternalPageLinkProps> = ({ pageId }) =>
       className="editor-mention align-baseline border-none"
       style={{ display: "inline-flex" }}
     >
-      <span className="flex items-center justify-center text-[14px] mr-1">
+      <span className="flex items-center justify-center text-base mr-1">
         {linkMetadata.icon || <Icon className="h-3.5 w-3.5" />}
       </span>
-      <span className="text-[13px]">
+      <span className="text-sm">
         {linkMetadata.title}
       </span>
     </button>
