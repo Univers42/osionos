@@ -103,7 +103,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
         target.innerHTML = "";
         const fallback = document.createElement("pre");
         fallback.className =
-          "text-[12px] leading-relaxed font-mono text-red-600 whitespace-pre-wrap";
+          "text-xs leading-relaxed font-mono text-[var(--osio-danger)] whitespace-pre-wrap";
         fallback.textContent = source;
         target.appendChild(fallback);
       }

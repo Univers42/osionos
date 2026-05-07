@@ -91,7 +91,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
           data-testid="emoji-picker-remove"
           className={[
             'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
-            'text-[var(--color-ink-muted)] hover:bg-red-50 hover:text-red-600',
+            'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-danger)]',
           ].join(' ')}
           onClick={handleRemove}
         >

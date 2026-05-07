@@ -329,11 +329,11 @@ export function useBlockContextMenu({
           onClick: handleUnavailable,
           subItems: [
             {
-              icon: <span className="font-semibold text-[#b91c1c]">A</span>,
+              icon: <span className="font-semibold text-[var(--osio-block-tint-red-fg)]">A</span>,
               label: "Red text",
               shortcut: "Ctrl+⇧+H",
-              active: blockLocation.block.textColor === "#b91c1c",
-              onClick: () => handleSetBlockStyle({ textColor: "#b91c1c" }),
+              active: blockLocation.block.textColor === "var(--osio-block-tint-red-fg)",
+              onClick: () => handleSetBlockStyle({ textColor: "var(--osio-block-tint-red-fg)" }),
             },
             {
               icon: "Text",
@@ -366,7 +366,7 @@ export function useBlockContextMenu({
               onClick: () => handleSetBlockStyle({ backgroundColor: undefined, textColor: blockLocation.block.textColor }),
             },
             ...BLOCK_COLOR_OPTIONS.map((option) => ({
-              icon: <span style={{ backgroundColor: option.background }} className="h-4 w-4 rounded border border-[var(--color-line)]" />,
+              icon: <span style={{ backgroundColor: option.background }} className="h-4 w-4 rounded border border-[var(--osio-border-default)]" />,
               label: `${option.label} background`,
               active: blockLocation.block.backgroundColor === option.background,
               onClick: () =>

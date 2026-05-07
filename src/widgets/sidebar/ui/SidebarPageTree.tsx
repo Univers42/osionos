@@ -66,7 +66,7 @@ const RecentPageActions: React.FC<RecentPageActionsProps> = ({
       />
       <button
         type="button"
-        className="p-1 rounded hover:bg-[var(--color-surface-secondary)]"
+        className="p-1 rounded hover:bg-[var(--osio-bg-subtle)]"
         onClick={(e) => onAddChild(e, recent)}
         title="Add child page"
       >
@@ -221,7 +221,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
               />
             ))
         ) : (
-          <p className="px-2 py-1 text-xs text-[var(--color-ink-faint)] italic">
+          <p className="px-2 py-1 text-xs text-[var(--osio-fg-subtle)] italic">
             Pages you visit will appear here
           </p>
         )}
@@ -245,14 +245,14 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
           if (activeWorkspaceId) runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "general", "text"));
         }}
       >
-        <div className="mb-1 grid grid-cols-2 gap-1 px-1 text-[11px]">
-          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "messages", "text"))}>+ messages</button>
-          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "forum", "forum"))}>+ forum</button>
-          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "audio", "audio"))}>+ audio</button>
-          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "video", "video"))}>+ video</button>
+        <div className="mb-1 grid grid-cols-2 gap-1 px-1 text-xs">
+          <button type="button" className="rounded px-2 py-1 text-left text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]" onClick={() => activeWorkspaceId && runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "messages", "text"))}>+ messages</button>
+          <button type="button" className="rounded px-2 py-1 text-left text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]" onClick={() => activeWorkspaceId && runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "forum", "forum"))}>+ forum</button>
+          <button type="button" className="rounded px-2 py-1 text-left text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]" onClick={() => activeWorkspaceId && runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "audio", "audio"))}>+ audio</button>
+          <button type="button" className="rounded px-2 py-1 text-left text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]" onClick={() => activeWorkspaceId && runWorkspaceAction(addChannel(activeUserId || "anonymous", activeWorkspaceId, "video", "video"))}>+ video</button>
         </div>
         {visibleRootChannels.length === 0 ? (
-          <p className="px-2 py-1 text-xs text-[var(--color-ink-faint)] italic">
+          <p className="px-2 py-1 text-xs text-[var(--osio-fg-subtle)] italic">
             Add messages, threads, audio or video channels.
           </p>
         ) : (
@@ -273,7 +273,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
                     <div className="mr-1 flex items-center gap-1">
                       <button
                         type="button"
-                        className="rounded px-1 text-[10px] text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
+                        className="rounded px-1 text-xs text-[var(--osio-fg-subtle)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
                         title="Toggle channel visibility"
                         onClick={(event) => {
                           event.stopPropagation();
@@ -289,7 +289,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
                       </button>
                       <button
                         type="button"
-                        className="rounded px-1 text-[10px] text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
+                        className="rounded px-1 text-xs text-[var(--osio-fg-subtle)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
                         title="Create thread"
                         onClick={(event) => {
                           event.stopPropagation();
@@ -315,7 +315,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
                           kind: "channel",
                           title: thread.name,
                         })}
-                        rightElement={<span className="pr-2 text-[10px] text-[var(--color-ink-faint)]">thread</span>}
+                        rightElement={<span className="pr-2 text-xs text-[var(--osio-fg-subtle)]">thread</span>}
                       />
                     </div>
                   ))}
@@ -339,7 +339,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
             }}
           >
             {pages.length === 0 && (
-              <p className="px-2 py-1 text-xs text-[var(--color-ink-faint)] italic">
+              <p className="px-2 py-1 text-xs text-[var(--osio-fg-subtle)] italic">
                 No pages yet
               </p>
             )}
@@ -376,7 +376,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
           })
         ) : (
           <SidebarNavItem
-            icon={<Plus size={14} className="text-[var(--color-accent)]" />}
+            icon={<Plus size={14} className="text-[var(--osio-accent)]" />}
             label="Start collaborating"
             subtle
             onClick={() => {

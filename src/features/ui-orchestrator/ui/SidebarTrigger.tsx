@@ -13,15 +13,15 @@ export const SidebarTrigger: React.FC = () => {
   if (isSidebarOpen) return null;
 
   return (
-    <div className="absolute top-2 left-2 z-50">
+    <div className="absolute top-2 left-2 z-[var(--osio-z-popover)]">
       <button
         type="button"
         onClick={() => setSidebarOpen(true)}
         className={[
           'flex items-center justify-center w-8 h-8 rounded-md',
-          'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]',
-          'transition-colors duration-200 cursor-pointer bg-[var(--color-surface-primary)]',
-          'border border-[var(--color-line)] shadow-sm'
+          'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]',
+          'transition-colors duration-200 cursor-pointer bg-[var(--osio-bg-surface)]',
+          'border border-[var(--osio-border-default)] shadow-sm'
         ].join(' ')}
         title="Open sidebar"
       >

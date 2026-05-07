@@ -44,7 +44,7 @@ export function resolveMediaBlockAsset(
 
 function Placeholder({ label }: Readonly<{ label: string }>) {
   return (
-    <div className="flex min-h-[144px] items-center justify-center rounded-lg border border-dashed border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-4 text-sm text-[var(--color-ink-faint)]">
+    <div className="flex min-h-[144px] items-center justify-center rounded-lg border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-4 text-sm text-[var(--osio-fg-subtle)]">
       {label}
     </div>
   );
@@ -69,7 +69,7 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
       <img
         src={resolved.url}
         alt={label}
-        className="block max-h-[24rem] w-full rounded-lg border border-[var(--color-line)] object-cover"
+        className="block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
       />
     );
   }
@@ -80,7 +80,7 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
         controls
         preload="metadata"
         poster={resolved.thumbnailUrl}
-        className="block max-h-[24rem] w-full rounded-lg border border-[var(--color-line)] bg-black/90"
+        className="block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] bg-black/90"
       >
         <source src={resolved.url} />
         <track kind="captions" />
@@ -90,16 +90,16 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
 
   if (block.type === "audio") {
     return (
-      <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-4">
+      <div className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
         <div className="mb-3 flex items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--color-surface-primary)] text-[var(--color-ink-muted)]">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--osio-bg-surface)] text-[var(--osio-fg-muted)]">
             <AssetRenderer value={block.asset ?? ""} size={22} />
           </span>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-[var(--color-ink)]">
+            <p className="truncate text-sm font-medium text-[var(--osio-fg-default)]">
               {label}
             </p>
-            <p className="text-xs text-[var(--color-ink-muted)]">
+            <p className="text-xs text-[var(--osio-fg-muted)]">
               Audio asset
             </p>
           </div>
@@ -117,20 +117,20 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
       href={resolved.url}
       target="_blank"
       rel="noreferrer"
-      className="flex items-center gap-3 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-4 transition-colors hover:bg-[var(--color-surface-hover)]"
+      className="flex items-center gap-3 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4 transition-colors hover:bg-[var(--osio-bg-hover)]"
     >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--color-surface-primary)] text-[var(--color-ink-muted)]">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--osio-bg-surface)] text-[var(--osio-fg-muted)]">
         <AssetRenderer value={block.asset ?? ""} size={22} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-[var(--color-ink)]">
+        <span className="block truncate text-sm font-medium text-[var(--osio-fg-default)]">
           {label}
         </span>
-        <span className="block text-xs text-[var(--color-ink-muted)]">
+        <span className="block text-xs text-[var(--osio-fg-muted)]">
           Open file
         </span>
       </span>
-      <span className="text-xs font-medium text-[var(--color-accent)]">
+      <span className="text-xs font-medium text-[var(--osio-accent)]">
         Open
       </span>
     </a>

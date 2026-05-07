@@ -121,16 +121,16 @@ const COLLECTION_FILE_ITEMS: Array<unknown> = [...FALLBACK_FILE_ITEMS];
 
 const BOARD_CLASS_NAMES: NonNullable<AssetPickerBoardProps['classNames']> = {
   root: 'w-full',
-  searchInput: 'placeholder:text-[var(--color-ink-faint)]',
+  searchInput: 'placeholder:text-[var(--osio-fg-subtle)]',
 };
 
 const BOARD_STYLES: NonNullable<AssetPickerBoardProps['styles']> = {
   root: {
     padding: 0,
     borderRadius: 12,
-    border: '1px solid var(--color-line)',
-    background: 'var(--color-surface-primary)',
-    color: 'var(--color-ink)',
+    border: '1px solid var(--osio-border-default)',
+    background: 'var(--osio-bg-surface)',
+    color: 'var(--osio-fg-default)',
     boxShadow: '0 18px 48px rgba(15, 23, 42, 0.16)',
     overflow: 'hidden',
   },
@@ -138,17 +138,17 @@ const BOARD_STYLES: NonNullable<AssetPickerBoardProps['styles']> = {
     gap: 6,
     marginBottom: 0,
     padding: '8px 8px 0',
-    borderBottom: '1px solid var(--color-line)',
+    borderBottom: '1px solid var(--osio-border-default)',
   },
   tabButton: {
-    color: 'var(--color-ink)',
+    color: 'var(--osio-fg-default)',
     borderRadius: 8,
   },
   searchField: {
     gap: 0,
     marginBottom: 0,
     padding: '8px',
-    borderBottom: '1px solid var(--color-line)',
+    borderBottom: '1px solid var(--osio-border-default)',
   },
   searchLabel: {
     display: 'none',
@@ -156,9 +156,9 @@ const BOARD_STYLES: NonNullable<AssetPickerBoardProps['styles']> = {
   searchInput: {
     height: 36,
     borderRadius: 8,
-    border: '1px solid var(--color-line)',
-    background: 'var(--color-surface-secondary)',
-    color: 'var(--color-ink)',
+    border: '1px solid var(--osio-border-default)',
+    background: 'var(--osio-bg-subtle)',
+    color: 'var(--osio-fg-default)',
     padding: '0 12px',
     fontSize: 10,
   },
@@ -168,7 +168,7 @@ const BOARD_STYLES: NonNullable<AssetPickerBoardProps['styles']> = {
   },
   groupLabel: {
     padding: '0 4px',
-    color: 'var(--color-ink-muted)',
+    color: 'var(--osio-fg-muted)',
     fontSize: 10,
     fontWeight: 600,
     letterSpacing: '0.04em',
@@ -178,11 +178,11 @@ const BOARD_STYLES: NonNullable<AssetPickerBoardProps['styles']> = {
     padding: '4px 8px 8px',
   },
   itemButton: {
-    color: 'var(--color-ink)',
+    color: 'var(--osio-fg-default)',
     borderRadius: 8,
   },
   itemLabel: {
-    color: 'var(--color-ink-muted)',
+    color: 'var(--osio-fg-muted)',
     fontSize: 10,
     lineHeight: 1.25,
   },
@@ -192,7 +192,7 @@ const BOARD_STYLES: NonNullable<AssetPickerBoardProps['styles']> = {
     border: 'none',
     borderRadius: 0,
     background: 'transparent',
-    color: 'var(--color-ink-muted)',
+    color: 'var(--osio-fg-muted)',
   },
 };
 

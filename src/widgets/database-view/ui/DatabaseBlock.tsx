@@ -119,28 +119,28 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
   }, [databasePage, osionosContentKey, osionosPage, pageId, state]);
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/20">
+    <div className="fixed inset-0 z-[var(--osio-z-modal)] flex justify-end bg-[var(--osio-overlay)]">
       <button
         type="button"
         aria-label="Close database page"
         className="fixed inset-0 cursor-default bg-transparent"
         onClick={onClose}
       />
-      <aside className="relative z-[60] h-full w-full max-w-5xl overflow-auto border-l border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-2xl">
-        <div className="sticky top-0 flex items-center justify-between border-b border-[var(--color-line)] bg-[var(--color-surface-primary)] px-6 py-3">
-          <span className="text-xs font-medium uppercase tracking-wide text-[var(--color-ink-muted)]">
+      <aside className="relative z-[var(--osio-z-modal)] h-full w-full max-w-5xl overflow-auto border-l border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl">
+        <div className="sticky top-0 flex items-center justify-between border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-6 py-3">
+          <span className="text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">
             {database?.name ?? 'Database page'} · osionos page
           </span>
           <button
             type="button"
-            className="rounded-md px-2 py-1 text-sm text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]"
+            className="rounded-md px-2 py-1 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
             onClick={onClose}
           >
             Close
           </button>
         </div>
         {osionosPage ? <OsionosPage pageId={pageId} /> : (
-          <div className="mx-auto max-w-3xl px-10 py-10 text-sm text-[var(--color-ink-muted)]">
+          <div className="mx-auto max-w-3xl px-10 py-10 text-sm text-[var(--osio-fg-muted)]">
             Page unavailable
           </div>
         )}

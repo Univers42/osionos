@@ -19,23 +19,23 @@ export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
   const isMermaid = lang.trim().toLowerCase() === "mermaid";
 
   return (
-    <div className="my-1 rounded-lg overflow-hidden border border-[var(--color-line)]">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--color-surface-secondary)] border-b border-[var(--color-line)]">
-        <span className="text-[11px] font-mono text-[var(--color-ink-muted)]">
+    <div className="my-1 rounded-lg overflow-hidden border border-[var(--osio-border-default)]">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--osio-bg-subtle)] border-b border-[var(--osio-border-default)]">
+        <span className="text-xs font-mono text-[var(--osio-fg-muted)]">
           {lang}
         </span>
       </div>
       {isMermaid ? (
         <MermaidDiagram
           chart={block.content}
-          className="p-3 bg-[var(--color-surface-primary)] overflow-x-auto"
+          className="p-3 bg-[var(--osio-bg-surface)] overflow-x-auto"
         />
       ) : (
         <CodeSyntaxHighlight
           code={block.content}
           language={lang}
-          className="p-3 bg-[var(--color-surface-primary)] overflow-x-auto"
-          codeClassName="text-[13px] leading-relaxed font-mono whitespace-pre"
+          className="p-3 bg-[var(--osio-bg-surface)] overflow-x-auto"
+          codeClassName="text-sm leading-relaxed font-mono whitespace-pre"
         />
       )}
     </div>

@@ -44,14 +44,14 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
       if (this.props.fallback) return this.props.fallback;
       return (
         <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-          <p className="text-lg font-semibold text-[var(--color-ink)]">Something went wrong</p>
-          <p className="text-sm text-[var(--color-ink-muted)] mt-2">
+          <p className="text-lg font-semibold text-[var(--osio-fg-default)]">Something went wrong</p>
+          <p className="text-sm text-[var(--osio-fg-muted)] mt-2">
             {this.state.error?.message ?? 'An unexpected error occurred.'}
           </p>
           <button
             type="button"
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="mt-4 px-4 py-2 text-sm rounded-lg bg-[var(--color-accent)] text-white hover:opacity-90"
+            className="mt-4 px-4 py-2 text-sm rounded-lg bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] hover:opacity-90"
           >
             Try again
           </button>

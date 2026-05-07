@@ -42,8 +42,8 @@ export const SidebarTopNav: React.FC<SidebarTopNavProps> = ({ isHomeActive, onOp
             className={[
               'flex h-8 min-w-0 shrink items-center justify-center overflow-hidden rounded-md px-2 text-sm font-medium transition-colors',
               tab.active
-                ? 'bg-[var(--color-surface-tertiary)] text-[var(--color-ink)]'
-                : 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]',
+                ? 'bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]'
+                : 'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]',
             ].join(' ')}
             title={tab.label}
           >
@@ -56,7 +56,7 @@ export const SidebarTopNav: React.FC<SidebarTopNavProps> = ({ isHomeActive, onOp
         type="button"
         aria-label="Search"
         title="Search"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--color-ink-muted)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
         onClick={() => undefined}
       >
         <Search size={18} />

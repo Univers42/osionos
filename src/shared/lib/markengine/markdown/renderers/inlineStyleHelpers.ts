@@ -4,8 +4,8 @@ export type InlineStyleMap = Record<string, string>;
 
 const INLINE_CODE_STYLE_MAP = {
   backgroundColor:
-    "var(--inline-code-background,var(--color-surface-tertiary-soft2))",
-  border: "1px solid var(--color-line)",
+    "var(--inline-code-background,var(--osio-bg-subtle))",
+  border: "1px solid var(--osio-border-default)",
   borderRadius: "6px",
   padding: "0 0.35em",
   fontFamily: "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace",

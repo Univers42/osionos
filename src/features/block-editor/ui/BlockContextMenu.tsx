@@ -39,10 +39,10 @@ function clampMenuPosition(y: number, x: number, width: number) {
 
 function getItemClassName(item: BlockContextMenuItem) {
   const base = "relative flex w-full items-center gap-3 px-3 py-1.5 text-left transition-colors";
-  if (item.danger) return `${base} text-red-600 hover:bg-red-50`;
-  if (item.active) return `${base} bg-[var(--color-surface-hover)] text-[var(--color-ink)]`;
-  if (item.disabled) return `${base} cursor-default text-[var(--color-ink-faint)]`;
-  return `${base} cursor-pointer text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)]`;
+  if (item.danger) return `${base} text-[var(--osio-danger)] hover:bg-[var(--osio-bg-subtle)]`;
+  if (item.active) return `${base} bg-[var(--osio-bg-hover)] text-[var(--osio-fg-default)]`;
+  if (item.disabled) return `${base} cursor-default text-[var(--osio-fg-subtle)]`;
+  return `${base} cursor-pointer text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]`;
 }
 
 interface SubmenuButtonProps {
@@ -68,11 +68,11 @@ const SubmenuButton: React.FC<SubmenuButtonProps> = ({
       onClick={handleClick}
       disabled={item.disabled}
       className={[
-        "flex w-full items-center gap-3 px-3 py-1.5 text-left text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)] disabled:cursor-default disabled:text-[var(--color-ink-faint)] disabled:hover:bg-transparent",
-        item.active ? "bg-[var(--color-surface-hover)]" : "",
+        "flex w-full items-center gap-3 px-3 py-1.5 text-left text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] disabled:cursor-default disabled:text-[var(--osio-fg-subtle)] disabled:hover:bg-transparent",
+        item.active ? "bg-[var(--osio-bg-hover)]" : "",
       ].join(" ")}
     >
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--color-surface-secondary)] text-[var(--color-ink-muted)]">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-muted)]">
         {item.icon}
       </span>
       <span className="flex-1 text-sm">{item.label}</span>
@@ -137,7 +137,7 @@ const SubmenuPanel: React.FC<SubmenuPanelProps> = ({
 
   return (
     <div
-      className="overflow-y-auto rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] py-1 shadow-xl"
+      className="overflow-y-auto rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-xl"
       style={style}
     >
       {items.map((subItem) => (
@@ -200,17 +200,17 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
       }}
       className={getItemClassName(item)}
     >
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--color-surface-secondary)] text-[var(--color-ink-muted)]">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-muted)]">
         {item.icon}
       </span>
       <span className="min-w-0 flex-1 text-sm">{item.label}</span>
       {item.shortcut ? (
-        <span className="text-[11px] text-[var(--color-ink-faint)]">
+        <span className="text-xs text-[var(--osio-fg-subtle)]">
           {item.shortcut}
         </span>
       ) : null}
       {item.subItems ? (
-        <span className="text-[var(--color-ink-faint)]">›</span>
+        <span className="text-[var(--osio-fg-subtle)]">›</span>
       ) : null}
       {item.subItems && openSubmenu === item.label ? (
         <SubmenuPanel
@@ -310,7 +310,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
       />
       <div
         ref={ref}
-        className="fixed overflow-visible rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-primary)] py-2 shadow-xl"
+        className="fixed overflow-visible rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-2 shadow-xl"
         style={{
           top: position.top,
           left: position.left,
@@ -324,14 +324,14 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search actions…"
-            className="h-8 w-full rounded-md border border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-2 text-sm text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-accent)]"
+            className="h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)] focus:border-[var(--osio-accent)]"
           />
         </div>
         <div className="max-h-[430px] overflow-visible" role="menu">
         {visibleSections.map((section, index) => (
           <div key={`${section.label ?? "section"}-${index}`}>
             {section.label ? (
-              <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-ink-faint)]">
+              <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
                 {section.label}
               </p>
             ) : null}
@@ -346,12 +346,12 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
               />
             ))}
             {index < visibleSections.length - 1 ? (
-              <div className="my-1 border-t border-[var(--color-line)]" />
+              <div className="my-1 border-t border-[var(--osio-border-default)]" />
             ) : null}
           </div>
         ))}
         </div>
-        <div className="mt-1 border-t border-[var(--color-line)] px-3 pt-2 text-[11px] leading-4 text-[var(--color-ink-faint)]">
+        <div className="mt-1 border-t border-[var(--osio-border-default)] px-3 pt-2 text-xs leading-4 text-[var(--osio-fg-subtle)]">
           <div>Last edited by current user</div>
           <div>Today</div>
         </div>
