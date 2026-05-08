@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:03:32 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -59,6 +59,7 @@ export interface Block {
   widthRatio?: number;      /** Relative width for column blocks */
   collapsed?: boolean;		/** Whether a toggle is collapsed */
   asset?: string;           /** Serialized ui-collection asset value for media blocks */
+  mediaWidth?: number;      /** Display width percentage for media blocks */
   placeholderText?: string; /** Temporary placeholder hint for empty transformed blocks */
   tableData?: string[][];	/** Table data (array of rows, each row is array of cell strings) */
   databaseId?: string;		/** Database reference ID (for database_inline / database_full_page) */

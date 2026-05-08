@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 20:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,6 +21,7 @@ interface PageIconProps {
   onChangeIcon: (icon: string) => void;
   /** Called when icon is removed. */
   onRemoveIcon: () => void;
+  disabled?: boolean;
 }
 
 /**
@@ -31,6 +32,7 @@ export const PageIcon: React.FC<PageIconProps> = ({
   icon,
   onChangeIcon,
   onRemoveIcon,
+  disabled = false,
 }) => {
   const [showPicker, setShowPicker] = useState(false);
 
@@ -42,14 +44,17 @@ export const PageIcon: React.FC<PageIconProps> = ({
         type="button"
         data-testid="page-icon-toggle-picker"
         className="osionos-page-icon"
-        onClick={() => setShowPicker((v) => !v)}
+        onClick={() => {
+          if (!disabled) setShowPicker((v) => !v);
+        }}
+        disabled={disabled}
         aria-label="Change page icon"
         title="Click to change icon"
       >
         <AssetRenderer value={icon} size={78} />
       </button>
 
-      {showPicker && (
+      {showPicker && !disabled && (
         <EmojiPicker
           current={icon}
           onSelect={onChangeIcon}

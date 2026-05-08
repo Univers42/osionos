@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "bash scripts/docker-dev.sh",
     "dev:local": "vite",
+    "bridge:api": "node scripts/bridge-api.mjs",
     "build": "bash scripts/docker-run.sh build",
     "build:local": "tsc --noEmit && vite build",
     "preview": "bash scripts/docker-run.sh preview",
@@ -29,6 +30,7 @@
     "test:e2e:smoke:local": "playwright test tests/e2e/smoke",
     "test:doctor": "bash scripts/docker-run.sh test-doctor",
     "test:doctor:local": "node tests/test-env-doctor.mjs",
+    "test:bridge": "node --test tests/bridge/*.test.mjs",
     "test:quality": "pnpm run typecheck && pnpm run lint",
     "test:setup": "pnpm run test:doctor"
   },

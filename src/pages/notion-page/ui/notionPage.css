@@ -43,6 +43,34 @@
   font-size: calc(1rem * var(--page-font-size-scale, 0.92));
 }
 
+.osionos-page--small-text .osionos-page-title {
+  font-size: calc(40px * var(--page-font-size-scale, 0.92));
+}
+
+.osionos-page--small-text .osionos-page-body :where(.text-xs) {
+  font-size: 0.6875rem !important;
+}
+
+.osionos-page--small-text .osionos-page-body :where(.text-sm) {
+  font-size: 0.8125rem !important;
+}
+
+.osionos-page--small-text .osionos-page-body :where(.text-base) {
+  font-size: 0.9375rem !important;
+}
+
+.osionos-page--small-text .osionos-page-body :where(.text-lg) {
+  font-size: 1.03125rem !important;
+}
+
+.osionos-page--small-text .osionos-page-body :where(.text-xl) {
+  font-size: 1.125rem !important;
+}
+
+.osionos-page--small-text .osionos-page-body :where(.text-2xl) {
+  font-size: 1.35rem !important;
+}
+
 .osionos-page--locked .osionos-page-body [contenteditable="true"] {
   pointer-events: none;
 }
@@ -113,6 +141,7 @@
 
 .osionos-page-cover-controls {
   position: absolute;
+  z-index: 2;
   right: 16px;
   bottom: 12px;
   display: flex;

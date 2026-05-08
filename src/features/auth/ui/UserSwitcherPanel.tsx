@@ -15,6 +15,7 @@ import { createPortal } from 'react-dom';
 import { Check, MoreHorizontal, Plus, Settings, Users, X } from 'lucide-react';
 import { AssetRenderer } from '@univers42/ui-collection';
 import { useUserStore } from '@/features/auth';
+import { usePageStore } from '@/store/usePageStore';
 import {
   COLLECTION_ROLE_BADGES,
 } from '@/shared/lib/markengine/uiCollectionAssets';
@@ -255,7 +256,28 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
     if (!activePersona) return;
     const name = `${activePersona.name}'s workspace`;
     const slug = toWorkspaceSlug(name);
-    await createWorkspace(name, slug);
+    const workspace = await createWorkspace(name, slug);
+    if (!workspace) return;
+
+    const pageStore = usePageStore.getState();
+    const session = useUserStore.getState().activeSession();
+    pageStore.clearWorkspace(workspace._id);
+    const firstPage = await pageStore.addPage(
+      workspace._id,
+      'Untitled',
+      session?.accessToken ?? '',
+      undefined,
+      { content: [] },
+    );
+    if (!firstPage) return;
+
+    pageStore.openPage({
+      id: firstPage._id,
+      workspaceId: workspace._id,
+      kind: 'page',
+      title: firstPage.title,
+      icon: firstPage.icon,
+    });
   }
 
   const panelStyle: React.CSSProperties = {

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/14 00:00:00 by rstancu           #+#    #+#             */
-/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -50,6 +50,13 @@ function Placeholder({ label }: Readonly<{ label: string }>) {
   );
 }
 
+function mediaWidthStyle(block: Block): React.CSSProperties {
+  const width = typeof block.mediaWidth === "number"
+    ? Math.min(100, Math.max(25, block.mediaWidth))
+    : 100;
+  return { width: `${width}%`, maxWidth: "100%" };
+}
+
 export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
   block,
 }) => {
@@ -66,25 +73,29 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
 
   if (block.type === "image") {
     return (
-      <img
-        src={resolved.url}
-        alt={label}
-        className="block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
-      />
+      <div style={mediaWidthStyle(block)}>
+        <img
+          src={resolved.url}
+          alt={label}
+          className="block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
+        />
+      </div>
     );
   }
 
   if (block.type === "video") {
     return (
-      <video
-        controls
-        preload="metadata"
-        poster={resolved.thumbnailUrl}
-        className="block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] bg-black/90"
-      >
-        <source src={resolved.url} />
-        <track kind="captions" />
-      </video>
+      <div style={mediaWidthStyle(block)}>
+        <video
+          controls
+          preload="metadata"
+          poster={resolved.thumbnailUrl}
+          className="block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] bg-black/90"
+        >
+          <source src={resolved.url} />
+          <track kind="captions" />
+        </video>
+      </div>
     );
   }
 

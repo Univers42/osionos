@@ -6,11 +6,12 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/07 14:05:47 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:10 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import { api } from "@/shared/api/client";
+import { apiJwtFromSessionToken } from "@/features/auth/model/userStore.helpers";
 import {
   canDeletePage,
   canDuplicatePage,
@@ -32,7 +33,7 @@ import {
   isValidMove,
   nextDuplicateTitle,
 } from "./pageStore.helpers";
-import type { PageEntry, PageStore, ActivePage } from "@/entities/page";
+import type { AddPageOptions, PageEntry, PageStore, ActivePage } from "@/entities/page";
 
 type SetFn = (
   partial: Partial<PageStore> | ((s: PageStore) => Partial<PageStore>),
@@ -170,18 +171,20 @@ export function createAddPage(set: SetFn, get: GetFn) {
     title: string,
     jwt: string,
     parentPageId?: string,
+    options: AddPageOptions = {},
   ): Promise<PageEntry | null> => {
     const context = getCurrentPageAccessContext();
     if (!context?.workspaceIds.includes(workspaceId)) {
       return null;
     }
-    const targetVisibility = getTargetWorkspaceMoveVisibility(
+    const targetVisibility = options.visibility ?? getTargetWorkspaceMoveVisibility(
       workspaceId,
       context,
       "private",
     );
+    const apiJwt = apiJwtFromSessionToken(jwt);
 
-    if (jwt) {
+    if (apiJwt) {
       try {
         const page = await api.post<PageEntry>(
           "/api/pages",
@@ -189,15 +192,18 @@ export function createAddPage(set: SetFn, get: GetFn) {
             workspaceId,
             title,
             parentPageId,
-            content: [],
+            content: options.content ?? [],
+            icon: options.icon,
             ownerId: context.userId,
             visibility: targetVisibility,
             collaborators: [],
+            surface: options.surface,
           },
-          jwt,
+          apiJwt,
         );
         const pageWithTimestamp: PageEntry = {
           ...page,
+          surface: page.surface ?? options.surface,
           updatedAt: page.updatedAt ?? new Date().toISOString(),
         };
         set((s) => ({
@@ -215,6 +221,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
     const newPage: PageEntry = {
       _id: localId(),
       title,
+      icon: options.icon,
       updatedAt: new Date().toISOString(),
       workspaceId,
       ownerId: context.userId,
@@ -223,7 +230,8 @@ export function createAddPage(set: SetFn, get: GetFn) {
       parentPageId: parentPageId ?? null,
       databaseId: null,
       archivedAt: null,
-      content: [],
+      content: options.content ?? [],
+      surface: options.surface,
     };
     set((s) => ({
       pages: {
@@ -254,7 +262,9 @@ export function createAddDatabasePage(set: SetFn, get: GetFn) {
       "private",
     );
 
-    if (jwt) {
+    const apiJwt = apiJwtFromSessionToken(jwt);
+
+    if (apiJwt) {
       try {
         const page = await api.post<PageEntry>(
           "/api/pages",
@@ -269,7 +279,7 @@ export function createAddDatabasePage(set: SetFn, get: GetFn) {
             visibility: targetVisibility,
             collaborators: [],
           },
-          jwt,
+          apiJwt,
         );
         const pageWithTimestamp: PageEntry = {
           ...page,

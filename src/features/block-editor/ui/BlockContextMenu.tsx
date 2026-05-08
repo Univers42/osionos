@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:16:31 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/07 16:29:50 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,8 +17,10 @@ import type {
   BlockContextMenuSection,
   BlockContextMenuState,
 } from "../model/blockContextMenu.helpers";
+import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
 
 const SUBMENU_WIDTH = 224; // w-56 = 14rem = 224px
+const PROFILE_PANEL_WIDTH = 288;
 const VIEWPORT_PAD = 12;
 
 interface BlockContextMenuProps {
@@ -29,12 +31,27 @@ interface BlockContextMenuProps {
 }
 
 function clampMenuPosition(y: number, x: number, width: number) {
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
+  const viewportWidth = globalThis.innerWidth;
+  const viewportHeight = globalThis.innerHeight;
   const maxHeight = Math.min(520, viewportHeight - 24);
   const left = Math.max(12, Math.min(x, viewportWidth - width - 12));
   const top = Math.max(12, Math.min(y, viewportHeight - maxHeight - 12));
   return { top, left, maxHeight };
+}
+
+function clampPanelPosition(anchor: { top: number; left: number }, menuWidth: number, panelWidth: number, maxHeight: number) {
+  const viewportWidth = globalThis.innerWidth;
+  const viewportHeight = globalThis.innerHeight;
+  let left = anchor.left + menuWidth + 8;
+  if (left + panelWidth + VIEWPORT_PAD > viewportWidth) {
+    left = anchor.left - panelWidth - 8;
+  }
+
+  return {
+    top: Math.max(VIEWPORT_PAD, Math.min(anchor.top, viewportHeight - maxHeight - VIEWPORT_PAD)),
+    left: Math.max(VIEWPORT_PAD, Math.min(left, viewportWidth - panelWidth - VIEWPORT_PAD)),
+    maxHeight,
+  };
 }
 
 function getItemClassName(item: BlockContextMenuItem) {
@@ -106,8 +123,8 @@ const SubmenuPanel: React.FC<SubmenuPanelProps> = ({
     if (!anchor) return { position: "fixed", opacity: 0 };
 
     const rect = anchor.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    const vw = globalThis.innerWidth;
+    const vh = globalThis.innerHeight;
 
     // Prefer opening to the right of the parent menu
     let left = rect.right + 8;
@@ -140,15 +157,116 @@ const SubmenuPanel: React.FC<SubmenuPanelProps> = ({
       className="overflow-y-auto rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-xl"
       style={style}
     >
-      {items.map((subItem) => (
+      {items.map((subItem, index) => (
         <SubmenuButton
-          key={`${parentLabel}-${subItem.label}`}
+          key={`${parentLabel}-${subItem.label}-${index}`}
           parentLabel={parentLabel}
           item={subItem}
           onSelect={onSelect}
         />
       ))}
     </div>
+  );
+};
+
+interface ColorProfilePanelProps {
+  style: React.CSSProperties;
+}
+
+const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
+  const profiles = useBlockColorProfileStore((state) => state.profiles);
+  const addProfile = useBlockColorProfileStore((state) => state.addProfile);
+  const removeProfile = useBlockColorProfileStore((state) => state.removeProfile);
+  const [name, setName] = useState("Custom profile");
+  const [textColor, setTextColor] = useState("#1f2937");
+  const [backgroundColor, setBackgroundColor] = useState("#f3f4f6");
+
+  const handleSubmit = useCallback((event: React.SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    addProfile({
+      name,
+      textColor,
+      backgroundColor,
+    });
+    setName("Custom profile");
+  }, [addProfile, backgroundColor, name, textColor]);
+
+  return (
+    <aside
+      className="fixed overflow-y-auto rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-3 shadow-xl"
+      style={{ ...style, width: PROFILE_PANEL_WIDTH, zIndex: 10003 }}
+      aria-label="Color profile properties"
+    >
+      <div className="mb-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--osio-fg-subtle)]">
+          Color Profiles
+        </p>
+        <p className="text-sm text-[var(--osio-fg-default)]">
+          Reusable foreground and background pairs.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-3">
+        <label className="block text-xs font-medium text-[var(--osio-fg-muted)]">
+          <span>Name</span>
+          <input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
+          />
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="text-xs font-medium text-[var(--osio-fg-muted)]">
+            <span>Text</span>
+            <input
+              type="color"
+              value={textColor}
+              onChange={(event) => setTextColor(event.target.value)}
+              className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-transparent"
+            />
+          </label>
+          <label className="text-xs font-medium text-[var(--osio-fg-muted)]">
+            <span>Background</span>
+            <input
+              type="color"
+              value={backgroundColor}
+              onChange={(event) => setBackgroundColor(event.target.value)}
+              className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-transparent"
+            />
+          </label>
+        </div>
+        <button
+          type="submit"
+          className="w-full rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+        >
+          + Save profile
+        </button>
+      </form>
+
+      <div className="mt-3 space-y-1">
+        {profiles.map((profile) => (
+          <div
+            key={profile.id}
+            className="flex items-center gap-2 rounded-lg border border-[var(--osio-border-default)] px-2 py-1.5"
+          >
+            <span
+              className="h-5 w-5 rounded border border-[var(--osio-border-default)]"
+              style={{ backgroundColor: profile.backgroundColor }}
+            />
+            <span className="min-w-0 flex-1 truncate text-sm text-[var(--osio-fg-default)]">
+              {profile.name}
+            </span>
+            <button
+              type="button"
+              className="rounded px-1.5 py-1 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+              onClick={() => removeProfile(profile.id)}
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+    </aside>
   );
 };
 
@@ -282,6 +400,11 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
     return clampMenuPosition(menu.y, menu.x, width);
   }, [menu, width]);
 
+  const profilePanelPosition = useMemo(() => {
+    if (!position || openSubmenu !== "Color") return null;
+    return clampPanelPosition(position, width, PROFILE_PANEL_WIDTH, Math.min(520, position.maxHeight));
+  }, [openSubmenu, position, width]);
+
   if (!menu || !position || sections.length === 0) {
     return null;
   }
@@ -356,6 +479,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
           <div>Today</div>
         </div>
       </div>
+      {profilePanelPosition ? <ColorProfilePanel style={profilePanelPosition} /> : null}
     </>,
     document.body,
   );

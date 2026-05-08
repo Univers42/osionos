@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:04:12 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 03:50:34 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,13 +35,13 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
 
   const persona         = useUserStore(s => s.activePersona());
   const session         = useUserStore(s => s.activeSession());
+  const jwt             = useUserStore(s => s.activeJwt() ?? '');
   const activeWorkspace = useUserStore(s => s.activeWorkspace());
   const workspaceName   = activeWorkspace?.name ?? session?.privateWorkspaces[0]?.name ?? 'My Workspace';
   const addPage         = usePageStore(s => s.addPage);
   const openPage        = usePageStore(s => s.openPage);
   const setSidebarOpen  = useUIStore(s => s.setSidebarOpen);
 
-  const jwt       = session?.accessToken ?? '';
   const firstWsId = activeWorkspace?._id ?? session?.privateWorkspaces[0]?._id ?? '';
 
   async function handleNewPage() {

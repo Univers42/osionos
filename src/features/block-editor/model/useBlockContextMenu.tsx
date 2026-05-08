@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:16:25 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/07 16:29:49 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,6 +20,7 @@ import {
   MessageSquare,
   MoveRight,
   Palette,
+  Plus,
   PlusSquare,
   Presentation,
   Sparkles,
@@ -30,6 +31,7 @@ import {
   BLOCK_COLOR_OPTIONS,
   ensureReadableTextColor,
 } from "./blockColors";
+import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
 import {
   BLOCK_TRANSFORM_OPTIONS,
   changeBlockTypeInTree,
@@ -66,6 +68,7 @@ export function useBlockContextMenu({
   const [contextMenu, setContextMenu] = useState<BlockContextMenuState | null>(
     null,
   );
+  const colorProfiles = useBlockColorProfileStore((state) => state.profiles);
 
   const blockLocation = useMemo(() => {
     if (!contextMenu) return null;
@@ -378,6 +381,38 @@ export function useBlockContextMenu({
                   ),
                 }),
             })),
+            {
+              icon: <Plus size={14} />,
+              label: "Create color profile",
+              onClick: () => undefined,
+            },
+            ...(colorProfiles.length > 0
+              ? [
+                  {
+                    icon: "Profiles",
+                    label: "Saved profiles",
+                    disabled: true,
+                    onClick: handleUnavailable,
+                  },
+                  ...colorProfiles.map((profile) => ({
+                    icon: (
+                      <span
+                        className="h-4 w-4 rounded border border-[var(--osio-border-default)]"
+                        style={{ backgroundColor: profile.backgroundColor }}
+                      />
+                    ),
+                    label: profile.name,
+                    active:
+                      blockLocation.block.textColor === profile.textColor &&
+                      blockLocation.block.backgroundColor === profile.backgroundColor,
+                    onClick: () =>
+                      handleSetBlockStyle({
+                        textColor: ensureReadableTextColor(profile.backgroundColor, profile.textColor),
+                        backgroundColor: profile.backgroundColor,
+                      }),
+                  })),
+                ]
+              : []),
           ],
         },
       ],
@@ -461,6 +496,7 @@ export function useBlockContextMenu({
     ];
   }, [
     blockLocation,
+    colorProfiles,
     handleChangeType,
     handleCopyText,
     handleCopyLink,

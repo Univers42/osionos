@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/07 16:29:52 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,6 +16,7 @@ import { Plus } from "lucide-react";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { PageSelectorMenu } from "./PageSelectorMenu";
 import type { Block } from "@/entities/block";
+import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
 
 import { usePageStore } from "@/store/usePageStore";
 import { usePlaygroundBlockEditor, BlockEditor } from "@/features/block-editor";
@@ -26,6 +27,7 @@ import { isParentable, selfRendersChildren } from "@/entities/block";
 
 interface PlaygroundPageEditorProps {
   pageId: string;
+  locked?: boolean;
 }
 
 type DropPosition = "above" | "below" | "inside" | "left" | "right" | null;
@@ -384,6 +386,7 @@ function getDropIndicatorClassName(position: Exclude<DropPosition, null>) {
 /** Editable block-based page editor for the playground. */
 export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
   pageId,
+  locked = false,
 }) => {
   const page = usePageStore((s) => s.pageById(pageId));
   const deleteBlock = usePageStore((s) => s.deleteBlock);
@@ -526,6 +529,22 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
             You cannot edit this page in the current session.
           </p>
         </div>
+      </div>
+    );
+  }
+
+  if (locked) {
+    return (
+      <div data-testid="locked-page-body" className="relative flex flex-col">
+        {blocks.length === 0 ? (
+          <p className="py-8 text-sm italic text-[var(--osio-fg-subtle)]">
+            This page is locked and has no content.
+          </p>
+        ) : (
+          blocks.map((block, index) => (
+            <ReadOnlyBlock key={block.id} block={block} index={index} />
+          ))
+        )}
       </div>
     );
   }

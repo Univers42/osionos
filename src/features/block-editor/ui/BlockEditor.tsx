@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/07 16:29:52 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:10 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,6 +17,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { Check, Copy } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
 import katex from "katex";
 import "katex/dist/katex.min.css";
@@ -419,6 +420,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const updateBlock = usePageStore((s) => s.updateBlock);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [showCalloutIconPicker, setShowCalloutIconPicker] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [isEquationEditing, setIsEquationEditing] = useState(false);
   const equationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const langPickerRef = useRef<HTMLDivElement | null>(null);
@@ -433,10 +435,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const isMermaidCode =
     block.type === "code" &&
     (block.language || "plaintext").trim().toLowerCase() === "mermaid";
-  const isSyntaxPreviewCode =
-    block.type === "code" &&
-    !isMermaidCode &&
-    (block.language || "plaintext").trim().toLowerCase() !== "plaintext";
+  const codeCaretColor = editableStyle?.color ?? "var(--osio-fg-default)";
 
   const commitBlockUpdate = useCallback(
     (blockId: string, updates: Partial<Block>) => {
@@ -496,6 +495,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     setIsEquationEditing(true);
     requestAnimationFrame(() => equationTextareaRef.current?.focus());
   }, []);
+
+  const handleCopyCode = useCallback(() => {
+    navigator.clipboard.writeText(block.content).then(() => {
+      setCopiedCode(true);
+      globalThis.setTimeout(() => setCopiedCode(false), 1200);
+    }).catch(() => undefined);
+  }, [block.content]);
 
   useEffect(() => {
     if (!showLangPicker) return;
@@ -700,7 +706,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "column_list":
       return (
-        <div className="my-1 rounded-lg border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-2" style={surfaceStyle}>
+        <div className="my-1 rounded-lg border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-2">
           {renderChildren?.() ?? (
             <span className="text-xs text-[var(--osio-fg-subtle)]">Columns</span>
           )}
@@ -709,7 +715,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "column":
       return (
-        <div className="min-h-10 rounded-md border border-dashed border-[var(--osio-border-default)] px-2 py-1" style={surfaceStyle}>
+        <div className="min-h-10 rounded-md border border-dashed border-[var(--osio-border-default)] px-2 py-1">
           {renderChildren?.() ?? (
             <span className="text-xs text-[var(--osio-fg-subtle)]">Empty column</span>
           )}
@@ -732,13 +738,16 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "code":
       return (
-        <div className="my-1 rounded-lg overflow-visible border border-[var(--osio-border-default)] relative" style={surfaceStyle}>
-          <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--osio-bg-subtle)] border-b border-[var(--osio-border-default)]">
+        <div
+          className="my-2 overflow-visible rounded-md border border-[var(--osio-border-default)] shadow-sm"
+          style={surfaceStyle}
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-[var(--osio-border-default)] bg-black/[0.03] px-3 py-1.5">
             <div ref={langPickerRef} className="relative">
               <button
                 type="button"
                 onClick={() => setShowLangPicker((v) => !v)}
-                className="text-xs font-mono text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)] px-1.5 py-0.5 rounded hover:bg-[var(--osio-bg-hover)] transition-colors"
+                className="rounded px-1.5 py-0.5 font-mono text-xs text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
               >
                 {block.language || "plaintext"}
               </button>
@@ -762,38 +771,46 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 </div>
               )}
             </div>
+            <button
+              type="button"
+              title="Copy code"
+              className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+              onClick={handleCopyCode}
+            >
+              {copiedCode ? <Check size={14} /> : <Copy size={14} />}
+            </button>
           </div>
-          <div className="p-3 bg-[var(--osio-bg-surface)]" style={surfaceStyle}>
-            <textarea
-              value={block.content}
-              onChange={(e) => onChange(e.target.value)}
-              onKeyDown={handleCodeTextareaKeyDown}
-              placeholder={getBlockPlaceholder(block, "Code…")}
-              spellCheck={false}
-              className="w-full min-h-[120px] text-sm leading-relaxed font-mono text-[var(--osio-fg-default)] whitespace-pre bg-transparent outline-none resize-y"
-              style={editableStyle}
-            />
+          <div className="p-0">
+            <div className="relative min-h-[150px] overflow-hidden">
+              <CodeSyntaxHighlight
+                code={block.content || " "}
+                language={block.language}
+                className="pointer-events-none min-h-[150px] overflow-hidden p-3"
+                codeClassName="block min-h-[150px] whitespace-pre-wrap break-words font-mono text-sm leading-6"
+              />
+              <textarea
+                value={block.content}
+                onChange={(e) => onChange(e.target.value)}
+                onKeyDown={handleCodeTextareaKeyDown}
+                placeholder={getBlockPlaceholder(block, "Code…")}
+                spellCheck={false}
+                className="absolute inset-0 h-full min-h-[150px] w-full resize-y overflow-auto bg-transparent p-3 font-mono text-sm leading-6 text-transparent outline-none selection:bg-[rgba(35,131,226,0.28)] placeholder:text-[var(--osio-fg-subtle)]"
+                style={{
+                  tabSize: 2,
+                  color: "transparent",
+                  caretColor: codeCaretColor,
+                  WebkitTextFillColor: "transparent",
+                }}
+              />
+            </div>
             {isMermaidCode && block.content.trim() && (
               <div className="mt-3 pt-3 border-t border-[var(--osio-border-default)]">
-                <p className="text-xs font-mono text-[var(--osio-fg-muted)] mb-2">
+                <p className="mb-2 font-mono text-xs text-[var(--osio-fg-muted)]">
                   Mermaid preview
                 </p>
                 <MermaidDiagram
                   chart={block.content}
                   className="rounded-md border border-[var(--osio-border-default)] p-3 bg-[var(--osio-bg-subtle)] overflow-x-auto"
-                />
-              </div>
-            )}
-            {isSyntaxPreviewCode && block.content.trim() && (
-              <div className="mt-3 pt-3 border-t border-[var(--osio-border-default)]">
-                <p className="text-xs font-mono text-[var(--osio-fg-muted)] mb-2">
-                  Syntax preview
-                </p>
-                <CodeSyntaxHighlight
-                  code={block.content}
-                  language={block.language}
-                  className="rounded-md border border-[var(--osio-border-default)] p-3 bg-[var(--osio-bg-subtle)] overflow-x-auto"
-                  codeClassName="text-sm leading-relaxed font-mono whitespace-pre"
                 />
               </div>
             )}
@@ -803,7 +820,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "quote":
       return (
-        <div className="flex my-0.5 rounded-md px-1" style={surfaceStyle}>
+        <div className="flex my-0.5 rounded-md px-1">
           <div className="w-1 bg-[var(--osio-fg-default)] rounded-full shrink-0 mr-3" style={editableStyle} />
           <div className="flex-1 min-w-0">
             <EditableContent
@@ -823,20 +840,15 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "callout": {
       const icon = block.color || "💡";
-      const colors = {
-        bg: "bg-[var(--osio-bg-surface)]",
-        border: "border-[var(--osio-border-default)]",
-        text: "text-[var(--osio-fg-default)]",
-      };
       return (
         <div
-          className={`flex items-start gap-3 p-3 rounded-lg border my-0.5 ${colors.bg} ${colors.border}`}
+          className="my-0.5 flex items-start gap-3 rounded-lg border border-[var(--osio-border-default)] p-3"
           style={surfaceStyle}
         >
           <div className="relative shrink-0">
             <button
               type="button"
-              className={`inline-flex cursor-pointer items-center justify-center rounded ${colors.text}`}
+              className="inline-flex cursor-pointer items-center justify-center rounded text-[var(--osio-fg-default)]"
               aria-label="Change callout icon"
               title="Change callout icon"
               onClick={() => setShowCalloutIconPicker((prev) => !prev)}
@@ -859,7 +871,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <div className="flex-1 min-w-0">
             <EditableContent
               content={block.content}
-              className={`text-sm ${colors.text} leading-relaxed py-0.5`}
+              className="py-0.5 text-sm leading-relaxed text-[var(--osio-fg-default)]"
               style={editableStyle}
               placeholder={getBlockPlaceholder(block, "Type '/' for commands…")}
               onChange={onChange}
@@ -878,7 +890,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
       return (
         <div
-          className="relative my-2 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-3"
+          className="relative my-2 rounded-lg border border-[var(--osio-border-default)] p-3"
           style={surfaceStyle}
         >
           {shouldEditEquation ? null : (
@@ -950,7 +962,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <TableBlockEditor
             block={block}
             pageId={pageId}
-            style={surfaceStyle}
+            style={editableStyle}
             textStyle={editableStyle}
             onDeleteTable={onDeleteCodeBlock}
           />
@@ -958,7 +970,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       );
 
     case "database_inline":
-    case "database_full_page":
       return (
         <div // NOSONAR - keyboard navigation wrapper for non-editable block
           onKeyDown={(e) => {
@@ -980,6 +991,33 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             databaseId={block.databaseId}
             initialViewId={block.viewId}
             mode="inline"
+          />
+        </div>
+      );
+
+    case "database_full_page":
+      return (
+        <div // NOSONAR - keyboard navigation wrapper for non-editable block
+          onKeyDown={(e) => {
+            if (
+              e.key === "ArrowUp" ||
+              e.key === "ArrowDown" ||
+              e.key === "Backspace" ||
+              e.key === "Delete" ||
+              e.key === "Enter" ||
+              e.key === "Escape"
+            ) {
+              onKeyDown(e);
+            }
+          }}
+          tabIndex={-1}
+          aria-label="Full-page database block"
+          className="my-3 min-h-[520px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
+        >
+          <DatabaseBlock
+            databaseId={block.databaseId}
+            initialViewId={block.viewId}
+            mode="full"
           />
         </div>
       );
@@ -1105,6 +1143,21 @@ const TableBlockEditor: React.FC<{
     };
   }, [contextMenu]);
 
+  const tableContextMenuStyle = useMemo<React.CSSProperties>(() => {
+    if (!contextMenu) return {};
+    const width = 180;
+    const height = 160;
+    const viewportWidth = globalThis.innerWidth;
+    const viewportHeight = globalThis.innerHeight;
+    const left = clampNumber(contextMenu.x, 8, viewportWidth - width - 8, 8);
+    const belowTop = contextMenu.y;
+    const aboveTop = contextMenu.y - height;
+    const top = belowTop + height > viewportHeight - 8 && aboveTop > 8
+      ? aboveTop
+      : clampNumber(belowTop, 8, viewportHeight - height - 8, 8);
+    return { left, top };
+  }, [contextMenu]);
+
   return (
     <div className="group/table my-2 border border-[var(--osio-border-default)] rounded-lg overflow-visible relative" style={style}>
       <div className="overflow-auto max-h-[26rem]">
@@ -1161,7 +1214,7 @@ const TableBlockEditor: React.FC<{
         <div
           ref={contextMenuRef}
           className="fixed z-[var(--osio-z-popover)] min-w-[180px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-lg py-1"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          style={tableContextMenuStyle}
         >
           <button
             type="button"
