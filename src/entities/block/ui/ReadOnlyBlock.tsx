@@ -329,13 +329,23 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
       return <TableBlockReadOnly block={block} />;
 
     case "database_inline":
-    case "database_full_page":
       return (
         <DatabaseBlock
           databaseId={block.databaseId}
           initialViewId={block.viewId}
           mode="inline"
         />
+      );
+
+    case "database_full_page":
+      return (
+        <div className="my-3 min-h-[520px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
+          <DatabaseBlock
+            databaseId={block.databaseId}
+            initialViewId={block.viewId}
+            mode="full"
+          />
+        </div>
       );
 
     case "toggle":

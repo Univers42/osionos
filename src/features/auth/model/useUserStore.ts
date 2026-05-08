@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 17:32:09 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 03:50:38 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,8 +15,14 @@ import { api } from '@/shared/api/client';
 import type { UserSession, UserStore, Workspace } from '@/entities/user';
 import {
   INITIAL_PERSONAS,
+  ALLOW_OFFLINE_MODE,
+  REQUIRE_BRIDGE_SESSION,
+  type BridgeSessionImport,
+  consumeBridgeSessionFromLocation,
   createOfflineWorkspace,
   fetchWorkspaces,
+  apiJwtFromSessionToken,
+  isBridgeSession,
   loginPersona,
   partition,
   seededWorkspaceSession,
@@ -31,11 +37,14 @@ let _initInProgress = false;
 const ACTIVE_ACCOUNTS_STORAGE_KEY = 'osionos:active-accounts';
 const WORKSPACES_STORAGE_KEY = 'osionos:user-workspaces';
 const ACTIVE_CONTEXT_STORAGE_KEY = 'osionos:user-context';
+const BRIDGE_SESSION_STORAGE_KEY = 'osionos:bridge-session';
 
 type PersistedUserContext = {
   activeUserId?: string;
   activeWorkspaceByUser?: Record<string, string>;
 };
+
+type PersistedBridgeSession = BridgeSessionImport;
 
 function readPersistedContext(): PersistedUserContext {
   if (typeof localStorage === 'undefined') return {};
@@ -87,6 +96,38 @@ function savePersistedPersonas(personas: typeof INITIAL_PERSONAS) {
   localStorage.setItem(ACTIVE_ACCOUNTS_STORAGE_KEY, JSON.stringify(persisted));
 }
 
+function readPersistedBridgeSession(): PersistedBridgeSession | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(BRIDGE_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const record = JSON.parse(raw) as PersistedBridgeSession;
+    if (!record.session?.userId || !record.persona?.id) return null;
+    if (record.expiresAt && Date.parse(record.expiresAt) <= Date.now()) {
+      localStorage.removeItem(BRIDGE_SESSION_STORAGE_KEY);
+      return null;
+    }
+    return record;
+  } catch {
+    return null;
+  }
+}
+
+function savePersistedBridgeSession(record: PersistedBridgeSession) {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(BRIDGE_SESSION_STORAGE_KEY, JSON.stringify(record));
+}
+
+function clearPersistedBridgeSession(userId?: string) {
+  if (typeof localStorage === 'undefined') return;
+  if (!userId) {
+    localStorage.removeItem(BRIDGE_SESSION_STORAGE_KEY);
+    return;
+  }
+  const record = readPersistedBridgeSession();
+  if (record?.session.userId === userId) localStorage.removeItem(BRIDGE_SESSION_STORAGE_KEY);
+}
+
 function uniquePersonas(personas: typeof INITIAL_PERSONAS) {
   const byEmail = new Map<string, typeof INITIAL_PERSONAS[number]>();
   for (const persona of personas) {
@@ -123,6 +164,98 @@ function createOfflineSessions(personas: typeof INITIAL_PERSONAS) {
   return { sessions, firstUserId };
 }
 
+function activateBridgeSession(record: PersistedBridgeSession) {
+  const storedPersona = { ...record.persona, persistInSessions: true };
+  const bridgeSession: UserSession = {
+    ...record.session,
+    privateWorkspaces: record.session.privateWorkspaces ?? [],
+    sharedWorkspaces: record.session.sharedWorkspaces ?? [],
+  };
+  const nextPersonas = [storedPersona];
+  const sessions: Record<string, UserSession> = { [bridgeSession.userId]: bridgeSession };
+  const workspaceId = bridgeSession.privateWorkspaces[0]?._id ?? bridgeSession.sharedWorkspaces[0]?._id ?? '';
+  const activeWorkspaceByUser = { [bridgeSession.userId]: workspaceId };
+  savePersistedPersonas(nextPersonas);
+  savePersistedWorkspaces(sessions);
+  savePersistedBridgeSession({ ...record, persona: storedPersona, session: bridgeSession });
+  savePersistedContext({ activeUserId: bridgeSession.userId, activeWorkspaceByUser });
+  return { personas: nextPersonas, sessions, activeUserId: bridgeSession.userId, activeWorkspaceByUser };
+}
+
+function bridgeSessionRequiredState() {
+  return {
+    personas: [] as typeof INITIAL_PERSONAS,
+    sessions: {} as Record<string, UserSession>,
+    activeUserId: '',
+    activeWorkspaceByUser: {} as Record<string, string>,
+    initialized: true,
+    loading: false,
+    error: 'bridge-session-required',
+  };
+}
+
+function bridgeOnlyMode() {
+  return REQUIRE_BRIDGE_SESSION && !ALLOW_OFFLINE_MODE;
+}
+
+function initialPersonas() {
+  return uniquePersonas([...INITIAL_PERSONAS.map(p => ({ ...p })), ...readPersistedPersonas()]);
+}
+
+function finalizedState(personas: typeof INITIAL_PERSONAS, sessions: Record<string, UserSession>, firstUserId: string) {
+  savePersistedPersonas(personas);
+  const storedContext = readPersistedContext();
+  const activeUserId = storedContext.activeUserId && sessions[storedContext.activeUserId]
+    ? storedContext.activeUserId
+    : firstUserId;
+  savePersistedWorkspaces(sessions);
+  savePersistedContext({ activeUserId, activeWorkspaceByUser: storedContext.activeWorkspaceByUser ?? {} });
+  return { personas, sessions, activeUserId, activeWorkspaceByUser: storedContext.activeWorkspaceByUser ?? {}, initialized: true, loading: false, error: null };
+}
+
+function offlineState() {
+  const personas = initialPersonas();
+  const { sessions, firstUserId } = createOfflineSessions(personas);
+  return finalizedState(personas, sessions, firstUserId);
+}
+
+async function connectedOrOfflineState(personas: typeof INITIAL_PERSONAS) {
+  const sessions: Record<string, UserSession> = {};
+  let firstUserId = '';
+  const firstLogin = await loginPersona(INITIAL_PERSONAS[0]);
+
+  if (firstLogin) {
+    const { userId, accessToken, refreshToken } = firstLogin;
+    personas[0] = { ...personas[0], id: userId };
+    const workspaces = await fetchWorkspaces(accessToken);
+    const { privateWorkspaces, sharedWorkspaces } = partition(workspaces, userId);
+    sessions[userId] = { userId, accessToken, refreshToken, privateWorkspaces, sharedWorkspaces };
+    firstUserId = userId;
+
+    const remainingResults = await Promise.all(INITIAL_PERSONAS.slice(1).map(loginPersona));
+    for (let i = 0; i < remainingResults.length; i++) {
+      const loginResult = remainingResults[i];
+      if (!loginResult) continue;
+      const personaIndex = i + 1;
+      personas[personaIndex] = { ...personas[personaIndex], id: loginResult.userId };
+      const parts = partition(await fetchWorkspaces(loginResult.accessToken), loginResult.userId);
+      sessions[loginResult.userId] = { ...loginResult, privateWorkspaces: parts.privateWorkspaces, sharedWorkspaces: parts.sharedWorkspaces };
+    }
+  }
+
+  if (Object.keys(sessions).length > 0) return finalizedState(personas, sessions, firstUserId);
+  console.info('[playground] API unreachable — running in offline mode with seed data');
+  return offlineState();
+}
+
+async function resolveInitialState() {
+  const bridgeSession = await consumeBridgeSessionFromLocation().catch(() => null) ?? readPersistedBridgeSession();
+  if (bridgeSession) return { ...activateBridgeSession(bridgeSession), initialized: true, loading: false, error: null };
+  if (bridgeOnlyMode()) return bridgeSessionRequiredState();
+  const personas = initialPersonas();
+  return connectedOrOfflineState(personas);
+}
+
 /** Zustand store managing multi-user authentication and workspace access. */
 export const useUserStore = create<UserStore>((set, get) => ({
   personas:     uniquePersonas([...INITIAL_PERSONAS.map(p => ({ ...p })), ...readPersistedPersonas()]),
@@ -139,67 +272,9 @@ export const useUserStore = create<UserStore>((set, get) => ({
     set({ loading: true, error: null });
 
     try {
-      const updatedPersonas = uniquePersonas([...INITIAL_PERSONAS.map(p => ({ ...p })), ...readPersistedPersonas()]);
-      const sessions: Record<string, UserSession> = {};
-      let firstUserId = '';
-
-      const applyOfflineFallback = () => {
-        console.info('[playground] API unreachable — running in offline mode with seed data');
-        const offline = createOfflineSessions(updatedPersonas);
-        Object.assign(sessions, offline.sessions);
-        firstUserId = offline.firstUserId;
-      };
-
-      // Try to log in the first persona as a connectivity check.
-      // If it fails, skip all remaining logins and go to offline mode.
-      const firstLogin = await loginPersona(INITIAL_PERSONAS[0]);
-
-      if (firstLogin) {
-        // API is reachable — process first result and login the rest
-        const { userId, accessToken, refreshToken } = firstLogin;
-        updatedPersonas[0] = { ...updatedPersonas[0], id: userId };
-        const workspaces = await fetchWorkspaces(accessToken);
-        const { privateWorkspaces, sharedWorkspaces } = partition(workspaces, userId);
-        sessions[userId] = { userId, accessToken, refreshToken, privateWorkspaces, sharedWorkspaces };
-        firstUserId = userId;
-
-        // Login remaining personas
-        const remainingResults = await Promise.all(INITIAL_PERSONAS.slice(1).map(loginPersona));
-        for (let i = 0; i < remainingResults.length; i++) {
-          const lr = remainingResults[i];
-          if (!lr) continue;
-          const idx = i + 1; // offset since we already did index 0
-          updatedPersonas[idx] = { ...updatedPersonas[idx], id: lr.userId };
-          const ws = await fetchWorkspaces(lr.accessToken);
-          const parts = partition(ws, lr.userId);
-          sessions[lr.userId] = { userId: lr.userId, accessToken: lr.accessToken, refreshToken: lr.refreshToken, privateWorkspaces: parts.privateWorkspaces, sharedWorkspaces: parts.sharedWorkspaces };
-        }
-      }
-
-      if (Object.keys(sessions).length === 0) {
-        applyOfflineFallback();
-      }
-
-      savePersistedPersonas(updatedPersonas);
-      const storedContext = readPersistedContext();
-      const activeUserId = storedContext.activeUserId && sessions[storedContext.activeUserId]
-        ? storedContext.activeUserId
-        : firstUserId;
-      savePersistedWorkspaces(sessions);
-      savePersistedContext({ activeUserId, activeWorkspaceByUser: storedContext.activeWorkspaceByUser ?? {} });
-      set({ personas: updatedPersonas, sessions, activeUserId, activeWorkspaceByUser: storedContext.activeWorkspaceByUser ?? {}, initialized: true, loading: false });
+      set(await resolveInitialState());
     } catch {
-      const updatedPersonas = uniquePersonas([...INITIAL_PERSONAS.map(p => ({ ...p })), ...readPersistedPersonas()]);
-      const { sessions, firstUserId } = createOfflineSessions(updatedPersonas);
-
-      savePersistedPersonas(updatedPersonas);
-      const storedContext = readPersistedContext();
-      const activeUserId = storedContext.activeUserId && sessions[storedContext.activeUserId]
-        ? storedContext.activeUserId
-        : firstUserId;
-      savePersistedWorkspaces(sessions);
-      savePersistedContext({ activeUserId, activeWorkspaceByUser: storedContext.activeWorkspaceByUser ?? {} });
-      set({ personas: updatedPersonas, sessions, activeUserId, activeWorkspaceByUser: storedContext.activeWorkspaceByUser ?? {}, initialized: true, loading: false, error: null });
+      set(bridgeOnlyMode() ? bridgeSessionRequiredState() : offlineState());
     } finally {
       _initInProgress = false;
     }
@@ -277,6 +352,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
 
   logoutUser: (userId: string) => {
     set((state) => {
+      clearPersistedBridgeSession(userId);
       const sessions = { ...state.sessions };
       delete sessions[userId];
       const personas = state.personas.filter((persona) => persona.id !== userId || persona.persistInSessions);
@@ -293,7 +369,8 @@ export const useUserStore = create<UserStore>((set, get) => ({
   refreshWorkspaces: async (userId: string) => {
     const session = get().sessions[userId];
     if (!session) return;
-    const workspaces = await fetchWorkspaces(session.accessToken);
+    if (isBridgeSession(session)) return;
+    const workspaces = await fetchWorkspaces(apiJwtFromSessionToken(session.accessToken));
     const { privateWorkspaces, sharedWorkspaces } = partition(workspaces, userId);
     set(s => ({
       sessions: {
@@ -334,10 +411,29 @@ export const useUserStore = create<UserStore>((set, get) => ({
     try {
       const ws = await api.post<Workspace>('/api/workspaces', { name, slug }, jwt);
       await get().refreshWorkspaces(uid);
+      set((state) => {
+        const session = state.sessions[uid];
+        if (!session) return state;
+        const privateWorkspaces = session.privateWorkspaces.some((workspace) => workspace._id === ws._id)
+          ? session.privateWorkspaces
+          : [...session.privateWorkspaces, ws];
+        const sessions = {
+          ...state.sessions,
+          [uid]: { ...session, privateWorkspaces },
+        };
+        const activeWorkspaceByUser = { ...state.activeWorkspaceByUser, [uid]: ws._id };
+        savePersistedWorkspaces(sessions);
+        savePersistedContext({ activeUserId: uid, activeWorkspaceByUser });
+        return { sessions, activeWorkspaceByUser };
+      });
       return ws;
     } catch {
       return null;
     }
+  },
+
+  importBridgeSession: (session, persona, expiresAt) => {
+    set(() => activateBridgeSession({ ok: true, session, persona, expiresAt }));
   },
 
   activeSession: () => {
@@ -358,7 +454,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
     return personas.find(p => p.id === activeUserId) ?? personas[0] ?? null;
   },
 
-  activeJwt: () => get().activeSession()?.accessToken ?? null,
+  activeJwt: () => apiJwtFromSessionToken(get().activeSession()?.accessToken) || null,
 
   personaById: (id: string) => get().personas.find(p => p.id === id),
 }));

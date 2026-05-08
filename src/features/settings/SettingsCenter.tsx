@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:17:01 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/07 16:29:52 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -45,6 +45,7 @@ import { AssetRenderer } from '@univers42/ui-collection';
 
 import { useUserStore, type StaticPersona } from '@/features/auth';
 import { WorkspaceThemeControls } from '@/features/theme/WorkspaceThemePanel';
+import { useAssetLibraryStore, type AccountAsset, type AccountAssetKind } from '@/shared/config/assetLibraryStore';
 
 type SettingsTab =
   | 'profile'
@@ -130,6 +131,36 @@ const prompts: Record<SettingsTab, { title: string; subtitle: string }> = {
 };
 
 const rowBorder = 'border-t border-[var(--osio-border-default)]';
+const EMPTY_ASSETS: AccountAsset[] = [];
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error('Could not read import.'));
+    });
+    reader.addEventListener('error', () => reject(reader.error ?? new Error('Could not read import.')));
+    reader.readAsDataURL(file);
+  });
+}
+
+function assetKindFromFile(file: File): AccountAssetKind {
+  if (file.type.startsWith('image/')) return 'image';
+  if (file.type.startsWith('video/')) return 'video';
+  if (file.type.startsWith('audio/')) return 'audio';
+  return 'file';
+}
+
+function formatBytes(value?: number): string {
+  if (!value) return 'Local';
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 'default' | 'primary' | 'danger' | 'ghost' }> = ({ className = '', tone = 'default', ...props }) => {
   const toneClass = {
@@ -492,8 +523,28 @@ const PeoplePanel: React.FC<{ rows: React.ReactNode[][]; membersCount: number }>
 );
 
 const ImportPanel = () => {
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const activeUserId = useUserStore((s) => s.activeUserId) || 'anonymous';
+  const addAsset = useAssetLibraryStore((s) => s.addAsset);
   const files = ['CSV', 'PDF', 'Text & Markdown', 'HTML', 'Word'];
   const apps = ['Asana', 'Confluence', 'Trello', 'Workflowy', 'Evernote', 'Jira', 'Monday.com', 'Quip', 'Google Docs'];
+
+  async function handleLibraryImport(event: React.ChangeEvent<HTMLInputElement>) {
+    const imports = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    for (const file of imports) {
+      const source = await readFileAsDataUrl(file);
+      addAsset(activeUserId, {
+        kind: assetKindFromFile(file),
+        name: file.name,
+        source,
+        origin: 'upload',
+        mimeType: file.type,
+        size: file.size,
+      });
+    }
+  }
+
   return (
     <>
       <MiniTabs active="Discover" tabs={[{ label: 'Discover' }, { label: 'Completed' }]} />
@@ -501,8 +552,10 @@ const ImportPanel = () => {
         <div className="rounded-xl border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center">
           <Upload className="mx-auto text-[var(--osio-accent)]" size={28} />
           <h4 className="mt-3 font-medium text-[var(--osio-fg-default)]">Import your content to osionos</h4>
-          <p className="mt-2 text-sm text-[var(--osio-fg-muted)]">Drag and drop ZIP, CSV, PDF, text, markdown, or HTML files, or <span className="text-[var(--osio-accent)]">choose a file</span>.</p>
+          <p className="mt-2 text-sm text-[var(--osio-fg-muted)]">ZIP, CSV, PDF, text, markdown, HTML, images, audio, and video files.</p>
           <p className="mt-1 text-xs text-[var(--osio-fg-subtle)]">ZIP files can be a maximum of 5GB</p>
+          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleLibraryImport} />
+          <Button className="mt-4" onClick={() => fileInputRef.current?.click()}><Upload size={15} /> Choose files</Button>
         </div>
       </Section>
       <Section title="File-based imports"><div className="grid gap-3 sm:grid-cols-2">{files.map((file) => <FeatureCard key={file} icon={<FileText size={16} />} title={file} description={`Import ${file.toLowerCase()} content from files`} />)}</div></Section>
@@ -552,12 +605,82 @@ const PublicPagesPanel = () => (
   </>
 );
 
-const LibraryPanel = () => (
-  <>
-    <Section title="Emoji"><div className="grid gap-3 sm:grid-cols-3">{['😀', '🚀', '🌏', '🧠', '📚', '✨'].map((emoji) => <button key={emoji} type="button" className="rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-5 text-3xl hover:bg-[var(--osio-bg-hover)]">{emoji}</button>)}</div><Button className="mt-4"><Upload size={15} /> Upload emoji</Button></Section>
-    <Section title="Photos"><div className="grid gap-3 sm:grid-cols-3">{['Cover image', 'Workspace icon', 'Avatar photo'].map((item) => <FeatureCard key={item} icon={<Upload size={16} />} title={item} description="Upload, preview, and reuse media in the workspace library." />)}</div></Section>
-  </>
-);
+const LibraryPanel = () => {
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const activeUserId = useUserStore((s) => s.activeUserId) || 'anonymous';
+  const assets = useAssetLibraryStore((s) => s.assetsByUser[activeUserId] ?? EMPTY_ASSETS);
+  const addAsset = useAssetLibraryStore((s) => s.addAsset);
+  const removeAsset = useAssetLibraryStore((s) => s.removeAsset);
+  const imageAssets = assets.filter((asset) => asset.kind === 'cover' || asset.kind === 'image').slice(0, 9);
+
+  async function handleLibraryUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const uploads = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    for (const file of uploads) {
+      const source = await readFileAsDataUrl(file);
+      addAsset(activeUserId, {
+        kind: assetKindFromFile(file),
+        name: file.name,
+        source,
+        origin: 'upload',
+        mimeType: file.type,
+        size: file.size,
+      });
+    }
+  }
+
+  const rows = assets.map((asset) => [
+    <div key={asset.id} className="flex min-w-0 items-center gap-3">
+      {asset.source.startsWith('data:image') || asset.source.startsWith('http') ? (
+        <img src={asset.source} alt="" className="h-10 w-14 rounded object-cover" />
+      ) : (
+        <span className="flex h-10 w-14 items-center justify-center rounded bg-[var(--osio-bg-subtle)]"><FileText size={16} /></span>
+      )}
+      <div className="min-w-0">
+        <div className="truncate font-medium">{asset.name}</div>
+        <div className="truncate text-xs text-[var(--osio-fg-muted)]">{asset.mimeType || asset.origin}</div>
+      </div>
+    </div>,
+    asset.kind,
+    formatBytes(asset.size),
+    <Button key={`${asset.id}-remove`} tone="ghost" className="px-2" onClick={() => removeAsset(activeUserId, asset.id)}><Trash2 size={15} /></Button>,
+  ]);
+
+  return (
+    <>
+      <Section title="Account imports">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <MiniTabs active="All" tabs={[{ label: 'All', count: assets.length }, { label: 'Images', count: imageAssets.length }, { label: 'Files' }]} />
+          <div>
+            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleLibraryUpload} />
+            <Button onClick={() => fileInputRef.current?.click()}><Upload size={15} /> Add import</Button>
+          </div>
+        </div>
+        {assets.length > 0 ? (
+          <DataTable className="mt-4" headers={['Asset', 'Type', 'Size', '']} rows={rows} />
+        ) : (
+          <div className="mt-4 rounded-xl border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-6 py-8 text-center text-sm text-[var(--osio-fg-muted)]">
+            No imported assets yet.
+          </div>
+        )}
+      </Section>
+      <Section title="Photos">
+        {imageAssets.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-3">
+            {imageAssets.map((asset) => (
+              <div key={asset.id} className="overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
+                <img src={asset.source} alt="" className="h-28 w-full object-cover" />
+                <div className="px-3 py-2 text-xs font-medium text-[var(--osio-fg-default)]">{asset.name}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-3">{['Cover image', 'Workspace icon', 'Avatar photo'].map((item) => <FeatureCard key={item} icon={<Upload size={16} />} title={item} description="Reusable media for this account." />)}</div>
+        )}
+      </Section>
+    </>
+  );
+};
 
 const TeamspacesPanel: React.FC<{ workspaceName?: string }> = ({ workspaceName = '42 school HQ' }) => (
   <>

@@ -6,12 +6,11 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:26:44 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/07 16:29:51 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useEffect, useRef } from "react";
-import mermaid from "mermaid";
 
 interface MermaidDiagramProps {
   chart: string;
@@ -19,15 +18,23 @@ interface MermaidDiagramProps {
 }
 
 let mermaidInitialized = false;
+let mermaidPromise: Promise<typeof import("mermaid").default> | null = null;
 
-function ensureMermaidInitialized() {
-  if (mermaidInitialized) return;
+function loadMermaid() {
+  mermaidPromise ??= import("mermaid").then((module) => module.default);
+  return mermaidPromise;
+}
+
+async function ensureMermaidInitialized() {
+  const mermaid = await loadMermaid();
+  if (mermaidInitialized) return mermaid;
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: "strict",
     theme: "default",
   });
   mermaidInitialized = true;
+  return mermaid;
 }
 
 function nextRenderId() {
@@ -84,7 +91,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
 
     async function renderDiagram() {
       try {
-        ensureMermaidInitialized();
+        const mermaid = await ensureMermaidInitialized();
         const { svg, bindFunctions } = await mermaid.render(renderId, source);
 
         if (cancelled || renderTokenRef.current !== currentToken) {

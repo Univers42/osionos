@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:21 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/07 16:29:52 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,6 +34,15 @@ import type {
 } from "@/features/slash-commands/model/types";
 
 type SelectableSlashCommand = Exclude<SlashCommand, SlashMediaPickerCommand>;
+
+const MENU_MARGIN = 8;
+const COMMAND_MENU_WIDTH = 256;
+const MEDIA_MENU_WIDTH = 296;
+const COMMAND_MENU_MAX_HEIGHT = 416;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), Math.max(min, max));
+}
 
 interface SlashCommandMenuProps {
   position: { x: number; y: number };
@@ -129,6 +138,24 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     activeEl?.scrollIntoView({ block: "nearest" });
   }, [effectiveActiveIdx]);
 
+  const menuStyle = useMemo<React.CSSProperties>(() => {
+    const viewportWidth = typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1024;
+    const viewportHeight = typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 768;
+    const width = COMMAND_MENU_WIDTH + (activeMediaKind ? MEDIA_MENU_WIDTH : 0);
+    const maxHeight = Math.min(COMMAND_MENU_MAX_HEIGHT, viewportHeight - MENU_MARGIN * 2);
+    const belowTop = position.y + 4;
+    const aboveTop = position.y - maxHeight - 8;
+    const top = belowTop + maxHeight > viewportHeight - MENU_MARGIN && aboveTop >= MENU_MARGIN
+      ? aboveTop
+      : clamp(belowTop, MENU_MARGIN, viewportHeight - maxHeight - MENU_MARGIN);
+
+    return {
+      top,
+      left: clamp(position.x, MENU_MARGIN, viewportWidth - width - MENU_MARGIN),
+      maxHeight,
+    };
+  }, [activeMediaKind, position.x, position.y]);
+
   if (filtered.length === 0 && !activeMediaKind) {
     return null;
   }
@@ -148,7 +175,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       ref={ref}
       data-testid="slash-command-menu"
       className="fixed z-[var(--osio-z-popover)] flex max-h-[26rem] overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl"
-      style={{ top: position.y + 4, left: position.x }}
+      style={menuStyle}
     >
       <div className="flex w-64 min-w-0 flex-col">
         <div className="max-h-[26rem] overflow-y-auto py-1.5">

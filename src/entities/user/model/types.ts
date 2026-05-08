@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 17:22:35 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 02:49:48 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -63,6 +63,7 @@ export interface UserStore {
   logoutUser: (userId: string) => void;
   refreshWorkspaces: (userId: string) => Promise<void>;
   createWorkspace: (name: string, slug: string) => Promise<Workspace | null>;
+  importBridgeSession: (session: UserSession, persona: StaticPersona, expiresAt?: string) => void;
 
   // Selectors
   activeSession: () => UserSession | null;

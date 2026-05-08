@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/07 16:29:47 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 03:50:34 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -37,10 +37,10 @@ export const MainContent: React.FC = () => {
   const openPage = usePageStore((s) => s.openPage);
   const clearActivePage = usePageStore.setState;
   const session = useUserStore((s) => s.activeSession());
+  const jwt = useUserStore((s) => s.activeJwt() ?? "");
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const persona = useUserStore((s) => s.activePersona());
 
-  const jwt = session?.accessToken ?? "";
   const firstWsId = activeWorkspace?._id ?? session?.privateWorkspaces[0]?._id ?? "";
 
   useEffect(() => {

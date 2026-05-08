@@ -45,6 +45,7 @@ import { PageBreadcrumbs } from "./PageBreadcrumbs";
 const MINUTE_IN_MS = 60_000;
 const HOUR_IN_MS = 3_600_000;
 const DAY_IN_MS = 86_400_000;
+const VERSION_AUTOSAVE_DELAY_MS = 1800;
 
 interface PageHeaderBarProps {
   pageId: string;
@@ -67,6 +68,24 @@ const FONT_OPTIONS: Array<{ id: PageFont; label: string; sample: string }> = [
   { id: "serif", label: "Serif", sample: "Ag" },
   { id: "mono", label: "Mono", sample: "Ag" },
 ];
+
+const TRANSLATION_LANGUAGES = [
+  { locale: "fr", label: "French" },
+  { locale: "es", label: "Spanish" },
+  { locale: "en", label: "English" },
+  { locale: "de", label: "German" },
+  { locale: "it", label: "Italian" },
+  { locale: "pt", label: "Portuguese" },
+  { locale: "nl", label: "Dutch" },
+  { locale: "ar", label: "Arabic" },
+  { locale: "ja", label: "Japanese" },
+  { locale: "ko", label: "Korean" },
+  { locale: "zh", label: "Chinese" },
+] as const;
+
+function translationLabel(locale: string): string {
+  return TRANSLATION_LANGUAGES.find((language) => language.locale === locale)?.label ?? locale.toUpperCase();
+}
 
 function fontSampleClass(font: PageFont): string {
   if (font === "serif") return "font-serif";
@@ -94,6 +113,11 @@ function formatEditedLabel(updatedAt: string | undefined): string {
 
   const days = Math.floor(elapsed / DAY_IN_MS);
   return `Edited ${days} day${days === 1 ? "" : "s"} ago`;
+}
+
+function pageVersionSignature(page: { title: string; content?: unknown[] } | null | undefined): string {
+  if (!page) return "";
+  return JSON.stringify({ title: page.title, content: page.content ?? [] });
 }
 
 const MenuButton: React.FC<MenuButtonProps> = ({
@@ -181,7 +205,11 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
   const [configOpen, setConfigOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [detailPanel, setDetailPanel] = useState<"analytics" | "versions" | null>(null);
+  const [translateLocale, setTranslateLocale] = useState(config.activeTranslation?.locale ?? "fr");
   const importInputRef = useRef<HTMLInputElement>(null);
+  const lastVersionSignatureRef = useRef<string | null>(null);
+  const versionTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+  const versionCounterRef = useRef(0);
 
   const handleOpenHome = useCallback(() => {
     usePageStore.setState({
@@ -195,6 +223,46 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
     const id = setInterval(() => setTick((t) => t + 1), 60_000);
     return () => clearInterval(id);
   }, []);
+
+  const currentVersionSignature = useMemo(() => pageVersionSignature(page), [page]);
+
+  useEffect(() => {
+    if (!page) return;
+
+    if (lastVersionSignatureRef.current === null) {
+      lastVersionSignatureRef.current = currentVersionSignature;
+      return;
+    }
+
+    if (lastVersionSignatureRef.current === currentVersionSignature) return;
+
+    if (versionTimerRef.current) {
+      globalThis.clearTimeout(versionTimerRef.current);
+    }
+
+    versionTimerRef.current = globalThis.setTimeout(() => {
+      const latestPage = usePageStore.getState().pageById(pageId);
+      if (!latestPage) return;
+
+      const latestSignature = pageVersionSignature(latestPage);
+      if (lastVersionSignatureRef.current === latestSignature) return;
+
+      versionCounterRef.current += 1;
+      addVersion(safeUserId, pageId, {
+        title: latestPage.title || "Untitled",
+        content: latestPage.content ?? [],
+        label: `Autosave ${versionCounterRef.current}`,
+      }).catch(() => undefined);
+      lastVersionSignatureRef.current = latestSignature;
+    }, VERSION_AUTOSAVE_DELAY_MS);
+
+    return () => {
+      if (versionTimerRef.current) {
+        globalThis.clearTimeout(versionTimerRef.current);
+        versionTimerRef.current = null;
+      }
+    };
+  }, [addVersion, currentVersionSignature, page, pageId, safeUserId]);
 
   // `tick` is intentionally present in deps to refresh the label periodically.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -235,13 +303,37 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
     handleOpenHome();
   }
 
-  async function handleTranslate() {
+  async function handleTranslate(targetLocale = translateLocale) {
     if (!page) return;
-    await snapshot("Before translation");
-    const translated = await translatePage(page, jwt ?? undefined, "fr");
+    const label = translationLabel(targetLocale);
+    await snapshot(`Before translation to ${label}`);
+    const translated = await translatePage(page, jwt ?? undefined, targetLocale);
     if (translated.title) updatePageTitle(pageId, translated.title);
     if (translated.content) updatePageContent(pageId, translated.content);
-    await logAction("translate", "Page translated to French", { targetLocale: "fr" });
+
+    const translationRecord = {
+      id: crypto.randomUUID(),
+      userId: safeUserId,
+      pageId,
+      locale: targetLocale,
+      label,
+      title: translated.title ?? page.title,
+      content: translated.content ?? page.content ?? [],
+      createdAt: new Date().toISOString(),
+    };
+    const latestConfig = usePageConfigStore.getState().getConfig(safeUserId, pageId);
+    await updateConfig(safeUserId, pageId, {
+      translations: [
+        translationRecord,
+        ...latestConfig.translations.filter((translation) => translation.locale !== targetLocale),
+      ].slice(0, 20),
+      activeTranslation: {
+        id: translationRecord.id,
+        locale: targetLocale,
+        label,
+      },
+    });
+    await logAction("translate", `Page translated to ${label}`, { targetLocale });
   }
 
   async function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
@@ -279,10 +371,12 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
     await logAction("connections", existing ? "Connection disabled" : "MongoDB connection enabled");
   }
 
-  function restoreVersion(version: PageVersion) {
+  async function restoreVersion(version: PageVersion) {
+    await snapshot("Before version restore");
     updatePageTitle(pageId, version.title);
     updatePageContent(pageId, version.content as Parameters<typeof updatePageContent>[1]);
-    logAction("version_history", "Version restored", { versionId: version.id }).catch(() => undefined);
+    lastVersionSignatureRef.current = pageVersionSignature({ title: version.title, content: version.content });
+    await logAction("version_history", "Version restored", { versionId: version.id });
   }
 
   return (
@@ -340,7 +434,26 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({
                   <MenuButton icon={<Text size={16} />} label="Small text" checked={config.smallText} onClick={() => updatePageSetting({ smallText: !config.smallText }, "small_text", "Small text toggled")} />
                   <MenuButton icon={<Maximize2 size={16} />} label="Full width" checked={config.fullWidth} onClick={() => updatePageSetting({ fullWidth: !config.fullWidth }, "full_width", "Full width toggled")} />
                   <MenuButton icon={<Lock size={16} />} label="Lock page" checked={config.locked} onClick={() => updatePageSetting({ locked: !config.locked }, "lock_page", config.locked ? "Page unlocked" : "Page locked")} />
-                  <MenuButton icon={<Languages size={16} />} label="Translate" trailing="French" onClick={handleTranslate} />
+                  <div className="flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--osio-bg-hover)]">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--osio-fg-muted)]"><Languages size={16} /></span>
+                    <span className="min-w-0 flex-1 truncate">Translate</span>
+                    <select
+                      value={translateLocale}
+                      className="max-w-28 rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-1.5 py-1 text-xs text-[var(--osio-fg-default)] outline-none"
+                      onChange={(event) => setTranslateLocale(event.target.value)}
+                    >
+                      {TRANSLATION_LANGUAGES.map((language) => (
+                        <option key={language.locale} value={language.locale}>{language.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="rounded bg-[var(--osio-accent)] px-2 py-1 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90"
+                      onClick={() => handleTranslate()}
+                    >
+                      Apply
+                    </button>
+                  </div>
                 </div>
 
                 <div className="border-t border-[var(--osio-border-default)] py-1">

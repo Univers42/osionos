@@ -139,6 +139,17 @@
   --osio-block-tint-pink-bg: #F2D8E7;
   --osio-block-tint-red-fg: #B42318;
   --osio-block-tint-red-bg: #F5D8D5;
+
+  --osio-syntax-keyword: #A626A4;
+  --osio-syntax-string: #0B6B49;
+  --osio-syntax-number: #0B63CE;
+  --osio-syntax-comment: #5F6B76;
+  --osio-syntax-function: #8250DF;
+  --osio-syntax-type: #953800;
+  --osio-syntax-property: #0550AE;
+  --osio-syntax-tag: #116329;
+  --osio-syntax-attr: #6F42C1;
+  --osio-syntax-literal: #0A3069;
 }
 
 [data-theme="dark"] {
@@ -183,6 +194,17 @@
   --osio-block-tint-pink-bg: #3C2030;
   --osio-block-tint-red-fg: #FFB4AB;
   --osio-block-tint-red-bg: #3E211E;
+
+  --osio-syntax-keyword: #D2A8FF;
+  --osio-syntax-string: #A5D6FF;
+  --osio-syntax-number: #79C0FF;
+  --osio-syntax-comment: #AAB4C0;
+  --osio-syntax-function: #D2A8FF;
+  --osio-syntax-type: #FFA657;
+  --osio-syntax-property: #79C0FF;
+  --osio-syntax-tag: #7EE787;
+  --osio-syntax-attr: #D2A8FF;
+  --osio-syntax-literal: #79C0FF;
 }
 
 :root,
@@ -251,7 +273,67 @@ body {
 .hljs {
   background: transparent !important;
   color: var(--osio-fg-default) !important;
+  display: block !important;
   padding: 0 !important;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-name {
+  color: var(--osio-syntax-keyword) !important;
+}
+
+.hljs-string,
+.hljs-title.class_,
+.hljs-section,
+.hljs-quote,
+.hljs-template-variable,
+.hljs-deletion {
+  color: var(--osio-syntax-string) !important;
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: var(--osio-syntax-number) !important;
+}
+
+.hljs-comment,
+.hljs-meta {
+  color: var(--osio-syntax-comment) !important;
+  font-style: italic;
+}
+
+.hljs-title,
+.hljs-function .hljs-title {
+  color: var(--osio-syntax-function) !important;
+}
+
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-title.class_ {
+  color: var(--osio-syntax-type) !important;
+}
+
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-property {
+  color: var(--osio-syntax-property) !important;
+}
+
+.hljs-tag,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: var(--osio-syntax-tag) !important;
+}
+
+.hljs-regexp,
+.hljs-addition {
+  color: var(--osio-syntax-literal) !important;
 }
 
 /* Link and Mention Unification */

@@ -51,7 +51,6 @@ import { useBlockContextMenu } from "./useBlockContextMenu";
 import { focusEditableBlock } from "./blockDomFocus";
 
 const HEADING_SHORTCUT_RE = /^#{1,6}$/;
-const NUMBERED_SHORTCUT_RE = /^\d+\.$/;
 
 function parsePipeTable(text: string): string[][] | null {
   const lines = text
@@ -86,6 +85,16 @@ function parsePipeTable(text: string): string[][] | null {
 
   const table = [header, ...bodyRows];
   return table.length ? table : null;
+}
+
+function shouldTryMarkdownShortcut(text: string): boolean {
+  const trimmed = text.trimEnd();
+  return (
+    text.endsWith(" ") ||
+    /^[-*_]{3,}$/.test(trimmed) ||
+    trimmed.startsWith("```") ||
+    trimmed === "$$"
+  );
 }
 
 function isEffectivelyEmptyForDeletion(text: string): boolean {
@@ -286,11 +295,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [pageSelector, getCaretRect],
   );
 
-  const tryHandleMarkdownShortcut = useCallback(
-    (blockId: string, text: string): void => {
-      if (!(text.endsWith(" ") || text === "---" || text === "```" || text === "$$")) return;
-
-      const detection = detectBlockType(text);
+  const applyMarkdownDetection = useCallback(
+    (blockId: string, detection: ReturnType<typeof detectBlockType>): void => {
       if (!detection) return;
 
       changeBlockType(pageId, blockId, detection.type);
@@ -298,17 +304,31 @@ export function usePlaygroundBlockEditor(pageId: string) {
         content: detection.remainingContent,
         ...(detection.type === "to_do"
           ? { checked: Boolean(detection.checked) }
-          : {}),
+          : { checked: undefined }),
         ...(detection.type === "callout"
           ? { color: getCalloutIconForKind(detection.kind ?? "note") }
           : {}),
-        ...(detection.headingLevel
-          ? { headingLevel: detection.headingLevel as Block["headingLevel"] }
-          : { headingLevel: undefined }),
+        ...(detection.type === "code"
+          ? { language: detection.language ?? "plaintext" }
+          : { language: undefined }),
+        ...(detection.type === "toggle" ? { collapsed: false } : {}),
+        headingLevel: detection.headingLevel,
       });
       repositionCursor(blockId, detection.remainingContent);
     },
     [pageId, changeBlockType, updateBlock],
+  );
+
+  const tryHandleMarkdownShortcut = useCallback(
+    (blockId: string, text: string): void => {
+      if (!shouldTryMarkdownShortcut(text)) return;
+
+      const detection = detectBlockType(text);
+      if (!detection) return;
+
+      applyMarkdownDetection(blockId, detection);
+    },
+    [applyMarkdownDetection],
   );
 
   /** Handle content change — detects '/' trigger and markdown shortcuts. */
@@ -338,50 +358,15 @@ export function usePlaygroundBlockEditor(pageId: string) {
     (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
       if (e.key !== " " || block.type !== "paragraph") return false;
 
-      if (block.content === "-") {
-        e.preventDefault();
-        changeBlockType(pageId, blockId, "bulleted_list");
-        updateBlock(pageId, blockId, { content: "" });
-        focusBlock(blockId);
-        return true;
-      }
+      const detection = detectBlockType(`${block.content} `);
+      if (!detection) return false;
 
-      if (
-        block.content === "[]" ||
-        block.content === "[ ]" ||
-        block.content === "[x]" ||
-        block.content === "[X]"
-      ) {
-        e.preventDefault();
-        changeBlockType(pageId, blockId, "to_do");
-        updateBlock(pageId, blockId, {
-          content: "",
-          checked: block.content === "[x]" || block.content === "[X]",
-        });
-        focusBlock(blockId);
-        return true;
-      }
-
-      if (HEADING_SHORTCUT_RE.test(block.content)) {
-        e.preventDefault();
-        const level = block.content.length;
-        changeBlockType(pageId, blockId, `heading_${level}` as Block["type"]);
-        updateBlock(pageId, blockId, { content: "" });
-        focusBlock(blockId);
-        return true;
-      }
-
-      if (NUMBERED_SHORTCUT_RE.test(block.content)) {
-        e.preventDefault();
-        changeBlockType(pageId, blockId, "numbered_list");
-        updateBlock(pageId, blockId, { content: "" });
-        focusBlock(blockId);
-        return true;
-      }
-
-      return false;
+      e.preventDefault();
+      applyMarkdownDetection(blockId, detection);
+      focusBlock(blockId);
+      return true;
     },
-    [pageId, changeBlockType, updateBlock, focusBlock],
+    [applyMarkdownDetection, focusBlock],
   );
 
   const handleToggleHeadingSpaceShortcut = useCallback(

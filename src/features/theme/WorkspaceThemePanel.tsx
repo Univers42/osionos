@@ -83,7 +83,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
     <div className={compact ? 'space-y-3' : 'space-y-3 overflow-y-auto p-4'}>
       <button
         type="button"
-        className={`w-full rounded-xl border p-3 text-left transition ${
+        className={`w-full rounded-md border p-3 text-left transition ${
           usingNativeAppTheme
             ? 'border-[var(--osio-accent)] bg-[var(--osio-bg-subtle)]'
             : 'border-[var(--osio-border-default)] hover:bg-[var(--osio-bg-hover)]'
@@ -103,7 +103,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
             <button
               type="button"
               key={preset.themeName}
-              className={`rounded-xl border p-3 text-left transition ${
+              className={`rounded-md border p-3 text-left transition ${
                 selected
                   ? 'border-[var(--osio-accent)] bg-[var(--osio-bg-subtle)]'
                   : 'border-[var(--osio-border-default)] hover:bg-[var(--osio-bg-hover)]'
@@ -116,7 +116,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
                   {Object.values(preset.tokens).slice(0, 4).map((color, index) => (
                     <span
                       key={`${preset.themeName}-${index}`}
-                      className="h-4 w-4 rounded-full border border-black/10"
+                      className="h-4 w-4 rounded-sm border border-black/10"
                       style={{ background: color }}
                     />
                   ))}
@@ -127,7 +127,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
         })}
       </div>
 
-      <div className="rounded-xl border border-[var(--osio-border-default)] p-3">
+      <div className="rounded-md border border-[var(--osio-border-default)] p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
           <span className="text-sm font-medium text-[var(--osio-fg-default)]">JSON theme config</span>
           <button

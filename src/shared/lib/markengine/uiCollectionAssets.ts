@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:26:09 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/05 01:56:06 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:10 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -81,7 +81,73 @@ const EMOJI_GROUP_LABELS: Record<string, string> = {
 const BOARD_ACTIVE_BACKGROUND = 'rgba(35, 131, 226, 0.12)';
 // Media collections have been removed from @univers42/ui-collection
 // Using empty arrays to preserve API compatibility
+export interface CoverPickerAsset {
+  id: string;
+  label: string;
+  ref: string;
+  previewUrl?: string;
+  credit?: string;
+  downloadLocation?: string;
+  author?: string;
+}
+
+export const PRELOADED_COVER_ITEMS: CoverPickerAsset[] = [
+  {
+    id: 'cover-preloaded-studio',
+    label: 'Studio desk',
+    ref: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1800&q=80',
+    previewUrl: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=720&q=70',
+    credit: 'Unsplash',
+  },
+  {
+    id: 'cover-preloaded-library',
+    label: 'Library shelves',
+    ref: 'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=1800&q=80',
+    previewUrl: 'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=720&q=70',
+    credit: 'Unsplash',
+  },
+  {
+    id: 'cover-preloaded-canyon',
+    label: 'Desert canyon',
+    ref: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1800&q=80',
+    previewUrl: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=720&q=70',
+    credit: 'Unsplash',
+  },
+  {
+    id: 'cover-preloaded-night-city',
+    label: 'Night city',
+    ref: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=1800&q=80',
+    previewUrl: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=720&q=70',
+    credit: 'Unsplash',
+  },
+];
+
+export const UNSPLASH_COVER_ITEMS: CoverPickerAsset[] = [
+  {
+    id: 'cover-unsplash-people-workspace',
+    label: 'People workspace',
+    ref: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1800&q=80',
+    previewUrl: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=720&q=70',
+    credit: 'Unsplash',
+  },
+  {
+    id: 'cover-unsplash-portrait-warm',
+    label: 'Portrait study',
+    ref: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=1800&q=80',
+    previewUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=720&q=70',
+    credit: 'Unsplash',
+  },
+  {
+    id: 'cover-unsplash-portrait-city',
+    label: 'City portrait',
+    ref: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1800&q=80',
+    previewUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=720&q=70',
+    credit: 'Unsplash',
+  },
+];
+
 const FALLBACK_COVER_ITEMS = [
+  ...PRELOADED_COVER_ITEMS,
   { id: 'cover-aurora', label: 'Aurora', ref: 'linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%)' },
   { id: 'cover-sunset', label: 'Sunset', ref: 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)' },
   { id: 'cover-forest', label: 'Forest', ref: 'linear-gradient(135deg, #16a34a 0%, #0f766e 100%)' },
@@ -285,9 +351,11 @@ const MEDIA_PICKER_TAB_OPTIONS = {
   itemLabelVisibility: 'hidden',
 } as const;
 
-export const SLASH_MEDIA_PICKER_TABS: Record<MediaBlockType, AssetPickerBoardTab[]> = {
-  image: [
-    createMediaCollectionPickerTab('photos', COLLECTION_IMAGE_ITEMS, {
+function createImageMediaPickerTabs(
+  items: Array<unknown> = COLLECTION_IMAGE_ITEMS,
+): AssetPickerBoardTab[] {
+  return [
+    createMediaCollectionPickerTab('photos', items, {
       label: 'Images',
       columns: 2,
       layout: 'cover',
@@ -295,7 +363,11 @@ export const SLASH_MEDIA_PICKER_TABS: Record<MediaBlockType, AssetPickerBoardTab
       searchPlaceholder: 'Search photos by mood or keyword',
       ...MEDIA_PICKER_TAB_OPTIONS,
     }),
-  ],
+  ];
+}
+
+export const SLASH_MEDIA_PICKER_TABS: Record<MediaBlockType, AssetPickerBoardTab[]> = {
+  image: createImageMediaPickerTabs(),
   video: [
     createMediaCollectionPickerTab('videos', COLLECTION_VIDEO_ITEMS, {
       label: 'Videos',
@@ -330,7 +402,13 @@ export const SLASH_MEDIA_PICKER_TABS: Record<MediaBlockType, AssetPickerBoardTab
   ],
 };
 
-export function getSlashMediaPickerTabs(kind: MediaBlockType): AssetPickerBoardTab[] {
+export function getSlashMediaPickerTabs(
+  kind: MediaBlockType,
+  dynamicImageItems: Array<unknown> = [],
+): AssetPickerBoardTab[] {
+  if (kind === 'image' && dynamicImageItems.length > 0) {
+    return createImageMediaPickerTabs(dynamicImageItems);
+  }
   return SLASH_MEDIA_PICKER_TABS[kind];
 }
 
@@ -340,6 +418,17 @@ export interface ResolvedCollectionMediaAsset {
   thumbnailUrl?: string;
 }
 
+export function normalizeMediaSource(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  if (value.startsWith('url:')) return value.slice(4);
+  return value;
+}
+
+function isDirectMediaSource(value: string): boolean {
+  const source = normalizeMediaSource(value) ?? value;
+  return /^(https?:|data:|blob:)/i.test(source);
+}
+
 export function resolveCollectionMediaAsset(
   value: string | undefined,
   tabs: AssetPickerBoardTab[],
@@ -347,6 +436,15 @@ export function resolveCollectionMediaAsset(
 ): ResolvedCollectionMediaAsset | null {
   if (!value) {
     return null;
+  }
+
+  if (isDirectMediaSource(value)) {
+    const source = normalizeMediaSource(value);
+    return {
+      label: fallbackLabel,
+      url: source,
+      thumbnailUrl: source,
+    };
   }
 
   const resolved = resolveAssetValue(value, tabs);
