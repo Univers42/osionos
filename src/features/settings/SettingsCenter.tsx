@@ -6,12 +6,17 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:17:01 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 18:16:10 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 /* eslint-disable react/prop-types */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import JSZip from 'jszip';
+import i18n from 'i18next';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import QRCode from 'qrcode';
+import { startRegistration } from '@simplewebauthn/browser';
 import {
   Bell,
   Bot,
@@ -25,6 +30,7 @@ import {
   FileText,
   Globe,
   Import,
+  KeyRound,
   LayoutGrid,
   Mail,
   MoreHorizontal,
@@ -44,14 +50,51 @@ import {
 import { AssetRenderer } from '@univers42/ui-collection';
 
 import { useUserStore, type StaticPersona } from '@/features/auth';
+import { usePageActions, type PageEntry } from '@/entities/page';
 import { WorkspaceThemeControls } from '@/features/theme/WorkspaceThemePanel';
+import { importPageFile } from '@/services/page-actions';
+import { API_BASE, api, getActiveJwt } from '@/shared/api/client';
 import { useAssetLibraryStore, type AccountAsset, type AccountAssetKind } from '@/shared/config/assetLibraryStore';
+import { useUIStore } from '@/shared/config/uiStore';
+import { usePageStore } from '@/store/usePageStore';
+import {
+  MCP_TOOL_OPTIONS,
+  recordSettingsAction,
+  useAiSettingsStore,
+  useAccountDevicesStore,
+  useAccountEmailsStore,
+  useAccountPasskeysStore,
+  useAccountSettingsStore,
+  useBillingStore,
+  useConnectionsStore,
+  useImportHistoryStore,
+  useMcpSettingsStore,
+  useNotificationSettingsStore,
+  useTeamspacesStore,
+  useUserPreferencesStore,
+  useWorkspaceInvitesStore,
+  useWorkspaceMembersStore,
+  useWorkspaceSettingsStore,
+  type BillingInvoice,
+  type BillingState,
+  type ConnectionRecord,
+  type ImportHistoryEntry,
+  type McpAllowedTool,
+  type PublicDomain,
+  type WorkspaceInvite,
+  type WorkspaceMember,
+  type WorkspaceMemberRole,
+  type WorkspaceSettings,
+} from '@/store/settings';
+import { defaultBillingState, defaultWorkspaceSettings } from '@/store/settings/defaults';
 import {
   Dropdown,
+  EmojiPicker,
   MiniTabs as PrimitiveMiniTabs,
   Modal,
   Toggle,
-  searchSettings,
+  useSettingsSearchIndex,
+  useToastStore,
   type SettingsSearchEntry,
   type SettingsTab,
 } from '@/shared/ui';
@@ -123,6 +166,56 @@ const prompts: Record<SettingsTab, { title: string; subtitle: string }> = {
 
 const rowBorder = 'border-t border-[var(--osio-border-default)]';
 const EMPTY_ASSETS: AccountAsset[] = [];
+const EMPTY_BILLING_INVOICES: BillingInvoice[] = [];
+const EMPTY_IMPORT_HISTORY: ImportHistoryEntry[] = [];
+const EMPTY_WORKSPACE_INVITES: WorkspaceInvite[] = [];
+const EMPTY_WORKSPACE_MEMBERS: WorkspaceMember[] = [];
+
+const CONNECTION_PROVIDERS = [
+  { provider: 'chartbase', label: 'ChartBase', scopes: ['content.read'] },
+  { provider: 'slack', label: 'Slack', scopes: ['links.preview', 'messages.notify'] },
+  { provider: 'github', label: 'GitHub', scopes: ['links.preview', 'databases.sync'] },
+  { provider: 'whimsical', label: 'Whimsical', scopes: ['files.preview'] },
+  { provider: 'adobe-xd', label: 'Adobe XD', scopes: ['files.preview'] },
+  { provider: 'mail', label: 'osionos Mail', scopes: ['mail.read'] },
+  { provider: 'calendar', label: 'osionos Calendar', scopes: ['calendar.read'] },
+] as const;
+
+const FALLBACK_TIMEZONES = ['UTC', 'Europe/Madrid', 'Europe/Paris', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'Asia/Tokyo'];
+
+type SettingsModalName =
+  | 'email-manager'
+  | 'password'
+  | 'two-factor'
+  | 'passkeys'
+  | 'support-duration'
+  | 'delete-account'
+  | 'revoke-devices'
+  | 'cookies'
+  | 'reset-preferences'
+  | 'page-notification-overrides'
+  | 'connection-gallery'
+  | 'connection-scopes'
+  | 'mail-provider'
+  | 'calendar-provider'
+  | 'page-selector'
+  | 'delete-workspace'
+  | 'invite-members'
+  | 'people-directory'
+  | 'member-actions'
+  | 'typed-import'
+  | 'provider-import'
+  | 'mcp-developer'
+  | 'billing-edit'
+  | 'upgrade-plan'
+  | 'new-teamspace'
+  | 'analytics-drawer'
+  | 'version-history';
+
+interface ActiveSettingsModal {
+  name: SettingsModalName;
+  payload?: Record<string, unknown>;
+}
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -153,6 +246,80 @@ function formatBytes(value?: number): string {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function runAsync(work: Promise<unknown>) {
+  work.catch(() => undefined);
+}
+
+function noopHandledAction(label: string, metadata: Record<string, unknown> = {}) {
+  recordSettingsAction(label, metadata);
+}
+
+function downloadBlob(fileName: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadText(fileName: string, content: string, type = 'text/plain') {
+  downloadBlob(fileName, new Blob([content], { type }));
+}
+
+function csvCell(value: unknown): string {
+  const primitive = typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? value : '';
+  return `"${String(primitive).replaceAll('"', '""')}"`;
+}
+
+function safeSlug(value: string): string {
+  return value.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, '-').replaceAll(/^-|-$/g, '') || 'export';
+}
+
+function timezoneOptions(): string[] {
+  const supportedValuesOf = Intl.supportedValuesOf as ((key: 'timeZone') => string[]) | undefined;
+  return supportedValuesOf ? supportedValuesOf('timeZone') : FALLBACK_TIMEZONES;
+}
+
+function applyTheme(theme: 'light' | 'dark' | 'system') {
+  document.documentElement.dataset.osionosTheme = theme;
+  recordSettingsAction('theme_apply', { theme });
+}
+
+function changeLanguage(language: string) {
+  if (i18n.isInitialized) {
+    runAsync(i18n.changeLanguage(language));
+    return;
+  }
+  recordSettingsAction('i18n_change_stub', { language, todo: 'Initialize react-i18next app provider.' });
+}
+
+async function postAccountAction<T>(path: string, body: unknown): Promise<T | null> {
+  const jwt = getActiveJwt();
+  if (!jwt || !API_BASE) return null;
+  return api.post<T>(path, body, jwt);
+}
+
+function connectionProvider(provider: string) {
+  return CONNECTION_PROVIDERS.find((item) => item.provider === provider) ?? CONNECTION_PROVIDERS[0];
+}
+
+function cookieModeLabel(mode: string | undefined) {
+  if (mode === 'all') return 'Allow all';
+  if (mode === 'essential') return 'Essential only';
+  return 'Customize';
+}
+
+function providerConnectionInput(userId: string, provider: string, labelSuffix = '') {
+  const manifest = connectionProvider(provider);
+  return {
+    userId,
+    provider: manifest.provider,
+    label: `${manifest.label}${labelSuffix}`,
+    scopes: [...manifest.scopes],
+  };
+}
+
 function anchorFromTitle(value: string): string {
   return value
     .toLowerCase()
@@ -170,7 +337,7 @@ function textFromReactNode(node: React.ReactNode): string {
   return '';
 }
 
-const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 'default' | 'primary' | 'danger' | 'ghost' }> = ({ className = '', tone = 'default', ...props }) => {
+const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 'default' | 'primary' | 'danger' | 'ghost' }> = ({ className = '', tone = 'default', onClick, children, ...props }) => {
   const toneClass = {
     default: 'border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]',
     primary: 'bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] hover:opacity-90',
@@ -178,24 +345,40 @@ const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 
     ghost: 'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]',
   }[tone];
 
-  return <button type="button" className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${toneClass} ${className}`} {...props} />;
+  const label = textFromReactNode(children) || props['aria-label'] || 'button';
+  const handleClick: React.MouseEventHandler<HTMLButtonElement> = (event) => {
+    if (onClick) {
+      onClick(event);
+      return;
+    }
+    noopHandledAction('settings_button_click', { label });
+  };
+
+  return <button type="button" className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${toneClass} ${className}`} onClick={handleClick} {...props}>{children}</button>;
 };
 
-const SelectButton: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const SelectButton: React.FC<{
+  children: React.ReactNode;
+  value?: string;
+  options?: Array<{ value: string; label: string }>;
+  onChange?: (value: string) => void;
+}> = ({ children, value, options: providedOptions, onChange }) => {
   const label = textFromReactNode(children) || 'Select';
-  const [value, setValue] = useState(label);
-  const options = useMemo(() => [
+  const [localValue, setLocalValue] = useState(value ?? label);
+  const options = useMemo(() => providedOptions ?? [
     { value: label, label },
     { value: 'Default', label: 'Default' },
     { value: 'Off', label: 'Off' },
-  ].filter((option, index, array) => array.findIndex((candidate) => candidate.value === option.value) === index), [label]);
+  ].filter((option, index, array) => array.findIndex((candidate) => candidate.value === option.value) === index), [label, providedOptions]);
+  const selectedValue = value ?? localValue;
 
-  return <Dropdown value={value} options={options} onChange={setValue} align="end" width="auto" />;
+  return <Dropdown value={selectedValue} options={options} onChange={(next) => { setLocalValue(next); if (onChange) onChange(next); else noopHandledAction('settings_select_change', { label, value: next }); }} align="end" width="auto" />;
 };
 
-const Switch: React.FC<{ checked?: boolean; label?: string }> = ({ checked = false, label }) => {
-  const [value, setValue] = useState(checked);
-  return <Toggle checked={value} onChange={setValue} label={label} />;
+const Switch: React.FC<{ checked?: boolean; label?: string; onChange?: (checked: boolean) => void }> = ({ checked = false, label, onChange }) => {
+  const [localValue, setLocalValue] = useState(checked);
+  const value = onChange ? checked : localValue;
+  return <Toggle checked={value} onChange={(next) => { if (!onChange) { setLocalValue(next); noopHandledAction('settings_toggle_change', { label, value: next }); } onChange?.(next); }} label={label} />;
 };
 
 const Section: React.FC<{ title: string; children: React.ReactNode; className?: string }> = ({ title, children, className = '' }) => (
@@ -242,12 +425,13 @@ const DataTable: React.FC<{ headers: string[]; rows: React.ReactNode[][]; classN
   </div>
 );
 
-const MiniTabs: React.FC<{ tabs: Array<{ label: string; count?: number }>; active?: string }> = ({ tabs, active }) => {
+const MiniTabs: React.FC<{ tabs: Array<{ label: string; count?: number }>; active?: string; onChange?: (value: string) => void }> = ({ tabs, active, onChange }) => {
   const options = useMemo(() => tabs.map((tab) => ({ value: tab.label, label: tab.label, count: tab.count })), [tabs]);
   const [value, setValue] = useState(active ?? options[0]?.value ?? '');
   if (options.length === 0) return null;
-  const safeValue = options.some((option) => option.value === value) ? value : options[0].value;
-  return <PrimitiveMiniTabs value={safeValue} options={options} onChange={setValue} />;
+  const selectedValue = active ?? value;
+  const safeValue = options.some((option) => option.value === selectedValue) ? selectedValue : options[0].value;
+  return <PrimitiveMiniTabs value={safeValue} options={options} onChange={(next) => { setValue(next); onChange?.(next); }} />;
 };
 
 const Avatar: React.FC<{ value?: string; label?: string; size?: number }> = ({ value = '👤', label, size = 28 }) => (
@@ -269,30 +453,46 @@ const FeatureCard: React.FC<{ icon?: React.ReactNode; title: string; description
   </div>
 );
 
+function flashSavedIndicator(setSaved: React.Dispatch<React.SetStateAction<boolean>>) {
+  setSaved(true);
+  globalThis.setTimeout(() => setSaved(false), 1400);
+}
+
 export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'profile', onClose }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [settingsQuery, setSettingsQuery] = useState('');
+  const activeUserId = useUserStore((s) => s.activeUserId);
   const persona = useUserStore((s) => s.activePersona());
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const members = useUserStore((s) => s.personas);
   const current = prompts[activeTab];
-  const settingsResults = useMemo(
-    () => settingsQuery.trim() ? searchSettings(settingsQuery).slice(0, 8) : [],
-    [settingsQuery],
-  );
+  const searchMatches = useSettingsSearchIndex(settingsQuery);
+  const settingsResults = settingsQuery.trim() ? searchMatches.slice(0, 8) : [];
 
   function openSearchResult(entry: SettingsSearchEntry) {
     setActiveTab(entry.tab);
     setSettingsQuery('');
     requestAnimationFrame(() => {
-      document.querySelector(`[data-settings-anchor="${entry.anchor}"]`)?.scrollIntoView({ block: 'start' });
+      const target = document.querySelector(`[data-settings-anchor="${entry.anchor}"]`);
+      target?.scrollIntoView({ block: 'start' });
+      target?.classList.add('rounded-lg', 'ring-2', 'ring-[var(--osio-accent)]', 'ring-offset-2', 'ring-offset-[var(--osio-bg-surface)]');
+      globalThis.setTimeout(() => {
+        target?.classList.remove('rounded-lg', 'ring-2', 'ring-[var(--osio-accent)]', 'ring-offset-2', 'ring-offset-[var(--osio-bg-surface)]');
+      }, 1400);
     });
+  }
+
+  function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter' && settingsResults[0]) {
+      event.preventDefault();
+      openSearchResult(settingsResults[0]);
+    }
   }
 
   const memberRows = useMemo(
     () => members.slice(0, 20).map((member, index) => [
       <div key={member.id || member.email} className="flex items-center gap-3">
-        <input type="checkbox" className="h-3.5 w-3.5" />
+        <input type="checkbox" className="h-3.5 w-3.5" onChange={(event) => recordSettingsAction('fallback_member_select', { id: member.id, selected: event.target.checked })} />
         <Avatar value={member.emoji} label={member.name} />
         <div className="min-w-0">
           <div className="truncate font-medium">{member.name}</div>
@@ -333,7 +533,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
               ))}
             </div>
             <div className="sticky bottom-0 border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
-              <Button className="w-full" onClick={() => setActiveTab('ai')}>
+              <Button className="w-full" onClick={() => { recordSettingsAction('cta_click_ai', { source: 'settings_footer' }); setActiveTab('ai'); }}>
                 <Sparkles size={15} /> Get osionos AI
               </Button>
             </div>
@@ -360,6 +560,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
                     <input
                       value={settingsQuery}
                       onChange={(event) => setSettingsQuery(event.target.value)}
+                      onKeyDown={handleSearchKeyDown}
                       placeholder="Search actions..."
                       className="min-w-0 flex-1 bg-transparent text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
                     />
@@ -383,21 +584,21 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
               </header>
 
               {activeTab === 'profile' && <ProfilePanel persona={persona} />}
-              {activeTab === 'preferences' && <PreferencesPanel />}
-              {activeTab === 'notifications' && <NotificationsPanel />}
-              {activeTab === 'connections' && <ConnectionsPanel />}
-              {activeTab === 'mail_calendar' && <MailCalendarPanel personaEmail={persona?.email} />}
-              {activeTab === 'general' && <GeneralPanel workspaceName={activeWorkspace?.name} workspaceId={activeWorkspace?._id} membersCount={members.length} />}
-              {activeTab === 'people' && <PeoplePanel rows={memberRows} membersCount={members.length} />}
-              {activeTab === 'import' && <ImportPanel />}
+              {activeTab === 'preferences' && <PreferencesPanel activeUserId={activeUserId} />}
+              {activeTab === 'notifications' && <NotificationsPanel activeUserId={activeUserId} />}
+              {activeTab === 'connections' && <ConnectionsPanel activeUserId={activeUserId} personaEmail={persona?.email} />}
+              {activeTab === 'mail_calendar' && <MailCalendarPanel activeUserId={activeUserId} personaEmail={persona?.email} />}
+              {activeTab === 'general' && <GeneralPanel userId={activeUserId} workspaceName={activeWorkspace?.name} workspaceId={activeWorkspace?._id} membersCount={members.length} />}
+              {activeTab === 'people' && <PeoplePanel workspaceId={activeWorkspace?._id} activeUserId={activeUserId} personas={members} fallbackRows={memberRows} membersCount={members.length} />}
+              {activeTab === 'import' && <ImportPanel workspaceId={activeWorkspace?._id} activeUserId={activeUserId} />}
               {activeTab === 'page_settings' && <PageSettingsPanel />}
               {activeTab === 'ai' && <AiPanel />}
               {activeTab === 'mcp' && <McpPanel />}
               {activeTab === 'public_pages' && <PublicPagesPanel />}
               {activeTab === 'library' && <LibraryPanel />}
               {activeTab === 'teamspaces' && <TeamspacesPanel workspaceName={activeWorkspace?.name} />}
-              {activeTab === 'billing' && <BillingPanel />}
-              {activeTab === 'plans' && <PlansPanel />}
+              {activeTab === 'billing' && <BillingPanel workspaceId={activeWorkspace?._id} />}
+              {activeTab === 'plans' && <PlansPanel workspaceId={activeWorkspace?._id} />}
             </div>
           </div>
         </section>
@@ -406,195 +607,804 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
   );
 };
 
-const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) => (
-  <>
-    <Section title="Account">
-      <div className="flex items-center gap-5 pb-3">
-        <Avatar value={persona?.emoji} label={persona?.name} size={60} />
-        <label className="w-[260px] text-xs text-[var(--osio-fg-muted)]">
-          <span>Preferred name</span>
-          <input className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none" defaultValue={persona?.name ?? ''} />
-        </label>
-      </div>
-      <p className="text-sm text-[var(--osio-fg-muted)]"><span className="text-[var(--osio-accent)]">Create a custom self-portrait</span> with osionos Faces</p>
-    </Section>
-    <Section title="Account security">
-      <SettingRow title="Email" description={persona?.email ?? 'dev.pro.photo@gmail.com'} action={<Button>Manage emails</Button>} />
-      <SettingRow title="Password" description="If you lose access to your school email address, you’ll be able to log in using your password." action={<Button>Add password</Button>} />
-      <SettingRow title="Two-step verification" description="Add another layer of security to your account" action={<Button>Add verification method</Button>} />
-      <SettingRow title="Passkeys" description="Sign in with on-device biometric authentication" action={<Button>Add passkey</Button>} />
-    </Section>
-    <Section title="Support">
-      <SettingRow title="Support access" description="Grant support temporary access to troubleshoot problems. You can revoke access anytime." action={<Switch />} />
-      <SettingRow danger title="Delete my account" description="Permanently delete your account and remove access to your pages and workspaces." action={<Button tone="danger">Delete my account</Button>} />
-    </Section>
-    <Section title="Devices">
-      <SettingRow danger title="Log out of all devices" description="Log out of active sessions on all your devices, other than this one" action={<Button tone="danger">Log out of all devices</Button>} />
-      <DataTable headers={['Device Name', 'Last Active', 'Location', '']} rows={[
-        ['Ubuntu · This Device', 'Now', 'Madrid, ES-M, Spain', ''],
-        ['Linux', 'Apr 3, 2026, 9:45 PM', 'Madrid, ES-M, Spain', <Button key="linux-apr-logout">Log out</Button>],
-        ['Linux', 'Mar 29, 2026, 3:00 PM', 'Madrid, ES-M, Spain', <Button key="linux-mar-logout">Log out</Button>],
-      ]} />
-      <Button tone="ghost" className="mt-2"><FileDown size={14} /> Load 32 more devices</Button>
-    </Section>
-    <Section title="User ID">
-      <SettingRow title="User ID" description={persona?.id ?? 'b0181a89-4ad8-476c-9657-352d6eadf49e'} action={<Button tone="ghost"><Copy size={15} /></Button>} />
-    </Section>
-  </>
-);
+const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) => {
+  const userId = persona?.id || 'anonymous';
+  const toast = useToastStore((state) => state.push);
+  const logoutUser = useUserStore((state) => state.logoutUser);
+  const account = useAccountSettingsStore((state) => state.data);
+  const hydrateAccount = useAccountSettingsStore((state) => state.hydrate);
+  const updateAccount = useAccountSettingsStore((state) => state.update);
+  const devices = useAccountDevicesStore((state) => state.data);
+  const hydrateDevices = useAccountDevicesStore((state) => state.hydrate);
+  const revokeDevice = useAccountDevicesStore((state) => state.revoke);
+  const revokeAllExceptCurrent = useAccountDevicesStore((state) => state.revokeAllExceptCurrent);
+  const passkeys = useAccountPasskeysStore((state) => state.data);
+  const hydratePasskeys = useAccountPasskeysStore((state) => state.hydrate);
+  const registerPasskeyOptions = useAccountPasskeysStore((state) => state.registerOptions);
+  const verifyPasskeyRegistration = useAccountPasskeysStore((state) => state.verifyRegistration);
+  const renamePasskey = useAccountPasskeysStore((state) => state.rename);
+  const removePasskey = useAccountPasskeysStore((state) => state.remove);
+  const emails = useAccountEmailsStore((state) => state.data);
+  const hydrateEmails = useAccountEmailsStore((state) => state.hydrate);
+  const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [preferredNameDraft, setPreferredNameDraft] = useState(persona?.name ?? '');
+  const [nameSaved, setNameSaved] = useState(false);
 
-const PreferencesPanel = () => (
-  <>
-    <Section title="Appearance">
-      <SettingRow title="Theme" description="Choose a theme for osionos on this device" action={<SelectButton>Use system setting</SelectButton>} />
-      <div className="mt-4 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
-        <WorkspaceThemeControls compact />
-      </div>
-    </Section>
-    <Section title="Input options">
-      <SettingRow title="Use Enter to add a new line" description="Applies to chat, comments, and other input fields. Press Cmd/Ctrl + Enter to send." action={<Switch />} />
-    </Section>
-    <Section title="Language & time">
-      <SettingRow title="Language" description="Choose the language you want to use osionos in" action={<SelectButton>English (US)</SelectButton>} />
-      <SettingRow title="Number format" description="Choose how numbers and currencies are formatted." action={<SelectButton>Default</SelectButton>} />
-      <SettingRow title="Always show text direction controls" description="Show left-to-right and right-to-left controls in the editor." action={<Switch />} />
-      <SettingRow title="Start week on Monday" description="This will affect the way your calendars appear in osionos" action={<Switch checked />} />
-      <SettingRow title="Date format" description="Set the default format for new @date mentions" action={<SelectButton>Relative</SelectButton>} />
-      <SettingRow title="Set time zone automatically using your location" description="Reminders, notifications, and emails will use your time zone" action={<Switch />} />
-      <SettingRow title="Time zone" description="Choose your time zone" action={<SelectButton>(GMT+2:00) Madrid</SelectButton>} />
-    </Section>
-    <Section title="Desktop app">
-      <SettingRow title="Open on start" description="Choose what page opens when you start osionos and when you switch workspaces" action={<SelectButton>Last visited page</SelectButton>} />
-    </Section>
-    <Section title="Privacy">
-      <SettingRow title="Cookie settings" description="See the Cookie Notice for more information" action={<SelectButton>Customize</SelectButton>} />
-      <SettingRow title="Show my view history" description="People with edit or full access can see when you’ve viewed a page." action={<Switch checked />} />
-      <SettingRow title="Profile discoverability" description="Users who know your email will see your profile when inviting you." action={<Switch checked />} />
-    </Section>
-  </>
-);
+  useEffect(() => {
+    runAsync(hydrateAccount(userId, persona?.name));
+    runAsync(hydrateDevices(userId));
+    runAsync(hydratePasskeys());
+    runAsync(hydrateEmails(userId, persona?.email));
+  }, [hydrateAccount, hydrateDevices, hydrateEmails, hydratePasskeys, persona?.email, persona?.name, userId]);
 
-const GeneralPanel: React.FC<{ workspaceName?: string; workspaceId?: string; membersCount: number }> = ({ workspaceName = '42 school', workspaceId = '1edd3106-e5a4-4068-92a1-6b6e55a61ee6', membersCount }) => (
-  <>
-    <Section title="Workspace settings">
-      <SettingRow stack title="Workspace name" description="Your workspace name can be up to 65 characters" action={<input className="w-full max-w-[400px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" defaultValue={workspaceName} maxLength={65} />} />
-      <SettingRow stack title="Icon" description="Upload an image or pick an emoji. This icon will appear in your sidebar and notifications." action={<div className="flex h-[72px] w-[72px] items-center justify-center rounded-md border border-[var(--osio-border-default)] text-5xl">🌏</div>} />
-      <SettingRow title="Custom landing page" description={<>When a new member joins this workspace, a copy of this page will be added to their <b>Private</b> pages</>} action={<SelectButton>Select page</SelectButton>} />
-    </Section>
-    <Section title="Sidebar">
-      <SettingRow title={<span className="inline-flex items-center gap-2">Try the new sidebar <span className="rounded bg-[var(--osio-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--osio-accent)]">New</span></span>} description="Keep your pages, meetings, and AI within reach." action={<Switch checked />} />
-      <SettingRow title="Show other osionos apps in sidebar" description="Show osionos Calendar and osionos Mail in your sidebar" action={<Switch checked />} />
-    </Section>
-    <Section title="Export">
-      <SettingRow title="Workspace content" description={`Export all pages in ${workspaceName}. This can take longer depending on the size of the workspace.`} action={<Button>Export</Button>} />
-      <SettingRow title="Members" description={`${membersCount} members available locally. Upgrade text from prompt is kept as a disabled export pattern.`} action={<Button>Export</Button>} />
-    </Section>
-    <Section title="Analytics">
-      <SettingRow title="Save and display page view analytics" description={`Collect page view data for all pages in ${workspaceName}. Editors can see how many views it has.`} action={<Switch checked />} />
-      <Button tone="ghost" className="-ml-2"><Search size={14} /> Learn more</Button>
-    </Section>
-    <Section title="Danger zone">
-      <SettingRow danger title="Delete workspace" description="Permanently delete this workspace, including all pages and files." action={<Button tone="danger">Delete workspace</Button>} />
-      <Button tone="ghost" className="-ml-2">Learn about deleting workspaces.</Button>
-    </Section>
-    <Section title="Workspace ID">
-      <SettingRow title="Workspace ID" description={workspaceId} action={<Button tone="ghost"><Copy size={15} /></Button>} />
-    </Section>
-  </>
-);
+  useEffect(() => {
+    setPreferredNameDraft(account?.profile.preferredName ?? persona?.name ?? '');
+  }, [account?.profile.preferredName, persona?.name]);
 
-const NotificationsPanel = () => (
-  <>
-    <Section title="In-app notifications">
-      <FeatureCard icon={<CalendarDays size={16} />} title="Live meeting activity" description="Join video conferencing and start transcribing. Meeting is being transcribed and summarized." action={<Switch checked />} />
-    </Section>
-    <Section title="Slack notifications"><SettingRow title="Slack notifications" description="Get Slack notifications about activity in your osionos workspace" action={<SelectButton>Off</SelectButton>} /></Section>
-    <Section title="Discord notifications"><SettingRow title="Discord notifications" description="Get Discord notifications about activity in your osionos workspace" action={<SelectButton>Off</SelectButton>} /></Section>
-    <Section title="Email notifications">
-      {['Activity in my workspace', 'Always send email notifications', 'Page updates', 'Workspace digest', 'Announcements and update emails'].map((label, index) => (
-        <SettingRow key={label} title={label} description={index === 2 ? 'Get email digests about pages you’ve turned on notifications for' : undefined} action={<Switch checked={index !== 1} />} />
-      ))}
-      <Button className="mt-3">Manage settings</Button>
-      <Button tone="ghost" className="mt-3">Learn about notifications</Button>
-    </Section>
-  </>
-);
+  useEffect(() => {
+    const currentName = account?.profile.preferredName ?? persona?.name ?? '';
+    if (!preferredNameDraft.trim() || preferredNameDraft === currentName) return;
+    const timer = globalThis.setTimeout(() => {
+      runAsync(updateAccount({ profile: { ...account?.profile, preferredName: preferredNameDraft.trim() } }).then(() => flashSavedIndicator(setNameSaved)));
+    }, 300);
+    return () => globalThis.clearTimeout(timer);
+  }, [account?.profile, persona?.name, preferredNameDraft, updateAccount]);
 
-const ConnectionsPanel = () => (
-  <>
-    <Section title="My connections">
-      <DataTable headers={['Connection', 'Access']} rows={[
-        ['ChartBase', 'Can view content'],
-        ['Slack · 42born2code - dlesieur@student.42madrid.com', 'Can preview links'],
-        ['GitHub (Workspace) · LESdylan', 'Can preview links'],
-        ['GitHub · LESdylan', 'Can preview links and sync databases'],
-        ['Whimsical · dev.pro.photo@gmail.com', 'Can preview links'],
-      ]} />
-    </Section>
-    <Section title="Discover connections">
-      <div className="grid gap-3">
-        <FeatureCard icon={<Sparkles size={16} />} title="osionos AI connectors" description="Get search results, AI answers, summaries and more without leaving osionos." action={<Button>Explore</Button>} />
-        <FeatureCard icon={<Bot size={16} />} title="osionos MCP" description="Connect osionos to your AI tools to summarize, search, and move faster." action={<Button>Explore</Button>} />
-        <FeatureCard icon={<LayoutGrid size={16} />} title="Adobe XD" description="View Adobe XD files directly in osionos" action={<Button>Install</Button>} />
-      </div>
-      <div className="mt-4 flex flex-wrap gap-2"><Button>See all</Button><Button>Browse connections in Gallery</Button><Button>Develop or manage connections</Button></div>
-    </Section>
-  </>
-);
+  const preferredName = account?.profile.preferredName ?? persona?.name ?? '';
+  const primaryEmail = emails.find((email) => email.isPrimary)?.email ?? persona?.email ?? 'dev.pro.photo@gmail.com';
+  const security = account?.security ?? {};
+  const visibleDevices = devices.filter((device) => !device.revokedAt);
+  const activePasskeys = passkeys.filter((passkey) => !passkey.removedAt);
+  const deviceRows = visibleDevices.map((device, index) => [
+    <span key={`${device._id}-name`}>{index === 0 ? 'Ubuntu · This Device' : device.userAgent?.split(')')[0]?.replace('(', '') || 'Linux'}{device._id === 'current-device' ? <span className="ml-2 rounded bg-[var(--osio-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--osio-accent)]">Current</span> : null}</span>,
+    device._id === 'current-device' ? 'Now' : new Date(device.lastActiveAt).toLocaleString(),
+    device.location ?? 'Unknown location',
+    device._id === 'current-device' ? '' : <Button key={`${device._id}-logout`} onClick={() => { runAsync(revokeDevice(device._id)); }}>Log out</Button>,
+  ]);
 
-const MailCalendarPanel: React.FC<{ personaEmail?: string }> = ({ personaEmail = 'dev.pro.photo@gmail.com' }) => (
-  <>
-    <Section title="Connected emails"><SettingRow title="osionos Mail" description={`dylan lesieur · ${personaEmail}`} action={<Button>Add address</Button>} /></Section>
-    <Section title="Connected calendars">
-      <DataTable headers={['Calendar', 'Account', 'Status']} rows={[
-        ['osionos Calendar', personaEmail, '2 calendars'],
-        ['Holidays in Spain', personaEmail, 'Connected'],
-        ['Festivos en España', 'higueraslp@gmail.com', 'Connected'],
-      ]} />
-      <Button className="mt-4">Add calendar</Button>
-    </Section>
-  </>
-);
+  async function handleRegisterPasskey(nickname = 'osionos passkey') {
+    const options = await registerPasskeyOptions(nickname);
+    const response = options
+      ? await startRegistration({ optionsJSON: options as Parameters<typeof startRegistration>[0]['optionsJSON'] })
+      : { id: `local-${Date.now()}`, response: { transports: ['internal'] } };
+    await verifyPasskeyRegistration(response, nickname);
+    toast({ kind: 'success', title: 'Passkey added' });
+  }
 
-const PeoplePanel: React.FC<{ rows: React.ReactNode[][]; membersCount: number }> = ({ rows, membersCount }) => (
-  <>
-    <div className="flex items-center justify-between gap-3">
-      <MiniTabs active="Guests" tabs={[{ label: 'Guests', count: 32 }, { label: 'Members', count: membersCount }, { label: 'Groups' }, { label: 'Contacts' }]} />
-      <div className="flex gap-2"><Button tone="ghost"><Search size={16} /></Button><Button tone="primary"><UserPlus size={15} /> Add members</Button></div>
-    </div>
-    <DataTable headers={['User', 'Access', '']} rows={rows} />
-    <Button tone="ghost">View People Directory</Button>
-  </>
-);
-
-const ImportPanel = () => {
-  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
-  const activeUserId = useUserStore((s) => s.activeUserId) || 'anonymous';
-  const addAsset = useAssetLibraryStore((s) => s.addAsset);
-  const files = ['CSV', 'PDF', 'Text & Markdown', 'HTML', 'Word'];
-  const apps = ['Asana', 'Confluence', 'Trello', 'Workflowy', 'Evernote', 'Jira', 'Monday.com', 'Quip', 'Google Docs'];
-
-  async function handleLibraryImport(event: React.ChangeEvent<HTMLInputElement>) {
-    const imports = Array.from(event.target.files ?? []);
-    event.target.value = '';
-    for (const file of imports) {
-      const source = await readFileAsDataUrl(file);
-      addAsset(activeUserId, {
-        kind: assetKindFromFile(file),
-        name: file.name,
-        source,
-        origin: 'upload',
-        mimeType: file.type,
-        size: file.size,
-      });
-    }
+  async function handleDeleteAccount() {
+    await postAccountAction('/api/account/request-deletion', {});
+    recordSettingsAction('account_request_deletion', { userId });
+    logoutUser(userId);
+    toast({ kind: 'success', title: 'Account scheduled for deletion in 30 days. Cancel anytime in Settings.' });
+    globalThis.location.assign('/');
   }
 
   return (
     <>
-      <MiniTabs active="Discover" tabs={[{ label: 'Discover' }, { label: 'Completed' }]} />
+      <Section title="Account">
+        <div className="flex items-center gap-5 pb-3">
+          <div className="relative">
+            <button type="button" className="rounded-full focus:outline-none focus:ring-2 focus:ring-[var(--osio-accent)]" onClick={() => setAvatarPickerOpen((open) => !open)} aria-label="Change avatar">
+              <Avatar value={account?.profile.avatar ?? persona?.emoji} label={preferredName} size={60} />
+            </button>
+            {avatarPickerOpen && (
+              <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2">
+                <EmojiPicker
+                  current={account?.profile.avatar ?? persona?.emoji}
+                  onSelect={(value) => { runAsync(updateAccount({ profile: { ...account?.profile, avatar: value } })); setAvatarPickerOpen(false); }}
+                  onRemove={() => { runAsync(updateAccount({ profile: { ...account?.profile, avatar: null } })); setAvatarPickerOpen(false); }}
+                  onClose={() => setAvatarPickerOpen(false)}
+                />
+              </div>
+            )}
+          </div>
+          <label className="w-[260px] text-xs text-[var(--osio-fg-muted)]">
+            <span>Preferred name</span>
+            <span className="relative mt-1 block">
+              <input
+                className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 pr-8 text-sm text-[var(--osio-fg-default)] outline-none"
+                value={preferredNameDraft}
+                onChange={(event) => setPreferredNameDraft(event.target.value)}
+              />
+              {nameSaved && <Check size={15} className="absolute right-2 top-2.5 text-[var(--osio-success)]" />}
+            </span>
+          </label>
+        </div>
+        <p className="text-sm text-[var(--osio-fg-muted)]"><span className="text-[var(--osio-accent)]">Create a custom self-portrait</span> with osionos Faces</p>
+      </Section>
+      <Section title="Account security">
+        <SettingRow title="Email" description={primaryEmail} action={<Button onClick={() => setModal({ name: 'email-manager' })}>Manage emails</Button>} />
+        <SettingRow title="Password" description={security.hasPassword ? 'Password sign-in is available for this account.' : 'Add a password to keep another sign-in option available.'} action={<Button onClick={() => setModal({ name: 'password' })}>{security.hasPassword ? 'Update password' : 'Add password'}</Button>} />
+        <SettingRow title="Two-step verification" description="Add another layer of security to your account" action={<Button onClick={() => setModal({ name: 'two-factor' })}>{security.twoStepEnabled ? 'Manage' : 'Add verification method'}</Button>} />
+        <SettingRow title="Passkeys" description={`${activePasskeys.length} passkey${activePasskeys.length === 1 ? '' : 's'} configured`} action={<Button onClick={() => setModal({ name: 'passkeys' })}><KeyRound size={14} /> Add passkey</Button>} />
+      </Section>
+      <Section title="Support">
+        <SettingRow title="Support access" description="Grant support temporary access to troubleshoot problems. You can revoke access anytime." action={<Switch checked={Boolean(account?.supportAccessGrantedUntil)} onChange={(checked) => { if (checked) setModal({ name: 'support-duration' }); else runAsync(updateAccount({ supportAccessGrantedUntil: null })); }} />} />
+        <SettingRow danger title="Delete my account" description="Permanently delete your account and remove access to your pages and workspaces." action={<Button tone="danger" onClick={() => setModal({ name: 'delete-account' })}>Delete my account</Button>} />
+      </Section>
+      <Section title="Devices">
+        <SettingRow danger title="Log out of all devices" description="Log out of active sessions on all your devices, other than this one" action={<Button tone="danger" onClick={() => setModal({ name: 'revoke-devices' })}>Log out of all devices</Button>} />
+        <DataTable headers={['Device Name', 'Last Active', 'Location', '']} rows={deviceRows.length ? deviceRows : [['Ubuntu · This Device', 'Now', 'This device', '']]} />
+        <Button tone="ghost" className="mt-2"><FileDown size={14} /> Load more devices</Button>
+      </Section>
+      <Section title="User ID">
+        <SettingRow title="User ID" description={persona?.id ?? 'b0181a89-4ad8-476c-9657-352d6eadf49e'} action={<Button tone="ghost" aria-label="Copy user ID" onClick={() => { runAsync(navigator.clipboard.writeText(persona?.id ?? userId).then(() => toast({ kind: 'success', title: 'User ID copied' }))); }}><Copy size={15} /></Button>} />
+      </Section>
+
+      {modal?.name === 'email-manager' && <EmailManagerModal userId={userId} fallbackEmail={persona?.email} onClose={() => setModal(null)} />}
+      {modal?.name === 'password' && <PasswordModal hasPassword={Boolean(security.hasPassword)} onSaved={() => runAsync(updateAccount({ security: { ...security, hasPassword: true } }))} onClose={() => setModal(null)} />}
+      {modal?.name === 'two-factor' && <TwoFactorModal enabled={Boolean(security.twoStepEnabled)} onEnabled={(enabled) => runAsync(updateAccount({ security: { ...security, twoStepEnabled: enabled } }))} onClose={() => setModal(null)} />}
+      {modal?.name === 'passkeys' && <PasskeyManagerModal passkeys={activePasskeys} onAdd={() => runAsync(handleRegisterPasskey())} onRename={renamePasskey} onRemove={(id) => runAsync(removePasskey(id))} onClose={() => setModal(null)} />}
+      {modal?.name === 'support-duration' && <SupportDurationModal onSelect={(days) => { runAsync(updateAccount({ supportAccessGrantedUntil: new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString() })); setModal(null); }} onClose={() => setModal(null)} />}
+      {modal?.name === 'delete-account' && <TypedConfirmModal title="Delete account" message="Type DELETE to schedule this account for deletion." confirmText="DELETE" danger actionLabel="Schedule deletion" onConfirm={() => runAsync(handleDeleteAccount())} onClose={() => setModal(null)} />}
+      {modal?.name === 'revoke-devices' && <ConfirmModal title="Log out all devices" message="This logs out every active session except your current device." danger actionLabel="Log out all devices" onConfirm={() => { runAsync(revokeAllExceptCurrent(userId)); setModal(null); }} onClose={() => setModal(null)} />}
+    </>
+  );
+};
+
+const EmailManagerModal: React.FC<{ userId: string; fallbackEmail?: string; onClose: () => void }> = ({ userId, fallbackEmail, onClose }) => {
+  const emails = useAccountEmailsStore((state) => state.data);
+  const addEmail = useAccountEmailsStore((state) => state.add);
+  const verifyEmail = useAccountEmailsStore((state) => state.verify);
+  const removeEmail = useAccountEmailsStore((state) => state.remove);
+  const makePrimaryEmail = useAccountEmailsStore((state) => state.makePrimary);
+  const [emailDraft, setEmailDraft] = useState('');
+  const displayedEmails = emails.length ? emails : [];
+  if (!displayedEmails.length && fallbackEmail) {
+    displayedEmails.push({ _id: 'fallback-email', userId, email: fallbackEmail, isPrimary: true, verifiedAt: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), removedAt: null });
+  }
+  const rows = displayedEmails.map((email) => [
+    <span key={`${email._id}-email`} className="font-medium">{email.email}</span>,
+    email.isPrimary ? 'Primary' : 'Secondary',
+    email.verifiedAt ? 'Verified' : <Button key={`${email._id}-verify`} onClick={() => runAsync(verifyEmail(email._id))}>Verify</Button>,
+    <div key={`${email._id}-actions`} className="flex gap-2">
+      {!email.isPrimary && <Button onClick={() => runAsync(makePrimaryEmail(email._id))}>Make primary</Button>}
+      {!email.isPrimary && <Button tone="danger" onClick={() => runAsync(removeEmail(email._id))}>Remove</Button>}
+    </div>,
+  ]);
+  return (
+    <Modal open onClose={onClose} title="Manage emails" size="md">
+      <div className="space-y-4">
+        <DataTable headers={['Email', 'Role', 'Status', '']} rows={rows} />
+        <div className="flex gap-2">
+          <input className="min-w-0 flex-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} placeholder="name@example.com" />
+          <Button tone="primary" onClick={() => { if (emailDraft.includes('@')) { runAsync(addEmail(emailDraft, userId)); setEmailDraft(''); } }}>Add email</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+const PasswordModal: React.FC<{ hasPassword: boolean; onSaved: () => void; onClose: () => void }> = ({ hasPassword, onSaved, onClose }) => {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [nextPassword, setNextPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const toast = useToastStore((state) => state.push);
+  const strength = Math.min(4, [nextPassword.length >= 10, /[A-Z]/.test(nextPassword), /\d/.test(nextPassword), /[^A-Za-z0-9]/.test(nextPassword)].filter(Boolean).length);
+  const canSave = nextPassword.length >= 8 && nextPassword === confirmPassword && (!hasPassword || currentPassword.length > 0);
+  return (
+    <Modal open onClose={onClose} title={hasPassword ? 'Update password' : 'Add password'} size="sm">
+      <div className="space-y-3">
+        {hasPassword && <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Current password" />}
+        <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={nextPassword} onChange={(event) => setNextPassword(event.target.value)} placeholder="New password" />
+        <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm password" />
+        <div className="grid grid-cols-4 gap-1">{[0, 1, 2, 3].map((index) => <span key={index} className={`h-1 rounded ${index < strength ? 'bg-[var(--osio-accent)]' : 'bg-[var(--osio-bg-muted)]'}`} />)}</div>
+        <div className="flex justify-end gap-2">
+          <Button onClick={onClose}>Cancel</Button>
+          <Button tone="primary" disabled={!canSave} onClick={() => { runAsync(postAccountAction('/api/account/password', { currentPassword, nextPassword }).then(() => { onSaved(); toast({ kind: 'success', title: 'Password saved' }); onClose(); })); }}>Save password</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+const TwoFactorModal: React.FC<{ enabled: boolean; onEnabled: (enabled: boolean) => void; onClose: () => void }> = ({ enabled, onEnabled, onClose }) => {
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const toast = useToastStore((state) => state.push);
+  useEffect(() => {
+    if (enabled) return;
+    runAsync(postAccountAction<{ otpauthUrl?: string }>('/api/account/2fa/enroll', {}).then((response) => QRCode.toDataURL(response?.otpauthUrl ?? `otpauth://totp/osionos:${Date.now()}?secret=LOCALDEV&issuer=osionos`).then(setQrDataUrl)));
+  }, [enabled]);
+  return (
+    <Modal open onClose={onClose} title="Two-step verification" size="sm">
+      <div className="space-y-4">
+        {enabled ? <p className="text-sm text-[var(--osio-fg-muted)]">Two-step verification is enabled.</p> : <>{qrDataUrl && <img alt="Two-step verification QR code" className="h-40 w-40 rounded-md border border-[var(--osio-border-default)]" src={qrDataUrl} />}<input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={code} onChange={(event) => setCode(event.target.value.replaceAll(/\D/g, '').slice(0, 6))} placeholder="6-digit code" /></>}
+        {recoveryCodes.length > 0 && <div className="grid grid-cols-2 gap-2 rounded-md bg-[var(--osio-bg-subtle)] p-3 text-xs font-mono">{recoveryCodes.map((item) => <span key={item}>{item}</span>)}</div>}
+        <div className="flex justify-end gap-2">
+          {enabled && <Button tone="danger" onClick={() => { runAsync(postAccountAction('/api/account/2fa/disable', {}).then(() => { onEnabled(false); toast({ kind: 'success', title: 'Two-step verification disabled' }); onClose(); })); }}>Disable</Button>}
+          {!enabled && <Button tone="primary" disabled={code.length !== 6} onClick={() => { runAsync(postAccountAction<{ recoveryCodes?: string[] }>('/api/account/2fa/verify', { code }).then((response) => { onEnabled(true); setRecoveryCodes(response?.recoveryCodes ?? ['A12B-C34D', 'E56F-G78H', 'J90K-L12M', 'N34P-Q56R']); toast({ kind: 'success', title: 'Two-step verification enabled' }); })); }}>Verify</Button>}
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+const PasskeyManagerModal: React.FC<{ passkeys: Array<{ _id: string; nickname?: string | null; createdAt: string }>; onAdd: () => void; onRename: (id: string, nickname: string) => void; onRemove: (id: string) => void; onClose: () => void }> = ({ passkeys, onAdd, onRename, onRemove, onClose }) => (
+  <Modal open onClose={onClose} title="Passkeys" size="md">
+    <div className="space-y-4">
+      <DataTable headers={['Name', 'Created', '']} rows={passkeys.map((passkey) => [
+        <input key={`${passkey._id}-name`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none" defaultValue={passkey.nickname ?? 'Passkey'} onBlur={(event) => onRename(passkey._id, event.target.value)} />,
+        new Date(passkey.createdAt).toLocaleDateString(),
+        <Button key={`${passkey._id}-remove`} tone="danger" onClick={() => onRemove(passkey._id)}>Remove</Button>,
+      ])} />
+      <div className="flex justify-end gap-2"><Button onClick={onClose}>Done</Button><Button tone="primary" onClick={onAdd}>Add passkey</Button></div>
+    </div>
+  </Modal>
+);
+
+const SupportDurationModal: React.FC<{ onSelect: (days: number) => void; onClose: () => void }> = ({ onSelect, onClose }) => (
+  <Modal open onClose={onClose} title="Support access duration" size="sm">
+    <div className="grid gap-2">
+      {[1, 7, 30].map((days) => <Button key={days} onClick={() => onSelect(days)}>{days === 1 ? '1 day' : `${days} days`}</Button>)}
+    </div>
+  </Modal>
+);
+
+const ConfirmModal: React.FC<{ title: string; message: string; actionLabel: string; danger?: boolean; onConfirm: () => void; onClose: () => void }> = ({ title, message, actionLabel, danger, onConfirm, onClose }) => (
+  <Modal open onClose={onClose} title={title} size="sm">
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--osio-fg-muted)]">{message}</p>
+      <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone={danger ? 'danger' : 'primary'} onClick={onConfirm}>{actionLabel}</Button></div>
+    </div>
+  </Modal>
+);
+
+const TypedConfirmModal: React.FC<{ title: string; message: string; confirmText: string; actionLabel: string; danger?: boolean; onConfirm: () => void; onClose: () => void }> = ({ title, message, confirmText, actionLabel, danger, onConfirm, onClose }) => {
+  const [draft, setDraft] = useState('');
+  return (
+    <Modal open onClose={onClose} title={title} size="sm">
+      <div className="space-y-4">
+        <p className="text-sm text-[var(--osio-fg-muted)]">{message}</p>
+        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={confirmText} />
+        <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone={danger ? 'danger' : 'primary'} disabled={draft !== confirmText} onClick={onConfirm}>{actionLabel}</Button></div>
+      </div>
+    </Modal>
+  );
+};
+
+const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }) => {
+  const userId = activeUserId || 'anonymous';
+  const preferences = useUserPreferencesStore((state) => state.data);
+  const hydrate = useUserPreferencesStore((state) => state.hydrate);
+  const update = useUserPreferencesStore((state) => state.update);
+  const reset = useUserPreferencesStore((state) => state.reset);
+  const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
+
+  useEffect(() => {
+    runAsync(hydrate(userId));
+  }, [hydrate, userId]);
+
+  const privacy = preferences?.privacy as { viewHistory?: boolean; profileDiscoverability?: boolean; textDirectionControls?: boolean } | undefined;
+  const desktop = preferences?.desktop as { openOnStart?: string } | undefined;
+  const cookies = preferences?.cookies as { mode?: string } | undefined;
+  const cookieButtonLabel = cookieModeLabel(cookies?.mode);
+  const timezones = useMemo(() => timezoneOptions().map((timezone) => ({ value: timezone, label: timezone.replaceAll('_', ' ') })), []);
+
+  return (
+    <>
+      <Section title="Appearance">
+        <SettingRow
+          title="Theme"
+          description="Choose a theme for osionos on this device"
+          action={<SelectButton value={preferences?.theme ?? 'system'} options={[{ value: 'system', label: 'Use system setting' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]} onChange={(value) => { const theme = value as 'light' | 'dark' | 'system'; applyTheme(theme); update({ theme }); }}>Use system setting</SelectButton>}
+        />
+        <div className="mt-4 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
+          <WorkspaceThemeControls compact />
+        </div>
+      </Section>
+      <Section title="Input options">
+        <SettingRow title="Use Enter to add a new line" description="Applies to chat, comments, and other input fields. Press Cmd/Ctrl + Enter to send." action={<Switch checked={Boolean(preferences?.enterAddsNewline)} onChange={(checked) => update({ enterAddsNewline: checked })} />} />
+      </Section>
+      <Section title="Language & time">
+        <SettingRow title="Language" description="Choose the language you want to use osionos in" action={<SelectButton value={preferences?.language ?? 'en-US'} options={[{ value: 'en-US', label: 'English (US)' }, { value: 'fr-FR', label: 'Français' }, { value: 'es-ES', label: 'Español' }, { value: 'de-DE', label: 'Deutsch' }]} onChange={(value) => { changeLanguage(value); update({ language: value }); }}>English (US)</SelectButton>} />
+        <SettingRow title="Number format" description="Choose how numbers and currencies are formatted." action={<SelectButton value={preferences?.numberFormat ?? 'default'} options={[{ value: 'default', label: 'Default' }, { value: 'dot', label: '1,000.00' }, { value: 'comma', label: '1.000,00' }, { value: 'space', label: '1 000,00' }]} onChange={(value) => update({ numberFormat: value })}>Default</SelectButton>} />
+        <SettingRow title="Always show text direction controls" description="Show left-to-right and right-to-left controls in the editor." action={<Switch checked={Boolean(preferences?.privacy?.textDirectionControls)} onChange={(checked) => update({ privacy: { ...preferences?.privacy, textDirectionControls: checked } })} />} />
+        <SettingRow title="Start week" description="This will affect the way your calendars appear in osionos" action={<SelectButton value={preferences?.weekStart ?? 'monday'} options={[{ value: 'monday', label: 'Monday' }, { value: 'sunday', label: 'Sunday' }]} onChange={(value) => update({ weekStart: value })}>Monday</SelectButton>} />
+        <SettingRow title="Date format" description="Set the default format for new @date mentions" action={<SelectButton value={preferences?.dateFormat ?? 'relative'} options={[{ value: 'relative', label: 'Relative' }, { value: 'short', label: 'Short' }, { value: 'iso', label: 'ISO' }]} onChange={(value) => update({ dateFormat: value })}>Relative</SelectButton>} />
+        <SettingRow title="Set time zone automatically using your location" description="Reminders, notifications, and emails will use your time zone" action={<Switch checked={Boolean(preferences?.autoTimezone)} onChange={(checked) => update({ autoTimezone: checked, timezone: checked ? Intl.DateTimeFormat().resolvedOptions().timeZone : preferences?.timezone })} />} />
+        <SettingRow title="Time zone" description="Choose your time zone" action={<SelectButton value={preferences?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} options={timezones} onChange={(value) => update({ timezone: value, autoTimezone: false })}>Time zone</SelectButton>} />
+      </Section>
+      <Section title="Desktop app">
+        <SettingRow title="Open on start" description="Choose what page opens when you start osionos and when you switch workspaces" action={<SelectButton value={desktop?.openOnStart ?? 'last-visited-page'} options={[{ value: 'last-visited-page', label: 'Last visited page' }, { value: 'home', label: 'Home' }, { value: 'new-page', label: 'New page' }]} onChange={(value) => update({ desktop: { ...preferences?.desktop, openOnStart: value } })}>Last visited page</SelectButton>} />
+      </Section>
+      <Section title="Privacy">
+        <SettingRow title="Cookie settings" description="See the Cookie Notice for more information" action={<Button onClick={() => setModal({ name: 'cookies' })}>{cookieButtonLabel}</Button>} />
+        <SettingRow title="Show my view history" description="People with edit or full access can see when you’ve viewed a page." action={<Switch checked={privacy?.viewHistory ?? true} onChange={(checked) => update({ privacy: { ...preferences?.privacy, viewHistory: checked } })} />} />
+        <SettingRow title="Profile discoverability" description="Users who know your email will see your profile when inviting you." action={<Switch checked={privacy?.profileDiscoverability ?? true} onChange={(checked) => update({ privacy: { ...preferences?.privacy, profileDiscoverability: checked } })} />} />
+        <Button className="mt-3" onClick={() => setModal({ name: 'reset-preferences' })}>Reset to defaults</Button>
+      </Section>
+
+      {modal?.name === 'cookies' && <CookieSettingsModal mode={cookies?.mode ?? 'customize'} onSave={(mode) => { update({ cookies: { ...preferences?.cookies, mode } }); setModal(null); }} onClose={() => setModal(null)} />}
+      {modal?.name === 'reset-preferences' && <ConfirmModal title="Reset preferences" message="This restores language, theme, input, privacy, and desktop preferences to their defaults." actionLabel="Reset" onConfirm={() => { runAsync(reset(userId)); setModal(null); }} onClose={() => setModal(null)} />}
+    </>
+  );
+};
+
+const CookieSettingsModal: React.FC<{ mode: string; onSave: (mode: string) => void; onClose: () => void }> = ({ mode, onSave, onClose }) => {
+  const [analytics, setAnalytics] = useState(mode === 'all' || mode === 'customize');
+  const [personalization, setPersonalization] = useState(mode === 'all');
+  let nextMode = 'essential';
+  if (personalization) nextMode = 'all';
+  else if (analytics) nextMode = 'customize';
+  return (
+    <Modal open onClose={onClose} title="Cookie settings" size="sm">
+      <div className="space-y-3">
+        <SettingRow title="Essential cookies" description="Required for login, security, and workspace routing." action={<Switch checked label="Always on" />} />
+        <SettingRow title="Analytics cookies" description="Help us understand performance and reliability." action={<Switch checked={analytics} onChange={setAnalytics} />} />
+        <SettingRow title="Personalization cookies" description="Remember richer preferences across devices." action={<Switch checked={personalization} onChange={setPersonalization} />} />
+        <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => onSave(nextMode)}>Save</Button></div>
+      </div>
+    </Modal>
+  );
+};
+
+const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspaceId?: string; membersCount: number }> = ({ userId, workspaceName = '42 school', workspaceId = '1edd3106-e5a4-4068-92a1-6b6e55a61ee6', membersCount }) => {
+  const resolvedUserId = userId || 'anonymous';
+  const toast = useToastStore((state) => state.push);
+  const renameWorkspace = useUserStore((state) => state.renameWorkspace);
+  const deleteWorkspace = useUserStore((state) => state.deleteWorkspace);
+  const workspaces = useUserStore((state) => state.workspaces);
+  const setUseNewSidebar = useUIStore((state) => state.setUseNewSidebar);
+  const setShowOtherApps = useUIStore((state) => state.setShowOtherApps);
+  const pages = usePageStore((state) => state.pages);
+  const workspaceMembers = useWorkspaceMembersStore((state) => state.data[workspaceId] ?? EMPTY_WORKSPACE_MEMBERS);
+  const storedSettings = useWorkspaceSettingsStore((state) => state.data[workspaceId]);
+  const hydrate = useWorkspaceSettingsStore((state) => state.hydrate);
+  const update = useWorkspaceSettingsStore((state) => state.update);
+  const reset = useWorkspaceSettingsStore((state) => state.reset);
+  const fallbackSettings = useMemo<WorkspaceSettings>(() => defaultWorkspaceSettings(workspaceId, workspaceName), [workspaceId, workspaceName]);
+  const settings = storedSettings ?? fallbackSettings;
+  const sidebar = settings.sidebar as { newSidebar?: boolean; showApps?: boolean };
+  const analytics = settings.analytics as { pageViews?: boolean };
+  const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [workspaceNameDraft, setWorkspaceNameDraft] = useState(settings.name);
+
+  useEffect(() => {
+    setWorkspaceNameDraft(settings.name);
+  }, [settings.name]);
+
+  useEffect(() => {
+    if (!workspaceNameDraft.trim() || workspaceNameDraft === settings.name) return;
+    const timer = globalThis.setTimeout(() => {
+      runAsync(renameWorkspace(workspaceId, workspaceNameDraft.trim(), settings.icon ?? undefined).then(() => update(resolvedUserId, workspaceId, { name: workspaceNameDraft.trim() })));
+    }, 300);
+    return () => globalThis.clearTimeout(timer);
+  }, [renameWorkspace, resolvedUserId, settings.icon, settings.name, update, workspaceId, workspaceNameDraft]);
+
+  useEffect(() => {
+    runAsync(hydrate(resolvedUserId, workspaceId, workspaceName));
+  }, [hydrate, resolvedUserId, workspaceId, workspaceName]);
+
+  async function exportWorkspaceContent() {
+    try {
+      const jwt = getActiveJwt();
+      if (jwt) {
+        const response = await fetch(`${API_BASE}/api/workspaces/${encodeURIComponent(workspaceId)}/export`, { headers: { Authorization: `Bearer ${jwt}` } });
+        if (response.ok) {
+          downloadBlob(`${safeSlug(settings.name)}.zip`, await response.blob());
+          return;
+        }
+      }
+    } catch {
+      recordSettingsAction('workspace_export_remote_failed', { workspaceId });
+    }
+    const zip = new JSZip();
+    pages.forEach((page) => zip.file(`${safeSlug(page.title || 'untitled') || page.id}.json`, JSON.stringify(page, null, 2)));
+    downloadBlob(`${safeSlug(settings.name)}.zip`, await zip.generateAsync({ type: 'blob' }));
+  }
+
+  function exportMembersCsv() {
+    const rows = [['User ID', 'Role', 'Joined at'], ...workspaceMembers.map((member) => [member.userId, member.role, member.joinedAt])];
+    const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n');
+    downloadText(`${safeSlug(settings.name)}-members.csv`, csv, 'text/csv');
+  }
+
+  async function handleDeleteWorkspace() {
+    if (workspaces.length <= 1) {
+      toast({ kind: 'warning', title: 'You need at least one workspace.' });
+      return;
+    }
+    const deleted = await deleteWorkspace(workspaceId);
+    if (deleted) toast({ kind: 'success', title: 'Workspace deleted' });
+  }
+
+  return (
+    <>
+      <Section title="Workspace settings">
+        <SettingRow stack title="Workspace name" description="Your workspace name can be up to 65 characters" action={<input className="w-full max-w-[400px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={workspaceNameDraft} maxLength={65} onChange={(event) => setWorkspaceNameDraft(event.target.value)} />} />
+        <SettingRow stack title="Icon" description="Upload an image or pick an emoji. This icon will appear in your sidebar and notifications." action={<div className="relative"><button type="button" className="flex h-[72px] w-[72px] items-center justify-center rounded-md border border-[var(--osio-border-default)] text-5xl" onClick={() => setIconPickerOpen((open) => !open)}>{settings.icon ?? '🌏'}</button>{iconPickerOpen && <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2"><EmojiPicker current={settings.icon ?? '🌏'} onSelect={(value) => { update(resolvedUserId, workspaceId, { icon: value }); runAsync(renameWorkspace(workspaceId, settings.name, value)); setIconPickerOpen(false); }} onRemove={() => { update(resolvedUserId, workspaceId, { icon: null }); setIconPickerOpen(false); }} onClose={() => setIconPickerOpen(false)} /></div>}</div>} />
+        <SettingRow title="Custom landing page" description={<>When a new member joins this workspace, a copy of this page will be added to their <b>Private</b> pages</>} action={<Button onClick={() => setModal({ name: 'page-selector' })}>{settings.landingPageId ? 'Change page' : 'Select page'}</Button>} />
+      </Section>
+      <Section title="Sidebar">
+        <SettingRow title={<span className="inline-flex items-center gap-2">Try the new sidebar <span className="rounded bg-[var(--osio-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--osio-accent)]">New</span></span>} description="Keep your pages, meetings, and AI within reach." action={<Switch checked={sidebar.newSidebar ?? true} onChange={(checked) => { setUseNewSidebar(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, newSidebar: checked } }); }} />} />
+        <SettingRow title="Show other osionos apps in sidebar" description="Show osionos Calendar and osionos Mail in your sidebar" action={<Switch checked={sidebar.showApps ?? true} onChange={(checked) => { setShowOtherApps(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, showApps: checked } }); }} />} />
+      </Section>
+      <Section title="Export">
+        <SettingRow title="Workspace content" description={`Export all pages in ${settings.name}. This can take longer depending on the size of the workspace.`} action={<Button onClick={() => runAsync(exportWorkspaceContent())}>Export</Button>} />
+        <SettingRow title="Members" description={`${membersCount} members available locally. Upgrade text from prompt is kept as a disabled export pattern.`} action={<Button onClick={exportMembersCsv}>Export</Button>} />
+      </Section>
+      <Section title="Analytics">
+        <SettingRow title="Save and display page view analytics" description={`Collect page view data for all pages in ${settings.name}. Editors can see how many views it has.`} action={<Switch checked={analytics.pageViews ?? true} onChange={(checked) => update(resolvedUserId, workspaceId, { analytics: { ...settings.analytics, pageViews: checked } })} />} />
+        <Button tone="ghost" className="-ml-2"><Search size={14} /> Learn more</Button>
+      </Section>
+      <Section title="Danger zone">
+        <SettingRow danger title="Delete workspace" description="Permanently delete this workspace, including all pages and files." action={<Button tone="danger" onClick={() => setModal({ name: 'delete-workspace' })}>Delete workspace</Button>} />
+        <Button tone="ghost" className="-ml-2" onClick={() => { runAsync(reset(resolvedUserId, workspaceId, workspaceName)); }}>Reset to defaults</Button>
+      </Section>
+      <Section title="Workspace ID">
+        <SettingRow title="Workspace ID" description={workspaceId} action={<Button tone="ghost" aria-label="Copy workspace ID" onClick={() => { runAsync(navigator.clipboard.writeText(workspaceId).then(() => toast({ kind: 'success', title: 'Workspace ID copied' }))); }}><Copy size={15} /></Button>} />
+      </Section>
+      {modal?.name === 'page-selector' && <PageSelectorModal pages={pages} selectedId={settings.landingPageId ?? null} onSelect={(pageId) => { update(resolvedUserId, workspaceId, { landingPageId: pageId }); setModal(null); }} onClose={() => setModal(null)} />}
+      {modal?.name === 'delete-workspace' && <TypedConfirmModal title="Delete workspace" message={`Type ${settings.name} to permanently delete this workspace.`} confirmText={settings.name} danger actionLabel="Delete workspace" onConfirm={() => runAsync(handleDeleteWorkspace())} onClose={() => setModal(null)} />}
+    </>
+  );
+};
+
+const PageSelectorModal: React.FC<{ pages: PageEntry[]; selectedId: string | null; onSelect: (pageId: string | null) => void; onClose: () => void }> = ({ pages, selectedId, onSelect, onClose }) => (
+  <Modal open onClose={onClose} title="Select landing page" size="md">
+    <div className="space-y-2">
+      <Button className="w-full justify-start" onClick={() => onSelect(null)}>No landing page</Button>
+      {pages.slice(0, 20).map((page) => <Button key={page.id} className={`w-full justify-start ${selectedId === page.id ? 'border-[var(--osio-accent)]' : ''}`} onClick={() => onSelect(page.id)}>{page.icon ?? '📄'} {page.title || 'Untitled'}</Button>)}
+    </div>
+  </Modal>
+);
+
+const NotificationsPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }) => {
+  const userId = activeUserId || 'anonymous';
+  const settings = useNotificationSettingsStore((state) => state.data);
+  const hydrate = useNotificationSettingsStore((state) => state.hydrate);
+  const update = useNotificationSettingsStore((state) => state.update);
+  const reset = useNotificationSettingsStore((state) => state.reset);
+  const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
+
+  useEffect(() => {
+    runAsync(hydrate(userId));
+  }, [hydrate, userId]);
+
+  const inApp = settings?.inApp as { liveMeetingActivity?: boolean } | undefined;
+  const slack = settings?.slack as { mode?: string } | undefined;
+  const discord = settings?.discord as { mode?: string } | undefined;
+  const email = settings?.email as Record<string, boolean> | undefined;
+  const emailRows: Array<[string, string, string | undefined]> = [
+    ['Activity in my workspace', 'workspaceActivity', undefined],
+    ['Always send email notifications', 'alwaysSend', undefined],
+    ['Page updates', 'pageUpdates', 'Get email digests about pages you’ve turned on notifications for'],
+    ['Workspace digest', 'workspaceDigest', undefined],
+    ['Announcements and update emails', 'announcements', undefined],
+  ];
+
+  return (
+    <>
+      <Section title="In-app notifications">
+        <FeatureCard icon={<CalendarDays size={16} />} title="Live meeting activity" description="Join video conferencing and start transcribing. Meeting is being transcribed and summarized." action={<Switch checked={inApp?.liveMeetingActivity ?? true} onChange={(checked) => update({ inApp: { ...settings?.inApp, liveMeetingActivity: checked } })} />} />
+      </Section>
+      <Section title="Slack notifications"><SettingRow title="Slack notifications" description="Get Slack notifications about activity in your osionos workspace" action={<SelectButton value={slack?.mode ?? 'off'} options={[{ value: 'off', label: 'Off' }, { value: 'mentions', label: 'Mentions only' }, { value: 'all', label: 'All activity' }]} onChange={(value) => update({ slack: { ...settings?.slack, mode: value } })}>Off</SelectButton>} /></Section>
+      <Section title="Discord notifications"><SettingRow title="Discord notifications" description="Get Discord notifications about activity in your osionos workspace" action={<SelectButton value={discord?.mode ?? 'off'} options={[{ value: 'off', label: 'Off' }, { value: 'mentions', label: 'Mentions only' }, { value: 'all', label: 'All activity' }]} onChange={(value) => update({ discord: { ...settings?.discord, mode: value } })}>Off</SelectButton>} /></Section>
+      <Section title="Email notifications">
+        {emailRows.map(([label, key, description]) => (
+          <SettingRow key={label} title={label} description={description} action={<Switch checked={email?.[key] ?? key !== 'alwaysSend'} onChange={(checked) => update({ email: { ...settings?.email, [key]: checked } })} />} />
+        ))}
+        <Button className="mt-3" onClick={() => reset(userId)}>Reset to defaults</Button>
+        <Button tone="ghost" className="mt-3" onClick={() => setModal({ name: 'page-notification-overrides' })}>Manage settings</Button>
+      </Section>
+      {modal?.name === 'page-notification-overrides' && <PageNotificationOverridesModal onClose={() => setModal(null)} />}
+    </>
+  );
+};
+
+const PageNotificationOverridesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const pages = usePageStore((state) => state.pages).slice(0, 8);
+  const [enabledIds, setEnabledIds] = useState(() => new Set(pages.filter((page) => page.visibility !== 'private').map((page) => page.id)));
+  return (
+    <Modal open onClose={onClose} title="Page notification settings" size="md">
+      <div className="space-y-2">
+        {pages.length === 0 ? <p className="text-sm text-[var(--osio-fg-muted)]">No pages available yet.</p> : pages.map((page) => (
+          <SettingRow key={page.id} title={page.title || 'Untitled'} description={page.updatedAt ? new Date(page.updatedAt).toLocaleString() : 'No updates yet'} action={<Switch checked={enabledIds.has(page.id)} onChange={(checked) => setEnabledIds((current) => { const next = new Set(current); if (checked) { next.add(page.id); } else { next.delete(page.id); } return next; })} />} />
+        ))}
+        <div className="flex justify-end"><Button tone="primary" onClick={onClose}>Done</Button></div>
+      </div>
+    </Modal>
+  );
+};
+
+const ConnectionsPanel: React.FC<{ activeUserId: string; personaEmail?: string }> = ({ activeUserId, personaEmail }) => {
+  const userId = activeUserId || 'anonymous';
+  const connections = useConnectionsStore((state) => state.data);
+  const hydrate = useConnectionsStore((state) => state.hydrate);
+  const connect = useConnectionsStore((state) => state.connect);
+  const sync = useConnectionsStore((state) => state.sync);
+  const disconnect = useConnectionsStore((state) => state.disconnect);
+  const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
+
+  useEffect(() => {
+    runAsync(hydrate(userId, personaEmail));
+  }, [hydrate, personaEmail, userId]);
+
+  async function connectWithDelay(provider: string) {
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 800));
+    await connect(providerConnectionInput(userId, provider));
+  }
+
+  const rows = connections.filter((connection) => !connection.removedAt).map((connection) => [
+    connection.label,
+    connection.scopes.length ? connection.scopes.join(', ') : 'Can preview links',
+    <div key={`${connection._id}-actions`} className="flex flex-wrap justify-end gap-2">
+      <Button tone="ghost" onClick={() => { runAsync(sync(connection._id)); }}>Sync</Button>
+      <Button onClick={() => setModal({ name: 'connection-scopes', payload: { connectionId: connection._id } })}>Manage scopes</Button>
+      <Button tone="danger" onClick={() => setModal({ name: 'connection-scopes', payload: { connectionId: connection._id, disconnect: true } })}>Disconnect</Button>
+    </div>,
+  ]);
+  const selectedConnection = connections.find((connection) => connection._id === modal?.payload?.connectionId);
+
+  return (
+    <>
+      <Section title="My connections">
+        <DataTable headers={['Connection', 'Access', '']} rows={rows.length ? rows : [['No connections yet', 'Install one from Discover connections', '']]} />
+      </Section>
+      <Section title="Discover connections">
+        <div className="grid gap-3">
+          <FeatureCard icon={<Sparkles size={16} />} title="ChartBase" description="Use charts from databases and docs without leaving osionos." action={<Button onClick={() => { runAsync(connectWithDelay('chartbase')); }}>Explore</Button>} />
+          <FeatureCard icon={<Bot size={16} />} title="Slack" description="Preview threads and send notifications from pages." action={<Button onClick={() => { runAsync(connectWithDelay('slack')); }}>Install</Button>} />
+          <FeatureCard icon={<LayoutGrid size={16} />} title="GitHub" description="Attach issues, pull requests, and repository previews." action={<Button onClick={() => { runAsync(connectWithDelay('github')); }}>Install</Button>} />
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => setModal({ name: 'connection-gallery' })}>See all</Button><Button onClick={() => setModal({ name: 'connection-gallery' })}>Browse connections in Gallery</Button><Button onClick={() => setModal({ name: 'connection-gallery', payload: { developer: true } })}>Develop or manage connections</Button></div>
+      </Section>
+      {modal?.name === 'connection-gallery' && <ConnectionGalleryModal onConnect={(provider) => runAsync(connectWithDelay(provider))} onClose={() => setModal(null)} />}
+      {modal?.name === 'connection-scopes' && selectedConnection && modal.payload?.disconnect !== true && <ConnectionScopesModal connection={selectedConnection} onClose={() => setModal(null)} />}
+      {modal?.name === 'connection-scopes' && selectedConnection && modal.payload?.disconnect === true && <ConfirmModal title="Disconnect connection" message={`Disconnect ${selectedConnection.label}?`} danger actionLabel="Disconnect" onConfirm={() => { runAsync(disconnect(selectedConnection._id)); setModal(null); }} onClose={() => setModal(null)} />}
+    </>
+  );
+};
+
+const ConnectionScopesModal: React.FC<{ connection: ConnectionRecord; onClose: () => void }> = ({ connection, onClose }) => (
+  <Modal open onClose={onClose} title="Manage scopes" size="sm">
+    <div className="space-y-3">
+      {connection.scopes.map((scope) => <SettingRow key={scope} title={scope} description="Granted locally for this connection." action={<Switch checked />} />)}
+      <div className="flex justify-end"><Button tone="primary" onClick={onClose}>Done</Button></div>
+    </div>
+  </Modal>
+);
+
+const ConnectionGalleryModal: React.FC<{ onConnect: (provider: string) => void; onClose: () => void }> = ({ onConnect, onClose }) => (
+  <Modal open onClose={onClose} title="Connection gallery" size="lg">
+    <div className="grid gap-3 sm:grid-cols-2">
+      {CONNECTION_PROVIDERS.map((provider) => <FeatureCard key={provider.provider} title={provider.label} description={provider.scopes.join(', ')} icon={<Plug size={16} />} action={<Button onClick={() => onConnect(provider.provider)}>Install</Button>} />)}
+    </div>
+  </Modal>
+);
+
+const MailCalendarPanel: React.FC<{ activeUserId: string; personaEmail?: string }> = ({ activeUserId, personaEmail = 'dev.pro.photo@gmail.com' }) => {
+  const userId = activeUserId || 'anonymous';
+  const connections = useConnectionsStore((state) => state.data);
+  const hydrate = useConnectionsStore((state) => state.hydrate);
+  const connect = useConnectionsStore((state) => state.connect);
+  const disconnect = useConnectionsStore((state) => state.disconnect);
+  const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
+
+  useEffect(() => {
+    runAsync(hydrate(userId, personaEmail));
+  }, [hydrate, personaEmail, userId]);
+
+  const mailConnections = connections.filter((connection) => connection.provider === 'mail' && !connection.removedAt);
+  const calendarConnections = connections.filter((connection) => connection.provider === 'calendar' && !connection.removedAt);
+  const calendarRows = calendarConnections.map((connection) => [connection.label.split(' · ')[0] ?? connection.label, personaEmail, connection.status]);
+
+  return (
+    <>
+      <Section title="Connected emails">
+        {mailConnections.map((connection) => <SettingRow key={connection._id} title={connection.label.split(' · ')[0]} description={connection.label.split(' · ')[1] ?? personaEmail} action={<Button tone="danger" onClick={() => runAsync(disconnect(connection._id))}>Disconnect</Button>} />)}
+        <Button onClick={() => setModal({ name: 'mail-provider' })}>Add address</Button>
+      </Section>
+      <Section title="Connected calendars">
+        <DataTable headers={['Calendar', 'Account', 'Status']} rows={calendarRows.length ? calendarRows : [['osionos Calendar', personaEmail, 'Not connected']]} />
+        <Button className="mt-4" onClick={() => setModal({ name: 'calendar-provider' })}>Add calendar</Button>
+      </Section>
+      {modal?.name === 'mail-provider' && <ProviderPickerModal title="Mail provider" providers={['mail', 'slack']} onSelect={(provider) => { runAsync(connect(providerConnectionInput(userId, provider, ` · ${personaEmail}`))); setModal(null); }} onClose={() => setModal(null)} />}
+      {modal?.name === 'calendar-provider' && <ProviderPickerModal title="Calendar provider" providers={['calendar', 'github']} onSelect={(provider) => { runAsync(connect(providerConnectionInput(userId, provider, ` · ${personaEmail}`))); setModal(null); }} onClose={() => setModal(null)} />}
+    </>
+  );
+};
+
+const ProviderPickerModal: React.FC<{ title: string; providers: string[]; onSelect: (provider: string) => void; onClose: () => void }> = ({ title, providers, onSelect, onClose }) => (
+  <Modal open onClose={onClose} title={title} size="sm">
+    <div className="grid gap-2">
+      {providers.map((provider) => {
+        const manifest = connectionProvider(provider);
+        return <Button key={provider} onClick={() => onSelect(provider)}>{manifest.label}</Button>;
+      })}
+    </div>
+  </Modal>
+);
+
+const PeoplePanel: React.FC<{
+  workspaceId?: string;
+  activeUserId: string;
+  personas: StaticPersona[];
+  fallbackRows: React.ReactNode[][];
+  membersCount: number;
+}> = ({ workspaceId = 'local-workspace', activeUserId, personas, fallbackRows, membersCount }) => {
+  const [activePeopleTab, setActivePeopleTab] = useState('Members');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [peopleQuery, setPeopleQuery] = useState('');
+  const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
+  const members = useWorkspaceMembersStore((state) => state.data[workspaceId] ?? EMPTY_WORKSPACE_MEMBERS);
+  const hydrateMembers = useWorkspaceMembersStore((state) => state.hydrate);
+  const changeRole = useWorkspaceMembersStore((state) => state.changeRole);
+  const removeMember = useWorkspaceMembersStore((state) => state.remove);
+  const invites = useWorkspaceInvitesStore((state) => state.data[workspaceId] ?? EMPTY_WORKSPACE_INVITES);
+  const hydrateInvites = useWorkspaceInvitesStore((state) => state.hydrate);
+  const createInvite = useWorkspaceInvitesStore((state) => state.invite);
+  const revokeInvite = useWorkspaceInvitesStore((state) => state.revoke);
+  const seedUserIds = useMemo(() => personas.map((persona) => persona.id).filter(Boolean), [personas]);
+  const roleOptions = useMemo(() => [
+    { value: 'owner', label: 'Owner' },
+    { value: 'admin', label: 'Admin' },
+    { value: 'member', label: 'Member' },
+    { value: 'guest', label: 'Guest' },
+  ], []);
+
+  useEffect(() => {
+    runAsync(hydrateMembers(workspaceId, activeUserId || 'anonymous', seedUserIds));
+    runAsync(hydrateInvites(workspaceId));
+  }, [activeUserId, hydrateInvites, hydrateMembers, seedUserIds, workspaceId]);
+
+  const selectedMemberId = typeof modal?.payload?.userId === 'string' ? modal.payload.userId : null;
+  const selectedMember = members.find((member) => member.userId === selectedMemberId);
+  const visibleMembers = members.filter((member) => {
+    const persona = personas.find((candidate) => candidate.id === member.userId);
+    const haystack = `${persona?.name ?? ''} ${persona?.email ?? ''} ${member.userId}`.toLowerCase();
+    const matchesQuery = !peopleQuery.trim() || haystack.includes(peopleQuery.trim().toLowerCase());
+    let matchesTab = true;
+    if (activePeopleTab === 'Members') matchesTab = member.role !== 'guest';
+    if (activePeopleTab === 'Guests') matchesTab = member.role === 'guest';
+    return matchesQuery && matchesTab;
+  });
+  const rows = visibleMembers.length ? visibleMembers.map((member) => {
+    const persona = personas.find((candidate) => candidate.id === member.userId);
+    return [
+      <div key={member.userId} className="flex items-center gap-3">
+        <input type="checkbox" className="h-3.5 w-3.5" onChange={(event) => recordSettingsAction('people_member_select', { userId: member.userId, selected: event.target.checked })} />
+        <Avatar value={persona?.emoji} label={persona?.name ?? member.userId} />
+        <div className="min-w-0">
+          <div className="truncate font-medium">{persona?.name ?? member.userId}</div>
+          <div className="truncate text-xs text-[var(--osio-fg-muted)]">{persona?.email ?? member.joinedAt}</div>
+        </div>
+      </div>,
+      <SelectButton key={`${member.userId}-role`} value={member.role} options={roleOptions} onChange={(value) => { if (value === 'owner') setModal({ name: 'member-actions', payload: { userId: member.userId, transferOwner: true } }); else runAsync(changeRole(workspaceId, member.userId, value as WorkspaceMemberRole)); }}>{member.role}</SelectButton>,
+      <Button key={`${member.userId}-menu`} tone="ghost" className="px-2" onClick={() => setModal({ name: 'member-actions', payload: { userId: member.userId } })}><MoreHorizontal size={16} /></Button>,
+    ];
+  }) : fallbackRows;
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <MiniTabs active={activePeopleTab} onChange={setActivePeopleTab} tabs={[{ label: 'Guests', count: invites.length }, { label: 'Members', count: members.length || membersCount }, { label: 'Groups' }, { label: 'Contacts' }]} />
+        <div className="flex flex-wrap gap-2">
+          <Button tone="ghost" onClick={() => setSearchOpen((open) => !open)}><Search size={16} /></Button>
+          {searchOpen && <input value={peopleQuery} onChange={(event) => setPeopleQuery(event.target.value)} placeholder="Search people" className="h-8 w-[220px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm outline-none" />}
+          <Button tone="primary" onClick={() => setModal({ name: 'invite-members' })}><UserPlus size={15} /> Add members</Button>
+        </div>
+      </div>
+      <DataTable headers={['User', 'Access', '']} rows={rows} />
+      {invites.length > 0 && <DataTable className="mt-4" headers={['Pending invite', 'Role', '']} rows={invites.map((invite) => [invite.email, invite.role, <Button key={`${invite._id}-revoke`} tone="ghost" onClick={() => { runAsync(revokeInvite(workspaceId, invite._id)); }}>Revoke</Button>])} />}
+      <Button tone="ghost" onClick={() => setModal({ name: 'people-directory' })}>View People Directory</Button>
+      {modal?.name === 'invite-members' && <InviteMembersModal onInvite={(email, role) => createInvite(workspaceId, { email, role, invitedBy: activeUserId || 'anonymous' })} onClose={() => setModal(null)} />}
+      {modal?.name === 'people-directory' && <PeopleDirectoryModal personas={personas} onClose={() => setModal(null)} />}
+      {modal?.name === 'member-actions' && selectedMember && <MemberActionsModal onRole={(role) => { runAsync(changeRole(workspaceId, selectedMember.userId, role)); setModal(null); }} onRemove={() => { runAsync(removeMember(workspaceId, selectedMember.userId)); setModal(null); }} onClose={() => setModal(null)} transferOwner={modal.payload?.transferOwner === true} />}
+    </>
+  );
+};
+
+const InviteMembersModal: React.FC<{ onInvite: (email: string, role: WorkspaceMemberRole) => Promise<WorkspaceInvite | null>; onClose: () => void }> = ({ onInvite, onClose }) => {
+  const [emailDraft, setEmailDraft] = useState('');
+  const [role, setRole] = useState<WorkspaceMemberRole>('member');
+  return (
+    <Modal open onClose={onClose} title="Invite members" size="sm">
+      <div className="space-y-3">
+        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} placeholder="name@example.com" />
+        <SelectButton value={role} options={[{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }, { value: 'guest', label: 'Guest' }]} onChange={(value) => setRole(value as WorkspaceMemberRole)}>Member</SelectButton>
+        <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => { if (emailDraft.includes('@')) runAsync(onInvite(emailDraft.trim().toLowerCase(), role).then(() => onClose())); }}>Invite</Button></div>
+      </div>
+    </Modal>
+  );
+};
+
+const PeopleDirectoryModal: React.FC<{ personas: StaticPersona[]; onClose: () => void }> = ({ personas, onClose }) => (
+  <Modal open onClose={onClose} title="People directory" size="md">
+    <DataTable headers={['Person', 'Email']} rows={personas.map((persona) => [<span key={persona.id} className="inline-flex items-center gap-2"><Avatar value={persona.emoji} label={persona.name} />{persona.name}</span>, persona.email])} />
+  </Modal>
+);
+
+const MemberActionsModal: React.FC<{ transferOwner?: boolean; onRole: (role: WorkspaceMemberRole) => void; onRemove: () => void; onClose: () => void }> = ({ transferOwner, onRole, onRemove, onClose }) => (
+  <Modal open onClose={onClose} title={transferOwner ? 'Transfer ownership' : 'Member actions'} size="sm">
+    <div className="grid gap-2">
+      {transferOwner && <p className="text-sm text-[var(--osio-fg-muted)]">Confirm owner transfer before changing this role.</p>}
+      <Button onClick={() => recordSettingsAction('invite_resend')}>Resend invite</Button>
+      <Button onClick={() => onRole('owner')}>Transfer ownership</Button>
+      <Button onClick={() => recordSettingsAction('member_view_profile')}>View profile</Button>
+      <Button tone="danger" onClick={onRemove}>Remove</Button>
+    </div>
+  </Modal>
+);
+
+const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string }> = ({ workspaceId = 'local-workspace', activeUserId }) => {
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [activeImportTab, setActiveImportTab] = useState('Discover');
+  const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
+  const addAsset = useAssetLibraryStore((s) => s.addAsset);
+  const addPage = usePageStore((state) => state.addPage);
+  const openPage = usePageStore((state) => state.openPage);
+  const jwt = useUserStore((state) => state.activeJwt());
+  const history = useImportHistoryStore((state) => state.data[workspaceId] ?? EMPTY_IMPORT_HISTORY);
+  const hydrateHistory = useImportHistoryStore((state) => state.hydrate);
+  const uploadImport = useImportHistoryStore((state) => state.upload);
+  const addImportEntry = useImportHistoryStore((state) => state.addEntry);
+  const markRetry = useImportHistoryStore((state) => state.markRetry);
+  const files = ['CSV', 'PDF', 'Text & Markdown', 'HTML', 'Word'];
+  const apps = ['Asana', 'Confluence', 'Trello', 'Workflowy', 'Evernote', 'Jira', 'Monday.com', 'Quip', 'Google Docs'];
+
+  useEffect(() => {
+    runAsync(hydrateHistory(workspaceId));
+  }, [hydrateHistory, workspaceId]);
+
+  async function importFiles(imports: File[]) {
+    const pageExtensions = new Set(['.md', '.markdown', '.html', '.json', '.txt']);
+    event.target.value = '';
+    for (const file of imports) {
+      const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+      if (pageExtensions.has(extension)) {
+        const payload = await importPageFile(file);
+        const page = await addPage(workspaceId, payload.title || file.name, jwt, undefined, { content: payload.content });
+        addImportEntry(workspaceId, { userId: activeUserId || 'anonymous', workspaceId, source: 'file', fileName: file.name, byteSize: file.size, status: 'completed', pageIds: page?._id ? [page._id] : [], error: null, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), removedAt: null });
+        continue;
+      }
+      const source = await readFileAsDataUrl(file);
+      addAsset(activeUserId, { kind: assetKindFromFile(file), name: file.name, source, origin: 'upload', mimeType: file.type, size: file.size });
+      const entry = await uploadImport(workspaceId, file);
+      if (!entry) addImportEntry(workspaceId, { userId: activeUserId || 'anonymous', workspaceId, source: 'file', fileName: file.name, byteSize: file.size, status: 'completed', pageIds: [], error: null, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), removedAt: null });
+    }
+  }
+
+  async function handleLibraryImport(event: React.ChangeEvent<HTMLInputElement>) {
+    const imports = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    await importFiles(imports);
+  }
+
+  function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    runAsync(importFiles(Array.from(event.dataTransfer.files)));
+  }
+
+  const completedRows = history
+    .filter((entry) => entry.status === 'completed')
+    .map((entry) => [
+      entry.fileName ?? entry.source,
+      formatBytes(entry.byteSize),
+      entry.finishedAt ? new Date(entry.finishedAt).toLocaleString() : entry.status,
+      <div key={`${entry._id}-actions`} className="flex gap-2"><Button onClick={() => { const pageId = entry.pageIds[0]; if (pageId) openPage({ id: pageId, workspaceId, kind: 'page' }); }}>Open</Button><Button tone="ghost" onClick={() => markRetry(workspaceId, entry._id)}>Retry</Button></div>,
+    ]);
+
+  if (activeImportTab === 'Completed') {
+    return (
+      <>
+        <MiniTabs active={activeImportTab} onChange={setActiveImportTab} tabs={[{ label: 'Discover' }, { label: 'Completed', count: completedRows.length }]} />
+        <Section title="Completed imports">
+          <DataTable headers={['Import', 'Size', 'Finished', '']} rows={completedRows.length ? completedRows : [['No completed imports yet', 'Local', '', '']]} />
+        </Section>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <MiniTabs active={activeImportTab} onChange={setActiveImportTab} tabs={[{ label: 'Discover' }, { label: 'Completed', count: completedRows.length }]} />
       <Section title="Import your content">
-        <div className="rounded-xl border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center">
+        <div className="rounded-xl border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center" onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
           <Upload className="mx-auto text-[var(--osio-accent)]" size={28} />
           <h4 className="mt-3 font-medium text-[var(--osio-fg-default)]">Import your content to osionos</h4>
           <p className="mt-2 text-sm text-[var(--osio-fg-muted)]">ZIP, CSV, PDF, text, markdown, HTML, images, audio, and video files.</p>
@@ -603,9 +1413,43 @@ const ImportPanel = () => {
           <Button className="mt-4" onClick={() => fileInputRef.current?.click()}><Upload size={15} /> Choose files</Button>
         </div>
       </Section>
-      <Section title="File-based imports"><div className="grid gap-3 sm:grid-cols-2">{files.map((file) => <FeatureCard key={file} icon={<FileText size={16} />} title={file} description={`Import ${file.toLowerCase()} content from files`} />)}</div></Section>
-      <Section title="Third-party imports"><div className="grid gap-3 sm:grid-cols-2">{apps.map((app) => <FeatureCard key={app} icon={<Database size={16} />} title={app} description={`Migrate content from ${app}`} />)}</div></Section>
+      <Section title="File-based imports"><div className="grid gap-3 sm:grid-cols-2">{files.map((file) => <FeatureCard key={file} icon={<FileText size={16} />} title={file} description={`Import ${file.toLowerCase()} content from files`} action={<Button onClick={() => setModal({ name: 'typed-import', payload: { kind: file } })}>Open</Button>} />)}</div></Section>
+      <Section title="Third-party imports"><div className="grid gap-3 sm:grid-cols-2">{apps.map((app) => <FeatureCard key={app} icon={<Database size={16} />} title={app} description={`Migrate content from ${app}`} action={<Button onClick={() => setModal({ name: 'provider-import', payload: { app } })}>Import</Button>} />)}</div></Section>
+      {modal?.name === 'typed-import' && <TypedImportModal kind={String(modal.payload?.kind ?? 'File')} onChoose={() => fileInputRef.current?.click()} onClose={() => setModal(null)} />}
+      {modal?.name === 'provider-import' && <ProviderImportModal app={String(modal.payload?.app ?? 'Provider')} workspaceId={workspaceId} activeUserId={activeUserId || 'anonymous'} addEntry={addImportEntry} addPage={addPage} jwt={jwt} onClose={() => setModal(null)} />}
     </>
+  );
+};
+
+const TypedImportModal: React.FC<{ kind: string; onChoose: () => void; onClose: () => void }> = ({ kind, onChoose, onClose }) => (
+  <Modal open onClose={onClose} title={`${kind} import`} size="sm">
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--osio-fg-muted)]">Choose a local file and osionos will route it to pages or the asset library based on type.</p>
+      <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => { onChoose(); onClose(); }}>Choose file</Button></div>
+    </div>
+  </Modal>
+);
+
+const ProviderImportModal: React.FC<{ app: string; workspaceId: string; activeUserId: string; jwt: string; addEntry: ReturnType<typeof useImportHistoryStore.getState>['addEntry']; addPage: ReturnType<typeof usePageStore.getState>['addPage']; onClose: () => void }> = ({ app, workspaceId, activeUserId, jwt, addEntry, addPage, onClose }) => {
+  const [progress, setProgress] = useState(20);
+  useEffect(() => {
+    const timer = globalThis.setInterval(() => setProgress((value) => Math.min(100, value + 20)), 180);
+    return () => globalThis.clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    if (progress < 100) return;
+    runAsync(addPage(workspaceId, `${app} import`, jwt, undefined, { content: [{ id: `block-${Date.now()}`, type: 'paragraph', text: `${app} imported into osionos.`, children: [] }] }).then((page) => {
+      addEntry(workspaceId, { userId: activeUserId, workspaceId, source: app, fileName: `${app} migration`, byteSize: 0, status: 'completed', pageIds: page?._id ? [page._id] : [], error: null, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), removedAt: null });
+    }));
+  }, [activeUserId, addEntry, addPage, app, jwt, progress, workspaceId]);
+  return (
+    <Modal open onClose={onClose} title={`${app} import`} size="sm">
+      <div className="space-y-4">
+        <div className="h-2 overflow-hidden rounded bg-[var(--osio-bg-muted)]"><div className="h-full bg-[var(--osio-accent)] transition-all" style={{ width: `${progress}%` }} /></div>
+        <p className="text-sm text-[var(--osio-fg-muted)]">{progress >= 100 ? 'Import completed.' : 'Importing workspace content...'}</p>
+        <div className="flex justify-end"><Button tone="primary" onClick={onClose}>Done</Button></div>
+      </div>
+    </Modal>
   );
 };
 
@@ -734,24 +1578,57 @@ const TeamspacesPanel: React.FC<{ workspaceName?: string }> = ({ workspaceName =
   </>
 );
 
-const BillingPanel = () => (
-  <>
-    <Section title="Plan"><SettingRow title="Education Plus" description="For students & educators" action={<Button>Change plan</Button>} /></Section>
-    <Section title="Payment details"><SettingRow title="Payment method" description="None" action={<Button>Edit method</Button>} /><SettingRow title="Billed to" description="None" action={<Button>Edit information</Button>} /><SettingRow title="Billing email" action={<Button>Edit email</Button>} /><SettingRow title="Invoice emails" description="Receive a copy of your invoice via email each billing period" action={<Button>Edit</Button>} /><SettingRow title="VAT/GST number" action={<Button>Edit number</Button>} /></Section>
-    <Section title="Invoices"><SettingRow title="Upcoming invoice" action={<Button>View invoice</Button>} /></Section>
-  </>
-);
+const BillingPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId = 'local-workspace' }) => {
+  const storedBilling = useBillingStore((state) => state.data[workspaceId]);
+  const invoices = useBillingStore((state) => state.invoices[workspaceId] ?? EMPTY_BILLING_INVOICES);
+  const hydrate = useBillingStore((state) => state.hydrate);
+  const update = useBillingStore((state) => state.update);
+  const reset = useBillingStore((state) => state.reset);
+  const fallbackBilling = useMemo<BillingState>(() => defaultBillingState(workspaceId), [workspaceId]);
+  const billing = storedBilling ?? fallbackBilling;
 
-const PlansPanel = () => {
+  useEffect(() => {
+    runAsync(hydrate(workspaceId));
+  }, [hydrate, workspaceId]);
+
+  return (
+    <>
+      <Section title="Plan"><SettingRow title={billing.plan} description="For students & educators" action={<SelectButton value={billing.plan} options={[{ value: 'Free', label: 'Free' }, { value: 'Education Plus', label: 'Education Plus' }, { value: 'Business', label: 'Business' }]} onChange={(value) => update(workspaceId, { plan: value })}>Change plan</SelectButton>} /></Section>
+      <Section title="Payment details">
+        <SettingRow title="Payment method" description={billing.paymentMethod ? 'Configured' : 'None'} action={<Button>Edit method</Button>} />
+        <SettingRow title="Billed to" description={billing.billedTo ? 'Configured' : 'None'} action={<Button>Edit information</Button>} />
+        <SettingRow title="Billing email" description={billing.billingEmail ?? 'None'} action={<Button>Edit email</Button>} />
+        <SettingRow title="Invoice emails" description="Receive a copy of your invoice via email each billing period" action={<Button>Edit</Button>} />
+        <SettingRow title="VAT/GST number" description={billing.vatNumber ?? 'None'} action={<Button>Edit number</Button>} />
+      </Section>
+      <Section title="Invoices">
+        <SettingRow title="Upcoming invoice" description={billing.upcomingInvoice ? 'Ready to review' : 'No upcoming invoice'} action={<Button>View invoice</Button>} />
+        {invoices.length > 0 && <DataTable className="mt-4" headers={['Invoice', 'Amount', 'Status']} rows={invoices.map((invoice) => [invoice.number, `${invoice.amount} ${invoice.currency}`, invoice.status])} />}
+        <Button className="mt-3" onClick={() => reset(workspaceId)}>Reset to defaults</Button>
+      </Section>
+    </>
+  );
+};
+
+const PlansPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId = 'local-workspace' }) => {
+  const storedBilling = useBillingStore((state) => state.data[workspaceId]);
+  const hydrate = useBillingStore((state) => state.hydrate);
+  const fallbackBilling = useMemo<BillingState>(() => defaultBillingState(workspaceId), [workspaceId]);
+  const billing = storedBilling ?? fallbackBilling;
   const plans = [
     ['Free', 'Basic forms, basic sites, custom databases, osionos Calendar, osionos Mail'],
     ['Plus', 'Everything in Free, unlimited blocks, unlimited charts, custom forms, custom sites'],
     ['Business', 'Popular · osionos Agent, Custom Agents, AI Meeting Notes, database permissions, SAML SSO'],
     ['Enterprise', 'AI analytics, zero data retention, SCIM, audit log, domain management'],
   ];
+
+  useEffect(() => {
+    runAsync(hydrate(workspaceId));
+  }, [hydrate, workspaceId]);
+
   return (
     <>
-      <FeatureCard title="Your current plan" description="Education Plus · For students & educators" action={<Check size={18} className="text-[var(--osio-accent)]" />} />
+      <FeatureCard title="Your current plan" description={`${billing.plan} · For students & educators`} action={<Check size={18} className="text-[var(--osio-accent)]" />} />
       <FeatureCard icon={<Sparkles size={16} />} title="osionos AI" description="Upgrade to search everywhere, automate meeting notes & more" action={<Button tone="primary">Upgrade</Button>} />
       <Section title="Compare all plans"><div className="grid gap-3 md:grid-cols-2">{plans.map(([name, description]) => <div key={name} className="rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4"><div className="flex items-center justify-between"><h4 className="font-semibold text-[var(--osio-fg-default)]">{name}</h4>{name !== 'Free' && <span className="text-xs text-[var(--osio-fg-muted)]">billed monthly</span>}</div><p className="mt-3 text-sm leading-5 text-[var(--osio-fg-muted)]">{description}</p><Button className="mt-4 w-full">Upgrade</Button></div>)}</div></Section>
       <Section title="FAQ"><SettingRow title="Plans, Billing & Payment" action={<ChevronDown size={16} />} /><SettingRow title="Message support" action={<ChevronDown size={16} />} /></Section>

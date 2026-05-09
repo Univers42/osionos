@@ -29,6 +29,7 @@ export interface Workspace {
   name: string;
   slug: string;
   ownerId: string;
+  icon?: string;
   memberIds?: string[];
   settings?: Record<string, unknown>;
 }
@@ -63,6 +64,8 @@ export interface UserStore {
   logoutUser: (userId: string) => void;
   refreshWorkspaces: (userId: string) => Promise<void>;
   createWorkspace: (name: string, slug: string) => Promise<Workspace | null>;
+  renameWorkspace: (workspaceId: string, name: string, icon?: string) => void;
+  deleteWorkspace: (workspaceId: string) => Promise<boolean>;
   importBridgeSession: (session: UserSession, persona: StaticPersona, expiresAt?: string) => void;
 
   // Selectors

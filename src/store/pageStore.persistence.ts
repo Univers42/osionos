@@ -6,29 +6,16 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 03:57:43 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 18:16:10 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import { api } from '@/shared/api/client';
+import { API_BASE, api, getActiveJwt } from '@/shared/api/client';
 import { isMongoId } from './pageStore.helpers';
 import type { PageEntry } from '@/entities/page';
 import { canEditPage, getCurrentPageAccessContext } from '@/shared/lib/auth/pageAccess';
 
-const API_BASE = ((import.meta.env as Record<string, string>)['VITE_API_URL'] ?? '').trim();
-
-/** Lazy JWT getter — avoids importing useUserStore at module top level */
-export function getActiveJwt(): string | null {
-  try {
-    const mod = (globalThis as unknown as Record<string, unknown>).__playgroundUserStore as
-      | { getState: () => { activeJwt: () => string | null } }
-      | undefined;
-    if (!mod) return null;
-    return mod.getState().activeJwt() || null;
-  } catch {
-    return null;
-  }
-}
+export { getActiveJwt } from '@/shared/api/client';
 
 type PageByIdFn = (pageId: string) => PageEntry | undefined;
 let _pageByIdFn: PageByIdFn | null = null;

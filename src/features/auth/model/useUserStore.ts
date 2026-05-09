@@ -213,6 +213,21 @@ function finalizedState(personas: typeof INITIAL_PERSONAS, sessions: Record<stri
   return { personas, sessions, activeUserId, activeWorkspaceByUser: storedContext.activeWorkspaceByUser ?? {}, initialized: true, loading: false, error: null };
 }
 
+function renameWorkspaceList(workspaces: Workspace[], workspaceId: string, name: string, icon?: string) {
+  return workspaces.map((workspace) => {
+    if (workspace._id !== workspaceId) return workspace;
+    return { ...workspace, name, ...(icon ? { icon } : {}) };
+  });
+}
+
+function renamedWorkspaceSession(session: UserSession, workspaceId: string, name: string, icon?: string): UserSession {
+  return {
+    ...session,
+    privateWorkspaces: renameWorkspaceList(session.privateWorkspaces, workspaceId, name, icon),
+    sharedWorkspaces: renameWorkspaceList(session.sharedWorkspaces, workspaceId, name, icon),
+  };
+}
+
 function offlineState() {
   const personas = initialPersonas();
   const { sessions, firstUserId } = createOfflineSessions(personas);
@@ -430,6 +445,53 @@ export const useUserStore = create<UserStore>((set, get) => ({
     } catch {
       return null;
     }
+  },
+
+  renameWorkspace: (workspaceId, name, icon) => {
+    set((state) => {
+      const sessions = Object.fromEntries(
+        Object.entries(state.sessions).map(([userId, session]) => [
+          userId,
+          renamedWorkspaceSession(session, workspaceId, name, icon),
+        ]),
+      );
+      savePersistedWorkspaces(sessions);
+      return { sessions };
+    });
+  },
+
+  deleteWorkspace: async (workspaceId) => {
+    const state = get();
+    const uid = state.activeUserId;
+    const session = state.sessions[uid];
+    if (!session) return false;
+    const allWorkspaces = [...session.privateWorkspaces, ...session.sharedWorkspaces];
+    if (allWorkspaces.length <= 1) return false;
+
+    const jwt = get().activeJwt();
+    if (jwt) {
+      await api.delete(`/api/workspaces/${workspaceId}`, jwt).catch(() => undefined);
+    }
+
+    set((currentState) => {
+      const currentSession = currentState.sessions[uid];
+      if (!currentSession) return currentState;
+      const privateWorkspaces = currentSession.privateWorkspaces.filter((workspace) => workspace._id !== workspaceId);
+      const sharedWorkspaces = currentSession.sharedWorkspaces.filter((workspace) => workspace._id !== workspaceId);
+      const nextWorkspaceId = currentState.activeWorkspaceByUser[uid] === workspaceId
+        ? privateWorkspaces[0]?._id ?? sharedWorkspaces[0]?._id ?? ''
+        : currentState.activeWorkspaceByUser[uid];
+      const sessions = {
+        ...currentState.sessions,
+        [uid]: { ...currentSession, privateWorkspaces, sharedWorkspaces },
+      };
+      const activeWorkspaceByUser = { ...currentState.activeWorkspaceByUser, [uid]: nextWorkspaceId };
+      savePersistedWorkspaces(sessions);
+      savePersistedContext({ activeUserId: uid, activeWorkspaceByUser });
+      return { sessions, activeWorkspaceByUser };
+    });
+
+    return true;
   },
 
   importBridgeSession: (session, persona, expiresAt) => {
