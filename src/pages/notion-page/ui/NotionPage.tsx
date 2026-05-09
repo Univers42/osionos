@@ -15,6 +15,7 @@ import { MessageSquare, Send } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
 
 import { usePageStore } from "@/store/usePageStore";
+import { savePagesCache } from "@/store/pageStore.helpers";
 import { useUserStore } from "@/features/auth";
 import { pageConfigKey, resolvePageConfig, usePageConfigStore } from "@/shared/config/pageConfigStore";
 import {
@@ -25,11 +26,11 @@ import {
 import {
   IconImage,
   getCollectionEmojiValue,
-  randomUiCollectionCover,
   randomUiCollectionEmoji,
 } from "@/shared/lib/markengine/uiCollectionAssets";
 
 import {
+  CoverAssetPicker,
   PageCover,
   PageHeaderBar,
   PageIcon,
@@ -72,6 +73,8 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
   const safeUserId = activeUserId || "anonymous";
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
+  const [coverPickerOpen, setCoverPickerOpen] = useState(false);
+  const coverPickerRef = React.useRef<HTMLDivElement | null>(null);
   const comments = useRealtimeMessagesStore(
     (s) => s.messagesByThread[`page:${pageId}:comments`] ?? EMPTY_MESSAGES,
   );
@@ -94,25 +97,46 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
     return () => globalThis.removeEventListener("osionos:add-page-comment", handleAddPageComment);
   }, [pageId]);
 
+  useEffect(() => {
+    if (!coverPickerOpen) return;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (coverPickerRef.current?.contains(event.target as Node)) return;
+      setCoverPickerOpen(false);
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCoverPickerOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [coverPickerOpen]);
+
   /* ── Page metadata from store ──────────────────────────────────── */
   const title = page?.title ?? activePage?.title ?? "";
   const icon = page?.icon ?? activePage?.icon;
-  const cover = page?.cover;
+  const cover = page?.cover ?? activePage?.cover;
 
   /* ── Handlers ──────────────────────────────────────────────────── */
 
   const handleChangeTitle = useCallback(
     (newTitle: string) => {
+      if (pageConfig.locked) return;
       updatePageTitle(pageId, newTitle);
       if (activePage?.id === pageId) {
         openPage({ ...activePage, title: newTitle });
       }
     },
-    [pageId, activePage, openPage, updatePageTitle],
+    [pageConfig.locked, pageId, activePage, openPage, updatePageTitle],
   );
 
   const handleChangeIcon = useCallback(
     (newIcon: string) => {
+      if (pageConfig.locked) return;
       /* Persist icon on the page entry — we store it in the store's PageEntry */
       usePageStore.setState((s) => {
         const newPages = { ...s.pages };
@@ -121,16 +145,18 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
             p._id === pageId ? { ...p, icon: newIcon } : p,
           );
         }
+        savePagesCache(newPages);
         return { pages: newPages };
       });
       if (activePage?.id === pageId) {
         openPage({ ...activePage, icon: newIcon });
       }
     },
-    [pageId, activePage, openPage],
+    [pageConfig.locked, pageId, activePage, openPage],
   );
 
   const handleRemoveIcon = useCallback(() => {
+    if (pageConfig.locked) return;
     usePageStore.setState((s) => {
       const newPages = { ...s.pages };
       for (const wsId of Object.keys(newPages)) {
@@ -138,12 +164,13 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
           p._id === pageId ? { ...p, icon: undefined } : p,
         );
       }
+        savePagesCache(newPages);
       return { pages: newPages };
     });
     if (activePage?.id === pageId) {
       openPage({ ...activePage, icon: undefined });
     }
-  }, [pageId, activePage, openPage]);
+  }, [pageConfig.locked, pageId, activePage, openPage]);
 
   const handleAddIcon = useCallback(() => {
     const emoji = randomUiCollectionEmoji();
@@ -152,6 +179,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
 
   const handleChangeCover = useCallback(
     (newCover: string) => {
+      if (pageConfig.locked) return;
       usePageStore.setState((s) => {
         const newPages = { ...s.pages };
         for (const wsId of Object.keys(newPages)) {
@@ -159,13 +187,18 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
             p._id === pageId ? { ...p, cover: newCover } : p,
           );
         }
+        savePagesCache(newPages);
         return { pages: newPages };
       });
+      if (activePage?.id === pageId) {
+        openPage({ ...activePage, cover: newCover });
+      }
     },
-    [pageId],
+    [pageConfig.locked, pageId, activePage, openPage],
   );
 
   const handleRemoveCover = useCallback(() => {
+    if (pageConfig.locked) return;
     usePageStore.setState((s) => {
       const newPages = { ...s.pages };
       for (const wsId of Object.keys(newPages)) {
@@ -173,16 +206,26 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
           p._id === pageId ? { ...p, cover: undefined } : p,
         );
       }
+        savePagesCache(newPages);
       return { pages: newPages };
     });
-  }, [pageId]);
+    if (activePage?.id === pageId) {
+      openPage({ ...activePage, cover: undefined });
+    }
+  }, [pageConfig.locked, pageId, activePage, openPage]);
 
   const handleAddCover = useCallback(() => {
-    const nextCover = randomUiCollectionCover();
-    if (nextCover) {
+    if (pageConfig.locked) return;
+    setCoverPickerOpen((open) => !open);
+  }, [pageConfig.locked]);
+
+  const handleSelectCoverFromToolbar = useCallback(
+    (nextCover: string) => {
       handleChangeCover(nextCover);
-    }
-  }, [handleChangeCover]);
+      setCoverPickerOpen(false);
+    },
+    [handleChangeCover],
+  );
 
   const handleSubmitComment = useCallback(
     (event: { preventDefault: () => void }) => {
@@ -232,6 +275,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
           cover={cover}
           onChangeCover={handleChangeCover}
           onRemoveCover={handleRemoveCover}
+          disabled={pageConfig.locked}
         />
       )}
 
@@ -249,12 +293,13 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
             icon={icon}
             onChangeIcon={handleChangeIcon}
             onRemoveIcon={handleRemoveIcon}
+            disabled={pageConfig.locked}
           />
         )}
 
         {/* Toolbar: Add icon / cover / comment (shown on hover) */}
         <div className="osionos-page-toolbar">
-          {!hasIcon && (
+          {!hasIcon && !pageConfig.locked && (
             <button
               type="button"
               className="osionos-page-toolbar-btn"
@@ -267,7 +312,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
               Add icon
             </button>
           )}
-          {!hasCover && (
+          {!hasCover && !pageConfig.locked && (
             <button
               type="button"
               className="osionos-page-toolbar-btn"
@@ -287,13 +332,19 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
           </button>
         </div>
 
+        {!hasCover && coverPickerOpen ? (
+          <div ref={coverPickerRef} className="absolute z-[var(--osio-z-popover)] mt-1">
+            <CoverAssetPicker onSelect={handleSelectCoverFromToolbar} />
+          </div>
+        ) : null}
+
         {commentsOpen ? (
-          <section className="mb-4 max-w-xl rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-3">
+          <section className="mb-4 max-w-xl rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-3">
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-medium text-[var(--color-ink)]">Page comments</p>
+              <p className="text-sm font-medium text-[var(--osio-fg-default)]">Page comments</p>
               <button
                 type="button"
-                className="text-xs text-[var(--color-ink-muted)] hover:text-[var(--color-ink)]"
+                className="text-xs text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]"
                 onClick={() => setCommentsOpen(false)}
               >
                 Close
@@ -301,17 +352,17 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
             </div>
             <div className="mb-3 max-h-44 space-y-2 overflow-y-auto">
               {comments.length === 0 ? (
-                <p className="text-xs text-[var(--color-ink-muted)]">No comments yet.</p>
+                <p className="text-xs text-[var(--osio-fg-muted)]">No comments yet.</p>
               ) : (
                 comments.map((comment) => (
-                  <article key={comment.id} className="rounded-lg bg-[var(--color-surface-primary)] px-3 py-2">
+                  <article key={comment.id} className="rounded-lg bg-[var(--osio-bg-surface)] px-3 py-2">
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="font-medium text-[var(--color-ink)]">{comment.authorName}</span>
-                      <span className="text-[var(--color-ink-faint)]">
+                      <span className="font-medium text-[var(--osio-fg-default)]">{comment.authorName}</span>
+                      <span className="text-[var(--osio-fg-subtle)]">
                         {new Date(comment.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </span>
                     </div>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--color-ink)]">{comment.body}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-[var(--osio-fg-default)]">{comment.body}</p>
                   </article>
                 ))
               )}
@@ -322,12 +373,12 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
                 onChange={(event) => setCommentDraft(event.target.value)}
                 rows={2}
                 placeholder="Write a comment…"
-                className="min-h-10 flex-1 resize-none rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-primary)] px-3 py-2 text-sm outline-none focus:border-[var(--color-accent)]"
+                className="min-h-10 flex-1 resize-none rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--osio-accent)]"
               />
               <button
                 type="submit"
                 disabled={!commentDraft.trim()}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-accent)] text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Send comment"
               >
                 <Send size={16} />
@@ -337,11 +388,11 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
         ) : null}
 
         {/* Title */}
-        <PageTitle title={title} onChangeTitle={handleChangeTitle} />
+        <PageTitle title={title} onChangeTitle={handleChangeTitle} readOnly={pageConfig.locked} />
       </div>
 
       {/* Body: block editor powered by markengine */}
-      <PageBody pageId={pageId} />
+      <PageBody pageId={pageId} locked={pageConfig.locked} />
     </div>
   );
 };

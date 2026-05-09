@@ -6,24 +6,41 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:03:52 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/08 19:03:53 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/07 00:51:16 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 /**
- * useDatabaseStore stub — placeholder for the database CRUD store.
- * In standalone mode, this provides a no-op createInlineDatabase.
+ * useDatabaseStore bridge — returns the canonical Mongo-backed database target.
  */
 import { create } from 'zustand';
 
+export const DEFAULT_OBJECT_DATABASE_ID = 'db-tasks';
+export const DEFAULT_OBJECT_DATABASE_VIEW_ID = 'v-tasks-table';
+
+export interface DatabaseReference {
+  databaseId: string;
+  viewId: string;
+}
+
 interface DatabaseStore {
-  createInlineDatabase: (name?: string) => { databaseId: string; viewId: string } | null;
+  createInlineDatabase: (name?: string) => DatabaseReference;
 }
 
 export const useDatabaseStore = create<DatabaseStore>(() => ({
-  createInlineDatabase: (name?: string) => {
-    const id = crypto.randomUUID();
-    console.info('[databaseStore] Created stub inline database:', name ?? 'Untitled', id);
-    return { databaseId: id, viewId: `view-${id.slice(0, 8)}` };
+  createInlineDatabase: () => {
+    const suffix = createIdSuffix();
+    const databaseId = `db-${suffix}`;
+    return {
+      databaseId,
+      viewId: `${databaseId}-table`,
+    };
   },
 }));
+
+function createIdSuffix(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID().slice(0, 8);
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}

@@ -6,11 +6,12 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/05 03:57:43 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:10 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import { api } from "@/shared/api/client";
+import { apiJwtFromSessionToken } from "@/features/auth/model/userStore.helpers";
 import {
   canDeletePage,
   canDuplicatePage,
@@ -32,7 +33,7 @@ import {
   isValidMove,
   nextDuplicateTitle,
 } from "./pageStore.helpers";
-import type { PageEntry, PageStore, ActivePage } from "@/entities/page";
+import type { AddPageOptions, PageEntry, PageStore, ActivePage } from "@/entities/page";
 
 type SetFn = (
   partial: Partial<PageStore> | ((s: PageStore) => Partial<PageStore>),
@@ -44,8 +45,9 @@ export function createSeedOfflinePages(set: SetFn, get: GetFn) {
     if (get().seeded) return;
     const existingPages = get().pages;
     if (Object.keys(existingPages).length > 0) {
-      set({ seeded: true });
-      savePagesCache(existingPages);
+      const mergedPages = mergeMissingSeedPages(existingPages);
+      set({ pages: mergedPages, seeded: true });
+      savePagesCache(mergedPages);
       return;
     }
     const grouped: Record<string, PageEntry[]> = {};
@@ -56,6 +58,16 @@ export function createSeedOfflinePages(set: SetFn, get: GetFn) {
     set({ pages: grouped, seeded: true });
     savePagesCache(grouped);
   };
+}
+
+function mergeMissingSeedPages(existingPages: Record<string, PageEntry[]>): Record<string, PageEntry[]> {
+  const pages = { ...existingPages };
+  for (const seedPage of SEED_PAGES) {
+    const workspacePages = pages[seedPage.workspaceId] ?? [];
+    if (workspacePages.some((page) => page._id === seedPage._id)) continue;
+    pages[seedPage.workspaceId] = [...workspacePages, seedToEntry(seedPage)];
+  }
+  return pages;
 }
 
 export function createSeedOnlinePages(set: SetFn, get: GetFn) {
@@ -73,6 +85,7 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
             workspaceId: realWsId,
             title: sp.title,
             icon: sp.icon,
+            databaseId: sp.databaseId ?? undefined,
             content: sp.content,
             ownerId: sp.ownerId ?? undefined,
             visibility: sp.visibility,
@@ -158,18 +171,20 @@ export function createAddPage(set: SetFn, get: GetFn) {
     title: string,
     jwt: string,
     parentPageId?: string,
+    options: AddPageOptions = {},
   ): Promise<PageEntry | null> => {
     const context = getCurrentPageAccessContext();
     if (!context?.workspaceIds.includes(workspaceId)) {
       return null;
     }
-    const targetVisibility = getTargetWorkspaceMoveVisibility(
+    const targetVisibility = options.visibility ?? getTargetWorkspaceMoveVisibility(
       workspaceId,
       context,
       "private",
     );
+    const apiJwt = apiJwtFromSessionToken(jwt);
 
-    if (jwt) {
+    if (apiJwt) {
       try {
         const page = await api.post<PageEntry>(
           "/api/pages",
@@ -177,15 +192,18 @@ export function createAddPage(set: SetFn, get: GetFn) {
             workspaceId,
             title,
             parentPageId,
-            content: [],
+            content: options.content ?? [],
+            icon: options.icon,
             ownerId: context.userId,
             visibility: targetVisibility,
             collaborators: [],
+            surface: options.surface,
           },
-          jwt,
+          apiJwt,
         );
         const pageWithTimestamp: PageEntry = {
           ...page,
+          surface: page.surface ?? options.surface,
           updatedAt: page.updatedAt ?? new Date().toISOString(),
         };
         set((s) => ({
@@ -203,6 +221,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
     const newPage: PageEntry = {
       _id: localId(),
       title,
+      icon: options.icon,
       updatedAt: new Date().toISOString(),
       workspaceId,
       ownerId: context.userId,
@@ -210,6 +229,87 @@ export function createAddPage(set: SetFn, get: GetFn) {
       collaborators: [],
       parentPageId: parentPageId ?? null,
       databaseId: null,
+      archivedAt: null,
+      content: options.content ?? [],
+      surface: options.surface,
+    };
+    set((s) => ({
+      pages: {
+        ...s.pages,
+        [workspaceId]: [...(s.pages[workspaceId] ?? []), newPage],
+      },
+    }));
+    savePagesCache(get().pages);
+    return newPage;
+  };
+}
+
+export function createAddDatabasePage(set: SetFn, get: GetFn) {
+  return async (
+    workspaceId: string,
+    title: string,
+    jwt: string,
+    databaseId: string,
+    parentPageId?: string,
+  ): Promise<PageEntry | null> => {
+    const context = getCurrentPageAccessContext();
+    if (!context?.workspaceIds.includes(workspaceId)) {
+      return null;
+    }
+    const targetVisibility = getTargetWorkspaceMoveVisibility(
+      workspaceId,
+      context,
+      "private",
+    );
+
+    const apiJwt = apiJwtFromSessionToken(jwt);
+
+    if (apiJwt) {
+      try {
+        const page = await api.post<PageEntry>(
+          "/api/pages",
+          {
+            workspaceId,
+            title,
+            parentPageId,
+            databaseId,
+            content: [],
+            icon: "icon:table",
+            ownerId: context.userId,
+            visibility: targetVisibility,
+            collaborators: [],
+          },
+          apiJwt,
+        );
+        const pageWithTimestamp: PageEntry = {
+          ...page,
+          databaseId: page.databaseId ?? databaseId,
+          updatedAt: page.updatedAt ?? new Date().toISOString(),
+        };
+        set((s) => ({
+          pages: {
+            ...s.pages,
+            [workspaceId]: [...(s.pages[workspaceId] ?? []), pageWithTimestamp],
+          },
+        }));
+        savePagesCache(get().pages);
+        return pageWithTimestamp;
+      } catch {
+        return null;
+      }
+    }
+
+    const newPage: PageEntry = {
+      _id: localId(),
+      title,
+      icon: "icon:table",
+      updatedAt: new Date().toISOString(),
+      workspaceId,
+      ownerId: context.userId,
+      visibility: targetVisibility,
+      collaborators: [],
+      parentPageId: parentPageId ?? null,
+      databaseId,
       archivedAt: null,
       content: [],
     };

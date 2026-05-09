@@ -5,13 +5,14 @@
   min-width: var(--sidebar-width, #{tokens.$sidebar-width});
   height: 100%;
   flex-shrink: 0;
-  overflow: hidden;
-  background-color: var(--color-surface-secondary);
-  box-shadow: inset -1px 0 0 0 var(--color-line);
-  transition: transform 0.3s ease, width 0.3s ease, margin-left 0.3s ease;
+  overflow: visible;
+  background-color: var(--osio-bg-subtle);
+  box-shadow: inset -1px 0 0 0 var(--osio-border-default);
+  transition: transform 0.3s ease, margin-left 0.3s ease;
   display: flex;
   flex-direction: column;
   position: relative;
+  z-index: var(--osio-z-sidebar);
 }
 
 .sidebarClosed {
@@ -19,17 +20,23 @@
   min-width: 0;
   transform: translateX(-8px);
   pointer-events: none;
+  overflow: hidden;
 }
 
 .resizeHandle {
   position: absolute;
   top: 0;
-  right: -3px;
+  right: -5px;
   bottom: 0;
-  z-index: 40;
-  width: 6px;
+  z-index: var(--osio-z-popover);
+  width: 10px;
+  height: 100%;
+  margin: 0;
+  border: 0;
   cursor: col-resize;
   background: transparent;
+  touch-action: none;
+  user-select: none;
 }
 
 .resizeHandle::after {
@@ -43,6 +50,7 @@
   transition: background 120ms ease;
 }
 
-.resizeHandle:hover::after {
-  background: var(--color-accent);
+.resizeHandle:hover::after,
+.resizeHandle:active::after {
+  background: var(--osio-accent);
 }

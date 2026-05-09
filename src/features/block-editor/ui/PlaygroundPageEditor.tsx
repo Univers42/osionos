@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:04:12 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,6 +16,7 @@ import { Plus } from "lucide-react";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { PageSelectorMenu } from "./PageSelectorMenu";
 import type { Block } from "@/entities/block";
+import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
 
 import { usePageStore } from "@/store/usePageStore";
 import { usePlaygroundBlockEditor, BlockEditor } from "@/features/block-editor";
@@ -26,6 +27,7 @@ import { isParentable, selfRendersChildren } from "@/entities/block";
 
 interface PlaygroundPageEditorProps {
   pageId: string;
+  locked?: boolean;
 }
 
 type DropPosition = "above" | "below" | "inside" | "left" | "right" | null;
@@ -115,7 +117,7 @@ function getNestedTreeClassName(
   }
 
   if (parentBlockType === "toggle") {
-    return "ml-6 mt-0.5 pl-3 border-l-2 border-[var(--color-line)]";
+    return "ml-6 mt-0.5 pl-3 border-l-2 border-[var(--osio-border-default)]";
   }
 
   if (parentBlockType === "column") {
@@ -384,6 +386,7 @@ function getDropIndicatorClassName(position: Exclude<DropPosition, null>) {
 /** Editable block-based page editor for the playground. */
 export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
   pageId,
+  locked = false,
 }) => {
   const page = usePageStore((s) => s.pageById(pageId));
   const deleteBlock = usePageStore((s) => s.deleteBlock);
@@ -455,6 +458,12 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
     focusBlock,
   } = usePlaygroundBlockEditor(pageId);
 
+  const runEditorAction = useCallback((action: Promise<unknown>) => {
+    action.catch((error: unknown) => {
+      console.error("[PlaygroundPageEditor] Async editor action failed", error);
+    });
+  }, []);
+
   const handleRequestSlashMenu = useCallback(
     (blockId: string, position: { x: number; y: number }) => {
       setSlashMenu({ blockId, position, filter: "" });
@@ -511,15 +520,31 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
 
   if (!page) {
     return (
-      <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-6 py-12 text-center">
+      <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-6 py-12 text-center">
         <div>
-          <p className="text-sm font-medium text-[var(--color-ink)]">
+          <p className="text-sm font-medium text-[var(--osio-fg-default)]">
             Page unavailable
           </p>
-          <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
+          <p className="mt-1 text-sm text-[var(--osio-fg-muted)]">
             You cannot edit this page in the current session.
           </p>
         </div>
+      </div>
+    );
+  }
+
+  if (locked) {
+    return (
+      <div data-testid="locked-page-body" className="relative flex flex-col">
+        {blocks.length === 0 ? (
+          <p className="py-8 text-sm italic text-[var(--osio-fg-subtle)]">
+            This page is locked and has no content.
+          </p>
+        ) : (
+          blocks.map((block, index) => (
+            <ReadOnlyBlock key={block.id} block={block} index={index} />
+          ))
+        )}
       </div>
     );
   }
@@ -532,7 +557,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
         className="flex-1 min-h-[200px] cursor-text text-left"
         onClick={() => handleInitBlock(blocks)}
       >
-        <p className="text-sm text-[var(--color-ink-faint)] italic select-none pt-1">
+        <p className="text-sm text-[var(--osio-fg-subtle)] italic select-none pt-1">
           Click here to start writing...
         </p>
       </button>
@@ -566,7 +591,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
 
       <button
         type="button"
-        className="flex items-center gap-2 text-sm text-[var(--color-ink-faint)] hover:text-[var(--color-ink-muted)] py-2 px-1 mt-1 transition-colors group"
+        className="flex items-center gap-2 text-sm text-[var(--osio-fg-subtle)] hover:text-[var(--osio-fg-muted)] py-2 px-1 mt-1 transition-colors group"
         onClick={() => handleAddBlock(blocks)}
       >
         <Plus
@@ -593,7 +618,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
             }
 
             if (item.kind === "create-page") {
-              void handleSlashCreatePageSelect(blocks);
+              runEditorAction(handleSlashCreatePageSelect(blocks));
               return;
             }
 
@@ -618,7 +643,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
           filter={pageSelector.filter}
           onSelect={handlePageSelectorSelect}
           onCreate={() => {
-            void handlePageSelectorCreate();
+            runEditorAction(handlePageSelectorCreate());
           }}
           onClose={() => setPageSelector(null)}
         />
@@ -632,7 +657,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
 
       {selectionRect ? (
         <div
-          className="fixed pointer-events-none z-[9999] rounded-sm border border-[var(--color-accent)] bg-[var(--color-accent)]/10"
+          className="fixed pointer-events-none z-[var(--osio-z-max)] rounded-sm border border-[var(--osio-accent)] bg-[var(--osio-accent)]/10"
           style={{
             left: selectionRect.left,
             top: selectionRect.top,
@@ -768,7 +793,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
               <div
                 className={
                   isHighlighted
-                    ? "rounded-md bg-[var(--color-surface-secondary)]"
+                    ? "rounded-md bg-[var(--osio-bg-subtle)]"
                     : "rounded-md transition-colors"
                 }
               >
@@ -946,7 +971,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
       data-draggable-block-id={block.id}
       data-selected={isSelected ? "true" : undefined}
       data-block-type={block.type}
-      className={`group/block relative rounded-md transition-colors transition-opacity hover:bg-[var(--color-surface-secondary)] focus-within:bg-[var(--color-surface-secondary)] ${isDragged ? "opacity-40" : ""} ${isSelected ? "bg-[var(--color-accent)]/10 ring-1 ring-[var(--color-accent)]/35" : ""}`}
+      className={`group/block relative rounded-md transition-colors transition-opacity hover:bg-[var(--osio-bg-subtle)] focus-within:bg-[var(--osio-bg-subtle)] ${isDragged ? "opacity-40" : ""} ${isSelected ? "bg-[var(--osio-accent)]/10 ring-1 ring-[var(--osio-accent)]/35" : ""}`}
       onContextMenu={(e) => onContextMenu(e, block.id)}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -959,7 +984,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
         onClick={(e) => onContextMenu(e, block.id)}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
-        className="absolute -left-7 top-2 p-0.5 rounded text-[var(--color-ink-faint)] hover:text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-secondary)] transition-colors opacity-0 group-hover/block:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
+        className="absolute -left-7 top-2 p-0.5 rounded text-[var(--osio-fg-subtle)] hover:text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)] transition-colors opacity-0 group-hover/block:opacity-100 transition-opacity cursor-grab active:cursor-grabbing"
         aria-label="Drag to reorder block"
         title="Drag to reorder"
       >
@@ -981,7 +1006,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
       {dropPosition && (
         <div
           data-testid="block-drop-indicator"
-          className={`absolute bg-[var(--color-accent)] rounded-full pointer-events-none z-10 ${getDropIndicatorClassName(dropPosition)}`}
+          className={`absolute bg-[var(--osio-accent)] rounded-full pointer-events-none z-[var(--osio-z-raised)] ${getDropIndicatorClassName(dropPosition)}`}
         />
       )}
 
@@ -1072,7 +1097,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
     if (block.type === "column_list") {
       const columns = block.children;
       return (
-        <div className="flex items-stretch gap-0 rounded-md border border-dashed border-transparent hover:border-[var(--color-line)]">
+        <div className="flex items-stretch gap-0 rounded-md border border-dashed border-transparent hover:border-[var(--osio-border-default)]">
           {columns.map((column, index) => (
             <React.Fragment key={column.id}>
               <div
@@ -1269,7 +1294,7 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
       className="group/resize flex w-3 shrink-0 cursor-col-resize items-stretch justify-center"
       onPointerDown={handlePointerDown}
     >
-      <div className="w-px rounded-full bg-[var(--color-line)] transition-colors group-hover/resize:bg-[var(--color-accent)]" />
+      <div className="w-px rounded-full bg-[var(--osio-border-default)] transition-colors group-hover/resize:bg-[var(--osio-accent)]" />
     </div>
   );
 };

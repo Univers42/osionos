@@ -34,12 +34,12 @@ export const SidebarNavItem: React.FC<Props> = ({
   const paddingLeft = 10 + indent * 12;
 
   let stateClass: string;
-  if (active) stateClass = 'bg-[var(--color-surface-tertiary)] text-[var(--color-ink)]';
-  else if (subtle) stateClass = 'text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink-muted)]';
-  else stateClass = 'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]';
+  if (active) stateClass = 'bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]';
+  else if (subtle) stateClass = 'text-[var(--osio-fg-subtle)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)]';
+  else stateClass = 'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]';
 
   const countBadge = count !== undefined && count > 0 ? (
-    <span className="text-[10px] font-semibold min-w-[16px] h-4 flex items-center justify-center rounded px-[3px] bg-red-500 text-white">
+    <span className="text-xs font-semibold min-w-[16px] h-4 flex items-center justify-center rounded px-[3px] bg-[var(--osio-danger)] text-[var(--osio-danger-fg)]">
       {count}
     </span>
   ) : null;
@@ -47,7 +47,7 @@ export const SidebarNavItem: React.FC<Props> = ({
   return (
     <div
       className={[
-        'group relative w-full flex items-center gap-2 rounded-[6px] text-[14px] select-none',
+        'group relative w-full flex items-center gap-2 rounded-[6px] text-base select-none',
         'font-medium',
         stateClass,
       ].join(' ')}
@@ -57,7 +57,7 @@ export const SidebarNavItem: React.FC<Props> = ({
         type="button"
         onClick={onClick}
         className={[
-          'flex min-w-0 flex-1 items-center gap-2 rounded-[6px] text-[14px] select-none',
+          'flex min-w-0 flex-1 items-center gap-2 rounded-[6px] text-base select-none',
           'transition-colors duration-100 cursor-pointer',
           'font-medium',
           stateClass,

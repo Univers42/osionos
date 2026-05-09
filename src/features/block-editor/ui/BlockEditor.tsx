@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:27:01 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 05:35:14 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,6 +17,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { Check, Copy } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
 import katex from "katex";
 import "katex/dist/katex.min.css";
@@ -419,6 +420,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const updateBlock = usePageStore((s) => s.updateBlock);
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [showCalloutIconPicker, setShowCalloutIconPicker] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [isEquationEditing, setIsEquationEditing] = useState(false);
   const equationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const langPickerRef = useRef<HTMLDivElement | null>(null);
@@ -433,10 +435,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const isMermaidCode =
     block.type === "code" &&
     (block.language || "plaintext").trim().toLowerCase() === "mermaid";
-  const isSyntaxPreviewCode =
-    block.type === "code" &&
-    !isMermaidCode &&
-    (block.language || "plaintext").trim().toLowerCase() !== "plaintext";
+  const codeCaretColor = editableStyle?.color ?? "var(--osio-fg-default)";
 
   const commitBlockUpdate = useCallback(
     (blockId: string, updates: Partial<Block>) => {
@@ -497,6 +496,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     requestAnimationFrame(() => equationTextareaRef.current?.focus());
   }, []);
 
+  const handleCopyCode = useCallback(() => {
+    navigator.clipboard.writeText(block.content).then(() => {
+      setCopiedCode(true);
+      globalThis.setTimeout(() => setCopiedCode(false), 1200);
+    }).catch(() => undefined);
+  }, [block.content]);
+
   useEffect(() => {
     if (!showLangPicker) return;
 
@@ -518,7 +524,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-2xl font-bold text-[var(--color-ink)] mt-6 mb-1 leading-tight"
+          className="text-2xl font-bold text-[var(--osio-fg-default)] mt-6 mb-1 leading-tight"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 1")}
           onChange={onChange}
@@ -532,7 +538,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-xl font-semibold text-[var(--color-ink)] mt-5 mb-1 leading-tight"
+          className="text-xl font-semibold text-[var(--osio-fg-default)] mt-5 mb-1 leading-tight"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 2")}
           onChange={onChange}
@@ -546,7 +552,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-lg font-semibold text-[var(--color-ink)] mt-4 mb-0.5 leading-snug"
+          className="text-lg font-semibold text-[var(--osio-fg-default)] mt-4 mb-0.5 leading-snug"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 3")}
           onChange={onChange}
@@ -561,7 +567,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-base font-semibold text-[var(--color-ink)] mt-3 mb-0.5 leading-snug"
+          className="text-base font-semibold text-[var(--osio-fg-default)] mt-3 mb-0.5 leading-snug"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 4")}
           onChange={onChange}
@@ -576,7 +582,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-sm font-semibold text-[var(--color-ink)] mt-2 mb-0.5 leading-snug"
+          className="text-sm font-semibold text-[var(--osio-fg-default)] mt-2 mb-0.5 leading-snug"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 5")}
           onChange={onChange}
@@ -591,7 +597,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-xs font-semibold text-[var(--color-ink-muted)] mt-2 mb-0.5 leading-snug tracking-wide"
+          className="text-xs font-semibold text-[var(--osio-fg-muted)] mt-2 mb-0.5 leading-snug tracking-wide"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 6")}
           onChange={onChange}
@@ -606,7 +612,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 min-h-[1.5em]"
+          className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 min-h-[1.5em]"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Type '/' for commands…")}
           onChange={onChange}
@@ -623,19 +629,19 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <div className="flex items-start gap-2 pl-5">
           <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
             {bulletStyle === "disc" && (
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-ink-faint)] mt-[7px]" />
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--osio-fg-subtle)] mt-[7px]" />
             )}
             {bulletStyle === "circle" && (
-              <span className="inline-block w-1.5 h-1.5 rounded-full border border-[var(--color-ink-faint)] mt-[7px]" />
+              <span className="inline-block w-1.5 h-1.5 rounded-full border border-[var(--osio-fg-subtle)] mt-[7px]" />
             )}
             {bulletStyle === "square" && (
-              <span className="inline-block w-1.5 h-1.5 bg-[var(--color-ink-faint)] mt-[7px]" />
+              <span className="inline-block w-1.5 h-1.5 bg-[var(--osio-fg-subtle)] mt-[7px]" />
             )}
           </span>
           <div className="flex-1">
             <EditableContent
               content={block.content}
-              className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 whitespace-pre-wrap"
+              className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 whitespace-pre-wrap"
               style={editableStyle}
               placeholder={getBlockPlaceholder(block, "List item")}
               onChange={onChange}
@@ -652,13 +658,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     case "numbered_list":
       return (
         <div className="flex items-start gap-2 pl-5">
-          <span className="text-sm leading-relaxed py-0.5 text-[var(--color-ink-muted)] select-none shrink-0 w-6 text-center font-medium">
+          <span className="text-sm leading-relaxed py-0.5 text-[var(--osio-fg-muted)] select-none shrink-0 w-6 text-center font-medium">
             {getNumberedMarker(numberedIndex, numberedDepth)}
           </span>
           <div className="flex-1">
             <EditableContent
               content={block.content}
-              className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 whitespace-pre-wrap"
+              className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 whitespace-pre-wrap"
               style={editableStyle}
               placeholder={getBlockPlaceholder(block, "List item")}
               onChange={onChange}
@@ -700,18 +706,18 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "column_list":
       return (
-        <div className="my-1 rounded-lg border border-dashed border-[var(--color-line)] bg-[var(--color-surface-secondary)] px-2 py-2" style={surfaceStyle}>
+        <div className="my-1 rounded-lg border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-2">
           {renderChildren?.() ?? (
-            <span className="text-xs text-[var(--color-ink-faint)]">Columns</span>
+            <span className="text-xs text-[var(--osio-fg-subtle)]">Columns</span>
           )}
         </div>
       );
 
     case "column":
       return (
-        <div className="min-h-10 rounded-md border border-dashed border-[var(--color-line)] px-2 py-1" style={surfaceStyle}>
+        <div className="min-h-10 rounded-md border border-dashed border-[var(--osio-border-default)] px-2 py-1">
           {renderChildren?.() ?? (
-            <span className="text-xs text-[var(--color-ink-faint)]">Empty column</span>
+            <span className="text-xs text-[var(--osio-fg-subtle)]">Empty column</span>
           )}
         </div>
       );
@@ -732,28 +738,31 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "code":
       return (
-        <div className="my-1 rounded-lg overflow-visible border border-[var(--color-line)] relative" style={surfaceStyle}>
-          <div className="flex items-center justify-between px-3 py-1.5 bg-[var(--color-surface-secondary)] border-b border-[var(--color-line)]">
+        <div
+          className="my-2 overflow-visible rounded-md border border-[var(--osio-border-default)] shadow-sm"
+          style={surfaceStyle}
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-[var(--osio-border-default)] bg-black/[0.03] px-3 py-1.5">
             <div ref={langPickerRef} className="relative">
               <button
                 type="button"
                 onClick={() => setShowLangPicker((v) => !v)}
-                className="text-[11px] font-mono text-[var(--color-ink-muted)] hover:text-[var(--color-ink)] px-1.5 py-0.5 rounded hover:bg-[var(--color-surface-hover)] transition-colors"
+                className="rounded px-1.5 py-0.5 font-mono text-xs text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
               >
                 {block.language || "plaintext"}
               </button>
               {showLangPicker && (
-                <div className="absolute top-full left-0 mt-1 bg-[var(--color-surface-primary)] border border-[var(--color-line)] rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto w-40">
+                <div className="absolute top-full left-0 mt-1 bg-[var(--osio-bg-surface)] border border-[var(--osio-border-default)] rounded-lg shadow-lg z-[var(--osio-z-popover)] max-h-48 overflow-y-auto w-40">
                   {LANGUAGES.map((language) => (
                     <button
                       key={language}
                       type="button"
                       onClick={() => handleLangSelect(language)}
                       className={[
-                        "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-[var(--color-surface-hover)]",
+                        "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-[var(--osio-bg-hover)]",
                         language === (block.language || "plaintext")
-                          ? "bg-[var(--color-surface-secondary)] text-[var(--color-ink)]"
-                          : "text-[var(--color-ink-muted)]",
+                          ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]"
+                          : "text-[var(--osio-fg-muted)]",
                       ].join(" ")}
                     >
                       {language}
@@ -762,38 +771,46 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 </div>
               )}
             </div>
+            <button
+              type="button"
+              title="Copy code"
+              className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+              onClick={handleCopyCode}
+            >
+              {copiedCode ? <Check size={14} /> : <Copy size={14} />}
+            </button>
           </div>
-          <div className="p-3 bg-[var(--color-surface-primary)]" style={surfaceStyle}>
-            <textarea
-              value={block.content}
-              onChange={(e) => onChange(e.target.value)}
-              onKeyDown={handleCodeTextareaKeyDown}
-              placeholder={getBlockPlaceholder(block, "Code…")}
-              spellCheck={false}
-              className="w-full min-h-[120px] text-[13px] leading-relaxed font-mono text-[var(--color-ink)] whitespace-pre bg-transparent outline-none resize-y"
-              style={editableStyle}
-            />
+          <div className="p-0">
+            <div className="relative min-h-[150px] overflow-hidden">
+              <CodeSyntaxHighlight
+                code={block.content || " "}
+                language={block.language}
+                className="pointer-events-none min-h-[150px] overflow-hidden p-3"
+                codeClassName="block min-h-[150px] whitespace-pre-wrap break-words font-mono text-sm leading-6"
+              />
+              <textarea
+                value={block.content}
+                onChange={(e) => onChange(e.target.value)}
+                onKeyDown={handleCodeTextareaKeyDown}
+                placeholder={getBlockPlaceholder(block, "Code…")}
+                spellCheck={false}
+                className="absolute inset-0 h-full min-h-[150px] w-full resize-y overflow-auto bg-transparent p-3 font-mono text-sm leading-6 text-transparent outline-none selection:bg-[rgba(35,131,226,0.28)] placeholder:text-[var(--osio-fg-subtle)]"
+                style={{
+                  tabSize: 2,
+                  color: "transparent",
+                  caretColor: codeCaretColor,
+                  WebkitTextFillColor: "transparent",
+                }}
+              />
+            </div>
             {isMermaidCode && block.content.trim() && (
-              <div className="mt-3 pt-3 border-t border-[var(--color-line)]">
-                <p className="text-[11px] font-mono text-[var(--color-ink-muted)] mb-2">
+              <div className="mt-3 pt-3 border-t border-[var(--osio-border-default)]">
+                <p className="mb-2 font-mono text-xs text-[var(--osio-fg-muted)]">
                   Mermaid preview
                 </p>
                 <MermaidDiagram
                   chart={block.content}
-                  className="rounded-md border border-[var(--color-line)] p-3 bg-[var(--color-surface-secondary)] overflow-x-auto"
-                />
-              </div>
-            )}
-            {isSyntaxPreviewCode && block.content.trim() && (
-              <div className="mt-3 pt-3 border-t border-[var(--color-line)]">
-                <p className="text-[11px] font-mono text-[var(--color-ink-muted)] mb-2">
-                  Syntax preview
-                </p>
-                <CodeSyntaxHighlight
-                  code={block.content}
-                  language={block.language}
-                  className="rounded-md border border-[var(--color-line)] p-3 bg-[var(--color-surface-secondary)] overflow-x-auto"
-                  codeClassName="text-[13px] leading-relaxed font-mono whitespace-pre"
+                  className="rounded-md border border-[var(--osio-border-default)] p-3 bg-[var(--osio-bg-subtle)] overflow-x-auto"
                 />
               </div>
             )}
@@ -803,12 +820,12 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "quote":
       return (
-        <div className="flex my-0.5 rounded-md px-1" style={surfaceStyle}>
-          <div className="w-1 bg-[var(--color-ink)] rounded-full shrink-0 mr-3" style={editableStyle} />
+        <div className="flex my-0.5 rounded-md px-1">
+          <div className="w-1 bg-[var(--osio-fg-default)] rounded-full shrink-0 mr-3" style={editableStyle} />
           <div className="flex-1 min-w-0">
             <EditableContent
               content={block.content}
-              className="text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic"
+              className="text-sm text-[var(--osio-fg-muted)] leading-relaxed py-0.5 italic"
               style={editableStyle}
               placeholder="Quote…"
               onChange={onChange}
@@ -823,20 +840,15 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "callout": {
       const icon = block.color || "💡";
-      const colors = {
-        bg: "bg-[var(--color-surface-primary)]",
-        border: "border-[var(--color-line)]",
-        text: "text-[var(--color-ink)]",
-      };
       return (
         <div
-          className={`flex items-start gap-3 p-3 rounded-lg border my-0.5 ${colors.bg} ${colors.border}`}
+          className="my-0.5 flex items-start gap-3 rounded-lg border border-[var(--osio-border-default)] p-3"
           style={surfaceStyle}
         >
           <div className="relative shrink-0">
             <button
               type="button"
-              className={`inline-flex cursor-pointer items-center justify-center rounded ${colors.text}`}
+              className="inline-flex cursor-pointer items-center justify-center rounded text-[var(--osio-fg-default)]"
               aria-label="Change callout icon"
               title="Change callout icon"
               onClick={() => setShowCalloutIconPicker((prev) => !prev)}
@@ -859,7 +871,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <div className="flex-1 min-w-0">
             <EditableContent
               content={block.content}
-              className={`text-sm ${colors.text} leading-relaxed py-0.5`}
+              className="py-0.5 text-sm leading-relaxed text-[var(--osio-fg-default)]"
               style={editableStyle}
               placeholder={getBlockPlaceholder(block, "Type '/' for commands…")}
               onChange={onChange}
@@ -878,19 +890,19 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
       return (
         <div
-          className="relative my-2 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-3"
+          className="relative my-2 rounded-lg border border-[var(--osio-border-default)] p-3"
           style={surfaceStyle}
         >
           {shouldEditEquation ? null : (
             <button
               type="button"
               aria-label="Edit equation"
-              className="absolute inset-0 z-10 cursor-text rounded-lg bg-transparent"
+              className="absolute inset-0 z-[var(--osio-z-raised)] cursor-text rounded-lg bg-transparent"
               onClick={openEquationEditor}
             />
           )}
           <div
-            className="overflow-x-auto text-[var(--color-ink)]"
+            className="overflow-x-auto text-[var(--osio-fg-default)]"
             style={editableStyle}
             dangerouslySetInnerHTML={{ __html: equationHtml }}
           />
@@ -904,7 +916,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onFocus={() => setIsEquationEditing(true)}
               onBlur={() => setIsEquationEditing(false)}
               placeholder="Write LaTeX, e.g. E = mc^2"
-              className="mt-2 min-h-[56px] w-full resize-y rounded-md border border-[var(--color-line)] bg-[var(--color-surface-primary)] px-3 py-2 font-mono text-xs text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+              className="mt-2 min-h-[56px] w-full resize-y rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 font-mono text-xs text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
               style={editableStyle}
             />
           ) : null}
@@ -919,13 +931,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <button
           type="button"
-          className="w-full py-2 rounded outline-none focus:bg-[var(--color-surface-secondary)]"
+          className="w-full py-2 rounded outline-none focus:bg-[var(--osio-bg-subtle)]"
           onKeyDown={(e) => {
             onKeyDown(e);
           }}
           aria-label="Divider block"
         >
-          <hr className="w-full h-px border-0 bg-[var(--color-ink-faint)]" />
+          <hr className="w-full h-px border-0 bg-[var(--osio-fg-subtle)]" />
         </button>
       );
 
@@ -950,7 +962,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <TableBlockEditor
             block={block}
             pageId={pageId}
-            style={surfaceStyle}
+            style={editableStyle}
             textStyle={editableStyle}
             onDeleteTable={onDeleteCodeBlock}
           />
@@ -958,7 +970,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       );
 
     case "database_inline":
-    case "database_full_page":
       return (
         <div // NOSONAR - keyboard navigation wrapper for non-editable block
           onKeyDown={(e) => {
@@ -984,11 +995,38 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         </div>
       );
 
+    case "database_full_page":
+      return (
+        <div // NOSONAR - keyboard navigation wrapper for non-editable block
+          onKeyDown={(e) => {
+            if (
+              e.key === "ArrowUp" ||
+              e.key === "ArrowDown" ||
+              e.key === "Backspace" ||
+              e.key === "Delete" ||
+              e.key === "Enter" ||
+              e.key === "Escape"
+            ) {
+              onKeyDown(e);
+            }
+          }}
+          tabIndex={-1}
+          aria-label="Full-page database block"
+          className="my-3 min-h-[520px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
+        >
+          <DatabaseBlock
+            databaseId={block.databaseId}
+            initialViewId={block.viewId}
+            mode="full"
+          />
+        </div>
+      );
+
     default:
       return (
         <EditableContent
           content={block.content}
-          className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5"
+          className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Type something…")}
           onChange={onChange}
@@ -1105,8 +1143,23 @@ const TableBlockEditor: React.FC<{
     };
   }, [contextMenu]);
 
+  const tableContextMenuStyle = useMemo<React.CSSProperties>(() => {
+    if (!contextMenu) return {};
+    const width = 180;
+    const height = 160;
+    const viewportWidth = globalThis.innerWidth;
+    const viewportHeight = globalThis.innerHeight;
+    const left = clampNumber(contextMenu.x, 8, viewportWidth - width - 8, 8);
+    const belowTop = contextMenu.y;
+    const aboveTop = contextMenu.y - height;
+    const top = belowTop + height > viewportHeight - 8 && aboveTop > 8
+      ? aboveTop
+      : clampNumber(belowTop, 8, viewportHeight - height - 8, 8);
+    return { left, top };
+  }, [contextMenu]);
+
   return (
-    <div className="group/table my-2 border border-[var(--color-line)] rounded-lg overflow-visible relative" style={style}>
+    <div className="group/table my-2 border border-[var(--osio-border-default)] rounded-lg overflow-visible relative" style={style}>
       <div className="overflow-auto max-h-[26rem]">
         <table className="w-max min-w-full text-sm">
           <tbody>
@@ -1115,14 +1168,14 @@ const TableBlockEditor: React.FC<{
                 key={`row-${ri}`} // NOSONAR - positional keys are correct for table grid cells
                 className={
                   ri === 0
-                    ? "bg-[var(--color-surface-secondary)] font-medium"
+                    ? "bg-[var(--osio-bg-subtle)] font-medium"
                     : ""
                 }
               >
                 {row.map((cell, ci) => (
                   <td
                     key={`cell-${ri}-${ci}`} // NOSONAR - positional keys are correct for table grid cells
-                    className="border-b border-r border-[var(--color-line)] last:border-r-0 px-0 py-0 min-w-[120px] text-[var(--color-ink)]"
+                    className="border-b border-r border-[var(--osio-border-default)] last:border-r-0 px-0 py-0 min-w-[120px] text-[var(--osio-fg-default)]"
                     style={textStyle}
                     onContextMenu={(e) => openContextMenu(e, ri, ci)}
                   >
@@ -1130,7 +1183,7 @@ const TableBlockEditor: React.FC<{
                       type="text"
                       value={cell}
                       onChange={(e) => handleCellChange(ri, ci, e.target.value)}
-                      className="w-full bg-transparent px-3 py-1.5 outline-none focus:bg-[var(--color-surface-hover)]"
+                      className="w-full bg-transparent px-3 py-1.5 outline-none focus:bg-[var(--osio-bg-hover)]"
                       style={textStyle}
                     />
                   </td>
@@ -1144,7 +1197,7 @@ const TableBlockEditor: React.FC<{
         type="button"
         onClick={addCol}
         aria-label="Add column"
-        className="absolute -right-3 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface-primary)] text-sm text-[var(--color-ink-muted)] opacity-0 shadow-sm transition-opacity hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-ink)] group-hover/table:opacity-100"
+        className="absolute -right-3 top-1/2 z-[var(--osio-z-raised)] flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-sm text-[var(--osio-fg-muted)] opacity-0 shadow-sm transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)] group-hover/table:opacity-100"
       >
         +
       </button>
@@ -1152,7 +1205,7 @@ const TableBlockEditor: React.FC<{
         type="button"
         onClick={addRow}
         aria-label="Add row"
-        className="absolute -bottom-3 left-1/2 z-10 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface-primary)] text-sm text-[var(--color-ink-muted)] opacity-0 shadow-sm transition-opacity hover:bg-[var(--color-surface-secondary)] hover:text-[var(--color-ink)] group-hover/table:opacity-100"
+        className="absolute -bottom-3 left-1/2 z-[var(--osio-z-raised)] flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-sm text-[var(--osio-fg-muted)] opacity-0 shadow-sm transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)] group-hover/table:opacity-100"
       >
         +
       </button>
@@ -1160,8 +1213,8 @@ const TableBlockEditor: React.FC<{
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-[10000] min-w-[180px] rounded-md border border-[var(--color-line)] bg-[var(--color-surface-primary)] shadow-lg py-1"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          className="fixed z-[var(--osio-z-popover)] min-w-[180px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-lg py-1"
+          style={tableContextMenuStyle}
         >
           <button
             type="button"
@@ -1170,7 +1223,7 @@ const TableBlockEditor: React.FC<{
               setContextMenu(null);
             }}
             disabled={data.length <= 1}
-            className="w-full px-3 py-1.5 text-left text-sm text-[var(--color-ink)] hover:bg-[var(--color-surface-secondary)] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full px-3 py-1.5 text-left text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-subtle)] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Delete row
           </button>
@@ -1181,11 +1234,11 @@ const TableBlockEditor: React.FC<{
               setContextMenu(null);
             }}
             disabled={(data[0]?.length ?? 0) <= 1}
-            className="w-full px-3 py-1.5 text-left text-sm text-[var(--color-ink)] hover:bg-[var(--color-surface-secondary)] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full px-3 py-1.5 text-left text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-subtle)] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Delete column
           </button>
-          <div className="my-1 border-t border-[var(--color-line)]" />
+          <div className="my-1 border-t border-[var(--osio-border-default)]" />
           <button
             type="button"
             onClick={() => {
@@ -1193,7 +1246,7 @@ const TableBlockEditor: React.FC<{
               setContextMenu(null);
             }}
             disabled={!onDeleteTable}
-            className="w-full px-3 py-1.5 text-left text-sm text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full px-3 py-1.5 text-left text-sm text-[var(--osio-danger)] hover:bg-[var(--osio-bg-subtle)] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Delete table
           </button>
@@ -1496,18 +1549,18 @@ const LayoutBlockEditor: React.FC<{ block: Block; pageId: string }> = ({
   );
 
   return (
-    <section className="my-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-2">
+    <section className="my-3 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2">
       <div className="mb-2 flex flex-wrap items-center gap-1 text-xs">
-        <button type="button" onClick={() => setSettingsOpen((value) => !value)} className="rounded-md px-2 py-1 text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)]">⚙️ Grid</button>
-        <button type="button" onClick={addCell} className="rounded-md px-2 py-1 text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)]">+ Cell</button>
-        <button type="button" onClick={() => updateConfig({ showGuides: !config.showGuides })} className="rounded-md px-2 py-1 text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)]">📐 Guides</button>
-        <button type="button" onClick={() => updateConfig({ preview: !config.preview })} className="rounded-md px-2 py-1 text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)]">👁 Preview</button>
-        <button type="button" onClick={() => updateConfig({ wrap: !config.wrap })} className="rounded-md px-2 py-1 text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)]">↔ {config.wrap ? "Wrap" : "No-wrap"}</button>
-        <button type="button" onClick={() => updateConfig({ autoReflow: !config.autoReflow })} className="rounded-md px-2 py-1 text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)]">⇄ {config.autoReflow ? "Auto" : "Manual"}</button>
+        <button type="button" onClick={() => setSettingsOpen((value) => !value)} className="rounded-md px-2 py-1 text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">⚙️ Grid</button>
+        <button type="button" onClick={addCell} className="rounded-md px-2 py-1 text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">+ Cell</button>
+        <button type="button" onClick={() => updateConfig({ showGuides: !config.showGuides })} className="rounded-md px-2 py-1 text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">📐 Guides</button>
+        <button type="button" onClick={() => updateConfig({ preview: !config.preview })} className="rounded-md px-2 py-1 text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">👁 Preview</button>
+        <button type="button" onClick={() => updateConfig({ wrap: !config.wrap })} className="rounded-md px-2 py-1 text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">↔ {config.wrap ? "Wrap" : "No-wrap"}</button>
+        <button type="button" onClick={() => updateConfig({ autoReflow: !config.autoReflow })} className="rounded-md px-2 py-1 text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">⇄ {config.autoReflow ? "Auto" : "Manual"}</button>
       </div>
 
       {settingsOpen ? (
-        <div className="mb-2 grid grid-cols-2 gap-2 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-primary)] p-2 text-xs md:grid-cols-5">
+        <div className="mb-2 grid grid-cols-2 gap-2 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-2 text-xs md:grid-cols-5">
           {([
             ["columns", "Columns", 1, 24],
             ["rows", "Rows", 1, 48],
@@ -1515,7 +1568,7 @@ const LayoutBlockEditor: React.FC<{ block: Block; pageId: string }> = ({
             ["rowGap", "Row gap", 0, 48],
             ["rowHeight", "Row height", 48, 320],
           ] as const).map(([key, label, min, max]) => (
-            <label key={key} className="flex flex-col gap-1 text-[var(--color-ink-muted)]">
+            <label key={key} className="flex flex-col gap-1 text-[var(--osio-fg-muted)]">
               {label}
               <input
                 type="number"
@@ -1523,7 +1576,7 @@ const LayoutBlockEditor: React.FC<{ block: Block; pageId: string }> = ({
                 max={max}
                 value={config[key]}
                 onChange={(event) => updateConfig({ [key]: Number(event.target.value) } as Partial<LayoutConfig>)}
-                className="rounded-md border border-[var(--color-line)] bg-transparent px-2 py-1 text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+                className="rounded-md border border-[var(--osio-border-default)] bg-transparent px-2 py-1 text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
               />
             </label>
           ))}
@@ -1533,14 +1586,14 @@ const LayoutBlockEditor: React.FC<{ block: Block; pageId: string }> = ({
       <div className={config.wrap ? "overflow-x-hidden" : "overflow-x-auto pb-2"}>
         <div
           data-layout-grid
-          className="relative grid min-h-[360px] rounded-lg bg-[var(--color-surface-primary)] p-2"
+          className="relative grid min-h-[360px] rounded-lg bg-[var(--osio-bg-surface)] p-2"
           style={{
             width: config.wrap ? "100%" : `${Math.max(960, config.columns * 88)}px`,
             gridTemplateColumns: `repeat(${config.columns}, minmax(0, 1fr))`,
             gridAutoRows: `${config.rowHeight}px`,
             gap: `${config.rowGap}px ${config.columnGap}px`,
             backgroundImage: config.showGuides && !config.preview
-              ? "linear-gradient(var(--color-line) 1px, transparent 1px), linear-gradient(90deg, var(--color-line) 1px, transparent 1px)"
+              ? "linear-gradient(var(--osio-border-default) 1px, transparent 1px), linear-gradient(90deg, var(--osio-border-default) 1px, transparent 1px)"
               : undefined,
             backgroundSize: config.showGuides && !config.preview
               ? `calc((100% - ${(config.columns - 1) * config.columnGap}px) / ${config.columns} + ${config.columnGap}px) ${config.rowHeight + config.rowGap}px`
@@ -1551,7 +1604,7 @@ const LayoutBlockEditor: React.FC<{ block: Block; pageId: string }> = ({
             <button
               type="button"
               onClick={addCell}
-              className="col-span-full row-span-2 rounded-lg border border-dashed border-[var(--color-line)] text-sm text-[var(--color-ink-muted)] hover:border-[var(--color-accent)] hover:text-[var(--color-ink)]"
+              className="col-span-full row-span-2 rounded-lg border border-dashed border-[var(--osio-border-default)] text-sm text-[var(--osio-fg-muted)] hover:border-[var(--osio-accent)] hover:text-[var(--osio-fg-default)]"
             >
               + Create first layout cell
             </button>
@@ -1561,7 +1614,7 @@ const LayoutBlockEditor: React.FC<{ block: Block; pageId: string }> = ({
             <section
               key={cell.id}
               aria-label="Layout cell"
-              className="group/cell relative rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-2 shadow-sm"
+              className="group/cell relative rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2 shadow-sm"
               style={{
                 gridColumn: `${cell.colStart} / span ${cell.colSpan}`,
                 gridRow: `${cell.rowStart} / span ${cell.rowSpan}`,
@@ -1574,7 +1627,7 @@ const LayoutBlockEditor: React.FC<{ block: Block; pageId: string }> = ({
                   type="button"
                   onClick={() => removeCell(cell.id)}
                   aria-label="Delete layout cell"
-                  className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded text-[var(--color-ink-faint)] opacity-0 hover:bg-[var(--color-surface-hover)] hover:text-red-600 group-hover/cell:opacity-100"
+                  className="absolute right-1 top-1 z-[var(--osio-z-raised)] flex h-5 w-5 items-center justify-center rounded text-[var(--osio-fg-subtle)] opacity-0 hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-danger)] group-hover/cell:opacity-100"
                 >
                   ×
                 </button>
@@ -1602,7 +1655,7 @@ const LayoutBlockEditor: React.FC<{ block: Block; pageId: string }> = ({
                 <>
                   <div onPointerDown={(event) => startResize(event, cell, "x")} className="absolute bottom-3 right-0 top-3 w-2 cursor-ew-resize opacity-0 group-hover/cell:opacity-100" />
                   <div onPointerDown={(event) => startResize(event, cell, "y")} className="absolute bottom-0 left-3 right-3 h-2 cursor-ns-resize opacity-0 group-hover/cell:opacity-100" />
-                  <div onPointerDown={(event) => startResize(event, cell, "both")} className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize rounded-tl border-l border-t border-[var(--color-line)] bg-[var(--color-surface-primary)] opacity-0 group-hover/cell:opacity-100" />
+                  <div onPointerDown={(event) => startResize(event, cell, "both")} className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize rounded-tl border-l border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] opacity-0 group-hover/cell:opacity-100" />
                 </>
               )}
             </section>
@@ -1690,7 +1743,7 @@ const LayoutCellBlockTree: React.FC<LayoutCellBlockTreeProps> = ({
             data-layout-cell-block-id={nestedBlock.id}
             data-block-id={nestedBlock.id}
             data-block-type={nestedBlock.type}
-            className="rounded-md px-1 hover:bg-[var(--color-surface-primary)] focus-within:bg-[var(--color-surface-primary)]"
+            className="rounded-md px-1 hover:bg-[var(--osio-bg-surface)] focus-within:bg-[var(--osio-bg-surface)]"
             style={getBlockSurfaceStyle(nestedBlock)}
           >
             <BlockEditor

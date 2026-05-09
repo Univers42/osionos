@@ -20,9 +20,9 @@ import { ReadOnlyBlock } from "./ReadOnlyBlock";
 export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
   const icon = block.color || "💡";
   const colors = CALLOUT_COLORS[icon] || {
-    bg: "bg-[var(--color-surface-secondary)]",
-    border: "border-[var(--color-line)]",
-    text: "text-[var(--color-ink)]",
+    bg: "bg-[var(--osio-bg-subtle)]",
+    border: "border-[var(--osio-border-default)]",
+    text: "text-[var(--osio-fg-default)]",
   };
   const content = block.content
     ? {

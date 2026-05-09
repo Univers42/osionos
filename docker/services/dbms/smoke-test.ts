@@ -1,7 +1,7 @@
 /**
  * @file smoke-test.ts — Tests all database adapters.
  *
- * Usage: npx tsx docker/services/dbms/smoke-test.ts [--all]
+ * Usage: docker compose run --rm --no-deps playground pnpm exec tsx docker/services/dbms/smoke-test.ts [--all]
  * Flags: --all  Also run MongoDB and PostgreSQL tests (requires running containers).
  */
 

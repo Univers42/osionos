@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:16:25 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,6 +20,7 @@ import {
   MessageSquare,
   MoveRight,
   Palette,
+  Plus,
   PlusSquare,
   Presentation,
   Sparkles,
@@ -30,6 +31,7 @@ import {
   BLOCK_COLOR_OPTIONS,
   ensureReadableTextColor,
 } from "./blockColors";
+import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
 import {
   BLOCK_TRANSFORM_OPTIONS,
   changeBlockTypeInTree,
@@ -66,6 +68,7 @@ export function useBlockContextMenu({
   const [contextMenu, setContextMenu] = useState<BlockContextMenuState | null>(
     null,
   );
+  const colorProfiles = useBlockColorProfileStore((state) => state.profiles);
 
   const blockLocation = useMemo(() => {
     if (!contextMenu) return null;
@@ -173,14 +176,14 @@ export function useBlockContextMenu({
 
   const handleCopyText = useCallback(() => {
     if (!blockLocation?.block.content.trim()) return;
-    void navigator.clipboard?.writeText(blockLocation.block.content);
+    navigator.clipboard?.writeText(blockLocation.block.content).catch(() => undefined);
     closeContextMenu();
   }, [blockLocation, closeContextMenu]);
 
   const handleCopyLink = useCallback(() => {
     if (!contextMenu) return;
     const url = `${globalThis.location.origin}${globalThis.location.pathname}#block-${contextMenu.blockId}`;
-    void navigator.clipboard?.writeText(url);
+    navigator.clipboard?.writeText(url).catch(() => undefined);
     closeContextMenu();
   }, [closeContextMenu, contextMenu]);
 
@@ -329,11 +332,11 @@ export function useBlockContextMenu({
           onClick: handleUnavailable,
           subItems: [
             {
-              icon: <span className="font-semibold text-[#b91c1c]">A</span>,
+              icon: <span className="font-semibold text-[var(--osio-block-tint-red-fg)]">A</span>,
               label: "Red text",
               shortcut: "Ctrl+⇧+H",
-              active: blockLocation.block.textColor === "#b91c1c",
-              onClick: () => handleSetBlockStyle({ textColor: "#b91c1c" }),
+              active: blockLocation.block.textColor === "var(--osio-block-tint-red-fg)",
+              onClick: () => handleSetBlockStyle({ textColor: "var(--osio-block-tint-red-fg)" }),
             },
             {
               icon: "Text",
@@ -366,7 +369,7 @@ export function useBlockContextMenu({
               onClick: () => handleSetBlockStyle({ backgroundColor: undefined, textColor: blockLocation.block.textColor }),
             },
             ...BLOCK_COLOR_OPTIONS.map((option) => ({
-              icon: <span style={{ backgroundColor: option.background }} className="h-4 w-4 rounded border border-[var(--color-line)]" />,
+              icon: <span style={{ backgroundColor: option.background }} className="h-4 w-4 rounded border border-[var(--osio-border-default)]" />,
               label: `${option.label} background`,
               active: blockLocation.block.backgroundColor === option.background,
               onClick: () =>
@@ -378,6 +381,38 @@ export function useBlockContextMenu({
                   ),
                 }),
             })),
+            {
+              icon: <Plus size={14} />,
+              label: "Create color profile",
+              onClick: () => undefined,
+            },
+            ...(colorProfiles.length > 0
+              ? [
+                  {
+                    icon: "Profiles",
+                    label: "Saved profiles",
+                    disabled: true,
+                    onClick: handleUnavailable,
+                  },
+                  ...colorProfiles.map((profile) => ({
+                    icon: (
+                      <span
+                        className="h-4 w-4 rounded border border-[var(--osio-border-default)]"
+                        style={{ backgroundColor: profile.backgroundColor }}
+                      />
+                    ),
+                    label: profile.name,
+                    active:
+                      blockLocation.block.textColor === profile.textColor &&
+                      blockLocation.block.backgroundColor === profile.backgroundColor,
+                    onClick: () =>
+                      handleSetBlockStyle({
+                        textColor: ensureReadableTextColor(profile.backgroundColor, profile.textColor),
+                        backgroundColor: profile.backgroundColor,
+                      }),
+                  })),
+                ]
+              : []),
           ],
         },
       ],
@@ -461,6 +496,7 @@ export function useBlockContextMenu({
     ];
   }, [
     blockLocation,
+    colorProfiles,
     handleChangeType,
     handleCopyText,
     handleCopyLink,

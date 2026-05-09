@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 20:16:02 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:10 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -28,6 +28,8 @@ import { useUserStore } from "@/features/auth";
 import {
   resolveWorkspaceConfig,
   useWorkspaceConfigStore,
+  type WorkspaceChannel,
+  type WorkspaceChannelType,
   workspaceConfigKey,
 } from "@/shared/config/workspaceConfigStore";
 
@@ -66,7 +68,7 @@ const RecentPageActions: React.FC<RecentPageActionsProps> = ({
       />
       <button
         type="button"
-        className="p-1 rounded hover:bg-[var(--color-surface-secondary)]"
+        className="p-1 rounded hover:bg-[var(--osio-bg-subtle)]"
         onClick={(e) => onAddChild(e, recent)}
         title="Add child page"
       >
@@ -135,6 +137,35 @@ interface SidebarPageTreeProps {
   onAddToWorkspace: (wsId: string) => void;
 }
 
+function runWorkspaceAction(action: Promise<unknown>) {
+  action.catch((error: unknown) => {
+    console.error("[SidebarPageTree] Workspace action failed", error);
+  });
+}
+
+const CHANNEL_CATEGORIES: Array<{
+  label: string;
+  types: WorkspaceChannelType[];
+  createType: WorkspaceChannelType;
+  createName: string;
+}> = [
+  { label: "Text channels", types: ["text", "forum"], createType: "text", createName: "messages" },
+  { label: "Voice rooms", types: ["audio", "video", "stage"], createType: "audio", createName: "audio" },
+  { label: "Automation", types: ["agent"], createType: "agent", createName: "agent-room" },
+  { label: "Archive", types: ["archive"], createType: "archive", createName: "archive" },
+];
+
+function channelTypeLabel(type: WorkspaceChannelType): string {
+  if (type === "forum") return "forum";
+  if (type === "audio") return "voice";
+  if (type === "video") return "video";
+  if (type === "stage") return "stage";
+  if (type === "archive") return "archive";
+  if (type === "agent") return "agent";
+  if (type === "thread") return "thread";
+  return "text";
+}
+
 /** Scrollable page-tree area: Recents, Agents, Private, Shared, osionos apps. */
 export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   recents,
@@ -158,11 +189,21 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   const addThread = useWorkspaceConfigStore((s) => s.addThread);
   const updateChannel = useWorkspaceConfigStore((s) => s.updateChannel);
   const accessContext = getCurrentPageAccessContext();
+  const safeActiveUserId = activeUserId || "anonymous";
 
   const rootChannels = workspaceConfig.channels.filter((channel) => !channel.parentChannelId);
-  const visibleRootChannels = rootChannels.filter((channel) => channel.visibility === "workspace" || channel.memberIds.includes(activeUserId));
+  const visibleRootChannels = rootChannels.filter((channel) => channel.visibility === "workspace" || channel.memberIds.includes(safeActiveUserId));
 
-  function channelIcon(type: string, restricted: boolean) {
+  const activeWorkspacePages = (pagesByWorkspace[activeWorkspaceId] ?? []).filter(
+    (page) => !page.parentPageId && !page.archivedAt && canReadPage(page, accessContext),
+  );
+  const agentPages = activeWorkspacePages.filter((page) => page.surface === "agent");
+  const ownedSharedPages = activeWorkspacePages.filter((page) => page.surface !== "agent" && page.visibility === "shared");
+  const sharedWorkspaceRootPages = sharedWorkspaces.flatMap((workspace) => (
+    pagesByWorkspace[workspace._id] ?? []
+  ).filter((page) => !page.parentPageId && !page.archivedAt && canReadPage(page, accessContext)));
+
+  function channelIcon(type: WorkspaceChannelType, restricted: boolean) {
     if (restricted) return <Lock size={14} />;
     if (type === "thread") return <GitBranch size={14} />;
     if (type === "forum") return <MessageSquare size={14} />;
@@ -171,6 +212,27 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
     if (type === "archive") return <Archive size={14} />;
     if (type === "agent") return <Bot size={14} />;
     return <Hash size={14} />;
+  }
+
+  function openChannel(channel: WorkspaceChannel) {
+    openPage({
+      id: channel.id,
+      workspaceId: activeWorkspaceId,
+      kind: "channel",
+      title: channel.name,
+    });
+  }
+
+  function createChannel(type: WorkspaceChannelType, name: string, parentChannelId?: string | null) {
+    if (!activeWorkspaceId) return;
+    runWorkspaceAction(addChannel(safeActiveUserId, activeWorkspaceId, name, type, parentChannelId ?? null));
+  }
+
+  function visibleThreadsFor(channelId: string) {
+    return workspaceConfig.channels.filter((thread) => (
+      thread.parentChannelId === channelId &&
+      (thread.visibility === "workspace" || thread.memberIds.includes(safeActiveUserId))
+    ));
   }
 
   const handleAddChildToRecent = async (
@@ -188,6 +250,140 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
       });
     }
   };
+
+  async function createAndOpenPage(workspaceId: string, title: string, options?: Parameters<typeof addPage>[4]) {
+    if (!workspaceId) return;
+    const page = await addPage(workspaceId, title, jwt, undefined, options);
+    if (!page) return;
+    openPage({
+      id: page._id,
+      workspaceId,
+      kind: "page",
+      title: page.title,
+      icon: page.icon,
+    });
+  }
+
+  function createSharedPage() {
+    void createAndOpenPage(activeWorkspaceId, "Shared page", { visibility: "shared" });
+  }
+
+  function createAgentPage() {
+    void createAndOpenPage(activeWorkspaceId, "New agent", {
+      icon: "icon:sparkles",
+      surface: "agent",
+      visibility: "private",
+      content: [
+        {
+          id: `block-${crypto.randomUUID()}`,
+          type: "paragraph",
+          content: "Describe this agent's job, tools, and boundaries.",
+        },
+      ],
+    });
+  }
+
+  function handleToggleChannelVisibility(event: React.MouseEvent, channel: WorkspaceChannel) {
+    event.stopPropagation();
+    if (!activeWorkspaceId) return;
+    const isWorkspaceVisible = channel.visibility === "workspace";
+    runWorkspaceAction(updateChannel(safeActiveUserId, activeWorkspaceId, channel.id, {
+      visibility: isWorkspaceVisible ? "members" : "workspace",
+      memberIds: isWorkspaceVisible ? [safeActiveUserId] : [],
+    }));
+  }
+
+  function handleCreateThread(event: React.MouseEvent, channel: WorkspaceChannel) {
+    event.stopPropagation();
+    if (activeWorkspaceId) {
+      runWorkspaceAction(addThread(safeActiveUserId, activeWorkspaceId, channel.id, `${channel.name}-thread`));
+    }
+  }
+
+  function renderThread(thread: WorkspaceChannel) {
+    return (
+      <div key={thread.id} className="ml-4">
+        <SidebarNavItem
+          icon={<GitBranch size={13} />}
+          label={thread.name}
+          active={activePage?.kind === "channel" && activePage.id === thread.id}
+          onClick={() => openChannel(thread)}
+          rightElement={<span className="pr-2 text-[10px] uppercase text-[var(--osio-fg-subtle)]">thread</span>}
+        />
+      </div>
+    );
+  }
+
+  function renderChannel(channel: WorkspaceChannel) {
+    return (
+      <React.Fragment key={channel.id}>
+        <SidebarNavItem
+          icon={channelIcon(channel.type, channel.visibility === "members")}
+          label={channel.name}
+          active={activePage?.kind === "channel" && activePage.id === channel.id}
+          onClick={() => openChannel(channel)}
+          rightElement={
+            <div className="mr-1 flex items-center gap-0.5">
+              <span className="hidden rounded bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-[10px] text-[var(--osio-fg-subtle)] group-hover:inline sm:inline">
+                {channelTypeLabel(channel.type)}
+              </span>
+              <button
+                type="button"
+                className="flex h-6 w-6 items-center justify-center rounded text-[var(--osio-fg-subtle)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
+                title="Toggle channel visibility"
+                onClick={(event) => handleToggleChannelVisibility(event, channel)}
+              >
+                {channel.visibility === "members" ? <Lock size={12} /> : <Hash size={12} />}
+              </button>
+              <button
+                type="button"
+                className="flex h-6 w-6 items-center justify-center rounded text-[var(--osio-fg-subtle)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
+                title="Create thread"
+                onClick={(event) => handleCreateThread(event, channel)}
+              >
+                <GitBranch size={12} />
+              </button>
+            </div>
+          }
+        />
+        {visibleThreadsFor(channel.id).map(renderThread)}
+      </React.Fragment>
+    );
+  }
+
+  function renderChannelCategory(category: (typeof CHANNEL_CATEGORIES)[number]) {
+    const categoryChannels = visibleRootChannels.filter((channel) => category.types.includes(channel.type));
+    if (categoryChannels.length === 0) return null;
+
+    return (
+      <div key={category.label} className="mb-2">
+        <div className="mb-0.5 flex items-center justify-between px-2 text-[10px] font-semibold uppercase text-[var(--osio-fg-subtle)]">
+          <span>{category.label}</span>
+          <button
+            type="button"
+            title={`Create ${category.label.toLowerCase()}`}
+            className="flex h-5 w-5 items-center justify-center rounded hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
+            onClick={() => createChannel(category.createType, category.createName)}
+          >
+            <Plus size={12} />
+          </button>
+        </div>
+        {categoryChannels.map(renderChannel)}
+      </div>
+    );
+  }
+
+  function renderChannelCategories() {
+    if (visibleRootChannels.length === 0) {
+      return (
+        <p className="px-2 py-1 text-xs text-[var(--osio-fg-subtle)] italic">
+          Add messages, threads, audio or video channels.
+        </p>
+      );
+    }
+
+    return CHANNEL_CATEGORIES.map(renderChannelCategory);
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -215,20 +411,28 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
               />
             ))
         ) : (
-          <p className="px-2 py-1 text-xs text-[var(--color-ink-faint)] italic">
+          <p className="px-2 py-1 text-xs text-[var(--osio-fg-subtle)] italic">
             Pages you visit will appear here
           </p>
         )}
       </SidebarSection>
 
-      <SidebarSection label="Agents">
+      <SidebarSection label="Agents" onAdd={createAgentPage}>
+        {agentPages.map((page) => (
+          <PageTreeItem
+            key={page._id}
+            page={page}
+            workspaceId={activeWorkspaceId}
+            jwt={jwt}
+            depth={0}
+            activeId={activePage?.id}
+          />
+        ))}
         <SidebarNavItem
           icon={<Plus size={14} />}
           label="New agent"
           subtle
-          onClick={() => {
-            /* placeholder */
-          }}
+          onClick={createAgentPage}
         />
       </SidebarSection>
 
@@ -236,91 +440,21 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         label="Channels"
         defaultOpen
         onAdd={() => {
-          if (activeWorkspaceId) void addChannel(activeUserId || "anonymous", activeWorkspaceId, "general", "text");
+          createChannel("text", "general");
         }}
       >
-        <div className="mb-1 grid grid-cols-2 gap-1 px-1 text-[11px]">
-          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && void addChannel(activeUserId || "anonymous", activeWorkspaceId, "messages", "text")}>+ messages</button>
-          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && void addChannel(activeUserId || "anonymous", activeWorkspaceId, "forum", "forum")}>+ forum</button>
-          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && void addChannel(activeUserId || "anonymous", activeWorkspaceId, "audio", "audio")}>+ audio</button>
-          <button type="button" className="rounded px-2 py-1 text-left text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]" onClick={() => activeWorkspaceId && void addChannel(activeUserId || "anonymous", activeWorkspaceId, "video", "video")}>+ video</button>
+        <div className="mb-2 grid grid-cols-4 gap-1 px-1">
+          <button type="button" title="Create text channel" className="flex h-8 items-center justify-center rounded-md text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={() => createChannel("text", "messages")}><Hash size={15} /></button>
+          <button type="button" title="Create forum" className="flex h-8 items-center justify-center rounded-md text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={() => createChannel("forum", "forum")}><MessageSquare size={15} /></button>
+          <button type="button" title="Create voice room" className="flex h-8 items-center justify-center rounded-md text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={() => createChannel("audio", "audio")}><Volume2 size={15} /></button>
+          <button type="button" title="Create video room" className="flex h-8 items-center justify-center rounded-md text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={() => createChannel("video", "video")}><Video size={15} /></button>
         </div>
-        {visibleRootChannels.length === 0 ? (
-          <p className="px-2 py-1 text-xs text-[var(--color-ink-faint)] italic">
-            Add messages, threads, audio or video channels.
-          </p>
-        ) : (
-          visibleRootChannels
-            .map((channel) => (
-              <React.Fragment key={channel.id}>
-                <SidebarNavItem
-                  icon={channelIcon(channel.type, channel.visibility === "members")}
-                  label={channel.name}
-                  active={activePage?.kind === "channel" && activePage.id === channel.id}
-                  onClick={() => openPage({
-                    id: channel.id,
-                    workspaceId: activeWorkspaceId,
-                    kind: "channel",
-                    title: channel.name,
-                  })}
-                  rightElement={
-                    <div className="mr-1 flex items-center gap-1">
-                      <button
-                        type="button"
-                        className="rounded px-1 text-[10px] text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
-                        title="Toggle channel visibility"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          if (!activeUserId || !activeWorkspaceId) return;
-                          const isWorkspaceVisible = channel.visibility === "workspace";
-                          void updateChannel(activeUserId, activeWorkspaceId, channel.id, {
-                            visibility: isWorkspaceVisible ? "members" : "workspace",
-                            memberIds: isWorkspaceVisible ? [activeUserId] : [],
-                          });
-                        }}
-                      >
-                        {channel.visibility === "members" ? "lock" : "open"}
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded px-1 text-[10px] text-[var(--color-ink-faint)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-accent)]"
-                        title="Create thread"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          if (activeUserId && activeWorkspaceId) void addThread(activeUserId, activeWorkspaceId, channel.id, `${channel.name}-thread`);
-                        }}
-                      >
-                        + hilo
-                      </button>
-                    </div>
-                  }
-                />
-                {workspaceConfig.channels
-                  .filter((thread) => thread.parentChannelId === channel.id && (thread.visibility === "workspace" || thread.memberIds.includes(activeUserId)))
-                  .map((thread) => (
-                    <div key={thread.id} className="ml-4">
-                      <SidebarNavItem
-                        icon={<GitBranch size={13} />}
-                        label={thread.name}
-                        active={activePage?.kind === "channel" && activePage.id === thread.id}
-                        onClick={() => openPage({
-                          id: thread.id,
-                          workspaceId: activeWorkspaceId,
-                          kind: "channel",
-                          title: thread.name,
-                        })}
-                        rightElement={<span className="pr-2 text-[10px] text-[var(--color-ink-faint)]">thread</span>}
-                      />
-                    </div>
-                  ))}
-              </React.Fragment>
-            ))
-        )}
+        {renderChannelCategories()}
       </SidebarSection>
 
       {privateWorkspaces.map((ws) => {
         const pages = (pagesByWorkspace[ws._id] ?? []).filter(
-          (p) => !p.parentPageId && !p.archivedAt,
+          (p) => !p.parentPageId && !p.archivedAt && p.visibility !== "shared" && p.surface !== "agent" && canReadPage(p, accessContext),
         );
         return (
           <SidebarSection
@@ -333,7 +467,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
             }}
           >
             {pages.length === 0 && (
-              <p className="px-2 py-1 text-xs text-[var(--color-ink-faint)] italic">
+              <p className="px-2 py-1 text-xs text-[var(--osio-fg-subtle)] italic">
                 No pages yet
               </p>
             )}
@@ -351,33 +485,35 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         );
       })}
 
-      <SidebarSection label="Shared">
-        {sharedWorkspaces.length > 0 ? (
-          sharedWorkspaces.map((ws) => {
-            const pages = (pagesByWorkspace[ws._id] ?? []).filter(
-              (p) => !p.parentPageId && !p.archivedAt,
-            );
-            return pages.map((page) => (
-              <PageTreeItem
-                key={page._id}
-                page={page}
-                workspaceId={ws._id}
-                jwt={jwt}
-                depth={0}
-                activeId={activePage?.id}
-              />
-            ));
-          })
-        ) : (
+      <SidebarSection label="Shared" onAdd={createSharedPage}>
+        {ownedSharedPages.map((page) => (
+          <PageTreeItem
+            key={page._id}
+            page={page}
+            workspaceId={page.workspaceId}
+            jwt={jwt}
+            depth={0}
+            activeId={activePage?.id}
+          />
+        ))}
+        {sharedWorkspaceRootPages.map((page) => (
+          <PageTreeItem
+            key={page._id}
+            page={page}
+            workspaceId={page.workspaceId}
+            jwt={jwt}
+            depth={0}
+            activeId={activePage?.id}
+          />
+        ))}
+        {ownedSharedPages.length === 0 && sharedWorkspaceRootPages.length === 0 ? (
           <SidebarNavItem
-            icon={<Plus size={14} className="text-[var(--color-accent)]" />}
+            icon={<Plus size={14} className="text-[var(--osio-accent)]" />}
             label="Start collaborating"
             subtle
-            onClick={() => {
-              /* placeholder */
-            }}
+            onClick={createSharedPage}
           />
-        )}
+        ) : null}
       </SidebarSection>
 
       <SidebarSection label="osionos apps">

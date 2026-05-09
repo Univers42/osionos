@@ -30,11 +30,15 @@ interface BlockProps {
   numberedDepth?: number;
 }
 
+function renderInternalPageLink(pageId: string) {
+  return <InternalPageLink pageId={pageId} />;
+}
+
 const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
   const renderedContent = useMemo(() => {
     if (!content) return null;
     return renderInlineToReact(content, {
-      internalLinkRenderer: (pageId: string) => <InternalPageLink pageId={pageId} />,
+      internalLinkRenderer: renderInternalPageLink,
     });
   }, [content]);
 
@@ -59,7 +63,7 @@ function getNestedChildrenClassName(type: Block["type"]) {
   }
 
   if (type === "toggle") {
-    return "ml-6 mt-0.5 pl-3 border-l-2 border-[var(--color-line)]";
+    return "ml-6 mt-0.5 pl-3 border-l-2 border-[var(--osio-border-default)]";
   }
 
   if (type === "column") {
@@ -99,12 +103,12 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
       return (
         <>
           {block.content ? (
-            <p className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 min-h-[1.5em]">
+            <p className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 min-h-[1.5em]">
               <InlineMarkdown content={block.content} />
             </p>
           ) : (
-            <p className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 min-h-[1.5em]">
-              <span className="text-[var(--color-ink-faint)]">&nbsp;</span>
+            <p className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 min-h-[1.5em]">
+              <span className="text-[var(--osio-fg-subtle)]">&nbsp;</span>
             </p>
           )}
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -114,7 +118,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
     case "heading_1":
       return (
         <>
-          <h1 className="text-2xl font-bold text-[var(--color-ink)] mt-6 mb-1 leading-tight">
+          <h1 className="text-2xl font-bold text-[var(--osio-fg-default)] mt-6 mb-1 leading-tight">
             <InlineMarkdown content={block.content} />
           </h1>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -124,7 +128,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
     case "heading_2":
       return (
         <>
-          <h2 className="text-xl font-semibold text-[var(--color-ink)] mt-5 mb-1 leading-tight">
+          <h2 className="text-xl font-semibold text-[var(--osio-fg-default)] mt-5 mb-1 leading-tight">
             <InlineMarkdown content={block.content} />
           </h2>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -134,7 +138,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
     case "heading_3":
       return (
         <>
-          <h3 className="text-lg font-semibold text-[var(--color-ink)] mt-4 mb-0.5 leading-snug">
+          <h3 className="text-lg font-semibold text-[var(--osio-fg-default)] mt-4 mb-0.5 leading-snug">
             <InlineMarkdown content={block.content} />
           </h3>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -144,7 +148,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
     case "heading_4":
       return (
         <>
-          <h4 className="text-base font-semibold text-[var(--color-ink)] mt-3 mb-0.5 leading-snug">
+          <h4 className="text-base font-semibold text-[var(--osio-fg-default)] mt-3 mb-0.5 leading-snug">
             <InlineMarkdown content={block.content} />
           </h4>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -154,7 +158,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
     case "heading_5":
       return (
         <>
-          <h5 className="text-sm font-semibold text-[var(--color-ink)] mt-2 mb-0.5 leading-snug">
+          <h5 className="text-sm font-semibold text-[var(--osio-fg-default)] mt-2 mb-0.5 leading-snug">
             <InlineMarkdown content={block.content} />
           </h5>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -164,7 +168,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
     case "heading_6":
       return (
         <>
-          <h6 className="text-xs font-semibold text-[var(--color-ink-muted)] mt-2 mb-0.5 leading-snug uppercase tracking-wide">
+          <h6 className="text-xs font-semibold text-[var(--osio-fg-muted)] mt-2 mb-0.5 leading-snug uppercase tracking-wide">
             <InlineMarkdown content={block.content} />
           </h6>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -178,16 +182,16 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
           <div className="flex items-start gap-2 pl-5">
             <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
               {bulletStyle === "disc" && (
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-ink-faint)] mt-[7px]" />
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--osio-fg-subtle)] mt-[7px]" />
               )}
               {bulletStyle === "circle" && (
-                <span className="inline-block w-1.5 h-1.5 rounded-full border border-[var(--color-ink-faint)] mt-[7px]" />
+                <span className="inline-block w-1.5 h-1.5 rounded-full border border-[var(--osio-fg-subtle)] mt-[7px]" />
               )}
               {bulletStyle === "square" && (
-                <span className="inline-block w-1.5 h-1.5 bg-[var(--color-ink-faint)] mt-[7px]" />
+                <span className="inline-block w-1.5 h-1.5 bg-[var(--osio-fg-subtle)] mt-[7px]" />
               )}
             </span>
-            <span className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1">
+            <span className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 flex-1">
               <InlineMarkdown content={block.content} />
             </span>
           </div>
@@ -200,10 +204,10 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
       return (
         <>
           <div className="flex items-start gap-2 pl-5">
-            <span className="text-sm leading-relaxed py-0.5 text-[var(--color-ink-muted)] select-none shrink-0 w-6 text-center font-medium">
+            <span className="text-sm leading-relaxed py-0.5 text-[var(--osio-fg-muted)] select-none shrink-0 w-6 text-center font-medium">
               {getNumberedMarker(index + 1, numberedDepth)}
             </span>
-            <span className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1">
+            <span className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 flex-1">
               <InlineMarkdown content={block.content} />
             </span>
           </div>
@@ -219,8 +223,8 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
               className={[
                 "shrink-0 mt-[3px] w-4 h-4 rounded border flex items-center justify-center",
                 block.checked
-                  ? "bg-[var(--color-accent)] border-[var(--color-accent)] text-white"
-                  : "border-[var(--color-line)] bg-[var(--color-surface-primary)]",
+                  ? "bg-[var(--osio-accent)] border-[var(--osio-accent)] text-[var(--osio-accent-fg)]"
+                  : "border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]",
               ].join(" ")}
             >
               {block.checked && (
@@ -239,8 +243,8 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
               className={[
                 "text-sm leading-relaxed py-0.5 flex-1",
                 block.checked
-                  ? "text-[var(--color-ink-muted)] line-through"
-                  : "text-[var(--color-ink)]",
+                  ? "text-[var(--osio-fg-muted)] line-through"
+                  : "text-[var(--osio-fg-default)]",
               ].join(" ")}
             >
               <InlineMarkdown content={block.content} />
@@ -256,7 +260,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
     case "equation":
       return (
         <div
-          className="my-2 overflow-x-auto rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-3 text-[var(--color-ink)]"
+          className="my-2 overflow-x-auto rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-3 text-[var(--osio-fg-default)]"
           dangerouslySetInnerHTML={{ __html: renderEquationToHtml(block.content) }}
         />
       );
@@ -297,8 +301,8 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
       return (
         <>
           <div className="flex my-0.5">
-            <div className="w-1 bg-[var(--color-ink)] rounded-full shrink-0 mr-3" />
-            <span className="text-sm text-[var(--color-ink-muted)] leading-relaxed py-0.5 italic flex-1">
+            <div className="w-1 bg-[var(--osio-fg-default)] rounded-full shrink-0 mr-3" />
+            <span className="text-sm text-[var(--osio-fg-muted)] leading-relaxed py-0.5 italic flex-1">
               <InlineMarkdown content={block.content} />
             </span>
           </div>
@@ -317,7 +321,7 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
     case "divider":
       return (
         <div className="py-2">
-          <hr className="w-full h-px border-0 bg-[var(--color-ink-faint)]" />
+          <hr className="w-full h-px border-0 bg-[var(--osio-fg-subtle)]" />
         </div>
       );
 
@@ -325,7 +329,6 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
       return <TableBlockReadOnly block={block} />;
 
     case "database_inline":
-    case "database_full_page":
       return (
         <DatabaseBlock
           databaseId={block.databaseId}
@@ -334,13 +337,24 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
         />
       );
 
+    case "database_full_page":
+      return (
+        <div className="my-3 min-h-[520px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
+          <DatabaseBlock
+            databaseId={block.databaseId}
+            initialViewId={block.viewId}
+            mode="full"
+          />
+        </div>
+      );
+
     case "toggle":
       return <ToggleBlockReadOnly block={block} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />;
 
     default:
       return (
         <>
-          <p className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5">
+          <p className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5">
             {block.content}
           </p>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -363,19 +377,19 @@ const ToggleBlockReadOnly: React.FC<{ block: Block; bulletDepth: number; numbere
         <button
           type="button"
           onClick={() => setExpanded((o) => !o)}
-          className="shrink-0 mt-[3px] w-5 h-5 rounded hover:bg-[var(--color-surface-hover)] flex items-center justify-center"
+          className="shrink-0 mt-[3px] w-5 h-5 rounded hover:bg-[var(--osio-bg-hover)] flex items-center justify-center"
         >
           <ChevronRight
             size={14}
             className={[
-              "text-[var(--color-ink-muted)] transition-transform duration-150",
+              "text-[var(--osio-fg-muted)] transition-transform duration-150",
               expanded ? "rotate-90" : "",
             ].join(" ")}
           />
         </button>
         <button
           type="button"
-          className="text-sm text-[var(--color-ink)] leading-relaxed py-0.5 flex-1 cursor-pointer select-none text-left"
+          className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 flex-1 cursor-pointer select-none text-left"
           onClick={() => setExpanded((o) => !o)}
         >
           <InlineMarkdown content={block.content} />
@@ -383,8 +397,8 @@ const ToggleBlockReadOnly: React.FC<{ block: Block; bulletDepth: number; numbere
       </div>
       {expanded && renderNestedChildren(block, bulletDepth, numberedDepth)}
       {expanded && !block.children?.length && (
-        <div className="ml-6 mt-0.5 pl-3 border-l-2 border-[var(--color-line)]">
-          <span className="text-xs text-[var(--color-ink-faint)] py-1 italic">
+        <div className="ml-6 mt-0.5 pl-3 border-l-2 border-[var(--osio-border-default)]">
+          <span className="text-xs text-[var(--osio-fg-subtle)] py-1 italic">
             Empty toggle
           </span>
         </div>
@@ -397,14 +411,14 @@ const TableBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
   const data = block.tableData ?? [];
   if (!data.length) {
     return (
-      <div className="my-2 rounded border border-[var(--color-line)] px-3 py-2 text-xs text-[var(--color-ink-faint)]">
+      <div className="my-2 rounded border border-[var(--osio-border-default)] px-3 py-2 text-xs text-[var(--osio-fg-subtle)]">
         Empty table
       </div>
     );
   }
 
   return (
-    <div className="my-2 border border-[var(--color-line)] rounded-lg overflow-auto">
+    <div className="my-2 border border-[var(--osio-border-default)] rounded-lg overflow-auto">
       <table className="w-max min-w-full text-sm">
         <tbody>
           {data.map((row, ri) => (
@@ -412,14 +426,14 @@ const TableBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
               key={`row-${row.join("¦")}`}
               className={
                 ri === 0
-                  ? "bg-[var(--color-surface-secondary)] font-medium"
+                  ? "bg-[var(--osio-bg-subtle)] font-medium"
                   : ""
               }
             >
               {row.map((cell, ci) => (
                 <td
                   key={`cell-${ri}-${ci}`}
-                  className="border-b border-r border-[var(--color-line)] last:border-r-0 px-3 py-1.5 min-w-[120px] text-[var(--color-ink)]"
+                  className="border-b border-r border-[var(--osio-border-default)] last:border-r-0 px-3 py-1.5 min-w-[120px] text-[var(--osio-fg-default)]"
                 >
                   <InlineMarkdown content={cell} />
                 </td>

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -7,11 +8,20 @@ import process from "node:process";
 const ROOT = process.cwd();
 const TEST_PORT = Number.parseInt(process.env.PLAYWRIGHT_PORT ?? "3004", 10);
 const OFFICIAL_BASE_URL = `http://127.0.0.1:${TEST_PORT}`;
+const require = createRequire(import.meta.url);
 
 function readJson(relativePath) {
   return JSON.parse(
     fs.readFileSync(path.join(ROOT, relativePath), "utf8"),
   );
+}
+
+function readJsonFile(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
+function resolveFromRoot(request, paths = [ROOT]) {
+  return require.resolve(request, { paths });
 }
 
 function formatResult(status, message) {
@@ -38,20 +48,20 @@ function checkPackageManager(pkg, results) {
   const official = pkg.packageManager ?? "npm";
   const userAgent = process.env.npm_config_user_agent ?? "";
 
-  if (userAgent.startsWith("npm/")) {
+  if (userAgent.startsWith("pnpm/")) {
     results.push(formatResult("OK", `Package manager ${official}`));
     return true;
   }
 
   if (userAgent.length === 0) {
-    results.push(formatResult("WARN", `Run doctor through npm. Official manager ${official}.`));
+    results.push(formatResult("WARN", `Run doctor through pnpm. Official manager ${official}.`));
     return true;
   }
 
   results.push(
     formatResult(
       "FAIL",
-      `Detected ${userAgent}. Official manager ${official}. Run \`npm ci\`, not pnpm/yarn.`,
+      `Detected ${userAgent}. Official manager ${official}. Run through Docker with pnpm, not npm/yarn.`,
     ),
   );
   return false;
@@ -75,14 +85,14 @@ function checkDependenciesInstalled(results) {
   results.push(
     formatResult(
       "FAIL",
-      "Dependencies missing or incomplete (`playwright` / `@playwright/test`). Run `npm ci` first.",
+      "Dependencies missing or incomplete (`playwright` / `@playwright/test`). Run `make pnpm-install` first.",
     ),
   );
   return false;
 }
 
 function checkPlaywrightVersion(pkg, results) {
-  const installed = readJson("node_modules/playwright/package.json").version ?? "";
+  const installed = readJsonFile(resolveFromRoot("playwright/package.json")).version ?? "";
   const expected =
     (pkg.devDependencies?.playwright ?? "").replace(/^[^\d]*/, "") ||
     (pkg.devDependencies?.["@playwright/test"] ?? "").replace(/^[^\d]*/, "");
@@ -95,7 +105,7 @@ function checkPlaywrightVersion(pkg, results) {
   results.push(
     formatResult(
       "FAIL",
-      `Playwright ${installed} != package.json ${expected}. Reinstall with \`npm ci\`.`,
+      `Playwright ${installed} != package.json ${expected}. Reinstall with \`make pnpm-install\`.`,
     ),
   );
   return false;
@@ -121,7 +131,12 @@ function resolvePlaywrightCacheDir() {
 }
 
 function checkBrowsersInstalled(results) {
-  const browserMetadata = readJson("node_modules/playwright-core/browsers.json").browsers ?? [];
+  const playwrightDir = path.dirname(resolveFromRoot("playwright/package.json"));
+  const playwrightCoreDir = path.dirname(
+    resolveFromRoot("playwright-core/package.json", [playwrightDir, ROOT]),
+  );
+  const browserMetadataPath = path.join(playwrightCoreDir, "browsers.json");
+  const browserMetadata = readJsonFile(browserMetadataPath).browsers ?? [];
   const chromium = browserMetadata.find((browser) => browser.name === "chromium");
   const shell = browserMetadata.find((browser) => browser.name === "chromium-headless-shell");
   const cacheDir = resolvePlaywrightCacheDir();
@@ -149,7 +164,7 @@ function checkBrowsersInstalled(results) {
   results.push(
     formatResult(
       "FAIL",
-      "Playwright browsers missing. Run `npm run test:setup`.",
+      "Playwright browsers missing. Run `make test-setup`.",
     ),
   );
   return false;
@@ -237,10 +252,10 @@ async function main() {
 
   if (hasFailure) {
     console.error("");
-    console.error("Official flow:");
-    console.error("  1. npm ci");
-    console.error("  2. npm run test:setup");
-    console.error("  3. npm run test:e2e");
+    console.error("Official Docker-only flow:");
+    console.error("  1. make pnpm-install");
+    console.error("  2. make test-setup");
+    console.error("  3. make test");
     process.exit(1);
   }
 }

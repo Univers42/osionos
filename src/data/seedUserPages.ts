@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/07 00:51:17 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,7 +31,7 @@ export const designSystem: SeedPage = {
     divider(),
     h2('Color tokens'),
     p('We use CSS custom properties for all colors. This allows seamless light/dark theme switching.'),
-    code(':root {\n  --color-ink:              #37352f;\n  --color-ink-muted:        #787774;\n  --color-ink-faint:        #b4b4b0;\n  --color-surface-primary:  #ffffff;\n  --color-surface-secondary:#f7f6f3;\n  --color-accent:           #2383e2;\n  --color-line:             #e9e9e7;\n}', 'css'),
+    code(':root {\n  --osio-fg-default:              #37352f;\n  --osio-fg-muted:        #787774;\n  --osio-fg-subtle:        #b4b4b0;\n  --osio-bg-surface:  #ffffff;\n  --osio-bg-subtle:#f7f6f3;\n  --osio-accent:           #2383e2;\n  --osio-border-default:             #e9e9e7;\n}', 'css'),
     h2('Typography'),
     p('Base font: system-ui. We use a modular scale for heading sizes.'),
     bullet('H1: 2xl (24px), bold'),
@@ -52,7 +52,7 @@ export const designSystem: SeedPage = {
     p('All colors are defined via CSS variables. Toggle by applying a class to <html>:'),
     code('document.documentElement.classList.toggle("dark");', 'javascript'),
     toggle('Full dark mode token list', [
-      code(':root.dark {\n  --color-ink:              #ffffffcf;\n  --color-ink-muted:        #ffffff73;\n  --color-surface-primary:  #191919;\n  --color-surface-secondary:#202020;\n  --color-accent:           #529cca;\n  --color-line:             #ffffff14;\n}', 'css'),
+      code(':root.dark {\n  --osio-fg-default:              #ffffffcf;\n  --osio-fg-muted:        #ffffff73;\n  --osio-bg-surface:  #191919;\n  --osio-bg-subtle:#202020;\n  --osio-accent:           #529cca;\n  --osio-border-default:             #ffffff14;\n}', 'css'),
     ]),
   ],
 };
@@ -91,6 +91,16 @@ export const sprintReview: SeedPage = {
     bullet('Page content rendering should use the real Block pipeline'),
     quote('"Let\'s focus on rendering quality next sprint." — Alex'),
   ],
+};
+
+export const alexTasksDatabase: SeedPage = {
+  _id: 'page-alex-tasks-database',
+  title: 'Tasks database',
+  icon: 'icon:table',
+  workspaceId: alexWsId,
+  ownerId: 'mock-user-1',
+  databaseId: 'db-tasks',
+  content: [],
 };
 
 
@@ -144,4 +154,14 @@ export const readingList: SeedPage = {
     divider(),
     quote('"A reader lives a thousand lives before he dies. The man who never reads lives only one." — George R.R. Martin'),
   ],
+};
+
+export const samTasksDatabase: SeedPage = {
+  _id: 'page-sam-tasks-database',
+  title: 'Tasks database',
+  icon: 'icon:table',
+  workspaceId: samWsId,
+  ownerId: 'mock-user-2',
+  databaseId: 'db-tasks',
+  content: [],
 };

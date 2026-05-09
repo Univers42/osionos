@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 20:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 18:19:49 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:10 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,7 @@ import { Trash2 } from 'lucide-react';
 import {
   COVER_PICKER_TABS,
   IconImage,
+  normalizeMediaSource,
   resolveCollectionMediaAsset,
 } from '@/shared/lib/markengine/uiCollectionAssets';
 import { CoverAssetPicker } from './CoverAssetPicker';
@@ -26,6 +27,7 @@ interface PageCoverProps {
   onChangeCover: (cover: string) => void;
   /** Remove the cover entirely. */
   onRemoveCover: () => void;
+  disabled?: boolean;
 }
 
 /**
@@ -36,6 +38,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
   cover,
   onChangeCover,
   onRemoveCover,
+  disabled = false,
 }) => {
   const [showPicker, setShowPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -45,7 +48,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
     ? null
     : resolveCollectionMediaAsset(cover, COVER_PICKER_TABS, 'Cover', 'cover');
   const isUrl = !isGradient;
-  const coverSrc = resolvedCover?.url ?? cover;
+  const coverSrc = normalizeMediaSource(resolvedCover?.url ?? cover);
 
   /* Close picker on outside click */
   useEffect(() => {
@@ -70,16 +73,18 @@ export const PageCover: React.FC<PageCoverProps> = ({
 
   const handleSelect = useCallback(
     (value: string) => {
+      if (disabled) return;
       onChangeCover(value);
       setShowPicker(false);
     },
-    [onChangeCover],
+    [disabled, onChangeCover],
   );
 
   const handleRemove = useCallback(() => {
+    if (disabled) return;
     onRemoveCover();
     setShowPicker(false);
-  }, [onRemoveCover]);
+  }, [disabled, onRemoveCover]);
 
   return (
     <div data-testid="page-cover" className="osionos-page-cover">
@@ -102,7 +107,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
       </div>
 
       {/* Hover controls */}
-      <div className="osionos-page-cover-controls">
+      {!disabled && <div className="osionos-page-cover-controls">
         <button
           type="button"
           data-testid="page-cover-toggle-picker"
@@ -120,10 +125,10 @@ export const PageCover: React.FC<PageCoverProps> = ({
         >
           <Trash2 size={14} />
         </button>
-      </div>
+      </div>}
 
       {/* Cover picker */}
-      {showPicker && (
+      {showPicker && !disabled && (
         <div
           ref={pickerRef}
           data-testid="page-cover-picker"

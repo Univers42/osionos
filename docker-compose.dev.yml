@@ -1,0 +1,80 @@
+# Development stack: Vite HMR, browser tests, optional SonarQube.
+# Usage: docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up
+
+services:
+  playground:
+    build:
+      context: .
+      dockerfile: docker/services/node/Dockerfile
+    container_name: playground_vite
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "${VITE_PORT:-3001}:3001"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-}
+      VITE_BAAS_ENABLED: ${VITE_BAAS_ENABLED:-false}
+      VITE_BAAS_URL: ${VITE_BAAS_URL:-}
+      VITE_BAAS_ANON_KEY: ${VITE_BAAS_ANON_KEY:-}
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - .:/app
+      - playground_node_modules:/app/node_modules
+      - playground_pnpm_store:/pnpm/store
+    command: ["pnpm", "exec", "vite", "--host", "0.0.0.0", "--port", "3001", "--strictPort"]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - osionos_net
+
+  browser-tests:
+    build:
+      context: .
+      dockerfile: docker/services/browser-tests/Dockerfile
+    working_dir: /app
+    init: true
+    ipc: host
+    environment:
+      CI: "1"
+      NODE_ENV: test
+      TEST_WORKERS: ${TEST_WORKERS:-1}
+      TEST_FILTER: ${TEST_FILTER:-}
+      VITE_API_URL: ${VITE_API_URL:-}
+      VITE_BAAS_ENABLED: ${VITE_BAAS_ENABLED:-false}
+      VITE_BAAS_URL: ${VITE_BAAS_URL:-}
+      VITE_BAAS_ANON_KEY: ${VITE_BAAS_ANON_KEY:-}
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+    volumes:
+      - .:/app
+      - browser_test_node_modules:/app/node_modules
+      - browser_test_pnpm_store:/pnpm/store
+    entrypoint: ["/bin/bash", "/app/docker/services/browser-tests/entrypoint.sh"]
+    command: ["pnpm", "exec", "playwright", "test"]
+    networks:
+      - osionos_net
+    profiles:
+      - testing
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: playground_sonar
+    restart: unless-stopped
+    ports:
+      - "${SONAR_PORT:-9000}:9000"
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_logs:/opt/sonarqube/logs
+      - ./docker/services/sonarqube/conf/sonar.properties:/opt/sonarqube/conf/sonar.properties:ro
+    networks:
+      - osionos_net
+    profiles:
+      - sonar
+
+volumes:
+  sonarqube_data:
+  sonarqube_logs:

@@ -1,15 +1,3 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   notionPage.css                                     :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/04/28 22:23:55 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:23:56 by dlesieur         ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
-
 /* ═══════════════════════════════════════════════════════════════════════════
    osionos-style page layout
    ═══════════════════════════════════════════════════════════════════════════
@@ -38,7 +26,7 @@
   box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--color-surface-primary);
+  background: var(--osio-bg-page);
   font-family: var(--page-font-family, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   position: relative;
 }
@@ -55,6 +43,34 @@
   font-size: calc(1rem * var(--page-font-size-scale, 0.92));
 }
 
+.osionos-page--small-text .osionos-page-title {
+  font-size: calc(40px * var(--page-font-size-scale, 0.92));
+}
+
+.osionos-page--small-text .osionos-page-body :where(.text-xs) {
+  font-size: 0.6875rem !important;
+}
+
+.osionos-page--small-text .osionos-page-body :where(.text-sm) {
+  font-size: 0.8125rem !important;
+}
+
+.osionos-page--small-text .osionos-page-body :where(.text-base) {
+  font-size: 0.9375rem !important;
+}
+
+.osionos-page--small-text .osionos-page-body :where(.text-lg) {
+  font-size: 1.03125rem !important;
+}
+
+.osionos-page--small-text .osionos-page-body :where(.text-xl) {
+  font-size: 1.125rem !important;
+}
+
+.osionos-page--small-text .osionos-page-body :where(.text-2xl) {
+  font-size: 1.35rem !important;
+}
+
 .osionos-page--locked .osionos-page-body [contenteditable="true"] {
   pointer-events: none;
 }
@@ -66,8 +82,8 @@
 
 .osionos-page--present {
   background:
-    radial-gradient(circle at top, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 34rem),
-    var(--color-surface-primary);
+    radial-gradient(circle at top, color-mix(in srgb, var(--osio-accent) 12%, transparent), transparent 34rem),
+    var(--osio-bg-page);
 }
 
 /* ── Fluid content width (shared by header, properties, body) ─────── */
@@ -125,6 +141,7 @@
 
 .osionos-page-cover-controls {
   position: absolute;
+  z-index: 2;
   right: 16px;
   bottom: 12px;
   display: flex;
@@ -148,7 +165,7 @@
   font-weight: 500;
   cursor: pointer;
   background: rgba(255, 255, 255, 0.9);
-  color: #37352f;
+  color: var(--osio-fg-default);
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.05),
     0 1px 2px rgba(0, 0, 0, 0.1);
@@ -197,7 +214,7 @@
   border-radius: 4px;
   font-size: 12px;
   line-height: 1.25;
-  color: var(--color-ink-muted);
+  color: var(--osio-fg-muted);
   white-space: nowrap;
   max-width: 220px;
   overflow: hidden;
@@ -212,22 +229,22 @@ button.osionos-page-breadcrumb {
 }
 
 button.osionos-page-breadcrumb:hover {
-  color: var(--color-ink);
-  background: var(--color-surface-hover);
+  color: var(--osio-fg-default);
+  background: var(--osio-bg-hover);
 }
 
 .osionos-page-breadcrumb--root {
-  color: var(--color-ink-faint);
+  color: var(--osio-fg-subtle);
 }
 
 .osionos-page-breadcrumb--current {
-  color: var(--color-ink);
+  color: var(--osio-fg-default);
   font-weight: 500;
 }
 
 .osionos-page-breadcrumb-separator {
   flex-shrink: 0;
-  color: var(--color-ink-faint);
+  color: var(--osio-fg-subtle);
 }
 
 /* ── Icon ─────────────────────────────────────────────────────────── */
@@ -253,13 +270,13 @@ button.osionos-page-breadcrumb:hover {
 }
 
 .osionos-page-icon:hover {
-  background: var(--color-surface-hover);
+  background: var(--osio-bg-hover);
 }
 
 .osionos-page-icon svg {
   width: 78px;
   height: 78px;
-  color: var(--color-ink);
+  color: var(--osio-fg-default);
 }
 
 /* ── Toolbar (add icon / add cover / add comment) ────────────────── */
@@ -287,7 +304,7 @@ button.osionos-page-breadcrumb:hover {
   border-radius: 4px;
   border: none;
   font-size: 12px;
-  color: var(--color-ink-muted);
+  color: var(--osio-fg-muted);
   background: transparent;
   cursor: pointer;
   transition:
@@ -296,8 +313,8 @@ button.osionos-page-breadcrumb:hover {
 }
 
 .osionos-page-toolbar-btn:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-ink);
+  background: var(--osio-bg-hover);
+  color: var(--osio-fg-default);
 }
 
 /* ── Title ────────────────────────────────────────────────────────── */
@@ -308,7 +325,7 @@ button.osionos-page-breadcrumb:hover {
   font-size: 40px;
   font-weight: 700;
   line-height: 1.2;
-  color: var(--color-ink);
+  color: var(--osio-fg-default);
   outline: none;
   border: none;
   background: transparent;
@@ -316,13 +333,13 @@ button.osionos-page-breadcrumb:hover {
   min-height: 1.2em;
   word-break: break-word;
   white-space: pre-wrap;
-  caret-color: var(--color-ink);
+  caret-color: var(--osio-fg-default);
   resize: none;
   overflow: hidden;
 }
 
 .osionos-page-title::placeholder {
-  color: var(--color-ink-faint);
+  color: var(--osio-fg-subtle);
   opacity: 1;
 }
 
@@ -334,14 +351,14 @@ button.osionos-page-breadcrumb:hover {
   gap: 8px;
   padding: 4px 0;
   font-size: 14px;
-  color: var(--color-ink);
-  border-bottom: 1px solid var(--color-line);
+  color: var(--osio-fg-default);
+  border-bottom: 1px solid var(--osio-border-default);
 }
 
 .osionos-page-property-label {
   flex-shrink: 0;
   width: 160px;
-  color: var(--color-ink-muted);
+  color: var(--osio-fg-muted);
   font-size: 13px;
 }
 
@@ -359,31 +376,31 @@ button.osionos-page-breadcrumb:hover {
 }
 
 .osionos-page-body a {
-  color: var(--color-accent);
+  color: var(--osio-accent);
   text-decoration: underline;
   text-decoration-color: currentColor;
   text-underline-offset: 0.14em;
 }
 
 .osionos-page-body a:hover {
-  color: color-mix(in srgb, var(--color-accent) 86%, black);
+  color: color-mix(in srgb, var(--osio-accent) 86%, black);
 }
 
 .osionos-page-body a:visited {
-  color: color-mix(in srgb, var(--color-accent) 88%, #6b21a8);
+  color: var(--osio-accent-hover);
 }
 
 /* ── Emoji picker ─────────────────────────────────────────────────── */
 
 .osionos-emoji-picker {
   position: absolute;
-  z-index: 1000;
+  z-index: var(--osio-z-popover);
   top: 100%;
   left: 0;
   width: 352px;
   max-height: 380px;
-  background: var(--color-surface-primary);
-  border: 1px solid var(--color-line);
+  background: var(--osio-bg-surface);
+  border: 1px solid var(--osio-border-default);
   border-radius: 8px;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.04),
@@ -395,7 +412,7 @@ button.osionos-page-breadcrumb:hover {
 
 .osionos-emoji-picker-tabs {
   display: flex;
-  border-bottom: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--osio-border-default);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -410,7 +427,7 @@ button.osionos-page-breadcrumb:hover {
   white-space: nowrap;
   border: none;
   background: transparent;
-  color: var(--color-ink-muted);
+  color: var(--osio-fg-muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition:
@@ -419,28 +436,28 @@ button.osionos-page-breadcrumb:hover {
 }
 
 .osionos-emoji-picker-tab:hover {
-  color: var(--color-ink);
+  color: var(--osio-fg-default);
 }
 
 .osionos-emoji-picker-tab--active {
-  color: var(--color-ink);
-  border-bottom-color: var(--color-ink);
+  color: var(--osio-fg-default);
+  border-bottom-color: var(--osio-fg-default);
 }
 
 .osionos-emoji-picker-search {
   margin: 8px;
   padding: 6px 10px;
   border-radius: 4px;
-  border: 1px solid var(--color-line);
-  background: var(--color-surface-secondary);
-  color: var(--color-ink);
+  border: 1px solid var(--osio-border-default);
+  background: var(--osio-bg-subtle);
+  color: var(--osio-fg-default);
   font-size: 13px;
   outline: none;
   width: calc(100% - 16px);
 }
 
 .osionos-emoji-picker-search:focus {
-  border-color: var(--color-accent);
+  border-color: var(--osio-accent);
 }
 
 .osionos-emoji-picker-grid {
@@ -468,7 +485,7 @@ button.osionos-page-breadcrumb:hover {
 }
 
 .osionos-emoji-picker-item:hover {
-  background: var(--color-surface-hover);
+  background: var(--osio-bg-hover);
 }
 
 .osionos-emoji-picker-svg-grid {
@@ -494,13 +511,13 @@ button.osionos-page-breadcrumb:hover {
 }
 
 .osionos-emoji-picker-svg-item:hover {
-  background: var(--color-surface-hover);
+  background: var(--osio-bg-hover);
 }
 
 .osionos-emoji-picker-svg-item svg {
   width: 24px;
   height: 24px;
-  color: var(--color-ink);
+  color: var(--osio-fg-default);
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -513,9 +530,9 @@ button.osionos-page-breadcrumb:hover {
   justify-content: space-between;
   align-items: center;
   padding: 6px 10px;
-  border-top: 1px solid var(--color-line);
+  border-top: 1px solid var(--osio-border-default);
   font-size: 12px;
-  color: var(--color-ink-muted);
+  color: var(--osio-fg-muted);
 }
 
 .osionos-emoji-picker-remove-btn {
@@ -525,15 +542,15 @@ button.osionos-page-breadcrumb:hover {
   background: transparent;
   cursor: pointer;
   font-size: 12px;
-  color: var(--color-ink-muted);
+  color: var(--osio-fg-muted);
   transition:
     background 120ms ease,
     color 120ms ease;
 }
 
 .osionos-emoji-picker-remove-btn:hover {
-  background: rgba(255, 0, 0, 0.06);
-  color: #e53e3e;
+  background: var(--osio-danger);
+  color: var(--osio-danger-fg);
 }
 
 /* ── Cover picker (gallery) ───────────────────────────────────────── */

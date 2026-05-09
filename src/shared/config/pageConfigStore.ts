@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:24:31 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:24:32 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -43,6 +43,17 @@ export interface PageVersion {
   label: string;
 }
 
+export interface PageTranslation {
+  id: string;
+  userId: string;
+  pageId: string;
+  locale: string;
+  label: string;
+  title: string;
+  content: unknown[];
+  createdAt: string;
+}
+
 export interface PageConnection {
   id: string;
   name: string;
@@ -74,6 +85,12 @@ export interface PageConfig {
   connections: PageConnection[];
   analytics: PageAnalytics;
   versions: PageVersion[];
+  translations: PageTranslation[];
+  activeTranslation?: {
+    id: string;
+    locale: string;
+    label: string;
+  };
   lastAction?: PageActionEvent;
   cssTokens: PageCssTokens;
 }
@@ -116,6 +133,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
     duplicates: 0,
   },
   versions: [],
+  translations: [],
   cssTokens: {
     fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     fontSizeScale: 1,
@@ -156,6 +174,8 @@ export function resolvePageConfig(config?: PageConfig, updates: Partial<PageConf
     },
     connections: updates.connections ?? config?.connections ?? DEFAULT_PAGE_CONFIG.connections,
     versions: updates.versions ?? config?.versions ?? DEFAULT_PAGE_CONFIG.versions,
+    translations: updates.translations ?? config?.translations ?? DEFAULT_PAGE_CONFIG.translations,
+    activeTranslation: updates.activeTranslation ?? config?.activeTranslation,
   };
 
   return {

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:14 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/06 23:05:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -41,6 +41,7 @@ interface UseSlashSelectOptions {
     name?: string,
   ) => { databaseId: string; viewId: string } | null;
   createPageInPrivateWorkspace: () => Promise<{ id: string } | null>;
+  createDatabasePageInPrivateWorkspace: () => Promise<{ id: string } | null>;
   focusBlock: (blockId: string, end?: boolean) => void;
 }
 
@@ -50,14 +51,14 @@ function stripSlashQuery(content: string): string {
 }
 
 function appendInternalPageLink(content: string, pageId: string): string {
-  const trimmed = content.replace(/\s+$/, "");
+  const trimmed = content.trimEnd();
   const separator = trimmed.length > 0 ? " " : "";
   return `${trimmed}${separator}[[page:${pageId}]] `;
 }
 
 function appendInlineText(content: string, insertText: string): string {
   const cleanContent = stripSlashQuery(content);
-  const separator = cleanContent.length > 0 && !/\s$/.test(cleanContent) ? " " : "";
+  const separator = cleanContent.length > 0 && cleanContent === cleanContent.trimEnd() ? " " : "";
   return `${cleanContent}${separator}${insertText}`;
 }
 
@@ -77,6 +78,7 @@ export function useSlashSelect({
   insertBlock,
   createInlineDatabase,
   createPageInPrivateWorkspace,
+  createDatabasePageInPrivateWorkspace,
   focusBlock,
 }: UseSlashSelectOptions) {
   const applyBlockSelection = useCallback(
@@ -115,6 +117,24 @@ export function useSlashSelect({
           insertBlock(pageId, blockId, newBlock);
           focusBlock(newBlock.id);
         }
+        return;
+      }
+
+      if (selectedType === "database_full_page") {
+        void (async () => {
+          const createdPage = await createDatabasePageInPrivateWorkspace();
+          const nextContent = createdPage
+            ? appendInternalPageLink(cleanContent, createdPage.id)
+            : cleanContent;
+
+          updateBlock(pageId, blockId, {
+            content: nextContent,
+            placeholderText: undefined,
+          });
+          if (!createdPage) {
+            repositionCursor(blockId, nextContent);
+          }
+        })();
         return;
       }
 
@@ -205,6 +225,7 @@ export function useSlashSelect({
       changeBlockType,
       insertBlock,
       createInlineDatabase,
+      createDatabasePageInPrivateWorkspace,
       focusBlock,
     ],
   );

@@ -1,0 +1,29 @@
+# Runtime configuration for the osionos playground.
+# Secrets stay in .env — never here.
+
+[app]
+name        = "osionos"
+version     = "1.0.0"
+environment = "development"
+
+[app.ports]
+vite       = 3001
+api        = 4000
+baas_proxy = 8080
+
+[app.features]
+offline_mode      = true
+realtime_messages = true
+page_analytics    = false
+ai_assist         = false
+
+[app.editor]
+autosave_debounce_ms = 400
+recents_max          = 10
+block_types_enabled  = [
+  "paragraph", "heading_1", "heading_2", "heading_3",
+  "bulleted_list", "numbered_list", "to_do", "toggle",
+  "code", "quote", "callout", "divider", "image",
+  "video", "audio", "file", "table_block",
+  "database_inline", "database_full_page", "equation"
+]

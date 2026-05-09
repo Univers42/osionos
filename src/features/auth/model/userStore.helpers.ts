@@ -6,13 +6,13 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 16:12:43 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 03:50:38 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import { api } from '@/shared/api/client';
 import seedUsers from '@/data/seedUsers.json';
-import type { StaticPersona, Workspace } from '@/entities/user';
+import type { StaticPersona, UserSession, Workspace } from '@/entities/user';
 
 type SeedUsersFile = {
   users?: StaticPersona[];
@@ -31,6 +31,66 @@ export const SEEDED_WORKSPACES: Workspace[] = seed.workspaces ?? [];
 
 /** Resolved API base URL — empty string means "no API configured → offline" */
 export const API_BASE: string = ((import.meta.env as Record<string, string>)['VITE_API_URL'] ?? '').trim();
+export const REQUIRE_BRIDGE_SESSION = ((import.meta.env as Record<string, string>)['VITE_REQUIRE_BRIDGE_SESSION'] ?? 'true') !== 'false';
+export const ALLOW_OFFLINE_MODE = ((import.meta.env as Record<string, string>)['VITE_ALLOW_OFFLINE_MODE'] ?? 'false') === 'true';
+export const PRISMATICA_URL = ((import.meta.env as Record<string, string>)['VITE_PRISMATICA_URL'] ?? 'https://localhost:4323').trim();
+export const BRIDGE_APP_TOKEN_PREFIX = 'osionos_v1.';
+
+export type BridgeSessionImport = {
+  ok: boolean;
+  persona: StaticPersona;
+  session: UserSession;
+  expiresAt?: string;
+  message?: string;
+};
+
+export function isBridgeAppToken(token: string | null | undefined): boolean {
+  return typeof token === 'string' && token.startsWith(BRIDGE_APP_TOKEN_PREFIX);
+}
+
+export function apiJwtFromSessionToken(token: string | null | undefined): string {
+  if (!token || isBridgeAppToken(token)) return '';
+  return token;
+}
+
+export function isBridgeSession(session: UserSession | null | undefined): boolean {
+  if (!session) return false;
+  if (isBridgeAppToken(session.accessToken)) return true;
+  return session.privateWorkspaces.some((workspace) => workspace.settings?.bridgeProvider === 'prismatica');
+}
+
+function bridgeTokenFromLocation(): string {
+  if (globalThis.window === undefined) return '';
+  const hash = globalThis.location.hash.startsWith('#') ? globalThis.location.hash.slice(1) : globalThis.location.hash;
+  const searchToken = new URLSearchParams(globalThis.location.search).get('bridge_token') ?? '';
+  const hashToken = new URLSearchParams(hash).get('bridge_token') ?? '';
+  return (hashToken || searchToken).trim();
+}
+
+export function clearBridgeTokenFromLocation() {
+  if (globalThis.window === undefined) return;
+  const url = new URL(globalThis.location.href);
+  url.searchParams.delete('bridge_token');
+  const hashParams = new URLSearchParams(url.hash.startsWith('#') ? url.hash.slice(1) : url.hash);
+  hashParams.delete('bridge_token');
+  url.hash = hashParams.toString();
+  globalThis.history.replaceState(globalThis.history.state, document.title, url.toString());
+}
+
+export async function consumeBridgeSessionFromLocation(): Promise<BridgeSessionImport | null> {
+  const token = bridgeTokenFromLocation();
+  if (!token || !API_BASE) return null;
+  const response = await fetch(`${API_BASE}/api/auth/bridge/consume`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ token }),
+  });
+  if (!response.ok) throw new Error('Bridge session could not be imported.');
+  const payload = await response.json() as BridgeSessionImport;
+  clearBridgeTokenFromLocation();
+  return payload;
+}
 
 export async function loginPersona(persona: StaticPersona) {
   if (!API_BASE) return null; // no API configured → skip fetch entirely
@@ -83,9 +143,10 @@ export async function signupPersona(persona: StaticPersona) {
 }
 
 export async function fetchWorkspaces(jwt: string): Promise<Workspace[]> {
-  if (!jwt || !API_BASE) return [];  // offline mode — skip network call
+  const apiJwt = apiJwtFromSessionToken(jwt);
+  if (!apiJwt || !API_BASE) return [];  // offline mode — skip network call
   try {
-    return await api.get<Workspace[]>('/api/workspaces', jwt);
+    return await api.get<Workspace[]>('/api/workspaces', apiJwt);
   } catch {
     return [];
   }

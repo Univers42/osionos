@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/22 12:00:00 by danfern3          #+#    #+#             */
-/*   Updated: 2026/04/28 22:24:15 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -79,7 +79,7 @@ export const TrashView: React.FC = () => {
     return (
       <div className="trash-view-container">
         <div className="trash-view-empty">
-          <p className="text-[var(--color-ink-faint)]">Not authenticated</p>
+          <p className="text-[var(--osio-fg-subtle)]">Not authenticated</p>
         </div>
       </div>
     );
@@ -122,12 +122,12 @@ export const TrashView: React.FC = () => {
     <div className="trash-view-container">
       <div className="trash-view-header">
         <div className="flex items-center gap-3 mb-6">
-          <Archive size={24} className="text-[var(--color-ink)]" />
-          <h1 className="text-2xl font-semibold text-[var(--color-ink)]">
+          <Archive size={24} className="text-[var(--osio-fg-default)]" />
+          <h1 className="text-2xl font-semibold text-[var(--osio-fg-default)]">
             Archived files
           </h1>
         </div>
-        <p className="text-sm text-[var(--color-ink-faint)]">
+        <p className="text-sm text-[var(--osio-fg-subtle)]">
           Pages you archive are moved here. Restore them anytime, or delete
           them permanently.
         </p>
@@ -135,17 +135,21 @@ export const TrashView: React.FC = () => {
 
       {userWorkspaces.length > 1 && (
         <div className="trash-view-workspace-selector mb-6">
-          <label className="text-xs font-medium text-[var(--color-ink-faint)] block mb-2">
+          <label
+            htmlFor="trash-workspace-selector"
+            className="text-xs font-medium text-[var(--osio-fg-subtle)] block mb-2"
+          >
             Workspace
           </label>
           <select
+            id="trash-workspace-selector"
             value={selectedWorkspaceId || ""}
             onChange={(e) =>
               setPreferredWorkspaceId(
                 e.target.value === "" ? undefined : e.target.value,
               )
             }
-            className="w-full px-3 py-2 text-sm rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-ink)] hover:border-[var(--color-border-hover)] focus:outline-none focus:border-[var(--color-accent)]"
+            className="w-full px-3 py-2 text-sm rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] hover:border-[var(--osio-border-strong)] focus:outline-none focus:border-[var(--osio-accent)]"
           >
             <option value="">Select a workspace</option>
             {userWorkspaces.map((ws) => (
@@ -160,8 +164,8 @@ export const TrashView: React.FC = () => {
       <div className="trash-view-content">
         {trashPages.length === 0 ? (
           <div className="trash-view-empty">
-            <Archive size={48} className="text-[var(--color-ink-faint)] mb-3" />
-            <p className="text-[var(--color-ink-faint)] text-center">
+            <Archive size={48} className="text-[var(--osio-fg-subtle)] mb-3" />
+            <p className="text-[var(--osio-fg-subtle)] text-center">
               No archived pages
             </p>
           </div>
@@ -174,11 +178,11 @@ export const TrashView: React.FC = () => {
                     {page.icon && (
                       <span className="text-lg flex-shrink-0">{page.icon}</span>
                     )}
-                    <h3 className="text-sm font-medium text-[var(--color-ink)] truncate">
+                    <h3 className="text-sm font-medium text-[var(--osio-fg-default)] truncate">
                       {page.title}
                     </h3>
                   </div>
-                  <p className="text-xs text-[var(--color-ink-faint)]">
+                  <p className="text-xs text-[var(--osio-fg-subtle)]">
                     Archived {formatDate(page.archivedAt)}
                   </p>
                 </div>

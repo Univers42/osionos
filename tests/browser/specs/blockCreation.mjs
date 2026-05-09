@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   blockCreation.mjs                                  :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/20 21:29:38 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/27 09:45:13 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -161,6 +161,8 @@ export const blockCreationScenarios = [
       await openFreshPage(page, appUrl);
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "[] ");
+      await expect(blockLocatorForEditor(editor)).toHaveAttribute("data-block-type", "to_do");
+      await editor.click();
       await page.keyboard.type("Todo item");
       await expect(blockLocatorForEditor(editor)).toHaveAttribute("data-block-type", "to_do");
       await expect(blockLocatorForEditor(editor).getByTestId("todo-checkbox")).toHaveCount(1);
@@ -175,6 +177,8 @@ export const blockCreationScenarios = [
       await openFreshPage(page, appUrl);
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "[ ] ");
+      await expect(blockLocatorForEditor(editor)).toHaveAttribute("data-block-type", "to_do");
+      await editor.click();
       await page.keyboard.type("Todo item");
       await expect(blockLocatorForEditor(editor)).toHaveAttribute("data-block-type", "to_do");
       await expect(blockLocatorForEditor(editor).getByTestId("todo-checkbox")).toHaveCount(1);
@@ -202,8 +206,9 @@ export const blockCreationScenarios = [
       await openFreshPage(page, appUrl);
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "---");
-      await expect(page.getByRole("button", { name: /Divider block/i })).toBeVisible();
-      await expect(page.locator("hr")).toHaveCount(1);
+      const dividerBlock = page.getByRole("button", { name: /Divider block/i });
+      await expect(dividerBlock).toBeVisible();
+      await expect(dividerBlock.locator("hr")).toHaveCount(1);
     },
   ),
   defineScenario(

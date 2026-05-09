@@ -47,12 +47,13 @@ If shared scenarios are moved later into `tests/e2e/scenarios`, then `tests/brow
 
 Execution flow:
 
-1. `npx playwright test` reads `playwright.config.ts`.
-2. Playwright starts Vite through `webServer`.
-3. Playwright discovers specs under `tests/e2e`.
-4. Each spec imports scenario arrays from `tests/browser/specs/*.mjs`.
-5. `tests/e2e/support/scenarioTestUtils.mjs` wraps each scenario into native `test(...)`.
-6. Scenario receives Playwright fixtures:
+1. `make test` starts the Docker `browser-tests` service.
+2. The container runs `pnpm exec playwright test`.
+3. Playwright starts Vite through `webServer`.
+4. Playwright discovers specs under `tests/e2e`.
+5. Each spec imports scenario arrays from `tests/browser/specs/*.mjs`.
+6. `tests/e2e/support/scenarioTestUtils.mjs` wraps each scenario into native `test(...)`.
+7. Scenario receives Playwright fixtures:
    - `page`
    - `context`
    - `browser`
@@ -88,14 +89,14 @@ Utility layer that converts scenario objects into native Playwright tests and sp
 
 ## Official Commands
 
-Primary commands:
+Primary Docker commands:
 
-- `npm ci`
-- `npm run test:setup`
-- `npm run test:doctor`
-- `npm run test:e2e`
-- `npm run test:e2e:serial`
-- `npm run test:e2e:smoke`
+- `make pnpm-install`
+- `make test-setup`
+- `make test-doctor`
+- `make test`
+- `make test-serial`
+- `make test-smoke`
 
 Make targets:
 
@@ -114,28 +115,29 @@ Filter a subset by title with:
 Quality gates stay separate:
 
 - `make ci`
-- `npm run test:quality`
+- `make typecheck`
+- `make lint`
 
 Environment preparation stays separate:
 
-- `npm run test:setup`
+- `make test-setup`
 
 ## Reproducible Local Flow
 
 Official local browser flow is:
 
-1. `nvm use` (repo pins Node 22 via `.nvmrc`)
-2. `npm ci`
-3. `npm run test:setup`
-4. `npm run test:e2e`
+1. Install Docker, Docker Compose, Make, and Git on the host.
+2. `make pnpm-install`
+3. `make test-setup`
+4. `make test`
 
 What `test:setup` does:
 
-- installs Playwright Chromium for repo-local Playwright version
-- runs `npm run test:doctor`
+- validates the Docker Playwright image and Chromium installation
+- runs `pnpm run test:doctor` inside Docker
 - fails early if Node/deps/browsers/port are not ready
 
-Use `npm run test:doctor` by itself when a teammate wants a fast preflight check before running the suite.
+Use `make test-doctor` by itself when a teammate wants a fast preflight check before running the suite.
 
 ## Environment Invariants
 
@@ -157,10 +159,10 @@ This means the official suite should not depend on:
 
 Important local setup rules:
 
-- official package manager is `npm`
-- `npm ci` is preferred over `npm install` for deterministic local dependency trees
+- official package manager is `pnpm@10.32.1`
+- dependencies are installed only inside Docker with `pnpm install --frozen-lockfile`
 - `make dev` no longer installs `@univers42/ui-collection@latest` dynamically
-- if Chromium system dependencies are missing on Linux, run `npx playwright install --with-deps chromium` or use `make test-docker`
+- Chromium system dependencies are baked into the Docker `browser-tests` image
 
 ## CI Execution
 
@@ -202,7 +204,7 @@ This is transitional but valid.
 
 Baseline command for stabilization:
 
-- `npm run test:e2e:serial`
+- `make test-serial`
 
 Policy:
 

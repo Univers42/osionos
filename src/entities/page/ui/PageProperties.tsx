@@ -45,7 +45,7 @@ export const PageProperties: React.FC<PagePropertiesProps> = ({
                 type="text"
                 value={prop.value}
                 onChange={(e) => onChangeProperty(prop.key, e.target.value)}
-                className="w-full bg-transparent outline-none text-sm text-[var(--color-ink)]"
+                className="w-full bg-transparent outline-none text-sm text-[var(--osio-fg-default)]"
               />
             ) : (
               prop.value

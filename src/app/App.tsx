@@ -6,14 +6,17 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:14:42 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 03:50:31 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useEffect, useState } from "react";
 
+import type { UserSession } from "@/entities/user";
 import { useUserStore } from "@/features/auth";
+import { isBridgeSession, PRISMATICA_URL } from "@/features/auth/model/userStore.helpers";
 import { usePageStore } from "@/store/usePageStore";
+import { savePagesCache, saveRecents } from "@/store/pageStore.helpers";
 import { Sidebar } from "@/widgets/sidebar";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
 import { MainContent } from "@/widgets/page-renderer";
@@ -28,6 +31,73 @@ import {
 } from "@/shared/config/workspaceConfigStore";
 import { SettingsCenter } from "@/features/settings/SettingsCenter";
 
+type UserSessions = Record<string, UserSession>;
+
+function ensureBridgeWorkspacePages(session: UserSession | null | undefined) {
+  const workspaceIds = [
+    ...(session?.privateWorkspaces ?? []),
+    ...(session?.sharedWorkspaces ?? []),
+  ].map((workspace) => workspace._id);
+  const allowedWorkspaceIds = new Set(workspaceIds);
+
+  usePageStore.setState((pageState) => {
+    const pages = Object.fromEntries(
+      workspaceIds.map((workspaceId) => [workspaceId, pageState.pages[workspaceId] ?? []]),
+    );
+    const recents = pageState.recents.filter((recent) => allowedWorkspaceIds.has(recent.workspaceId));
+    const activePage = pageState.activePage && allowedWorkspaceIds.has(pageState.activePage.workspaceId)
+      ? pageState.activePage
+      : null;
+    const navigationPath = pageState.navigationPath.filter((page) => allowedWorkspaceIds.has(page.workspaceId));
+
+    for (const workspaceId of workspaceIds) {
+      pages[workspaceId] = pages[workspaceId] ?? [];
+    }
+    savePagesCache(pages);
+    saveRecents(recents);
+    return { pages, recents, activePage, navigationPath, seeded: true, showTrash: false };
+  });
+}
+
+function uniqueSessionWorkspaces(sessions: UserSessions) {
+  const seen = new Set<string>();
+  return Object.values(sessions)
+    .flatMap((session) => [...session.privateWorkspaces, ...session.sharedWorkspaces])
+    .filter((workspace) => {
+      if (seen.has(workspace._id)) return false;
+      seen.add(workspace._id);
+      return true;
+    });
+}
+
+async function seedEmptyOnlineWorkspaces(sessions: UserSessions, jwt: string) {
+  const uniqueWorkspaces = uniqueSessionWorkspaces(sessions);
+  await Promise.all(
+    uniqueWorkspaces.map((workspace) => usePageStore.getState().fetchPages(workspace._id, jwt)),
+  );
+
+  const pages = usePageStore.getState().pages;
+  const anyEmpty = uniqueWorkspaces.some(
+    (workspace) => (pages[workspace._id] ?? []).length === 0,
+  );
+  if (!anyEmpty) return;
+
+  const personas = useUserStore.getState().personas;
+  const workspaceMap: Record<string, string> = {};
+
+  for (let index = 0; index < personas.length; index++) {
+    const persona = personas[index];
+    const personaSession = sessions[persona.id];
+    if (!personaSession) continue;
+    const privateWorkspace = personaSession.privateWorkspaces[0];
+    if (privateWorkspace) workspaceMap[`mock-ws-private-${index}`] = privateWorkspace._id;
+    const sharedWorkspace = personaSession.sharedWorkspaces[0];
+    if (sharedWorkspace) workspaceMap["mock-ws-shared-team"] = sharedWorkspace._id;
+  }
+
+  await usePageStore.getState().seedOnlinePages(workspaceMap, jwt);
+}
+
 /**
  * Root of the Playground app.
  *
@@ -40,6 +110,7 @@ import { SettingsCenter } from "@/features/settings/SettingsCenter";
 const App: React.FC = () => {
   const initUsers = useUserStore((s) => s.init);
   const initialized = useUserStore((s) => s.initialized);
+  const error = useUserStore((s) => s.error);
   const activeUserId = useUserStore((s) => s.activeUserId);
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const workspaceKey = workspaceConfigKey(activeUserId || "anonymous", activeWorkspace?._id ?? "workspace");
@@ -65,61 +136,19 @@ const App: React.FC = () => {
 
         const { sessions, activeUserId } = state;
         const session = sessions[activeUserId];
-        const jwt = session?.accessToken ?? "";
+        const jwt = state.activeJwt() ?? "";
 
         if (!jwt) {
-          // Offline mode — load in-memory seed data
+          if (isBridgeSession(session)) {
+            ensureBridgeWorkspacePages(session);
+            return;
+          }
+
           usePageStore.getState().seedOfflinePages();
           return;
         }
 
-        // Online mode — fetch pages from MongoDB for every workspace
-        const allWorkspaces = Object.values(sessions).flatMap((s) => [
-          ...s.privateWorkspaces,
-          ...s.sharedWorkspaces,
-        ]);
-        // Deduplicate by _id
-        const seen = new Set<string>();
-        const uniqueWs = allWorkspaces.filter((w) => {
-          if (seen.has(w._id)) return false;
-          seen.add(w._id);
-          return true;
-        });
-
-        // Fetch pages for each workspace
-        await Promise.all(
-          uniqueWs.map((w) => usePageStore.getState().fetchPages(w._id, jwt)),
-        );
-
-        // Check if any workspace is empty -> seed if needed
-        const pages = usePageStore.getState().pages;
-        const anyEmpty = uniqueWs.some(
-          (w) => (pages[w._id] ?? []).length === 0,
-        );
-
-        if (anyEmpty) {
-          // Build workspace mapping: mock seed IDs -> real workspace IDs
-          // Seed pages reference mock-ws-private-0/1/2 and mock-ws-shared-team
-          // Map them to the real workspace IDs from the sessions
-          const personas = useUserStore.getState().personas;
-          const workspaceMap: Record<string, string> = {};
-
-          for (let i = 0; i < personas.length; i++) {
-            const persona = personas[i];
-            const personaSession = sessions[persona.id];
-            if (!personaSession) continue;
-            const privateWs = personaSession.privateWorkspaces[0];
-            if (privateWs) {
-              workspaceMap[`mock-ws-private-${i}`] = privateWs._id;
-            }
-            const sharedWs = personaSession.sharedWorkspaces[0];
-            if (sharedWs) {
-              workspaceMap["mock-ws-shared-team"] = sharedWs._id;
-            }
-          }
-
-          await usePageStore.getState().seedOnlinePages(workspaceMap, jwt);
-        }
+        await seedEmptyOnlineWorkspaces(sessions, jwt);
       })
       .catch(() => undefined);
   }, [initUsers, initialized]);
@@ -136,11 +165,32 @@ const App: React.FC = () => {
 
   if (!ready) {
     return (
-      <div className="flex items-center justify-center h-screen w-screen bg-[var(--color-surface-primary)]">
+      <div className="flex items-center justify-center h-screen w-screen bg-[var(--osio-bg-page)]">
         <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin w-8 h-8 border-2 border-[var(--color-accent)] border-t-transparent rounded-full" />
-          <p className="text-sm text-[var(--color-ink-muted)]">Signing in...</p>
+          <div className="animate-spin w-8 h-8 border-2 border-[var(--osio-accent)] border-t-transparent rounded-full" />
+          <p className="text-sm text-[var(--osio-fg-muted)]">Signing in...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (error === "bridge-session-required" || !activeUserId) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[var(--osio-bg-page)] px-6 text-[var(--osio-fg-default)]">
+        <section className="w-full max-w-md rounded-md border border-[var(--osio-border)] bg-[var(--osio-bg-panel)] p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">Private workspace</p>
+          <h1 className="mt-3 text-2xl font-semibold">Open osionos from Prismatica</h1>
+          <p className="mt-3 text-sm leading-6 text-[var(--osio-fg-muted)]">
+            This app only opens after your Prismatica account creates a signed workspace handoff.
+          </p>
+          <button
+            type="button"
+            className="mt-5 inline-flex w-full items-center justify-center rounded-md bg-[var(--osio-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            onClick={() => { globalThis.location.href = PRISMATICA_URL; }}
+          >
+            Go to Prismatica
+          </button>
+        </section>
       </div>
     );
   }
@@ -148,7 +198,7 @@ const App: React.FC = () => {
   return (
     <div
       data-testid="app-shell"
-      className="relative flex h-screen w-screen overflow-hidden bg-[var(--color-surface-primary)]"
+      className="relative flex h-screen w-screen overflow-hidden bg-[var(--osio-bg-page)]"
     >
       {/* Left sidebar */}
       <Sidebar

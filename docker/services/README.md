@@ -1,6 +1,6 @@
 # services/ — Docker Service Configs
 
-Configuration files for the two database containers: **MongoDB 7** and **PostgreSQL 16**. These are mounted into stock Docker images — no custom Dockerfiles needed for dev.
+Configuration files for the Docker-backed development services. The app should be started through Docker (`make dev` or `pnpm run dev`, which now delegates to Docker), not by running local Vite against host `node_modules`.
 
 The `dbms/` subdirectory contains the TypeScript database adapter layer used by the main app.
 
@@ -53,7 +53,7 @@ All mounted as read-only (`:ro`). Data persists in named Docker volumes (`postgr
 | Service | User | Password | Database | Port |
 |---|---|---|---|---|
 | PostgreSQL | `osionos_user` | `osionos_pass` | `osionos_db` | 5432 |
-| MongoDB | `osionos_user` | `osionos_pass` | `osionos_db` | 27017 |
+| MongoDB | `osionos_user` | `osionos_pass` | `osionos_db` | 27018 → 27017 |
 
 All configurable via `.env` at project root.
 

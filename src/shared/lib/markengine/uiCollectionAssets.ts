@@ -89,8 +89,16 @@ const EMOJI_GROUP_LABELS: Record<string, string> = {
 
 const BOARD_ACTIVE_BACKGROUND = 'rgba(35, 131, 226, 0.12)';
 
-// Media collections have been removed from @univers42/ui-collection
-// Using empty arrays to preserve API compatibility
+export interface CoverPickerAsset {
+  id: string;
+  label: string;
+  ref: string;
+  previewUrl?: string;
+  credit?: string;
+  downloadLocation?: string;
+  author?: string;
+}
+
 const COLLECTION_SVG_ITEMS: Array<unknown> = [];
 
 const BOARD_CLASS_NAMES: NonNullable<AssetPickerBoardProps['classNames']> = {
@@ -348,6 +356,17 @@ function normalizeCollectionMediaKind(
   return 'cover';
 }
 
+export function normalizeMediaSource(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  if (value.startsWith('url:')) return value.slice(4);
+  return value;
+}
+
+function isDirectMediaSource(value: string): boolean {
+  const source = normalizeMediaSource(value) ?? value;
+  return /^(https?:|data:|blob:)/i.test(source);
+}
+
 export function resolveCollectionMediaAsset(
   value: string | undefined,
   tabs: AssetPickerBoardTab[],
@@ -360,7 +379,22 @@ export function resolveCollectionMediaAsset(
 
   const resolved = resolveAssetValue(value, tabs);
   if (!resolved) {
-    return null;
+    if (!isDirectMediaSource(value)) {
+      return null;
+    }
+
+    const source = normalizeMediaSource(value);
+    const resolvedKind = normalizeCollectionMediaKind(kind);
+    return {
+      label: fallbackLabel,
+      url: source,
+      fullUrl: source,
+      previewUrl:
+        resolvedKind === 'image' || resolvedKind === 'cover' ? source : undefined,
+      thumbnailUrl:
+        resolvedKind === 'image' || resolvedKind === 'cover' ? source : undefined,
+      mediaKind: resolvedKind === 'cover' ? 'image' : resolvedKind,
+    };
   }
 
   const itemData = resolved.item?.data as UiCollectionMediaCatalogItem | undefined;

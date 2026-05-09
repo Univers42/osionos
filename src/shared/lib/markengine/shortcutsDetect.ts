@@ -6,12 +6,12 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:26:05 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:26:07 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 05:35:15 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 // Markdown shortcuts — block detection and shortcut map
-import type { BlockType } from '@/entities/block';
+import type { Block, BlockType } from '@/entities/block';
 
 export interface BlockDetection {
   type: BlockType;
@@ -19,6 +19,8 @@ export interface BlockDetection {
   remainingContent: string;
   checked?: boolean;
   kind?: string;
+  headingLevel?: Block['headingLevel'];
+  language?: string;
 }
 
 export const BLOCK_SHORTCUTS: Record<string, string> = {
@@ -28,13 +30,15 @@ export const BLOCK_SHORTCUTS: Record<string, string> = {
   heading_4: '#### ',
   heading_5: '##### ',
   heading_6: '###### ',
-  bulleted_list: '- ',
-  numbered_list: '1. ',
-  to_do: '- [] ',
-  quote: '" ',
+  bulleted_list: '- / * / +',
+  numbered_list: '1. / 1)',
+  to_do: '[] / [ ] / - [ ] / - [x]',
+  quote: '" / |',
   toggle: '> ',
-  code: '```',
-  divider: '---',
+  toggle_heading: '#> / ##> / ###>',
+  code: '```lang',
+  equation: '$$',
+  divider: '--- / *** / ___',
 };
 
 function ltrim(s: string): string {
@@ -61,7 +65,7 @@ function isOrdered(s: string): { num: number; rest: string } | null {
   let i = 0;
   while (i < s.length && s[i] >= '0' && s[i] <= '9') i++;
   if (i === 0 || i >= s.length) return null;
-  if (s[i] !== '.') return null;
+  if (s[i] !== '.' && s[i] !== ')') return null;
   const num = Number.parseInt(s.substring(0, i), 10);
   const rest = stripPrefix(s, i + 1);
   return { num, rest };
@@ -82,6 +86,25 @@ const HEADING_DEFS: HeadingDef[] = [
   { prefix: '# ', type: 'heading_1', len: 2 },
 ];
 
+const TODO_PREFIXES = [
+  { prefix: '- [x] ', checked: true },
+  { prefix: '- [X] ', checked: true },
+  { prefix: '* [x] ', checked: true },
+  { prefix: '* [X] ', checked: true },
+  { prefix: '+ [x] ', checked: true },
+  { prefix: '+ [X] ', checked: true },
+  { prefix: '- [] ', checked: false },
+  { prefix: '- [ ] ', checked: false },
+  { prefix: '* [] ', checked: false },
+  { prefix: '* [ ] ', checked: false },
+  { prefix: '+ [] ', checked: false },
+  { prefix: '+ [ ] ', checked: false },
+  { prefix: '[] ', checked: false },
+  { prefix: '[ ] ', checked: false },
+  { prefix: '[x] ', checked: true },
+  { prefix: '[X] ', checked: true },
+] as const;
+
 function detectHeading(line: string): BlockDetection | null {
   for (const h of HEADING_DEFS) {
     if (line.startsWith(h.prefix)) {
@@ -92,16 +115,96 @@ function detectHeading(line: string): BlockDetection | null {
   return null;
 }
 
+function detectToggleHeading(line: string): BlockDetection | null {
+  const compactMatch = /^(#{1,6})>\s*(.*)$/.exec(line);
+  if (compactMatch) {
+    const content = compactMatch[2] ?? '';
+    return {
+      type: 'toggle',
+      content,
+      remainingContent: content,
+      headingLevel: compactMatch[1].length as Block['headingLevel'],
+    };
+  }
+
+  const notionMatch = /^>\s+(#{1,6})\s+(.*)$/.exec(line);
+  if (notionMatch) {
+    const content = notionMatch[2] ?? '';
+    return {
+      type: 'toggle',
+      content,
+      remainingContent: content,
+      headingLevel: notionMatch[1].length as Block['headingLevel'],
+    };
+  }
+
+  return null;
+}
+
 function detectToDo(line: string): BlockDetection | null {
-  if (line.startsWith('[] ') || line.startsWith('[ ] ')) {
-    const prefixLen = line.startsWith('[] ') ? 3 : 4;
-    const c = stripPrefix(line, prefixLen);
-    return { type: 'to_do', content: c, remainingContent: c, checked: false };
+  for (const item of TODO_PREFIXES) {
+    if (line.startsWith(item.prefix)) {
+      const c = stripPrefix(line, item.prefix.length);
+      return {
+        type: 'to_do',
+        content: c,
+        remainingContent: c,
+        checked: item.checked,
+      };
+    }
   }
-  if (line.startsWith('[x] ') || line.startsWith('[X] ')) {
-    const c = stripPrefix(line, 4);
-    return { type: 'to_do', content: c, remainingContent: c, checked: true };
+  return null;
+}
+
+function detectCallout(line: string): BlockDetection | null {
+  if (!line.startsWith('>![')) return null;
+
+  const close = line.indexOf(']', 3);
+  if (close === -1) return null;
+
+  const kind = line.substring(3, close).trim() || 'note';
+  const c = stripPrefix(line, close + 1);
+  return {
+    type: 'callout',
+    content: c,
+    remainingContent: c,
+    kind,
+  };
+}
+
+function detectCodeFence(line: string): BlockDetection | null {
+  if (!line.startsWith('```')) return null;
+
+  const language = line.slice(3).trim().toLowerCase();
+  const isLanguageSafe = [...language].every(
+    (char) =>
+      (char >= 'a' && char <= 'z') ||
+      (char >= '0' && char <= '9') ||
+      char === '_' ||
+      char === '+' ||
+      char === '-',
+  );
+
+  if (!isLanguageSafe) return null;
+
+  return {
+    type: 'code',
+    content: '',
+    remainingContent: '',
+    language: language || 'plaintext',
+  };
+}
+
+function detectDivider(lineNoTrail: string): BlockDetection | null {
+  if (
+    lineNoTrail.length >= 3 &&
+    (isRepeated(lineNoTrail, '-') ||
+      isRepeated(lineNoTrail, '*') ||
+      isRepeated(lineNoTrail, '_'))
+  ) {
+    return { type: 'divider', content: '', remainingContent: '' };
   }
+
   return null;
 }
 
@@ -113,12 +216,21 @@ export function detectBlockType(text: string): BlockDetection | null {
   const line = ltrim(text);
   const lineNoTrail = line.trimEnd();
 
-  if (lineNoTrail.length >= 3 && isRepeated(lineNoTrail, '-')) {
-    return { type: 'divider', content: '', remainingContent: '' };
+  const divider = detectDivider(lineNoTrail);
+  if (divider) return divider;
+
+  if (lineNoTrail === '$$') {
+    return { type: 'equation', content: '', remainingContent: '' };
   }
-  if (line === '```' || line.startsWith('```')) {
-    return { type: 'code', content: '', remainingContent: '' };
-  }
+
+  const code = detectCodeFence(line);
+  if (code) return code;
+
+  const callout = detectCallout(line);
+  if (callout) return callout;
+
+  const toggleHeading = detectToggleHeading(line);
+  if (toggleHeading) return toggleHeading;
 
   const heading = detectHeading(line);
   if (heading) return heading;
@@ -126,29 +238,23 @@ export function detectBlockType(text: string): BlockDetection | null {
   const todo = detectToDo(line);
   if (todo) return todo;
 
-  if (line.startsWith('" ')) { const c = stripPrefix(line, 2); return { type: 'quote', content: c, remainingContent: c }; }
-  if (line.startsWith('> ') && !line.startsWith('>![')) {
+  if (line.startsWith('" ') || line.startsWith('| ')) {
     const c = stripPrefix(line, 2);
     return { type: 'quote', content: c, remainingContent: c };
   }
-  if (line.startsWith('- ')) { const c = stripPrefix(line, 2); return { type: 'bulleted_list', content: c, remainingContent: c }; }
+
+  if (line.startsWith('> ')) {
+    const c = stripPrefix(line, 2);
+    return { type: 'toggle', content: c, remainingContent: c };
+  }
+
+  if (line.startsWith('- ') || line.startsWith('* ') || line.startsWith('+ ')) {
+    const c = stripPrefix(line, 2);
+    return { type: 'bulleted_list', content: c, remainingContent: c };
+  }
 
   const orderedResult = isOrdered(line);
   if (orderedResult) return { type: 'numbered_list', content: orderedResult.rest, remainingContent: orderedResult.rest };
-
-  if (line.startsWith('>![')) {
-    const close = line.indexOf(']', 3);
-    if (close !== -1) {
-      const kind = line.substring(3, close).trim() || 'note';
-      const c = stripPrefix(line, close + 1);
-      return {
-        type: 'callout',
-        content: c,
-        remainingContent: c,
-        kind,
-      };
-    }
-  }
 
   return null;
 }

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:04:12 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 03:50:34 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,13 +35,13 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
 
   const persona         = useUserStore(s => s.activePersona());
   const session         = useUserStore(s => s.activeSession());
+  const jwt             = useUserStore(s => s.activeJwt() ?? '');
   const activeWorkspace = useUserStore(s => s.activeWorkspace());
   const workspaceName   = activeWorkspace?.name ?? session?.privateWorkspaces[0]?.name ?? 'My Workspace';
   const addPage         = usePageStore(s => s.addPage);
   const openPage        = usePageStore(s => s.openPage);
   const setSidebarOpen  = useUIStore(s => s.setSidebarOpen);
 
-  const jwt       = session?.accessToken ?? '';
   const firstWsId = activeWorkspace?._id ?? session?.privateWorkspaces[0]?._id ?? '';
 
   async function handleNewPage() {
@@ -69,8 +69,8 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             'flex items-center gap-2 flex-1 min-w-0 h-8 px-2 rounded-[6px]',
             'transition-colors duration-100 cursor-pointer select-none',
             open
-              ? 'bg-[var(--color-surface-tertiary)]'
-              : 'hover:bg-[var(--color-surface-hover)]',
+              ? 'bg-[var(--osio-bg-muted)]'
+              : 'hover:bg-[var(--osio-bg-hover)]',
           ].join(' ')}
         >
           {/* Avatar (rounded square, like osionos) */}
@@ -81,7 +81,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             />
           </span>
 
-          <span className="flex-1 text-[14px] font-semibold text-[var(--color-ink)] truncate text-left leading-5">
+          <span className="flex-1 text-base font-semibold text-[var(--osio-fg-default)] truncate text-left leading-5">
             {workspaceName}
           </span>
         </button>
@@ -94,7 +94,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             onClick={handleNewPage}
             className={[
               'flex items-center justify-center w-7 h-7 rounded shrink-0',
-              'text-[var(--color-ink)] hover:bg-[var(--color-surface-hover)]',
+              'text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]',
               'transition-colors duration-100 cursor-pointer',
             ].join(' ')}
             title="New page"
@@ -107,7 +107,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             onClick={() => setSidebarOpen(false)}
             className={[
               'flex items-center justify-center w-7 h-7 rounded shrink-0',
-              'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]',
+              'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]',
               'transition-colors duration-100 cursor-pointer',
             ].join(' ')}
             title="Close sidebar"
@@ -121,7 +121,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             onClick={() => setOpen(o => !o)}
             className={[
               'flex items-center justify-center w-4 h-7 rounded shrink-0',
-              'text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]',
+              'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]',
               'transition-all duration-100 cursor-pointer',
             ].join(' ')}
             title="More options"

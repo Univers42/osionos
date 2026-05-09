@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   contextMenu.mjs                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/20 21:29:48 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/20 21:29:49 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/05/06 00:08:25 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -68,7 +68,7 @@ export const contextMenuScenarios = [
     async ({ page, appUrl }) => {
       await page.addInitScript(() => {
         const clipboard = navigator.clipboard;
-        (window).__copiedText = null;
+        globalThis.__copiedText = null;
         if (!clipboard?.writeText) {
           return;
         }
@@ -77,7 +77,7 @@ export const contextMenuScenarios = [
         Object.defineProperty(clipboard, "writeText", {
           configurable: true,
           value: async (value) => {
-            (window).__copiedText = value;
+            globalThis.__copiedText = value;
             try {
               return await originalWriteText(value);
             } catch {
@@ -91,7 +91,7 @@ export const contextMenuScenarios = [
       await expect(getEditors(page).first()).toHaveText("Copy me");
       await openBlockContextMenuForEditor(getEditors(page).first());
       await contextMenuItem(page, "Copy text").click();
-      await expect.poll(() => page.evaluate(() => window.__copiedText)).toBe("Copy me");
+      await expect.poll(() => page.evaluate(() => globalThis.__copiedText)).toBe("Copy me");
     },
     { serial: true },
   ),

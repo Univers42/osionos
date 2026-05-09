@@ -1,24 +1,12 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   PageOptionsMenu.module.scss                        :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/04/28 20:16:52 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 20:16:53 by dlesieur         ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
-
 .dropdown {
   position: absolute;
   right: 0;
   top: calc(100% + 5px);
   width: 200px;
   
-  background-color: #202020;
+  background-color: var(--osio-bg-surface);
   
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--osio-border-default);
   border-radius: 8px;
   
   box-shadow: 
@@ -26,7 +14,7 @@
     0 3px 6px rgba(15, 15, 15, 0.1), 
     0 9px 24px rgba(15, 15, 15, 0.2);
     
-  z-index: 10000;
+  z-index: var(--osio-z-popover);
   padding: 6px;
   animation: scaleIn 0.1s ease-out;
 }
@@ -39,33 +27,33 @@
   padding: 4px 8px;
   font-size: 14px;
   border-radius: 4px;
-  color: #e8e8e8;
-  background-color: #202020;
+  color: var(--osio-fg-default);
+  background-color: var(--osio-bg-surface);
   transition: background-color 0.1s ease;
   cursor: pointer;
   border: none;
 
   &:hover {
-    background-color: #2d2d2d;
-    color: #ffffff;
+    background-color: var(--osio-bg-hover);
+    color: var(--osio-fg-strong);
   }
 
   svg {
-    color: #e8e8e8;
+    color: var(--osio-fg-default);
   }
 
   &.destructive {
-    color: #dc2626;
+    color: var(--osio-danger);
 
     svg {
-      color: #dc2626;
+      color: var(--osio-danger);
     }
 
     &:hover {
-      color: #ef4444;
+      color: var(--osio-danger-hover);
 
       svg {
-        color: #ef4444;
+        color: var(--osio-danger-hover);
       }
     }
   }

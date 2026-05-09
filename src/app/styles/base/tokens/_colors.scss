@@ -1,26 +1,30 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   _colors.scss                                       :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/04/28 22:14:29 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:14:31 by dlesieur         ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
-
 // src/app/styles/base/tokens/_colors.scss
-$color-ink: var(--color-ink);
-$color-ink-muted: var(--color-ink-muted);
-$color-ink-faint: var(--color-ink-faint);
-$color-ink-strong: var(--color-ink-strong);
+$osio-fg-default: var(--osio-fg-default);
+$osio-fg-muted: var(--osio-fg-muted);
+$osio-fg-subtle: var(--osio-fg-subtle);
+$osio-fg-strong: var(--osio-fg-strong);
+$osio-fg-inverse: var(--osio-fg-inverse);
 
-$surface-primary: var(--color-surface-primary);
-$surface-secondary: var(--color-surface-secondary);
-$surface-tertiary: var(--color-surface-tertiary);
-$surface-tertiary-soft2: var(--color-surface-tertiary-soft2);
-$surface-hover: var(--color-surface-hover);
+$osio-bg-page: var(--osio-bg-page);
+$osio-bg-surface: var(--osio-bg-surface);
+$osio-bg-subtle: var(--osio-bg-subtle);
+$osio-bg-muted: var(--osio-bg-muted);
+$osio-bg-elevated: var(--osio-bg-elevated);
+$osio-bg-hover: var(--osio-bg-hover);
 
-$accent: var(--color-accent);
-$color-line: var(--color-line);
+$osio-accent: var(--osio-accent);
+$osio-border-default: var(--osio-border-default);
+
+$color-ink: $osio-fg-default;
+$color-ink-muted: $osio-fg-muted;
+$color-ink-faint: $osio-fg-subtle;
+$color-ink-strong: $osio-fg-strong;
+
+$surface-primary: $osio-bg-page;
+$surface-secondary: $osio-bg-subtle;
+$surface-tertiary: $osio-bg-muted;
+$surface-tertiary-soft2: $osio-bg-subtle;
+$surface-hover: $osio-bg-hover;
+
+$accent: $osio-accent;
+$color-line: $osio-border-default;

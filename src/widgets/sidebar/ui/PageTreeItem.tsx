@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/04 23:14:06 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/07 16:29:52 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -32,7 +32,7 @@ interface Props {
 
 /**
  * Recursive page tree row.
- * – Indent: depth × 12 px left offset
+ * – Indent: depth × --osio-space-4 with a --osio-space-2 row gutter
  * – Hover reveals ⋯ (actions) and + (add child) buttons
  * – Click opens the page in MainContent
  */
@@ -65,7 +65,7 @@ export const PageTreeItem: React.FC<Props> = ({
   );
   const isActive = activeId === page._id;
   const hasChildren = children.length > 0;
-  const paddingLeft = 10 + depth * 12;
+  const paddingLeft = `calc(var(--osio-space-2) + ${depth} * var(--osio-space-4))`;
 
   const fallbackIcon = page.databaseId ? "icon:table" : "icon:page";
 
@@ -81,6 +81,7 @@ export const PageTreeItem: React.FC<Props> = ({
       kind: page.databaseId ? "database" : "page",
       title: page.title,
       icon: page.icon,
+      databaseId: page.databaseId,
     });
   }
 
@@ -102,12 +103,12 @@ export const PageTreeItem: React.FC<Props> = ({
     <>
       <div
         className="group relative w-full flex items-center gap-0.5 h-7 rounded-md text-sm select-none"
-        style={{ paddingLeft, paddingRight: 4 }}
+        style={{ paddingLeft, paddingRight: "var(--osio-space-1)" }}
       >
         {hasChildren ? (
           <button
             type="button"
-            className="flex items-center justify-center w-5 h-5 shrink-0 rounded hover:bg-[var(--color-surface-hover)]"
+            className="flex items-center justify-center w-5 h-5 shrink-0 rounded hover:bg-[var(--osio-bg-hover)]"
             onClick={(e) => {
               e.stopPropagation();
               setExpanded((o) => !o);
@@ -137,8 +138,8 @@ export const PageTreeItem: React.FC<Props> = ({
           className={[
             "flex min-w-0 flex-1 items-center gap-0.5 h-full rounded-md text-sm text-left transition-colors duration-100 pr-14",
             isActive
-              ? "bg-[var(--color-surface-tertiary)] text-[var(--color-ink)]"
-              : "text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-ink)]",
+              ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
+              : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
           ].join(" ")}
         >
           {page.icon ? (
@@ -174,7 +175,7 @@ export const PageTreeItem: React.FC<Props> = ({
           />
           <button
             type="button"
-            className="p-1 rounded hover:bg-[var(--color-surface-secondary)]"
+            className="p-1 rounded hover:bg-[var(--osio-bg-subtle)]"
             onClick={handleAddChild}
             title="Add child page"
           >

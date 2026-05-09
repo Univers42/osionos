@@ -16,6 +16,12 @@ interface WorkspaceThemeControlsProps {
   compact?: boolean;
 }
 
+function runThemeAction(action: Promise<unknown>) {
+  action.catch((error: unknown) => {
+    console.error('[WorkspaceThemeControls] Theme action failed', error);
+  });
+}
+
 export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ compact = false }) => {
   const [themeJson, setThemeJson] = useState('');
   const activeUserId = useUserStore((s) => s.activeUserId);
@@ -77,15 +83,15 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
     <div className={compact ? 'space-y-3' : 'space-y-3 overflow-y-auto p-4'}>
       <button
         type="button"
-        className={`w-full rounded-xl border p-3 text-left transition ${
+        className={`w-full rounded-md border p-3 text-left transition ${
           usingNativeAppTheme
-            ? 'border-[var(--color-accent)] bg-[var(--color-surface-secondary)]'
-            : 'border-[var(--color-line)] hover:bg-[var(--color-surface-hover)]'
+            ? 'border-[var(--osio-accent)] bg-[var(--osio-bg-subtle)]'
+            : 'border-[var(--osio-border-default)] hover:bg-[var(--osio-bg-hover)]'
         }`}
-        onClick={() => void resetToAppTheme()}
+        onClick={() => runThemeAction(resetToAppTheme())}
       >
-        <span className="text-sm font-medium text-[var(--color-ink)]">App light/dark/system</span>
-        <p className="mt-2 text-xs text-[var(--color-ink-muted)]">
+        <span className="text-sm font-medium text-[var(--osio-fg-default)]">App light/dark/system</span>
+        <p className="mt-2 text-xs text-[var(--osio-fg-muted)]">
           Clears workspace token overrides so the native app theme works again.
         </p>
       </button>
@@ -97,20 +103,20 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
             <button
               type="button"
               key={preset.themeName}
-              className={`rounded-xl border p-3 text-left transition ${
+              className={`rounded-md border p-3 text-left transition ${
                 selected
-                  ? 'border-[var(--color-accent)] bg-[var(--color-surface-secondary)]'
-                  : 'border-[var(--color-line)] hover:bg-[var(--color-surface-hover)]'
+                  ? 'border-[var(--osio-accent)] bg-[var(--osio-bg-subtle)]'
+                  : 'border-[var(--osio-border-default)] hover:bg-[var(--osio-bg-hover)]'
               }`}
-              onClick={() => void applyPreset(preset)}
+              onClick={() => runThemeAction(applyPreset(preset))}
             >
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-[var(--color-ink)]">{preset.themeName}</span>
+                <span className="text-sm font-medium text-[var(--osio-fg-default)]">{preset.themeName}</span>
                 <span className="flex gap-1">
                   {Object.values(preset.tokens).slice(0, 4).map((color, index) => (
                     <span
                       key={`${preset.themeName}-${index}`}
-                      className="h-4 w-4 rounded-full border border-black/10"
+                      className="h-4 w-4 rounded-sm border border-black/10"
                       style={{ background: color }}
                     />
                   ))}
@@ -121,27 +127,27 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
         })}
       </div>
 
-      <div className="rounded-xl border border-[var(--color-line)] p-3">
+      <div className="rounded-md border border-[var(--osio-border-default)] p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="text-sm font-medium text-[var(--color-ink)]">JSON theme config</span>
+          <span className="text-sm font-medium text-[var(--osio-fg-default)]">JSON theme config</span>
           <button
             type="button"
-            className="rounded-md px-2 py-1 text-xs text-[var(--color-accent)] hover:bg-[var(--color-surface-hover)]"
-            onClick={() => void copyThemeJson()}
+            className="rounded-md px-2 py-1 text-xs text-[var(--osio-accent)] hover:bg-[var(--osio-bg-hover)]"
+            onClick={() => runThemeAction(copyThemeJson())}
           >
             Copy current
           </button>
         </div>
         <textarea
-          className="h-32 w-full resize-none rounded-lg border border-[var(--color-line)] bg-[var(--color-surface-secondary)] p-2 font-mono text-[11px] text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)]"
+          className="h-32 w-full resize-none rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2 font-mono text-xs text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
           placeholder='{"themeName":"Custom","tokens":{"ink":"#...","muted":"#...","surface":"#...","surfaceSecondary":"#...","surfaceHover":"#...","accent":"#...","line":"#..."}}'
           value={themeJson}
           onChange={(event) => setThemeJson(event.target.value)}
         />
         <button
           type="button"
-          className="mt-2 w-full rounded-lg bg-[var(--color-accent)] px-3 py-2 text-xs font-medium text-white hover:opacity-90"
-          onClick={() => void applyJsonTheme()}
+          className="mt-2 w-full rounded-lg bg-[var(--osio-accent)] px-3 py-2 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90"
+          onClick={() => runThemeAction(applyJsonTheme())}
         >
           Apply JSON tokens
         </button>

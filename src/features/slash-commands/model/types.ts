@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:17:07 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 21:26:12 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/06 23:31:25 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,6 +29,7 @@ import type { BlockType, MediaBlockType } from "@/entities/block";
 export interface SlashCommandBase {
   id: string;
   label: string;
+  aliases?: string[];
   icon: ReactNode;
   description: string;
   section: string;

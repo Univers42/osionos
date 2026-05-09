@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 20:16:02 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 03:50:32 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -42,6 +42,8 @@ export interface PageEntry {
   archivedAt?: string | null;
   /** Block content (only populated in offline/seed mode) */
   content?: Block[];
+  /** Local surface classification used for private app-only spaces such as agents. */
+  surface?: "page" | "agent";
 }
 
 /** Discriminator for the type of page currently active. */
@@ -54,6 +56,8 @@ export interface ActivePage {
   kind: ActivePageKind;
   title?: string;
   icon?: string;
+  cover?: string;
+  databaseId?: string | null;
 }
 
 export interface PageStore {
@@ -80,6 +84,14 @@ export interface PageStore {
     workspaceId: string,
     title: string,
     jwt: string,
+    parentPageId?: string,
+    options?: AddPageOptions,
+  ) => Promise<PageEntry | null>;
+  addDatabasePage: (
+    workspaceId: string,
+    title: string,
+    jwt: string,
+    databaseId: string,
     parentPageId?: string,
   ) => Promise<PageEntry | null>;
   duplicatePage: (
@@ -150,4 +162,11 @@ export interface PageStore {
   archivedPages: (workspaceId: string) => PageEntry[];
   /** Get full page data including content (for rendering) */
   pageById: (pageId: string) => PageEntry | undefined;
+}
+
+export interface AddPageOptions {
+  visibility?: PageVisibility;
+  icon?: string;
+  content?: Block[];
+  surface?: PageEntry["surface"];
 }

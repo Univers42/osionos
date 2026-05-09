@@ -1,3 +1,6 @@
 [submodule "vendor/scripts"]
 	path = vendor/scripts
 	url = git@github.com:Univers42/scripts.git
+[submodule "src/shared/notion-database-sys"]
+	path = src/shared/notion-database-sys
+	url = git@github.com:Univers42/notion-database-sys.git

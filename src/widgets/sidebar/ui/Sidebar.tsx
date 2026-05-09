@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 03:50:33 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,6 +34,7 @@ export const Sidebar: React.FC<Props> = ({
   onOpenTrash,
 }) => {
   const session = useUserStore((s) => s.activeSession());
+  const jwt = useUserStore((s) => s.activeJwt() ?? "");
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const activePage = usePageStore((s) => s.activePage);
   const recents = usePageStore((s) => s.recents);
@@ -47,8 +48,6 @@ export const Sidebar: React.FC<Props> = ({
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
 
   const [showInviteCTA, setShowInviteCTA] = useState(true);
-
-  const jwt = session?.accessToken ?? "";
 
   const privateWorkspaces = useMemo(
     () => activeWorkspace && activeWorkspace.ownerId === session?.userId ? [activeWorkspace] : [],
@@ -117,7 +116,7 @@ export const Sidebar: React.FC<Props> = ({
       />
 
       <div
-        className="h-px w-full shrink-0 -mt-px z-[99]"
+        className="h-px w-full shrink-0 -mt-px z-[var(--osio-z-raised)]"
         style={{
           boxShadow: "transparent 0px 0px 0px",
           transition: "box-shadow 300ms",
@@ -144,10 +143,9 @@ export const Sidebar: React.FC<Props> = ({
         onDismissInvite={() => setShowInviteCTA(false)}
       />
       {isSidebarOpen ? (
-        <div
+        <hr
           className={styles.resizeHandle}
           data-sidebar-resize-handle
-          role="separator"
           aria-orientation="vertical"
           aria-label="Resize sidebar"
           onPointerDown={handleResizePointerDown}

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:14:54 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/07 14:05:47 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -133,4 +133,24 @@ export const meetingNotes: SeedPage = {
     divider(),
     p('Next meeting: April 4, 2026'),
   ],
+};
+
+export const dylanTasksDatabase: SeedPage = {
+  _id: 'page-admin-tasks-database',
+  title: 'Tasks database',
+  icon: 'icon:table',
+  workspaceId: adminWsId,
+  ownerId: 'mock-user-0',
+  databaseId: 'db-tasks',
+  content: [],
+};
+
+export const dylanProjectsDatabase: SeedPage = {
+  _id: 'page-admin-projects-database',
+  title: 'Projects & Sprints',
+  icon: getCollectionEmojiValue('rocket'),
+  workspaceId: adminWsId,
+  ownerId: 'mock-user-0',
+  databaseId: 'db-projects',
+  content: [],
 };

@@ -1,0 +1,1 @@
+![alt text](osionos_baas_service_architecture.svg)

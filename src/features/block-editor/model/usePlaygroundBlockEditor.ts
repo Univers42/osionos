@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:27:01 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 05:35:15 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -42,6 +42,7 @@ import {
   handleEnterKey,
   getAdjacentRenderedBlockId,
 } from "./playgroundBlockEditor.helpers";
+import { useBlockHistory } from "./useBlockHistory";
 import type {
   SlashMenuState,
   PageSelectorMenuState,
@@ -50,7 +51,6 @@ import { useBlockContextMenu } from "./useBlockContextMenu";
 import { focusEditableBlock } from "./blockDomFocus";
 
 const HEADING_SHORTCUT_RE = /^#{1,6}$/;
-const NUMBERED_SHORTCUT_RE = /^\d+\.$/;
 
 function parsePipeTable(text: string): string[][] | null {
   const lines = text
@@ -85,6 +85,16 @@ function parsePipeTable(text: string): string[][] | null {
 
   const table = [header, ...bodyRows];
   return table.length ? table : null;
+}
+
+function shouldTryMarkdownShortcut(text: string): boolean {
+  const trimmed = text.trimEnd();
+  return (
+    text.endsWith(" ") ||
+    /^[-*_]{3,}$/.test(trimmed) ||
+    trimmed.startsWith("```") ||
+    trimmed === "$$"
+  );
 }
 
 function isEffectivelyEmptyForDeletion(text: string): boolean {
@@ -167,6 +177,17 @@ export function usePlaygroundBlockEditor(pageId: string) {
     focusEditableBlock(blockId, cursorEnd ? "end" : "start");
   }, []);
 
+  const { pushSnapshot, undo, redo, clearHistory } = useBlockHistory(
+    pageId,
+    updatePageContent,
+    focusBlock,
+  );
+
+  // Clear undo/redo history when navigating to a different page.
+  useEffect(() => {
+    clearHistory();
+  }, [pageId, clearHistory]);
+
   /** Get the bounding rect of the caret. */
   const getCaretRect = useCallback((): { x: number; y: number } => {
     const sel = globalThis.getSelection();
@@ -191,12 +212,24 @@ export function usePlaygroundBlockEditor(pageId: string) {
 
   const tryHandleCodeOrTable = useCallback(
     (blockId: string, text: string): boolean => {
-      const fencedCodeMatch = /^```\s*([A-Za-z0-9_+-]+)?\s*$/.exec(text);
-      if (fencedCodeMatch) {
+      const trimmedText = text.trim();
+      const language = trimmedText.startsWith("```")
+        ? trimmedText.slice(3).trim().toLowerCase()
+        : "";
+      const isLanguageSafe = [...language].every(
+        (char) =>
+          (char >= "a" && char <= "z") ||
+          (char >= "0" && char <= "9") ||
+          char === "_" ||
+          char === "+" ||
+          char === "-",
+      );
+
+      if (trimmedText.startsWith("```") && isLanguageSafe) {
         changeBlockType(pageId, blockId, "code");
         updateBlock(pageId, blockId, {
           content: "",
-          language: fencedCodeMatch[1]?.toLowerCase() || "plaintext",
+          language: language || "plaintext",
         });
         repositionCursor(blockId, "");
         return true;
@@ -262,11 +295,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [pageSelector, getCaretRect],
   );
 
-  const tryHandleMarkdownShortcut = useCallback(
-    (blockId: string, text: string): void => {
-      if (!(text.endsWith(" ") || text === "---" || text === "```" || text === "$$")) return;
-
-      const detection = detectBlockType(text);
+  const applyMarkdownDetection = useCallback(
+    (blockId: string, detection: ReturnType<typeof detectBlockType>): void => {
       if (!detection) return;
 
       changeBlockType(pageId, blockId, detection.type);
@@ -274,17 +304,31 @@ export function usePlaygroundBlockEditor(pageId: string) {
         content: detection.remainingContent,
         ...(detection.type === "to_do"
           ? { checked: Boolean(detection.checked) }
-          : {}),
+          : { checked: undefined }),
         ...(detection.type === "callout"
           ? { color: getCalloutIconForKind(detection.kind ?? "note") }
           : {}),
-        ...(detection.headingLevel
-          ? { headingLevel: detection.headingLevel as Block["headingLevel"] }
-          : { headingLevel: undefined }),
+        ...(detection.type === "code"
+          ? { language: detection.language ?? "plaintext" }
+          : { language: undefined }),
+        ...(detection.type === "toggle" ? { collapsed: false } : {}),
+        headingLevel: detection.headingLevel,
       });
       repositionCursor(blockId, detection.remainingContent);
     },
     [pageId, changeBlockType, updateBlock],
+  );
+
+  const tryHandleMarkdownShortcut = useCallback(
+    (blockId: string, text: string): void => {
+      if (!shouldTryMarkdownShortcut(text)) return;
+
+      const detection = detectBlockType(text);
+      if (!detection) return;
+
+      applyMarkdownDetection(blockId, detection);
+    },
+    [applyMarkdownDetection],
   );
 
   /** Handle content change — detects '/' trigger and markdown shortcuts. */
@@ -314,50 +358,15 @@ export function usePlaygroundBlockEditor(pageId: string) {
     (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
       if (e.key !== " " || block.type !== "paragraph") return false;
 
-      if (block.content === "-") {
-        e.preventDefault();
-        changeBlockType(pageId, blockId, "bulleted_list");
-        updateBlock(pageId, blockId, { content: "" });
-        focusBlock(blockId);
-        return true;
-      }
+      const detection = detectBlockType(`${block.content} `);
+      if (!detection) return false;
 
-      if (
-        block.content === "[]" ||
-        block.content === "[ ]" ||
-        block.content === "[x]" ||
-        block.content === "[X]"
-      ) {
-        e.preventDefault();
-        changeBlockType(pageId, blockId, "to_do");
-        updateBlock(pageId, blockId, {
-          content: "",
-          checked: block.content === "[x]" || block.content === "[X]",
-        });
-        focusBlock(blockId);
-        return true;
-      }
-
-      if (HEADING_SHORTCUT_RE.test(block.content)) {
-        e.preventDefault();
-        const level = block.content.length;
-        changeBlockType(pageId, blockId, `heading_${level}` as Block["type"]);
-        updateBlock(pageId, blockId, { content: "" });
-        focusBlock(blockId);
-        return true;
-      }
-
-      if (NUMBERED_SHORTCUT_RE.test(block.content)) {
-        e.preventDefault();
-        changeBlockType(pageId, blockId, "numbered_list");
-        updateBlock(pageId, blockId, { content: "" });
-        focusBlock(blockId);
-        return true;
-      }
-
-      return false;
+      e.preventDefault();
+      applyMarkdownDetection(blockId, detection);
+      focusBlock(blockId);
+      return true;
     },
-    [pageId, changeBlockType, updateBlock, focusBlock],
+    [applyMarkdownDetection, focusBlock],
   );
 
   const handleToggleHeadingSpaceShortcut = useCallback(
@@ -673,6 +682,65 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [pageId, updateBlock, focusBlock],
   );
 
+  /** Handle Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z for undo/redo. Returns true if handled. */
+  const handleUndoRedo = useCallback(
+    (e: React.KeyboardEvent): boolean => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return false;
+
+      if (e.key === "z" && !e.shiftKey) {
+        // Only intercept if we have structural history; otherwise let
+        // the browser handle native text undo.
+        if (undo(contentRef.current)) {
+          e.preventDefault();
+          return true;
+        }
+        return false;
+      }
+      if ((e.key === "z" && e.shiftKey) || e.key === "y") {
+        if (redo(contentRef.current)) {
+          e.preventDefault();
+          return true;
+        }
+        return false;
+      }
+      return false;
+    },
+    [undo, redo],
+  );
+
+  /** Push an undo snapshot if the key will trigger a structural block mutation. */
+  const maybePushStructuralSnapshot = useCallback(
+    (e: React.KeyboardEvent, isEmptyForDeletion: boolean) => {
+      const isStructural =
+        e.key === "Tab" || e.key === "Enter" ||
+        ((e.key === "Backspace" || e.key === "Delete") && isEmptyForDeletion);
+      if (isStructural) {
+        pushSnapshot(contentRef.current);
+      }
+    },
+    [pushSnapshot],
+  );
+
+  /** Try Enter-key actions (new block creation). Returns true if handled. */
+  const handleEnterAction = useCallback(
+    (e: React.KeyboardEvent, blockId: string, blockType: Block["type"]) => {
+      if (e.key !== "Enter" || e.shiftKey) return false;
+      handleEnterKey(e, blockId, blockType, slashMenu, pageId, insertBlock, focusBlock);
+      return true;
+    },
+    [slashMenu, pageId, insertBlock, focusBlock],
+  );
+
+  /** Try Escape-key actions (close menus). */
+  const handleEscapeAction = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (slashMenu) setSlashMenu(null);
+      if (pageSelector) setPageSelector(null);
+    },
+    [slashMenu, pageSelector],
+  );
+
   /** Handle key presses — Enter, Backspace, Arrow navigation. */
   const handleKeyDown = useCallback(
     (
@@ -680,6 +748,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
       blockId: string,
       parentBlockId: string | null = null,
     ) => {
+      if (handleUndoRedo(e)) return;
+
       const content = parentBlockId
         ? (findChildrenForParent(contentRef.current, parentBlockId) ?? [])
         : contentRef.current;
@@ -690,6 +760,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
         (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
       const isEmpty = isEffectivelyEmpty(liveText);
       const isEmptyForDeletion = isEffectivelyEmptyForDeletion(liveText);
+
+      maybePushStructuralSnapshot(e, isEmptyForDeletion);
 
       const handled =
         handleBlockIndentation(e, blockId, block, content) ||
@@ -703,49 +775,14 @@ export function usePlaygroundBlockEditor(pageId: string) {
         handleContainerEnter(e, blockId, block);
 
       if (handled) return;
-
-      if (e.key === "Enter" && !e.shiftKey) {
-        handleEnterKey(
-          e,
-          blockId,
-          block.type,
-          slashMenu,
-          pageId,
-          insertBlock,
-          focusBlock,
-        );
-        return;
-      }
-
-      if (
-        handleEmptyBackspace(
-          e,
-          blockId,
-          block,
-          blockIdx,
-          content,
-          parentBlockId,
-          isEmptyForDeletion,
-        )
-      ) {
-        return;
-      }
-
-      if (handleArrowNavigation(e, blockId, content)) {
-        return;
-      }
-
-      if (e.key === "Escape") {
-        if (slashMenu) setSlashMenu(null);
-        if (pageSelector) setPageSelector(null);
-      }
+      if (handleEnterAction(e, blockId, block.type)) return;
+      if (handleEmptyBackspace(e, blockId, block, blockIdx, content, parentBlockId, isEmptyForDeletion)) return;
+      if (handleArrowNavigation(e, blockId, content)) return;
+      handleEscapeAction(e);
     },
     [
-      pageId,
-      slashMenu,
-      pageSelector,
-      insertBlock,
-      focusBlock,
+      handleUndoRedo,
+      maybePushStructuralSnapshot,
       handleBlockIndentation,
       handleParagraphSpaceShortcut,
       handleToggleHeadingSpaceShortcut,
@@ -754,8 +791,10 @@ export function usePlaygroundBlockEditor(pageId: string) {
       handleEmptyListDelete,
       handleDividerDelete,
       handleContainerEnter,
+      handleEnterAction,
       handleEmptyBackspace,
       handleArrowNavigation,
+      handleEscapeAction,
     ],
   );
 
@@ -780,12 +819,54 @@ export function usePlaygroundBlockEditor(pageId: string) {
     [],
   );
 
+  const createDatabasePageInPrivateWorkspace = useCallback(
+    async (title = "Untitled database") => {
+      const session = useUserStore.getState().activeSession();
+      const privateWorkspaceId = session?.privateWorkspaces[0]?._id;
+      if (!privateWorkspaceId) return null;
+
+      const jwt = session?.accessToken ?? "";
+      const databaseReference = useDatabaseStore.getState().createInlineDatabase(title);
+      const page = await usePageStore
+        .getState()
+        .addDatabasePage(
+          privateWorkspaceId,
+          title,
+          jwt,
+          databaseReference.databaseId,
+        );
+
+      if (!page) return null;
+
+      usePageStore.getState().openPage({
+        id: page._id,
+        workspaceId: privateWorkspaceId,
+        kind: "database",
+        title: page.title,
+        icon: page.icon,
+        databaseId: page.databaseId ?? databaseReference.databaseId,
+      });
+
+      return { id: page._id };
+    },
+    [],
+  );
+
   const page = usePageStore((s) => s.pageById(pageId));
   const content = useMemo(() => page?.content ?? [], [page?.content]);
 
   useEffect(() => {
     contentRef.current = content;
   }, [content]);
+
+  /** Wrap updatePageContent so context menu operations push undo snapshots. */
+  const updatePageContentWithHistory = useCallback(
+    (pid: string, blocks: Block[]) => {
+      pushSnapshot(contentRef.current);
+      updatePageContent(pid, blocks);
+    },
+    [pushSnapshot, updatePageContent],
+  );
 
   const {
     contextMenu,
@@ -795,7 +876,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
   } = useBlockContextMenu({
     pageId,
     content,
-    updatePageContent,
+    updatePageContent: updatePageContentWithHistory,
     focusBlock,
   });
 
@@ -815,6 +896,7 @@ export function usePlaygroundBlockEditor(pageId: string) {
     insertBlock,
     createInlineDatabase,
     createPageInPrivateWorkspace,
+    createDatabasePageInPrivateWorkspace,
     focusBlock,
   });
 
@@ -927,5 +1009,8 @@ export function usePlaygroundBlockEditor(pageId: string) {
     handleInitBlock,
     registerBlockRef,
     focusBlock,
+    undo,
+    redo,
+    pushSnapshot,
   };
 }

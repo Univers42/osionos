@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 18:20:17 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/07 16:29:53 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -38,9 +38,9 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   return (
     <>
       <div
-        className="h-px w-full shrink-0 -mt-px z-[99]"
+        className="h-px w-full shrink-0 -mt-px z-[var(--osio-z-raised)]"
         style={{
-          boxShadow: "0 1px 0 var(--color-line)",
+          boxShadow: "0 1px 0 var(--osio-border-default)",
           transition: "box-shadow 300ms",
         }}
       />
@@ -68,19 +68,19 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
       {showInviteCTA && (
         <div className="mx-2 mb-2 mt-1.5 relative">
           <div
-            className="relative p-2 rounded-lg overflow-hidden cursor-pointer hover:bg-[var(--color-surface-hover)] transition-colors duration-100"
-            style={{ boxShadow: "var(--color-line) 0 0 0 1px" }}
+            className="relative p-2 rounded-lg overflow-hidden cursor-pointer hover:bg-[var(--osio-bg-hover)] transition-colors duration-100"
+            style={{ boxShadow: "var(--osio-border-default) 0 0 0 1px" }}
           >
             <div className="flex items-start gap-2">
               <UserPlus
                 size={20}
-                className="shrink-0 text-[var(--color-ink)] mt-0.5"
+                className="shrink-0 text-[var(--osio-fg-default)] mt-0.5"
               />
               <div className="flex-1 min-w-0 pt-1">
-                <p className="text-[12px] font-semibold text-[var(--color-ink)] leading-4">
+                <p className="text-xs font-semibold text-[var(--osio-fg-default)] leading-4">
                   Invite members
                 </p>
-                <p className="text-[12px] text-[var(--color-ink-muted)] leading-4">
+                <p className="text-xs text-[var(--osio-fg-muted)] leading-4">
                   Collaborate with your team.
                 </p>
               </div>
@@ -92,7 +92,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
                 e.stopPropagation();
                 onDismissInvite();
               }}
-              className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded text-[var(--color-ink-muted)] hover:bg-[var(--color-surface-hover)]"
+              className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
             >
               <X size={12} />
             </button>

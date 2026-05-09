@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:24:19 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:24:20 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -56,11 +56,25 @@ function pageUrl(pageId: string): string {
 }
 
 function safeFileName(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9-_]+/gi, "-")
-    .replaceAll(/^-+|-+$/g, "") || "page";
+  let fileName = "";
+  let previousWasSeparator = true;
+
+  for (const char of value.trim().toLowerCase()) {
+    const isSafeChar =
+      (char >= "a" && char <= "z") ||
+      (char >= "0" && char <= "9") ||
+      char === "_";
+
+    if (isSafeChar) {
+      fileName += char;
+      previousWasSeparator = false;
+    } else if (!previousWasSeparator) {
+      fileName += "-";
+      previousWasSeparator = true;
+    }
+  }
+
+  return fileName.endsWith("-") ? fileName.slice(0, -1) : fileName || "page";
 }
 
 function blockToMarkdown(block: Block, depth = 0): string {
@@ -130,19 +144,163 @@ export async function importPageFile(file: File): Promise<ImportedPagePayload> {
     };
   }
 
+  const extensionIndex = file.name.lastIndexOf(".");
+
   return {
-    title: file.name.replaceAll(/\.[^.]+$/g, ""),
+    title: extensionIndex > 0 ? file.name.slice(0, extensionIndex) : file.name,
     content: parseMarkdownToBlocks(text),
   };
 }
 
-function localTranslateBlock(block: Block, targetLocale: string): Block {
-  if (!block.content) return block;
-  const prefix = `[${targetLocale}] `;
+const TRANSLATABLE_BLOCK_TYPES = new Set<Block["type"]>([
+  "paragraph",
+  "heading_1",
+  "heading_2",
+  "heading_3",
+  "heading_4",
+  "heading_5",
+  "heading_6",
+  "bulleted_list",
+  "numbered_list",
+  "to_do",
+  "toggle",
+  "quote",
+  "callout",
+  "image",
+  "video",
+  "audio",
+  "file",
+]);
+
+function looksLikePrefixTranslation(value: string | undefined, targetLocale: string): boolean {
+  return Boolean(value?.startsWith(`[${targetLocale}] `));
+}
+
+function configuredTranslationEndpoint(): string {
+  return ((import.meta.env as Record<string, string>).VITE_TRANSLATION_API_URL ?? "").trim();
+}
+
+function parseGoogleTranslateResponse(payload: unknown): string | null {
+  if (!Array.isArray(payload) || !Array.isArray(payload[0])) return null;
+  const translated = payload[0]
+    .map((part) => (Array.isArray(part) && typeof part[0] === "string" ? part[0] : ""))
+    .join("")
+    .trim();
+  return translated || null;
+}
+
+function parseConfiguredTranslateResponse(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  const translated = record.translatedText ?? record.translation ?? record.text;
+  return typeof translated === "string" && translated.trim() ? translated : null;
+}
+
+async function translateWithConfiguredEndpoint(
+  text: string,
+  targetLocale: string,
+  jwt?: string,
+): Promise<string | null> {
+  const endpoint = configuredTranslationEndpoint();
+  if (!endpoint) return null;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+    },
+    body: JSON.stringify({ text, targetLocale, sourceLocale: "auto" }),
+  });
+  if (!response.ok) return null;
+  return parseConfiguredTranslateResponse(await response.json());
+}
+
+async function translateWithGooglePublicEndpoint(text: string, targetLocale: string): Promise<string | null> {
+  const url = new URL("https://translate.googleapis.com/translate_a/single");
+  url.searchParams.set("client", "gtx");
+  url.searchParams.set("sl", "auto");
+  url.searchParams.set("tl", targetLocale);
+  url.searchParams.set("dt", "t");
+  url.searchParams.set("q", text);
+
+  const response = await fetch(url.toString());
+  if (!response.ok) return null;
+  return parseGoogleTranslateResponse(await response.json());
+}
+
+async function translateWithMyMemory(text: string, targetLocale: string): Promise<string | null> {
+  const url = new URL("https://api.mymemory.translated.net/get");
+  url.searchParams.set("q", text);
+  url.searchParams.set("langpair", `auto|${targetLocale}`);
+
+  const response = await fetch(url.toString());
+  if (!response.ok) return null;
+  const payload = await response.json() as Record<string, unknown>;
+  const translated = (payload.responseData as Record<string, unknown> | undefined)?.translatedText;
+  return typeof translated === "string" && translated.trim() ? translated : null;
+}
+
+async function translateText(
+  text: string,
+  targetLocale: string,
+  jwt: string | undefined,
+  cache: Map<string, Promise<string>>,
+): Promise<string> {
+  const trimmed = text.trim();
+  if (!trimmed) return text;
+
+  const cacheKey = `${targetLocale}\u0000${text}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const promise = (async () => {
+    for (const translator of [
+      () => translateWithConfiguredEndpoint(text, targetLocale, jwt),
+      () => translateWithGooglePublicEndpoint(text, targetLocale),
+      () => translateWithMyMemory(text, targetLocale),
+    ]) {
+      try {
+        const translated = await translator();
+        if (translated && !looksLikePrefixTranslation(translated, targetLocale)) {
+          return translated;
+        }
+      } catch {
+        // Try the next translation provider.
+      }
+    }
+
+    return text;
+  })();
+
+  cache.set(cacheKey, promise);
+  return promise;
+}
+
+async function translateBlock(
+  block: Block,
+  targetLocale: string,
+  jwt: string | undefined,
+  cache: Map<string, Promise<string>>,
+): Promise<Block> {
+  const nextContent = TRANSLATABLE_BLOCK_TYPES.has(block.type)
+    ? await translateText(block.content, targetLocale, jwt, cache)
+    : block.content;
+  const nextTableData = block.tableData
+    ? await Promise.all(
+        block.tableData.map((row) =>
+          Promise.all(row.map((cell) => translateText(cell, targetLocale, jwt, cache))),
+        ),
+      )
+    : undefined;
+
   return {
     ...block,
-    content: block.content.startsWith(prefix) ? block.content : `${prefix}${block.content}`,
-    children: block.children?.map((child) => localTranslateBlock(child, targetLocale)),
+    content: nextContent,
+    ...(nextTableData ? { tableData: nextTableData } : {}),
+    children: block.children
+      ? await Promise.all(block.children.map((child) => translateBlock(child, targetLocale, jwt, cache)))
+      : undefined,
   };
 }
 
@@ -153,20 +311,25 @@ export async function translatePage(
 ): Promise<TranslateResponse> {
   if (jwt) {
     try {
-      return await api.post<TranslateResponse>(
+      const translated = await api.post<TranslateResponse>(
         `/api/pages/${page._id}/translate`,
         { targetLocale },
         jwt,
       );
+      if (!looksLikePrefixTranslation(translated.title, targetLocale)) {
+        return translated;
+      }
     } catch {
-      // Fall through to local/offline translation preview.
+      // Fall through to the browser translation providers.
     }
   }
 
-  const titlePrefix = `[${targetLocale}] `;
+  const cache = new Map<string, Promise<string>>();
   return {
-    title: page.title.startsWith(titlePrefix) ? page.title : `${titlePrefix}${page.title}`,
-    content: page.content?.map((block) => localTranslateBlock(block, targetLocale)) ?? [],
+    title: await translateText(page.title, targetLocale, jwt, cache),
+    content: page.content
+      ? await Promise.all(page.content.map((block) => translateBlock(block, targetLocale, jwt, cache)))
+      : [],
   };
 }
 
