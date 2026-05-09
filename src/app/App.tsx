@@ -30,6 +30,7 @@ import {
   workspaceConfigKey,
 } from "@/shared/config/workspaceConfigStore";
 import { SettingsCenter } from "@/features/settings/SettingsCenter";
+import { ToastViewport } from "@/shared/ui";
 
 type UserSessions = Record<string, UserSession>;
 
@@ -229,6 +230,7 @@ const App: React.FC = () => {
 
       <WorkspaceThemePanel />
       {settingsOpen && <SettingsCenter initialTab="general" onClose={() => setSettingsOpen(false)} />}
+      <ToastViewport />
     </div>
   );
 };

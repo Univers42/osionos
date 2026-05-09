@@ -15,3 +15,4 @@ export * from "./molecules/CodeSyntaxHighlight";
 export * from "./molecules/AssetPickerBoard";
 export * from "./molecules/EmojiPicker";
 export * from "./molecules/MermaidDiagram";
+export * from "./primitives";
