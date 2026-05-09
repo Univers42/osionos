@@ -1,0 +1,100 @@
+.osionos-home-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.osionos-home-variant-menu {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.osionos-home-variant-menu > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  border: 1px solid var(--osio-border-default);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--osio-bg-surface) 92%, transparent);
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--osio-shadow) 14%, transparent);
+  color: var(--osio-fg-default);
+  font-size: var(--osio-font-size-sm);
+  font-weight: 700;
+  padding: 7px 10px;
+  backdrop-filter: blur(12px);
+}
+
+.osionos-home-variant-menu > button:hover,
+.osionos-home-variant-menu > button:focus-visible {
+  border-color: var(--osio-accent);
+  outline: none;
+}
+
+.osionos-home-variant-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  display: none;
+  min-width: 210px;
+  border: 1px solid var(--osio-border-default);
+  border-radius: 8px;
+  background: var(--osio-bg-surface);
+  box-shadow: 0 18px 42px color-mix(in srgb, var(--osio-shadow) 20%, transparent);
+  padding: 6px;
+}
+
+.osionos-home-variant-menu[data-open="true"] .osionos-home-variant-dropdown {
+  display: grid;
+  gap: 2px;
+}
+
+.osionos-home-variant-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--osio-fg-default);
+  font-size: var(--osio-font-size-sm);
+  padding: 7px 9px;
+  text-align: left;
+}
+
+.osionos-home-variant-dropdown button:hover,
+.osionos-home-variant-dropdown button[data-active="true"] {
+  background: color-mix(in srgb, var(--osio-accent) 12%, transparent);
+  color: var(--osio-accent);
+}
+
+.osionos-home-variant-current {
+  border: 1px solid var(--osio-border-default);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--osio-bg-surface) 86%, transparent);
+  color: var(--osio-fg-muted);
+  font-size: var(--osio-font-size-xs);
+  font-weight: 650;
+  padding: 5px 8px;
+  backdrop-filter: blur(12px);
+}
+
+@media (max-width: 720px) {
+  .osionos-home-variant-menu {
+    left: 10px;
+    top: 10px;
+  }
+
+  .osionos-home-variant-current {
+    display: none;
+  }
+}

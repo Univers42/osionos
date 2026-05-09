@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/09 20:57:58 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 23:07:10 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -269,6 +269,45 @@ function packLayoutCells(cells: LayoutCell[], config: LayoutConfig): LayoutCell[
 function normalizeLayoutCells(cells: LayoutCell[], config: LayoutConfig): LayoutCell[] {
   const clampedCells = cells.map((cell) => clampLayoutCell(cell, config));
   return config.autoArrange ? packLayoutCells(clampedCells, config) : clampedCells;
+}
+
+function hasLayoutCellCollision(cells: LayoutCell[]): boolean {
+  return cells.some((cell, index) => cells.slice(index + 1).some((candidate) => cellsOverlap(cell, candidate)));
+}
+
+function previewCellSwap(cells: LayoutCell[], draggedCellId: string, targetCellId: string): LayoutCell[] {
+  if (draggedCellId === targetCellId) return cells;
+  const draggedCell = cells.find((cell) => cell.id === draggedCellId);
+  const targetCell = cells.find((cell) => cell.id === targetCellId);
+  if (!draggedCell || !targetCell) return cells;
+
+  return cells.map((cell) => {
+    if (cell.id === draggedCellId) {
+      return {
+        ...cell,
+        colStart: targetCell.colStart,
+        colSpan: targetCell.colSpan,
+        rowStart: targetCell.rowStart,
+        rowSpan: targetCell.rowSpan,
+      };
+    }
+    if (cell.id === targetCellId) {
+      return {
+        ...cell,
+        colStart: draggedCell.colStart,
+        colSpan: draggedCell.colSpan,
+        rowStart: draggedCell.rowStart,
+        rowSpan: draggedCell.rowSpan,
+      };
+    }
+    return cell;
+  });
+}
+
+function applyCollisionPolicy(cells: LayoutCell[], config: LayoutConfig, fallbackCells: LayoutCell[]): LayoutCell[] {
+  const normalizedCells = cells.map((cell) => clampLayoutCell(cell, config));
+  if (config.autoArrange) return packLayoutCells(normalizedCells, config);
+  return hasLayoutCellCollision(normalizedCells) ? fallbackCells : normalizedCells;
 }
 
 function getLayoutConfig(block: Block): LayoutConfig {
@@ -1198,6 +1237,7 @@ const LayoutBlockEditor: React.FC<{
   const [resizingCell, setResizingCell] = useState<{ id: string; colSpan: number; rowSpan: number } | null>(null);
   const [draggingCellId, setDraggingCellId] = useState<string | null>(null);
   const [cellDropTargetId, setCellDropTargetId] = useState<string | null>(null);
+  const [collisionCellId, setCollisionCellId] = useState<string | null>(null);
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const config = getLayoutConfig(block);
   const layoutMode = getLayoutMode(block);
@@ -1227,8 +1267,13 @@ const LayoutBlockEditor: React.FC<{
     [cells, config, updateLayout],
   );
 
-  const updateCells = useCallback((nextCells: LayoutCell[]) => {
-    updateLayout({ layoutCells: normalizeLayoutCells(nextCells, config) });
+  const updateCells = useCallback((nextCells: LayoutCell[], options: { allowCollisionFallback?: boolean } = {}) => {
+    const normalizedCells = normalizeLayoutCells(nextCells, config);
+    if (!config.autoArrange && !options.allowCollisionFallback && hasLayoutCellCollision(normalizedCells)) {
+      return false;
+    }
+    updateLayout({ layoutCells: normalizedCells });
+    return true;
   }, [config, updateLayout]);
 
   const addCell = useCallback((template?: Partial<LayoutCell>) => {
@@ -1290,12 +1335,20 @@ const LayoutBlockEditor: React.FC<{
         blocks: heading(label),
       })),
     };
-    updateCells(templates[kind]);
+    updateCells(templates[kind], { allowCollisionFallback: true });
   }, [updateCells]);
 
   const updateCell = useCallback((cellId: string, patch: Partial<LayoutCell>) => {
-    updateCells(cells.map((cell) => (cell.id === cellId ? { ...cell, ...patch } : cell)));
-  }, [cells, updateCells]);
+    const nextCells = applyCollisionPolicy(
+      cells.map((cell) => (cell.id === cellId ? { ...cell, ...patch } : cell)),
+      config,
+      cells,
+    );
+    const changed = nextCells !== cells;
+    setCollisionCellId(changed ? null : cellId);
+    if (changed) updateLayout({ layoutCells: nextCells });
+    return changed;
+  }, [cells, config, updateLayout]);
 
   const removeCell = useCallback((cellId: string) => updateCells(cells.filter((cell) => cell.id !== cellId)), [cells, updateCells]);
 
@@ -1324,33 +1377,15 @@ const LayoutBlockEditor: React.FC<{
 
   const reorderCellByDrop = useCallback((draggedCellId: string, targetCellId: string) => {
     if (draggedCellId === targetCellId) return;
-    const draggedCell = cells.find((cell) => cell.id === draggedCellId);
-    const targetCell = cells.find((cell) => cell.id === targetCellId);
-    if (!draggedCell || !targetCell) return;
-    updateCells(cells.map((cell) => {
-      if (cell.id === draggedCellId) {
-        return {
-          ...cell,
-          colStart: targetCell.colStart,
-          colSpan: targetCell.colSpan,
-          rowStart: targetCell.rowStart,
-          rowSpan: targetCell.rowSpan,
-        };
-      }
-      if (cell.id === targetCellId) {
-        return {
-          ...cell,
-          colStart: draggedCell.colStart,
-          colSpan: draggedCell.colSpan,
-          rowStart: draggedCell.rowStart,
-          rowSpan: draggedCell.rowSpan,
-        };
-      }
-      return cell;
-    }));
+    const nextCells = previewCellSwap(cells, draggedCellId, targetCellId);
+    updateCells(nextCells, { allowCollisionFallback: true });
   }, [cells, updateCells]);
 
-  const startResize = useCallback((event: React.PointerEvent<HTMLDivElement>, cell: LayoutCell, axis: "x" | "y" | "both") => {
+  const previewCellDrop = useCallback((draggedCellId: string, targetCellId: string) => {
+    setCellDropTargetId(draggedCellId === targetCellId ? null : targetCellId);
+  }, []);
+
+  const startResize = useCallback((event: React.PointerEvent<HTMLDivElement>, cell: LayoutCell, edge: "left" | "right" | "top" | "bottom" | "top-left" | "top-right" | "bottom-left" | "bottom-right") => {
     event.preventDefault();
     event.stopPropagation();
     const container = event.currentTarget.closest<HTMLElement>("[data-layout-grid]");
@@ -1361,22 +1396,39 @@ const LayoutBlockEditor: React.FC<{
     const startY = event.clientY;
     const columnWidth = Math.max(1, rect.width / config.columns);
     const rowHeight = Math.max(CELL_MIN_ROW_HEIGHT, config.rowHeight);
-    const minColSpan = Math.max(1, Math.ceil(CELL_MIN_CONTENT_WIDTH / columnWidth));
-    const minRowSpan = Math.max(1, Math.ceil(CELL_MIN_ROW_HEIGHT / rowHeight));
+    const minColSpan = 1;
+    const minRowSpan = 1;
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       const colDelta = Math.round((moveEvent.clientX - startX) / columnWidth);
       const rowDelta = Math.round((moveEvent.clientY - startY) / rowHeight);
       let nextColSpan = cell.colSpan;
       let nextRowSpan = cell.rowSpan;
-      if (axis === "x" || axis === "both") {
+      let nextColStart = cell.colStart;
+      let nextRowStart = cell.rowStart;
+      if (edge.includes("right")) {
         nextColSpan = Math.max(minColSpan, Math.min(config.columns - cell.colStart + 1, cell.colSpan + colDelta));
       }
-      if (axis === "y" || axis === "both") {
+      if (edge.includes("left")) {
+        const rightEdge = cell.colStart + cell.colSpan;
+        nextColStart = Math.max(1, Math.min(rightEdge - minColSpan, cell.colStart + colDelta));
+        nextColSpan = rightEdge - nextColStart;
+      }
+      if (edge.includes("bottom")) {
         nextRowSpan = Math.max(minRowSpan, cell.rowSpan + rowDelta);
       }
+      if (edge.includes("top")) {
+        const bottomEdge = cell.rowStart + cell.rowSpan;
+        nextRowStart = Math.max(1, Math.min(bottomEdge - minRowSpan, cell.rowStart + rowDelta));
+        nextRowSpan = bottomEdge - nextRowStart;
+      }
       setResizingCell({ id: cell.id, colSpan: nextColSpan, rowSpan: nextRowSpan });
-      updateCell(cell.id, { colSpan: nextColSpan, rowSpan: nextRowSpan });
+      updateCell(cell.id, {
+        colStart: nextColStart,
+        colSpan: nextColSpan,
+        rowStart: nextRowStart,
+        rowSpan: nextRowSpan,
+      });
     };
 
     const handlePointerUp = () => {
@@ -1388,8 +1440,9 @@ const LayoutBlockEditor: React.FC<{
     };
 
     let cursor = "nwse-resize";
-    if (axis === "x") cursor = "ew-resize";
-    if (axis === "y") cursor = "ns-resize";
+    if (edge === "left" || edge === "right") cursor = "ew-resize";
+    if (edge === "top" || edge === "bottom") cursor = "ns-resize";
+    if (edge === "top-right" || edge === "bottom-left") cursor = "nesw-resize";
     document.body.style.cursor = cursor;
     document.body.style.userSelect = "none";
     globalThis.addEventListener("pointermove", handlePointerMove);
@@ -1508,6 +1561,7 @@ const LayoutBlockEditor: React.FC<{
                 data-layout-cell-selected={dataFlag(selectedCellId === cell.id)}
                 data-layout-cell-dragging={dataFlag(draggingCellId === cell.id)}
                 data-layout-cell-drop-target={dataFlag(cellDropTargetId === cell.id)}
+                data-layout-cell-collision={dataFlag(collisionCellId === cell.id)}
                 data-layout-sizing={cell.sizing ?? "fixed"}
                 data-layout-wrap={cell.wrap === false ? "false" : "true"}
                 data-layout-padding={cell.padding ?? "comfortable"}
@@ -1519,10 +1573,13 @@ const LayoutBlockEditor: React.FC<{
                   event.preventDefault();
                   event.stopPropagation();
                   event.dataTransfer.dropEffect = "move";
-                  setCellDropTargetId(cell.id);
+                  const draggedCellId = event.dataTransfer.getData(LAYOUT_CELL_DND_TYPE) || draggingCellId;
+                  if (draggedCellId) previewCellDrop(draggedCellId, cell.id);
                 }}
                 onDragLeave={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget as Node)) setCellDropTargetId(null);
+                  if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                    setCellDropTargetId(null);
+                  }
                 }}
                 onDrop={(event) => {
                   const draggedCellId = event.dataTransfer.getData(LAYOUT_CELL_DND_TYPE);
@@ -1538,8 +1595,13 @@ const LayoutBlockEditor: React.FC<{
                   <LayoutCellHandleBar
                     cell={cell}
                     liveSize={resizingCell?.id === cell.id ? resizingCell : null}
-                    onDragStart={() => setDraggingCellId(cell.id)}
-                    onDragEnd={() => { setDraggingCellId(null); setCellDropTargetId(null); }}
+                    onDragStart={() => {
+                      setDraggingCellId(cell.id);
+                    }}
+                    onDragEnd={() => {
+                      setDraggingCellId(null);
+                      setCellDropTargetId(null);
+                    }}
                     onRename={(label) => updateCell(cell.id, { label })}
                     onAddCell={() => addCell()}
                     onInspect={() => setSelectedCellId(cell.id)}
@@ -1559,9 +1621,14 @@ const LayoutBlockEditor: React.FC<{
                 </div>
                 {config.preview ? null : (
                   <>
-                    <div onPointerDown={(event) => startResize(event, cell, "x")} className="osionos-layout-resize-handle osionos-layout-resize-handle--x" />
-                    <div onPointerDown={(event) => startResize(event, cell, "y")} className="osionos-layout-resize-handle osionos-layout-resize-handle--y" />
-                    <div onPointerDown={(event) => startResize(event, cell, "both")} className="osionos-layout-resize-handle osionos-layout-resize-handle--both" />
+                    <div onPointerDown={(event) => startResize(event, cell, "left")} className="osionos-layout-resize-handle osionos-layout-resize-handle--left" />
+                    <div onPointerDown={(event) => startResize(event, cell, "right")} className="osionos-layout-resize-handle osionos-layout-resize-handle--right" />
+                    <div onPointerDown={(event) => startResize(event, cell, "top")} className="osionos-layout-resize-handle osionos-layout-resize-handle--top" />
+                    <div onPointerDown={(event) => startResize(event, cell, "bottom")} className="osionos-layout-resize-handle osionos-layout-resize-handle--bottom" />
+                    <div onPointerDown={(event) => startResize(event, cell, "top-left")} className="osionos-layout-resize-handle osionos-layout-resize-handle--top-left" />
+                    <div onPointerDown={(event) => startResize(event, cell, "top-right")} className="osionos-layout-resize-handle osionos-layout-resize-handle--top-right" />
+                    <div onPointerDown={(event) => startResize(event, cell, "bottom-left")} className="osionos-layout-resize-handle osionos-layout-resize-handle--bottom-left" />
+                    <div onPointerDown={(event) => startResize(event, cell, "bottom-right")} className="osionos-layout-resize-handle osionos-layout-resize-handle--bottom-right" />
                   </>
                 )}
               </section>

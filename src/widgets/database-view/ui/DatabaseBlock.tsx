@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:37 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/09 20:57:59 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 23:07:11 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,7 +14,7 @@ import React from 'react';
 import { ObjectDatabase, type ObjectDatabaseProps } from '@notion-db/object-database';
 
 import type { Block } from '@/entities/block';
-import type { PageEntry } from '@/entities/page';
+import type { PageEntry, PagePropertyEntry } from '@/entities/page';
 import { useUserStore } from '@/features/auth';
 import { OsionosPage } from '@/pages/notion-page/ui/NotionPage';
 import {
@@ -22,6 +22,8 @@ import {
   DEFAULT_OBJECT_DATABASE_VIEW_ID,
 } from '@/store/useDatabaseStore';
 import { usePageStore } from '@/store/usePageStore';
+import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseViewCatalog';
+import { createKnownDatabaseAdapter } from '../model/knownDatabaseState';
 import { getObjectDatabaseAdapter } from '../model/objectDatabaseAdapter';
 
 interface DatabaseBlockProps {
@@ -39,10 +41,37 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
   const resolvedDatabaseId = databaseId ?? DEFAULT_OBJECT_DATABASE_ID;
   const resolvedInitialView = initialViewId
     ?? (resolvedDatabaseId === DEFAULT_OBJECT_DATABASE_ID ? DEFAULT_OBJECT_DATABASE_VIEW_ID : undefined);
+  const knownViewId = resolvedInitialView && getKnownDatabaseView(resolvedInitialView)
+    ? resolvedInitialView
+    : KNOWN_DATABASE_VIEWS.find((viewDefinition) => viewDefinition.databaseId === resolvedDatabaseId)?.id;
+  const knownDatabaseAdapter = React.useMemo(() => createKnownDatabaseAdapter(), []);
   const renderPage = React.useCallback<NonNullable<ObjectDatabaseProps['renderPage']>>(
     (pageId, state, onClose) => <DatabaseObjectPage pageId={pageId} state={state} onClose={onClose} />,
     [],
   );
+
+  if (knownViewId) {
+    return (
+      <div
+        className={[
+          'osionos-database-block w-full min-w-0',
+          mode === 'full' ? 'osionos-database-block--full h-full overflow-auto' : 'osionos-database-block--inline my-2',
+        ].join(' ')}
+        data-database-id={resolvedDatabaseId}
+        data-database-view-id={knownViewId}
+      >
+        <ObjectDatabase
+          adapter={knownDatabaseAdapter}
+          databaseId={resolvedDatabaseId}
+          initialView={knownViewId}
+          mode={resolvedMode}
+          renderPage={renderPage}
+          className={mode === 'full' ? 'h-full' : undefined}
+          chrome="single-view"
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -96,6 +125,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
       parentPageId: activePage?.id ?? '__database_rows__',
       databaseId: databasePage.databaseId,
       archivedAt: null,
+      properties: database ? toOsionosPageProperties(database, databasePage) : [],
       content: toOsionosBlocks(databasePage.content),
     };
 
@@ -152,6 +182,8 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
 };
 
 type DatabasePageContent = DatabaseObjectPageProps['state']['pages'][string]['content'];
+type DatabaseSchema = DatabaseObjectPageProps['state']['databases'][string];
+type DatabasePage = DatabaseObjectPageProps['state']['pages'][string];
 
 function toOsionosBlocks(blocks: DatabasePageContent | undefined): Block[] {
   return (blocks ?? []).map((block) => ({
@@ -189,6 +221,59 @@ function mergeOsionosDatabasePage(entry: PageEntry, nextEntry: PageEntry): PageE
     ...entry,
     ...nextEntry,
     title: entry.title || nextEntry.title,
+    properties: nextEntry.properties,
     content: entry.content?.length ? entry.content : nextEntry.content,
   };
+}
+
+function toOsionosPageProperties(database: DatabaseSchema, page: DatabasePage): PagePropertyEntry[] {
+  return Object.values(database.properties).map((property) => ({
+    key: property.id,
+    label: property.name,
+    type: toOsionosPropertyType(property.type),
+    value: toOsionosPropertyValue(page.properties[property.id], property.type),
+    options: property.options?.map((option) => option.value),
+    relationTarget: property.type === 'relation' ? 'page' : undefined,
+  }));
+}
+
+function toOsionosPropertyType(type: DatabaseSchema['properties'][string]['type']): PagePropertyEntry['type'] {
+  if (type === 'number') return 'number';
+  if (type === 'checkbox') return 'checkbox';
+  if (type === 'date' || type === 'created_time' || type === 'last_edited_time' || type === 'due_date') return 'date';
+  if (type === 'select' || type === 'status') return 'select';
+  if (type === 'url') return 'url';
+  if (type === 'relation') return 'relation';
+  return 'text';
+}
+
+function toOsionosPropertyValue(value: unknown, type: DatabaseSchema['properties'][string]['type']): PagePropertyEntry['value'] {
+  if (type === 'relation') return toStringArray(value);
+  if (type === 'checkbox') return Boolean(value);
+  if (type === 'number') return toNumber(value);
+  if (Array.isArray(value)) return value.map(toSafeString).filter(Boolean).join(', ');
+  if (value == null) return null;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
+}
+
+function toNumber(value: unknown): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
+function toStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(toSafeString).filter(Boolean);
+  const item = toSafeString(value);
+  return item ? [item] : [];
+}
+
+function toSafeString(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
 }
