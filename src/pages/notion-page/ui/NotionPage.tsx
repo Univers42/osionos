@@ -34,7 +34,10 @@ import {
   PageCover,
   PageHeaderBar,
   PageIcon,
+  PageProperties,
   PageTitle,
+  type PageEntry,
+  type PagePropertyEntry,
 } from "@/entities/page";
 import { PageBody } from "./PageBody";
 
@@ -45,6 +48,35 @@ interface OsionosPageProps {
 }
 
 const EMPTY_MESSAGES: RealtimeMessage[] = [];
+
+function updatePagePropertyInPages(
+  pagesByWorkspace: Record<string, PageEntry[]>,
+  pageId: string,
+  propertyKey: string,
+  value: PagePropertyEntry["value"],
+): Record<string, PageEntry[]> {
+  const newPages = { ...pagesByWorkspace };
+  for (const wsId of Object.keys(newPages)) {
+    newPages[wsId] = newPages[wsId].map((page) => updatePageProperty(page, pageId, propertyKey, value));
+  }
+  return newPages;
+}
+
+function updatePageProperty(
+  page: PageEntry,
+  pageId: string,
+  propertyKey: string,
+  value: PagePropertyEntry["value"],
+): PageEntry {
+  if (page._id !== pageId) return page;
+  return {
+    ...page,
+    updatedAt: new Date().toISOString(),
+    properties: (page.properties ?? []).map((property) => (
+      property.key === propertyKey ? { ...property, value } : property
+    )),
+  };
+}
 
 /**
  * Full osionos-style page layout.
@@ -227,6 +259,18 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
     [handleChangeCover],
   );
 
+  const handleChangePageProperty = useCallback(
+    (propertyKey: string, value: PagePropertyEntry["value"]) => {
+      if (pageConfig.locked) return;
+      usePageStore.setState((s) => {
+        const newPages = updatePagePropertyInPages(s.pages, pageId, propertyKey, value);
+        savePagesCache(newPages);
+        return { pages: newPages };
+      });
+    },
+    [pageConfig.locked, pageId],
+  );
+
   const handleSubmitComment = useCallback(
     (event: { preventDefault: () => void }) => {
       event.preventDefault();
@@ -393,6 +437,10 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
 
         {/* Title */}
         <PageTitle title={title} onChangeTitle={handleChangeTitle} readOnly={pageConfig.locked} />
+        <PageProperties
+          properties={page?.properties ?? []}
+          onChangeProperty={pageConfig.locked ? undefined : handleChangePageProperty}
+        />
       </div>
 
       {/* Body: block editor powered by markengine */}

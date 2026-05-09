@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/08 03:50:32 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 23:07:10 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,6 +22,17 @@ export type PageCollaboratorRole = "viewer" | "editor" | "owner";
 export interface PageCollaborator {
   userId: string;
   role: PageCollaboratorRole;
+}
+
+export type PagePropertyType = "text" | "date" | "select" | "url" | "number" | "checkbox" | "relation";
+
+export interface PagePropertyEntry {
+  key: string;
+  label: string;
+  type?: PagePropertyType;
+  value: string | string[] | number | boolean | null;
+  options?: string[];
+  relationTarget?: "page" | "database" | "block" | "mixed";
 }
 
 /** Entry representing a page in the workspace tree. */
@@ -42,6 +53,8 @@ export interface PageEntry {
   archivedAt?: string | null;
   /** Block content (only populated in offline/seed mode) */
   content?: Block[];
+  /** Editable properties shown below the page title. */
+  properties?: PagePropertyEntry[];
   /** Local surface classification used for private app-only spaces such as agents and home. */
   surface?: "page" | "agent" | "home";
   /** Local version for generated home dashboard content. */

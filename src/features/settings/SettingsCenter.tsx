@@ -169,6 +169,7 @@ const rowBorder = 'border-t border-[var(--osio-border-default)]';
 const EMPTY_ASSETS: AccountAsset[] = [];
 const EMPTY_BILLING_INVOICES: BillingInvoice[] = [];
 const EMPTY_IMPORT_HISTORY: ImportHistoryEntry[] = [];
+const EMPTY_PAGES: PageEntry[] = [];
 const EMPTY_WORKSPACE_INVITES: WorkspaceInvite[] = [];
 const EMPTY_WORKSPACE_MEMBERS: WorkspaceMember[] = [];
 
@@ -952,10 +953,14 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
   const toast = useToastStore((state) => state.push);
   const renameWorkspace = useUserStore((state) => state.renameWorkspace);
   const deleteWorkspace = useUserStore((state) => state.deleteWorkspace);
-  const sessionWorkspaces = useUserStore((state) => state.activeSession()?.privateWorkspaces.concat(state.activeSession()?.sharedWorkspaces ?? []) ?? []);
+  const activeSession = useUserStore((state) => state.activeSession());
+  const sessionWorkspaces = useMemo(
+    () => [...(activeSession?.privateWorkspaces ?? []), ...(activeSession?.sharedWorkspaces ?? [])],
+    [activeSession],
+  );
   const setUseNewSidebar = useUIStore((state) => state.setUseNewSidebar);
   const setShowOtherApps = useUIStore((state) => state.setShowOtherApps);
-  const pages = usePageStore((state) => state.pages[workspaceId] ?? []);
+  const pages = usePageStore((state) => state.pages[workspaceId] ?? EMPTY_PAGES);
   const workspaceMembers = useWorkspaceMembersStore((state) => state.data[workspaceId] ?? EMPTY_WORKSPACE_MEMBERS);
   const storedSettings = useWorkspaceSettingsStore((state) => state.data[workspaceId]);
   const hydrate = useWorkspaceSettingsStore((state) => state.hydrate);

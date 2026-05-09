@@ -6,11 +6,12 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/08 03:50:34 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 23:07:10 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { Suspense, useEffect } from "react";
+import React, { Suspense, useEffect, useState } from "react";
+import { ChevronDown, LayoutDashboard, Network } from "lucide-react";
 
 import { ErrorBoundary } from "@/shared/ui";
 import { DatabaseBlock } from "@/widgets/database-view";
@@ -19,17 +20,23 @@ import {
   getHomeDashboardPageId,
   HOME_DASHBOARD_PAGE_ICON,
   HOME_DASHBOARD_PAGE_TITLE,
+  KNOWN_DATABASE_VIEWS,
 } from "@/widgets/database-view/model/databaseViewCatalog";
 import { ChannelMessagesView } from "@/widgets/channel-messages";
 import { OsionosPage } from "@/pages/notion-page";
 import { TrashView } from "@/pages/trash-view";
+import { HomeKnowledgeGraph } from "@/widgets/home-variants";
 
 import { usePageStore } from "@/store/usePageStore";
 import { savePagesCache } from "@/store/pageStore.helpers";
 import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
+import "./homeVariants.css";
 
 const HOME_DASHBOARD_VERSION = 3;
+const HOME_VARIANT_STORAGE_KEY = "osionos.home.variant";
+
+type HomeVariant = "dashboard" | "graph";
 
 function createHomeDashboardPage(workspaceId: string, ownerId: string | null): PageEntry {
   return {
@@ -45,6 +52,25 @@ function createHomeDashboardPage(workspaceId: string, ownerId: string | null): P
     parentPageId: null,
     databaseId: null,
     archivedAt: null,
+    properties: [
+      { key: "status", label: "Status", type: "select", value: "Active", options: ["Active", "Planning", "Review"] },
+      { key: "variant", label: "Home variant", type: "select", value: "Dashboard", options: ["Dashboard", "Second Brain"] },
+      { key: "last_refresh", label: "Last refresh", type: "date", value: new Date().toISOString().slice(0, 10) },
+      {
+        key: "data_sources",
+        label: "Data sources",
+        type: "relation",
+        value: ["projects", "tasks", "crm", "content", "inventory", "products"],
+        relationTarget: "database",
+      },
+      {
+        key: "views",
+        label: "Views",
+        type: "relation",
+        value: KNOWN_DATABASE_VIEWS.slice(0, 8).map((view) => view.name),
+        relationTarget: "database",
+      },
+    ],
     content: createViewShowcaseLayoutContent("full_page"),
     surface: "home",
     homeDashboardVersion: HOME_DASHBOARD_VERSION,
@@ -64,6 +90,10 @@ export const MainContent: React.FC = () => {
   const session = useUserStore((s) => s.activeSession());
   const jwt = useUserStore((s) => s.activeJwt() ?? "");
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
+  const [homeVariant, setHomeVariant] = useState<HomeVariant>(() => {
+    if (globalThis.window === undefined) return "dashboard";
+    return globalThis.localStorage.getItem(HOME_VARIANT_STORAGE_KEY) === "graph" ? "graph" : "dashboard";
+  });
 
   const firstWsId = activeWorkspace?._id ?? session?.privateWorkspaces[0]?._id ?? "";
   const workspacePages = usePageStore((s) => firstWsId ? s.pages[firstWsId] ?? [] : []);
@@ -119,6 +149,10 @@ export const MainContent: React.FC = () => {
     }
   }, [activePage, pageById, clearActivePage]);
 
+  useEffect(() => {
+    globalThis.localStorage.setItem(HOME_VARIANT_STORAGE_KEY, homeVariant);
+  }, [homeVariant]);
+
   /* ── Trash view ────────────────────────────────────────────────── */
   if (showTrash) {
     return (
@@ -135,7 +169,9 @@ export const MainContent: React.FC = () => {
     return (
       <ErrorBoundary>
         <div className="flex-1 min-w-0 h-full overflow-hidden bg-[var(--osio-bg-page)]">
-          {homeDashboardPage ? <OsionosPage pageId={homeDashboardPage._id} /> : <LoadingPane />}
+          <HomeVariantShell variant={homeVariant} onVariantChange={setHomeVariant}>
+            {renderHomeVariantContent(homeVariant, homeDashboardPage)}
+          </HomeVariantShell>
         </div>
       </ErrorBoundary>
     );
@@ -203,3 +239,55 @@ const LoadingPane: React.FC = () => (
     <div className="animate-spin w-6 h-6 border-2 border-[var(--osio-accent)] border-t-transparent rounded-full" />
   </div>
 );
+
+function renderHomeVariantContent(variant: HomeVariant, homeDashboardPage: PageEntry | undefined): React.ReactNode {
+  if (variant === "graph") return <HomeKnowledgeGraph />;
+  if (homeDashboardPage) return <OsionosPage pageId={homeDashboardPage._id} />;
+  return <LoadingPane />;
+}
+
+const HomeVariantShell: React.FC<{
+  variant: HomeVariant;
+  onVariantChange: (variant: HomeVariant) => void;
+  children: React.ReactNode;
+}> = ({ variant, onVariantChange, children }) => {
+  const [open, setOpen] = useState(false);
+  const activeLabel = variant === "graph" ? "Second Brain" : "Dashboard";
+
+  return (
+    <div className="osionos-home-shell">
+      <div className="osionos-home-variant-menu" data-open={open ? "true" : undefined}>
+        <button type="button" onClick={() => setOpen((current) => !current)}>
+          <span>Home</span>
+          <ChevronDown size={15} aria-hidden="true" />
+        </button>
+        <div className="osionos-home-variant-dropdown" role="menu">
+          <button
+            type="button"
+            data-active={variant === "dashboard" ? "true" : undefined}
+            onClick={() => {
+              onVariantChange("dashboard");
+              setOpen(false);
+            }}
+          >
+            <LayoutDashboard size={16} aria-hidden="true" />
+            <span>Dashboard</span>
+          </button>
+          <button
+            type="button"
+            data-active={variant === "graph" ? "true" : undefined}
+            onClick={() => {
+              onVariantChange("graph");
+              setOpen(false);
+            }}
+          >
+            <Network size={16} aria-hidden="true" />
+            <span>Second Brain</span>
+          </button>
+        </div>
+        <span className="osionos-home-variant-current">{activeLabel}</span>
+      </div>
+      {children}
+    </div>
+  );
+};
