@@ -11,3 +11,4 @@
 /* ************************************************************************** */
 
 export * from "./MediaAssetPicker";
+export * from "./ImageAssetPickerPanel";

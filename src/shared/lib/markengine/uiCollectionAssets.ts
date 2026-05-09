@@ -23,6 +23,15 @@ import {
 } from '@univers42/ui-collection';
 export { SECTION_LABELS as COLLECTION_SLASH_SECTION_LABELS } from '@univers42/ui-collection';
 import type { BlockType, MediaBlockType } from '@/entities/block';
+import {
+  COLLECTION_AUDIO_ITEMS,
+  COLLECTION_COVER_ITEMS,
+  COLLECTION_FILE_ITEMS,
+  COLLECTION_IMAGE_ITEMS,
+  COLLECTION_VIDEO_ITEMS,
+  type UiCollectionMediaCatalogItem,
+  type UiCollectionMediaKind,
+} from './uiCollectionMediaCatalog';
 
 const DEFAULT_PAGE_EMOJI_PRESET_IDS = [
   'rocket',
@@ -79,8 +88,7 @@ const EMOJI_GROUP_LABELS: Record<string, string> = {
 };
 
 const BOARD_ACTIVE_BACKGROUND = 'rgba(35, 131, 226, 0.12)';
-// Media collections have been removed from @univers42/ui-collection
-// Using empty arrays to preserve API compatibility
+
 export interface CoverPickerAsset {
   id: string;
   label: string;
@@ -158,32 +166,7 @@ const FALLBACK_COVER_ITEMS = [
   { id: 'cover-night', label: 'Night', ref: 'radial-gradient(circle at top, #475569 0%, #020617 70%)' },
 ] as const;
 
-const FALLBACK_MEDIA_PREVIEW =
-  'url:data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 640 360%22%3E%3Crect width=%22640%22 height=%22360%22 fill=%22%232383e2%22/%3E%3Ccircle cx=%22320%22 cy=%22180%22 r=%2280%22 fill=%22%23ffffff%22 fill-opacity=%220.28%22/%3E%3C/svg%3E';
-
-const FALLBACK_IMAGE_ITEMS = [
-  { id: 'image-blue', label: 'Blue abstract', ref: FALLBACK_MEDIA_PREVIEW, previewUrl: FALLBACK_MEDIA_PREVIEW },
-  { id: 'image-green', label: 'Green abstract', ref: 'url:data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 640 360%22%3E%3Crect width=%22640%22 height=%22360%22 fill=%22%2316a34a%22/%3E%3C/svg%3E', previewUrl: 'url:data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 640 360%22%3E%3Crect width=%22640%22 height=%22360%22 fill=%22%2316a34a%22/%3E%3C/svg%3E' },
-] as const;
-
-const FALLBACK_VIDEO_ITEMS = [
-  { id: 'video-demo', label: 'Demo video', ref: 'url:data:video/mp4;base64,', previewUrl: FALLBACK_MEDIA_PREVIEW },
-] as const;
-
-const FALLBACK_AUDIO_ITEMS = [
-  { id: 'audio-demo', label: 'Demo audio', ref: 'url:data:audio/mpeg;base64,', previewUrl: FALLBACK_MEDIA_PREVIEW },
-] as const;
-
-const FALLBACK_FILE_ITEMS = [
-  { id: 'file-demo', label: 'Demo file', ref: 'url:data:text/plain;base64,RGVtbyBmaWxl', previewUrl: FALLBACK_MEDIA_PREVIEW },
-] as const;
-
 const COLLECTION_SVG_ITEMS: Array<unknown> = [];
-const COLLECTION_COVER_ITEMS: Array<unknown> = [...FALLBACK_COVER_ITEMS];
-const COLLECTION_IMAGE_ITEMS: Array<unknown> = [...FALLBACK_IMAGE_ITEMS];
-const COLLECTION_VIDEO_ITEMS: Array<unknown> = [...FALLBACK_VIDEO_ITEMS];
-const COLLECTION_AUDIO_ITEMS: Array<unknown> = [...FALLBACK_AUDIO_ITEMS];
-const COLLECTION_FILE_ITEMS: Array<unknown> = [...FALLBACK_FILE_ITEMS];
 
 const BOARD_CLASS_NAMES: NonNullable<AssetPickerBoardProps['classNames']> = {
   root: 'w-full',
@@ -332,23 +315,21 @@ export const PAGE_ICON_PICKER_TABS: AssetPickerBoardTab[] =
     },
   });
 
-export const COVER_PICKER_TABS: AssetPickerBoardTab[] =
-  COLLECTION_COVER_ITEMS.length > 0
-    ? [
-        createMediaCollectionPickerTab('photos', COLLECTION_COVER_ITEMS, {
-          label: 'Photos',
-          columns: 2,
-          itemLabelVisibility: 'hidden',
-          activeBackground: BOARD_ACTIVE_BACKGROUND,
-          searchLabel: 'Search photos',
-          searchPlaceholder: 'Search by mood, category or tag',
-        }),
-      ]
-    : [];
+export const COVER_PICKER_TABS: AssetPickerBoardTab[] = [
+  createMediaCollectionPickerTab('photos', COLLECTION_COVER_ITEMS, {
+    label: 'Photos',
+    columns: 2,
+    layout: 'cover',
+    itemLabelVisibility: 'visible',
+    activeBackground: BOARD_ACTIVE_BACKGROUND,
+    searchLabel: 'Search covers',
+    searchPlaceholder: 'Search by mood, category or tag',
+  }),
+];
 
 const MEDIA_PICKER_TAB_OPTIONS = {
   activeBackground: BOARD_ACTIVE_BACKGROUND,
-  itemLabelVisibility: 'hidden',
+  itemLabelVisibility: 'visible',
 } as const;
 
 function createImageMediaPickerTabs(
@@ -360,14 +341,16 @@ function createImageMediaPickerTabs(
       columns: 2,
       layout: 'cover',
       searchLabel: 'Search images',
-      searchPlaceholder: 'Search photos by mood or keyword',
+      searchPlaceholder: 'Search by mood, category or tag',
       ...MEDIA_PICKER_TAB_OPTIONS,
     }),
   ];
 }
 
+export const IMAGE_PICKER_TABS: AssetPickerBoardTab[] = createImageMediaPickerTabs();
+
 export const SLASH_MEDIA_PICKER_TABS: Record<MediaBlockType, AssetPickerBoardTab[]> = {
-  image: createImageMediaPickerTabs(),
+  image: IMAGE_PICKER_TABS,
   video: [
     createMediaCollectionPickerTab('videos', COLLECTION_VIDEO_ITEMS, {
       label: 'Videos',
@@ -415,7 +398,41 @@ export function getSlashMediaPickerTabs(
 export interface ResolvedCollectionMediaAsset {
   label?: string;
   url?: string;
+  fullUrl?: string;
+  previewUrl?: string;
   thumbnailUrl?: string;
+  posterUrl?: string;
+  mediaKind?: UiCollectionMediaKind;
+}
+
+function resolveRemoteValue(ref?: string): string | undefined {
+  if (!ref) {
+    return undefined;
+  }
+
+  if (ref.startsWith('url:')) {
+    return ref.slice('url:'.length);
+  }
+
+  if (/^https?:\/\//i.test(ref)) {
+    return ref;
+  }
+
+  return undefined;
+}
+
+function normalizeCollectionMediaKind(
+  kind?: UiCollectionMediaKind | MediaBlockType | 'cover',
+): UiCollectionMediaKind | 'cover' | undefined {
+  if (!kind) {
+    return undefined;
+  }
+
+  if (kind === 'image' || kind === 'video' || kind === 'audio' || kind === 'file') {
+    return kind;
+  }
+
+  return 'cover';
 }
 
 export function normalizeMediaSource(value: string | undefined): string | undefined {
@@ -433,32 +450,59 @@ export function resolveCollectionMediaAsset(
   value: string | undefined,
   tabs: AssetPickerBoardTab[],
   fallbackLabel?: string,
+  kind?: UiCollectionMediaKind | MediaBlockType | 'cover',
 ): ResolvedCollectionMediaAsset | null {
   if (!value) {
     return null;
   }
 
-  if (isDirectMediaSource(value)) {
+  const resolved = resolveAssetValue(value, tabs);
+  if (!resolved) {
+    if (!isDirectMediaSource(value)) {
+      return null;
+    }
+
     const source = normalizeMediaSource(value);
+    const resolvedKind = normalizeCollectionMediaKind(kind);
     return {
       label: fallbackLabel,
       url: source,
-      thumbnailUrl: source,
+      fullUrl: source,
+      previewUrl:
+        resolvedKind === 'image' || resolvedKind === 'cover' ? source : undefined,
+      thumbnailUrl:
+        resolvedKind === 'image' || resolvedKind === 'cover' ? source : undefined,
+      mediaKind: resolvedKind === 'cover' ? 'image' : resolvedKind,
     };
   }
 
-  const resolved = resolveAssetValue(value, tabs);
-  if (!resolved) {
-    return null;
-  }
-
-  const previewImageUrl =
-    resolved.preview?.kind === 'image' ? resolved.preview.src : undefined;
+  const itemData = resolved.item?.data as UiCollectionMediaCatalogItem | undefined;
+  const resolvedKind = itemData?.kind ?? normalizeCollectionMediaKind(kind);
+  const fallbackUrl = resolveRemoteValue(resolved.serializedValue);
+  const previewImageUrl = resolved.preview?.kind === 'image' ? resolved.preview.src : undefined;
+  const fullUrl = resolveRemoteValue(itemData?.ref) ?? fallbackUrl;
+  const previewUrl =
+    resolveRemoteValue(itemData?.previewRef) ??
+    (resolvedKind === 'video' ? undefined : fullUrl ?? previewImageUrl);
+  const thumbnailUrl =
+    resolveRemoteValue(itemData?.thumbnailRef) ??
+    (resolvedKind === 'image' || resolvedKind === 'cover' ? previewImageUrl : undefined);
+  const posterUrl =
+    resolveRemoteValue(itemData?.posterRef) ??
+    resolveRemoteValue(itemData?.thumbnailRef) ??
+    (resolvedKind === 'video' ? previewImageUrl : undefined);
 
   return {
     label: resolved.item?.label ?? fallbackLabel,
-    url: previewImageUrl,
-    thumbnailUrl: previewImageUrl,
+    url:
+      resolvedKind === 'video' || resolvedKind === 'audio' || resolvedKind === 'file'
+        ? fullUrl
+        : previewUrl ?? fullUrl ?? previewImageUrl,
+    fullUrl,
+    previewUrl,
+    thumbnailUrl,
+    posterUrl,
+    mediaKind: resolvedKind === 'cover' ? 'image' : resolvedKind,
   };
 }
 

@@ -39,6 +39,7 @@ export function resolveMediaBlockAsset(
     block.asset,
     getSlashMediaPickerTabs(block.type),
     MEDIA_BLOCK_LABELS[block.type],
+    block.type,
   );
 }
 
@@ -89,11 +90,10 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
         <video
           controls
           preload="metadata"
-          poster={resolved.thumbnailUrl}
+          poster={resolved.posterUrl ?? resolved.thumbnailUrl}
           className="block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] bg-black/90"
         >
-          <source src={resolved.url} />
-          <track kind="captions" />
+          <source src={resolved.fullUrl ?? resolved.url} />
         </video>
       </div>
     );

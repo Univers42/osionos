@@ -46,7 +46,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
   const isGradient = cover.startsWith('linear-gradient') || cover.startsWith('radial-gradient');
   const resolvedCover = isGradient
     ? null
-    : resolveCollectionMediaAsset(cover, COVER_PICKER_TABS);
+    : resolveCollectionMediaAsset(cover, COVER_PICKER_TABS, 'Cover', 'cover');
   const isUrl = !isGradient;
   const coverSrc = normalizeMediaSource(resolvedCover?.url ?? cover);
 
