@@ -6,15 +6,14 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:24:39 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/08 03:50:35 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 18:16:10 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { api } from '@/shared/api/client';
-import { useUserStore } from '@/features/auth/model/useUserStore';
+import { api, getActiveJwt } from '@/shared/api/client';
 
 export type WorkspaceChannelType = 'text' | 'thread' | 'forum' | 'audio' | 'video' | 'stage' | 'archive' | 'agent';
 export type WorkspaceChannelVisibility = 'workspace' | 'members';
@@ -46,9 +45,31 @@ export interface WorkspaceAppearance {
   tokens: WorkspaceThemeTokens;
 }
 
+export interface WorkspaceSidebarSettings {
+  newSidebar: boolean;
+  showApps: boolean;
+}
+
+export interface WorkspaceAnalyticsSettings {
+  pageViews: boolean;
+}
+
+export interface WorkspaceSettingsFields {
+  name?: string;
+  icon?: string;
+  landingPageId?: string | null;
+  sidebar: WorkspaceSidebarSettings;
+  analytics: WorkspaceAnalyticsSettings;
+}
+
 export interface WorkspaceConfig {
   channels: WorkspaceChannel[];
   appearance?: WorkspaceAppearance | null;
+  name?: string;
+  icon?: string;
+  landingPageId?: string | null;
+  sidebar?: WorkspaceSidebarSettings;
+  analytics?: WorkspaceAnalyticsSettings;
 }
 
 interface WorkspaceConfigStore {
@@ -57,6 +78,8 @@ interface WorkspaceConfigStore {
   addChannel: (userId: string, workspaceId: string, name?: string, type?: WorkspaceChannelType, parentChannelId?: string | null) => Promise<WorkspaceChannel>;
   addThread: (userId: string, workspaceId: string, parentChannelId: string, name?: string) => Promise<WorkspaceChannel>;
   updateChannel: (userId: string, workspaceId: string, channelId: string, updates: Partial<WorkspaceChannel>) => Promise<void>;
+  updateSettings: (userId: string, workspaceId: string, updates: Partial<WorkspaceSettingsFields>) => Promise<void>;
+  resetSettings: (userId: string, workspaceId: string, defaults?: Partial<WorkspaceSettingsFields>) => Promise<void>;
   updateAppearance: (userId: string, workspaceId: string, appearance: WorkspaceAppearance) => Promise<void>;
   clearAppearance: (userId: string, workspaceId: string) => Promise<void>;
 }
@@ -72,6 +95,13 @@ export const DEFAULT_WORKSPACE_APPEARANCE: WorkspaceAppearance = {
     accent: '#2383e2',
     line: '#e9e9e7',
   },
+};
+
+export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettingsFields = {
+  icon: '🌏',
+  landingPageId: null,
+  sidebar: { newSidebar: true, showApps: true },
+  analytics: { pageViews: true },
 };
 
 export const THEME_PRESETS: WorkspaceAppearance[] = [
@@ -192,6 +222,11 @@ export function resolveWorkspaceConfig(config?: WorkspaceConfig): WorkspaceConfi
   return {
     channels: config?.channels ?? [],
     appearance,
+    name: config?.name,
+    icon: config?.icon ?? DEFAULT_WORKSPACE_SETTINGS.icon,
+    landingPageId: config?.landingPageId ?? DEFAULT_WORKSPACE_SETTINGS.landingPageId,
+    sidebar: { ...DEFAULT_WORKSPACE_SETTINGS.sidebar, ...config?.sidebar },
+    analytics: { ...DEFAULT_WORKSPACE_SETTINGS.analytics, ...config?.analytics },
   };
 }
 
@@ -200,7 +235,7 @@ export function effectiveWorkspaceAppearance(config?: WorkspaceConfig): Workspac
 }
 
 async function persistWorkspaceConfigToApi(workspaceId: string, config: WorkspaceConfig) {
-  const jwt = useUserStore.getState().activeJwt();
+  const jwt = getActiveJwt();
   if (!jwt) return;
   try {
     await api.patch(`/api/workspaces/${workspaceId}/config`, { config }, jwt);
@@ -245,6 +280,32 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
           channels: current.channels.map((channel) => channel.id === channelId
             ? { ...channel, ...updates, updatedAt: new Date().toISOString() }
             : channel),
+        };
+        set((state) => ({ configs: { ...state.configs, [key]: nextConfig } }));
+        await persistWorkspaceConfigToApi(workspaceId, nextConfig);
+      },
+      updateSettings: async (userId, workspaceId, updates) => {
+        const key = workspaceConfigKey(userId, workspaceId);
+        const current = resolveWorkspaceConfig(get().configs[key]);
+        const nextConfig: WorkspaceConfig = {
+          ...current,
+          ...updates,
+          sidebar: { ...DEFAULT_WORKSPACE_SETTINGS.sidebar, ...current.sidebar, ...updates.sidebar },
+          analytics: { ...DEFAULT_WORKSPACE_SETTINGS.analytics, ...current.analytics, ...updates.analytics },
+        };
+        set((state) => ({ configs: { ...state.configs, [key]: nextConfig } }));
+        await persistWorkspaceConfigToApi(workspaceId, nextConfig);
+      },
+      resetSettings: async (userId, workspaceId, defaults = {}) => {
+        const key = workspaceConfigKey(userId, workspaceId);
+        const current = resolveWorkspaceConfig(get().configs[key]);
+        const nextConfig = {
+          ...current,
+          name: defaults.name,
+          icon: defaults.icon ?? DEFAULT_WORKSPACE_SETTINGS.icon,
+          landingPageId: defaults.landingPageId ?? DEFAULT_WORKSPACE_SETTINGS.landingPageId,
+          sidebar: { ...DEFAULT_WORKSPACE_SETTINGS.sidebar, ...defaults.sidebar },
+          analytics: { ...DEFAULT_WORKSPACE_SETTINGS.analytics, ...defaults.analytics },
         };
         set((state) => ({ configs: { ...state.configs, [key]: nextConfig } }));
         await persistWorkspaceConfigToApi(workspaceId, nextConfig);
