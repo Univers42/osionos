@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:17:01 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/09 18:16:10 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 18:49:04 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,6 +35,7 @@ import {
   Mail,
   MoreHorizontal,
   Palette,
+  Plug,
   Search,
   Settings,
   Shield,
@@ -50,7 +51,7 @@ import {
 import { AssetRenderer } from '@univers42/ui-collection';
 
 import { useUserStore, type StaticPersona } from '@/features/auth';
-import { usePageActions, type PageEntry } from '@/entities/page';
+import { TRANSLATION_LANGUAGES, fontSampleClass, usePageActions, type PageEntry } from '@/entities/page';
 import { WorkspaceThemeControls } from '@/features/theme/WorkspaceThemePanel';
 import { importPageFile } from '@/services/page-actions';
 import { API_BASE, api, getActiveJwt } from '@/shared/api/client';
@@ -75,8 +76,8 @@ import {
   useWorkspaceInvitesStore,
   useWorkspaceMembersStore,
   useWorkspaceSettingsStore,
-  type BillingInvoice,
   type BillingState,
+  type BillingInvoice,
   type ConnectionRecord,
   type ImportHistoryEntry,
   type McpAllowedTool,
@@ -250,6 +251,10 @@ function runAsync(work: Promise<unknown>) {
   work.catch(() => undefined);
 }
 
+function runMaybeAsync(work: Promise<unknown> | void) {
+  Promise.resolve(work).catch(() => undefined);
+}
+
 function noopHandledAction(label: string, metadata: Record<string, unknown> = {}) {
   recordSettingsAction(label, metadata);
 }
@@ -308,6 +313,10 @@ function cookieModeLabel(mode: string | undefined) {
   if (mode === 'all') return 'Allow all';
   if (mode === 'essential') return 'Essential only';
   return 'Customize';
+}
+
+function stringPayload(value: unknown, fallback: string) {
+  return typeof value === 'string' ? value : fallback;
 }
 
 function providerConnectionInput(userId: string, provider: string, labelSuffix = '') {
@@ -639,14 +648,11 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
   }, [hydrateAccount, hydrateDevices, hydrateEmails, hydratePasskeys, persona?.email, persona?.name, userId]);
 
   useEffect(() => {
-    setPreferredNameDraft(account?.profile.preferredName ?? persona?.name ?? '');
-  }, [account?.profile.preferredName, persona?.name]);
-
-  useEffect(() => {
     const currentName = account?.profile.preferredName ?? persona?.name ?? '';
     if (!preferredNameDraft.trim() || preferredNameDraft === currentName) return;
     const timer = globalThis.setTimeout(() => {
-      runAsync(updateAccount({ profile: { ...account?.profile, preferredName: preferredNameDraft.trim() } }).then(() => flashSavedIndicator(setNameSaved)));
+      updateAccount({ profile: { ...account?.profile, preferredName: preferredNameDraft.trim() } });
+      flashSavedIndicator(setNameSaved);
     }, 300);
     return () => globalThis.clearTimeout(timer);
   }, [account?.profile, persona?.name, preferredNameDraft, updateAccount]);
@@ -666,7 +672,7 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
   async function handleRegisterPasskey(nickname = 'osionos passkey') {
     const options = await registerPasskeyOptions(nickname);
     const response = options
-      ? await startRegistration({ optionsJSON: options as Parameters<typeof startRegistration>[0]['optionsJSON'] })
+      ? await startRegistration({ optionsJSON: options as unknown as Parameters<typeof startRegistration>[0]['optionsJSON'] })
       : { id: `local-${Date.now()}`, response: { transports: ['internal'] } };
     await verifyPasskeyRegistration(response, nickname);
     toast({ kind: 'success', title: 'Passkey added' });
@@ -692,8 +698,8 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
               <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2">
                 <EmojiPicker
                   current={account?.profile.avatar ?? persona?.emoji}
-                  onSelect={(value) => { runAsync(updateAccount({ profile: { ...account?.profile, avatar: value } })); setAvatarPickerOpen(false); }}
-                  onRemove={() => { runAsync(updateAccount({ profile: { ...account?.profile, avatar: null } })); setAvatarPickerOpen(false); }}
+                  onSelect={(value) => { updateAccount({ profile: { ...account?.profile, avatar: value } }); setAvatarPickerOpen(false); }}
+                  onRemove={() => { updateAccount({ profile: { ...account?.profile, avatar: undefined } }); setAvatarPickerOpen(false); }}
                   onClose={() => setAvatarPickerOpen(false)}
                 />
               </div>
@@ -720,7 +726,7 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
         <SettingRow title="Passkeys" description={`${activePasskeys.length} passkey${activePasskeys.length === 1 ? '' : 's'} configured`} action={<Button onClick={() => setModal({ name: 'passkeys' })}><KeyRound size={14} /> Add passkey</Button>} />
       </Section>
       <Section title="Support">
-        <SettingRow title="Support access" description="Grant support temporary access to troubleshoot problems. You can revoke access anytime." action={<Switch checked={Boolean(account?.supportAccessGrantedUntil)} onChange={(checked) => { if (checked) setModal({ name: 'support-duration' }); else runAsync(updateAccount({ supportAccessGrantedUntil: null })); }} />} />
+        <SettingRow title="Support access" description="Grant support temporary access to troubleshoot problems. You can revoke access anytime." action={<Switch checked={Boolean(account?.supportAccessGrantedUntil)} onChange={(checked) => { if (checked) setModal({ name: 'support-duration' }); else updateAccount({ supportAccessGrantedUntil: null }); }} />} />
         <SettingRow danger title="Delete my account" description="Permanently delete your account and remove access to your pages and workspaces." action={<Button tone="danger" onClick={() => setModal({ name: 'delete-account' })}>Delete my account</Button>} />
       </Section>
       <Section title="Devices">
@@ -733,10 +739,10 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
       </Section>
 
       {modal?.name === 'email-manager' && <EmailManagerModal userId={userId} fallbackEmail={persona?.email} onClose={() => setModal(null)} />}
-      {modal?.name === 'password' && <PasswordModal hasPassword={Boolean(security.hasPassword)} onSaved={() => runAsync(updateAccount({ security: { ...security, hasPassword: true } }))} onClose={() => setModal(null)} />}
-      {modal?.name === 'two-factor' && <TwoFactorModal enabled={Boolean(security.twoStepEnabled)} onEnabled={(enabled) => runAsync(updateAccount({ security: { ...security, twoStepEnabled: enabled } }))} onClose={() => setModal(null)} />}
+      {modal?.name === 'password' && <PasswordModal hasPassword={Boolean(security.hasPassword)} onSaved={() => updateAccount({ security: { ...security, hasPassword: true } })} onClose={() => setModal(null)} />}
+      {modal?.name === 'two-factor' && <TwoFactorModal enabled={Boolean(security.twoStepEnabled)} onEnabled={(enabled) => updateAccount({ security: { ...security, twoStepEnabled: enabled } })} onClose={() => setModal(null)} />}
       {modal?.name === 'passkeys' && <PasskeyManagerModal passkeys={activePasskeys} onAdd={() => runAsync(handleRegisterPasskey())} onRename={renamePasskey} onRemove={(id) => runAsync(removePasskey(id))} onClose={() => setModal(null)} />}
-      {modal?.name === 'support-duration' && <SupportDurationModal onSelect={(days) => { runAsync(updateAccount({ supportAccessGrantedUntil: new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString() })); setModal(null); }} onClose={() => setModal(null)} />}
+      {modal?.name === 'support-duration' && <SupportDurationModal onSelect={(days) => { updateAccount({ supportAccessGrantedUntil: new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString() }); setModal(null); }} onClose={() => setModal(null)} />}
       {modal?.name === 'delete-account' && <TypedConfirmModal title="Delete account" message="Type DELETE to schedule this account for deletion." confirmText="DELETE" danger actionLabel="Schedule deletion" onConfirm={() => runAsync(handleDeleteAccount())} onClose={() => setModal(null)} />}
       {modal?.name === 'revoke-devices' && <ConfirmModal title="Log out all devices" message="This logs out every active session except your current device." danger actionLabel="Log out all devices" onConfirm={() => { runAsync(revokeAllExceptCurrent(userId)); setModal(null); }} onClose={() => setModal(null)} />}
     </>
@@ -902,7 +908,7 @@ const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }) 
         <SettingRow title="Language" description="Choose the language you want to use osionos in" action={<SelectButton value={preferences?.language ?? 'en-US'} options={[{ value: 'en-US', label: 'English (US)' }, { value: 'fr-FR', label: 'Français' }, { value: 'es-ES', label: 'Español' }, { value: 'de-DE', label: 'Deutsch' }]} onChange={(value) => { changeLanguage(value); update({ language: value }); }}>English (US)</SelectButton>} />
         <SettingRow title="Number format" description="Choose how numbers and currencies are formatted." action={<SelectButton value={preferences?.numberFormat ?? 'default'} options={[{ value: 'default', label: 'Default' }, { value: 'dot', label: '1,000.00' }, { value: 'comma', label: '1.000,00' }, { value: 'space', label: '1 000,00' }]} onChange={(value) => update({ numberFormat: value })}>Default</SelectButton>} />
         <SettingRow title="Always show text direction controls" description="Show left-to-right and right-to-left controls in the editor." action={<Switch checked={Boolean(preferences?.privacy?.textDirectionControls)} onChange={(checked) => update({ privacy: { ...preferences?.privacy, textDirectionControls: checked } })} />} />
-        <SettingRow title="Start week" description="This will affect the way your calendars appear in osionos" action={<SelectButton value={preferences?.weekStart ?? 'monday'} options={[{ value: 'monday', label: 'Monday' }, { value: 'sunday', label: 'Sunday' }]} onChange={(value) => update({ weekStart: value })}>Monday</SelectButton>} />
+        <SettingRow title="Start week" description="This will affect the way your calendars appear in osionos" action={<SelectButton value={preferences?.weekStart ?? 'monday'} options={[{ value: 'monday', label: 'Monday' }, { value: 'sunday', label: 'Sunday' }]} onChange={(value) => update({ weekStart: value as 'sunday' | 'monday' })}>Monday</SelectButton>} />
         <SettingRow title="Date format" description="Set the default format for new @date mentions" action={<SelectButton value={preferences?.dateFormat ?? 'relative'} options={[{ value: 'relative', label: 'Relative' }, { value: 'short', label: 'Short' }, { value: 'iso', label: 'ISO' }]} onChange={(value) => update({ dateFormat: value })}>Relative</SelectButton>} />
         <SettingRow title="Set time zone automatically using your location" description="Reminders, notifications, and emails will use your time zone" action={<Switch checked={Boolean(preferences?.autoTimezone)} onChange={(checked) => update({ autoTimezone: checked, timezone: checked ? Intl.DateTimeFormat().resolvedOptions().timeZone : preferences?.timezone })} />} />
         <SettingRow title="Time zone" description="Choose your time zone" action={<SelectButton value={preferences?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} options={timezones} onChange={(value) => update({ timezone: value, autoTimezone: false })}>Time zone</SelectButton>} />
@@ -946,10 +952,10 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
   const toast = useToastStore((state) => state.push);
   const renameWorkspace = useUserStore((state) => state.renameWorkspace);
   const deleteWorkspace = useUserStore((state) => state.deleteWorkspace);
-  const workspaces = useUserStore((state) => state.workspaces);
+  const sessionWorkspaces = useUserStore((state) => state.activeSession()?.privateWorkspaces.concat(state.activeSession()?.sharedWorkspaces ?? []) ?? []);
   const setUseNewSidebar = useUIStore((state) => state.setUseNewSidebar);
   const setShowOtherApps = useUIStore((state) => state.setShowOtherApps);
-  const pages = usePageStore((state) => state.pages);
+  const pages = usePageStore((state) => state.pages[workspaceId] ?? []);
   const workspaceMembers = useWorkspaceMembersStore((state) => state.data[workspaceId] ?? EMPTY_WORKSPACE_MEMBERS);
   const storedSettings = useWorkspaceSettingsStore((state) => state.data[workspaceId]);
   const hydrate = useWorkspaceSettingsStore((state) => state.hydrate);
@@ -964,13 +970,10 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState(settings.name);
 
   useEffect(() => {
-    setWorkspaceNameDraft(settings.name);
-  }, [settings.name]);
-
-  useEffect(() => {
     if (!workspaceNameDraft.trim() || workspaceNameDraft === settings.name) return;
     const timer = globalThis.setTimeout(() => {
-      runAsync(renameWorkspace(workspaceId, workspaceNameDraft.trim(), settings.icon ?? undefined).then(() => update(resolvedUserId, workspaceId, { name: workspaceNameDraft.trim() })));
+      renameWorkspace(workspaceId, workspaceNameDraft.trim(), settings.icon ?? undefined);
+      update(resolvedUserId, workspaceId, { name: workspaceNameDraft.trim() });
     }, 300);
     return () => globalThis.clearTimeout(timer);
   }, [renameWorkspace, resolvedUserId, settings.icon, settings.name, update, workspaceId, workspaceNameDraft]);
@@ -993,7 +996,7 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
       recordSettingsAction('workspace_export_remote_failed', { workspaceId });
     }
     const zip = new JSZip();
-    pages.forEach((page) => zip.file(`${safeSlug(page.title || 'untitled') || page.id}.json`, JSON.stringify(page, null, 2)));
+    pages.forEach((page) => zip.file(`${safeSlug(page.title || 'untitled') || page._id}.json`, JSON.stringify(page, null, 2)));
     downloadBlob(`${safeSlug(settings.name)}.zip`, await zip.generateAsync({ type: 'blob' }));
   }
 
@@ -1004,7 +1007,7 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
   }
 
   async function handleDeleteWorkspace() {
-    if (workspaces.length <= 1) {
+    if (sessionWorkspaces.length <= 1) {
       toast({ kind: 'warning', title: 'You need at least one workspace.' });
       return;
     }
@@ -1016,7 +1019,7 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
     <>
       <Section title="Workspace settings">
         <SettingRow stack title="Workspace name" description="Your workspace name can be up to 65 characters" action={<input className="w-full max-w-[400px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={workspaceNameDraft} maxLength={65} onChange={(event) => setWorkspaceNameDraft(event.target.value)} />} />
-        <SettingRow stack title="Icon" description="Upload an image or pick an emoji. This icon will appear in your sidebar and notifications." action={<div className="relative"><button type="button" className="flex h-[72px] w-[72px] items-center justify-center rounded-md border border-[var(--osio-border-default)] text-5xl" onClick={() => setIconPickerOpen((open) => !open)}>{settings.icon ?? '🌏'}</button>{iconPickerOpen && <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2"><EmojiPicker current={settings.icon ?? '🌏'} onSelect={(value) => { update(resolvedUserId, workspaceId, { icon: value }); runAsync(renameWorkspace(workspaceId, settings.name, value)); setIconPickerOpen(false); }} onRemove={() => { update(resolvedUserId, workspaceId, { icon: null }); setIconPickerOpen(false); }} onClose={() => setIconPickerOpen(false)} /></div>}</div>} />
+        <SettingRow stack title="Icon" description="Upload an image or pick an emoji. This icon will appear in your sidebar and notifications." action={<div className="relative"><button type="button" className="flex h-[72px] w-[72px] items-center justify-center rounded-md border border-[var(--osio-border-default)] text-5xl" onClick={() => setIconPickerOpen((open) => !open)}>{settings.icon ?? '🌏'}</button>{iconPickerOpen && <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2"><EmojiPicker current={settings.icon ?? '🌏'} onSelect={(value) => { update(resolvedUserId, workspaceId, { icon: value }); renameWorkspace(workspaceId, settings.name, value); setIconPickerOpen(false); }} onRemove={() => { update(resolvedUserId, workspaceId, { icon: undefined }); setIconPickerOpen(false); }} onClose={() => setIconPickerOpen(false)} /></div>}</div>} />
         <SettingRow title="Custom landing page" description={<>When a new member joins this workspace, a copy of this page will be added to their <b>Private</b> pages</>} action={<Button onClick={() => setModal({ name: 'page-selector' })}>{settings.landingPageId ? 'Change page' : 'Select page'}</Button>} />
       </Section>
       <Section title="Sidebar">
@@ -1048,7 +1051,7 @@ const PageSelectorModal: React.FC<{ pages: PageEntry[]; selectedId: string | nul
   <Modal open onClose={onClose} title="Select landing page" size="md">
     <div className="space-y-2">
       <Button className="w-full justify-start" onClick={() => onSelect(null)}>No landing page</Button>
-      {pages.slice(0, 20).map((page) => <Button key={page.id} className={`w-full justify-start ${selectedId === page.id ? 'border-[var(--osio-accent)]' : ''}`} onClick={() => onSelect(page.id)}>{page.icon ?? '📄'} {page.title || 'Untitled'}</Button>)}
+      {pages.slice(0, 20).map((page) => <Button key={page._id} className={`w-full justify-start ${selectedId === page._id ? 'border-[var(--osio-accent)]' : ''}`} onClick={() => onSelect(page._id)}>{page.icon ?? '📄'} {page.title || 'Untitled'}</Button>)}
     </div>
   </Modal>
 );
@@ -1097,13 +1100,13 @@ const NotificationsPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }
 };
 
 const PageNotificationOverridesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const pages = usePageStore((state) => state.pages).slice(0, 8);
-  const [enabledIds, setEnabledIds] = useState(() => new Set(pages.filter((page) => page.visibility !== 'private').map((page) => page.id)));
+  const pages = usePageStore((state) => Object.values(state.pages).flat().slice(0, 8));
+  const [enabledIds, setEnabledIds] = useState(() => new Set(pages.filter((page) => page.visibility !== 'private').map((page) => page._id)));
   return (
     <Modal open onClose={onClose} title="Page notification settings" size="md">
       <div className="space-y-2">
         {pages.length === 0 ? <p className="text-sm text-[var(--osio-fg-muted)]">No pages available yet.</p> : pages.map((page) => (
-          <SettingRow key={page.id} title={page.title || 'Untitled'} description={page.updatedAt ? new Date(page.updatedAt).toLocaleString() : 'No updates yet'} action={<Switch checked={enabledIds.has(page.id)} onChange={(checked) => setEnabledIds((current) => { const next = new Set(current); if (checked) { next.add(page.id); } else { next.delete(page.id); } return next; })} />} />
+          <SettingRow key={page._id} title={page.title || 'Untitled'} description={page.updatedAt ? new Date(page.updatedAt).toLocaleString() : 'No updates yet'} action={<Switch checked={enabledIds.has(page._id)} onChange={(checked) => setEnabledIds((current) => { const next = new Set(current); if (checked) { next.add(page._id); } else { next.delete(page._id); } return next; })} />} />
         ))}
         <div className="flex justify-end"><Button tone="primary" onClick={onClose}>Done</Button></div>
       </div>
@@ -1220,6 +1223,8 @@ const ProviderPickerModal: React.FC<{ title: string; providers: string[]; onSele
   </Modal>
 );
 
+type InviteRole = Exclude<WorkspaceMemberRole, 'owner'>;
+
 const PeoplePanel: React.FC<{
   workspaceId?: string;
   activeUserId: string;
@@ -1299,14 +1304,14 @@ const PeoplePanel: React.FC<{
   );
 };
 
-const InviteMembersModal: React.FC<{ onInvite: (email: string, role: WorkspaceMemberRole) => Promise<WorkspaceInvite | null>; onClose: () => void }> = ({ onInvite, onClose }) => {
+const InviteMembersModal: React.FC<{ onInvite: (email: string, role: InviteRole) => Promise<WorkspaceInvite | null>; onClose: () => void }> = ({ onInvite, onClose }) => {
   const [emailDraft, setEmailDraft] = useState('');
-  const [role, setRole] = useState<WorkspaceMemberRole>('member');
+  const [role, setRole] = useState<InviteRole>('member');
   return (
     <Modal open onClose={onClose} title="Invite members" size="sm">
       <div className="space-y-3">
         <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} placeholder="name@example.com" />
-        <SelectButton value={role} options={[{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }, { value: 'guest', label: 'Guest' }]} onChange={(value) => setRole(value as WorkspaceMemberRole)}>Member</SelectButton>
+        <SelectButton value={role} options={[{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }, { value: 'guest', label: 'Guest' }]} onChange={(value) => setRole(value as InviteRole)}>Member</SelectButton>
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => { if (emailDraft.includes('@')) runAsync(onInvite(emailDraft.trim().toLowerCase(), role).then(() => onClose())); }}>Invite</Button></div>
       </div>
     </Modal>
@@ -1353,12 +1358,11 @@ const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string }> = ({
 
   async function importFiles(imports: File[]) {
     const pageExtensions = new Set(['.md', '.markdown', '.html', '.json', '.txt']);
-    event.target.value = '';
     for (const file of imports) {
       const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
       if (pageExtensions.has(extension)) {
         const payload = await importPageFile(file);
-        const page = await addPage(workspaceId, payload.title || file.name, jwt, undefined, { content: payload.content });
+        const page = await addPage(workspaceId, payload.title || file.name, jwt ?? '', undefined, { content: payload.content });
         addImportEntry(workspaceId, { userId: activeUserId || 'anonymous', workspaceId, source: 'file', fileName: file.name, byteSize: file.size, status: 'completed', pageIds: page?._id ? [page._id] : [], error: null, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), removedAt: null });
         continue;
       }
@@ -1375,7 +1379,7 @@ const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string }> = ({
     await importFiles(imports);
   }
 
-  function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+  function handleDrop(event: React.DragEvent<HTMLButtonElement>) {
     event.preventDefault();
     runAsync(importFiles(Array.from(event.dataTransfer.files)));
   }
@@ -1404,19 +1408,19 @@ const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string }> = ({
     <>
       <MiniTabs active={activeImportTab} onChange={setActiveImportTab} tabs={[{ label: 'Discover' }, { label: 'Completed', count: completedRows.length }]} />
       <Section title="Import your content">
-        <div className="rounded-xl border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center" onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
+        <button type="button" className="w-full rounded-xl border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center" onClick={() => fileInputRef.current?.click()} onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
           <Upload className="mx-auto text-[var(--osio-accent)]" size={28} />
           <h4 className="mt-3 font-medium text-[var(--osio-fg-default)]">Import your content to osionos</h4>
           <p className="mt-2 text-sm text-[var(--osio-fg-muted)]">ZIP, CSV, PDF, text, markdown, HTML, images, audio, and video files.</p>
           <p className="mt-1 text-xs text-[var(--osio-fg-subtle)]">ZIP files can be a maximum of 5GB</p>
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleLibraryImport} />
-          <Button className="mt-4" onClick={() => fileInputRef.current?.click()}><Upload size={15} /> Choose files</Button>
-        </div>
+          <span className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-1.5 text-sm font-medium text-[var(--osio-fg-default)]"><Upload size={15} /> Choose files</span>
+        </button>
       </Section>
       <Section title="File-based imports"><div className="grid gap-3 sm:grid-cols-2">{files.map((file) => <FeatureCard key={file} icon={<FileText size={16} />} title={file} description={`Import ${file.toLowerCase()} content from files`} action={<Button onClick={() => setModal({ name: 'typed-import', payload: { kind: file } })}>Open</Button>} />)}</div></Section>
       <Section title="Third-party imports"><div className="grid gap-3 sm:grid-cols-2">{apps.map((app) => <FeatureCard key={app} icon={<Database size={16} />} title={app} description={`Migrate content from ${app}`} action={<Button onClick={() => setModal({ name: 'provider-import', payload: { app } })}>Import</Button>} />)}</div></Section>
-      {modal?.name === 'typed-import' && <TypedImportModal kind={String(modal.payload?.kind ?? 'File')} onChoose={() => fileInputRef.current?.click()} onClose={() => setModal(null)} />}
-      {modal?.name === 'provider-import' && <ProviderImportModal app={String(modal.payload?.app ?? 'Provider')} workspaceId={workspaceId} activeUserId={activeUserId || 'anonymous'} addEntry={addImportEntry} addPage={addPage} jwt={jwt} onClose={() => setModal(null)} />}
+      {modal?.name === 'typed-import' && <TypedImportModal kind={stringPayload(modal.payload?.kind, 'File')} onChoose={() => fileInputRef.current?.click()} onClose={() => setModal(null)} />}
+      {modal?.name === 'provider-import' && <ProviderImportModal app={stringPayload(modal.payload?.app, 'Provider')} workspaceId={workspaceId} activeUserId={activeUserId || 'anonymous'} addEntry={addImportEntry} addPage={addPage} jwt={jwt ?? ''} onClose={() => setModal(null)} />}
     </>
   );
 };
@@ -1438,7 +1442,7 @@ const ProviderImportModal: React.FC<{ app: string; workspaceId: string; activeUs
   }, []);
   useEffect(() => {
     if (progress < 100) return;
-    runAsync(addPage(workspaceId, `${app} import`, jwt, undefined, { content: [{ id: `block-${Date.now()}`, type: 'paragraph', text: `${app} imported into osionos.`, children: [] }] }).then((page) => {
+    runAsync(addPage(workspaceId, `${app} import`, jwt, undefined, { content: [{ id: `block-${Date.now()}`, type: 'paragraph', content: `${app} imported into osionos.`, children: [] }] }).then((page) => {
       addEntry(workspaceId, { userId: activeUserId, workspaceId, source: app, fileName: `${app} migration`, byteSize: 0, status: 'completed', pageIds: page?._id ? [page._id] : [], error: null, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), removedAt: null });
     }));
   }, [activeUserId, addEntry, addPage, app, jwt, progress, workspaceId]);
@@ -1453,46 +1457,128 @@ const ProviderImportModal: React.FC<{ app: string; workspaceId: string; activeUs
   );
 };
 
-const PageSettingsPanel = () => (
-  <>
-    <Section title="Style"><div className="grid gap-2 sm:grid-cols-3">{['Default', 'Serif', 'Mono'].map((font) => <Button key={font} className="justify-start"><span className="text-base">Ag</span>{font}</Button>)}</div></Section>
-    <Section title="Actions">
-      {[
-        ['Copy link', 'Ctrl+Alt+L', <Copy key="copy-link" size={15} />], ['Copy page contents', '', <FileText key="copy-contents" size={15} />], ['Duplicate', 'Ctrl+D', <Copy key="duplicate" size={15} />], ['Move to Trash', '', <Trash2 key="trash" size={15} />], ['Present', 'Beta · Ctrl+Alt+P', <Globe key="present" size={15} />], ['Use with AI', '', <Sparkles key="ai" size={15} />], ['Translate', '', <Globe key="translate" size={15} />], ['Import', '', <Import key="import" size={15} />], ['Export', '', <FileDown key="export" size={15} />],
-      ].map(([label, shortcut, icon]) => <SettingRow key={label as string} title={<span className="inline-flex items-center gap-2">{icon}{label}</span>} description={shortcut as string} action={<Button>Open</Button>} />)}
+const PageSettingsPanel = () => {
+  const activePage = usePageStore((state) => state.activePage);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const actions = usePageActions(activePage?.id ?? '', activePage?.workspaceId ?? '');
+
+  if (!activePage) {
+    return <div className="rounded-xl border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center text-sm text-[var(--osio-fg-muted)]">Open a page to see its settings.</div>;
+  }
+
+  function handleImport(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) runMaybeAsync(actions.importFile(file));
+  }
+
+  return (
+    <>
+      <Section title="Style"><div className="grid gap-2 sm:grid-cols-3">{(['default', 'serif', 'mono'] as const).map((font) => <Button key={font} className={`justify-start ${actions.config.font === font ? 'border-[var(--osio-accent)]' : ''}`} onClick={() => runMaybeAsync(actions.setFont(font))}><span className={`text-base ${fontSampleClass(font)}`}>Ag</span>{font[0].toUpperCase() + font.slice(1)}</Button>)}</div></Section>
+      <Section title="Actions">
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Copy size={15} />Copy link</span>} description="Ctrl+Alt+L" action={<Button onClick={() => runMaybeAsync(actions.copyLink())}>Copy</Button>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><FileText size={15} />Copy page contents</span>} action={<Button onClick={() => runMaybeAsync(actions.copyContents())}>Copy</Button>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Copy size={15} />Duplicate</span>} description="Ctrl+D" action={<Button onClick={() => runMaybeAsync(actions.duplicate())}>Duplicate</Button>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Trash2 size={15} />Move to Trash</span>} action={<Button tone="danger" onClick={() => runMaybeAsync(actions.moveToTrash())}>Move</Button>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={15} />Present</span>} description="Beta · Ctrl+Alt+P" action={<Switch checked={actions.config.presentationMode} onChange={() => runMaybeAsync(actions.present())} />} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Sparkles size={15} />Use with AI</span>} description="Share this page context with osionos AI." action={<Button onClick={() => recordSettingsAction('page_use_with_ai', { pageId: activePage.id })}>Use</Button>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={15} />Translate</span>} action={<div className="flex gap-2"><SelectButton value={actions.translateLocale} options={TRANSLATION_LANGUAGES.map((language) => ({ value: language.locale, label: language.label }))} onChange={actions.setTranslateLocale}>Language</SelectButton><Button onClick={() => runMaybeAsync(actions.translate())}>Translate</Button></div>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Import size={15} />Import</span>} action={<><input ref={importInputRef} type="file" accept=".json,.md,.markdown,.txt" className="hidden" onChange={handleImport} /><Button onClick={() => importInputRef.current?.click()}>Import</Button></>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><FileDown size={15} />Export</span>} action={<Button onClick={() => runMaybeAsync(actions.exportPage())}>Export</Button>} />
+      </Section>
+      <Section title="Page switches"><SettingRow title="Small text" action={<Switch checked={actions.config.smallText} onChange={() => runMaybeAsync(actions.toggleSmallText())} />} /><SettingRow title="Full width" action={<Switch checked={actions.config.fullWidth} onChange={() => runMaybeAsync(actions.toggleFullWidth())} />} /><SettingRow title="Lock page" action={<Switch checked={actions.config.locked} onChange={() => runMaybeAsync(actions.toggleLock())} />} /></Section>
+      <Section title="History & connections">
+        <SettingRow title="Updates & analytics" description={`Actions ${actions.config.analytics.actions} · Copies ${actions.config.analytics.copies}`} action={<Button onClick={actions.openAnalytics}>Open</Button>} />
+        <SettingRow title="Version history" description={`${actions.versions.length} saved versions`} action={<Button onClick={actions.openVersionHistory}>Open</Button>} />
+        <SettingRow title="Notify me" action={<Switch checked={actions.config.notifications.comments} onChange={() => runMaybeAsync(actions.toggleNotifications())} />} />
+        <SettingRow title="Connections" description={actions.config.connections.length ? actions.config.connections.map((connection) => connection.name).join(', ') : 'None'} action={<Button onClick={() => runMaybeAsync(actions.manageConnections())}>Manage</Button>} />
+        <p className="pt-3 text-xs text-[var(--osio-fg-subtle)]">Word count: {actions.wordCount} words · {actions.editedLabel}</p>
+      </Section>
+    </>
+  );
+};
+
+const AiPanel = () => {
+  const workspaceId = useUserStore((state) => state.activeWorkspace()?._id ?? 'local-workspace');
+  const settings = useAiSettingsStore((state) => state.getData(workspaceId));
+  const update = useAiSettingsStore((state) => state.update);
+  return (
+    <Section title="osionos AI">
+      <FeatureCard icon={<Sparkles size={16} />} title="osionos AI" description="Search everywhere, automate meeting notes, create summaries, and run agents." action={<Button tone="primary" onClick={() => { update(workspaceId, { connectors: true, searchEverywhereIndexing: true }); recordSettingsAction('ai_upgrade_click', { workspaceId }); }}>Upgrade</Button>} />
+      <SettingRow title="AI connectors" description="Let AI search connected tools from this workspace." action={<Switch checked={settings.connectors} onChange={(checked) => update(workspaceId, { connectors: checked })} />} />
+      <SettingRow title="Meeting notes auto-record" description="Automatically record and summarize meetings when available." action={<Switch checked={settings.meetingNotesAutoRecord} onChange={(checked) => update(workspaceId, { meetingNotesAutoRecord: checked })} />} />
+      <SettingRow title="Agents" description="Enable workspace agents." action={<Switch checked={settings.agentsEnabled} onChange={(checked) => update(workspaceId, { agentsEnabled: checked })} />} />
+      <SettingRow title="Custom agents" description="Allow members to create custom agents." action={<Switch checked={settings.customAgentsAllowed} onChange={(checked) => update(workspaceId, { customAgentsAllowed: checked })} />} />
+      <SettingRow title="Search everywhere indexing" description="Index pages and connected content for AI answers." action={<Switch checked={settings.searchEverywhereIndexing} onChange={(checked) => update(workspaceId, { searchEverywhereIndexing: checked })} />} />
+      <SettingRow title="Summaries" description="Generate page and meeting summaries." action={<Switch checked={settings.summaries} onChange={(checked) => update(workspaceId, { summaries: checked })} />} />
     </Section>
-    <Section title="Page switches"><SettingRow title="Small text" action={<Switch />} /><SettingRow title="Full width" action={<Switch />} /><SettingRow title="Lock page" action={<Switch />} /></Section>
-    <Section title="History & connections">
-      {['Updates & analytics', 'Version history', 'Notify me', 'Comments', 'Connections · None'].map((label) => <SettingRow key={label} title={label} action={<ChevronDown size={16} />} />)}
-      <p className="pt-3 text-xs text-[var(--osio-fg-subtle)]">Word count: 34 words · Last edited by dylan lesieur · Apr 13, 2026, 8:08 PM</p>
+  );
+};
+
+const McpPanel = () => {
+  const workspaceId = useUserStore((state) => state.activeWorkspace()?._id ?? 'local-workspace');
+  const settings = useMcpSettingsStore((state) => state.getData(workspaceId));
+  const update = useMcpSettingsStore((state) => state.update);
+  const toggleTool = useMcpSettingsStore((state) => state.toggleTool);
+  const [developerOpen, setDeveloperOpen] = useState(false);
+  return (
+    <Section title="osionos MCP">
+      <FeatureCard icon={<Bot size={16} />} title="Connect osionos to AI tools" description="Summarize, search, and move faster with MCP-compatible clients." action={<Switch checked={settings.connected} onChange={(checked) => update(workspaceId, { connected: checked })} />} />
+      <div className="grid gap-2 rounded-lg border border-[var(--osio-border-default)] p-3">
+        {MCP_TOOL_OPTIONS.map((tool) => <SettingRow key={tool.value} title={tool.label} description={tool.value} action={<Switch checked={settings.allowedTools.includes(tool.value)} onChange={() => toggleTool(workspaceId, tool.value)} />} />)}
+      </div>
+      <SettingRow title="Developer mode" description="Expose MCP debugging details and local command setup." action={<Switch checked={settings.developerMode} onChange={(checked) => update(workspaceId, { developerMode: checked })} />} />
+      <SettingRow title="Developer access" description="Develop or manage connections" action={<Button onClick={() => setDeveloperOpen(true)}>Manage</Button>} />
+      {developerOpen && <McpDeveloperModal settings={settings} onClose={() => setDeveloperOpen(false)} />}
     </Section>
-  </>
+  );
+};
+
+const McpDeveloperModal: React.FC<{ settings: { connected: boolean; allowedTools: McpAllowedTool[]; developerMode: boolean }; onClose: () => void }> = ({ settings, onClose }) => (
+  <Modal open onClose={onClose} title="MCP developer" size="md">
+    <div className="space-y-3 text-sm text-[var(--osio-fg-muted)]">
+      <p>Status: {settings.connected ? 'Connected' : 'Disconnected'}</p>
+      <p>Allowed tools: {settings.allowedTools.join(', ')}</p>
+      <pre className="overflow-auto rounded-md bg-[var(--osio-bg-subtle)] p-3 text-xs">claude mcp get osionos</pre>
+      <div className="flex justify-end"><Button tone="primary" onClick={onClose}>Done</Button></div>
+    </div>
+  </Modal>
 );
 
-const AiPanel = () => (
-  <div className="grid gap-3">
-    <FeatureCard icon={<Sparkles size={16} />} title="osionos AI" description="Upgrade to search everywhere, automate meeting notes and create summaries." action={<Button tone="primary">Upgrade</Button>} />
-    {['AI connectors', 'Meeting notes', 'Agents', 'Custom agents', 'Search everywhere', 'Summaries'].map((item) => <FeatureCard key={item} title={item} description={`Configure ${item.toLowerCase()} for this workspace.`} />)}
-  </div>
-);
+const PublicPagesPanel = () => {
+  const userId = useUserStore((state) => state.activeUserId) || 'anonymous';
+  const workspace = useUserStore((state) => state.activeWorkspace());
+  const workspaceId = workspace?._id ?? 'local-workspace';
+  const pages = usePageStore((state) => state.pages[workspaceId] ?? []);
+  const firstPublicPage = pages.find((page) => page.visibility === 'public');
+  const storedSettings = useWorkspaceSettingsStore((state) => state.data[workspaceId]);
+  const update = useWorkspaceSettingsStore((state) => state.update);
+  const domains = storedSettings?.publicDomains ?? [];
 
-const McpPanel = () => (
-  <Section title="osionos MCP">
-    <FeatureCard icon={<Bot size={16} />} title="Connect osionos to AI tools" description="Summarize, search, and move faster with MCP-compatible clients." action={<Button>Explore</Button>} />
-    <SettingRow title="Allowed tools" description="Search, summarize, move pages, update databases" action={<SelectButton>Workspace default</SelectButton>} />
-    <SettingRow title="Developer access" description="Develop or manage connections" action={<Button>Manage</Button>} />
-  </Section>
-);
+  function publishPage(pageId: string, publicValue: boolean) {
+    usePageStore.setState((state) => ({ pages: { ...state.pages, [workspaceId]: (state.pages[workspaceId] ?? []).map((page) => page._id === pageId ? { ...page, visibility: publicValue ? 'public' : 'private' } : page) } }));
+    recordSettingsAction('public_page_toggle', { pageId, publicValue });
+  }
 
-const PublicPagesPanel = () => (
-  <>
-    <Section title="osionos Sites"><FeatureCard icon={<Globe size={16} />} title="puzzled-basil-cc8.osionos.site" description="Published workspace site domain" action={<Button>Settings</Button>} /></Section>
-    <Section title="Public forms"><FeatureCard title="New member here !" description="Anyone with the link · Universe42" action={<Button>Open</Button>} /></Section>
-    <Section title="Shared AI chats"><SettingRow title="No shared chats" description="Shared conversations will appear here." /></Section>
-    <Section title="Domains"><DataTable headers={['Domain', 'Homepage', 'Status']} rows={[[ 'puzzled-basil-cc8.osionos.site', 'Universe42', <span key="site-live" className="text-[var(--osio-accent)]">Live</span> ]]} /><Button className="mt-4">New domain</Button></Section>
-    <Section title="Settings"><SettingRow title="Always indicate that a page is live as a osionos Site" action={<Switch checked />} /></Section>
-  </>
-);
+  function addDomain() {
+    const timestamp = new Date().toISOString();
+    const domain: PublicDomain = { _id: `domain-${crypto.randomUUID()}`, domain: `${safeSlug(workspace?.name ?? 'workspace')}.osionos.site`, homepage: firstPublicPage?.title ?? workspace?.name ?? 'Home', status: 'live', createdAt: timestamp, updatedAt: timestamp };
+    update(userId, workspaceId, { publicDomains: [domain, ...domains] });
+  }
+
+  const domainRows = domains.map((domain) => [
+    <input key={`${domain._id}-domain`} className="w-full rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none" defaultValue={domain.domain} onBlur={(event) => update(userId, workspaceId, { publicDomains: domains.map((item) => item._id === domain._id ? { ...item, domain: event.target.value, updatedAt: new Date().toISOString() } : item) })} />,
+    domain.homepage,
+    <span key={`${domain._id}-status`} className="text-[var(--osio-accent)]">{domain.status}</span>,
+  ]);
+  return (
+    <>
+      <Section title="Public pages"><DataTable headers={['Page', 'Status', '']} rows={pages.map((page) => [page.title || 'Untitled', page.visibility === 'public' ? 'Live' : 'Private', <Switch key={`${page._id}-public`} checked={page.visibility === 'public'} onChange={(checked) => publishPage(page._id, checked)} />])} /></Section>
+      <Section title="Domains"><DataTable headers={['Domain', 'Homepage', 'Status']} rows={domainRows.length ? domainRows : [['No domains yet', 'Select a public page', 'Draft']]} /><Button className="mt-4" onClick={addDomain}>New domain</Button></Section>
+      <Section title="Settings"><SettingRow title="Always indicate that a page is live as a osionos Site" action={<Switch checked onChange={(checked) => recordSettingsAction('public_live_indicator_toggle', { checked })} />} /></Section>
+    </>
+  );
+};
 
 const LibraryPanel = () => {
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -1571,50 +1657,132 @@ const LibraryPanel = () => {
   );
 };
 
-const TeamspacesPanel: React.FC<{ workspaceName?: string }> = ({ workspaceName = '42 school HQ' }) => (
-  <>
-    <Section title="Default teamspaces"><SettingRow title={workspaceName} description="Default workspace teamspace" action={<Button>Update</Button>} /><SettingRow title="Limit teamspace creation to workspace owners" description="Allow only workspace owners to create teamspaces" action={<Switch />} /></Section>
-    <Section title="Teamspaces"><p className="mb-3 text-sm text-[var(--osio-fg-muted)]">Manage all teamspaces you have access to here.</p><MiniTabs active="Active" tabs={[{ label: 'Active' }, { label: 'Owner' }, { label: 'Access' }, { label: 'Security' }]} /><DataTable className="mt-4" headers={['Teamspace', 'Owners', 'Access', 'Updated']} rows={[[workspaceName, 'dylan lesieur', 'Default · 1 member • Joined', '9/11/24']]} /><Button className="mt-4">New teamspace</Button></Section>
-  </>
-);
+const TeamspacesPanel: React.FC<{ workspaceName?: string }> = ({ workspaceName = '42 school HQ' }) => {
+  const workspace = useUserStore((state) => state.activeWorkspace());
+  const workspaceId = workspace?._id ?? 'local-workspace';
+  const activeUserId = useUserStore((state) => state.activeUserId) || 'anonymous';
+  const jwt = useUserStore((state) => state.activeJwt());
+  const addPage = usePageStore((state) => state.addPage);
+  const teamspaces = useTeamspacesStore((state) => state.data[workspaceId] ?? []);
+  const createTeamspace = useTeamspacesStore((state) => state.create);
+  const updateTeamspace = useTeamspacesStore((state) => state.update);
+  const archiveTeamspace = useTeamspacesStore((state) => state.archive);
+  const [activeTab, setActiveTab] = useState('Active');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [limitOwners, setLimitOwners] = useState(false);
+  const activeTeamspaces = teamspaces.filter((teamspace) => !teamspace.archivedAt);
+  const rows = activeTeamspaces.map((teamspace) => [
+    <input key={`${teamspace._id}-name`} className="w-full rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none" defaultValue={teamspace.name} onBlur={(event) => updateTeamspace(workspaceId, teamspace._id, { name: event.target.value })} />,
+    teamspace.owners.join(', ') || activeUserId,
+    <SelectButton key={`${teamspace._id}-access`} value={teamspace.access} options={[{ value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }, { value: 'private', label: 'Private' }]} onChange={(value) => updateTeamspace(workspaceId, teamspace._id, { access: value as 'open' | 'closed' | 'private' })}>{teamspace.access}</SelectButton>,
+    <Button key={`${teamspace._id}-archive`} tone="danger" onClick={() => archiveTeamspace(workspaceId, teamspace._id)}>Archive</Button>,
+  ]);
+
+  async function createNewTeamspace(name: string) {
+    const page = await addPage(workspaceId, name, jwt ?? '', undefined, { icon: '🏛️', visibility: 'shared' });
+    createTeamspace(workspaceId, { name, ownerId: activeUserId, pageId: page?._id ?? null });
+  }
+
+  return (
+    <>
+      <Section title="Default teamspaces"><SettingRow title={workspaceName} description="Default workspace teamspace" action={<Button onClick={() => recordSettingsAction('default_teamspace_update', { workspaceId })}>Update</Button>} /><SettingRow title="Limit teamspace creation to workspace owners" description="Allow only workspace owners to create teamspaces" action={<Switch checked={limitOwners} onChange={setLimitOwners} />} /></Section>
+      <Section title="Teamspaces"><p className="mb-3 text-sm text-[var(--osio-fg-muted)]">Manage all teamspaces you have access to here.</p><MiniTabs active={activeTab} onChange={setActiveTab} tabs={[{ label: 'Active', count: activeTeamspaces.length }, { label: 'Owner' }, { label: 'Access' }, { label: 'Security' }]} /><DataTable className="mt-4" headers={['Teamspace', 'Owners', 'Access', '']} rows={rows.length ? rows : [[workspaceName, activeUserId, 'Default · joined', '']]} /><Button className="mt-4" onClick={() => setModalOpen(true)}>New teamspace</Button></Section>
+      {modalOpen && <NewTeamspaceModal onCreate={(name) => { runAsync(createNewTeamspace(name)); setModalOpen(false); }} onClose={() => setModalOpen(false)} />}
+    </>
+  );
+};
+
+const NewTeamspaceModal: React.FC<{ onCreate: (name: string) => void; onClose: () => void }> = ({ onCreate, onClose }) => {
+  const [name, setName] = useState('New teamspace');
+  return (
+    <Modal open onClose={onClose} title="New teamspace" size="sm">
+      <div className="space-y-4">
+        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={name} onChange={(event) => setName(event.target.value)} />
+        <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => onCreate(name.trim() || 'New teamspace')}>Create</Button></div>
+      </div>
+    </Modal>
+  );
+};
 
 const BillingPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId = 'local-workspace' }) => {
   const storedBilling = useBillingStore((state) => state.data[workspaceId]);
   const invoices = useBillingStore((state) => state.invoices[workspaceId] ?? EMPTY_BILLING_INVOICES);
   const hydrate = useBillingStore((state) => state.hydrate);
   const update = useBillingStore((state) => state.update);
+  const addInvoice = useBillingStore((state) => state.addInvoice);
   const reset = useBillingStore((state) => state.reset);
   const fallbackBilling = useMemo<BillingState>(() => defaultBillingState(workspaceId), [workspaceId]);
   const billing = storedBilling ?? fallbackBilling;
+  const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
 
   useEffect(() => {
     runAsync(hydrate(workspaceId));
   }, [hydrate, workspaceId]);
 
+  function saveBillingEdit(value: string) {
+    const field = stringPayload(modal?.payload?.field, 'billingEmail');
+    if (field === 'paymentMethod') {
+      update(workspaceId, { paymentMethod: { label: value } });
+    } else if (field === 'billedTo') {
+      update(workspaceId, { billedTo: { label: value } });
+    } else if (field === 'invoiceEmails') {
+      update(workspaceId, { invoiceEmails: value.split(',').map((item) => item.trim()).filter(Boolean) });
+    } else {
+      update(workspaceId, { [field]: value } as Partial<BillingState>);
+    }
+    setModal(null);
+  }
+
   return (
     <>
       <Section title="Plan"><SettingRow title={billing.plan} description="For students & educators" action={<SelectButton value={billing.plan} options={[{ value: 'Free', label: 'Free' }, { value: 'Education Plus', label: 'Education Plus' }, { value: 'Business', label: 'Business' }]} onChange={(value) => update(workspaceId, { plan: value })}>Change plan</SelectButton>} /></Section>
       <Section title="Payment details">
-        <SettingRow title="Payment method" description={billing.paymentMethod ? 'Configured' : 'None'} action={<Button>Edit method</Button>} />
-        <SettingRow title="Billed to" description={billing.billedTo ? 'Configured' : 'None'} action={<Button>Edit information</Button>} />
-        <SettingRow title="Billing email" description={billing.billingEmail ?? 'None'} action={<Button>Edit email</Button>} />
-        <SettingRow title="Invoice emails" description="Receive a copy of your invoice via email each billing period" action={<Button>Edit</Button>} />
-        <SettingRow title="VAT/GST number" description={billing.vatNumber ?? 'None'} action={<Button>Edit number</Button>} />
+        <SettingRow title="Payment method" description={billing.paymentMethod ? 'Configured' : 'None'} action={<Button onClick={() => setModal({ name: 'billing-edit', payload: { field: 'paymentMethod', label: 'Payment method' } })}>Edit method</Button>} />
+        <SettingRow title="Billed to" description={billing.billedTo ? 'Configured' : 'None'} action={<Button onClick={() => setModal({ name: 'billing-edit', payload: { field: 'billedTo', label: 'Billed to' } })}>Edit information</Button>} />
+        <SettingRow title="Billing email" description={billing.billingEmail ?? 'None'} action={<Button onClick={() => setModal({ name: 'billing-edit', payload: { field: 'billingEmail', label: 'Billing email' } })}>Edit email</Button>} />
+        <SettingRow title="Invoice emails" description="Receive a copy of your invoice via email each billing period" action={<Button onClick={() => setModal({ name: 'billing-edit', payload: { field: 'invoiceEmails', label: 'Invoice emails' } })}>Edit</Button>} />
+        <SettingRow title="VAT/GST number" description={billing.vatNumber ?? 'None'} action={<Button onClick={() => setModal({ name: 'billing-edit', payload: { field: 'vatNumber', label: 'VAT/GST number' } })}>Edit number</Button>} />
       </Section>
       <Section title="Invoices">
-        <SettingRow title="Upcoming invoice" description={billing.upcomingInvoice ? 'Ready to review' : 'No upcoming invoice'} action={<Button>View invoice</Button>} />
-        {invoices.length > 0 && <DataTable className="mt-4" headers={['Invoice', 'Amount', 'Status']} rows={invoices.map((invoice) => [invoice.number, `${invoice.amount} ${invoice.currency}`, invoice.status])} />}
+        <SettingRow title="Upcoming invoice" description={billing.upcomingInvoice ? 'Ready to review' : 'No upcoming invoice'} action={<Button onClick={() => runAsync(downloadInvoicePdf(addInvoice(workspaceId, { amount: 0, status: 'open' })))}>View invoice</Button>} />
+        {invoices.length > 0 && <DataTable className="mt-4" headers={['Invoice', 'Amount', 'Status', '']} rows={invoices.map((invoice) => [invoice.number, `${invoice.amount} ${invoice.currency}`, invoice.status, <Button key={`${invoice._id}-view`} onClick={() => runAsync(downloadInvoicePdf(invoice))}>View invoice</Button>])} />}
         <Button className="mt-3" onClick={() => reset(workspaceId)}>Reset to defaults</Button>
       </Section>
+      {modal?.name === 'billing-edit' && <BillingEditModal label={stringPayload(modal.payload?.label, 'Billing')} onSave={saveBillingEdit} onClose={() => setModal(null)} />}
     </>
+  );
+};
+
+async function downloadInvoicePdf(invoice: BillingInvoice) {
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage([595, 842]);
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  page.drawText('osionos invoice', { x: 56, y: 780, size: 24, font, color: rgb(0.1, 0.1, 0.1) });
+  page.drawText(invoice.number, { x: 56, y: 744, size: 14, font });
+  page.drawText(`${invoice.amount} ${invoice.currency} · ${invoice.status}`, { x: 56, y: 720, size: 12, font });
+  const bytes = await pdf.save();
+  downloadBlob(`${invoice.number}.pdf`, new Blob([bytes], { type: 'application/pdf' }));
+}
+
+const BillingEditModal: React.FC<{ label: string; onSave: (value: string) => void; onClose: () => void }> = ({ label, onSave, onClose }) => {
+  const [value, setValue] = useState('');
+  return (
+    <Modal open onClose={onClose} title={label} size="sm">
+      <div className="space-y-4">
+        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={value} onChange={(event) => setValue(event.target.value)} placeholder={label} />
+        <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => onSave(value)}>Save</Button></div>
+      </div>
+    </Modal>
   );
 };
 
 const PlansPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId = 'local-workspace' }) => {
   const storedBilling = useBillingStore((state) => state.data[workspaceId]);
   const hydrate = useBillingStore((state) => state.hydrate);
+  const update = useBillingStore((state) => state.update);
   const fallbackBilling = useMemo<BillingState>(() => defaultBillingState(workspaceId), [workspaceId]);
   const billing = storedBilling ?? fallbackBilling;
+  const [upgradePlan, setUpgradePlan] = useState<string | null>(null);
   const plans = [
     ['Free', 'Basic forms, basic sites, custom databases, osionos Calendar, osionos Mail'],
     ['Plus', 'Everything in Free, unlimited blocks, unlimited charts, custom forms, custom sites'],
@@ -1629,9 +1797,19 @@ const PlansPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId = 'local-w
   return (
     <>
       <FeatureCard title="Your current plan" description={`${billing.plan} · For students & educators`} action={<Check size={18} className="text-[var(--osio-accent)]" />} />
-      <FeatureCard icon={<Sparkles size={16} />} title="osionos AI" description="Upgrade to search everywhere, automate meeting notes & more" action={<Button tone="primary">Upgrade</Button>} />
-      <Section title="Compare all plans"><div className="grid gap-3 md:grid-cols-2">{plans.map(([name, description]) => <div key={name} className="rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4"><div className="flex items-center justify-between"><h4 className="font-semibold text-[var(--osio-fg-default)]">{name}</h4>{name !== 'Free' && <span className="text-xs text-[var(--osio-fg-muted)]">billed monthly</span>}</div><p className="mt-3 text-sm leading-5 text-[var(--osio-fg-muted)]">{description}</p><Button className="mt-4 w-full">Upgrade</Button></div>)}</div></Section>
+      <FeatureCard icon={<Sparkles size={16} />} title="osionos AI" description="Upgrade to search everywhere, automate meeting notes & more" action={<Button tone="primary" onClick={() => setUpgradePlan('AI')}>Upgrade</Button>} />
+      <Section title="Compare all plans"><div className="grid gap-3 md:grid-cols-2">{plans.map(([name, description]) => <div key={name} className="rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4"><div className="flex items-center justify-between"><h4 className="font-semibold text-[var(--osio-fg-default)]">{name}</h4>{name !== 'Free' && <span className="text-xs text-[var(--osio-fg-muted)]">billed monthly</span>}</div><p className="mt-3 text-sm leading-5 text-[var(--osio-fg-muted)]">{description}</p><Button className="mt-4 w-full" onClick={() => setUpgradePlan(name)}>Upgrade</Button></div>)}</div></Section>
       <Section title="FAQ"><SettingRow title="Plans, Billing & Payment" action={<ChevronDown size={16} />} /><SettingRow title="Message support" action={<ChevronDown size={16} />} /></Section>
+      {upgradePlan && <UpgradePlanModal plan={upgradePlan} onConfirm={() => { update(workspaceId, { plan: upgradePlan }); useToastStore.getState().push({ kind: 'success', title: 'accountUpgraded' }); setUpgradePlan(null); }} onClose={() => setUpgradePlan(null)} />}
     </>
   );
 };
+
+const UpgradePlanModal: React.FC<{ plan: string; onConfirm: () => void; onClose: () => void }> = ({ plan, onConfirm, onClose }) => (
+  <Modal open onClose={onClose} title="Upgrade plan" size="sm">
+    <div className="space-y-4">
+      <p className="text-sm text-[var(--osio-fg-muted)]">Upgrade this workspace to {plan}.</p>
+      <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={onConfirm}>Upgrade</Button></div>
+    </div>
+  </Modal>
+);

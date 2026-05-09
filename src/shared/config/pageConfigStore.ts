@@ -6,12 +6,14 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:24:31 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 18:49:04 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+
+import type { Block } from '@/entities/block';
 
 import { api } from '@/shared/api/client';
 import { useUserStore } from '@/features/auth/model/useUserStore';
@@ -38,7 +40,7 @@ export interface PageVersion {
   userId: string;
   pageId: string;
   title: string;
-  content: unknown[];
+  content: Block[];
   createdAt: string;
   label: string;
 }
@@ -50,7 +52,7 @@ export interface PageTranslation {
   locale: string;
   label: string;
   title: string;
-  content: unknown[];
+  content: Block[];
   createdAt: string;
 }
 

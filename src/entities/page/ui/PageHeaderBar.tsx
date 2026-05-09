@@ -24,10 +24,8 @@ import {
   TRANSLATION_LANGUAGES,
   fontSampleClass,
   usePageActions,
-  type PageFont,
-  type PageVersion,
 } from '@/entities/page';
-import type { PageConfig } from '@/shared/config/pageConfigStore';
+import type { PageConfig, PageFont, PageVersion } from '@/shared/config/pageConfigStore';
 import { usePageStore } from '@/store/usePageStore';
 
 import { PageBreadcrumbs } from './PageBreadcrumbs';

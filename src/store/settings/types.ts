@@ -168,6 +168,7 @@ export interface BillingState {
   paymentMethod?: Record<string, unknown> | null;
   billedTo?: Record<string, unknown> | null;
   billingEmail?: string | null;
+  invoiceEmails?: string[] | null;
   vatNumber?: string | null;
   upcomingInvoice?: Record<string, unknown> | null;
   createdAt: string;

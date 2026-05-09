@@ -50,9 +50,9 @@ export function fontSampleClass(font: PageFont): string {
   return '';
 }
 
-function formatEditedLabel(updatedAt: string | undefined): string {
+function formatEditedLabel(updatedAt: string | undefined, now: number): string {
   if (!updatedAt) return 'Edited recently';
-  const elapsed = Math.max(0, Date.now() - new Date(updatedAt).getTime());
+  const elapsed = Math.max(0, now - new Date(updatedAt).getTime());
   if (Number.isNaN(elapsed)) return 'Edited recently';
   if (elapsed < MINUTE_IN_MS) return 'Edited just now';
   if (elapsed < HOUR_IN_MS) {
@@ -97,7 +97,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
   const updatePageTitle = usePageStore((state) => state.updatePageTitle);
   const updatePageContent = usePageStore((state) => state.updatePageContent);
   const pushToast = useToastStore((state) => state.push);
-  const [tick, setTick] = useState(0);
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [detailPanel, setDetailPanel] = useState<'analytics' | 'versions' | null>(null);
   const [translateLocale, setTranslateLocale] = useState(config.activeTranslation?.locale ?? 'fr');
@@ -106,7 +106,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
   const versionCounterRef = useRef(0);
 
   useEffect(() => {
-    const id = globalThis.setInterval(() => setTick((value) => value + 1), 60_000);
+    const id = globalThis.setInterval(() => setClockNow(Date.now()), 60_000);
     return () => globalThis.clearInterval(id);
   }, []);
 
@@ -141,7 +141,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     };
   }, [addVersion, currentVersionSignature, page, pageId, safeUserId]);
 
-  const editedLabel = useMemo(() => formatEditedLabel(page?.updatedAt), [page?.updatedAt, tick]);
+  const editedLabel = useMemo(() => formatEditedLabel(page?.updatedAt, clockNow), [clockNow, page?.updatedAt]);
   const wordCount = useMemo(() => wordCountFromPage(page), [page]);
 
   const openHome = useCallback(() => {
