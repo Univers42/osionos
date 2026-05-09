@@ -46,24 +46,15 @@ import { AssetRenderer } from '@univers42/ui-collection';
 import { useUserStore, type StaticPersona } from '@/features/auth';
 import { WorkspaceThemeControls } from '@/features/theme/WorkspaceThemePanel';
 import { useAssetLibraryStore, type AccountAsset, type AccountAssetKind } from '@/shared/config/assetLibraryStore';
-
-type SettingsTab =
-  | 'profile'
-  | 'preferences'
-  | 'notifications'
-  | 'connections'
-  | 'mail_calendar'
-  | 'general'
-  | 'people'
-  | 'import'
-  | 'page_settings'
-  | 'ai'
-  | 'mcp'
-  | 'public_pages'
-  | 'library'
-  | 'teamspaces'
-  | 'billing'
-  | 'plans';
+import {
+  Dropdown,
+  MiniTabs as PrimitiveMiniTabs,
+  Modal,
+  Toggle,
+  searchSettings,
+  type SettingsSearchEntry,
+  type SettingsTab,
+} from '@/shared/ui';
 
 interface SettingsCenterProps {
   initialTab?: SettingsTab;
@@ -162,6 +153,23 @@ function formatBytes(value?: number): string {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function anchorFromTitle(value: string): string {
+  return value
+    .toLowerCase()
+    .replaceAll('&', '')
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    .replaceAll(/^-|-$/g, '');
+}
+
+function textFromReactNode(node: React.ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(textFromReactNode).join('');
+  if (React.isValidElement<{ children?: React.ReactNode }>(node)) {
+    return textFromReactNode(node.props.children);
+  }
+  return '';
+}
+
 const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 'default' | 'primary' | 'danger' | 'ghost' }> = ({ className = '', tone = 'default', ...props }) => {
   const toneClass = {
     default: 'border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]',
@@ -173,21 +181,25 @@ const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 
   return <button type="button" className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${toneClass} ${className}`} {...props} />;
 };
 
-const SelectButton: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Button className="whitespace-nowrap">
-    {children}
-    <ChevronDown size={14} />
-  </Button>
-);
+const SelectButton: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const label = textFromReactNode(children) || 'Select';
+  const [value, setValue] = useState(label);
+  const options = useMemo(() => [
+    { value: label, label },
+    { value: 'Default', label: 'Default' },
+    { value: 'Off', label: 'Off' },
+  ].filter((option, index, array) => array.findIndex((candidate) => candidate.value === option.value) === index), [label]);
 
-const Switch: React.FC<{ checked?: boolean }> = ({ checked = false }) => (
-  <span className={`flex h-[18px] w-[34px] rounded-full p-0.5 transition ${checked ? 'bg-[var(--osio-accent)]' : 'bg-[var(--osio-bg-muted)]'}`}>
-    <span className={`h-3.5 w-3.5 rounded-full bg-[var(--osio-accent-fg)] transition ${checked ? 'translate-x-4' : ''}`} />
-  </span>
-);
+  return <Dropdown value={value} options={options} onChange={setValue} align="end" width="auto" />;
+};
+
+const Switch: React.FC<{ checked?: boolean; label?: string }> = ({ checked = false, label }) => {
+  const [value, setValue] = useState(checked);
+  return <Toggle checked={value} onChange={setValue} label={label} />;
+};
 
 const Section: React.FC<{ title: string; children: React.ReactNode; className?: string }> = ({ title, children, className = '' }) => (
-  <section className={`space-y-4 ${className}`}>
+  <section className={`space-y-4 ${className}`} data-settings-anchor={anchorFromTitle(title)}>
     <h3 className="border-b border-[var(--osio-border-default)] pb-3 text-base font-medium text-[var(--osio-fg-default)]">{title}</h3>
     <div>{children}</div>
   </section>
@@ -230,19 +242,13 @@ const DataTable: React.FC<{ headers: string[]; rows: React.ReactNode[][]; classN
   </div>
 );
 
-const MiniTabs: React.FC<{ tabs: Array<{ label: string; count?: number }>; active?: string }> = ({ tabs, active }) => (
-  <div className="flex flex-wrap items-center gap-1 rounded-lg bg-[var(--osio-bg-subtle)] p-1">
-    {tabs.map((tab) => (
-      <button
-        key={tab.label}
-        type="button"
-        className={`rounded-md px-3 py-1.5 text-sm font-medium ${active === tab.label ? 'bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-sm' : 'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]'}`}
-      >
-        {tab.label}{typeof tab.count === 'number' && <span className="ml-1 text-[var(--osio-fg-subtle)]">{tab.count}</span>}
-      </button>
-    ))}
-  </div>
-);
+const MiniTabs: React.FC<{ tabs: Array<{ label: string; count?: number }>; active?: string }> = ({ tabs, active }) => {
+  const options = useMemo(() => tabs.map((tab) => ({ value: tab.label, label: tab.label, count: tab.count })), [tabs]);
+  const [value, setValue] = useState(active ?? options[0]?.value ?? '');
+  if (options.length === 0) return null;
+  const safeValue = options.some((option) => option.value === value) ? value : options[0].value;
+  return <PrimitiveMiniTabs value={safeValue} options={options} onChange={setValue} />;
+};
 
 const Avatar: React.FC<{ value?: string; label?: string; size?: number }> = ({ value = '👤', label, size = 28 }) => (
   <span className="flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)]" style={{ width: size, height: size }}>
@@ -265,10 +271,23 @@ const FeatureCard: React.FC<{ icon?: React.ReactNode; title: string; description
 
 export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'profile', onClose }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const [settingsQuery, setSettingsQuery] = useState('');
   const persona = useUserStore((s) => s.activePersona());
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const members = useUserStore((s) => s.personas);
   const current = prompts[activeTab];
+  const settingsResults = useMemo(
+    () => settingsQuery.trim() ? searchSettings(settingsQuery).slice(0, 8) : [],
+    [settingsQuery],
+  );
+
+  function openSearchResult(entry: SettingsSearchEntry) {
+    setActiveTab(entry.tab);
+    setSettingsQuery('');
+    requestAnimationFrame(() => {
+      document.querySelector(`[data-settings-anchor="${entry.anchor}"]`)?.scrollIntoView({ block: 'start' });
+    });
+  }
 
   const memberRows = useMemo(
     () => members.slice(0, 20).map((member, index) => [
@@ -287,8 +306,8 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
   );
 
   return (
-    <div className="fixed inset-0 z-[var(--osio-z-modal)] flex items-center justify-center bg-[var(--osio-overlay)] px-4 py-6">
-      <div className="flex h-[min(900px,94vh)] w-full max-w-6xl overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl">
+    <Modal open onClose={onClose} title="Settings" description={current.subtitle} size="xl">
+      <div className="flex h-[min(900px,94vh)] w-full overflow-hidden">
         <aside className="w-[240px] shrink-0 overflow-y-auto border-r border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)]">
           <div className="flex min-h-full flex-col justify-between">
             <div className="space-y-4 p-2">
@@ -335,6 +354,32 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
               <header className="space-y-2">
                 <h2 className="text-2xl font-semibold leading-8 text-[var(--osio-fg-default)]">{current.title}</h2>
                 <p className="text-base leading-6 text-[var(--osio-fg-default)]">{current.subtitle}</p>
+                <div className="relative max-w-lg pt-2">
+                  <label className="flex h-9 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 text-sm text-[var(--osio-fg-muted)] focus-within:border-[var(--osio-accent)]">
+                    <Search size={15} />
+                    <input
+                      value={settingsQuery}
+                      onChange={(event) => setSettingsQuery(event.target.value)}
+                      placeholder="Search actions..."
+                      className="min-w-0 flex-1 bg-transparent text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
+                    />
+                  </label>
+                  {settingsResults.length > 0 ? (
+                    <div className="absolute left-0 right-0 top-full z-[var(--osio-z-popover)] mt-2 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-xl">
+                      {settingsResults.map((entry) => (
+                        <button
+                          key={`${entry.tab}-${entry.anchor}`}
+                          type="button"
+                          className="flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-[var(--osio-bg-hover)]"
+                          onClick={() => openSearchResult(entry)}
+                        >
+                          <span className="font-medium text-[var(--osio-fg-default)]">{entry.label}</span>
+                          <span className="text-xs capitalize text-[var(--osio-fg-muted)]">{entry.tab.replaceAll('_', ' ')}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </header>
 
               {activeTab === 'profile' && <ProfilePanel persona={persona} />}
@@ -357,7 +402,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
           </div>
         </section>
       </div>
-    </div>
+    </Modal>
   );
 };
 
