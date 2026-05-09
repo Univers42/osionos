@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:03:32 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 20:57:58 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -44,6 +44,53 @@ export type BlockType =
   | 'database_inline'
   | 'database_full_page';
 
+export type LayoutMode = 'inline' | 'full_page';
+export type LayoutGuideVisibility = 'auto' | 'always' | 'never';
+export type LayoutCellSizing = 'fixed' | 'auto-height' | 'auto-width' | 'auto';
+export type LayoutCellHorizontalConstraint = 'left' | 'stretch' | 'scale';
+export type LayoutCellVerticalConstraint = 'top' | 'stretch' | 'hug';
+export type LayoutCellPadding = 'compact' | 'comfortable' | 'spacious';
+export type LayoutCellFontSize = 'small' | 'base' | 'large';
+
+export interface LayoutConfig {
+  columns: number;
+  rows?: number;
+  rowHeight: number;
+  gap: number;
+  wrap: boolean;
+  autoArrange: boolean;
+  snapToGrid: boolean;
+  guideVisibility: LayoutGuideVisibility;
+  preview: boolean;
+  theme?: 'default' | 'compact' | 'spacious';
+  columnGap?: number;
+  rowGap?: number;
+  autoReflow?: boolean;
+  showGuides?: boolean;
+}
+
+export interface LayoutCell {
+  id: string;
+  colStart: number;
+  colSpan: number;
+  rowStart: number;
+  rowSpan: number;
+  label?: string;
+  tint?: string;
+  blocks: Block[];
+  type?: 'text' | 'color' | 'spacer';
+  content?: string;
+  blockType?: BlockType;
+  textColor?: string;
+  backgroundColor?: string;
+  sizing?: LayoutCellSizing;
+  horizontalConstraint?: LayoutCellHorizontalConstraint;
+  verticalConstraint?: LayoutCellVerticalConstraint;
+  wrap?: boolean;
+  padding?: LayoutCellPadding;
+  fontSize?: LayoutCellFontSize;
+}
+
 /** A single content block in a page. */
 export interface Block {
   id: string;
@@ -64,5 +111,8 @@ export interface Block {
   tableData?: string[][];	/** Table data (array of rows, each row is array of cell strings) */
   databaseId?: string;		/** Database reference ID (for database_inline / database_full_page) */
   viewId?: string;			/** View ID for database blocks */
+  layoutMode?: LayoutMode;
+  layoutConfig?: Partial<LayoutConfig>;
+  layoutCells?: LayoutCell[];
   [key: string]: unknown;	/** Arbitrary metadata */
 }

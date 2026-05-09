@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:16:16 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 21:26:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 20:57:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -263,15 +263,18 @@ function normalizeBlockForType(block: Block, nextType: BlockType): Block {
       return {
         ...base,
         content: "",
+        layoutMode: "inline",
         layoutConfig: {
           columns: 12,
           rows: 6,
-          columnGap: 16,
-          rowGap: 16,
+          gap: 16,
           rowHeight: 120,
           wrap: true,
-          showGuides: true,
+          autoArrange: false,
+          snapToGrid: true,
+          guideVisibility: "auto",
           preview: false,
+          theme: "default",
         },
         layoutCells: [],
       };

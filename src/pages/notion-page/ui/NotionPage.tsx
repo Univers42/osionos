@@ -245,6 +245,9 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
 
   const hasCover = !!cover;
   const hasIcon = !!icon;
+  const hasFullPageLayout = page?.content?.length === 1 &&
+    page.content[0]?.type === "layout" &&
+    page.content[0]?.layoutMode === "full_page";
 
   return (
     <div
@@ -253,6 +256,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
         `osionos-page--font-${pageConfig.font}`,
         pageConfig.smallText ? "osionos-page--small-text" : "",
         pageConfig.fullWidth ? "osionos-page--full-width" : "",
+        hasFullPageLayout ? "osionos-page--layout-canvas" : "",
         pageConfig.locked ? "osionos-page--locked" : "",
         pageConfig.presentationMode ? "osionos-page--present" : "",
       ].filter(Boolean).join(" ")}
@@ -266,7 +270,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
       <PageHeaderBar
         key={pageId}
         pageId={pageId}
-        workspaceId={activePage?.workspaceId ?? ""}
+        workspaceId={page?.workspaceId ?? activePage?.workspaceId ?? ""}
       />
 
       {/* Cover */}

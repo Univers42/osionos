@@ -94,6 +94,14 @@
   --osio-z-max: 100;
 
   --sidebar-width: 260px;
+
+  --osio-cell-min-content-width: 280px;
+  --osio-cell-min-row-height: 96px;
+  --osio-cell-comfortable-width: 480px;
+  --osio-cell-max-content-width: 960px;
+  --osio-cell-padding-inline: clamp(12px, 2vw, 24px);
+  --osio-cell-padding-block: clamp(10px, 1.6vw, 20px);
+  --osio-motion-standard: 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 :root,
