@@ -42,8 +42,10 @@ export interface PageEntry {
   archivedAt?: string | null;
   /** Block content (only populated in offline/seed mode) */
   content?: Block[];
-  /** Local surface classification used for private app-only spaces such as agents. */
-  surface?: "page" | "agent";
+  /** Local surface classification used for private app-only spaces such as agents and home. */
+  surface?: "page" | "agent" | "home";
+  /** Local version for generated home dashboard content. */
+  homeDashboardVersion?: number;
 }
 
 /** Discriminator for the type of page currently active. */

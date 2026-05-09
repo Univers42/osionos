@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:37 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/07 16:29:52 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 20:57:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -47,9 +47,11 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
   return (
     <div
       className={[
-        'w-full min-w-0',
-        mode === 'full' ? 'h-full overflow-hidden' : 'my-2',
+        'osionos-database-block w-full min-w-0',
+        mode === 'full' ? 'osionos-database-block--full h-full overflow-auto' : 'osionos-database-block--inline my-2',
       ].join(' ')}
+      data-database-id={resolvedDatabaseId}
+      data-database-view-id={resolvedInitialView}
     >
       <ObjectDatabase
         adapter={getObjectDatabaseAdapter()}

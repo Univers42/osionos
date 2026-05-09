@@ -45,12 +45,14 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   webServer: {
-    command: `pnpm exec vite --host 127.0.0.1 --port ${testPort} --strictPort`,
+    command: `VITE_API_URL= VITE_ALLOW_OFFLINE_MODE=true VITE_REQUIRE_BRIDGE_SESSION=false pnpm exec vite --mode test --host 127.0.0.1 --port ${testPort} --strictPort`,
     url: baseURL,
     reuseExistingServer,
     env: {
       ...process.env,
       VITE_API_URL: "",
+      VITE_ALLOW_OFFLINE_MODE: "true",
+      VITE_REQUIRE_BRIDGE_SESSION: "false",
     },
     stdout: "pipe",
     stderr: "pipe",

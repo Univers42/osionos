@@ -15,8 +15,14 @@ import process from "node:process";
 export async function openFreshPage(page, appUrl) {
   await page.goto(appUrl, { waitUntil: "domcontentloaded" });
   const newPageButton = page.getByRole("button", { name: /New page/i }).first();
-  await newPageButton.waitFor({ state: "visible" });
-  await newPageButton.click();
+  const oldHomeButtonVisible = await newPageButton.isVisible().catch(() => false);
+  if (oldHomeButtonVisible) {
+    await newPageButton.click();
+  } else {
+    const addPrivatePageButton = page.locator('button[title="Add to Private"]').first();
+    await addPrivatePageButton.waitFor({ state: "attached" });
+    await addPrivatePageButton.evaluate((node) => node.click());
+  }
   await page.getByRole("textbox", { name: "Page title" }).waitFor();
 }
 

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:14 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/06 23:05:59 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 20:57:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,11 +16,13 @@ import {
   createMediaBlock,
   type Block,
   type BlockType,
+  type LayoutMode,
   type MediaBlockType,
   findBlockInTree,
 } from "@/entities/block";
 import type { SlashMenuState } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
 import { focusEditableBlock } from "@/features/block-editor/model/blockDomFocus";
+import { createViewShowcaseLayoutContent } from "@/widgets/database-view/model/databaseViewCatalog";
 
 interface UseSlashSelectOptions {
   pageId: string;
@@ -40,7 +42,10 @@ interface UseSlashSelectOptions {
   createInlineDatabase: (
     name?: string,
   ) => { databaseId: string; viewId: string } | null;
-  createPageInPrivateWorkspace: () => Promise<{ id: string } | null>;
+  createPageInPrivateWorkspace: (
+    title?: string,
+    options?: { icon?: string; content?: Block[]; open?: boolean },
+  ) => Promise<{ id: string } | null>;
   createDatabasePageInPrivateWorkspace: () => Promise<{ id: string } | null>;
   focusBlock: (blockId: string, end?: boolean) => void;
 }
@@ -88,6 +93,7 @@ export function useSlashSelect({
       options?: {
         calloutIcon?: string;
         placeholderText?: string;
+        layoutMode?: LayoutMode;
       },
     ) => {
       if (!slashMenu) return;
@@ -181,18 +187,41 @@ export function useSlashSelect({
       }
 
       if (selectedType === "layout") {
+        if (options?.layoutMode === "full_page") {
+          void (async () => {
+            const createdPage = await createPageInPrivateWorkspace("Layout dashboard", {
+              icon: "icon:layout-dashboard",
+              content: createViewShowcaseLayoutContent("full_page"),
+              open: true,
+            });
+            const nextContent = createdPage
+              ? appendInternalPageLink(cleanContent, createdPage.id)
+              : cleanContent;
+
+            updateBlock(pageId, blockId, {
+              content: nextContent,
+              placeholderText: undefined,
+            });
+            if (!createdPage) repositionCursor(blockId, nextContent);
+          })();
+          return;
+        }
+
         changeBlockType(pageId, blockId, selectedType);
         updateBlock(pageId, blockId, {
           content: "",
+          layoutMode: options?.layoutMode ?? "inline",
           layoutConfig: {
             columns: 12,
             rows: 6,
-            columnGap: 16,
-            rowGap: 16,
+            gap: 16,
             rowHeight: 120,
             wrap: true,
-            showGuides: true,
+            autoArrange: false,
+            snapToGrid: true,
+            guideVisibility: "auto",
             preview: false,
+            theme: "default",
           },
           layoutCells: [],
           placeholderText: undefined,
@@ -225,14 +254,15 @@ export function useSlashSelect({
       changeBlockType,
       insertBlock,
       createInlineDatabase,
+      createPageInPrivateWorkspace,
       createDatabasePageInPrivateWorkspace,
       focusBlock,
     ],
   );
 
   const handleSlashBlockSelect = useCallback(
-    (selectedType: BlockType, content: Block[], calloutIcon?: string) => {
-      applyBlockSelection(selectedType, content, { calloutIcon });
+    (selectedType: BlockType, content: Block[], calloutIcon?: string, layoutMode?: LayoutMode) => {
+      applyBlockSelection(selectedType, content, { calloutIcon, layoutMode });
     },
     [applyBlockSelection],
   );
@@ -244,6 +274,7 @@ export function useSlashSelect({
       options?: {
         calloutIcon?: string;
         placeholderText?: string;
+        layoutMode?: LayoutMode;
       },
     ) => {
       applyBlockSelection(selectedType, content, options);
@@ -279,6 +310,55 @@ export function useSlashSelect({
       updateBlock(pageId, blockId, {
         content: "",
         asset,
+        placeholderText: undefined,
+      });
+      focusBlock(blockId);
+    },
+    [
+      pageId,
+      slashMenu,
+      setSlashMenu,
+      updateBlock,
+      changeBlockType,
+      insertBlock,
+      focusBlock,
+    ],
+  );
+
+  const handleSlashDatabaseViewSelect = useCallback(
+    (databaseId: string, viewId: string, content: Block[]) => {
+      if (!slashMenu) return;
+      const { blockId } = slashMenu;
+
+      setSlashMenu(null);
+
+      const block = findBlockInTree(content, blockId);
+      const cleanContent = stripSlashQuery(block?.content ?? "");
+
+      if (!block || cleanContent.trim().length > 0) {
+        if (block) {
+          updateBlock(pageId, blockId, {
+            content: cleanContent,
+            placeholderText: undefined,
+          });
+        }
+        const newBlock: Block = {
+          id: crypto.randomUUID(),
+          type: "database_inline",
+          content: "",
+          databaseId,
+          viewId,
+        };
+        insertBlock(pageId, blockId, newBlock);
+        focusBlock(newBlock.id);
+        return;
+      }
+
+      changeBlockType(pageId, blockId, "database_inline");
+      updateBlock(pageId, blockId, {
+        content: "",
+        databaseId,
+        viewId,
         placeholderText: undefined,
       });
       focusBlock(blockId);
@@ -348,6 +428,7 @@ export function useSlashSelect({
     handleSlashBlockSelect,
     handleSlashTurnIntoSelect,
     handleSlashMediaSelect,
+    handleSlashDatabaseViewSelect,
     handleSlashCreatePageSelect,
     handleSlashInlineSelect,
   };

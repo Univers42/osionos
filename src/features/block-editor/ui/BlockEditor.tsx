@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/08 05:35:14 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 20:57:58 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,35 +17,27 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Grid3X3, Plus, SlidersHorizontal } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
-import { DatabaseBlock } from "@/widgets/database-view";
+import { DatabaseBlock } from "@/widgets/database-view/ui/DatabaseBlock";
+import { createViewShowcaseCells } from "@/widgets/database-view/model/databaseViewCatalog";
 import {
-  continuesSameType,
   getBlockPlaceholder,
-  isListBlock,
-  selfRendersChildren,
   type Block,
 } from "@/entities/block";
-import { SlashCommandMenu } from "@/features/slash-commands";
-import type { SlashCommand } from "@/features/slash-commands/model/types";
 
 import { usePageStore } from "@/store/usePageStore";
-import {
-  detectBlockType,
-  getCalloutIconForKind,
-  parseMarkdownToBlocks,
-} from "@/shared/lib/markengine";
 import { MermaidDiagram, CodeSyntaxHighlight, EmojiPicker } from "@/shared/ui";
 import { getNumberedMarker, getBulletMarker } from "@/entities/block/model/listMarkers";
 import { MediaBlockEditor } from "./MediaBlockEditor";
 import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
+import { BlockEditorSurface, type SurfaceBlockEditorProps } from "./BlockEditorSurface";
 
 const LANGUAGES = [
   "plaintext",
@@ -90,16 +82,25 @@ function renderEquationToHtml(source: string): string {
 
 
 
+type LayoutMode = "inline" | "full_page";
+type LayoutGuideVisibility = "auto" | "always" | "never";
+type LayoutCellSizing = "fixed" | "auto-height" | "auto-width" | "auto";
+type LayoutCellHorizontalConstraint = "left" | "stretch" | "scale";
+type LayoutCellVerticalConstraint = "top" | "stretch" | "hug";
+type LayoutCellPadding = "compact" | "comfortable" | "spacious";
+type LayoutCellFontSize = "small" | "base" | "large";
+
 interface LayoutConfig {
   columns: number;
   rows: number;
-  columnGap: number;
-  rowGap: number;
+  gap: number;
   rowHeight: number;
   wrap: boolean;
-  autoReflow: boolean;
-  showGuides: boolean;
+  autoArrange: boolean;
+  snapToGrid: boolean;
+  guideVisibility: LayoutGuideVisibility;
   preview: boolean;
+  theme: "default" | "compact" | "spacious";
 }
 
 interface LayoutCell {
@@ -108,33 +109,54 @@ interface LayoutCell {
   colSpan: number;
   rowStart: number;
   rowSpan: number;
-  type: "text" | "color" | "spacer";
-  content: string;
-  blocks?: Block[];
+  label?: string;
+  tint?: string;
+  blocks: Block[];
+  type?: "text" | "color" | "spacer";
+  content?: string;
   blockType?: Block["type"];
   textColor?: string;
   backgroundColor?: string;
+  sizing?: LayoutCellSizing;
+  horizontalConstraint?: LayoutCellHorizontalConstraint;
+  verticalConstraint?: LayoutCellVerticalConstraint;
+  wrap?: boolean;
+  padding?: LayoutCellPadding;
+  fontSize?: LayoutCellFontSize;
 }
+
+const LAYOUT_CELL_COLOR_SWATCHES = [
+  { label: "Surface", backgroundColor: "var(--osio-bg-surface)", textColor: "var(--osio-fg-default)" },
+  { label: "Blue", backgroundColor: "color-mix(in srgb, #2563eb 8%, var(--osio-bg-surface))", textColor: "var(--osio-fg-default)" },
+  { label: "Green", backgroundColor: "color-mix(in srgb, #0f766e 10%, var(--osio-bg-surface))", textColor: "var(--osio-fg-default)" },
+  { label: "Gold", backgroundColor: "color-mix(in srgb, #b45309 10%, var(--osio-bg-surface))", textColor: "var(--osio-fg-default)" },
+  { label: "Rose", backgroundColor: "color-mix(in srgb, #be123c 8%, var(--osio-bg-surface))", textColor: "var(--osio-fg-default)" },
+];
 
 const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
   columns: 12,
   rows: 6,
-  columnGap: 16,
-  rowGap: 16,
+  gap: 16,
   rowHeight: 120,
   wrap: true,
-  autoReflow: true,
-  showGuides: true,
+  autoArrange: false,
+  snapToGrid: true,
+  guideVisibility: "auto",
   preview: false,
+  theme: "default",
 };
+const LAYOUT_CELL_DND_TYPE = "application/x-osionos-layout-cell-id";
 
 const LAYOUT_CONFIG_LIMITS = {
   columns: [1, 24],
   rows: [1, 96],
-  columnGap: [0, 48],
-  rowGap: [0, 48],
-  rowHeight: [48, 320],
+  gap: [0, 48],
+  rowHeight: [96, 320],
 } as const;
+
+const CELL_MIN_CONTENT_WIDTH = 280;
+const CELL_COMFORTABLE_WIDTH = 480;
+const CELL_MIN_ROW_HEIGHT = 96;
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const nextValue = typeof value === "number" ? value : Number(value);
@@ -143,19 +165,29 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
 }
 
 function sanitizeLayoutConfig(config: Partial<LayoutConfig> | undefined): LayoutConfig {
-  const merged = config
+  const legacyConfig = config as (Partial<LayoutConfig> & {
+    columnGap?: number;
+    rowGap?: number;
+    autoReflow?: boolean;
+    showGuides?: boolean;
+  }) | undefined;
+  const merged = legacyConfig
     ? { ...DEFAULT_LAYOUT_CONFIG, ...config }
     : DEFAULT_LAYOUT_CONFIG;
+  const legacyGap = legacyConfig?.columnGap ?? legacyConfig?.rowGap;
+  const guideVisibility = merged.guideVisibility
+    ?? (legacyConfig?.showGuides === false ? "never" : "auto");
   return {
     columns: clampNumber(merged.columns, ...LAYOUT_CONFIG_LIMITS.columns, DEFAULT_LAYOUT_CONFIG.columns),
     rows: clampNumber(merged.rows, ...LAYOUT_CONFIG_LIMITS.rows, DEFAULT_LAYOUT_CONFIG.rows),
-    columnGap: clampNumber(merged.columnGap, ...LAYOUT_CONFIG_LIMITS.columnGap, DEFAULT_LAYOUT_CONFIG.columnGap),
-    rowGap: clampNumber(merged.rowGap, ...LAYOUT_CONFIG_LIMITS.rowGap, DEFAULT_LAYOUT_CONFIG.rowGap),
+    gap: clampNumber(merged.gap ?? legacyGap, ...LAYOUT_CONFIG_LIMITS.gap, DEFAULT_LAYOUT_CONFIG.gap),
     rowHeight: clampNumber(merged.rowHeight, ...LAYOUT_CONFIG_LIMITS.rowHeight, DEFAULT_LAYOUT_CONFIG.rowHeight),
     wrap: Boolean(merged.wrap),
-    autoReflow: merged.autoReflow !== false,
-    showGuides: Boolean(merged.showGuides),
+    autoArrange: merged.autoArrange ?? legacyConfig?.autoReflow ?? DEFAULT_LAYOUT_CONFIG.autoArrange,
+    snapToGrid: merged.snapToGrid ?? DEFAULT_LAYOUT_CONFIG.snapToGrid,
+    guideVisibility: guideVisibility === "always" || guideVisibility === "never" ? guideVisibility : "auto",
     preview: Boolean(merged.preview),
+    theme: merged.theme ?? DEFAULT_LAYOUT_CONFIG.theme,
   };
 }
 
@@ -164,12 +196,18 @@ function clampLayoutCell(cell: LayoutCell, config: LayoutConfig): LayoutCell {
   return {
     ...cell,
     colSpan,
-    rowSpan: clampNumber(cell.rowSpan, 1, config.rows, 1),
+    rowSpan: clampNumber(cell.rowSpan, Math.max(1, Math.ceil(CELL_MIN_ROW_HEIGHT / config.rowHeight)), config.rows, 1),
     colStart: clampNumber(cell.colStart, 1, Math.max(1, config.columns - colSpan + 1), 1),
     rowStart: clampNumber(cell.rowStart, 1, config.rows, 1),
     type: cell.type ?? "text",
     content: typeof cell.content === "string" ? cell.content : "",
     blocks: getLayoutCellBlocks(cell),
+    sizing: cell.sizing ?? "fixed",
+    horizontalConstraint: cell.horizontalConstraint ?? "stretch",
+    verticalConstraint: cell.verticalConstraint ?? "top",
+    wrap: cell.wrap !== false,
+    padding: cell.padding ?? "comfortable",
+    fontSize: cell.fontSize ?? "base",
   };
 }
 
@@ -202,6 +240,7 @@ function findLayoutPlacement(
         rowSpan: safeRowSpan,
         type: "text",
         content: "",
+        blocks: [],
       };
       if (placedCells.every((cell) => !cellsOverlap(candidate, cell))) {
         return { colStart, rowStart };
@@ -229,36 +268,20 @@ function packLayoutCells(cells: LayoutCell[], config: LayoutConfig): LayoutCell[
 
 function normalizeLayoutCells(cells: LayoutCell[], config: LayoutConfig): LayoutCell[] {
   const clampedCells = cells.map((cell) => clampLayoutCell(cell, config));
-  return config.autoReflow ? packLayoutCells(clampedCells, config) : clampedCells;
-}
-
-function stripSlashQuery(content: string): string {
-  const slashIndex = content.lastIndexOf("/");
-  return slashIndex >= 0 ? content.slice(0, slashIndex) : content;
-}
-
-function appendInlineText(content: string, insertText: string): string {
-  const cleanContent = stripSlashQuery(content);
-  const separator = cleanContent.length > 0 && !/\s$/.test(cleanContent) ? " " : "";
-  return `${cleanContent}${separator}${insertText}`;
-}
-
-function getCaretRectFallback(): { x: number; y: number } {
-  const selection = globalThis.getSelection?.();
-  if (selection?.rangeCount) {
-    const range = selection.getRangeAt(0).cloneRange();
-    range.collapse(false);
-    const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
-    if (rect) {
-      return { x: rect.left, y: rect.bottom };
-    }
-  }
-  return { x: 24, y: 24 };
+  return config.autoArrange ? packLayoutCells(clampedCells, config) : clampedCells;
 }
 
 function getLayoutConfig(block: Block): LayoutConfig {
   const storedConfig = block.layoutConfig as Partial<LayoutConfig> | undefined;
   return sanitizeLayoutConfig(storedConfig);
+}
+
+function getLayoutMode(block: Block): LayoutMode {
+  return block.layoutMode === "full_page" ? "full_page" : "inline";
+}
+
+function dataFlag(condition: boolean): "true" | undefined {
+  return condition ? "true" : undefined;
 }
 
 function getLayoutCells(block: Block): LayoutCell[] {
@@ -291,97 +314,6 @@ function getLayoutCellBlocks(cell: LayoutCell): Block[] {
   }
 
   return [createLayoutCellBlock(cell)];
-}
-
-function summarizeLayoutCellContent(blocks: Block[]): string {
-  return blocks.map((nestedBlock) => nestedBlock.content).join("\n");
-}
-
-function updateBlockInTree(
-  blocks: Block[],
-  blockId: string,
-  updater: (block: Block) => Block,
-): Block[] {
-  return blocks.map((nestedBlock) => {
-    if (nestedBlock.id === blockId) return updater(nestedBlock);
-    if (!nestedBlock.children?.length) return nestedBlock;
-    return {
-      ...nestedBlock,
-      children: updateBlockInTree(nestedBlock.children, blockId, updater),
-    };
-  });
-}
-
-function insertBlockAfterInTree(
-  blocks: Block[],
-  blockId: string,
-  newBlock: Block,
-): Block[] {
-  const nextBlocks: Block[] = [];
-
-  for (const nestedBlock of blocks) {
-    nextBlocks.push(nestedBlock);
-    if (nestedBlock.id === blockId) {
-      nextBlocks.push(newBlock);
-      continue;
-    }
-
-    if (nestedBlock.children?.length) {
-      nextBlocks[nextBlocks.length - 1] = {
-        ...nestedBlock,
-        children: insertBlockAfterInTree(nestedBlock.children, blockId, newBlock),
-      };
-    }
-  }
-
-  return nextBlocks;
-}
-
-function deleteBlockFromTree(blocks: Block[], blockId: string): Block[] {
-  return blocks
-    .filter((nestedBlock) => nestedBlock.id !== blockId)
-    .map((nestedBlock) =>
-      nestedBlock.children?.length
-        ? {
-            ...nestedBlock,
-            children: deleteBlockFromTree(nestedBlock.children, blockId),
-          }
-        : nestedBlock,
-    );
-}
-
-function flattenBlockIds(blocks: Block[]): string[] {
-  return blocks.flatMap((nestedBlock) => [
-    nestedBlock.id,
-    ...flattenBlockIds(nestedBlock.children ?? []),
-  ]);
-}
-
-function shouldRenderLayoutCellChildren(block: Block): boolean {
-  if (!block.children?.length) return false;
-  if (selfRendersChildren(block.type)) return false;
-  if (block.type === "toggle" && block.collapsed) return false;
-  return true;
-}
-
-function focusLayoutCellBlock(blockId: string, cursorEnd = false) {
-  requestAnimationFrame(() => {
-    const root = document.querySelector<HTMLElement>(`[data-layout-cell-block-id="${blockId}"]`);
-    const editable = root?.querySelector<HTMLElement>('[contenteditable="true"], textarea, button');
-    editable?.focus();
-
-    if (!cursorEnd || editable?.getAttribute("contenteditable") !== "true") {
-      return;
-    }
-
-    const selection = globalThis.getSelection?.();
-    if (!selection) return;
-    const range = document.createRange();
-    range.selectNodeContents(editable);
-    range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
-  });
 }
 
 interface BlockEditorProps {
@@ -925,7 +857,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     }
 
     case "layout":
-      return <LayoutBlockEditor block={block} pageId={pageId} />;
+      return <LayoutBlockEditor block={block} pageId={pageId} onUpdateBlock={commitBlockUpdate} />;
 
     case "divider":
       return (
@@ -1256,515 +1188,582 @@ const TableBlockEditor: React.FC<{
   );
 };
 
-const LayoutBlockEditor: React.FC<{ block: Block; pageId: string }> = ({
-  block,
-  pageId,
-}) => {
+const LayoutBlockEditor: React.FC<{
+  block: Block;
+  pageId: string;
+  onUpdateBlock?: (blockId: string, updates: Partial<Block>) => void;
+}> = ({ block, pageId, onUpdateBlock }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [cellSlashMenu, setCellSlashMenu] = useState<{
-    cellId: string;
-    blockId: string;
-    position: { x: number; y: number };
-    filter: string;
-  } | null>(null);
+  const [resizingCell, setResizingCell] = useState<{ id: string; colSpan: number; rowSpan: number } | null>(null);
+  const [draggingCellId, setDraggingCellId] = useState<string | null>(null);
+  const [cellDropTargetId, setCellDropTargetId] = useState<string | null>(null);
+  const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const config = getLayoutConfig(block);
-  const cells = useMemo(
-    () => normalizeLayoutCells(getLayoutCells(block), config),
-    [block, config],
+  const layoutMode = getLayoutMode(block);
+  const cells = useMemo(() => normalizeLayoutCells(getLayoutCells(block), config), [block, config]);
+  const selectedCell = useMemo(
+    () => cells.find((cell) => cell.id === selectedCellId) ?? null,
+    [cells, selectedCellId],
   );
+  const renderBlockEditor = useCallback((props: SurfaceBlockEditorProps) => <BlockEditor {...props} />, []);
 
   const updateLayout = useCallback(
-    (updates: Partial<Pick<Block, "layoutConfig" | "layoutCells">>) => {
+    (updates: Partial<Pick<Block, "layoutConfig" | "layoutCells" | "layoutMode">>) => {
+      if (onUpdateBlock) {
+        onUpdateBlock(block.id, updates);
+        return;
+      }
       updateBlock(pageId, block.id, updates);
     },
-    [block.id, pageId, updateBlock],
+    [block.id, onUpdateBlock, pageId, updateBlock],
   );
 
   const updateConfig = useCallback(
     (patch: Partial<LayoutConfig>) => {
       const nextConfig = sanitizeLayoutConfig({ ...config, ...patch });
-      updateLayout({
-        layoutConfig: nextConfig,
-        layoutCells: normalizeLayoutCells(cells, nextConfig),
-      });
+      updateLayout({ layoutConfig: nextConfig, layoutCells: normalizeLayoutCells(cells, nextConfig) });
     },
     [cells, config, updateLayout],
   );
 
-  const updateCells = useCallback(
-    (nextCells: LayoutCell[]) => updateLayout({ layoutCells: nextCells }),
-    [updateLayout],
-  );
+  const updateCells = useCallback((nextCells: LayoutCell[]) => {
+    updateLayout({ layoutCells: normalizeLayoutCells(nextCells, config) });
+  }, [config, updateLayout]);
 
-  const addCell = useCallback(() => {
-    const colSpan = Math.min(4, config.columns);
-    const placement = findLayoutPlacement(cells, config, colSpan, 1);
+  const addCell = useCallback((template?: Partial<LayoutCell>) => {
+    const grid = document.querySelector<HTMLElement>(`[data-layout-grid="${block.id}"]`);
+    const columnWidth = Math.max(1, (grid?.getBoundingClientRect().width ?? 960) / config.columns);
+    const comfortableSpan = Math.max(1, Math.ceil(CELL_COMFORTABLE_WIDTH / columnWidth));
+    const colSpan = Math.min(config.columns, Math.max(template?.colSpan ?? comfortableSpan, Math.ceil(CELL_MIN_CONTENT_WIDTH / columnWidth)));
+    const rowSpan = Math.max(1, template?.rowSpan ?? 2);
+    const placement = findLayoutPlacement(cells, config, colSpan, rowSpan);
     const nextCell: LayoutCell = {
       id: crypto.randomUUID(),
-      colStart: placement.colStart,
+      colStart: template?.colStart ?? placement.colStart,
       colSpan,
-      rowStart: placement.rowStart,
-      rowSpan: 1,
+      rowStart: template?.rowStart ?? placement.rowStart,
+      rowSpan,
+      label: template?.label,
+      tint: template?.tint,
+      textColor: template?.textColor,
+      backgroundColor: template?.backgroundColor,
+      sizing: template?.sizing ?? "fixed",
+      horizontalConstraint: template?.horizontalConstraint ?? "stretch",
+      verticalConstraint: template?.verticalConstraint ?? "top",
+      wrap: template?.wrap !== false,
+      padding: template?.padding ?? "comfortable",
+      fontSize: template?.fontSize ?? "base",
       type: "text",
       content: "",
-      blocks: [{ id: crypto.randomUUID(), type: "paragraph", content: "" }],
+      blocks: template?.blocks ?? [{ id: crypto.randomUUID(), type: "paragraph", content: "" }],
     };
-    const nextCells: LayoutCell[] = [
-      ...cells,
-      nextCell,
-    ];
-    updateCells(config.autoReflow ? packLayoutCells(nextCells, config) : nextCells);
-  }, [cells, config, updateCells]);
+    updateCells(config.autoArrange ? packLayoutCells([...cells, nextCell], config) : [...cells, nextCell]);
+  }, [block.id, cells, config, updateCells]);
 
-  const updateCell = useCallback(
-    (cellId: string, patch: Partial<LayoutCell>) => {
-      const nextCells = cells.map((cell) => (cell.id === cellId ? { ...cell, ...patch } : cell));
-      updateCells(config.autoReflow ? packLayoutCells(nextCells, config) : normalizeLayoutCells(nextCells, config));
-    },
-    [cells, config, updateCells],
-  );
+  const applyTemplate = useCallback((kind: "dashboard" | "tracker" | "notes" | "kanban") => {
+    const createCell = (partial: Omit<LayoutCell, "id" | "type" | "content">): LayoutCell => ({
+      id: crypto.randomUUID(),
+      type: "text",
+      content: "",
+      ...partial,
+    });
+    const heading = (text: string): Block[] => [{ id: crypto.randomUUID(), type: "heading_3", content: text }];
+    const templates: Record<typeof kind, LayoutCell[]> = {
+      dashboard: createViewShowcaseCells(),
+      tracker: [
+        createCell({ colStart: 1, colSpan: 4, rowStart: 1, rowSpan: 5, label: "Sidebar", blocks: heading("Tracker") }),
+        createCell({ colStart: 5, colSpan: 8, rowStart: 1, rowSpan: 2, label: "Now", blocks: heading("Now") }),
+        createCell({ colStart: 5, colSpan: 4, rowStart: 3, rowSpan: 2, label: "Status", blocks: heading("Status") }),
+        createCell({ colStart: 9, colSpan: 4, rowStart: 3, rowSpan: 2, label: "Risks", blocks: heading("Risks") }),
+      ],
+      notes: [
+        createCell({ colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 4, label: "Left", blocks: heading("Notes") }),
+        createCell({ colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 4, label: "Right", blocks: heading("References") }),
+      ],
+      kanban: ["Backlog", "Doing", "Review", "Done"].map((label, index) => createCell({
+        colStart: index * 3 + 1,
+        colSpan: 3,
+        rowStart: 1,
+        rowSpan: 4,
+        label,
+        blocks: heading(label),
+      })),
+    };
+    updateCells(templates[kind]);
+  }, [updateCells]);
 
-  const removeCell = useCallback(
-    (cellId: string) => updateCells(cells.filter((cell) => cell.id !== cellId)),
-    [cells, updateCells],
-  );
+  const updateCell = useCallback((cellId: string, patch: Partial<LayoutCell>) => {
+    updateCells(cells.map((cell) => (cell.id === cellId ? { ...cell, ...patch } : cell)));
+  }, [cells, updateCells]);
 
-  const startResize = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>, cell: LayoutCell, axis: "x" | "y" | "both") => {
-      event.preventDefault();
-      event.stopPropagation();
-      const container = event.currentTarget.closest<HTMLElement>("[data-layout-grid]");
-      const rect = container?.getBoundingClientRect();
-      if (!rect) return;
+  const removeCell = useCallback((cellId: string) => updateCells(cells.filter((cell) => cell.id !== cellId)), [cells, updateCells]);
 
-      const startX = event.clientX;
-      const startY = event.clientY;
-      const cellWidth = rect.width / config.columns;
-      const rowHeight = Math.max(24, config.rowHeight);
+  const updateSelectedCell = useCallback((patch: Partial<LayoutCell>) => {
+    if (!selectedCellId) return;
+    updateCell(selectedCellId, patch);
+  }, [selectedCellId, updateCell]);
 
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        const colDelta = Math.round((moveEvent.clientX - startX) / Math.max(cellWidth, 1));
-        const rowDelta = Math.round((moveEvent.clientY - startY) / rowHeight);
-        const resizedCell = {
-          colSpan: axis === "x" || axis === "both"
-            ? Math.max(1, Math.min(config.columns - cell.colStart + 1, cell.colSpan + colDelta))
-            : cell.colSpan,
-          rowSpan: axis === "y" || axis === "both"
-            ? Math.max(1, cell.rowSpan + rowDelta)
-            : cell.rowSpan,
+  const duplicateCell = useCallback((cell: LayoutCell) => {
+    addCell({
+      label: cell.label ? `${cell.label} copy` : undefined,
+      colSpan: cell.colSpan,
+      rowSpan: cell.rowSpan,
+      tint: cell.tint,
+      textColor: cell.textColor,
+      backgroundColor: cell.backgroundColor,
+      sizing: cell.sizing,
+      horizontalConstraint: cell.horizontalConstraint,
+      verticalConstraint: cell.verticalConstraint,
+      wrap: cell.wrap,
+      padding: cell.padding,
+      fontSize: cell.fontSize,
+      blocks: structuredClone(cell.blocks).map((nestedBlock) => ({ ...nestedBlock, id: crypto.randomUUID() })),
+    });
+  }, [addCell]);
+
+  const reorderCellByDrop = useCallback((draggedCellId: string, targetCellId: string) => {
+    if (draggedCellId === targetCellId) return;
+    const draggedCell = cells.find((cell) => cell.id === draggedCellId);
+    const targetCell = cells.find((cell) => cell.id === targetCellId);
+    if (!draggedCell || !targetCell) return;
+    updateCells(cells.map((cell) => {
+      if (cell.id === draggedCellId) {
+        return {
+          ...cell,
+          colStart: targetCell.colStart,
+          colSpan: targetCell.colSpan,
+          rowStart: targetCell.rowStart,
+          rowSpan: targetCell.rowSpan,
         };
-        updateCell(cell.id, resizedCell);
-      };
-
-      const handlePointerUp = () => {
-        globalThis.removeEventListener("pointermove", handlePointerMove);
-        globalThis.removeEventListener("pointerup", handlePointerUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-      };
-
-      let cursor = "nwse-resize";
-      if (axis === "x") cursor = "ew-resize";
-      if (axis === "y") cursor = "ns-resize";
-      document.body.style.cursor = cursor;
-      document.body.style.userSelect = "none";
-      globalThis.addEventListener("pointermove", handlePointerMove);
-      globalThis.addEventListener("pointerup", handlePointerUp, { once: true });
-    },
-    [config.columns, config.rowHeight, updateCell],
-  );
-
-  const updateCellBlocks = useCallback(
-    (cellId: string, nextBlocks: Block[]) => {
-      updateCell(cellId, {
-        blocks: nextBlocks,
-        content: summarizeLayoutCellContent(nextBlocks),
-      });
-    },
-    [updateCell],
-  );
-
-  const handleCellBlockChange = useCallback(
-    (cell: LayoutCell, blockId: string, nextContent: string) => {
-      let nextBlocks = updateBlockInTree(cell.blocks ?? getLayoutCellBlocks(cell), blockId, (nestedBlock) => ({
-        ...nestedBlock,
-        content: nextContent,
-      }));
-
-      if (nextContent.endsWith(" ") || nextContent === "---" || nextContent === "```" || nextContent === "$$") {
-        const detection = detectBlockType(nextContent);
-        if (detection) {
-          nextBlocks = updateBlockInTree(nextBlocks, blockId, (nestedBlock) => ({
-            ...nestedBlock,
-            type: detection.type,
-            content: detection.remainingContent,
-            checked: detection.type === "to_do" ? Boolean(detection.checked) : nestedBlock.checked,
-            color: detection.type === "callout"
-              ? getCalloutIconForKind(detection.kind ?? "note")
-              : nestedBlock.color,
-            headingLevel: detection.headingLevel as Block["headingLevel"],
-          }));
-          focusLayoutCellBlock(blockId);
-        }
       }
-
-      updateCellBlocks(cell.id, nextBlocks);
-
-      const slashIndex = nextContent.lastIndexOf("/");
-      setCellSlashMenu((current) => {
-        const isActiveCellMenu = current?.cellId === cell.id && current.blockId === blockId;
-        if (slashIndex >= 0 && (nextContent.endsWith("/") || isActiveCellMenu)) {
-          return {
-            cellId: cell.id,
-            blockId,
-            position: isActiveCellMenu ? current.position : getCaretRectFallback(),
-            filter: nextContent.slice(slashIndex + 1),
-          };
-        }
-
-        return isActiveCellMenu ? null : current;
-      });
-    },
-    [updateCellBlocks],
-  );
-
-  const handleCellBlockKeyDown = useCallback(
-    (event: React.KeyboardEvent, cell: LayoutCell, nestedBlock: Block) => {
-      const cellBlocks = cell.blocks ?? getLayoutCellBlocks(cell);
-
-      if (event.key === "Escape") {
-        setCellSlashMenu(null);
-        return;
-      }
-
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-
-        if (isListBlock(nestedBlock.type) && nestedBlock.content.trim().length === 0) {
-          const nextBlocks = updateBlockInTree(cellBlocks, nestedBlock.id, (blockToUpdate) => ({
-            ...blockToUpdate,
-            type: "paragraph",
-            content: "",
-            checked: false,
-          }));
-          updateCellBlocks(cell.id, nextBlocks);
-          focusLayoutCellBlock(nestedBlock.id);
-          return;
-        }
-
-        const nextBlock: Block = {
-          id: crypto.randomUUID(),
-          type: continuesSameType(nestedBlock.type) ? nestedBlock.type : "paragraph",
-          content: "",
+      if (cell.id === targetCellId) {
+        return {
+          ...cell,
+          colStart: draggedCell.colStart,
+          colSpan: draggedCell.colSpan,
+          rowStart: draggedCell.rowStart,
+          rowSpan: draggedCell.rowSpan,
         };
-        const nextBlocks = insertBlockAfterInTree(cellBlocks, nestedBlock.id, nextBlock);
-        updateCellBlocks(cell.id, nextBlocks);
-        focusLayoutCellBlock(nextBlock.id);
-        return;
       }
+      return cell;
+    }));
+  }, [cells, updateCells]);
 
-      if (
-        (event.key === "Backspace" || event.key === "Delete") &&
-        nestedBlock.content.trim().length === 0 &&
-        flattenBlockIds(cellBlocks).length > 1
-      ) {
-        event.preventDefault();
-        const ids = flattenBlockIds(cellBlocks);
-        const currentIndex = ids.indexOf(nestedBlock.id);
-        const focusTarget = ids[event.key === "Delete" ? currentIndex + 1 : currentIndex - 1]
-          ?? ids[currentIndex - 1]
-          ?? ids[currentIndex + 1];
-        updateCellBlocks(cell.id, deleteBlockFromTree(cellBlocks, nestedBlock.id));
-        if (focusTarget) focusLayoutCellBlock(focusTarget, event.key !== "Delete");
+  const startResize = useCallback((event: React.PointerEvent<HTMLDivElement>, cell: LayoutCell, axis: "x" | "y" | "both") => {
+    event.preventDefault();
+    event.stopPropagation();
+    const container = event.currentTarget.closest<HTMLElement>("[data-layout-grid]");
+    const rect = container?.getBoundingClientRect();
+    if (!rect) return;
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const columnWidth = Math.max(1, rect.width / config.columns);
+    const rowHeight = Math.max(CELL_MIN_ROW_HEIGHT, config.rowHeight);
+    const minColSpan = Math.max(1, Math.ceil(CELL_MIN_CONTENT_WIDTH / columnWidth));
+    const minRowSpan = Math.max(1, Math.ceil(CELL_MIN_ROW_HEIGHT / rowHeight));
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const colDelta = Math.round((moveEvent.clientX - startX) / columnWidth);
+      const rowDelta = Math.round((moveEvent.clientY - startY) / rowHeight);
+      let nextColSpan = cell.colSpan;
+      let nextRowSpan = cell.rowSpan;
+      if (axis === "x" || axis === "both") {
+        nextColSpan = Math.max(minColSpan, Math.min(config.columns - cell.colStart + 1, cell.colSpan + colDelta));
       }
-    },
-    [updateCellBlocks],
-  );
-
-  const handleCellBlockPaste = useCallback(
-    (event: React.ClipboardEvent, cell: LayoutCell, blockId: string) => {
-      const markdown = event.clipboardData.getData("text/plain").replaceAll("\r\n", "\n").trim();
-      if (!markdown) return;
-
-      const parsedBlocks = parseMarkdownToBlocks(markdown);
-      if (parsedBlocks.length <= 1 && parsedBlocks[0]?.type === "paragraph") return;
-
-      event.preventDefault();
-      const [firstBlock, ...restBlocks] = parsedBlocks;
-      let nextBlocks = updateBlockInTree(cell.blocks ?? getLayoutCellBlocks(cell), blockId, (nestedBlock) => ({
-        ...nestedBlock,
-        ...firstBlock,
-        id: nestedBlock.id,
-      }));
-      let afterBlockId = blockId;
-      for (const parsedBlock of restBlocks) {
-        nextBlocks = insertBlockAfterInTree(nextBlocks, afterBlockId, parsedBlock);
-        afterBlockId = parsedBlock.id;
+      if (axis === "y" || axis === "both") {
+        nextRowSpan = Math.max(minRowSpan, cell.rowSpan + rowDelta);
       }
-      updateCellBlocks(cell.id, nextBlocks);
-      focusLayoutCellBlock(restBlocks.at(-1)?.id ?? blockId, true);
-    },
-    [updateCellBlocks],
-  );
+      setResizingCell({ id: cell.id, colSpan: nextColSpan, rowSpan: nextRowSpan });
+      updateCell(cell.id, { colSpan: nextColSpan, rowSpan: nextRowSpan });
+    };
 
-  const applyCellSlashCommand = useCallback(
-    (command: Exclude<SlashCommand, { kind: "media-picker" }>) => {
-      if (!cellSlashMenu) return;
-      const targetCell = cells.find((cell) => cell.id === cellSlashMenu.cellId);
-      if (!targetCell) return;
-      const targetBlocks = targetCell.blocks ?? getLayoutCellBlocks(targetCell);
+    const handlePointerUp = () => {
+      globalThis.removeEventListener("pointermove", handlePointerMove);
+      globalThis.removeEventListener("pointerup", handlePointerUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      setResizingCell(null);
+    };
 
-      setCellSlashMenu(null);
+    let cursor = "nwse-resize";
+    if (axis === "x") cursor = "ew-resize";
+    if (axis === "y") cursor = "ns-resize";
+    document.body.style.cursor = cursor;
+    document.body.style.userSelect = "none";
+    globalThis.addEventListener("pointermove", handlePointerMove);
+    globalThis.addEventListener("pointerup", handlePointerUp, { once: true });
+  }, [config.columns, config.rowHeight, updateCell]);
 
-      if (command.kind === "inline") {
-        updateCellBlocks(targetCell.id, updateBlockInTree(targetBlocks, cellSlashMenu.blockId, (nestedBlock) => ({
-          ...nestedBlock,
-          content: appendInlineText(nestedBlock.content, command.insertText),
-        })));
-        return;
-      }
-
-      if (command.kind === "create-page") {
-        updateCellBlocks(targetCell.id, updateBlockInTree(targetBlocks, cellSlashMenu.blockId, (nestedBlock) => ({
-          ...nestedBlock,
-          content: stripSlashQuery(nestedBlock.content),
-        })));
-        return;
-      }
-
-      const blockType = command.blockType;
-      updateCellBlocks(targetCell.id, updateBlockInTree(targetBlocks, cellSlashMenu.blockId, (nestedBlock) => ({
-        ...nestedBlock,
-        type: blockType,
-        content: blockType === "equation"
-          ? "E = mc^2"
-          : stripSlashQuery(nestedBlock.content),
-        color: command.kind === "turn-into" ? command.calloutIcon : nestedBlock.color,
-        placeholderText: command.kind === "turn-into" ? command.placeholderText : nestedBlock.placeholderText,
-      })));
-      focusLayoutCellBlock(cellSlashMenu.blockId);
-    },
-    [cellSlashMenu, cells, updateCellBlocks],
-  );
+  const shouldShowGuides = !config.preview && config.guideVisibility !== "never";
+  const modeClass = layoutMode === "full_page" ? "osionos-layout-block--full-page" : "osionos-layout-block--inline";
 
   return (
-    <section className="my-3 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2">
-      <div className="mb-2 flex flex-wrap items-center gap-1 text-xs">
-        <button type="button" onClick={() => setSettingsOpen((value) => !value)} className="rounded-md px-2 py-1 text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">⚙️ Grid</button>
-        <button type="button" onClick={addCell} className="rounded-md px-2 py-1 text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">+ Cell</button>
-        <button type="button" onClick={() => updateConfig({ showGuides: !config.showGuides })} className="rounded-md px-2 py-1 text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">📐 Guides</button>
-        <button type="button" onClick={() => updateConfig({ preview: !config.preview })} className="rounded-md px-2 py-1 text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">👁 Preview</button>
-        <button type="button" onClick={() => updateConfig({ wrap: !config.wrap })} className="rounded-md px-2 py-1 text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">↔ {config.wrap ? "Wrap" : "No-wrap"}</button>
-        <button type="button" onClick={() => updateConfig({ autoReflow: !config.autoReflow })} className="rounded-md px-2 py-1 text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">⇄ {config.autoReflow ? "Auto" : "Manual"}</button>
-      </div>
-
-      {settingsOpen ? (
-        <div className="mb-2 grid grid-cols-2 gap-2 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-2 text-xs md:grid-cols-5">
-          {([
-            ["columns", "Columns", 1, 24],
-            ["rows", "Rows", 1, 48],
-            ["columnGap", "Column gap", 0, 48],
-            ["rowGap", "Row gap", 0, 48],
-            ["rowHeight", "Row height", 48, 320],
-          ] as const).map(([key, label, min, max]) => (
-            <label key={key} className="flex flex-col gap-1 text-[var(--osio-fg-muted)]">
-              {label}
-              <input
-                type="number"
-                min={min}
-                max={max}
-                value={config[key]}
-                onChange={(event) => updateConfig({ [key]: Number(event.target.value) } as Partial<LayoutConfig>)}
-                className="rounded-md border border-[var(--osio-border-default)] bg-transparent px-2 py-1 text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
-              />
-            </label>
-          ))}
-        </div>
-      ) : null}
-
-      <div className={config.wrap ? "overflow-x-hidden" : "overflow-x-auto pb-2"}>
-        <div
-          data-layout-grid
-          className="relative grid min-h-[360px] rounded-lg bg-[var(--osio-bg-surface)] p-2"
-          style={{
-            width: config.wrap ? "100%" : `${Math.max(960, config.columns * 88)}px`,
-            gridTemplateColumns: `repeat(${config.columns}, minmax(0, 1fr))`,
-            gridAutoRows: `${config.rowHeight}px`,
-            gap: `${config.rowGap}px ${config.columnGap}px`,
-            backgroundImage: config.showGuides && !config.preview
-              ? "linear-gradient(var(--osio-border-default) 1px, transparent 1px), linear-gradient(90deg, var(--osio-border-default) 1px, transparent 1px)"
-              : undefined,
-            backgroundSize: config.showGuides && !config.preview
-              ? `calc((100% - ${(config.columns - 1) * config.columnGap}px) / ${config.columns} + ${config.columnGap}px) ${config.rowHeight + config.rowGap}px`
-              : undefined,
-          }}
+    <section className={`osionos-layout-block ${modeClass}`} data-layout-mode={layoutMode}>
+      <div className="osionos-layout-shell">
+        <button
+          type="button"
+          aria-label="Layout settings"
+          title="Layout settings"
+          className="osionos-layout-settings-tab"
+          onClick={() => setSettingsOpen((value) => !value)}
         >
-          {cells.length === 0 ? (
-            <button
-              type="button"
-              onClick={addCell}
-              className="col-span-full row-span-2 rounded-lg border border-dashed border-[var(--osio-border-default)] text-sm text-[var(--osio-fg-muted)] hover:border-[var(--osio-accent)] hover:text-[var(--osio-fg-default)]"
-            >
-              + Create first layout cell
-            </button>
-          ) : null}
+          ⚙
+        </button>
 
-          {cells.map((cell) => (
-            <section
-              key={cell.id}
-              aria-label="Layout cell"
-              className="group/cell relative rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2 shadow-sm"
-              style={{
+        <div className="osionos-layout-toolbar" aria-label="Layout tools">
+          <button type="button" onClick={() => addCell()}>
+            <Plus size={14} aria-hidden />
+            <span>Add cell</span>
+          </button>
+          <button type="button" onClick={() => applyTemplate("dashboard")}>
+            <Grid3X3 size={14} aria-hidden />
+            <span>Dashboard</span>
+          </button>
+          <button type="button" onClick={() => setSelectedCellId((current) => current ?? cells[0]?.id ?? null)}>
+            <SlidersHorizontal size={14} aria-hidden />
+            <span>Inspector</span>
+          </button>
+          <button type="button" onClick={() => updateConfig({ guideVisibility: config.guideVisibility === "never" ? "auto" : "never" })}>
+            <Grid3X3 size={14} aria-hidden />
+            <span>{config.guideVisibility === "never" ? "Show grid" : "Hide grid"}</span>
+          </button>
+        </div>
+
+        {settingsOpen ? (
+          <aside className="osionos-layout-settings-panel" aria-label="Layout settings">
+            <LayoutNumberControl label="Columns" value={config.columns} min={1} max={24} onChange={(columns) => updateConfig({ columns })} />
+            <LayoutNumberControl label="Row height" value={config.rowHeight} min={96} max={320} suffix="px" onChange={(rowHeight) => updateConfig({ rowHeight })} />
+            <LayoutNumberControl label="Gap" value={config.gap} min={0} max={48} suffix="px" onChange={(gap) => updateConfig({ gap })} />
+            <LayoutToggle label="Wrap" checked={config.wrap} onChange={(wrap) => updateConfig({ wrap })} />
+            <LayoutToggle label="Auto-arrange" checked={config.autoArrange} onChange={(autoArrange) => updateConfig({ autoArrange })} />
+            <LayoutToggle label="Snap to grid" checked={config.snapToGrid} onChange={(snapToGrid) => updateConfig({ snapToGrid })} />
+            <LayoutSegmented
+              label="Guides"
+              value={config.guideVisibility}
+              options={["auto", "always", "never"]}
+              onChange={(guideVisibility) => updateConfig({ guideVisibility })}
+            />
+            <LayoutSegmented
+              label="Mode"
+              value={config.preview ? "view" : "edit"}
+              options={["edit", "view"]}
+              onChange={(mode) => updateConfig({ preview: mode === "view" })}
+            />
+            <LayoutSegmented
+              label="Canvas"
+              value={layoutMode === "full_page" ? "full" : "inline"}
+              options={["inline", "full"]}
+              onChange={(mode) => updateLayout({ layoutMode: mode === "full" ? "full_page" : "inline" })}
+            />
+          </aside>
+        ) : null}
+
+        {selectedCell && !config.preview ? (
+          <LayoutCellInspector
+            cell={selectedCell}
+            onUpdate={updateSelectedCell}
+            onClose={() => setSelectedCellId(null)}
+          />
+        ) : null}
+
+        <div className={config.wrap ? "overflow-x-hidden" : "overflow-x-auto pb-2"}>
+          <div
+            data-layout-grid={block.id}
+            className="osionos-layout-grid"
+            style={{
+              width: config.wrap ? "100%" : `${Math.max(960, config.columns * CELL_MIN_CONTENT_WIDTH)}px`,
+              gridTemplateColumns: `repeat(${config.columns}, minmax(0, 1fr))`,
+              gridAutoRows: `minmax(${config.rowHeight}px, auto)`,
+              gap: `${config.gap}px`,
+              backgroundImage: shouldShowGuides
+                ? "linear-gradient(color-mix(in srgb, var(--osio-accent) 22%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--osio-accent) 22%, transparent) 1px, transparent 1px)"
+                : undefined,
+              backgroundSize: shouldShowGuides
+                ? `calc((100% - ${(config.columns - 1) * config.gap}px) / ${config.columns} + ${config.gap}px) ${config.rowHeight + config.gap}px`
+                : undefined,
+            }}
+          >
+            {cells.length === 0 ? (
+              <LayoutEmptyState onAdd={() => addCell()} onTemplate={applyTemplate} />
+            ) : null}
+
+            {cells.map((cell) => {
+              const cellMinHeight = cell.rowSpan * config.rowHeight + Math.max(0, cell.rowSpan - 1) * config.gap;
+              const cellStyle = {
                 gridColumn: `${cell.colStart} / span ${cell.colSpan}`,
                 gridRow: `${cell.rowStart} / span ${cell.rowSpan}`,
                 color: cell.textColor,
                 backgroundColor: cell.backgroundColor,
-              }}
-            >
-              {config.preview ? null : (
-                <button
-                  type="button"
-                  onClick={() => removeCell(cell.id)}
-                  aria-label="Delete layout cell"
-                  className="absolute right-1 top-1 z-[var(--osio-z-raised)] flex h-5 w-5 items-center justify-center rounded text-[var(--osio-fg-subtle)] opacity-0 hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-danger)] group-hover/cell:opacity-100"
-                >
-                  ×
-                </button>
-              )}
-              <LayoutCellBlockTree
-                blocks={cell.blocks ?? getLayoutCellBlocks(cell)}
-                pageId={pageId}
-                cell={cell}
-                isPreview={config.preview || cell.type === "spacer"}
-                onChange={handleCellBlockChange}
-                onKeyDown={handleCellBlockKeyDown}
-                onPaste={handleCellBlockPaste}
-                onUpdateBlock={(blockIdToUpdate, updates) => {
-                  const nextBlocks = updateBlockInTree(cell.blocks ?? getLayoutCellBlocks(cell), blockIdToUpdate, (nestedBlock) => ({
-                    ...nestedBlock,
-                    ...updates,
-                  }));
-                  updateCellBlocks(cell.id, nextBlocks);
+                "--osionos-layout-cell-min-height": `${cellMinHeight}px`,
+              } as React.CSSProperties;
+
+              return (
+              <section
+                key={cell.id}
+                aria-label={cell.label || "Layout cell"}
+                className="osionos-layout-cell group/cell"
+                data-layout-cell-id={cell.id}
+                data-layout-cell-selected={dataFlag(selectedCellId === cell.id)}
+                data-layout-cell-dragging={dataFlag(draggingCellId === cell.id)}
+                data-layout-cell-drop-target={dataFlag(cellDropTargetId === cell.id)}
+                data-layout-sizing={cell.sizing ?? "fixed"}
+                data-layout-wrap={cell.wrap === false ? "false" : "true"}
+                data-layout-padding={cell.padding ?? "comfortable"}
+                data-layout-font-size={cell.fontSize ?? "base"}
+                style={cellStyle}
+                onFocusCapture={() => setSelectedCellId(cell.id)}
+                onDragOver={(event) => {
+                  if (!event.dataTransfer.types.includes(LAYOUT_CELL_DND_TYPE)) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  event.dataTransfer.dropEffect = "move";
+                  setCellDropTargetId(cell.id);
                 }}
-                onRequestSlashMenu={(nestedBlockId, position) =>
-                  setCellSlashMenu({ cellId: cell.id, blockId: nestedBlockId, position, filter: "" })
-                }
-              />
-              {config.preview ? null : (
-                <>
-                  <div onPointerDown={(event) => startResize(event, cell, "x")} className="absolute bottom-3 right-0 top-3 w-2 cursor-ew-resize opacity-0 group-hover/cell:opacity-100" />
-                  <div onPointerDown={(event) => startResize(event, cell, "y")} className="absolute bottom-0 left-3 right-3 h-2 cursor-ns-resize opacity-0 group-hover/cell:opacity-100" />
-                  <div onPointerDown={(event) => startResize(event, cell, "both")} className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize rounded-tl border-l border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] opacity-0 group-hover/cell:opacity-100" />
-                </>
-              )}
-            </section>
-          ))}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node)) setCellDropTargetId(null);
+                }}
+                onDrop={(event) => {
+                  const draggedCellId = event.dataTransfer.getData(LAYOUT_CELL_DND_TYPE);
+                  if (!draggedCellId) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  reorderCellByDrop(draggedCellId, cell.id);
+                  setDraggingCellId(null);
+                  setCellDropTargetId(null);
+                }}
+              >
+                {config.preview ? null : (
+                  <LayoutCellHandleBar
+                    cell={cell}
+                    liveSize={resizingCell?.id === cell.id ? resizingCell : null}
+                    onDragStart={() => setDraggingCellId(cell.id)}
+                    onDragEnd={() => { setDraggingCellId(null); setCellDropTargetId(null); }}
+                    onRename={(label) => updateCell(cell.id, { label })}
+                    onAddCell={() => addCell()}
+                    onInspect={() => setSelectedCellId(cell.id)}
+                    onDuplicate={() => duplicateCell(cell)}
+                    onDelete={() => removeCell(cell.id)}
+                  />
+                )}
+                <div className="osionos-layout-cell-editor">
+                  <BlockEditorSurface
+                    pageId={pageId}
+                    source={{ kind: "cell", pageId, layoutBlockId: block.id, cellId: cell.id }}
+                    locked={config.preview || cell.type === "spacer"}
+                    compact
+                    emptyPlaceholder="Type / for blocks, [[ for pages…"
+                    renderBlockEditor={renderBlockEditor}
+                  />
+                </div>
+                {config.preview ? null : (
+                  <>
+                    <div onPointerDown={(event) => startResize(event, cell, "x")} className="osionos-layout-resize-handle osionos-layout-resize-handle--x" />
+                    <div onPointerDown={(event) => startResize(event, cell, "y")} className="osionos-layout-resize-handle osionos-layout-resize-handle--y" />
+                    <div onPointerDown={(event) => startResize(event, cell, "both")} className="osionos-layout-resize-handle osionos-layout-resize-handle--both" />
+                  </>
+                )}
+              </section>
+              );
+            })}
+          </div>
         </div>
       </div>
-
-      {cellSlashMenu ? (
-        <SlashCommandMenu
-          key={`${cellSlashMenu.cellId}:${cellSlashMenu.filter}`}
-          position={cellSlashMenu.position}
-          filter={cellSlashMenu.filter}
-          onSelect={applyCellSlashCommand}
-          onMediaSelect={() => setCellSlashMenu(null)}
-          onClose={() => setCellSlashMenu(null)}
-        />
-      ) : null}
     </section>
   );
 };
 
-interface LayoutCellBlockTreeProps {
-  blocks: Block[];
-  pageId: string;
-  cell: LayoutCell;
-  isPreview: boolean;
-  parentBlockType?: Block["type"] | null;
-  numberedDepth?: number;
-  bulletDepth?: number;
-  onChange: (cell: LayoutCell, blockId: string, text: string) => void;
-  onKeyDown: (event: React.KeyboardEvent, cell: LayoutCell, block: Block) => void;
-  onPaste: (event: React.ClipboardEvent, cell: LayoutCell, blockId: string) => void;
-  onUpdateBlock: (blockId: string, updates: Partial<Block>) => void;
-  onRequestSlashMenu: (blockId: string, position: { x: number; y: number }) => void;
-}
+const LayoutNumberControl: React.FC<{
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  suffix?: string;
+  onChange: (value: number) => void;
+}> = ({ label, value, min, max, suffix, onChange }) => (
+  <label className="osionos-layout-control-row">
+    <span>{label}</span>
+    <span className="osionos-layout-number-input">
+      <input type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      {suffix ? <span>{suffix}</span> : null}
+    </span>
+  </label>
+);
 
-const LayoutCellBlockTree: React.FC<LayoutCellBlockTreeProps> = ({
-  blocks,
-  pageId,
-  cell,
-  isPreview,
-  parentBlockType = null,
-  numberedDepth = 0,
-  bulletDepth = 0,
+const LayoutToggle: React.FC<{ label: string; checked: boolean; onChange: (checked: boolean) => void }> = ({ label, checked, onChange }) => (
+  <label className="osionos-layout-control-row">
+    <span>{label}</span>
+    <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+  </label>
+);
+
+const LayoutSegmented = <T extends string>({
+  label,
+  value,
+  options,
   onChange,
-  onKeyDown,
-  onPaste,
-  onUpdateBlock,
-  onRequestSlashMenu,
-}) => {
-  let numberedCounter = 0;
+}: {
+  label: string;
+  value: T;
+  options: readonly T[];
+  onChange: (value: T) => void;
+}) => (
+  <div className="osionos-layout-control-row osionos-layout-control-row--stacked">
+    <span>{label}</span>
+    <div className="osionos-layout-segmented">
+      {options.map((option) => (
+        <button key={option} type="button" data-active={option === value ? "true" : undefined} onClick={() => onChange(option)}>
+          {option}
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
+const LayoutEmptyState: React.FC<{
+  onAdd: () => void;
+  onTemplate: (template: "dashboard" | "tracker" | "notes" | "kanban") => void;
+}> = ({ onAdd, onTemplate }) => (
+  <div className="osionos-layout-empty-state">
+    <div className="text-3xl" aria-hidden>▦</div>
+    <p className="text-sm font-medium text-[var(--osio-fg-default)]">Add cells to your layout</p>
+    <div className="flex flex-wrap justify-center gap-2">
+      <button type="button" onClick={onAdd}>+ Cell</button>
+      <button type="button" onClick={() => onTemplate("dashboard")}>Use dashboard</button>
+    </div>
+    <div className="flex flex-wrap justify-center gap-1 text-xs text-[var(--osio-fg-subtle)]">
+      <button type="button" onClick={() => onTemplate("kanban")}>Kanban</button>
+      <span>·</span>
+      <button type="button" onClick={() => onTemplate("tracker")}>Tracker</button>
+      <span>·</span>
+      <button type="button" onClick={() => onTemplate("notes")}>Two-column notes</button>
+    </div>
+  </div>
+);
+
+const LayoutCellInspector: React.FC<{
+  cell: LayoutCell;
+  onUpdate: (patch: Partial<LayoutCell>) => void;
+  onClose: () => void;
+}> = ({ cell, onUpdate, onClose }) => (
+  <aside className="osionos-layout-cell-inspector" aria-label="Cell inspector">
+    <div className="osionos-layout-inspector-header">
+      <div>
+        <p>Cell inspector</p>
+        <span>{cell.label || "Untitled cell"}</span>
+      </div>
+      <button type="button" onClick={onClose} aria-label="Close cell inspector">×</button>
+    </div>
+
+    <LayoutSegmented<LayoutCellSizing>
+      label="Auto-layout"
+      value={cell.sizing ?? "fixed"}
+      options={["fixed", "auto-height", "auto-width", "auto"]}
+      onChange={(sizing) => onUpdate({ sizing })}
+    />
+    <LayoutSegmented<LayoutCellHorizontalConstraint>
+      label="Width constraint"
+      value={cell.horizontalConstraint ?? "stretch"}
+      options={["left", "stretch", "scale"]}
+      onChange={(horizontalConstraint) => onUpdate({ horizontalConstraint })}
+    />
+    <LayoutSegmented<LayoutCellVerticalConstraint>
+      label="Height constraint"
+      value={cell.verticalConstraint ?? "top"}
+      options={["top", "stretch", "hug"]}
+      onChange={(verticalConstraint) => onUpdate({ verticalConstraint })}
+    />
+    <LayoutToggle label="Wrap content" checked={cell.wrap !== false} onChange={(wrap) => onUpdate({ wrap })} />
+    <LayoutSegmented<LayoutCellPadding>
+      label="Padding"
+      value={cell.padding ?? "comfortable"}
+      options={["compact", "comfortable", "spacious"]}
+      onChange={(padding) => onUpdate({ padding })}
+    />
+    <LayoutSegmented<LayoutCellFontSize>
+      label="Text size"
+      value={cell.fontSize ?? "base"}
+      options={["small", "base", "large"]}
+      onChange={(fontSize) => onUpdate({ fontSize })}
+    />
+    <LayoutNumberControl label="Column span" value={cell.colSpan} min={1} max={12} onChange={(colSpan) => onUpdate({ colSpan })} />
+    <LayoutNumberControl label="Row span" value={cell.rowSpan} min={1} max={24} onChange={(rowSpan) => onUpdate({ rowSpan })} />
+
+    <div className="osionos-layout-control-row osionos-layout-control-row--stacked">
+      <span>Color</span>
+      <div className="osionos-layout-swatches">
+        {LAYOUT_CELL_COLOR_SWATCHES.map((swatch) => (
+          <button
+            key={swatch.label}
+            type="button"
+            aria-label={`${swatch.label} cell color`}
+            title={swatch.label}
+            className="osionos-layout-swatch"
+            style={{ backgroundColor: swatch.backgroundColor }}
+            onClick={() => onUpdate({ backgroundColor: swatch.backgroundColor, textColor: swatch.textColor })}
+          />
+        ))}
+      </div>
+    </div>
+  </aside>
+);
+
+const LayoutCellHandleBar: React.FC<{
+  cell: LayoutCell;
+  liveSize: { colSpan: number; rowSpan: number } | null;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onRename: (label: string) => void;
+  onAddCell: () => void;
+  onInspect: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}> = ({ cell, liveSize, onDragStart, onDragEnd, onRename, onAddCell, onInspect, onDuplicate, onDelete }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [labelDraft, setLabelDraft] = useState(cell.label ?? "");
+  const size = liveSize ?? cell;
 
   return (
-    <div className={`min-h-full pr-5 ${isPreview ? "pointer-events-none" : ""}`}>
-      {blocks.map((nestedBlock) => {
-        const numberedIndex = nestedBlock.type === "numbered_list" ? ++numberedCounter : 0;
-        if (nestedBlock.type !== "numbered_list") numberedCounter = 0;
-        const nextNumberedDepth = nestedBlock.type === "numbered_list" ? numberedDepth + 1 : numberedDepth;
-        const nextBulletDepth = nestedBlock.type === "bulleted_list" ? bulletDepth + 1 : bulletDepth;
-        const renderChildren = () => {
-          if (!nestedBlock.children?.length) return null;
-          return (
-            <div className={parentBlockType === "column" ? "mt-0.5" : "ml-6 mt-0.5"}>
-              <LayoutCellBlockTree
-                blocks={nestedBlock.children}
-                pageId={pageId}
-                cell={cell}
-                isPreview={isPreview}
-                parentBlockType={nestedBlock.type}
-                numberedDepth={nextNumberedDepth}
-                bulletDepth={nextBulletDepth}
-                onChange={onChange}
-                onKeyDown={onKeyDown}
-                onPaste={onPaste}
-                onUpdateBlock={onUpdateBlock}
-                onRequestSlashMenu={onRequestSlashMenu}
-              />
-            </div>
-          );
-        };
-
-        return (
-          <div
-            key={nestedBlock.id}
-            data-layout-cell-block-id={nestedBlock.id}
-            data-block-id={nestedBlock.id}
-            data-block-type={nestedBlock.type}
-            className="rounded-md px-1 hover:bg-[var(--osio-bg-surface)] focus-within:bg-[var(--osio-bg-surface)]"
-            style={getBlockSurfaceStyle(nestedBlock)}
-          >
-            <BlockEditor
-              pageId={pageId}
-              block={nestedBlock}
-              numberedIndex={numberedIndex}
-              numberedDepth={numberedDepth}
-              bulletDepth={bulletDepth}
-              onChange={(text) => onChange(cell, nestedBlock.id, text)}
-              onKeyDown={(event) => onKeyDown(event, cell, nestedBlock)}
-              onPaste={(event) => onPaste(event, cell, nestedBlock.id)}
-              onUpdateBlock={onUpdateBlock}
-              onDeleteCodeBlock={() => onUpdateBlock(nestedBlock.id, { type: "paragraph", content: "" })}
-              focusBlock={focusLayoutCellBlock}
-              onRequestSlashMenu={(position) => onRequestSlashMenu(nestedBlock.id, position)}
-              renderChildren={renderChildren}
-            />
-            {shouldRenderLayoutCellChildren(nestedBlock) ? renderChildren() : null}
+    <div className="osionos-layout-cell-handle" data-layout-cell-handle>
+      <button
+        type="button"
+        draggable
+        className="osionos-layout-cell-drag"
+        title="Drag cell"
+        aria-label="Drag cell"
+        onDragStart={(event) => {
+          event.dataTransfer.setData(LAYOUT_CELL_DND_TYPE, cell.id);
+          event.dataTransfer.effectAllowed = "move";
+          onDragStart();
+        }}
+        onDragEnd={onDragEnd}
+      >⋮⋮</button>
+      <input
+        value={labelDraft}
+        onChange={(event) => setLabelDraft(event.target.value)}
+        onBlur={() => onRename(labelDraft.trim())}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.currentTarget.blur();
+            event.currentTarget.closest<HTMLElement>("[data-layout-cell-id]")?.querySelector<HTMLElement>('[contenteditable="true"], textarea')?.focus();
+          }
+        }}
+        placeholder="Untitled cell"
+        aria-label="Cell title"
+      />
+      <span className="osionos-layout-size-badge">⤢ {size.colSpan}×{size.rowSpan}</span>
+      <div className="relative">
+        <button type="button" onClick={() => setMenuOpen((value) => !value)} aria-label="Cell menu" title="Cell menu">⋯</button>
+        {menuOpen ? (
+          <div className="osionos-layout-cell-menu">
+            <button type="button" onClick={() => { onAddCell(); setMenuOpen(false); }}>Add cell</button>
+            <button type="button" onClick={() => { onInspect(); setMenuOpen(false); }}>Inspect</button>
+            <button type="button" onClick={() => { onDuplicate(); setMenuOpen(false); }}>Duplicate</button>
+            <button type="button" onClick={() => { onDelete(); setMenuOpen(false); }}>Delete</button>
           </div>
-        );
-      })}
+        ) : null}
+      </div>
     </div>
   );
 };

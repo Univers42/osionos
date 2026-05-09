@@ -198,10 +198,10 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
     (page) => !page.parentPageId && !page.archivedAt && canReadPage(page, accessContext),
   );
   const agentPages = activeWorkspacePages.filter((page) => page.surface === "agent");
-  const ownedSharedPages = activeWorkspacePages.filter((page) => page.surface !== "agent" && page.visibility === "shared");
+  const ownedSharedPages = activeWorkspacePages.filter((page) => page.surface !== "agent" && page.surface !== "home" && page.visibility === "shared");
   const sharedWorkspaceRootPages = sharedWorkspaces.flatMap((workspace) => (
     pagesByWorkspace[workspace._id] ?? []
-  ).filter((page) => !page.parentPageId && !page.archivedAt && canReadPage(page, accessContext)));
+  ).filter((page) => !page.parentPageId && !page.archivedAt && page.surface !== "home" && canReadPage(page, accessContext)));
 
   function channelIcon(type: WorkspaceChannelType, restricted: boolean) {
     if (restricted) return <Lock size={14} />;
@@ -454,7 +454,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
 
       {privateWorkspaces.map((ws) => {
         const pages = (pagesByWorkspace[ws._id] ?? []).filter(
-          (p) => !p.parentPageId && !p.archivedAt && p.visibility !== "shared" && p.surface !== "agent" && canReadPage(p, accessContext),
+          (p) => !p.parentPageId && !p.archivedAt && p.visibility !== "shared" && p.surface !== "agent" && p.surface !== "home" && canReadPage(p, accessContext),
         );
         return (
           <SidebarSection

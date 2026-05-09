@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/14 00:00:00 by rstancu           #+#    #+#             */
-/*   Updated: 2026/05/06 23:31:25 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 20:57:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,6 +16,11 @@ import {
   IconPage,
 } from "@/shared/lib/markengine/uiCollectionAssets";
 import type { BlockType, MediaBlockType } from "@/entities/block";
+import {
+  KNOWN_DATABASE_VIEWS,
+  VIEW_TYPE_ICONS,
+  VIEW_TYPE_LABELS,
+} from "@/widgets/database-view/model/databaseViewCatalog";
 import type {
   SlashCreatePageCommand,
   SlashCommand,
@@ -43,7 +48,7 @@ const SLASH_DESCRIPTIONS: Partial<Record<BlockType, string>> = {
   quote: "Block quote",
   callout: "Callout block",
   equation: "LaTeX equation block",
-  layout: "Advanced CSS grid layout",
+  layout: "Grid layout canvas",
   column_list: "Side-by-side columns",
   column: "Column container",
   divider: "Horizontal divider",
@@ -55,6 +60,7 @@ const SLASH_DESCRIPTIONS: Partial<Record<BlockType, string>> = {
 const SLASH_ALIASES: Partial<Record<BlockType, string[]>> = {
   database_inline: ["database inline"],
   database_full_page: ["database full page"],
+  layout: ["layout inline", "layout full page", "layout page"],
 };
 
 const MEDIA_PICKER_TYPES = new Set<MediaBlockType>([
@@ -80,7 +86,6 @@ const TURN_INTO_BLOCK_TYPES = new Set<BlockType>([
   "quote",
   "callout",
   "equation",
-  "layout",
   "column_list",
 ]);
 
@@ -97,7 +102,9 @@ const SECTION_ORDER = [
   "advanced",
 ] as const;
 
-const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.map(
+const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.filter(
+  (item) => item.type !== "layout",
+).map(
   (item) => {
     const normalizedLabel = item.type === "callout" ? "Callout" : item.label;
     const description =
@@ -152,13 +159,26 @@ const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
     blockType: "equation",
   },
   {
-    id: "layout:layout",
+    id: "layout:layout_inline",
     kind: "block",
     section: "layout",
-    label: "Layout",
+    label: "Layout inline",
+    aliases: ["layout", "layout inline", "inline layout", "same page layout"],
     icon: "▦",
-    description: "Design a custom grid layout",
+    description: "Design an inline grid canvas",
     blockType: "layout",
+    layoutMode: "inline",
+  },
+  {
+    id: "layout:layout_full_page",
+    kind: "block",
+    section: "layout",
+    label: "Layout full page",
+    aliases: ["layout full page", "full page layout", "layout page"],
+    icon: "▦",
+    description: "Create a full-page layout canvas",
+    blockType: "layout",
+    layoutMode: "full_page",
   },
   {
     id: "layout:column_list",
@@ -170,6 +190,27 @@ const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
     blockType: "column_list",
   },
 ];
+
+const VIEW_SLASH_COMMANDS: SlashCommand[] = KNOWN_DATABASE_VIEWS.map((viewDefinition) => ({
+  id: `view:${viewDefinition.id}`,
+  kind: "database-view",
+  section: "database",
+  label: `View: ${viewDefinition.databaseName} · ${viewDefinition.name}`,
+  aliases: [
+    "view",
+    `view ${viewDefinition.databaseName}`,
+    `view ${viewDefinition.databaseName} ${viewDefinition.name}`,
+    `${viewDefinition.databaseName} ${viewDefinition.name}`,
+    `${VIEW_TYPE_LABELS[viewDefinition.type]} view`,
+    viewDefinition.id,
+    ...viewDefinition.aliases,
+  ],
+  icon: VIEW_TYPE_ICONS[viewDefinition.type],
+  description: `${VIEW_TYPE_LABELS[viewDefinition.type]} view from ${viewDefinition.databaseName}. ${viewDefinition.description}`,
+  databaseId: viewDefinition.databaseId,
+  viewId: viewDefinition.id,
+  viewType: viewDefinition.type,
+}));
 
 export const TURN_INTO_COMMANDS: SlashTurnIntoCommand[] =
   [
@@ -201,16 +242,6 @@ export const TURN_INTO_COMMANDS: SlashTurnIntoCommand[] =
       placeholderText: "Equation",
     },
     {
-      id: "turn-into:layout",
-      kind: "turn-into",
-      section: "turn-into",
-      label: "Layout",
-      icon: "▦",
-      description: "Transform the current block into a grid layout",
-      blockType: "layout",
-      placeholderText: "Layout",
-    },
-    {
       id: "turn-into:column_list",
       kind: "turn-into",
       section: "turn-into",
@@ -236,6 +267,7 @@ const CREATE_PAGE_COMMAND: SlashCreatePageCommand[] = [
 export const SLASH_COMMANDS: SlashCommand[] = [
   ...CREATE_PAGE_COMMAND,
   ...BASE_SLASH_COMMANDS,
+  ...VIEW_SLASH_COMMANDS,
   ...LOCAL_SLASH_COMMANDS,
   ...TURN_INTO_COMMANDS,
 ];
@@ -252,6 +284,8 @@ export function filterSlashCommands(filter: string): SlashCommand[] {
       item.aliases?.some((alias) => alias.toLowerCase().includes(lower)) ||
       item.description.toLowerCase().includes(lower) ||
       ("blockType" in item && item.blockType.toLowerCase().includes(lower)) ||
+      ("viewId" in item && item.viewId.toLowerCase().includes(lower)) ||
+      ("databaseId" in item && item.databaseId.toLowerCase().includes(lower)) ||
       item.id.toLowerCase().includes(lower)
     );
   });

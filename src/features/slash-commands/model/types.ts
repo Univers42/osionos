@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:17:07 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/06 23:31:25 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/09 20:57:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,7 +24,8 @@
 
 import type { ReactNode } from "react";
 
-import type { BlockType, MediaBlockType } from "@/entities/block";
+import type { BlockType, LayoutMode, MediaBlockType } from "@/entities/block";
+import type { KnownDatabaseViewType } from "@/widgets/database-view/model/databaseViewCatalog";
 
 export interface SlashCommandBase {
   id: string;
@@ -39,12 +40,14 @@ export interface SlashCommandBase {
 export interface SlashBlockCommand extends SlashCommandBase {
   kind: "block";
   blockType: BlockType;
+  layoutMode?: LayoutMode;
 }
 
 export interface SlashTurnIntoCommand extends SlashCommandBase {
   kind: "turn-into";
   blockType: BlockType;
   placeholderText: string;
+  layoutMode?: LayoutMode;
 }
 
 export interface SlashCreatePageCommand extends SlashCommandBase {
@@ -54,6 +57,13 @@ export interface SlashCreatePageCommand extends SlashCommandBase {
 export interface SlashInlineCommand extends SlashCommandBase {
   kind: "inline";
   insertText: string;
+}
+
+export interface SlashDatabaseViewCommand extends SlashCommandBase {
+  kind: "database-view";
+  databaseId: string;
+  viewId: string;
+  viewType: KnownDatabaseViewType;
 }
 
 export interface SlashMediaPickerCommand extends SlashCommandBase {
@@ -66,6 +76,7 @@ export type SlashCommand =
   | SlashTurnIntoCommand
   | SlashCreatePageCommand
   | SlashInlineCommand
+  | SlashDatabaseViewCommand
   | SlashMediaPickerCommand;
 
 export interface SlashCommandSection {
