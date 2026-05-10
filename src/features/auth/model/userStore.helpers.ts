@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/09 20:57:58 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/10 14:13:37 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,7 +34,7 @@ export const API_BASE: string = ((import.meta.env as Record<string, string>)['VI
 const TEST_MODE = (import.meta.env as Record<string, string>)['MODE'] === 'test';
 export const REQUIRE_BRIDGE_SESSION = ((import.meta.env as Record<string, string>)['VITE_REQUIRE_BRIDGE_SESSION'] ?? (TEST_MODE ? 'false' : 'true')) !== 'false';
 export const ALLOW_OFFLINE_MODE = ((import.meta.env as Record<string, string>)['VITE_ALLOW_OFFLINE_MODE'] ?? (TEST_MODE ? 'true' : 'false')) === 'true';
-export const PRISMATICA_URL = ((import.meta.env as Record<string, string>)['VITE_PRISMATICA_URL'] ?? 'https://localhost:4323').trim();
+export const PRISMATICA_URL = ((import.meta.env as Record<string, string>)['VITE_PRISMATICA_URL'] ?? 'http://localhost:4322').trim();
 export const BRIDGE_APP_TOKEN_PREFIX = 'osionos_v1.';
 
 export type BridgeSessionImport = {

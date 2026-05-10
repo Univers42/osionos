@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/09 23:07:10 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/10 14:41:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,6 +23,7 @@ import {
   KNOWN_DATABASE_VIEWS,
 } from "@/widgets/database-view/model/databaseViewCatalog";
 import { ChannelMessagesView } from "@/widgets/channel-messages";
+import { AgentConversationPage } from "@/widgets/agent-conversation";
 import { OsionosPage } from "@/pages/notion-page";
 import { TrashView } from "@/pages/trash-view";
 import { HomeKnowledgeGraph } from "@/widgets/home-variants";
@@ -35,6 +36,7 @@ import "./homeVariants.css";
 
 const HOME_DASHBOARD_VERSION = 3;
 const HOME_VARIANT_STORAGE_KEY = "osionos.home.variant";
+const EMPTY_PAGES: PageEntry[] = [];
 
 type HomeVariant = "dashboard" | "graph";
 
@@ -96,7 +98,7 @@ export const MainContent: React.FC = () => {
   });
 
   const firstWsId = activeWorkspace?._id ?? session?.privateWorkspaces[0]?._id ?? "";
-  const workspacePages = usePageStore((s) => firstWsId ? s.pages[firstWsId] ?? [] : []);
+  const workspacePages = usePageStore((s) => firstWsId ? s.pages[firstWsId] ?? EMPTY_PAGES : EMPTY_PAGES);
   const homeDashboardPageId = firstWsId ? getHomeDashboardPageId(firstWsId) : "";
   const homeDashboardPage = workspacePages.find((page) => page._id === homeDashboardPageId && !page.archivedAt);
 
@@ -221,6 +223,16 @@ export const MainContent: React.FC = () => {
             workspaceId={activePage.workspaceId}
             title={activePage.title}
           />
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  if (activePage.kind === "page" && pageById(activePage.id)?.surface === "agent") {
+    return (
+      <ErrorBoundary>
+        <div className="flex-1 min-w-0 h-full overflow-hidden bg-[var(--osio-bg-page)]">
+          <AgentConversationPage pageId={activePage.id} />
         </div>
       </ErrorBoundary>
     );

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -39,6 +40,21 @@ const DEFAULT_HANDOFF_TTL_MS = 90 * 1000;
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60;
 const DEFAULT_UNSPLASH_PER_PAGE = 12;
 const MAX_UNSPLASH_PER_PAGE = 24;
+const MAX_CLAUDE_TOOL_RESULT_TEXT = 120_000;
+const CLAUDE_AGENT_VALUES = new Set(['general-purpose', 'Explore', 'Plan']);
+const CLAUDE_MODEL_VALUES = new Set(['default', 'sonnet', 'opus', 'haiku']);
+const CLAUDE_EFFORT_VALUES = new Set(['low', 'medium', 'high', 'xhigh']);
+const CLAUDE_TOOL_MAP = {
+	app: ['mcp__osionos__osionos_describe_app'],
+	status: ['mcp__osionos__osionos_status'],
+	workspace: ['mcp__osionos__osionos_list_workspaces'],
+	list: ['mcp__osionos__osionos_list_pages'],
+	search: ['mcp__osionos__osionos_search_pages'],
+	read: ['mcp__osionos__osionos_read_page'],
+	create: ['mcp__osionos__osionos_create_page'],
+	update: ['mcp__osionos__osionos_update_page', 'mcp__osionos__osionos_append_to_page'],
+	archive: ['mcp__osionos__osionos_archive_page'],
+};
 
 export function configFromEnv(env = process.env) {
 	const appUrl = (env.OSIONOS_APP_URL ?? env.PUBLIC_OSIONOS_APP_URL ?? 'http://localhost:3001').replace(/\/$/, '');
@@ -365,8 +381,248 @@ function json(response, status, body, config) {
 	response.end(JSON.stringify(body));
 }
 
+function requestOriginConfig(config, request) {
+	const origin = String(request.headers.origin ?? '');
+	if (/^https?:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin)) {
+		return { ...config, allowedOrigin: origin };
+	}
+	return config;
+}
+
+function sse(response, event, data) {
+	response.write(`event: ${event}\n`);
+	response.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+function sanitizeClaudeRequest(payload) {
+	const prompt = safeText(payload.prompt, 8000);
+	if (!prompt) throw Object.assign(new Error('Prompt is required.'), { status: 422 });
+	const agent = safeText(payload.agent, 80);
+	const model = safeText(payload.model, 40) || 'default';
+	const effort = safeText(payload.effort, 20) || 'medium';
+	const maxBudgetUsd = Math.min(Math.max(Number(payload.maxBudgetUsd ?? 0.5), 0.01), 2);
+	const allowedToolKeys = Array.isArray(payload.allowedTools)
+		? payload.allowedTools.map((tool) => safeText(tool, 40)).filter((tool) => tool in CLAUDE_TOOL_MAP)
+		: ['app', 'status', 'workspace', 'list', 'search', 'read', 'create', 'update'];
+	const context = payload.context && typeof payload.context === 'object' && !Array.isArray(payload.context)
+		? payload.context
+		: {};
+	return {
+		prompt,
+		agent: CLAUDE_AGENT_VALUES.has(agent) ? agent : '',
+		model: CLAUDE_MODEL_VALUES.has(model) ? model : 'default',
+		effort: CLAUDE_EFFORT_VALUES.has(effort) ? effort : 'medium',
+		maxBudgetUsd,
+		allowedTools: [...new Set(allowedToolKeys.flatMap((tool) => CLAUDE_TOOL_MAP[tool]))],
+		context,
+	};
+}
+
+function buildClaudePrompt(request) {
+	return [
+		'You are Claude, speaking inside an osionos Agent page.',
+		'Answer normal conversational prompts directly. Do not create or update pages unless the user asks you to work with osionos content.',
+		'When the user asks to create, read, search, update, or archive osionos content, use the osionos MCP tools that are available to you.',
+		'When the user asks for documentation about osionos, how the app works, or a note that demonstrates slash/block elements, call osionos_describe_app first and then create the page with explicit rich block content.',
+		'Keep responses concise and suitable for a chat transcript. If you use tools, summarize what changed.',
+		'Current app context:',
+		JSON.stringify(request.context, null, 2).slice(0, 6000),
+		'User message:',
+		request.prompt,
+	].join('\n\n');
+}
+
+function buildClaudeArgs(request) {
+	const args = [
+		'-p', buildClaudePrompt(request),
+		'--output-format', 'stream-json',
+		'--verbose',
+		'--permission-mode', 'bypassPermissions',
+		'--max-budget-usd', request.maxBudgetUsd.toFixed(2),
+	];
+	if (request.agent) args.push('--agent', request.agent);
+	if (request.model !== 'default') args.push('--model', request.model);
+	if (request.effort) args.push('--effort', request.effort);
+	if (request.allowedTools.length > 0) args.push('--allowedTools', request.allowedTools.join(','));
+	return args;
+}
+
+function summarizeToolResult(event) {
+	const content = event?.message?.content?.[0]?.content;
+	if (!Array.isArray(content)) return null;
+	const toolUseId = event.message.content[0].tool_use_id;
+	const text = content.map((item) => item?.text ?? '').join('\n').trim();
+	return { toolUseId, text: text.slice(0, MAX_CLAUDE_TOOL_RESULT_TEXT) };
+}
+
+function emitAssistantContent(response, content) {
+	if (!Array.isArray(content)) return;
+	for (const item of content) {
+		if (item.type === 'text' && item.text) sse(response, 'delta', { text: item.text });
+		if (item.type === 'tool_use') sse(response, 'tool', { id: item.id, name: item.name, input: item.input ?? {} });
+	}
+}
+
+function emitClaudeEvent(response, event) {
+	if (event.type === 'assistant') {
+		emitAssistantContent(response, event?.message?.content);
+		return '';
+	}
+	if (event.type === 'user') {
+		const result = summarizeToolResult(event);
+		if (result) sse(response, 'tool_result', result);
+		return '';
+	}
+	if (event.type !== 'result') return '';
+	const finalResult = String(event.result ?? '');
+	sse(response, 'result', { text: finalResult, sessionId: event.session_id ?? null });
+	return finalResult;
+}
+
+async function handleClaudeAgentStream(request, response, config) {
+	const payload = sanitizeClaudeRequest(await readJson(request));
+	response.writeHead(200, {
+		'content-type': 'text/event-stream; charset=utf-8',
+		'cache-control': 'no-store',
+		connection: 'keep-alive',
+		'access-control-allow-origin': config.allowedOrigin,
+		'access-control-allow-credentials': 'true',
+		vary: 'Origin',
+	});
+	sse(response, 'meta', {
+		agent: payload.agent || 'default',
+		model: payload.model,
+		effort: payload.effort,
+		allowedTools: payload.allowedTools,
+	});
+
+	const child = spawn(process.env.CLAUDE_BIN ?? 'claude', buildClaudeArgs(payload), {
+		cwd: resolve(APP_ROOT, '../../..'),
+		env: process.env,
+		stdio: ['ignore', 'pipe', 'pipe'],
+	});
+	let buffer = '';
+	let stderr = '';
+	let finalResult = '';
+
+	function handleLine(line) {
+		if (!line.trim()) return;
+		let event;
+		try {
+			event = JSON.parse(line);
+		} catch {
+			sse(response, 'delta', { text: line });
+			return;
+		}
+		finalResult = emitClaudeEvent(response, event) || finalResult;
+	}
+
+	child.stdout.on('data', (chunk) => {
+		buffer += chunk.toString('utf8');
+		let newline = buffer.indexOf('\n');
+		while (newline >= 0) {
+			handleLine(buffer.slice(0, newline));
+			buffer = buffer.slice(newline + 1);
+			newline = buffer.indexOf('\n');
+		}
+	});
+	child.stderr.on('data', (chunk) => {
+		stderr += chunk.toString('utf8');
+	});
+	request.on('close', () => {
+		if (!response.writableEnded) child.kill('SIGTERM');
+	});
+	child.on('error', (error) => {
+		sse(response, 'error', { message: error.message });
+		response.end();
+	});
+	child.on('close', (code) => {
+		if (buffer.trim()) handleLine(buffer);
+		if (code !== 0) sse(response, 'error', { message: stderr.trim() || `Claude exited with code ${code}` });
+		sse(response, 'done', { code, result: finalResult });
+		response.end();
+	});
+}
+
 function errorJson(response, error, config) {
 	json(response, error.status ?? 500, { ok: false, message: error instanceof Error ? error.message : 'Bridge request failed.' }, config);
+}
+
+function writeOptionsResponse(response, config) {
+	response.writeHead(204, {
+		'access-control-allow-origin': config.allowedOrigin,
+		'access-control-allow-credentials': 'true',
+		'access-control-allow-methods': 'GET, POST, OPTIONS',
+		'access-control-allow-headers': 'content-type, authorization, x-prismatica-bridge-timestamp, x-prismatica-bridge-signature',
+		vary: 'Origin',
+	});
+	response.end();
+}
+
+async function handleBridgeGet(url, response, config, fetchImpl) {
+	if (url.pathname === '/api/auth/bridge/health') {
+		json(response, 200, { ok: true, service: 'osionos-bridge' }, config);
+		return true;
+	}
+	if (url.pathname !== '/api/media/unsplash/search') return false;
+	json(response, 200, await searchUnsplashPhotos({
+		query: url.searchParams.get('query') ?? url.searchParams.get('q') ?? undefined,
+		perPage: url.searchParams.get('perPage') ?? url.searchParams.get('per_page') ?? undefined,
+		orientation: url.searchParams.get('orientation') ?? undefined,
+	}, config, fetchImpl), config);
+	return true;
+}
+
+async function handleBridgeSession(request, response, config, handoffStore, replayStore, fetchImpl) {
+	const rawPayload = await readJson(request);
+	const payload = verifyBridgeRequest({
+		headers: request.headers,
+		payload: rawPayload,
+		secret: config.sharedSecret,
+		timestampSkewMs: config.timestampSkewMs,
+		replayStore,
+	});
+	json(response, 200, await createBridgeHandoff({ payload, config, handoffStore, fetchImpl }), config);
+}
+
+async function handleBridgeConsume(request, response, config, handoffStore) {
+	const payload = await readJson(request);
+	const token = safeText(payload.token, 512);
+	if (!token) throw Object.assign(new Error('Bridge handoff token is required.'), { status: 422 });
+	json(response, 200, consumeHandoffToken(token, handoffStore), config);
+}
+
+async function handleBridgePost(url, request, response, config, handoffStore, replayStore, fetchImpl) {
+	if (url.pathname === '/api/agent/claude/stream') {
+		await handleClaudeAgentStream(request, response, config);
+		return true;
+	}
+	if (url.pathname === '/api/auth/bridge/session') {
+		await handleBridgeSession(request, response, config, handoffStore, replayStore, fetchImpl);
+		return true;
+	}
+	if (url.pathname !== '/api/auth/bridge/consume') return false;
+	await handleBridgeConsume(request, response, config, handoffStore);
+	return true;
+}
+
+async function handleBridgeRequest(request, response, context) {
+	if (request.method === 'OPTIONS') {
+		writeOptionsResponse(response, context.config);
+		return;
+	}
+	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+	if (request.method === 'GET' && await handleBridgeGet(url, response, context.config, context.fetchImpl)) return;
+	if (request.method === 'POST' && await handleBridgePost(
+		url,
+		request,
+		response,
+		context.config,
+		context.handoffStore,
+		context.replayStore,
+		context.fetchImpl,
+	)) return;
+	json(response, 404, { ok: false, message: 'Not found.' }, context.config);
 }
 
 export function createBridgeServer(options = {}) {
@@ -375,53 +631,11 @@ export function createBridgeServer(options = {}) {
 	const replayStore = options.replayStore ?? new Map();
 	const fetchImpl = options.fetchImpl ?? fetch;
 	return createServer(async (request, response) => {
+		let responseConfig = requestOriginConfig(config, request);
 		try {
-			if (request.method === 'OPTIONS') {
-				response.writeHead(204, {
-					'access-control-allow-origin': config.allowedOrigin,
-					'access-control-allow-credentials': 'true',
-					'access-control-allow-methods': 'GET, POST, OPTIONS',
-					'access-control-allow-headers': 'content-type, authorization, x-prismatica-bridge-timestamp, x-prismatica-bridge-signature',
-					vary: 'Origin',
-				});
-				response.end();
-				return;
-			}
-			const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
-			if (request.method === 'GET' && url.pathname === '/api/auth/bridge/health') {
-				json(response, 200, { ok: true, service: 'osionos-bridge' }, config);
-				return;
-			}
-			if (request.method === 'GET' && url.pathname === '/api/media/unsplash/search') {
-				json(response, 200, await searchUnsplashPhotos({
-					query: url.searchParams.get('query') ?? url.searchParams.get('q') ?? undefined,
-					perPage: url.searchParams.get('perPage') ?? url.searchParams.get('per_page') ?? undefined,
-					orientation: url.searchParams.get('orientation') ?? undefined,
-				}, config, fetchImpl), config);
-				return;
-			}
-			if (request.method === 'POST' && url.pathname === '/api/auth/bridge/session') {
-				const rawPayload = await readJson(request);
-				const payload = verifyBridgeRequest({
-					headers: request.headers,
-					payload: rawPayload,
-					secret: config.sharedSecret,
-					timestampSkewMs: config.timestampSkewMs,
-					replayStore,
-				});
-				json(response, 200, await createBridgeHandoff({ payload, config, handoffStore, fetchImpl }), config);
-				return;
-			}
-			if (request.method === 'POST' && url.pathname === '/api/auth/bridge/consume') {
-				const payload = await readJson(request);
-				const token = safeText(payload.token, 512);
-				if (!token) throw Object.assign(new Error('Bridge handoff token is required.'), { status: 422 });
-				json(response, 200, consumeHandoffToken(token, handoffStore), config);
-				return;
-			}
-			json(response, 404, { ok: false, message: 'Not found.' }, config);
+			await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl });
 		} catch (error) {
-			errorJson(response, error, config);
+			if (!response.headersSent) errorJson(response, error, responseConfig);
 		}
 	});
 }
