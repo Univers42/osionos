@@ -1,6 +1,10 @@
 # services/ — Docker Service Configs
 
-Configuration files for the Docker-backed development services. The app should be started through Docker (`make dev` or `pnpm run dev`, which now delegates to Docker), not by running local Vite against host `node_modules`.
+Configuration files for Docker-backed development services. In this workspace the app is started from the repository root with Docker Compose, not by running local Vite against host `node_modules`.
+
+```sh
+docker compose up -d --build osionos-app
+```
 
 The `dbms/` subdirectory contains the TypeScript database adapter layer used by the main app.
 

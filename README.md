@@ -1,87 +1,29 @@
-# playground/ — Multi-User Sandbox
+# osionos app
 
-A separate Vite + React app for testing multi-user workflows. It connects to the Fastify API (`packages/api/`) and lets you switch between 3 pre-seeded users, each with their own workspaces and pages.
+Vite + React app served by the root Docker Compose stack at `http://localhost:3001`.
 
-This is **not** the main app. The main app is in `src/`. This one exists to test:
-- Multi-user auth (JWT login/signup)
-- Workspace and page CRUD via REST API
-- Block-based page editing through the API
-- Real-time sync via WebSocket
+Do not install app dependencies on the host. Node, pnpm, Vite, TypeScript, linting, and browser tooling run inside Docker containers and Docker-managed volumes.
 
-## How it differs from src/
+## Run
 
-| | src/ | playground/ |
-|---|---|---|
-| Data source | Local files / direct DB via Vite middleware | Fastify REST API |
-| State | Single `useDatabaseStore` (massive Zustand store) | `usePageStore` + `useUserStore` (small, focused) |
-| Auth | None (single user) | JWT-based (login, signup, token refresh) |
-| Users | 1 implicit user | 3 pre-seeded users |
-| Port | 3000 | 3001 |
+From the repository root:
 
-The playground reuses UI components from `src/` via the `@src` path alias (configured in `vite.config.ts`).
-
-## How to run
-
-Only Docker, Docker Compose, Make, and Git are expected on the host. Node.js, pnpm,
-Vite, ESLint, TypeScript, and Playwright all run inside Docker.
-
-```bash
-# Start the Docker stack: Vite on :3001 + MongoDB
-make up
-
-# Also Docker-only: starts the playground and ObjectDatabase contract bridge
-pnpm run dev
-
-# Run quality gates inside Docker
-make ci
-
-# Run browser tests inside Docker
-make test
+```sh
+docker compose up -d --build osionos-app osionos-bridge
 ```
 
-Full reset (wipe DB + re-seed):
+For the normal website login flow, run the complete stack:
 
-```bash
-make re
+```sh
+docker compose up -d --build
 ```
 
-Build and release the production image:
+Then open `http://localhost:4322`, sign in, and let the website redirect into osionos. Direct app loads require an existing bridge session unless `VITE_REQUIRE_BRIDGE_SESSION` is changed inside the Docker configuration.
 
-```bash
-make tag VERSION=v1.0.0
-```
+## Bridge
 
-The release target builds `dlesieur/osionos:<VERSION>` with a multi-stage Docker
-build, pushes `dlesieur/osionos:<VERSION>` and `dlesieur/osionos:latest`, creates
-the git tag, and pushes the current branch plus the tag.
+- Bridge API: `http://localhost:4000`
+- Token consume route: `http://localhost:4000/api/auth/bridge/consume`
+- App URL after token consumption: `http://localhost:3001/#source=adapter&view=v-prod-table`
 
-## Pre-seeded users
-
-The seed script (`scripts/seed-playground.mjs`) creates 3 users:
-
-| User | Email | Password |
-|---|---|---|
-| Alice | alice@test.com | password123 |
-| Bob | bob@test.com | password123 |
-| Charlie | charlie@test.com | password123 |
-
-Each user gets their own workspace. Log in as any of them to see their pages.
-
-## Seed data
-
-`src/data/seedPages.ts` defines pre-built pages with real block content (headings, paragraphs, code blocks, todos, etc.). These get inserted via the API during seeding so you can immediately test the rendering pipeline.
-
-## Directory structure
-
-| File/Directory | What it is |
-|---|---|
-| `src/App.tsx` | Root component — sidebar + main content |
-| `src/main.tsx` | React entry point |
-| `src/api/client.ts` | HTTP client wrapper for the Fastify API |
-| `src/store/usePageStore.ts` | Zustand store for pages and blocks |
-| `src/store/useUserStore.ts` | Zustand store for auth state (current user, token) |
-| `src/data/seedPages.ts` | Seed page definitions with block content |
-| `src/hooks/usePlaygroundBlockEditor.ts` | Block editor hook adapted for API-backed editing |
-| `src/components/` | Playground-specific components (sidebar, page editor, block renderer) |
-| `vite.config.ts` | Vite config — `@src` alias points to `../src` for component reuse |
-# osionos
+See [../../../docs/howtouse.md](../../../docs/howtouse.md) for the full pipeline workflow and verification steps.

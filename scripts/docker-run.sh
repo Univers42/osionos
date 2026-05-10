@@ -10,15 +10,19 @@ cd "${ROOT_DIR}"
 
 run_inside_container() {
   case "${COMMAND}" in
-    build) exec pnpm run build:local "$@" ;;
-    preview) exec pnpm run preview:local "$@" ;;
-    typecheck) exec pnpm run typecheck:local "$@" ;;
-    lint) exec pnpm run lint:local "$@" ;;
-    lint-fix) exec pnpm run lint:fix:local "$@" ;;
-    test-e2e) exec pnpm run test:e2e:local -- "$@" ;;
-    test-e2e-serial) exec pnpm run test:e2e:serial:local -- "$@" ;;
-    test-e2e-smoke) exec pnpm run test:e2e:smoke:local -- "$@" ;;
-    test-doctor) exec pnpm run test:doctor:local "$@" ;;
+    build) exec sh -c 'pnpm exec tsc --noEmit && pnpm exec vite build' ;;
+    preview) exec pnpm exec vite preview --host 0.0.0.0 "$@" ;;
+    typecheck) exec pnpm exec tsc --noEmit "$@" ;;
+    lint) exec pnpm exec eslint src/ --max-warnings=0 "$@" ;;
+    lint-fix) exec pnpm exec eslint src/ --fix "$@" ;;
+    test-e2e) exec pnpm exec playwright test "$@" ;;
+    test-e2e-serial) exec pnpm exec playwright test --workers=1 "$@" ;;
+    test-e2e-smoke) exec pnpm exec playwright test tests/e2e/smoke "$@" ;;
+    test-doctor) exec node tests/test-env-doctor.mjs "$@" ;;
+    test-bridge) exec node --test tests/bridge/*.test.mjs "$@" ;;
+    bridge-api) exec node scripts/bridge-api.mjs "$@" ;;
+    mcp-claude) exec node scripts/osionos-mcp-server.mjs "$@" ;;
+    quality) pnpm exec tsc --noEmit && exec pnpm exec eslint src/ --max-warnings=0 "$@" ;;
     *) echo "Unknown docker-run command: ${COMMAND}" >&2; exit 2 ;;
   esac
 }
@@ -37,19 +41,19 @@ playground_mongo_port="${PLAYGROUND_MONGO_PORT:-27018}"
 
 case "${COMMAND}" in
   build)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground pnpm run build:local "$@"
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh build "$@"
     ;;
   preview)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --service-ports --no-deps playground pnpm run preview:local "$@"
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --service-ports --no-deps playground bash scripts/docker-run.sh preview "$@"
     ;;
   typecheck)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground pnpm run typecheck:local "$@"
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh typecheck "$@"
     ;;
   lint)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground pnpm run lint:local "$@"
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh lint "$@"
     ;;
   lint-fix)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground pnpm run lint:fix:local "$@"
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh lint-fix "$@"
     ;;
   test-e2e)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests pnpm exec playwright test "$@"
@@ -61,10 +65,22 @@ case "${COMMAND}" in
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests pnpm exec playwright test tests/e2e/smoke "$@"
     ;;
   test-doctor)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests pnpm run test:doctor:local "$@"
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests node tests/test-env-doctor.mjs "$@"
+    ;;
+  test-bridge)
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh test-bridge "$@"
+    ;;
+  quality)
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh quality "$@"
+    ;;
+  bridge-api)
+    (cd ../../.. && docker compose up -d --build osionos-bridge)
+    ;;
+  mcp-claude)
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh mcp-claude "$@"
     ;;
   *)
-    echo "Usage: $0 {build|preview|typecheck|lint|lint-fix|test-e2e|test-e2e-serial|test-e2e-smoke|test-doctor}" >&2
+    echo "Usage: $0 {build|preview|typecheck|lint|lint-fix|test-e2e|test-e2e-serial|test-e2e-smoke|test-doctor|test-bridge|quality|bridge-api|mcp-claude}" >&2
     exit 2
     ;;
 esac

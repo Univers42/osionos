@@ -14,7 +14,7 @@ if [[ -f /.dockerenv || "${OSIONOS_IN_DOCKER:-}" == "1" ]]; then
 fi
 
 if ! docker info >/dev/null 2>&1; then
-  echo "[dev] Docker is required. Start Docker, then run pnpm run dev again." >&2
+  echo "[dev] Docker is required. Start Docker, then run docker compose up -d --build osionos-app from the repository root." >&2
   exit 1
 fi
 

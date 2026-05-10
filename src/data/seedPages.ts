@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/07 14:05:48 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/10 14:41:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -48,18 +48,18 @@ const teamWiki: SeedPage = {
     divider(),
     h2('Onboarding'),
     p('Welcome to the team! Here\'s what you need to know:'),
-    numbered('Clone the repo and run pnpm install'),
-    numbered('Copy .env.example to .env'),
-    numbered('Run make dev-all to start both the API and playground'),
-    numbered('Open http://localhost:3001 in your browser'),
-    callout('If the API isn\'t running, the playground falls back to offline mode with seed data.', getCollectionEmojiValue('idea')),
+    numbered('Clone the repo and stay on the Docker-only workflow'),
+    numbered('Generate runtime env files with Dockerized Node'),
+    numbered('Run docker compose up -d --build from the repository root'),
+    numbered('Open http://localhost:4322 and sign in to reach osionos'),
+    callout('The normal flow starts at the website and opens this workspace through the bridge.', getCollectionEmojiValue('idea')),
     h2('Architecture'),
     p('The project has two main parts:'),
     bullet('src/ — The main osionos database system (components, stores, types)'),
     bullet('playground/ — A standalone Vite app for UI development and testing'),
     code('osionos-database-sys/\n├── src/           # Main project\n│   ├── components/  # React components\n│   ├── store/       # Zustand stores\n│   ├── types/       # TypeScript types\n│   └── lib/         # Engine, formula, markdown, syntax\n├── playground/    # Playground app\n│   └── src/\n│       ├── components/sidebar/  # osionos sidebar\n│       ├── store/               # Page & user stores\n│       └── data/                # Seed data\n└── packages/api/  # Fastify backend', 'plaintext'),
     h2('Useful commands'),
-    code('# Start everything\nmake dev-all\n\n# Just the playground (offline mode)\ncd playground && make dev\n\n# Type check\nnpx tsc --noEmit\n\n# Run tests\npnpm test', 'bash'),
+    code('# Generate runtime files\ndocker run --rm -v "$PWD":/workspace -w /workspace node:22-alpine node infrastructure/baas/scripts/bootstrap-env.mjs\ndocker run --rm -v "$PWD":/workspace -w /workspace node:22-alpine node infrastructure/baas/scripts/ensure-osionos-runtime-secrets.mjs\n\n# Start everything\ndocker compose up -d --build\n\n# Check services\ndocker compose ps', 'bash'),
   ],
 };
 
