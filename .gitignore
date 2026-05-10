@@ -8,6 +8,9 @@ test-results/
 
 ### dotenv ###
 .env
+.env.*
+!.env.example
+.env*.bak
 
 ### Node ###
 # Logs
