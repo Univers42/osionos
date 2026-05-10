@@ -15,7 +15,7 @@ for (const file of [
 	resolve(APP_ROOT, '../../../.env.local'),
 	resolve(APP_ROOT, '../../opposite-osiris/.env.local'),
 	resolve(APP_ROOT, '../../opposite-osiris/.env'),
-	resolve(APP_ROOT, '../../../infrastructure/baas/.env.local'),
+	resolve(APP_ROOT, '../../../apps/baas/.env.local'),
 ]) {
 	if (!existsSync(file)) continue;
 	for (const rawLine of readFileSync(file, 'utf8').split(/\r?\n/)) {
