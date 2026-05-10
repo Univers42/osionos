@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>osionos playground simulation</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f5f1e8;
+        color: #201b16;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          linear-gradient(90deg, rgba(48, 95, 105, 0.08) 1px, transparent 1px),
+          linear-gradient(rgba(48, 95, 105, 0.08) 1px, transparent 1px),
+          #f5f1e8;
+        background-size: 42px 42px;
+      }
+
+      main {
+        width: min(1180px, calc(100vw - 40px));
+        margin: 0 auto;
+        padding: 28px 0 40px;
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 18px;
+        align-items: end;
+        border-bottom: 1px solid rgba(32, 27, 22, 0.18);
+        padding-bottom: 18px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 5vw, 4.6rem);
+        line-height: 0.95;
+        font-family: Georgia, "Times New Roman", serif;
+        font-weight: 500;
+      }
+
+      .simulation-label {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 0 12px;
+        border: 1px solid rgba(32, 27, 22, 0.34);
+        background: #fffaf0;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .status-bar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 16px;
+        align-items: center;
+        margin: 22px 0;
+        padding: 14px 16px;
+        border: 1px solid rgba(32, 27, 22, 0.18);
+        background: rgba(255, 250, 240, 0.82);
+      }
+
+      .status-line {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 750;
+      }
+
+      .status-meta {
+        margin: 4px 0 0;
+        color: #6c6258;
+        font-size: 0.9rem;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 0 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(32, 27, 22, 0.22);
+        background: #fff;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .pill[data-status="running"] {
+        background: #e8f3f1;
+        color: #164f51;
+      }
+
+      .pill[data-status="succeeded"] {
+        background: #e7f5dd;
+        color: #255c28;
+      }
+
+      .pill[data-status="failed"] {
+        background: #ffe8df;
+        color: #88301e;
+      }
+
+      .stage {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 22px;
+        align-items: start;
+      }
+
+      .preview {
+        min-height: 520px;
+        border: 1px solid rgba(32, 27, 22, 0.22);
+        background: #fffaf0;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+      }
+
+      .preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+        background: #fff;
+      }
+
+      .empty-preview {
+        max-width: 360px;
+        padding: 28px;
+        text-align: center;
+        color: #6c6258;
+        font-weight: 650;
+      }
+
+      aside {
+        display: grid;
+        gap: 14px;
+      }
+
+      .panel {
+        border: 1px solid rgba(32, 27, 22, 0.18);
+        background: rgba(255, 250, 240, 0.9);
+        padding: 16px;
+      }
+
+      h2 {
+        margin: 0 0 10px;
+        font-size: 0.82rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      dl {
+        display: grid;
+        gap: 10px;
+        margin: 0;
+      }
+
+      dt {
+        color: #6c6258;
+        font-size: 0.75rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      dd {
+        margin: 2px 0 0;
+        overflow-wrap: anywhere;
+        font-weight: 700;
+      }
+
+      .log {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 8px;
+        max-height: 280px;
+        overflow: auto;
+      }
+
+      .log li {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 0.78rem;
+        line-height: 1.45;
+        color: #3a332d;
+      }
+
+      @media (max-width: 920px) {
+        header,
+        .status-bar,
+        .stage {
+          grid-template-columns: 1fr;
+        }
+
+        .preview {
+          min-height: 360px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <span class="simulation-label">Simulation viewer</span>
+          <h1>Website to osionos bridge</h1>
+        </div>
+        <span id="status-pill" class="pill" data-status="waiting">Waiting</span>
+      </header>
+
+      <section class="status-bar" aria-live="polite">
+        <div>
+          <p id="status-line" class="status-line">Waiting for make playground to publish the first simulation step.</p>
+          <p id="status-meta" class="status-meta">This page auto-refreshes from Docker Playwright state.</p>
+        </div>
+        <span class="pill">Automated run</span>
+      </section>
+
+      <section class="stage">
+        <div id="preview" class="preview">
+          <p class="empty-preview">Keep this tab open while the simulation runs. Screenshots appear here as Playwright moves through the account and bridge flow.</p>
+        </div>
+
+        <aside>
+          <section class="panel">
+            <h2>Session</h2>
+            <dl>
+              <div><dt>Persona</dt><dd id="persona">-</dd></div>
+              <div><dt>Workspace</dt><dd id="workspace">-</dd></div>
+              <div><dt>URL</dt><dd id="url">-</dd></div>
+            </dl>
+          </section>
+          <section class="panel">
+            <h2>Simulation Log</h2>
+            <ul id="log" class="log"></ul>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <script type="module">
+      const statusPill = document.querySelector('#status-pill');
+      const statusLine = document.querySelector('#status-line');
+      const statusMeta = document.querySelector('#status-meta');
+      const preview = document.querySelector('#preview');
+      const persona = document.querySelector('#persona');
+      const workspace = document.querySelector('#workspace');
+      const url = document.querySelector('#url');
+      const log = document.querySelector('#log');
+
+      function renderLog(entries = []) {
+        log.replaceChildren(...entries.slice(-12).map((entry) => {
+          const item = document.createElement('li');
+          item.textContent = `${entry.time}  ${entry.message}`;
+          return item;
+        }));
+      }
+
+      function renderSnapshot(state) {
+        if (!state.snapshotVersion) {
+          return;
+        }
+        const image = document.createElement('img');
+        image.alt = `Playwright simulation snapshot: ${state.message}`;
+        image.src = `snapshot.png?v=${encodeURIComponent(state.snapshotVersion)}`;
+        preview.replaceChildren(image);
+      }
+
+      function render(state) {
+        statusPill.dataset.status = state.status || 'waiting';
+        statusPill.textContent = state.status || 'waiting';
+        statusLine.textContent = state.message || 'Waiting for simulation state.';
+        statusMeta.textContent = state.updatedAt ? `Updated ${new Date(state.updatedAt).toLocaleTimeString()}` : 'This page auto-refreshes from Docker Playwright state.';
+        persona.textContent = state.session?.bridgePersona || state.username || '-';
+        workspace.textContent = state.session?.workspace || '-';
+        url.textContent = state.session?.url || state.currentUrl || '-';
+        renderLog(state.log);
+        renderSnapshot(state);
+      }
+
+      async function refresh() {
+        try {
+          const response = await fetch(`state.json?v=${Date.now()}`, { cache: 'no-store' });
+          if (!response.ok) {
+            return;
+          }
+          render(await response.json());
+        } catch {
+          // Waiting for the simulation container to write the first state file.
+        }
+      }
+
+      await refresh();
+      setInterval(refresh, 900);
+    </script>
+  </body>
+</html>
