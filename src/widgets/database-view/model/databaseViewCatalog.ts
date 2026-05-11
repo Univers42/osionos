@@ -360,14 +360,13 @@ function createViewCell(
 ): LayoutCell {
   const viewDefinition = getKnownDatabaseView(viewId) ?? KNOWN_DATABASE_VIEWS[0];
   const palette = CELL_PALETTE[paletteIndex % CELL_PALETTE.length];
-  const isDenseView = viewDefinition.type === "table" || viewDefinition.type === "timeline" || viewDefinition.type === "list";
 
   return createDashboardCell(placement, {
     label: `${viewDefinition.databaseName} · ${viewDefinition.name}`,
     backgroundColor: palette.backgroundColor,
     textColor: palette.textColor,
-    sizing: options.sizing ?? (isDenseView ? "fixed" : "auto-height"),
-    verticalConstraint: options.verticalConstraint ?? (isDenseView ? "top" : "hug"),
+    sizing: options.sizing ?? "fixed",
+    verticalConstraint: options.verticalConstraint ?? "top",
     padding: options.padding ?? (viewDefinition.type === "dashboard" ? "compact" : "comfortable"),
     fontSize: options.fontSize ?? "base",
     blocks: [
