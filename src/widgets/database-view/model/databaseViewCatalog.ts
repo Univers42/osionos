@@ -1,4 +1,5 @@
 import type { Block, LayoutCell, LayoutMode } from "@/entities/block";
+import { loadKnownDatabaseState } from "./knownDatabaseState";
 
 export type KnownDatabaseId =
   | "db-tasks"
@@ -116,25 +117,31 @@ export const SHOWCASE_VIEW_IDS = [
   "v-prod-table",
 ] as const;
 
-const DASHBOARD_METRICS = {
-  taskCount: 8,
-  projectCount: 8,
-  crmCount: 6,
-  contentCount: 5,
-  inventoryCount: 5,
-  productCount: 300,
-  completedTasks: 1,
-  blockedTasks: 1,
-  highPriorityTasks: 3,
-  urgentTasks: 1,
-  storyPoints: 47,
-  activeProjects: 3,
-  projectBudget: 530000,
-  pipelineValue: 560000,
-  inventoryValue: 5588,
-  averageProductRating: 3.64,
-  productRevenuePotential: 15678.96,
-};
+interface DashboardMetrics {
+  taskCount: number;
+  projectCount: number;
+  crmCount: number;
+  contentCount: number;
+  inventoryCount: number;
+  productCount: number;
+  completedTasks: number;
+  blockedTasks: number;
+  highPriorityTasks: number;
+  urgentTasks: number;
+  storyPoints: number;
+  activeProjects: number;
+  projectBudget: number;
+  pipelineValue: number;
+  inventoryValue: number;
+  averageProductRating: number;
+  productRevenuePotential: number;
+  productStockUnits: number;
+  featuredProducts: number;
+  approvedContent: number;
+}
+
+type KnownDatabaseState = ReturnType<typeof loadKnownDatabaseState>;
+type KnownDatabasePage = KnownDatabaseState["pages"][string];
 
 const VIEW_INSIGHTS: Record<string, string> = {
   "v-proj-dashboard": "Relation analytics ties projects to tasks, accounts, content, and equipment so the page starts with connected truth.",
@@ -257,6 +264,64 @@ function money(value: number): string {
   }).format(value) + " USD";
 }
 
+function pagesForDatabase(state: KnownDatabaseState, databaseId: KnownDatabaseId): KnownDatabasePage[] {
+  return Object.values(state.pages).filter((page) => page.databaseId === databaseId);
+}
+
+function numeric(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function sumProperty(pages: KnownDatabasePage[], propertyId: string): number {
+  return pages.reduce((total, page) => total + numeric(page.properties[propertyId]), 0);
+}
+
+function countProperty(pages: KnownDatabasePage[], propertyId: string, predicate: (value: unknown) => boolean): number {
+  return pages.filter((page) => predicate(page.properties[propertyId])).length;
+}
+
+function productRatingValue(value: unknown): number {
+  if (typeof value !== "string") return 0;
+  const ratingMatch = /\d+(?:\.\d+)?/.exec(value);
+  return ratingMatch ? Number(ratingMatch[0]) : 0;
+}
+
+function getDashboardMetrics(): DashboardMetrics {
+  const state = loadKnownDatabaseState();
+  const tasks = pagesForDatabase(state, "db-tasks");
+  const projects = pagesForDatabase(state, "db-projects");
+  const crm = pagesForDatabase(state, "db-crm");
+  const content = pagesForDatabase(state, "db-content");
+  const inventory = pagesForDatabase(state, "db-inventory");
+  const products = pagesForDatabase(state, "db-products");
+  const productRatings = products.map((page) => productRatingValue(page.properties["pp-rating"])).filter((rating) => rating > 0);
+
+  return {
+    taskCount: tasks.length,
+    projectCount: projects.length,
+    crmCount: crm.length,
+    contentCount: content.length,
+    inventoryCount: inventory.length,
+    productCount: products.length,
+    completedTasks: countProperty(tasks, "prop-done", Boolean),
+    blockedTasks: countProperty(tasks, "prop-status", (status) => status === "opt-blocked"),
+    highPriorityTasks: countProperty(tasks, "prop-priority", (priority) => priority === "pri-high"),
+    urgentTasks: countProperty(tasks, "prop-priority", (priority) => priority === "pri-urgent"),
+    storyPoints: sumProperty(tasks, "prop-points"),
+    activeProjects: countProperty(projects, "proj-status", (status) => status === "ps-active"),
+    projectBudget: sumProperty(projects, "proj-budget"),
+    pipelineValue: sumProperty(crm, "prop-value"),
+    inventoryValue: sumProperty(inventory, "prop-price"),
+    averageProductRating: productRatings.length
+      ? Number((productRatings.reduce((total, rating) => total + rating, 0) / productRatings.length).toFixed(2))
+      : 0,
+    productRevenuePotential: sumProperty(products, "pp-price"),
+    productStockUnits: sumProperty(products, "pp-stock-qty"),
+    featuredProducts: countProperty(products, "pp-featured", Boolean),
+    approvedContent: countProperty(content, "prop-approved", Boolean),
+  };
+}
+
 function summarizeCellContent(blocks: Block[]): string {
   return blocks
     .map((block) => block.content)
@@ -313,7 +378,8 @@ function createViewCell(
   });
 }
 
-function createHeroCell(placement: LayoutPlacement): LayoutCell {
+function createHeroCell(placement: LayoutPlacement, metrics: DashboardMetrics, focusViewId: string): LayoutCell {
+  const focusView = getKnownDatabaseView(focusViewId) ?? getKnownDatabaseView("v-prod-table") ?? KNOWN_DATABASE_VIEWS[0];
   return createDashboardCell(placement, {
     label: "Command center",
     backgroundColor: "color-mix(in srgb, #111827 6%, var(--osio-bg-surface))",
@@ -321,13 +387,13 @@ function createHeroCell(placement: LayoutPlacement): LayoutCell {
     padding: "spacious",
     blocks: [
       heading2("Workspace command center"),
-      paragraph(`A cross-functional home dashboard built from the real seeded workspace: ${DASHBOARD_METRICS.taskCount} tasks, ${DASHBOARD_METRICS.projectCount} projects, ${DASHBOARD_METRICS.crmCount} CRM accounts, ${DASHBOARD_METRICS.contentCount} content items, ${DASHBOARD_METRICS.inventoryCount} inventory assets, and ${DASHBOARD_METRICS.productCount} products.`),
-      callout(`${money(DASHBOARD_METRICS.projectBudget)} project budget, ${money(DASHBOARD_METRICS.pipelineValue)} pipeline value, and ${DASHBOARD_METRICS.storyPoints} story points are visible without locking the page to a single database.`, "◈"),
+      paragraph(`A cross-functional canvas built from live known database state: ${metrics.taskCount} tasks, ${metrics.projectCount} projects, ${metrics.crmCount} CRM accounts, ${metrics.contentCount} content items, ${metrics.inventoryCount} inventory assets, and ${metrics.productCount} product records.`),
+      callout(`${money(metrics.projectBudget)} project budget, ${money(metrics.pipelineValue)} pipeline value, ${metrics.storyPoints} story points, and ${metrics.productStockUnits.toLocaleString()} product units are visible without leaving Home. Featured /view: ${focusView.databaseName} · ${focusView.name}.`, "◈"),
     ],
   });
 }
 
-function createWorkCell(placement: LayoutPlacement): LayoutCell {
+function createWorkCell(placement: LayoutPlacement, metrics: DashboardMetrics): LayoutCell {
   return createDashboardCell(placement, {
     label: "Daily triage",
     backgroundColor: "color-mix(in srgb, #0f766e 12%, var(--osio-bg-surface))",
@@ -335,12 +401,12 @@ function createWorkCell(placement: LayoutPlacement): LayoutCell {
     padding: "spacious",
     blocks: [
       heading3("Today focus"),
-      paragraph(`${DASHBOARD_METRICS.highPriorityTasks} high-priority tasks, ${DASHBOARD_METRICS.urgentTasks} urgent task, ${DASHBOARD_METRICS.blockedTasks} blocker, and ${DASHBOARD_METRICS.completedTasks} completed item.`),
+      paragraph(`${metrics.highPriorityTasks} high-priority tasks, ${metrics.urgentTasks} urgent task, ${metrics.blockedTasks} blocker, and ${metrics.completedTasks} completed item across ${metrics.storyPoints} story points.`),
     ],
   });
 }
 
-function createGrowthCell(placement: LayoutPlacement): LayoutCell {
+function createGrowthCell(placement: LayoutPlacement, metrics: DashboardMetrics): LayoutCell {
   return createDashboardCell(placement, {
     label: "Growth radar",
     backgroundColor: "color-mix(in srgb, #b45309 12%, var(--osio-bg-surface))",
@@ -348,48 +414,55 @@ function createGrowthCell(placement: LayoutPlacement): LayoutCell {
     padding: "spacious",
     blocks: [
       heading3("Growth radar"),
-      paragraph(`${money(DASHBOARD_METRICS.pipelineValue)} pipeline value across ${DASHBOARD_METRICS.crmCount} accounts.`),
-      paragraph(`${DASHBOARD_METRICS.productCount} products, ${DASHBOARD_METRICS.averageProductRating} average rating, ${money(DASHBOARD_METRICS.productRevenuePotential)} catalog value.`),
+      paragraph(`${money(metrics.pipelineValue)} pipeline value across ${metrics.crmCount} accounts and ${metrics.activeProjects} active projects.`),
+      paragraph(`${metrics.productCount} products, ${metrics.averageProductRating} average rating, ${metrics.featuredProducts} featured products, and ${money(metrics.productRevenuePotential)} catalog value.`),
     ],
   });
 }
 
-function createLayoutLabCell(placement: LayoutPlacement): LayoutCell {
+function createLayoutLabCell(placement: LayoutPlacement, metrics: DashboardMetrics): LayoutCell {
   return createDashboardCell(placement, {
-    label: "Layout pressure",
+    label: "Data coverage",
     backgroundColor: "color-mix(in srgb, #7c3aed 9%, var(--osio-bg-surface))",
     textColor: "var(--osio-fg-default)",
     blocks: [
-      heading3("Layout pressure"),
-      paragraph("This home page intentionally mixes dense tables, boards, maps, feeds, timelines, charts, and dashboards so the canvas shows its strengths and its constraints in one editable surface."),
-      todo("Dense data needs fixed cells with scroll.", false),
-      todo("Narrative views work better with hug height.", true),
+      heading3("Data coverage"),
+      paragraph(`The canvas mixes ${KNOWN_DATABASE_VIEWS.length} /view definitions across six databases, including dashboards, tables, boards, maps, feeds, timelines, charts, and calendars.`),
+      todo(`${metrics.approvedContent}/${metrics.contentCount} content pieces approved.`, metrics.approvedContent === metrics.contentCount),
+      todo(`${money(metrics.inventoryValue)} inventory value connected to project work.`, true),
     ],
   });
 }
 
-export function createViewShowcaseCells(): LayoutCell[] {
+export function createViewShowcaseCells(focusViewId = "v-prod-table"): LayoutCell[] {
+  const metrics = getDashboardMetrics();
+  const focusView = getKnownDatabaseView(focusViewId)?.id ?? "v-prod-table";
+  const viewIds = [
+    focusView,
+    "v-prod-dashboard",
+    "v-prod-analytics",
+    "v-proj-dashboard",
+    "v-tasks-board",
+    "v-proj-timeline",
+    "v-proj-chart",
+    "v-tasks-list",
+    "v-content-calendar",
+    "v-prod-map",
+    "v-prod-feed",
+    "v-inv-dashboard",
+    "v-crm-gallery",
+  ].filter((viewId, index, viewList) => viewList.indexOf(viewId) === index);
+
   return [
-    createHeroCell(SHOWCASE_PLACEMENTS[0]),
-    createWorkCell(SHOWCASE_PLACEMENTS[1]),
-    createGrowthCell(SHOWCASE_PLACEMENTS[2]),
-    createLayoutLabCell(SHOWCASE_PLACEMENTS[3]),
-    createViewCell("v-proj-dashboard", SHOWCASE_PLACEMENTS[4], 0),
-    createViewCell("v-tasks-board", SHOWCASE_PLACEMENTS[5], 1),
-    createViewCell("v-proj-timeline", SHOWCASE_PLACEMENTS[6], 2),
-    createViewCell("v-proj-chart", SHOWCASE_PLACEMENTS[7], 3),
-    createViewCell("v-tasks-list", SHOWCASE_PLACEMENTS[8], 4),
-    createViewCell("v-content-calendar", SHOWCASE_PLACEMENTS[9], 5),
-    createViewCell("v-prod-analytics", SHOWCASE_PLACEMENTS[10], 6),
-    createViewCell("v-prod-map", SHOWCASE_PLACEMENTS[11], 0),
-    createViewCell("v-prod-feed", SHOWCASE_PLACEMENTS[12], 1),
-    createViewCell("v-inv-dashboard", SHOWCASE_PLACEMENTS[13], 2),
-    createViewCell("v-crm-gallery", SHOWCASE_PLACEMENTS[14], 3),
-    createViewCell("v-prod-table", SHOWCASE_PLACEMENTS[15], 4),
+    createHeroCell(SHOWCASE_PLACEMENTS[0], metrics, focusView),
+    createWorkCell(SHOWCASE_PLACEMENTS[1], metrics),
+    createGrowthCell(SHOWCASE_PLACEMENTS[2], metrics),
+    createLayoutLabCell(SHOWCASE_PLACEMENTS[3], metrics),
+    ...SHOWCASE_PLACEMENTS.slice(4).map((placement, index) => createViewCell(viewIds[index] ?? viewIds[0], placement, index)),
   ];
 }
 
-export function createViewShowcaseLayout(mode: LayoutMode): Block {
+export function createViewShowcaseLayout(mode: LayoutMode, focusViewId?: string): Block {
   return {
     id: crypto.randomUUID(),
     type: "layout",
@@ -407,10 +480,10 @@ export function createViewShowcaseLayout(mode: LayoutMode): Block {
       preview: false,
       theme: "spacious",
     },
-    layoutCells: createViewShowcaseCells(),
+    layoutCells: createViewShowcaseCells(focusViewId),
   };
 }
 
-export function createViewShowcaseLayoutContent(mode: LayoutMode): Block[] {
-  return [createViewShowcaseLayout(mode)];
+export function createViewShowcaseLayoutContent(mode: LayoutMode, focusViewId?: string): Block[] {
+  return [createViewShowcaseLayout(mode, focusViewId)];
 }
