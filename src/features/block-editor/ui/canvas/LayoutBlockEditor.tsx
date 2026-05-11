@@ -139,6 +139,7 @@ const LAYOUT_CONFIG_LIMITS = {
 const CELL_MIN_CONTENT_WIDTH = 280;
 const CELL_COMFORTABLE_WIDTH = 480;
 const CELL_MIN_ROW_HEIGHT = 96;
+const LAYOUT_CELL_ROW_SPAN_MAX = 512;
 type LayoutGridStyle = React.CSSProperties & Record<"--osionos-layout-dot-size" | "--osionos-layout-row-size", string>;
 const LAYOUT_PANEL_WIDTHS: Record<LayoutPanelKind, number> = {
   settings: 260,
@@ -306,7 +307,7 @@ function clampLayoutCell(cell: LayoutCell, config: LayoutConfig): LayoutCell {
   return {
     ...cell,
     colSpan,
-    rowSpan: clampNumber(cell.rowSpan, Math.max(1, Math.ceil(CELL_MIN_ROW_HEIGHT / config.rowHeight)), LAYOUT_CONFIG_LIMITS.rows[1], 1),
+    rowSpan: clampNumber(cell.rowSpan, Math.max(1, Math.ceil(CELL_MIN_ROW_HEIGHT / config.rowHeight)), LAYOUT_CELL_ROW_SPAN_MAX, 1),
     colStart: clampNumber(cell.colStart, 1, Math.max(1, config.columns - colSpan + 1), 1),
     rowStart: normalizeGridLine(cell.rowStart, 1),
     offset: normalizeLayoutOffset(cell.offset),
@@ -329,14 +330,14 @@ function layoutCellUsesContentHeight(cell: LayoutCell): boolean {
 function rowSpanForRenderedHeight(height: number, config: LayoutConfig): number {
   if (!Number.isFinite(height) || height <= 0) return 1;
   const rowStep = config.rowHeight + config.gap;
-  return clampNumber(Math.ceil((height + config.gap) / rowStep), 1, LAYOUT_CONFIG_LIMITS.rows[1], 1);
+  return clampNumber(Math.ceil((height + config.gap) / rowStep), 1, LAYOUT_CELL_ROW_SPAN_MAX, 1);
 }
 
 function collisionRowSpan(cell: LayoutCell, config?: LayoutConfig, measuredHeights?: LayoutMeasuredCellHeights): number {
   if (!config || !measuredHeights || !layoutCellUsesContentHeight(cell)) return cell.rowSpan;
   const measuredHeight = measuredHeights.get(cell.id);
   if (!measuredHeight) return cell.rowSpan;
-  return Math.max(cell.rowSpan, rowSpanForRenderedHeight(measuredHeight, config));
+  return rowSpanForRenderedHeight(measuredHeight, config);
 }
 
 function cellsOverlap(left: LayoutCell, right: LayoutCell, config?: LayoutConfig, measuredHeights?: LayoutMeasuredCellHeights): boolean {
@@ -498,7 +499,7 @@ function resolveMeasuredAutoHeightFootprints(cells: LayoutCell[], config: Layout
   for (const { cell } of orderedCells) {
     let nextCell = cell;
     let attempts = 0;
-    while (layoutCellOverlapsAny(nextCell, placedCells, config) && attempts < LAYOUT_CONFIG_LIMITS.rows[1] * 2) {
+    while (layoutCellOverlapsAny(nextCell, placedCells, config) && attempts < LAYOUT_CELL_ROW_SPAN_MAX) {
       nextCell = { ...nextCell, rowStart: nextCell.rowStart + 1 };
       attempts += 1;
     }
@@ -1892,7 +1893,7 @@ const LayoutCellInspector: React.FC<{
       onChange={(fontSize) => onUpdate({ fontSize })}
     />
     <LayoutNumberControl label="Column span" value={cell.colSpan} min={1} max={12} onChange={(colSpan) => onUpdate({ colSpan })} />
-    <LayoutNumberControl label="Row span" value={cell.rowSpan} min={1} max={24} onChange={(rowSpan) => onUpdate({ rowSpan })} />
+    <LayoutNumberControl label="Row span" value={cell.rowSpan} min={1} max={LAYOUT_CELL_ROW_SPAN_MAX} onChange={(rowSpan) => onUpdate({ rowSpan })} />
     <LayoutNumberControl
       label="Offset X"
       value={cell.offset?.x ?? 0}

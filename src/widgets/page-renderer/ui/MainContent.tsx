@@ -17,6 +17,7 @@ import { ErrorBoundary } from "@/shared/ui";
 import { DatabaseBlock } from "@/widgets/database-view";
 import {
   createViewShowcaseLayoutContent,
+  getKnownDatabaseView,
   getHomeDashboardPageId,
   HOME_DASHBOARD_PAGE_ICON,
   HOME_DASHBOARD_PAGE_TITLE,
@@ -34,13 +35,35 @@ import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 import "./homeVariants.css";
 
-const HOME_DASHBOARD_VERSION = 3;
+const HOME_DASHBOARD_VERSION = 4;
 const HOME_VARIANT_STORAGE_KEY = "osionos.home.variant";
 const EMPTY_PAGES: PageEntry[] = [];
 
 type HomeVariant = "dashboard" | "graph";
 
-function createHomeDashboardPage(workspaceId: string, ownerId: string | null): PageEntry {
+function getRequestedHomeViewId(): string | undefined {
+  if (globalThis.window === undefined) return undefined;
+  const viewId = new URLSearchParams(globalThis.window.location.hash.replace(/^#/, "")).get("view") ?? undefined;
+  return viewId && getKnownDatabaseView(viewId) ? viewId : undefined;
+}
+
+function getHomeDashboardFocusViewId(page: PageEntry | undefined): string | undefined {
+  const value = page?.properties?.find((property) => property.key === "focus_view")?.value;
+  return typeof value === "string" ? value : undefined;
+}
+
+function hasHomeDashboardCanvas(page: PageEntry | undefined): boolean {
+  const layoutBlock = page?.content?.find((block) => block.type === "layout");
+  return Boolean(layoutBlock?.layoutCells && layoutBlock.layoutCells.length >= 12);
+}
+
+function homeDashboardNeedsRefresh(page: PageEntry | undefined, focusViewId: string | undefined): boolean {
+  if (page?.homeDashboardVersion !== HOME_DASHBOARD_VERSION || !hasHomeDashboardCanvas(page)) return true;
+  return Boolean(focusViewId && getHomeDashboardFocusViewId(page) !== focusViewId);
+}
+
+function createHomeDashboardPage(workspaceId: string, ownerId: string | null, focusViewId?: string): PageEntry {
+  const focusView = focusViewId ? getKnownDatabaseView(focusViewId) : undefined;
   return {
     _id: getHomeDashboardPageId(workspaceId),
     title: HOME_DASHBOARD_PAGE_TITLE,
@@ -69,11 +92,12 @@ function createHomeDashboardPage(workspaceId: string, ownerId: string | null): P
         key: "views",
         label: "Views",
         type: "relation",
-        value: KNOWN_DATABASE_VIEWS.slice(0, 8).map((view) => view.name),
+        value: [focusView, ...KNOWN_DATABASE_VIEWS].filter(Boolean).slice(0, 8).map((view) => view.name),
         relationTarget: "database",
       },
+      { key: "focus_view", label: "Featured /view", type: "text", value: focusView?.id ?? "v-prod-table" },
     ],
-    content: createViewShowcaseLayoutContent("full_page"),
+    content: createViewShowcaseLayoutContent("full_page", focusView?.id),
     surface: "home",
     homeDashboardVersion: HOME_DASHBOARD_VERSION,
   };
@@ -98,22 +122,22 @@ export const MainContent: React.FC = () => {
   });
 
   const firstWsId = activeWorkspace?._id ?? session?.privateWorkspaces[0]?._id ?? "";
+  const requestedHomeViewId = getRequestedHomeViewId();
   const workspacePages = usePageStore((s) => firstWsId ? s.pages[firstWsId] ?? EMPTY_PAGES : EMPTY_PAGES);
   const homeDashboardPageId = firstWsId ? getHomeDashboardPageId(firstWsId) : "";
   const homeDashboardPage = workspacePages.find((page) => page._id === homeDashboardPageId && !page.archivedAt);
 
   useEffect(() => {
     if (activePage || showTrash || !firstWsId) return;
-    if (homeDashboardPage?.homeDashboardVersion === HOME_DASHBOARD_VERSION) return;
+    if (!homeDashboardNeedsRefresh(homeDashboardPage, requestedHomeViewId)) return;
 
-    const nextHomePage = createHomeDashboardPage(firstWsId, session?.userId ?? null);
+    const nextHomePage = createHomeDashboardPage(firstWsId, session?.userId ?? null, requestedHomeViewId);
     usePageStore.setState((state) => {
       const existingPages = state.pages[firstWsId] ?? [];
       const existingIndex = existingPages.findIndex((page) => page._id === nextHomePage._id && !page.archivedAt);
 
       if (existingIndex >= 0) {
         const existingHomePage = existingPages[existingIndex];
-        if (existingHomePage.homeDashboardVersion === HOME_DASHBOARD_VERSION) return {};
         const migratedHomePage: PageEntry = {
           ...nextHomePage,
           title: existingHomePage.title || nextHomePage.title,
@@ -135,7 +159,7 @@ export const MainContent: React.FC = () => {
       savePagesCache(pages);
       return { pages };
     });
-  }, [activePage, firstWsId, homeDashboardPage, session?.userId, showTrash]);
+  }, [activePage, firstWsId, homeDashboardPage, requestedHomeViewId, session?.userId, showTrash]);
 
   useEffect(() => {
     if (!activePage || activePage?.kind !== "page" || !jwt) return;
