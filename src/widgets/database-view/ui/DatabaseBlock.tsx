@@ -44,7 +44,10 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
   const knownViewId = resolvedInitialView && getKnownDatabaseView(resolvedInitialView)
     ? resolvedInitialView
     : KNOWN_DATABASE_VIEWS.find((viewDefinition) => viewDefinition.databaseId === resolvedDatabaseId)?.id;
-  const knownDatabaseAdapter = React.useMemo(() => createKnownDatabaseAdapter(), []);
+  const knownDatabaseAdapter = React.useMemo(
+    () => createKnownDatabaseAdapter({ inlineLoadLimit: mode === 'inline' ? 16 : undefined }),
+    [mode],
+  );
   const renderPage = React.useCallback<NonNullable<ObjectDatabaseProps['renderPage']>>(
     (pageId, state, onClose) => <DatabaseObjectPage pageId={pageId} state={state} onClose={onClose} />,
     [],
@@ -132,7 +135,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
     usePageStore.setState((current) => ({
       pages: upsertOsionosDatabasePage(current.pages, workspaceId, nextEntry),
     }));
-  }, [activePage?.id, activeUserId, database?.icon, databasePage, pageId, title, workspaceId]);
+  }, [activePage?.id, activeUserId, database, databasePage, pageId, title, workspaceId]);
 
   React.useEffect(() => {
     if (!databasePage || !database || !osionosPage) return;

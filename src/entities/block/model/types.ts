@@ -75,6 +75,7 @@ export interface LayoutCell {
   colSpan: number;
   rowStart: number;
   rowSpan: number;
+  offset?: { x: number; y: number };
   label?: string;
   tint?: string;
   blocks: Block[];

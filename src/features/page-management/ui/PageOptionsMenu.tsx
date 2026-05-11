@@ -6,12 +6,12 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:16:55 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/05 15:08:41 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 01:14:40 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, {
-  useEffect,
+  useCallback,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -25,6 +25,11 @@ import {
   ArrowRight,
   Trash2,
 } from "lucide-react";
+import {
+  clampTriggerAlignedMenuPosition,
+  IconButton,
+  useClickOutside,
+} from "@/shared/ui";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import {
@@ -69,11 +74,12 @@ export const PageOptionsMenu: React.FC<Props> = ({
   >(null);
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
-  const triggerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuBoundaryRefs = useMemo(() => [triggerRef, menuRef] as const, []);
   const portalTarget = globalThis.document?.body ?? null;
 
-  const jwt = useUserStore((s) => s.activeJwt());
+  const jwt = useUserStore((s) => s.activePageJwt());
   const activePageId = usePageStore((s) => s.activePage?.id);
 
   const storeWorkspaceId = usePageStore((s) =>
@@ -101,16 +107,9 @@ export const PageOptionsMenu: React.FC<Props> = ({
     return { descendantIds: ids, subPageCount: ids.length };
   }, [wsPages, pageId]);
 
-  useEffect(() => {
-    if (!isMenuOpen) return;
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setIsMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [isMenuOpen]);
+  const closeMenu = useCallback(() => setIsMenuOpen(false), []);
+
+  useClickOutside(menuBoundaryRefs, closeMenu, isMenuOpen);
 
   useLayoutEffect(() => {
     if (!isMenuOpen) {
@@ -126,30 +125,14 @@ export const PageOptionsMenu: React.FC<Props> = ({
 
       const triggerRect = triggerElement.getBoundingClientRect();
       const menuRect = menuElement.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
 
-      const left = Math.max(
-        MENU_MARGIN,
-        Math.min(
-          triggerRect.right - menuRect.width,
-          viewportWidth - menuRect.width - MENU_MARGIN,
-        ),
+      setMenuPosition(
+        clampTriggerAlignedMenuPosition(triggerRect, menuRect, {
+          align: "end",
+          gap: MENU_GAP,
+          margin: MENU_MARGIN,
+        }),
       );
-
-      const spaceBelow =
-        viewportHeight - triggerRect.bottom - MENU_GAP - MENU_MARGIN;
-      const spaceAbove = triggerRect.top - MENU_GAP - MENU_MARGIN;
-      const openAbove = spaceBelow < menuRect.height && spaceAbove > spaceBelow;
-
-      const top = openAbove
-        ? Math.max(MENU_MARGIN, triggerRect.top - menuRect.height - MENU_GAP)
-        : Math.min(
-            triggerRect.bottom + MENU_GAP,
-            viewportHeight - menuRect.height - MENU_MARGIN,
-          );
-
-      setMenuPosition({ top, left });
     };
 
     updateMenuPosition();
@@ -265,11 +248,13 @@ export const PageOptionsMenu: React.FC<Props> = ({
   };
 
   return (
-    <div className="relative flex items-center" ref={triggerRef}>
-      <button
-        type="button"
+    <div className="relative flex items-center">
+      <IconButton
+        ref={triggerRef}
+        size="xs"
+        tone="muted"
         className={[
-          "p-1 rounded transition-colors",
+          "rounded transition-colors",
           isMenuOpen
             ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
             : "hover:bg-[var(--osio-bg-subtle)]",
@@ -281,7 +266,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
         title="Page options"
       >
         <MoreHorizontal size={13} />
-      </button>
+      </IconButton>
 
       {isMenuOpen &&
         portalTarget &&

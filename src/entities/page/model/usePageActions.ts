@@ -83,7 +83,7 @@ function wordCountFromPage(page: { content?: Array<{ content?: string; children?
 export function usePageActions(pageId: string | null, workspaceId?: string) {
   const page = usePageStore((state) => (pageId ? state.pageById(pageId) : undefined));
   const activeUserId = useUserStore((state) => state.activeUserId);
-  const jwt = useUserStore((state) => state.activeJwt());
+  const jwt = useUserStore((state) => state.activePageJwt());
   const activeWorkspace = useUserStore((state) => state.activeWorkspace());
   const safeUserId = activeUserId || 'anonymous';
   const resolvedWorkspaceId = workspaceId ?? page?.workspaceId ?? activeWorkspace?._id ?? '';

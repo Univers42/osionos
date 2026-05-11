@@ -10,12 +10,12 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { API_BASE, api, getActiveJwt } from '@/shared/api/client';
-import { isMongoId } from './pageStore.helpers';
+import { API_BASE, api, getActivePageJwt } from '@/shared/api/client';
+import { isPersistedPageId } from './pageStore.helpers';
 import type { PageEntry } from '@/entities/page';
 import { canEditPage, getCurrentPageAccessContext } from '@/shared/lib/auth/pageAccess';
 
-export { getActiveJwt } from '@/shared/api/client';
+export { getActivePageJwt } from '@/shared/api/client';
 
 type PageByIdFn = (pageId: string) => PageEntry | undefined;
 let _pageByIdFn: PageByIdFn | null = null;
@@ -42,12 +42,12 @@ function flushPendingPersists() {
   for (const [pageId, timer] of _contentTimers.entries()) {
     clearTimeout(timer);
     _contentTimers.delete(pageId);
-    if (!isMongoId(pageId)) continue;  // offline seed page — skip API call
+    if (!isPersistedPageId(pageId)) continue;
     // Use registered lookup instead of direct store import (avoids circular dep)
     const page = _pageByIdFn?.(pageId);
     if (!page?.content) continue;
     if (!canEditPage(page, getCurrentPageAccessContext())) continue;
-    const jwt = getActiveJwt();
+    const jwt = getActivePageJwt();
     if (!jwt || !API_BASE) continue;
     const url = `${API_BASE}/api/pages/${pageId}`;
     // sendBeacon doesn't support custom headers — fall back to sync XHR
@@ -70,12 +70,12 @@ if (globalThis.window !== undefined) {
 }
 
 async function persistPageContent(pageId: string) {
-  if (!isMongoId(pageId)) return;  // offline seed page — skip API call
+  if (!isPersistedPageId(pageId)) return;
   const page = _pageByIdFn?.(pageId);
   if (!page?.content) return;
   if (!canEditPage(page, getCurrentPageAccessContext())) return;
 
-  const jwt = getActiveJwt();
+  const jwt = getActivePageJwt();
   if (!jwt) return;
 
   try {
@@ -86,10 +86,10 @@ async function persistPageContent(pageId: string) {
 }
 
 export async function persistPageTitle(pageId: string, title: string) {
-  if (!isMongoId(pageId)) return;  // offline seed page — skip API call
+  if (!isPersistedPageId(pageId)) return;
   const page = _pageByIdFn?.(pageId);
   if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
-  const jwt = getActiveJwt();
+  const jwt = getActivePageJwt();
   if (!jwt) return;
   try {
     await api.patch(`/api/pages/${pageId}`, { title }, jwt);

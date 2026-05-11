@@ -137,7 +137,7 @@ const App: React.FC = () => {
 
         const { sessions, activeUserId } = state;
         const session = sessions[activeUserId];
-        const jwt = state.activeJwt() ?? "";
+        const jwt = state.activePageJwt() ?? "";
 
         if (!jwt) {
           if (isBridgeSession(session)) {

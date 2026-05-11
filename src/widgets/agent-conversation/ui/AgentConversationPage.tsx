@@ -352,7 +352,7 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
   const openPage = usePageStore((state) => state.openPage);
   const updatePageTitle = usePageStore((state) => state.updatePageTitle);
   const activeWorkspace = useUserStore((state) => state.activeWorkspace());
-  const jwt = useUserStore((state) => state.activeJwt() ?? "");
+  const jwt = useUserStore((state) => state.activePageJwt() ?? "");
   const workspaceId = page?.workspaceId ?? activeWorkspace?._id ?? "";
   const workspacePages = usePageStore((state) => workspaceId ? state.pages[workspaceId] ?? [] : []);
   const [draft, setDraft] = useState(DEFAULT_PROMPT);

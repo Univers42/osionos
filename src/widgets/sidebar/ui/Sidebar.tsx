@@ -34,7 +34,7 @@ export const Sidebar: React.FC<Props> = ({
   onOpenTrash,
 }) => {
   const session = useUserStore((s) => s.activeSession());
-  const jwt = useUserStore((s) => s.activeJwt() ?? "");
+  const jwt = useUserStore((s) => s.activePageJwt() ?? "");
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const activePage = usePageStore((s) => s.activePage);
   const recents = usePageStore((s) => s.recents);

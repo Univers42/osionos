@@ -45,7 +45,7 @@ import {
 import {
   debouncePersistContent,
   persistPageTitle,
-  getActiveJwt,
+  getActivePageJwt,
   registerPageLookup,
 } from "./pageStore.persistence";
 import type { PageStore, ActivePage } from "@/entities/page";
@@ -129,7 +129,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         navigationPath: newPath,
       };
     });
-    const jwt = getActiveJwt();
+    const jwt = getActivePageJwt();
     if (jwt && page.kind === "page") {
       get().fetchPageContent(page.id, jwt);
     }
