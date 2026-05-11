@@ -1,3 +1,5 @@
+/* global DataTransfer, PointerEvent, document, getComputedStyle, localStorage, window */
+
 import { expect, test } from "@playwright/test";
 
 import {
@@ -52,6 +54,54 @@ async function syntheticDragDrop(page, source, target, targetPosition = "above")
   });
   await source.dispatchEvent("dragend", { dataTransfer });
   await dataTransfer.dispose();
+}
+
+async function pointerDragBy(page, locator, deltaX, deltaY) {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error("Could not resolve drag handle bounding box");
+  const startX = box.x + box.width / 2;
+  const startY = box.y + box.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + deltaX / 2, startY + deltaY / 2, { steps: 4 });
+  await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 4 });
+  await page.mouse.up();
+}
+
+async function syntheticPointerDragBy(page, locator, deltaX, deltaY) {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error("Could not resolve pointer drag target bounding box");
+  const startX = box.x + box.width / 2;
+  const startY = box.y + box.height / 2;
+  await locator.dispatchEvent("pointerdown", {
+    pointerId: 42,
+    pointerType: "mouse",
+    button: 0,
+    buttons: 1,
+    clientX: startX,
+    clientY: startY,
+  });
+  await page.evaluate(({ clientX, clientY }) => {
+    globalThis.dispatchEvent(new PointerEvent("pointermove", {
+      pointerId: 42,
+      pointerType: "mouse",
+      buttons: 1,
+      clientX,
+      clientY,
+      bubbles: true,
+    }));
+  }, { clientX: startX + deltaX / 2, clientY: startY + deltaY / 2 });
+  await page.evaluate(({ clientX, clientY }) => {
+    globalThis.dispatchEvent(new PointerEvent("pointerup", {
+      pointerId: 42,
+      pointerType: "mouse",
+      button: 0,
+      buttons: 0,
+      clientX,
+      clientY,
+      bubbles: true,
+    }));
+  }, { clientX: startX + deltaX, clientY: startY + deltaY });
 }
 
 test.describe("layout editor", () => {
@@ -121,6 +171,137 @@ test.describe("layout editor", () => {
 
     await expect.poll(() => firstCell.evaluate((node) => getComputedStyle(node).gridColumnStart)).toBe(secondBefore);
     await expect.poll(() => secondCell.evaluate((node) => getComputedStyle(node).gridColumnStart)).toBe(firstBefore);
+  });
+
+  test("cell resize handles change the grid span", async ({ page, baseURL }) => {
+    await createInlineLayout(page, baseURL);
+    const cell = await addLayoutCell(page);
+    const before = await cell.evaluate((node) => getComputedStyle(node).gridColumnEnd);
+
+    await pointerDragBy(page, cell.locator(".osionos-layout-resize-hit--left"), 180, 0);
+
+    await expect.poll(() => cell.evaluate((node) => getComputedStyle(node).gridColumnEnd)).not.toBe(before);
+  });
+
+  test("cell top resize handle changes the grid row", async ({ page, baseURL }) => {
+    await createInlineLayout(page, baseURL);
+    const cell = await addLayoutCell(page);
+
+    await pointerDragBy(page, cell.locator(".osionos-layout-cell-drag"), 0, 220);
+    const before = await cell.evaluate((node) => getComputedStyle(node).gridRowStart);
+
+    await syntheticPointerDragBy(page, cell.locator(".osionos-layout-resize-hit--top"), 0, -140);
+
+    await expect.poll(() => cell.evaluate((node) => getComputedStyle(node).gridRowStart)).not.toBe(before);
+  });
+
+  test("selected fixed cell frame clips overflowing content", async ({ page, baseURL }) => {
+    await createInlineLayout(page, baseURL);
+    const cell = await addLayoutCell(page);
+    await cell.click();
+    const before = await cell.boundingBox();
+    if (!before) throw new Error("Could not resolve layout cell bounding box");
+
+    await cell.locator(".osionos-layout-cell-editor").evaluate((node) => {
+      const tallContent = document.createElement("div");
+      tallContent.dataset.testTallContent = "true";
+      tallContent.style.height = "720px";
+      node.appendChild(tallContent);
+    });
+
+    await expect.poll(async () => {
+      const after = await cell.boundingBox();
+      return Math.abs((after?.height ?? 0) - before.height);
+    }).toBeLessThanOrEqual(2);
+    await expect.poll(() => cell.locator(".osionos-layout-cell-editor").evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+    await expect.poll(() => cell.evaluate((node) => getComputedStyle(node).outlineOffset)).toBe("-2px");
+  });
+
+  test("focused layout cell does not show a second blue outline", async ({ page, baseURL }) => {
+    await createInlineLayout(page, baseURL);
+    const cell = await addLayoutCell(page);
+
+    await cell.locator('[role="textbox"][aria-multiline="true"]').first().click();
+
+    await expect.poll(() => cell.evaluate((node) => getComputedStyle(node).outlineColor)).toBe("rgba(0, 0, 0, 0)");
+    await expect.poll(() => cell.locator(".osionos-layout-resize-overlay").evaluate((node) => getComputedStyle(node).opacity)).toBe("0");
+  });
+
+  test("cell move handle stays outside the diagonal resize handle", async ({ page, baseURL }) => {
+    await createInlineLayout(page, baseURL);
+    const cell = await addLayoutCell(page);
+    await cell.click();
+
+    await expect.poll(async () => cell.locator(".osionos-layout-cell-drag").evaluate((node) => {
+      const cellRect = node.closest(".osionos-layout-cell")?.getBoundingClientRect();
+      const dragRect = node.getBoundingClientRect();
+      const cornerRect = node.closest(".osionos-layout-cell")?.querySelector(".osionos-layout-resize-hit--top-left")?.getBoundingClientRect();
+      if (!cellRect || !cornerRect) return false;
+      const separated = dragRect.right <= cornerRect.left || cornerRect.right <= dragRect.left || dragRect.bottom <= cornerRect.top || cornerRect.bottom <= dragRect.top;
+      const outsideTopLeft = dragRect.right <= cellRect.left && dragRect.bottom <= cellRect.top;
+      return separated && outsideTopLeft;
+    })).toBe(true);
+  });
+
+  test("cell grab handle moves a cell to a new grid slot", async ({ page, baseURL }) => {
+    await createInlineLayout(page, baseURL);
+    const cell = await addLayoutCell(page);
+    const before = await cell.evaluate((node) => getComputedStyle(node).gridRowStart);
+
+    await pointerDragBy(page, cell.locator(".osionos-layout-cell-drag"), 0, 220);
+
+    await expect.poll(() => cell.evaluate((node) => getComputedStyle(node).gridRowStart)).not.toBe(before);
+    const after = await cell.evaluate((node) => getComputedStyle(node).gridRowStart);
+    expect(Number.parseInt(after, 10)).toBeLessThanOrEqual(4);
+
+    await page.keyboard.press("Control+Z");
+    await expect.poll(() => cell.evaluate((node) => getComputedStyle(node).gridRowStart)).toBe(before);
+
+    await page.keyboard.press("Control+Shift+Z");
+    await expect.poll(() => cell.evaluate((node) => getComputedStyle(node).gridRowStart)).toBe(after);
+  });
+
+  test("cell grab handle can move into implicit rows below the base grid", async ({ page, baseURL }) => {
+    await createInlineLayout(page, baseURL);
+    const cell = await addLayoutCell(page);
+
+    await syntheticPointerDragBy(page, cell.locator(".osionos-layout-cell-drag"), 0, 720);
+
+    await expect.poll(async () => Number.parseInt(await cell.evaluate((node) => getComputedStyle(node).gridRowStart), 10)).toBeGreaterThan(5);
+  });
+
+  test("cell inspector docks to the viewport edge and closes from the canvas", async ({ page, baseURL }) => {
+    await createInlineLayout(page, baseURL);
+    const cell = await addLayoutCell(page);
+    await cell.click();
+
+    const inspector = page.locator(".osionos-layout-cell-inspector");
+    const layoutBlock = page.locator(".osionos-layout-block").first();
+    await expect(inspector).toBeVisible();
+    await expect.poll(() => inspector.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      return Math.round(window.innerWidth - rect.right);
+    })).toBe(0);
+    await expect.poll(async () => {
+      const blockRight = await layoutBlock.evaluate((node) => node.getBoundingClientRect().right);
+      const panelLeft = await inspector.evaluate((node) => node.getBoundingClientRect().left);
+      return Math.round(panelLeft - blockRight);
+    }).toBeGreaterThanOrEqual(12);
+
+    await page.getByRole("textbox", { name: "Page title" }).click();
+    await expect(inspector).toBeHidden();
+  });
+
+  test("layout settings panel closes from view mode", async ({ page, baseURL }) => {
+    await createInlineLayout(page, baseURL);
+    await page.getByRole("button", { name: "Layout settings" }).click();
+
+    const settings = page.locator(".osionos-layout-settings-panel");
+    await expect(settings).toBeVisible();
+    await settings.getByRole("button", { name: "view" }).click();
+    await expect(settings).toBeVisible();
+    await settings.getByRole("button", { name: "Close layout settings" }).click();
+    await expect(settings).toBeHidden();
   });
 
   test("full-page layout command creates a linked layout canvas page", async ({ page, baseURL }) => {

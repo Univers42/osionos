@@ -1,17 +1,20 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
 	bridgeSignature,
 	configFromEnv,
 	consumeHandoffToken,
+	createBridgeServer,
 	createBridgeHandoff,
 	createUserSession,
 	persistBridgeIdentity,
+	requireWorkspaceAccess,
 	searchUnsplashPhotos,
 	stableStringify,
 	validateBridgePayload,
+	verifyAppSessionToken,
 	verifyBridgeRequest,
 } from '../../scripts/bridge-api.mjs';
 
@@ -26,6 +29,9 @@ const payload = {
 };
 const secret = 'test-bridge-secret-that-is-long-enough';
 const now = 1_768_000_000_000;
+const workspaceId = '1cc0693b-59dd-4d51-86d9-de86d088f9df';
+const pageId = '28196e1b-5dc6-44da-a4ee-098f27f04711';
+const childPageId = 'bb44cf14-84df-4f08-8b02-97dc84727744';
 
 function testConfig() {
 	return configFromEnv({
@@ -34,6 +40,119 @@ function testConfig() {
 		OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
 		OSIONOS_BRIDGE_PERSISTENCE: 'memory',
 	});
+}
+
+function testBaasConfig() {
+	return configFromEnv({
+		OSIONOS_APP_URL: 'http://localhost:3001',
+		OSIONOS_BRIDGE_SHARED_SECRET: secret,
+		OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
+		OSIONOS_BAAS_URL: 'http://baas.local',
+		KONG_SERVICE_API_KEY: 'service-role-test-key',
+	});
+}
+
+function appSession(config = testBaasConfig(), issuedAt = Date.now()) {
+	return createUserSession(validateBridgePayload(payload), config, {
+		workspaceId,
+		workspaceName: "Owner's osionos",
+		workspaceSlug: 'owner-osionos-3f6d2a70',
+	}, issuedAt);
+}
+
+async function listen(server) {
+	await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen));
+	const address = server.address();
+	return `http://127.0.0.1:${address.port}`;
+}
+
+function jsonResponse(value, status = 200) {
+	return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
+}
+
+function idsFromFilter(idFilter) {
+	if (idFilter.startsWith('in.')) return idFilter.slice(4, -1).split(',').filter(Boolean);
+	if (idFilter.startsWith('eq.')) return [idFilter.slice(3)];
+	return [];
+}
+
+function selectedRows(pages, ids, workspaceFilter) {
+	return [...pages.values()]
+		.filter((row) => ids.length === 0 || ids.includes(row.id))
+		.filter((row) => !workspaceFilter.startsWith('eq.') || row.workspace_id === workspaceFilter.slice(3));
+}
+
+function patchRows(pages, ids, updates) {
+	const patched = [];
+	for (const id of ids) {
+		const row = pages.get(id);
+		if (!row) continue;
+		const next = { ...row, ...updates };
+		pages.set(id, next);
+		patched.push(next);
+	}
+	return patched;
+}
+
+function createMockBaasFetch() {
+	const pages = new Map([
+		[childPageId, {
+			id: childPageId,
+			workspace_id: workspaceId,
+			parent_page_id: pageId,
+			owner_id: subject,
+			title: 'Child page',
+			visibility: 'private',
+			collaborators: [],
+			properties: [],
+			content: [],
+			archived_at: null,
+			created_at: '2026-01-01T00:00:00.000Z',
+			updated_at: '2026-01-01T00:00:00.000Z',
+		}],
+	]);
+
+	return {
+		pages,
+		fetchImpl: async (url, init = {}) => {
+			const parsed = new URL(url);
+			const table = parsed.pathname.split('/').pop();
+			if (table === 'osionos_workspace_members') {
+				return jsonResponse([{ role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] }]);
+			}
+			if (table !== 'osionos_pages') return jsonResponse({ message: 'not found' }, 404);
+
+			const method = init.method ?? 'GET';
+			const idFilter = parsed.searchParams.get('id') ?? '';
+			const workspaceFilter = parsed.searchParams.get('workspace_id') ?? '';
+			const ids = idsFromFilter(idFilter);
+
+			if (method === 'POST') {
+				const row = {
+					...JSON.parse(init.body),
+					id: pageId,
+					created_at: '2026-01-01T00:00:00.000Z',
+					updated_at: '2026-01-01T00:00:00.000Z',
+					archived_at: null,
+				};
+				pages.set(pageId, row);
+				return jsonResponse([row], 201);
+			}
+
+			if (method === 'PATCH') {
+				const updates = JSON.parse(init.body);
+				const patched = patchRows(pages, ids, updates);
+				return init.headers?.Prefer === 'return=minimal' ? new Response(null, { status: 204 }) : jsonResponse(patched);
+			}
+
+			if (method === 'DELETE') {
+				for (const id of ids) pages.delete(id);
+				return new Response(null, { status: 204 });
+			}
+
+			return jsonResponse(selectedRows(pages, ids, workspaceFilter));
+		},
+	};
 }
 
 describe('osionos bridge receiver', () => {
@@ -104,6 +223,44 @@ describe('osionos bridge receiver', () => {
 		assert.doesNotMatch(bridgeSession.session.accessToken, /Owner@example\.com/i);
 	});
 
+	it('verifies app-scoped session tokens and rejects invalid ones', () => {
+		const config = testBaasConfig();
+		const issuedAt = Date.now();
+		const bridgeSession = appSession(config, issuedAt);
+		const token = bridgeSession.session.accessToken;
+		const verified = verifyAppSessionToken(token, config, issuedAt + 1000);
+		assert.equal(verified.userId, subject);
+		assert.deepEqual(verified.workspaceIds, [workspaceId]);
+
+		const replacement = token.endsWith('a') ? 'b' : 'a';
+		assert.throws(() => verifyAppSessionToken(token.slice(0, -1) + replacement, config, issuedAt + 1000), /signature is invalid/);
+		assert.throws(() => verifyAppSessionToken(token, config, issuedAt + 3_700_000), /expired/);
+	});
+
+	it('requires both token scope and BaaS workspace membership', async () => {
+		const config = testBaasConfig();
+		const token = appSession(config).session.accessToken;
+		const request = { headers: { authorization: `Bearer ${token}` } };
+		const allowed = await requireWorkspaceAccess(request, workspaceId, 'update', config, async (url) => {
+			const parsed = new URL(url);
+			assert.equal(parsed.pathname.endsWith('/osionos_workspace_members'), true);
+			assert.equal(parsed.searchParams.get('workspace_id'), `eq.${workspaceId}`);
+			assert.equal(parsed.searchParams.get('user_id'), `eq.${subject}`);
+			return jsonResponse([{ role: 'editor', permissions: ['read', 'update'] }]);
+		});
+		assert.equal(allowed.userId, subject);
+		assert.equal(allowed.workspaceId, workspaceId);
+
+		await assert.rejects(
+			() => requireWorkspaceAccess(request, '2cc0693b-59dd-4d51-86d9-de86d088f9df', 'read', config, async () => jsonResponse([])),
+			/not scoped/,
+		);
+		await assert.rejects(
+			() => requireWorkspaceAccess(request, workspaceId, 'delete', config, async () => jsonResponse([{ role: 'viewer', permissions: ['read'] }])),
+			/permission denied/,
+		);
+	});
+
 	it('persists only hashed identity data through the BaaS RPC', async () => {
 		let requestBody = null;
 		const config = configFromEnv({
@@ -163,6 +320,68 @@ describe('osionos bridge receiver', () => {
 		assert.throws(() => consumeHandoffToken(decodeURIComponent(bridgeToken), handoffStore, now + 1000), /invalid/);
 	});
 
+	it('serves Postgres-backed page CRUD routes from the bridge', async () => {
+		const config = testBaasConfig();
+		const { pages, fetchImpl } = createMockBaasFetch();
+		const server = createBridgeServer({ config, fetchImpl });
+		const baseUrl = await listen(server);
+		const token = appSession(config).session.accessToken;
+		const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+
+		try {
+			const createdResponse = await fetch(`${baseUrl}/api/pages`, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify({
+					workspaceId,
+					title: 'Pipeline Dashboard',
+					icon: 'icon:gauge',
+					surface: 'page',
+					content: [{ id: 'block-1', type: 'paragraph', content: 'Persisted from bridge' }],
+				}),
+			});
+			assert.equal(createdResponse.status, 201);
+			const created = await createdResponse.json();
+			assert.equal(created._id, pageId);
+			assert.equal(created.workspaceId, workspaceId);
+
+			const listedResponse = await fetch(`${baseUrl}/api/pages/all?workspaceId=${workspaceId}`, { headers });
+			assert.equal(listedResponse.status, 200);
+			const listed = await listedResponse.json();
+			assert.equal(listed.length, 2);
+			assert.equal(listed.some((page) => page.title === 'Pipeline Dashboard'), true);
+
+			const readResponse = await fetch(`${baseUrl}/api/pages/${pageId}`, { headers });
+			assert.equal(readResponse.status, 200);
+			const readPage = await readResponse.json();
+			assert.equal(readPage.content[0].content, 'Persisted from bridge');
+
+			const archivedAt = '2026-05-10T12:00:00.000Z';
+			const patchedResponse = await fetch(`${baseUrl}/api/pages/${pageId}`, {
+				method: 'PATCH',
+				headers,
+				body: JSON.stringify({ title: 'Pipeline Dashboard v2', archivedAt }),
+			});
+			const patchedText = await patchedResponse.text();
+			assert.equal(patchedResponse.status, 200, patchedText);
+			const patched = JSON.parse(patchedText);
+			assert.equal(patched.title, 'Pipeline Dashboard v2');
+			assert.equal(pages.get(childPageId).archived_at, archivedAt);
+
+			const deletedResponse = await fetch(`${baseUrl}/api/pages/${pageId}`, { method: 'DELETE', headers });
+			assert.equal(deletedResponse.status, 200);
+			const deleted = await deletedResponse.json();
+			assert.deepEqual(
+				deleted.deletedIds.sort((left, right) => left.localeCompare(right)),
+				[childPageId, pageId].sort((left, right) => left.localeCompare(right)),
+			);
+			assert.equal(pages.has(pageId), false);
+			assert.equal(pages.has(childPageId), false);
+		} finally {
+			await new Promise((resolveClose) => server.close(resolveClose));
+		}
+	});
+
 	it('proxies Unsplash search with a server-side access key', async () => {
 		const config = configFromEnv({ UNSPLASH_ACCESS_KEY: 'unsplash-test-key' });
 		let requestedUrl = '';
@@ -193,6 +412,7 @@ describe('osionos bridge receiver', () => {
 			resolve(process.cwd(), '../../../docker-compose.yml'),
 		];
 		for (const file of files) {
+			if (!existsSync(file)) continue;
 			const content = readFileSync(file, 'utf8');
 			assert.doesNotMatch(content, /VITE_[A-Z0-9_]*(SERVICE_ROLE|JWT_SECRET|OSIONOS_BRIDGE_SHARED_SECRET|APP_SESSION_SECRET)/);
 		}

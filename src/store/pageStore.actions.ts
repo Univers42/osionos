@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import { api } from "@/shared/api/client";
-import { apiJwtFromSessionToken } from "@/features/auth/model/userStore.helpers";
+import { pageApiJwtFromSessionToken } from "@/features/auth/model/userStore.helpers";
 import {
   canDeletePage,
   canDuplicatePage,
@@ -25,7 +25,7 @@ import {
   seedToEntry,
   localId,
   updatePageInState,
-  isMongoId,
+  isPersistedPageId,
   saveRecents,
   getAllDescendantIds,
   savePagesCache,
@@ -73,6 +73,8 @@ function mergeMissingSeedPages(existingPages: Record<string, PageEntry[]>): Reco
 export function createSeedOnlinePages(set: SetFn, get: GetFn) {
   return async (workspaceMap: Record<string, string>, jwt: string) => {
     if (get().seeded) return;
+    const pageJwt = pageApiJwtFromSessionToken(jwt);
+    if (!pageJwt) return;
     set({ seeded: true });
     for (const sp of SEED_PAGES) {
       const realWsId = workspaceMap[sp.workspaceId];
@@ -91,7 +93,7 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
             visibility: sp.visibility,
             collaborators: sp.collaborators,
           },
-          jwt,
+          pageJwt,
         );
         set((s) => ({
           pages: {
@@ -109,7 +111,8 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
 
 export function createFetchPages(set: SetFn, get: GetFn) {
   return async (workspaceId: string, jwt: string) => {
-    if (!jwt) return;
+    const pageJwt = pageApiJwtFromSessionToken(jwt);
+    if (!pageJwt) return;
     const context = getCurrentPageAccessContext();
     if (context && !context.workspaceIds.includes(workspaceId)) return;
     if (get().loadingIds.has(workspaceId)) return;
@@ -117,7 +120,7 @@ export function createFetchPages(set: SetFn, get: GetFn) {
     try {
       const data = await api.get<PageEntry[]>(
         `/api/pages/all?workspaceId=${workspaceId}`,
-        jwt,
+        pageJwt,
       );
       set((s) => ({
         pages: {
@@ -141,12 +144,13 @@ export function createFetchPages(set: SetFn, get: GetFn) {
 
 export function createFetchPageContent(set: SetFn, get: GetFn) {
   return async (pageId: string, jwt: string) => {
-    if (!jwt || !isMongoId(pageId)) return; // skip for offline seed pages
+    const pageJwt = pageApiJwtFromSessionToken(jwt);
+    if (!pageJwt || !isPersistedPageId(pageId)) return;
     const page = get().pageById(pageId);
     const context = getCurrentPageAccessContext();
     if (!page || !canReadPage(page, context)) return;
     try {
-      const fullPage = await api.get<PageEntry>(`/api/pages/${pageId}`, jwt);
+      const fullPage = await api.get<PageEntry>(`/api/pages/${pageId}`, pageJwt);
       if (!fullPage) return;
       set((s) => ({
         pages: updatePageInState(s.pages, pageId, (p) => ({
@@ -182,7 +186,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
       context,
       "private",
     );
-    const apiJwt = apiJwtFromSessionToken(jwt);
+    const apiJwt = pageApiJwtFromSessionToken(jwt);
 
     if (apiJwt) {
       try {
@@ -262,7 +266,7 @@ export function createAddDatabasePage(set: SetFn, get: GetFn) {
       "private",
     );
 
-    const apiJwt = apiJwtFromSessionToken(jwt);
+    const apiJwt = pageApiJwtFromSessionToken(jwt);
 
     if (apiJwt) {
       try {
@@ -332,9 +336,11 @@ export function createArchivePage(set: SetFn, get: GetFn) {
 
     const archivedAt = new Date().toISOString();
 
-    if (jwt && isMongoId(pageId)) {
+    const pageJwt = pageApiJwtFromSessionToken(jwt);
+
+    if (pageJwt && isPersistedPageId(pageId)) {
       try {
-        await api.patch(`/api/pages/${pageId}`, { archivedAt }, jwt);
+        await api.patch(`/api/pages/${pageId}`, { archivedAt }, pageJwt);
       } catch {
         /* silent */
       }
@@ -573,9 +579,11 @@ export function createRestorePage(set: SetFn, get: GetFn) {
     const context = getCurrentPageAccessContext();
     if (!page || !canDeletePage(page, context)) return;
 
-    if (jwt && isMongoId(pageId)) {
+    const pageJwt = pageApiJwtFromSessionToken(jwt);
+
+    if (pageJwt && isPersistedPageId(pageId)) {
       try {
-        await api.patch(`/api/pages/${pageId}`, { archivedAt: null }, jwt);
+        await api.patch(`/api/pages/${pageId}`, { archivedAt: null }, pageJwt);
       } catch {
         /* silent */
       }
@@ -610,9 +618,11 @@ export function createDeletePage(set: SetFn, get: GetFn) {
     const context = getCurrentPageAccessContext();
     if (!page || !canDeletePage(page, context)) return;
 
-    if (jwt && isMongoId(pageId)) {
+    const pageJwt = pageApiJwtFromSessionToken(jwt);
+
+    if (pageJwt && isPersistedPageId(pageId)) {
       try {
-        await api.delete(`/api/pages/${pageId}`, jwt);
+        await api.delete(`/api/pages/${pageId}`, pageJwt);
       } catch {
         /* silent */
       }

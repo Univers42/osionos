@@ -33,14 +33,20 @@ const EMAIL_LOCAL_PART = String.raw`(?:[${EMAIL_ATEXT}]+(?:\.[${EMAIL_ATEXT}]+)*
 const EMAIL_DOMAIN_LABEL = '(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)';
 const EMAIL_REGEX = new RegExp(String.raw`^${EMAIL_LOCAL_PART}@(?>${EMAIL_DOMAIN_LABEL}\.)+[A-Za-z]{2,63}$`.replace('(?>', '(?:'));
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const APP_SESSION_TOKEN_VERSION = 'osionos_v1';
 const BRIDGE_FIELDS = new Set(['provider', 'subject', 'email', 'name', 'jti']);
 const SENSITIVE_FIELD_PATTERN = /password|pass|secret|service|role|key|jwt|token|cookie|consent|birth|city|address|phone|profile|metadata|database|connection/i;
 const DEFAULT_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
 const DEFAULT_HANDOFF_TTL_MS = 90 * 1000;
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60;
+const DEFAULT_JSON_BODY_LIMIT_BYTES = 16_384;
+const PAGE_JSON_BODY_LIMIT_BYTES = 2 * 1024 * 1024;
 const DEFAULT_UNSPLASH_PER_PAGE = 12;
 const MAX_UNSPLASH_PER_PAGE = 24;
 const MAX_CLAUDE_TOOL_RESULT_TEXT = 120_000;
+const PAGE_VISIBILITY_VALUES = new Set(['private', 'shared', 'public']);
+const PAGE_SURFACE_VALUES = new Set(['page', 'agent', 'home']);
+const WORKSPACE_PERMISSIONS = new Set(['create', 'read', 'update', 'delete', 'admin']);
 const CLAUDE_AGENT_VALUES = new Set(['general-purpose', 'Explore', 'Plan']);
 const CLAUDE_MODEL_VALUES = new Set(['default', 'sonnet', 'opus', 'haiku']);
 const CLAUDE_EFFORT_VALUES = new Set(['low', 'medium', 'high', 'xhigh']);
@@ -106,6 +112,12 @@ function safeCompareHex(left, right) {
 	return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
+function safeCompareText(left, right) {
+	const leftBuffer = Buffer.from(String(left ?? ''), 'utf8');
+	const rightBuffer = Buffer.from(String(right ?? ''), 'utf8');
+	return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
 function safeText(value, limit) {
 	return String(value ?? '')
 		.normalize('NFKC')
@@ -127,6 +139,60 @@ function uuidFromHash(value) {
 
 function emailHash(email, config) {
 	return createHmac('sha256', config.emailHashSalt).update(email).digest('hex');
+}
+
+function requireUuid(value, fieldName) {
+	const normalized = safeText(value, 80);
+	if (!UUID_REGEX.test(normalized)) throw Object.assign(new Error(`${fieldName} must be a UUID.`), { status: 422 });
+	return normalized;
+}
+
+function optionalUuid(value, fieldName) {
+	if (value === null) return null;
+	if (value === undefined || value === '') return undefined;
+	return requireUuid(value, fieldName);
+}
+
+function hasOwn(value, key) {
+	return Object.hasOwn(value, key);
+}
+
+function safeJsonArray(value, fallback = []) {
+	return Array.isArray(value) ? value : fallback;
+}
+
+function safeTimestampOrNull(value, fieldName) {
+	if (value === null || value === '') return null;
+	const timestamp = safeText(value, 64);
+	if (!timestamp || Number.isNaN(Date.parse(timestamp))) {
+		throw Object.assign(new Error(`${fieldName} must be an ISO timestamp or null.`), { status: 422 });
+	}
+	return new Date(timestamp).toISOString();
+}
+
+function normalizePermission(value) {
+	const permission = safeText(value, 16) || 'read';
+	return WORKSPACE_PERMISSIONS.has(permission) ? permission : 'read';
+}
+
+function responseStatusForBaasFailure(status) {
+	if (status === 401 || status === 403) return 403;
+	if (status === 404) return 404;
+	return 502;
+}
+
+function assignPayloadValue(row, payload, payloadKey, rowKey, mapper) {
+	if (hasOwn(payload, payloadKey)) row[rowKey] = mapper(payload[payloadKey]);
+}
+
+function textOrNull(value, limit) {
+	return safeText(value, limit) || null;
+}
+
+function nullablePostgrestFilter(value, mapper = (item) => safeText(item, 160)) {
+	if (value === undefined) return undefined;
+	if (value === null) return 'is.null';
+	return `eq.${mapper(value)}`;
 }
 
 export function validateBridgePayload(payload) {
@@ -197,6 +263,246 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 	const encodedPayload = base64url(JSON.stringify(tokenPayload));
 	const signature = createHmac('sha256', config.appSessionSecret).update(encodedPayload).digest('base64url');
 	return { token: `osionos_v1.${encodedPayload}.${signature}`, expiresAt: new Date(exp * 1000).toISOString() };
+}
+
+export function verifyAppSessionToken(token, config, now = Date.now()) {
+	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
+	const [version, encodedPayload, signature, extra] = safeText(token, 4096).split('.');
+	if (version !== APP_SESSION_TOKEN_VERSION || !encodedPayload || !signature || extra !== undefined) {
+		throw Object.assign(new Error('App session token is invalid.'), { status: 401 });
+	}
+	const expectedSignature = createHmac('sha256', config.appSessionSecret).update(encodedPayload).digest('base64url');
+	if (!safeCompareText(signature, expectedSignature)) {
+		throw Object.assign(new Error('App session token signature is invalid.'), { status: 401 });
+	}
+
+	let payload;
+	try {
+		payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
+	} catch {
+		throw Object.assign(new Error('App session token payload is invalid.'), { status: 401 });
+	}
+
+	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+		throw Object.assign(new Error('App session token payload is invalid.'), { status: 401 });
+	}
+	if (payload.iss !== 'osionos-bridge' || payload.aud !== 'osionos-app') {
+		throw Object.assign(new Error('App session token audience is invalid.'), { status: 401 });
+	}
+	if (!UUID_REGEX.test(String(payload.sub ?? ''))) {
+		throw Object.assign(new Error('App session token subject is invalid.'), { status: 401 });
+	}
+	const exp = Number(payload.exp);
+	if (!Number.isFinite(exp) || exp <= Math.floor(now / 1000)) {
+		throw Object.assign(new Error('App session token has expired.'), { status: 401 });
+	}
+	const workspaceIds = Array.isArray(payload.workspace_ids)
+		? payload.workspace_ids.map(String).filter((workspaceId) => UUID_REGEX.test(workspaceId))
+		: [];
+	if (workspaceIds.length === 0) {
+		throw Object.assign(new Error('App session token has no workspace access.'), { status: 401 });
+	}
+	return {
+		userId: String(payload.sub),
+		workspaceIds,
+		roles: payload.roles && typeof payload.roles === 'object' && !Array.isArray(payload.roles) ? payload.roles : {},
+		raw: payload,
+	};
+}
+
+function bearerToken(request) {
+	const header = String(request.headers.authorization ?? request.headers.Authorization ?? '');
+	const match = /^Bearer\s+(.+)$/i.exec(header);
+	if (!match) throw Object.assign(new Error('App session bearer token is required.'), { status: 401 });
+	return match[1].trim();
+}
+
+function requireBaasConfig(config) {
+	if (!config.baasUrl || !config.serviceKey) {
+		throw Object.assign(new Error('osionos BaaS service-role access is not configured.'), { status: 503 });
+	}
+}
+
+async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer } = {}) {
+	requireBaasConfig(config);
+	const headers = {
+		Accept: 'application/json',
+		apikey: config.serviceKey,
+		Authorization: `Bearer ${config.serviceKey}`,
+	};
+	if (body !== undefined) headers['Content-Type'] = 'application/json';
+	if (prefer) headers.Prefer = prefer;
+
+	const response = await fetchImpl(`${config.baasUrl}/rest/v1/${path}`, {
+		method,
+		headers,
+		body: body === undefined ? undefined : JSON.stringify(body),
+	});
+	const text = await response.text().catch(() => '');
+	if (!response.ok) {
+		const status = responseStatusForBaasFailure(response.status);
+		throw Object.assign(new Error(`BaaS request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
+	}
+	if (!text) return null;
+	try {
+		return JSON.parse(text);
+	} catch {
+		return null;
+	}
+}
+
+function postgrestQuery(params) {
+	const searchParams = new URLSearchParams();
+	for (const [key, value] of Object.entries(params)) {
+		if (value !== undefined && value !== null && value !== '') searchParams.set(key, value);
+	}
+	return searchParams.toString();
+}
+
+function pageRowToEntry(row) {
+	return {
+		_id: row.id,
+		title: typeof row.title === 'string' && row.title ? row.title : 'Untitled',
+		icon: row.icon ?? undefined,
+		cover: row.cover ?? undefined,
+		updatedAt: row.updated_at ?? row.created_at ?? undefined,
+		workspaceId: row.workspace_id,
+		ownerId: row.owner_id ?? null,
+		visibility: PAGE_VISIBILITY_VALUES.has(row.visibility) ? row.visibility : 'private',
+		collaborators: safeJsonArray(row.collaborators),
+		parentPageId: row.parent_page_id ?? null,
+		databaseId: row.database_id ?? null,
+		archivedAt: row.archived_at ?? null,
+		content: safeJsonArray(row.content),
+		properties: safeJsonArray(row.properties),
+		surface: PAGE_SURFACE_VALUES.has(row.surface) ? row.surface : undefined,
+	};
+}
+
+function pageRowsToEntries(rows) {
+	return Array.isArray(rows) ? rows.map(pageRowToEntry) : [];
+}
+
+function pageCreateRowFromPayload(payload, authContext) {
+	const workspaceId = requireUuid(payload.workspaceId, 'workspaceId');
+	const parentPageId = optionalUuid(payload.parentPageId, 'parentPageId');
+	const databaseId = hasOwn(payload, 'databaseId') && payload.databaseId !== null ? safeText(payload.databaseId, 160) || null : null;
+	const visibility = PAGE_VISIBILITY_VALUES.has(payload.visibility) ? payload.visibility : 'private';
+	const surface = PAGE_SURFACE_VALUES.has(payload.surface) ? payload.surface : null;
+	return {
+		workspace_id: workspaceId,
+		parent_page_id: parentPageId === undefined ? null : parentPageId,
+		owner_id: authContext.userId,
+		title: safeText(payload.title, 200) || 'Untitled',
+		icon: hasOwn(payload, 'icon') ? (safeText(payload.icon, 80) || null) : null,
+		cover: hasOwn(payload, 'cover') ? (safeText(payload.cover, 1024) || null) : null,
+		database_id: databaseId,
+		surface,
+		visibility,
+		collaborators: safeJsonArray(payload.collaborators),
+		properties: safeJsonArray(payload.properties),
+		content: safeJsonArray(payload.content),
+	};
+}
+
+function pageUpdateRowFromPayload(payload) {
+	const row = { updated_at: new Date().toISOString() };
+	assignPayloadValue(row, payload, 'workspaceId', 'workspace_id', (value) => requireUuid(value, 'workspaceId'));
+	assignPayloadValue(row, payload, 'parentPageId', 'parent_page_id', (value) => optionalUuid(value, 'parentPageId') ?? null);
+	assignPayloadValue(row, payload, 'title', 'title', (value) => safeText(value, 200) || 'Untitled');
+	assignPayloadValue(row, payload, 'icon', 'icon', (value) => textOrNull(value, 80));
+	assignPayloadValue(row, payload, 'cover', 'cover', (value) => textOrNull(value, 1024));
+	assignPayloadValue(row, payload, 'databaseId', 'database_id', (value) => value === null ? null : textOrNull(value, 160));
+	assignPayloadValue(row, payload, 'surface', 'surface', (value) => PAGE_SURFACE_VALUES.has(value) ? value : null);
+	assignPayloadValue(row, payload, 'visibility', 'visibility', (value) => PAGE_VISIBILITY_VALUES.has(value) ? value : 'private');
+	assignPayloadValue(row, payload, 'collaborators', 'collaborators', (value) => safeJsonArray(value));
+	assignPayloadValue(row, payload, 'properties', 'properties', (value) => safeJsonArray(value));
+	assignPayloadValue(row, payload, 'content', 'content', (value) => safeJsonArray(value));
+	assignPayloadValue(row, payload, 'archivedAt', 'archived_at', (value) => safeTimestampOrNull(value, 'archivedAt'));
+	return row;
+}
+
+function memberHasPermission(member, permission) {
+	if (!member) return false;
+	const role = safeText(member.role, 16);
+	if (role === 'owner' || role === 'admin') return true;
+	const permissions = Array.isArray(member.permissions) ? member.permissions.filter((item) => typeof item === 'string') : [];
+	return permissions.includes('admin') || permissions.includes(permission);
+}
+
+export async function requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl = fetch) {
+	const normalizedWorkspaceId = requireUuid(workspaceId, 'workspaceId');
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	if (!authContext.workspaceIds.includes(normalizedWorkspaceId)) {
+		throw Object.assign(new Error('App session is not scoped to this workspace.'), { status: 403 });
+	}
+	const query = postgrestQuery({
+		workspace_id: `eq.${normalizedWorkspaceId}`,
+		user_id: `eq.${authContext.userId}`,
+		select: 'role,permissions',
+		limit: '1',
+	});
+	const rows = await baasRest(config, fetchImpl, `osionos_workspace_members?${query}`);
+	const member = Array.isArray(rows) ? rows[0] : null;
+	const requiredPermission = normalizePermission(permission);
+	if (!memberHasPermission(member, requiredPermission)) {
+		throw Object.assign(new Error('Workspace permission denied.'), { status: 403 });
+	}
+	return {
+		...authContext,
+		workspaceId: normalizedWorkspaceId,
+		role: safeText(member.role, 16),
+		permissions: Array.isArray(member.permissions) ? member.permissions.filter((item) => typeof item === 'string') : [],
+	};
+}
+
+async function fetchPageRow(pageId, config, fetchImpl) {
+	const id = requireUuid(pageId, 'pageId');
+	const query = postgrestQuery({ id: `eq.${id}`, select: '*', limit: '1' });
+	const rows = await baasRest(config, fetchImpl, `osionos_pages?${query}`);
+	return Array.isArray(rows) ? rows[0] ?? null : null;
+}
+
+async function listPageRows(workspaceId, config, fetchImpl, filters = {}) {
+	const query = postgrestQuery({
+		workspace_id: `eq.${workspaceId}`,
+		database_id: nullablePostgrestFilter(filters.databaseId),
+		parent_page_id: nullablePostgrestFilter(filters.parentPageId, (value) => requireUuid(value, 'parentPageId')),
+		surface: filters.surface ? `eq.${filters.surface}` : undefined,
+		select: '*',
+		order: 'updated_at.desc',
+	});
+	return await baasRest(config, fetchImpl, `osionos_pages?${query}`) ?? [];
+}
+
+async function listWorkspacePageRefs(workspaceId, config, fetchImpl) {
+	const query = postgrestQuery({ workspace_id: `eq.${workspaceId}`, select: 'id,parent_page_id' });
+	return await baasRest(config, fetchImpl, `osionos_pages?${query}`) ?? [];
+}
+
+function descendantPageIds(rows, parentId) {
+	const childrenByParent = new Map();
+	for (const row of rows) {
+		if (!row.parent_page_id) continue;
+		const children = childrenByParent.get(row.parent_page_id) ?? [];
+		children.push(row.id);
+		childrenByParent.set(row.parent_page_id, children);
+	}
+	const result = [];
+	const pending = [...(childrenByParent.get(parentId) ?? [])];
+	const seen = new Set([parentId]);
+	while (pending.length > 0) {
+		const id = pending.shift();
+		if (!id || seen.has(id)) continue;
+		seen.add(id);
+		result.push(id);
+		pending.push(...(childrenByParent.get(id) ?? []));
+	}
+	return result;
+}
+
+function idsFilter(ids) {
+	return `id=in.(${ids.map((id) => encodeURIComponent(id)).join(',')})`;
 }
 
 export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) {
@@ -361,11 +667,11 @@ export async function searchUnsplashPhotos({ query, perPage, orientation } = {},
 	};
 }
 
-async function readJson(request) {
+async function readJson(request, maxBytes = DEFAULT_JSON_BODY_LIMIT_BYTES) {
 	let body = '';
 	for await (const chunk of request) {
 		body += chunk;
-		if (body.length > 16_384) throw Object.assign(new Error('Request body too large.'), { status: 413 });
+		if (body.length > maxBytes) throw Object.assign(new Error('Request body too large.'), { status: 413 });
 	}
 	return body ? JSON.parse(body) : {};
 }
@@ -552,11 +858,135 @@ function writeOptionsResponse(response, config) {
 	response.writeHead(204, {
 		'access-control-allow-origin': config.allowedOrigin,
 		'access-control-allow-credentials': 'true',
-		'access-control-allow-methods': 'GET, POST, OPTIONS',
+		'access-control-allow-methods': 'GET, POST, PATCH, DELETE, OPTIONS',
 		'access-control-allow-headers': 'content-type, authorization, x-prismatica-bridge-timestamp, x-prismatica-bridge-signature',
 		vary: 'Origin',
 	});
 	response.end();
+}
+
+function pageIdFromPath(pathname) {
+	const match = /^\/api\/pages\/([^/]+)$/.exec(pathname);
+	if (!match) return '';
+	return requireUuid(decodeURIComponent(match[1]), 'pageId');
+}
+
+async function handlePageList(url, request, response, config, fetchImpl) {
+	const workspaceId = requireUuid(url.searchParams.get('workspaceId'), 'workspaceId');
+	await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
+	const filters = url.pathname === '/api/pages/all' ? {} : {
+		databaseId: url.searchParams.has('databaseId')
+			? (url.searchParams.get('databaseId') || null)
+			: undefined,
+		parentPageId: url.searchParams.has('parentPageId')
+			? (url.searchParams.get('parentPageId') || null)
+			: undefined,
+		surface: PAGE_SURFACE_VALUES.has(url.searchParams.get('surface')) ? url.searchParams.get('surface') : undefined,
+	};
+	json(response, 200, pageRowsToEntries(await listPageRows(workspaceId, config, fetchImpl, filters)), config);
+	return true;
+}
+
+async function handlePageRead(url, request, response, config, fetchImpl) {
+	const pageId = pageIdFromPath(url.pathname);
+	if (!pageId) return false;
+	const row = await fetchPageRow(pageId, config, fetchImpl);
+	if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
+	await requireWorkspaceAccess(request, row.workspace_id, 'read', config, fetchImpl);
+	json(response, 200, pageRowToEntry(row), config);
+	return true;
+}
+
+async function handlePagesGet(url, request, response, config, fetchImpl) {
+	if (url.pathname === '/api/pages' || url.pathname === '/api/pages/all') {
+		return handlePageList(url, request, response, config, fetchImpl);
+	}
+	return handlePageRead(url, request, response, config, fetchImpl);
+}
+
+async function handlePageCreate(request, response, config, fetchImpl) {
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const workspaceId = requireUuid(payload.workspaceId, 'workspaceId');
+	const authContext = await requireWorkspaceAccess(request, workspaceId, 'create', config, fetchImpl);
+	const rows = await baasRest(config, fetchImpl, 'osionos_pages', {
+		method: 'POST',
+		body: pageCreateRowFromPayload(payload, authContext),
+		prefer: 'return=representation',
+	});
+	json(response, 201, pageRowToEntry(Array.isArray(rows) ? rows[0] : rows), config);
+	return true;
+}
+
+async function handleWorkspaceValidate(request, response, config, fetchImpl) {
+	const payload = await readJson(request);
+	const workspaceId = requireUuid(payload.workspaceId, 'workspaceId');
+	const authContext = await requireWorkspaceAccess(request, workspaceId, normalizePermission(payload.permission), config, fetchImpl);
+	json(response, 200, {
+		ok: true,
+		userId: authContext.userId,
+		workspaceId: authContext.workspaceId,
+		role: authContext.role,
+		permissions: authContext.permissions,
+	}, config);
+	return true;
+}
+
+async function handlePageArchiveCascade(row, archivedAt, config, fetchImpl) {
+	const refs = await listWorkspacePageRefs(row.workspace_id, config, fetchImpl);
+	const descendantIds = descendantPageIds(refs, row.id);
+	if (descendantIds.length === 0) return;
+	await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(descendantIds)}`, {
+		method: 'PATCH',
+		body: { archived_at: archivedAt, updated_at: new Date().toISOString() },
+		prefer: 'return=minimal',
+	});
+}
+
+async function handlePageUpdate(url, request, response, config, fetchImpl) {
+	const pageId = pageIdFromPath(url.pathname);
+	if (!pageId) return false;
+	const existing = await fetchPageRow(pageId, config, fetchImpl);
+	if (!existing) throw Object.assign(new Error('Page not found.'), { status: 404 });
+	await requireWorkspaceAccess(request, existing.workspace_id, 'update', config, fetchImpl);
+
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	if (hasOwn(payload, 'workspaceId') && payload.workspaceId !== existing.workspace_id) {
+		await requireWorkspaceAccess(request, payload.workspaceId, 'create', config, fetchImpl);
+	}
+	const updateRow = pageUpdateRowFromPayload(payload);
+	const rows = await baasRest(config, fetchImpl, `osionos_pages?id=eq.${pageId}`, {
+		method: 'PATCH',
+		body: updateRow,
+		prefer: 'return=representation',
+	});
+	const updated = Array.isArray(rows) ? rows[0] : rows;
+	if (updated && hasOwn(updateRow, 'archived_at')) {
+		await handlePageArchiveCascade(existing, updateRow.archived_at, config, fetchImpl);
+	}
+	json(response, 200, pageRowToEntry(updated), config);
+	return true;
+}
+
+async function handlePageDelete(url, request, response, config, fetchImpl) {
+	const pageId = pageIdFromPath(url.pathname);
+	if (!pageId) return false;
+	const row = await fetchPageRow(pageId, config, fetchImpl);
+	if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
+	await requireWorkspaceAccess(request, row.workspace_id, 'delete', config, fetchImpl);
+	const refs = await listWorkspacePageRefs(row.workspace_id, config, fetchImpl);
+	const ids = [pageId, ...descendantPageIds(refs, pageId)];
+	await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(ids)}`, {
+		method: 'DELETE',
+		prefer: 'return=minimal',
+	});
+	json(response, 200, { ok: true, deletedIds: ids }, config);
+	return true;
+}
+
+async function handlePagesPost(url, request, response, config, fetchImpl) {
+	if (url.pathname === '/api/pages') return handlePageCreate(request, response, config, fetchImpl);
+	if (url.pathname === '/api/auth/workspace/validate') return handleWorkspaceValidate(request, response, config, fetchImpl);
+	return false;
 }
 
 async function handleBridgeGet(url, response, config, fetchImpl) {
@@ -597,6 +1027,7 @@ async function handleBridgePost(url, request, response, config, handoffStore, re
 		await handleClaudeAgentStream(request, response, config);
 		return true;
 	}
+	if (await handlePagesPost(url, request, response, config, fetchImpl)) return true;
 	if (url.pathname === '/api/auth/bridge/session') {
 		await handleBridgeSession(request, response, config, handoffStore, replayStore, fetchImpl);
 		return true;
@@ -612,6 +1043,7 @@ async function handleBridgeRequest(request, response, context) {
 		return;
 	}
 	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+	if (request.method === 'GET' && await handlePagesGet(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'GET' && await handleBridgeGet(url, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'POST' && await handleBridgePost(
 		url,
@@ -622,6 +1054,8 @@ async function handleBridgeRequest(request, response, context) {
 		context.replayStore,
 		context.fetchImpl,
 	)) return;
+	if (request.method === 'PATCH' && await handlePageUpdate(url, request, response, context.config, context.fetchImpl)) return;
+	if (request.method === 'DELETE' && await handlePageDelete(url, request, response, context.config, context.fetchImpl)) return;
 	json(response, 404, { ok: false, message: 'Not found.' }, context.config);
 }
 

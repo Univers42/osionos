@@ -35,7 +35,7 @@ export const TrashView: React.FC = () => {
   const pages = usePageStore((s) => s.pages);
   const restorePage = usePageStore((s) => s.restorePage);
   const deletePage = usePageStore((s) => s.deletePage);
-  const jwt = useUserStore((s) => s.activeJwt());
+  const jwt = useUserStore((s) => s.activePageJwt());
   const session = useUserStore((s) => s.activeSession());
   const context = getCurrentPageAccessContext();
 

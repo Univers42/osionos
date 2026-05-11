@@ -35,7 +35,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
 
   const persona         = useUserStore(s => s.activePersona());
   const session         = useUserStore(s => s.activeSession());
-  const jwt             = useUserStore(s => s.activeJwt() ?? '');
+  const jwt             = useUserStore(s => s.activePageJwt() ?? '');
   const activeWorkspace = useUserStore(s => s.activeWorkspace());
   const workspaceName   = activeWorkspace?.name ?? session?.privateWorkspaces[0]?.name ?? 'My Workspace';
   const addPage         = usePageStore(s => s.addPage);

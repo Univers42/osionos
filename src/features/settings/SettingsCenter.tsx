@@ -1348,7 +1348,7 @@ const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string }> = ({
   const addAsset = useAssetLibraryStore((s) => s.addAsset);
   const addPage = usePageStore((state) => state.addPage);
   const openPage = usePageStore((state) => state.openPage);
-  const jwt = useUserStore((state) => state.activeJwt());
+  const jwt = useUserStore((state) => state.activePageJwt());
   const history = useImportHistoryStore((state) => state.data[workspaceId] ?? EMPTY_IMPORT_HISTORY);
   const hydrateHistory = useImportHistoryStore((state) => state.hydrate);
   const uploadImport = useImportHistoryStore((state) => state.upload);
@@ -1666,7 +1666,7 @@ const TeamspacesPanel: React.FC<{ workspaceName?: string }> = ({ workspaceName =
   const workspace = useUserStore((state) => state.activeWorkspace());
   const workspaceId = workspace?._id ?? 'local-workspace';
   const activeUserId = useUserStore((state) => state.activeUserId) || 'anonymous';
-  const jwt = useUserStore((state) => state.activeJwt());
+  const jwt = useUserStore((state) => state.activePageJwt());
   const addPage = usePageStore((state) => state.addPage);
   const teamspaces = useTeamspacesStore((state) => state.data[workspaceId] ?? []);
   const createTeamspace = useTeamspacesStore((state) => state.create);

@@ -42,6 +42,18 @@ export function getActiveJwt(): string | null {
   }
 }
 
+export function getActivePageJwt(): string | null {
+  try {
+    const store = (globalThis as unknown as Record<string, unknown>).__playgroundUserStore as
+      | { getState: () => { activePageJwt?: () => string | null; activeJwt: () => string | null } }
+      | undefined;
+    const state = store?.getState();
+    return state?.activePageJwt?.() || state?.activeJwt() || null;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(
   method: string,
   path: string,

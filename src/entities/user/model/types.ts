@@ -73,5 +73,6 @@ export interface UserStore {
   activeWorkspace: () => Workspace | null;
   activePersona: () => StaticPersona | null;
   activeJwt: () => string | null;
+  activePageJwt: () => string | null;
   personaById: (id: string) => StaticPersona | undefined;
 }

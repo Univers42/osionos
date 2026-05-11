@@ -23,10 +23,19 @@ const MAX_SIGNED_INT32 = 2147483647;
 
 /** A 24-hex-char string that looks like a MongoDB ObjectId. */
 const OBJECT_ID_RE = /^[a-f\d]{24}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Returns `true` when `id` looks like a valid MongoDB ObjectId. */
 export function isMongoId(id: string): boolean {
   return OBJECT_ID_RE.test(id);
+}
+
+export function isUuidId(id: string): boolean {
+  return UUID_RE.test(id);
+}
+
+export function isPersistedPageId(id: string): boolean {
+  return isMongoId(id) || isUuidId(id);
 }
 
 /**

@@ -6,11 +6,11 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:16:31 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/08 05:35:14 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 01:16:20 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { createRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type {
   BlockContextMenuItem,
@@ -18,6 +18,12 @@ import type {
   BlockContextMenuState,
 } from "../model/blockContextMenu.helpers";
 import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
+import {
+  clampAnchoredPanelPosition,
+  clampViewportMenuPosition,
+  useClickOutside,
+  useEscapeKey,
+} from "@/shared/ui";
 
 const SUBMENU_WIDTH = 224; // w-56 = 14rem = 224px
 const PROFILE_PANEL_WIDTH = 288;
@@ -28,30 +34,6 @@ interface BlockContextMenuProps {
   sections: BlockContextMenuSection[];
   onClose: () => void;
   width?: number;
-}
-
-function clampMenuPosition(y: number, x: number, width: number) {
-  const viewportWidth = globalThis.innerWidth;
-  const viewportHeight = globalThis.innerHeight;
-  const maxHeight = Math.min(520, viewportHeight - 24);
-  const left = Math.max(12, Math.min(x, viewportWidth - width - 12));
-  const top = Math.max(12, Math.min(y, viewportHeight - maxHeight - 12));
-  return { top, left, maxHeight };
-}
-
-function clampPanelPosition(anchor: { top: number; left: number }, menuWidth: number, panelWidth: number, maxHeight: number) {
-  const viewportWidth = globalThis.innerWidth;
-  const viewportHeight = globalThis.innerHeight;
-  let left = anchor.left + menuWidth + 8;
-  if (left + panelWidth + VIEWPORT_PAD > viewportWidth) {
-    left = anchor.left - panelWidth - 8;
-  }
-
-  return {
-    top: Math.max(VIEWPORT_PAD, Math.min(anchor.top, viewportHeight - maxHeight - VIEWPORT_PAD)),
-    left: Math.max(VIEWPORT_PAD, Math.min(left, viewportWidth - panelWidth - VIEWPORT_PAD)),
-    maxHeight,
-  };
 }
 
 function getItemClassName(item: BlockContextMenuItem) {
@@ -101,10 +83,9 @@ const SubmenuButton: React.FC<SubmenuButtonProps> = ({
 /**
  * Submenu panel that positions itself using fixed coordinates clamped
  * to the viewport, so it never extends beyond the visible area.
- * It measures the parent menuitem via anchorRef to decide placement.
  */
 interface SubmenuPanelProps {
-  anchorRef: React.RefObject<HTMLDivElement | null>;
+  anchor: { top: number; left: number } | null;
   parentWidth: number;
   items: BlockContextMenuItem[];
   parentLabel: string;
@@ -112,45 +93,32 @@ interface SubmenuPanelProps {
 }
 
 const SubmenuPanel: React.FC<SubmenuPanelProps> = ({
-  anchorRef,
+  anchor,
   parentWidth,
   items,
   parentLabel,
   onSelect,
 }) => {
   const style = useMemo<React.CSSProperties>(() => {
-    const anchor = anchorRef.current;
     if (!anchor) return { position: "fixed", opacity: 0 };
 
-    const rect = anchor.getBoundingClientRect();
-    const vw = globalThis.innerWidth;
-    const vh = globalThis.innerHeight;
-
-    // Prefer opening to the right of the parent menu
-    let left = rect.right + 8;
-    if (left + SUBMENU_WIDTH + VIEWPORT_PAD > vw) {
-      left = rect.left - SUBMENU_WIDTH - 8;
-    }
-    left = Math.max(VIEWPORT_PAD, Math.min(left, vw - SUBMENU_WIDTH - VIEWPORT_PAD));
-
-    // Vertical: align to anchor top, clamp so the panel stays in viewport
-    const maxH = vh - VIEWPORT_PAD * 2;
-    let top = rect.top;
-    if (top + maxH > vh) {
-      top = vh - maxH - VIEWPORT_PAD;
-    }
-    top = Math.max(VIEWPORT_PAD, top);
+    const position = clampAnchoredPanelPosition(
+      anchor,
+      parentWidth,
+      SUBMENU_WIDTH,
+      globalThis.innerHeight - VIEWPORT_PAD * 2,
+      VIEWPORT_PAD,
+    );
 
     return {
       position: "fixed",
-      top,
-      left,
+      top: position.top,
+      left: position.left,
       width: SUBMENU_WIDTH,
-      maxHeight: maxH,
+      maxHeight: position.maxHeight,
       zIndex: 10002,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anchorRef, parentWidth]);
+  }, [anchor, parentWidth]);
 
   return (
     <div
@@ -290,18 +258,38 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
   parentWidth,
   onSubItemClick,
 }) => {
-  const rowRef = useRef<HTMLDivElement>(null);
+  const [submenuAnchor, setSubmenuAnchor] = useState<{ top: number; left: number } | null>(null);
+
+  const openItemSubmenu = useCallback(
+    (target: HTMLElement) => {
+      if (!item.subItems) {
+        setSubmenuAnchor(null);
+        setOpenSubmenu(null);
+        return;
+      }
+
+      const rect = target.getBoundingClientRect();
+      setSubmenuAnchor({ top: rect.top, left: rect.left });
+      setOpenSubmenu(item.label);
+    },
+    [item.label, item.subItems, setOpenSubmenu],
+  );
+
+  const closeItemSubmenu = useCallback(() => {
+    setSubmenuAnchor(null);
+    setOpenSubmenu(null);
+  }, [setOpenSubmenu]);
 
   return (
     <div
-      ref={rowRef}
       role="menuitem"
       tabIndex={item.disabled ? -1 : 0}
-      onMouseEnter={() => setOpenSubmenu(item.subItems ? item.label : null)}
-      onClick={() => {
+      onMouseEnter={(event) => openItemSubmenu(event.currentTarget)}
+      onClick={(event) => {
         if (item.disabled) return;
         if (item.subItems) {
-          setOpenSubmenu(openSubmenu === item.label ? null : item.label);
+          if (openSubmenu === item.label) closeItemSubmenu();
+          else openItemSubmenu(event.currentTarget);
           return;
         }
         item.onClick();
@@ -311,7 +299,8 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
         event.preventDefault();
         if (item.disabled) return;
         if (item.subItems) {
-          setOpenSubmenu(openSubmenu === item.label ? null : item.label);
+          if (openSubmenu === item.label) closeItemSubmenu();
+          else openItemSubmenu(event.currentTarget);
           return;
         }
         item.onClick();
@@ -332,7 +321,7 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
       ) : null}
       {item.subItems && openSubmenu === item.label ? (
         <SubmenuPanel
-          anchorRef={rowRef}
+          anchor={submenuAnchor}
           parentWidth={parentWidth}
           items={item.subItems}
           parentLabel={item.label}
@@ -349,32 +338,13 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
   onClose,
   width = 260,
 }) => {
-  const ref = useMemo(() => createRef<HTMLDivElement>(), []);
+  const ref = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const active = Boolean(menu);
 
-  useEffect(() => {
-    if (!active) return;
-
-    const handleMouseDown = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        onClose();
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-
-    document.addEventListener("mousedown", handleMouseDown);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("mousedown", handleMouseDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [active, onClose, ref]);
+  useClickOutside(ref, onClose, active);
+  useEscapeKey(onClose, active);
 
   useEffect(() => {
     if (active) {
@@ -397,12 +367,22 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
 
   const position = useMemo(() => {
     if (!menu) return null;
-    return clampMenuPosition(menu.y, menu.x, width);
+    return clampViewportMenuPosition(menu.x, menu.y, {
+      width,
+      maxHeight: 520,
+      margin: VIEWPORT_PAD,
+    });
   }, [menu, width]);
 
   const profilePanelPosition = useMemo(() => {
     if (!position || openSubmenu !== "Color") return null;
-    return clampPanelPosition(position, width, PROFILE_PANEL_WIDTH, Math.min(520, position.maxHeight));
+    return clampAnchoredPanelPosition(
+      position,
+      width,
+      PROFILE_PANEL_WIDTH,
+      Math.min(520, position.maxHeight),
+      VIEWPORT_PAD,
+    );
   }, [openSubmenu, position, width]);
 
   if (!menu || !position || sections.length === 0) {

@@ -518,6 +518,8 @@ export const useUserStore = create<UserStore>((set, get) => ({
 
   activeJwt: () => apiJwtFromSessionToken(get().activeSession()?.accessToken) || null,
 
+  activePageJwt: () => get().activeSession()?.accessToken || null,
+
   personaById: (id: string) => get().personas.find(p => p.id === id),
 }));
 

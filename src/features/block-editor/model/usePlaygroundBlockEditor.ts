@@ -60,6 +60,13 @@ type NormalizedEditorSource =
   | { kind: "cell"; pageId: string; layoutBlockId: string; cellId: string };
 
 const HEADING_SHORTCUT_RE = /^#{1,6}$/;
+const EMPTY_BLOCKS: Block[] = [];
+
+const fallbackBlocksByCell = new WeakMap<LayoutCell, {
+  blockType: unknown;
+  blocks: Block[];
+  content: unknown;
+}>();
 
 function parsePipeTable(text: string): string[][] | null {
   const lines = text
@@ -197,17 +204,42 @@ function layoutCellsOf(block: Block): LayoutCell[] {
 }
 
 function blocksFromCell(cell: LayoutCell | undefined): Block[] {
-  if (!cell) return [];
-  const blocks = Array.isArray(cell.blocks) ? cell.blocks.filter(isBlockLike) : [];
-  if (blocks.length > 0) return blocks;
+  if (!cell) return EMPTY_BLOCKS;
+  if (Array.isArray(cell.blocks) && cell.blocks.length > 0) {
+    if (cell.blocks.every(isBlockLike)) return cell.blocks;
+    const blocks = cell.blocks.filter(isBlockLike);
+    if (blocks.length > 0) return blocks;
+  }
 
-  return [
+  const cached = fallbackBlocksByCell.get(cell);
+  if (cached && cached.content === cell.content && cached.blockType === cell.blockType) {
+    return cached.blocks;
+  }
+
+  const blocks = [
     createCellFallbackBlock(
       cell.id,
       cell.content,
       cell.blockType,
     ),
   ];
+  fallbackBlocksByCell.set(cell, { blockType: cell.blockType, blocks, content: cell.content });
+  return blocks;
+}
+
+function selectEditorContent(pageContent: Block[] | undefined, source: NormalizedEditorSource): Block[] {
+  const rootContent = pageContent ?? EMPTY_BLOCKS;
+  if (source.kind === "page") return rootContent;
+  return findLayoutCellBlocks(rootContent, source.layoutBlockId, source.cellId);
+}
+
+function replaceLayoutCellBlocks(cell: LayoutCell, nextBlocks: Block[]): LayoutCell {
+  return {
+    ...cell,
+    type: "text" as const,
+    content: summarizeBlocks(nextBlocks),
+    blocks: nextBlocks,
+  };
 }
 
 function summarizeBlocks(blocks: Block[]): string {
@@ -249,16 +281,14 @@ function patchLayoutCellBlocks(
 
   const nextTree = blocks.map((block) => {
     if (block.id === layoutBlockId) {
+      let cellsChanged = false;
       const nextCells = layoutCellsOf(block).map((cell) => {
         if (cell.id !== cellId) return cell;
-        changed = true;
-        return {
-          ...cell,
-          type: "text" as const,
-          content: summarizeBlocks(nextBlocks),
-          blocks: nextBlocks,
-        };
+        cellsChanged = true;
+        return replaceLayoutCellBlocks(cell, nextBlocks);
       });
+      if (!cellsChanged) return block;
+      changed = true;
       return { ...block, layoutCells: nextCells };
     }
 
@@ -268,21 +298,23 @@ function patchLayoutCellBlocks(
     const childrenChanged = Boolean(nextChildren && nextChildren !== block.children);
 
     const sourceCells = layoutCellsOf(block);
+    let cellsChanged = false;
     const nextCells = sourceCells.length > 0
       ? sourceCells.map((cell) => {
           const currentBlocks = blocksFromCell(cell);
           const nestedBlocks = patchLayoutCellBlocks(currentBlocks, layoutBlockId, cellId, nextBlocks);
           if (nestedBlocks === currentBlocks) return cell;
-          changed = true;
-          return { ...cell, type: cell.type ?? "text" as const, content: summarizeBlocks(nestedBlocks), blocks: nestedBlocks };
+          cellsChanged = true;
+          return replaceLayoutCellBlocks(cell, nestedBlocks);
         })
       : undefined;
 
-    if (!childrenChanged && !nextCells) return block;
+    if (!childrenChanged && !cellsChanged) return block;
+    if (cellsChanged) changed = true;
     return {
       ...block,
       ...(childrenChanged ? { children: nextChildren } : {}),
-      ...(nextCells ? { layoutCells: nextCells } : {}),
+      ...(cellsChanged && nextCells ? { layoutCells: nextCells } : {}),
     };
   });
 
@@ -466,12 +498,12 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   const source = useMemo(() => normalizeEditorSource(editorSource), [editorSource]);
   const sourceKey = useMemo(() => editorSourceKey(source), [source]);
   const pageId = source.pageId;
-  const page = usePageStore((s) => s.pageById(pageId));
-  const content = useMemo(() => {
-    const rootContent = page?.content ?? [];
-    if (source.kind === "page") return rootContent;
-    return findLayoutCellBlocks(rootContent, source.layoutBlockId, source.cellId);
-  }, [page?.content, source]);
+  const content = usePageStore(
+    useCallback(
+      (state) => selectEditorContent(state.pageById(pageId)?.content, source),
+      [pageId, source],
+    ),
+  );
 
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null);
   const [pageSelector, setPageSelector] =

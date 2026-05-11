@@ -20,6 +20,10 @@ type KnownDatabaseStoreState = {
   updatePageProperty: (pageId: string, propertyId: string, value: unknown) => void;
 };
 
+interface KnownDatabaseAdapterOptions {
+  inlineLoadLimit?: number;
+}
+
 export interface PersistableObjectDatabaseAdapter extends ObjectDatabaseAdapter {
   persistState?: (state: NotionState, previousState?: NotionState) => void;
 }
@@ -48,8 +52,8 @@ export const useKnownDatabaseStateStore = create<KnownDatabaseStoreState>((set) 
   }),
 }));
 
-export function createKnownDatabaseAdapter(): PersistableObjectDatabaseAdapter {
-  return new KnownDatabaseAdapter();
+export function createKnownDatabaseAdapter(options: KnownDatabaseAdapterOptions = {}): PersistableObjectDatabaseAdapter {
+  return new KnownDatabaseAdapter(options);
 }
 
 export function loadKnownDatabaseState(): NotionState {
@@ -80,8 +84,10 @@ export function persistKnownDatabaseState(state: NotionState): NotionState {
 class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   private readonly subscribers = new Set<(event: ChangeEvent) => void>();
 
+  constructor(private readonly options: KnownDatabaseAdapterOptions = {}) {}
+
   async loadState(): Promise<NotionState> {
-    return cloneState(useKnownDatabaseStateStore.getState().state);
+    return applyAdapterOptions(cloneState(useKnownDatabaseStateStore.getState().state), this.options);
   }
 
   async findPages(query: PageQuery): Promise<Page[]> {
@@ -239,9 +245,28 @@ function mergeWithSeedState(stored: Partial<NotionState>, seeded: NotionState): 
   const storedPages = isRecord(stored.pages) ? stored.pages : {};
   const storedViews = isRecord(stored.views) ? stored.views : {};
   return {
-    databases: mergeDatabases(seeded.databases, storedDatabases as NotionState["databases"]),
-    pages: { ...seeded.pages, ...(storedPages as NotionState["pages"]) },
-    views: { ...seeded.views, ...(storedViews as NotionState["views"]) },
+    databases: mergeDatabases(seeded.databases, storedDatabases),
+    pages: { ...seeded.pages, ...storedPages },
+    views: { ...seeded.views, ...storedViews },
+  };
+}
+
+function applyAdapterOptions(state: NotionState, options: KnownDatabaseAdapterOptions): NotionState {
+  if (!options.inlineLoadLimit) return state;
+  const loadLimit = Math.max(1, Math.round(options.inlineLoadLimit));
+  return {
+    ...state,
+    views: Object.fromEntries(Object.entries(state.views).map(([viewId, view]) => {
+      if (view.type !== "table" && view.type !== "list" && view.type !== "timeline") return [viewId, view];
+      const currentLimit = Number(view.settings?.loadLimit);
+      return [viewId, {
+        ...view,
+        settings: {
+          ...view.settings,
+          loadLimit: Number.isFinite(currentLimit) ? Math.min(currentLimit, loadLimit) : loadLimit,
+        },
+      }];
+    })),
   };
 }
 
@@ -292,7 +317,7 @@ function matchesEquality(value: unknown, condition: NonNullable<PageQuery["filte
 }
 
 function matchesInclusion(value: unknown, condition: NonNullable<PageQuery["filter"]>[string]): boolean {
-  return (condition.in === undefined || condition.in.includes(value)) && (condition.nin === undefined || !condition.nin.includes(value));
+  return (condition.in?.includes(value) ?? true) && !(condition.nin?.includes(value) ?? false);
 }
 
 function matchesContainment(value: unknown, contains: unknown): boolean {

@@ -54,6 +54,10 @@ export function apiJwtFromSessionToken(token: string | null | undefined): string
   return token;
 }
 
+export function pageApiJwtFromSessionToken(token: string | null | undefined): string {
+  return token ?? '';
+}
+
 export function isBridgeSession(session: UserSession | null | undefined): boolean {
   if (!session) return false;
   if (isBridgeAppToken(session.accessToken)) return true;

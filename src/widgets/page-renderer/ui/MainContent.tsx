@@ -90,7 +90,7 @@ export const MainContent: React.FC = () => {
   const fetchPageContent = usePageStore((s) => s.fetchPageContent);
   const clearActivePage = usePageStore.setState;
   const session = useUserStore((s) => s.activeSession());
-  const jwt = useUserStore((s) => s.activeJwt() ?? "");
+  const jwt = useUserStore((s) => s.activePageJwt() ?? "");
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const [homeVariant, setHomeVariant] = useState<HomeVariant>(() => {
     if (globalThis.window === undefined) return "dashboard";
