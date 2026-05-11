@@ -29,7 +29,11 @@ type ResolvedInlineHtmlOptions = InlineHtmlOptions & typeof DEFAULT_INLINE_HTML_
 
 export function renderInlineNodesToHtml(nodes: InlineNode[], options: InlineHtmlOptions = {}): string {
   const o = { ...DEFAULT_INLINE_HTML_OPTIONS, ...options };
-  return nodes.map((node) => renderInlineNodeToHtml(node, o)).join("");
+  let html = "";
+  for (const node of nodes) {
+    html += renderInlineNodeToHtml(node, o);
+  }
+  return html;
 }
 
 function renderChildren(nodes: InlineNode[], options: ResolvedInlineHtmlOptions): string {
