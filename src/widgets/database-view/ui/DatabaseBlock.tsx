@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import React from 'react';
+import ReactDOM from 'react-dom';
 import { ObjectDatabase, type ObjectDatabaseProps } from '@notion-db/object-database';
 
 import type { Block } from '@/entities/block';
@@ -23,8 +24,10 @@ import {
 } from '@/store/useDatabaseStore';
 import { usePageStore } from '@/store/usePageStore';
 import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseViewCatalog';
-import { createKnownDatabaseAdapter } from '../model/knownDatabaseState';
+import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
 import { getObjectDatabaseAdapter } from '../model/objectDatabaseAdapter';
+
+const INLINE_KNOWN_DATABASE_LOAD_LIMIT = 8;
 
 interface DatabaseBlockProps {
   databaseId?: string;
@@ -45,7 +48,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     ? resolvedInitialView
     : KNOWN_DATABASE_VIEWS.find((viewDefinition) => viewDefinition.databaseId === resolvedDatabaseId)?.id;
   const knownDatabaseAdapter = React.useMemo(
-    () => createKnownDatabaseAdapter({ inlineLoadLimit: mode === 'inline' ? 16 : undefined }),
+    () => getKnownDatabaseAdapter({ inlineLoadLimit: mode === 'inline' ? INLINE_KNOWN_DATABASE_LOAD_LIMIT : undefined }),
     [mode],
   );
   const renderPage = React.useCallback<NonNullable<ObjectDatabaseProps['renderPage']>>(
@@ -153,7 +156,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
     }
   }, [databasePage, osionosContentKey, osionosPage, pageId, state]);
 
-  return (
+  return ReactDOM.createPortal(
     <div className="fixed inset-0 z-[var(--osio-z-modal)] flex justify-end bg-[var(--osio-overlay)]">
       <button
         type="button"
@@ -180,7 +183,8 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
           </div>
         )}
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

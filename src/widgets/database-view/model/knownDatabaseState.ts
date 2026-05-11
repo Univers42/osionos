@@ -28,6 +28,8 @@ export interface PersistableObjectDatabaseAdapter extends ObjectDatabaseAdapter 
   persistState?: (state: NotionState, previousState?: NotionState) => void;
 }
 
+const knownDatabaseAdapterCache = new Map<string, PersistableObjectDatabaseAdapter>();
+
 export const useKnownDatabaseStateStore = create<KnownDatabaseStoreState>((set) => ({
   state: loadKnownDatabaseState(),
   replaceState: (state) => set({ state: persistKnownDatabaseState(state) }),
@@ -54,6 +56,15 @@ export const useKnownDatabaseStateStore = create<KnownDatabaseStoreState>((set) 
 
 export function createKnownDatabaseAdapter(options: KnownDatabaseAdapterOptions = {}): PersistableObjectDatabaseAdapter {
   return new KnownDatabaseAdapter(options);
+}
+
+export function getKnownDatabaseAdapter(options: KnownDatabaseAdapterOptions = {}): PersistableObjectDatabaseAdapter {
+  const cacheKey = `${options.inlineLoadLimit ?? "all"}`;
+  const cachedAdapter = knownDatabaseAdapterCache.get(cacheKey);
+  if (cachedAdapter) return cachedAdapter;
+  const adapter = createKnownDatabaseAdapter(options);
+  knownDatabaseAdapterCache.set(cacheKey, adapter);
+  return adapter;
 }
 
 export function loadKnownDatabaseState(): NotionState {

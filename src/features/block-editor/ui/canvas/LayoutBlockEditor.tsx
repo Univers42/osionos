@@ -757,6 +757,11 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
     }
   }, [cells]);
 
+  const configRef = useRef(config);
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
+
   const updateMeasuredCellHeight = useCallback((cellId: string, height: number | null) => {
     if (height === null) {
       if (measuredCellHeightsRef.current.delete(cellId)) setMeasurementVersion((version) => version + 1);
@@ -767,6 +772,13 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
     const previousHeight = measuredCellHeightsRef.current.get(cellId);
     if (previousHeight === measuredHeight) return;
     measuredCellHeightsRef.current.set(cellId, measuredHeight);
+    // Only signal a layout update when the measurement crosses a row boundary;
+    // every keystroke triggers a ResizeObserver pulse, and bumping on every
+    // pixel re-runs reconciliation/store writes which makes typing janky.
+    const cfg = configRef.current;
+    const previousSpan = previousHeight ? rowSpanForRenderedHeight(previousHeight, cfg) : 0;
+    const nextSpan = rowSpanForRenderedHeight(measuredHeight, cfg);
+    if (previousSpan === nextSpan) return;
     setMeasurementVersion((version) => version + 1);
   }, []);
 
@@ -1107,7 +1119,8 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
       cellElement.style.setProperty("--osionos-layout-cell-preview-width", `${latestStyle.width}px`);
       cellElement.style.setProperty("--osionos-layout-cell-preview-height", `${latestStyle.height}px`);
       cellElement.dataset.layoutCellCollision = layoutCellOverlapsAny({ ...cell, ...latestPreview }, cellsRef.current, config, measuredCellHeightsRef.current) ? "true" : "";
-      setResizingCell((currentPreview) => resizePreviewEqual(currentPreview, latestPreview) ? currentPreview : latestPreview);
+      const sizeBadge = cellElement.querySelector<HTMLElement>(".osionos-layout-size-badge");
+      if (sizeBadge) sizeBadge.textContent = `⤢ ${latestPreview.colSpan}×${latestPreview.rowSpan}`;
     };
 
     const queuePreview = (clientX: number, clientY: number) => {
@@ -1142,11 +1155,18 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
       delete cellElement.dataset.layoutCellCollision;
       setResizingCell(null);
       setInteractionMode(null);
+      // Auto-sizing cells derive their height from content, so a freshly
+      // dragged size would snap back when sizing is still "auto-height". On
+      // commit, lock the cell to fixed sizing so the resize is preserved.
+      const sizingPatch: Partial<LayoutCell> = layoutCellUsesContentHeight(cell)
+        ? { sizing: "fixed" }
+        : {};
       updateCell(cell.id, {
         colStart: latestPreview.colStart,
         colSpan: latestPreview.colSpan,
         rowStart: latestPreview.rowStart,
         rowSpan: latestPreview.rowSpan,
+        ...sizingPatch,
       });
     };
 
