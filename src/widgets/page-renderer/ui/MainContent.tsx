@@ -35,17 +35,12 @@ import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 import "./homeVariants.css";
 
-const HOME_DASHBOARD_VERSION = 4;
+const HOME_DASHBOARD_VERSION = 7;
 const HOME_VARIANT_STORAGE_KEY = "osionos.home.variant";
 const EMPTY_PAGES: PageEntry[] = [];
 
+const HOME_DASHBOARD_FOCUS_VIEW_ID = "v-prod-table";
 type HomeVariant = "dashboard" | "graph";
-
-function getRequestedHomeViewId(): string | undefined {
-  if (globalThis.window === undefined) return undefined;
-  const viewId = new URLSearchParams(globalThis.window.location.hash.replace(/^#/, "")).get("view") ?? undefined;
-  return viewId && getKnownDatabaseView(viewId) ? viewId : undefined;
-}
 
 function getHomeDashboardFocusViewId(page: PageEntry | undefined): string | undefined {
   const value = page?.properties?.find((property) => property.key === "focus_view")?.value;
@@ -61,9 +56,8 @@ function homeDashboardNeedsRefresh(page: PageEntry | undefined, focusViewId: str
   if (page?.homeDashboardVersion !== HOME_DASHBOARD_VERSION || !hasHomeDashboardCanvas(page)) return true;
   return Boolean(focusViewId && getHomeDashboardFocusViewId(page) !== focusViewId);
 }
-
-function createHomeDashboardPage(workspaceId: string, ownerId: string | null, focusViewId?: string): PageEntry {
-  const focusView = focusViewId ? getKnownDatabaseView(focusViewId) : undefined;
+function createHomeDashboardPage(workspaceId: string, ownerId: string | null, focusViewId = HOME_DASHBOARD_FOCUS_VIEW_ID): PageEntry {
+  const focusView = getKnownDatabaseView(focusViewId) ?? getKnownDatabaseView(HOME_DASHBOARD_FOCUS_VIEW_ID);
   return {
     _id: getHomeDashboardPageId(workspaceId),
     title: HOME_DASHBOARD_PAGE_TITLE,
@@ -122,7 +116,7 @@ export const MainContent: React.FC = () => {
   });
 
   const firstWsId = activeWorkspace?._id ?? session?.privateWorkspaces[0]?._id ?? "";
-  const requestedHomeViewId = getRequestedHomeViewId();
+  const requestedHomeViewId = HOME_DASHBOARD_FOCUS_VIEW_ID;
   const workspacePages = usePageStore((s) => firstWsId ? s.pages[firstWsId] ?? EMPTY_PAGES : EMPTY_PAGES);
   const homeDashboardPageId = firstWsId ? getHomeDashboardPageId(firstWsId) : "";
   const homeDashboardPage = workspacePages.find((page) => page._id === homeDashboardPageId && !page.archivedAt);

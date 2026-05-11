@@ -1575,6 +1575,7 @@ const LayoutCellViewComponent: React.FC<LayoutCellViewProps> = ({
   const visualResize = resizePreview?.visual;
   const liveOffset = visualResize ?? movePreview?.offset ?? cell.offset;
   const cellMinHeight = visualResize?.height ?? liveCell.rowSpan * config.rowHeight + Math.max(0, liveCell.rowSpan - 1) * config.gap;
+  const usesContentHeight = layoutCellUsesContentHeight(cell);
   const source = useMemo(
     () => ({ kind: "cell" as const, pageId, layoutBlockId, cellId: cell.id }),
     [cell.id, layoutBlockId, pageId],
@@ -1609,7 +1610,7 @@ const LayoutCellViewComponent: React.FC<LayoutCellViewProps> = ({
   }, [cell, config.preview, onFocusCell, onStartResize]);
 
   useEffect(() => {
-    if (!layoutCellUsesContentHeight(cell)) {
+    if (!usesContentHeight) {
       onMeasureCell(cell.id, null);
       return undefined;
     }
@@ -1617,17 +1618,18 @@ const LayoutCellViewComponent: React.FC<LayoutCellViewProps> = ({
     const cellElement = cellRef.current;
     if (!cellElement) return undefined;
 
-    const measure = () => onMeasureCell(cell.id, cellElement.getBoundingClientRect().height);
+    const measureTarget = cellElement.querySelector<HTMLElement>(".osionos-layout-cell-editor") ?? cellElement;
+    const measure = () => onMeasureCell(cell.id, Math.max(measureTarget.scrollHeight, measureTarget.getBoundingClientRect().height));
     measure();
     if (typeof ResizeObserver === "undefined") return () => onMeasureCell(cell.id, null);
 
     const observer = new ResizeObserver(measure);
-    observer.observe(cellElement);
+    observer.observe(measureTarget);
     return () => {
       observer.disconnect();
       onMeasureCell(cell.id, null);
     };
-  }, [cell, onMeasureCell]);
+  }, [cell.id, onMeasureCell, usesContentHeight]);
 
   return (
     <section
