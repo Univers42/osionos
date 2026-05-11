@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { normalizeInlineColorToken } from "./inlineTextStyles";
+import { normalizeInlineColorToken } from "./inlineColorTokens";
 
 export interface ElementFormattingState {
   bold: boolean;
@@ -297,6 +297,6 @@ function normalizeDomColorToken(value: string | null | undefined) {
 
 function stripHexAlphaSuffix(value: string) {
   const normalized = value.trim();
-  const match = normalized.match(/^#([0-9a-fA-F]{6})[0-9a-fA-F]{2}$/);
+  const match = /^#([0-9a-fA-F]{6})[0-9a-fA-F]{2}$/.exec(normalized);
   return match ? `#${match[1]}` : normalized;
 }

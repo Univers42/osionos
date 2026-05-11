@@ -49,12 +49,36 @@ export function isBridgeAppToken(token: string | null | undefined): boolean {
   return typeof token === 'string' && token.startsWith(BRIDGE_APP_TOKEN_PREFIX);
 }
 
+function decodeBridgeAppTokenPayload(token: string | null | undefined): Record<string, unknown> | null {
+  if (!isBridgeAppToken(token)) return null;
+  const [, encodedPayload, signature, extra] = token.split('.');
+  if (!encodedPayload || !signature || extra !== undefined) return null;
+  try {
+    const paddedPayload = `${encodedPayload}${'='.repeat((4 - encodedPayload.length % 4) % 4)}`;
+    const json = globalThis.atob(paddedPayload.replaceAll('-', '+').replaceAll('_', '/'));
+    const payload = JSON.parse(json) as unknown;
+    return payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? payload as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function isBridgeAppTokenExpired(token: string | null | undefined, now = Date.now()): boolean {
+  if (!isBridgeAppToken(token)) return false;
+  const payload = decodeBridgeAppTokenPayload(token);
+  const exp = Number(payload?.exp);
+  return !Number.isFinite(exp) || exp <= Math.floor(now / 1000);
+}
+
 export function apiJwtFromSessionToken(token: string | null | undefined): string {
   if (!token || isBridgeAppToken(token)) return '';
   return token;
 }
 
 export function pageApiJwtFromSessionToken(token: string | null | undefined): string {
+  if (isBridgeAppTokenExpired(token)) return '';
   return token ?? '';
 }
 

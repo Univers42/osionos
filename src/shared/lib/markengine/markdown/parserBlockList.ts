@@ -86,7 +86,7 @@ export function parseTaskList(
     const match = /^[-*+]\s+\[([ xX])\]\s+(.*)/.exec(trimmed);
     if (!match) break;
 
-    if (baseIndent === null) baseIndent = indent;
+    baseIndent ??= indent;
     if (indent !== baseIndent) break;
 
     advance(ctx);
@@ -115,7 +115,7 @@ export function parseOrderedList(
     const match = /^(\d{1,9})([.)]\s+)(.*)/.exec(trimmed);
     if (!match) break;
 
-    if (baseIndent === null) baseIndent = indent;
+    baseIndent ??= indent;
     if (indent !== baseIndent) break;
 
     advance(ctx);
@@ -146,7 +146,7 @@ export function parseUnorderedList(
     const match = /^[-*+]\s+(.*)/.exec(trimmed);
     if (!match) break;
 
-    if (baseIndent === null) baseIndent = indent;
+    baseIndent ??= indent;
     if (indent !== baseIndent) break;
 
     advance(ctx);

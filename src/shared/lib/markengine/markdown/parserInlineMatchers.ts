@@ -35,16 +35,19 @@ function matchTaggedInlineColor(
   parseInline: InlineParser,
   factory: (color: string, children: InlineNode[]) => InlineNode,
 ): InlineMatchResult | null {
-  const openMatch = new RegExp(`^\\[${tag}=([^\\]]+)\\]`).exec(text.slice(pos));
-  if (!openMatch) return null;
+  const opener = `[${tag}=`;
+  if (!text.startsWith(opener, pos)) return null;
 
-  const openLength = openMatch[0].length;
+  const bracketEnd = text.indexOf("]", pos + opener.length);
+  if (bracketEnd === -1) return null;
+
+  const openLength = bracketEnd - pos + 1;
   const start = pos + openLength;
   const closeTag = `[/${tag}]`;
   const end = findMatchingTaggedClose(text, start, tag, true);
   if (end === -1 || end === start) return null;
 
-  const color = openMatch[1].trim();
+  const color = text.slice(pos + opener.length, bracketEnd).trim();
   const inner = text.slice(start, end);
   return {
     start: pos,
@@ -83,53 +86,66 @@ function findMatchingTaggedClose(
   hasAttribute: boolean,
 ): number {
   const closeTag = `[/${tag}]`;
-  const plainOpenTag = `[${tag}]`;
-  const attributedOpenPrefix = `[${tag}=`;
   let depth = 1;
   let cursor = start;
 
   while (cursor < text.length) {
-    const closeIndex = text.indexOf(closeTag, cursor);
-    if (closeIndex === -1) {
-      return -1;
-    }
+      const token = findNextTaggedToken(text, cursor, tag, closeTag, hasAttribute);
+      if (!token) return -1;
 
-    let openIndex = -1;
-    let nextCursor = closeIndex + closeTag.length;
-
-    if (hasAttribute) {
-      const candidate = text.indexOf(attributedOpenPrefix, cursor);
-      if (candidate !== -1 && candidate < closeIndex) {
-        const bracketEnd = text.indexOf("]", candidate + attributedOpenPrefix.length);
-        if (bracketEnd !== -1) {
-          openIndex = candidate;
-          nextCursor = bracketEnd + 1;
-        }
-      }
-    } else {
-      const candidate = text.indexOf(plainOpenTag, cursor);
-      if (candidate !== -1 && candidate < closeIndex) {
-        openIndex = candidate;
-        nextCursor = candidate + plainOpenTag.length;
-      }
-    }
-
-    if (openIndex !== -1 && openIndex < closeIndex) {
+      if (token.kind === "open") {
       depth += 1;
-      cursor = nextCursor;
+        cursor = token.nextCursor;
       continue;
     }
 
     depth -= 1;
     if (depth === 0) {
-      return closeIndex;
+        return token.index;
     }
 
-    cursor = closeIndex + closeTag.length;
+      cursor = token.index + closeTag.length;
   }
 
   return -1;
 }
+
+  type TaggedToken =
+    | { kind: "open"; nextCursor: number }
+    | { kind: "close"; index: number };
+
+  function findNextTaggedToken(
+    text: string,
+    cursor: number,
+    tag: string,
+    closeTag: string,
+    hasAttribute: boolean,
+  ): TaggedToken | null {
+    const closeIndex = text.indexOf(closeTag, cursor);
+    if (closeIndex === -1) return null;
+
+    const nextOpenCursor = findNextTaggedOpen(text, cursor, tag, closeIndex, hasAttribute);
+    return nextOpenCursor === -1
+      ? { kind: "close", index: closeIndex }
+      : { kind: "open", nextCursor: nextOpenCursor };
+  }
+
+  function findNextTaggedOpen(
+    text: string,
+    cursor: number,
+    tag: string,
+    closeIndex: number,
+    hasAttribute: boolean,
+  ): number {
+    const openTag = hasAttribute ? `[${tag}=` : `[${tag}]`;
+    const candidate = text.indexOf(openTag, cursor);
+    if (candidate === -1 || candidate >= closeIndex) return -1;
+
+    if (!hasAttribute) return candidate + openTag.length;
+
+    const bracketEnd = text.indexOf("]", candidate + openTag.length);
+    return bracketEnd === -1 ? -1 : bracketEnd + 1;
+  }
 
 function findSingleEmphasisClose(
   text: string,
@@ -143,6 +159,25 @@ function findSingleEmphasisClose(
     if (text[i - 1] === marker || text[i + 1] === marker) continue;
 
     return i;
+  }
+  return -1;
+}
+
+function findDestinationClose(text: string, start: number): number {
+  let depth = 0;
+  for (let cursor = start; cursor < text.length; cursor++) {
+    const char = text[cursor];
+    if (char === "\\") {
+      cursor++;
+      continue;
+    }
+    if (char === "(") {
+      depth++;
+      continue;
+    }
+    if (char !== ")") continue;
+    if (depth === 0) return cursor;
+    depth--;
   }
   return -1;
 }
@@ -200,7 +235,7 @@ export function createInlineMatchers(
       if (text[pos] !== "!" || text[pos + 1] !== "[") return null;
       const altClose = findClosingBracket(text, pos + 1);
       if (altClose === -1 || text[altClose + 1] !== "(") return null;
-      const parenClose = text.indexOf(")", altClose + 2);
+      const parenClose = findDestinationClose(text, altClose + 2);
       if (parenClose === -1) return null;
       const alt = text.slice(pos + 2, altClose);
       const inside = text.slice(altClose + 2, parenClose).trim();
@@ -269,7 +304,7 @@ export function createInlineMatchers(
       if (text[pos] !== "[") return null;
       const labelClose = findClosingBracket(text, pos);
       if (labelClose === -1 || text[labelClose + 1] !== "(") return null;
-      const parenClose = text.indexOf(")", labelClose + 2);
+      const parenClose = findDestinationClose(text, labelClose + 2);
       if (parenClose === -1) return null;
       const label = text.slice(pos + 1, labelClose);
       const inside = text.slice(labelClose + 2, parenClose).trim();

@@ -10,8 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { parseInline } from "./markdown/index";
-import type { InlineNode } from "./markdown/index";
+import type { InlineNode } from "./markdown/ast";
+import { parseInline } from "./markdown/parser";
 import {
   cloneWrapperNode,
   getInlineNodesTextLength,

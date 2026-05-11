@@ -86,109 +86,122 @@ export function parseInlines(source: string, line: number): InlineNode[] {
   const nodes: InlineNode[] = [];
 
   while (cursor.index < cursor.source.length) {
-    const ch = cursor.source[cursor.index];
-    const start = cursor.index;
-
-    if (ch === "`") {
-      const close = cursor.source.indexOf("`", cursor.index + 1);
-      if (close !== -1) {
-        const value = cursor.source.slice(cursor.index + 1, close);
-        const node: CodeSpanNode = {
-          id: stableId(`code:${line}:${start}:${value}`),
-          kind: "code_span",
-          value,
-          span: makeSpan(line, start, close + 1),
-        };
-        nodes.push(node);
-        cursor.index = close + 1;
-        continue;
-      }
-    }
-
-    if (ch === "*" && cursor.source[cursor.index + 1] === "*") {
-      const close = cursor.source.indexOf("**", cursor.index + 2);
-      if (close !== -1) {
-        const content = cursor.source.slice(cursor.index + 2, close);
-        const node: StrongNode = {
-          id: stableId(`strong:${line}:${start}:${content}`),
-          kind: "strong",
-          children: parseInlines(content, line),
-          span: makeSpan(line, start, close + 2),
-        };
-        nodes.push(node);
-        cursor.index = close + 2;
-        continue;
-      }
-    }
-
-    if (ch === "*") {
-      const close = cursor.source.indexOf("*", cursor.index + 1);
-      if (close !== -1) {
-        const content = cursor.source.slice(cursor.index + 1, close);
-        const node: EmphasisNode = {
-          id: stableId(`em:${line}:${start}:${content}`),
-          kind: "emphasis",
-          children: parseInlines(content, line),
-          span: makeSpan(line, start, close + 1),
-        };
-        nodes.push(node);
-        cursor.index = close + 1;
-        continue;
-      }
-    }
-
-    if (ch === "[") {
-      const startIndex = cursor.index;
-      const label = parseBracketLabel(cursor);
-      if (label !== null && cursor.source[cursor.index] === "(") {
-        const href = parseParenHref(cursor);
-        if (href !== null) {
-          const node: LinkNode = {
-            id: stableId(`link:${line}:${startIndex}:${href}:${label}`),
-            kind: "link",
-            href,
-            children: parseInlines(label, line),
-            span: makeSpan(line, startIndex, cursor.index),
-          };
-          nodes.push(node);
-          continue;
-        }
-      }
-      cursor.index = startIndex;
-    }
-
-    let end = cursor.index + 1;
-    while (end < cursor.source.length) {
-      const c = cursor.source[end];
-      const c2 = cursor.source[end + 1];
-      const stop =
-        c === "`" || c === "[" || c === "*" || (c === "*" && c2 === "*");
-      if (stop) break;
-      end++;
-    }
-
-    const value = cursor.source.slice(cursor.index, end);
-    nodes.push(textNode(value, line, cursor.index, end));
-    cursor.index = end;
+    nodes.push(parseInlineNode(cursor, line));
   }
 
   return mergeTextNodes(nodes);
+}
+
+function parseInlineNode(cursor: Cursor, line: number): InlineNode {
+  return (
+    parseCodeSpanNode(cursor, line) ??
+    parseStrongNode(cursor, line) ??
+    parseEmphasisNode(cursor, line) ??
+    parseLinkNode(cursor, line) ??
+    parseTextRun(cursor, line)
+  );
+}
+
+function parseCodeSpanNode(cursor: Cursor, line: number): CodeSpanNode | null {
+  if (cursor.source[cursor.index] !== "`") return null;
+  const start = cursor.index;
+  const close = cursor.source.indexOf("`", start + 1);
+  if (close === -1) return null;
+
+  const value = cursor.source.slice(start + 1, close);
+  cursor.index = close + 1;
+  return {
+    id: stableId(`code:${line}:${start}:${value}`),
+    kind: "code_span",
+    value,
+    span: makeSpan(line, start, cursor.index),
+  };
+}
+
+function parseStrongNode(cursor: Cursor, line: number): StrongNode | null {
+  if (!cursor.source.startsWith("**", cursor.index)) return null;
+  const start = cursor.index;
+  const close = cursor.source.indexOf("**", start + 2);
+  if (close === -1) return null;
+
+  const content = cursor.source.slice(start + 2, close);
+  cursor.index = close + 2;
+  return {
+    id: stableId(`strong:${line}:${start}:${content}`),
+    kind: "strong",
+    children: parseInlines(content, line),
+    span: makeSpan(line, start, cursor.index),
+  };
+}
+
+function parseEmphasisNode(cursor: Cursor, line: number): EmphasisNode | null {
+  if (cursor.source[cursor.index] !== "*") return null;
+  const start = cursor.index;
+  const close = cursor.source.indexOf("*", start + 1);
+  if (close === -1) return null;
+
+  const content = cursor.source.slice(start + 1, close);
+  cursor.index = close + 1;
+  return {
+    id: stableId(`em:${line}:${start}:${content}`),
+    kind: "emphasis",
+    children: parseInlines(content, line),
+    span: makeSpan(line, start, cursor.index),
+  };
+}
+
+function parseLinkNode(cursor: Cursor, line: number): LinkNode | null {
+  if (cursor.source[cursor.index] !== "[") return null;
+  const start = cursor.index;
+  const label = parseBracketLabel(cursor);
+  if (label === null) {
+    cursor.index = start;
+    return null;
+  }
+
+  const href = parseParenHref(cursor);
+  if (href === null) {
+    cursor.index = start;
+    return null;
+  }
+
+  return {
+    id: stableId(`link:${line}:${start}:${href}:${label}`),
+    kind: "link",
+    href,
+    children: parseInlines(label, line),
+    span: makeSpan(line, start, cursor.index),
+  };
+}
+
+function parseTextRun(cursor: Cursor, line: number): TextNode {
+  const start = cursor.index;
+  let end = start + 1;
+  while (end < cursor.source.length && !isInlineTokenStart(cursor.source[end])) {
+    end++;
+  }
+
+  const value = cursor.source.slice(start, end);
+  cursor.index = end;
+  return textNode(value, line, start, end);
+}
+
+function isInlineTokenStart(char: string): boolean {
+  return char === "`" || char === "[" || char === "*";
 }
 
 function mergeTextNodes(nodes: InlineNode[]): InlineNode[] {
   if (nodes.length <= 1) return nodes;
   const merged: InlineNode[] = [];
   for (const node of nodes) {
-    const prev = merged[merged.length - 1];
-    if (prev && prev.kind === "text" && node.kind === "text") {
-      const textPrev = prev as TextNode;
-      const textNodeCurrent = node as TextNode;
+    const prev = merged.at(-1);
+    if (prev?.kind === "text" && node.kind === "text") {
       merged[merged.length - 1] = {
-        ...textPrev,
-        value: textPrev.value + textNodeCurrent.value,
+        ...prev,
+        value: prev.value + node.value,
         span: {
-          ...textPrev.span,
-          endOffset: textNodeCurrent.span.endOffset,
+          ...prev.span,
+          endOffset: node.span.endOffset,
         },
       };
       continue;

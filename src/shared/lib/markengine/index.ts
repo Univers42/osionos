@@ -12,8 +12,8 @@
 
 export {
   parseInlineMarkdown,
-  renderInlineToReact,
 } from './shortcuts';
+export { renderInlineToReact } from './markdown/shortcutsReact';
 export { detectBlockType, parseMarkdownToBlocks } from './shortcuts';
 export {
   applyInlineFormatting,

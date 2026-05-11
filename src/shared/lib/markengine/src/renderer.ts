@@ -25,6 +25,7 @@ import {
   type MarkdownViewMode,
 } from "./render-mode";
 import { escapeHtml } from "./utils";
+import { sanitizeUrl } from "../renderCore";
 
 export interface RenderHtmlOptions {
   mode?: MarkdownViewMode;
@@ -45,7 +46,7 @@ function renderInlines(nodes: InlineNode[]): string {
         case "code_span":
           return `<code data-node-id="${node.id}" class="md-inline-code">${escapeHtml(node.value)}</code>`;
         case "link":
-          return `<a data-node-id="${node.id}" href="${escapeHtml(node.href)}">${renderInlines(node.children)}</a>`;
+          return `<a data-node-id="${node.id}" href="${escapeHtml(sanitizeUrl(node.href) || "#")}">${renderInlines(node.children)}</a>`;
         default:
           return "";
       }

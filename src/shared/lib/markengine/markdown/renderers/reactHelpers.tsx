@@ -8,6 +8,7 @@ import {
   shouldSuppressInlineBackground,
   unwrapCodeRichStyles,
 } from "./inlineStyleHelpers";
+import { isExternalUrl, sanitizeUrl } from "../../renderCore";
 
 export function renderTable(
   node: Extract<BlockNode, { type: "table" }>,
@@ -193,10 +194,11 @@ export function renderInlineNode(
       );
 
     case "link": {
-      const isExt = isExternal(node.href);
+      const href = sanitizeUrl(node.href);
+      const isExt = isExternalUrl(href);
       const props: Record<string, unknown> = {
         key,
-        href: node.href,
+        href: href || "#",
         title: node.title || undefined,
         className: "editor-link",
         ...(o.externalLinks && isExt
@@ -228,12 +230,14 @@ export function renderInlineNode(
       );
 
     case "image": {
+      const src = sanitizeUrl(node.src);
+      if (!src) return null;
       if (o.imageRenderer) {
-        return o.imageRenderer(node.src, node.alt, node.title);
+        return o.imageRenderer(src, node.alt, node.title);
       }
       return React.createElement("img", {
         key,
-        src: node.src,
+        src,
         alt: node.alt,
         title: node.title || undefined,
       });
@@ -286,5 +290,5 @@ export function renderInlineNode(
 // HELPERS
 
 export function isExternal(href: string): boolean {
-  return /^https?:\/\//.test(href);
+  return isExternalUrl(href);
 }

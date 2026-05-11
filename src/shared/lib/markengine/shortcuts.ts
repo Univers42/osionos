@@ -12,7 +12,6 @@
 
 export {
   parseInlineMarkdown,
-  renderInlineToReact,
   parseMarkdownToBlocks,
   BLOCK_SHORTCUTS,
   detectBlockType,

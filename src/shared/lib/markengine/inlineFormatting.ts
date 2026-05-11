@@ -10,8 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { parseInline } from "./markdown/index";
-import type { InlineNode } from "./markdown/index";
+import type { InlineNode } from "./markdown/ast";
+import { parseInline } from "./markdown/parser";
 import {
   areInlineNodeListsEqual,
   cloneWrapperNode,
@@ -22,7 +22,7 @@ import {
   splitNodesAtOffset,
   type WrapperNode,
 } from "./inlineAst";
-import { normalizeInlineColorToken } from "./inlineTextStyles";
+import { normalizeInlineColorToken } from "./inlineColorTokens";
 
 const NO_ACTIVE_VALUE = "__none__";
 
@@ -204,33 +204,10 @@ function isSelectionFullyFormatted(
 
   const visit = (currentNodes: InlineNode[], active: boolean) => {
     for (const node of currentNodes) {
-      if (node.type === "text") {
-        if (node.value.length > 0) {
-          hasText = true;
-          allFormatted &&= active;
-        }
-        continue;
-      }
-
-      if (node.type === "code") {
-        if (node.value.length > 0) {
-          hasText = true;
-          allFormatted &&= active || format === "code";
-        }
-        continue;
-      }
-
-      if (node.type === "emoji" || node.type === "math_inline") {
-        if (node.value.length > 0) {
-          hasText = true;
-          allFormatted &&= active;
-        }
-        continue;
-      }
-
-      if (node.type === "footnote_ref" || node.type === "line_break") {
+      const contentFormatted = getLeafFormatState(node, format, active);
+      if (contentFormatted !== null) {
         hasText = true;
-        allFormatted &&= active;
+        allFormatted &&= contentFormatted;
         continue;
       }
 
@@ -246,6 +223,23 @@ function isSelectionFullyFormatted(
   return hasText && allFormatted;
 }
 
+function getLeafFormatState(
+  node: InlineNode,
+  format: InlineFormatKind,
+  active: boolean,
+): boolean | null {
+  if (node.type === "text" || node.type === "emoji" || node.type === "math_inline") {
+    return node.value.length > 0 ? active : null;
+  }
+  if (node.type === "code") {
+    return node.value.length > 0 ? active || format === "code" : null;
+  }
+  if (node.type === "footnote_ref" || node.type === "line_break") {
+    return active;
+  }
+  return null;
+}
+
 function getUniformColor(
   nodes: InlineNode[],
   colorKind: InlineColorKind,
@@ -255,36 +249,10 @@ function getUniformColor(
 
   const visit = (currentNodes: InlineNode[], activeColor: string | null) => {
     for (const node of currentNodes) {
-      const nextColor =
-        colorKind === "text" && node.type === "text_color"
-          ? node.color
-          : colorKind === "background" && node.type === "background_color"
-            ? node.color
-            : activeColor;
-
-      if (node.type === "text") {
-        if (node.value.length > 0) {
-          colors.add(nextColor ?? NO_ACTIVE_VALUE);
-        }
-        continue;
-      }
-
-      if (node.type === "code") {
-        if (node.value.length > 0) {
-          colors.add(nextColor ?? NO_ACTIVE_VALUE);
-        }
-        continue;
-      }
-
-      if (node.type === "emoji" || node.type === "math_inline") {
-        if (node.value.length > 0) {
-          colors.add(nextColor ?? NO_ACTIVE_VALUE);
-        }
-        continue;
-      }
-
-      if (node.type === "footnote_ref" || node.type === "line_break") {
-        colors.add(nextColor ?? NO_ACTIVE_VALUE);
+      const nextColor = getNodeActiveColor(node, colorKind, activeColor);
+      const leafColor = getLeafColorMarker(node, nextColor);
+      if (leafColor !== null) {
+        colors.add(leafColor);
         continue;
       }
 
@@ -302,6 +270,29 @@ function getUniformColor(
 
   const [value] = colors;
   return value === NO_ACTIVE_VALUE ? null : value;
+}
+
+function getLeafColorMarker(
+  node: InlineNode,
+  activeColor: string | null,
+): string | null {
+  if (node.type === "text" || node.type === "code" || node.type === "emoji" || node.type === "math_inline") {
+    return node.value.length > 0 ? activeColor ?? NO_ACTIVE_VALUE : null;
+  }
+  if (node.type === "footnote_ref" || node.type === "line_break") {
+    return activeColor ?? NO_ACTIVE_VALUE;
+  }
+  return null;
+}
+
+function getNodeActiveColor(
+  node: InlineNode,
+  colorKind: InlineColorKind,
+  activeColor: string | null,
+): string | null {
+  if (colorKind === "text" && node.type === "text_color") return node.color;
+  if (colorKind === "background" && node.type === "background_color") return node.color;
+  return activeColor;
 }
 
 function removeFormatFromNodes(nodes: InlineNode[], format: InlineFormatKind): InlineNode[] {
@@ -424,8 +415,8 @@ function trimInlineSelectionWhitespace(
   nodes: InlineNode[],
 ): InlineSelectionSegments {
   const textContent = getInlineNodesTextContent(nodes);
-  const leadingWhitespaceLength = textContent.match(/^\s+/)?.[0].length ?? 0;
-  const trailingWhitespaceLength = textContent.match(/\s+$/)?.[0].length ?? 0;
+  const leadingWhitespaceLength = /^\s+/.exec(textContent)?.[0].length ?? 0;
+  const trailingWhitespaceLength = /\s+$/.exec(textContent)?.[0].length ?? 0;
 
   if (leadingWhitespaceLength === 0 && trailingWhitespaceLength === 0) {
     return {

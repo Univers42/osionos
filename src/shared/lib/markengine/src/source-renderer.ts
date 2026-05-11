@@ -60,9 +60,8 @@ class HiddenMarkdownSymbolDecorator implements MarkdownSymbolDecorator {
 function createMarkdownSymbolDecorator(
   hideMarkdownSymbols: boolean,
 ): MarkdownSymbolDecorator {
-  return hideMarkdownSymbols
-    ? new HiddenMarkdownSymbolDecorator()
-    : new VisibleMarkdownSymbolDecorator();
+  if (hideMarkdownSymbols) return new HiddenMarkdownSymbolDecorator();
+  return new VisibleMarkdownSymbolDecorator();
 }
 
 function esc(value: string): string {

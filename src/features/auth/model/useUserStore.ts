@@ -22,6 +22,7 @@ import {
   createOfflineWorkspace,
   fetchWorkspaces,
   apiJwtFromSessionToken,
+  pageApiJwtFromSessionToken,
   isBridgeSession,
   loginPersona,
   partition,
@@ -518,7 +519,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
 
   activeJwt: () => apiJwtFromSessionToken(get().activeSession()?.accessToken) || null,
 
-  activePageJwt: () => get().activeSession()?.accessToken || null,
+  activePageJwt: () => pageApiJwtFromSessionToken(get().activeSession()?.accessToken) || null,
 
   personaById: (id: string) => get().personas.find(p => p.id === id),
 }));
