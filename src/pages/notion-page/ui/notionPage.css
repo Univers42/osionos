@@ -379,9 +379,20 @@
   cursor: grabbing;
 }
 
-.osionos-layout-grid[data-layout-interacting="true"] .osionos-layout-cell-editor {
+.osionos-layout-grid[data-layout-interaction-mode="resize"] .osionos-layout-cell-editor,
+.osionos-layout-grid[data-layout-interaction-mode="move"] .osionos-layout-cell[data-layout-cell-moving="true"] .osionos-layout-cell-editor,
+.osionos-layout-grid[data-layout-interaction-mode="drag"] .osionos-layout-cell[data-layout-cell-dragging="true"] .osionos-layout-cell-editor {
   pointer-events: none;
   user-select: none;
+}
+
+/* Only the cell currently being resized hides its heavy surface, and only
+   while the resize is active. Other heavy cells stay fully visible during
+   move/drag/resize so embedded databases don't flicker on every interaction. */
+.osionos-layout-cell[data-layout-cell-resizing="true"][data-layout-cell-heavy="true"] .osionos-layout-cell-surface-anchor {
+  contain: layout paint style;
+  content-visibility: hidden;
+  contain-intrinsic-size: 420px;
 }
 
 .osionos-layout-alignment-guide {
