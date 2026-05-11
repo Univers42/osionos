@@ -8,6 +8,18 @@ import type {
 import { EMOJI_MAP } from "./parserEmoji";
 import { findClosingBracket } from "./parserInlineUtils";
 
+type InlineMatcherSpec = {
+  firstChars: readonly string[];
+  matcher: InlineMatcher;
+};
+
+function defineMatcher(
+  firstChars: readonly string[],
+  matcher: InlineMatcher,
+): InlineMatcherSpec {
+  return { firstChars, matcher };
+}
+
 function matchDelimited(
   text: string,
   pos: number,
@@ -182,11 +194,11 @@ function findDestinationClose(text: string, start: number): number {
   return -1;
 }
 
-export function createInlineMatchers(
+export function createInlineDispatch(
   parseInline: InlineParser,
-): InlineMatcher[] {
-  return [
-    (text, pos) => {
+): Record<string, InlineMatcher[]> {
+  const specs: InlineMatcherSpec[] = [
+    defineMatcher(["\\"], (text, pos) => {
       if (text[pos] !== "\\" || pos + 1 >= text.length) return null;
       const next = text[pos + 1];
       if ("\\`*_{}[]()#+-.!|~$=".includes(next)) {
@@ -197,8 +209,8 @@ export function createInlineMatchers(
         };
       }
       return null;
-    },
-    (text, pos) => {
+    }),
+    defineMatcher(["`"], (text, pos) => {
       if (text[pos] !== "`") return null;
       let ticks = 0;
       let i = pos;
@@ -220,8 +232,8 @@ export function createInlineMatchers(
         end: closeIdx + ticks,
         node: { type: "code", value },
       };
-    },
-    (text, pos) => {
+    }),
+    defineMatcher(["$"], (text, pos) => {
       if (text[pos] !== "$" || text[pos + 1] === "$") return null;
       const close = text.indexOf("$", pos + 1);
       if (close === -1 || close === pos + 1) return null;
@@ -230,8 +242,8 @@ export function createInlineMatchers(
         end: close + 1,
         node: { type: "math_inline", value: text.slice(pos + 1, close) },
       };
-    },
-    (text, pos) => {
+    }),
+    defineMatcher(["!"], (text, pos) => {
       if (text[pos] !== "!" || text[pos + 1] !== "[") return null;
       const altClose = findClosingBracket(text, pos + 1);
       if (altClose === -1 || text[altClose + 1] !== "(") return null;
@@ -247,50 +259,58 @@ export function createInlineMatchers(
         end: parenClose + 1,
         node: { type: "image", src, alt, title },
       };
-    },
-    (text, pos) =>
+    }),
+    defineMatcher(["["], (text, pos) =>
       matchTaggedInlineColor(text, pos, "color", parseInline, (color, children) => ({
         type: "text_color",
         color,
         children,
       })),
-    (text, pos) =>
+    ),
+    defineMatcher(["["], (text, pos) =>
       matchTaggedInlineColor(text, pos, "bg", parseInline, (color, children) => ({
         type: "background_color",
         color,
         children,
       })),
-    (text, pos) =>
+    ),
+    defineMatcher(["["], (text, pos) =>
       matchTaggedInlineChildren(text, pos, "code", parseInline, (children) => ({
         type: "code_rich",
         children,
       })),
-    (text, pos) =>
+    ),
+    defineMatcher(["["], (text, pos) =>
       matchTaggedInlineChildren(text, pos, "b", parseInline, (children) => ({
         type: "bold",
         children,
       })),
-    (text, pos) =>
+    ),
+    defineMatcher(["["], (text, pos) =>
       matchTaggedInlineChildren(text, pos, "i", parseInline, (children) => ({
         type: "italic",
         children,
       })),
-    (text, pos) =>
+    ),
+    defineMatcher(["["], (text, pos) =>
       matchTaggedInlineChildren(text, pos, "s", parseInline, (children) => ({
         type: "strikethrough",
         children,
       })),
-    (text, pos) =>
+    ),
+    defineMatcher(["["], (text, pos) =>
       matchTaggedInlineChildren(text, pos, "u", parseInline, (children) => ({
         type: "underline",
         children,
       })),
-    (text, pos) =>
+    ),
+    defineMatcher(["["], (text, pos) =>
       matchTaggedInlineChildren(text, pos, "mark", parseInline, (children) => ({
         type: "highlight",
         children,
       })),
-    (text, pos) => {
+    ),
+    defineMatcher(["["], (text, pos) => {
       if (text[pos] !== "[" || text[pos + 1] !== "[") return null;
       const match = /^\[\[page:([^\]]+)\]\]/.exec(text.slice(pos));
       if (!match) return null;
@@ -299,8 +319,8 @@ export function createInlineMatchers(
         end: pos + match[0].length,
         node: { type: "internal_link", pageId: match[1] },
       };
-    },
-    (text, pos) => {
+    }),
+    defineMatcher(["["], (text, pos) => {
       if (text[pos] !== "[") return null;
       const labelClose = findClosingBracket(text, pos);
       if (labelClose === -1 || text[labelClose + 1] !== "(") return null;
@@ -316,8 +336,8 @@ export function createInlineMatchers(
         end: parenClose + 1,
         node: { type: "link", href, title, children: parseInline(label) },
       };
-    },
-    (text, pos) => {
+    }),
+    defineMatcher(["["], (text, pos) => {
       if (text[pos] !== "[" || text[pos + 1] !== "^") return null;
       const close = text.indexOf("]", pos + 2);
       if (close === -1 || text[close + 1] === "(") return null;
@@ -328,8 +348,8 @@ export function createInlineMatchers(
         end: close + 1,
         node: { type: "footnote_ref", label },
       };
-    },
-    (text, pos) => {
+    }),
+    defineMatcher([":"], (text, pos) => {
       if (text[pos] !== ":") return null;
       const match = /^:([a-zA-Z0-9_+-]+):/.exec(text.slice(pos));
       if (!match) return null;
@@ -341,13 +361,14 @@ export function createInlineMatchers(
         end: pos + match[0].length,
         node: { type: "emoji", value: emoji, raw: name },
       };
-    },
-    (text, pos) =>
+    }),
+    defineMatcher(["="], (text, pos) =>
       matchDelimited(text, pos, "==", "==", parseInline, (children) => ({
         type: "highlight",
         children,
       })),
-    (text, pos) =>
+    ),
+    defineMatcher(["*", "_"], (text, pos) =>
       matchDelimited(text, pos, "***", "***", parseInline, (children) => ({
         type: "bold_italic",
         children,
@@ -356,29 +377,33 @@ export function createInlineMatchers(
         type: "bold_italic",
         children,
       })),
-    (text, pos) =>
+    ),
+    defineMatcher(["*"], (text, pos) =>
       matchDelimited(text, pos, "**", "**", parseInline, (children) => ({
         type: "bold",
         children,
       })),
-    (text, pos) =>
+    ),
+    defineMatcher(["_"], (text, pos) =>
       matchDelimited(text, pos, "__", "__", parseInline, (children) => ({
         type: "underline",
         children,
       })),
-    (text, pos) =>
+    ),
+    defineMatcher(["~"], (text, pos) =>
       matchDelimited(text, pos, "~~", "~~", parseInline, (children) => ({
         type: "strikethrough",
         children,
       })),
-    (text, pos) => {
-      if (text[pos] !== "*" && text[pos] !== "_") return null;
-      const c = text[pos];
-      if (pos > 0 && text[pos - 1] === c) return null; // part of an existing run
-      if (text[pos + 1] === c) return null; // double = bold, not italic
-      const close = findSingleEmphasisClose(text, pos, c as "*");
+    ),
+    defineMatcher(["*", "_"], (text, pos) => {
+      const marker = text[pos];
+      if (marker !== "*" && marker !== "_") return null;
+      if (pos > 0 && text[pos - 1] === marker) return null; // part of an existing run
+      if (text[pos + 1] === marker) return null; // double = bold, not italic
+      const close = findSingleEmphasisClose(text, pos, marker);
       if (close === -1 || close === pos + 1) return null;
-      if (c === "_") {
+      if (marker === "_") {
         if (pos > 0 && /\w/.test(text[pos - 1])) return null;
         if (close + 1 < text.length && /\w/.test(text[close + 1])) return null;
       }
@@ -388,8 +413,8 @@ export function createInlineMatchers(
         end: close + 1,
         node: { type: "italic", children: parseInline(inner) },
       };
-    },
-    (text, pos) => {
+    }),
+    defineMatcher(["<"], (text, pos) => {
       const chunk = text.slice(pos);
       const br = /^<br\s*\/?>/i.exec(chunk);
       if (!br) return null;
@@ -398,8 +423,8 @@ export function createInlineMatchers(
         end: pos + br[0].length,
         node: { type: "line_break" },
       };
-    },
-    (text, pos) => {
+    }),
+    defineMatcher(["<"], (text, pos) => {
       if (text[pos] !== "<") return null;
       const close = text.indexOf(">", pos + 1);
       if (close === -1) return null;
@@ -427,6 +452,16 @@ export function createInlineMatchers(
         };
       }
       return null;
-    },
+    }),
   ];
+
+  const dispatch: Record<string, InlineMatcher[]> = {};
+  for (const spec of specs) {
+    for (const firstChar of spec.firstChars) {
+      dispatch[firstChar] ??= [];
+      dispatch[firstChar].push(spec.matcher);
+    }
+  }
+
+  return dispatch;
 }

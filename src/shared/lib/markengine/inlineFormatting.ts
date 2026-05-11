@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   inlineFormatting.ts                                :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/16 21:45:31 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/16 21:45:32 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/05/11 21:03:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -70,29 +70,39 @@ export function applyInlineFormatting(
   selection: InlineTextSelection,
   command: InlineFormattingCommand,
 ) {
-  const normalizedSelection = normalizeSelection(selection, source.length);
+  const nodes = normalizeInlineNodes(parseInline(source));
+  const nextNodes = applyInlineFormattingToNodes(nodes, selection, command);
+  return nextNodes === nodes ? source : serializeInlineNodes(nextNodes);
+}
+
+export function applyInlineFormattingToNodes(
+  nodes: InlineNode[],
+  selection: InlineTextSelection,
+  command: InlineFormattingCommand,
+): InlineNode[] {
+  const normalizedSelection = normalizeSelection(
+    selection,
+    getInlineNodesTextLength(nodes),
+  );
   if (normalizedSelection.start === normalizedSelection.end) {
-    return source;
+    return nodes;
   }
 
-  const nodes = normalizeInlineNodes(parseInline(source));
   const partition = partitionInlineNodes(nodes, normalizedSelection);
   if (partition.selection.length === 0) {
-    return source;
+    return nodes;
   }
 
   const nextSelection = applyCommandToSelection(partition.selection, command);
   if (areInlineNodeListsEqual(partition.selection, nextSelection)) {
-    return source;
+    return nodes;
   }
 
-  return serializeInlineNodes(
-    normalizeInlineNodes([
-      ...partition.before,
-      ...nextSelection,
-      ...partition.after,
-    ]),
-  );
+  return normalizeInlineNodes([
+    ...partition.before,
+    ...nextSelection,
+    ...partition.after,
+  ]);
 }
 
 function normalizeSelection(selection: InlineTextSelection, maxLength: number) {

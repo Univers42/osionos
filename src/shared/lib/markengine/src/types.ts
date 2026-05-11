@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:27:54 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:27:55 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 20:31:35 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -156,6 +156,7 @@ export interface IncrementalPatch {
 export interface IncrementalParseResult {
   text: string;
   ast: DocumentNode;
+  blockIndex: BlockRange[];
   changedNodeIds: string[];
   diagnostics: ParseDiagnostic[];
 }

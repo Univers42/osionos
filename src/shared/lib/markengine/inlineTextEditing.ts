@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:25:37 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:25:38 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 21:03:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -40,12 +40,30 @@ export interface InlineTextEditResult {
   selection: InlineTextSelection;
 }
 
+export interface InlineNodeTextEditResult {
+  nodes: InlineNode[];
+  selection: InlineTextSelection;
+}
+
 export function applyInlineTextEdit(
   source: string,
   selection: InlineTextSelection,
   command: InlineTextEditCommand,
 ): InlineTextEditResult {
   const nodes = normalizeInlineNodes(parseInline(source));
+  const result = applyInlineTextEditToNodes(nodes, selection, command);
+
+  return {
+    source: result.nodes === nodes ? source : serializeInlineNodes(result.nodes),
+    selection: result.selection,
+  };
+}
+
+export function applyInlineTextEditToNodes(
+  nodes: InlineNode[],
+  selection: InlineTextSelection,
+  command: InlineTextEditCommand,
+): InlineNodeTextEditResult {
   const normalizedSelection = normalizeSelection(
     selection,
     getInlineNodesTextLength(nodes),
@@ -54,7 +72,7 @@ export function applyInlineTextEdit(
   if (command.type === "insert_text") {
     if (command.text.length === 0) {
       return {
-        source,
+        nodes,
         selection: normalizedSelection,
       };
     }
@@ -73,7 +91,7 @@ export function applyInlineTextEdit(
   );
   if (!deletionSelection) {
     return {
-      source,
+      nodes,
       selection: normalizedSelection,
     };
   }
@@ -85,7 +103,7 @@ function replaceInlineTextSelection(
   nodes: InlineNode[],
   selection: InlineTextSelection,
   replacementNodes: InlineNode[],
-): InlineTextEditResult {
+): InlineNodeTextEditResult {
   const [before, afterStart] = splitNodesAtOffset(nodes, selection.start);
   const [, after] = splitNodesAtOffset(afterStart, selection.end - selection.start);
   const insertionContext = getInsertionContext(before, after);
@@ -102,7 +120,7 @@ function replaceInlineTextSelection(
   const nextSelectionOffset = selection.start + replacementTextLength;
 
   return {
-    source: serializeInlineNodes(nextNodes),
+    nodes: nextNodes,
     selection: {
       start: nextSelectionOffset,
       end: nextSelectionOffset,

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:27:46 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:27:47 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 21:16:27 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -196,14 +196,15 @@ function mergeTextNodes(nodes: InlineNode[]): InlineNode[] {
   for (const node of nodes) {
     const prev = merged.at(-1);
     if (prev?.kind === "text" && node.kind === "text") {
-      merged[merged.length - 1] = {
+      merged.pop();
+      merged.push({
         ...prev,
         value: prev.value + node.value,
         span: {
           ...prev.span,
           endOffset: node.span.endOffset,
         },
-      };
+      });
       continue;
     }
     merged.push(node);

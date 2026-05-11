@@ -17,7 +17,7 @@ const INLINE_CODE_STYLE_MAP = {
   ["--inline-background-radius" as const]: "0",
 } satisfies InlineStyleMap;
 
-export const INLINE_CODE_STYLE = styleMapToCss(INLINE_CODE_STYLE_MAP);
+const INLINE_CODE_STYLE = styleMapToCss(INLINE_CODE_STYLE_MAP);
 
 const INLINE_BACKGROUND_RADIUS = "0.18em";
 const INLINE_BACKGROUND_PADDING = "0";
