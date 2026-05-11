@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 00:03:28 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 16:05:15 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -63,12 +63,70 @@ const teamWiki: SeedPage = {
   ],
 };
 
+const containmentFixture: SeedPage = {
+  _id: 'page-admin-cell-containment-fixture',
+  title: 'Cell containment fixture',
+  icon: 'icon:grid',
+  workspaceId: 'mock-ws-private-0',
+  ownerId: 'mock-user-0',
+  content: [
+    h1('Cell content containment'),
+    p('Three adjacent layout cells for validating intrinsic-width block containment.'),
+    {
+      id: 'block-cell-containment-layout',
+      type: 'layout',
+      content: '',
+      layoutMode: 'inline',
+      layoutConfig: { columns: 12, rows: 3, gap: 16, rowHeight: 180, wrap: true, autoArrange: false, snapToGrid: true, guideVisibility: 'auto', preview: false },
+      layoutCells: [
+        {
+          id: 'cell-containment-database',
+          colStart: 1,
+          colSpan: 3,
+          rowStart: 1,
+          rowSpan: 3,
+          label: 'Database table',
+          blocks: [{ id: 'block-containment-database', type: 'database_inline', content: '', databaseId: 'db-products', viewId: 'v-prod-table' }],
+          sizing: 'fixed',
+        },
+        {
+          id: 'cell-containment-table',
+          colStart: 4,
+          colSpan: 3,
+          rowStart: 1,
+          rowSpan: 3,
+          label: 'Wide table',
+          blocks: [{ id: 'block-containment-table', type: 'table_block', content: '', tableData: [
+            ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'],
+            ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot', 'Golf', 'Hotel', 'India', 'Juliet'],
+          ] }],
+          sizing: 'fixed',
+        },
+        {
+          id: 'cell-containment-copy',
+          colStart: 7,
+          colSpan: 6,
+          rowStart: 1,
+          rowSpan: 3,
+          label: 'Nested paragraphs',
+          blocks: [
+            p('This wider cell should stay calm while the neighboring intrinsic-width blocks scroll inside their own content regions.'),
+            p('The cell frame, selection ring, handle bar, and resize handles should remain tied to the layout cell, not the child content width.'),
+          ],
+          sizing: 'fixed',
+        },
+      ],
+    },
+  ],
+};
+
 /** All seed pages for offline playground mode. */
 export const SEED_PAGES: SeedPage[] = [
   // Admin
   gettingStarted,
   projectRoadmap,
   meetingNotes,
+  containmentFixture,
   dylanTasksDatabase,
   dylanProjectsDatabase,
   // Alex

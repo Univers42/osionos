@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 14:39:24 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 16:05:14 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -671,13 +671,15 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           tabIndex={-1}
           aria-label="Table block"
         >
-          <TableBlockEditor
-            block={block}
-            pageId={pageId}
-            style={editableStyle}
-            textStyle={editableStyle}
-            onDeleteTable={onDeleteCodeBlock}
-          />
+          <div className="osio-block-scroll-x">
+            <TableBlockEditor
+              block={block}
+              pageId={pageId}
+              style={editableStyle}
+              textStyle={editableStyle}
+              onDeleteTable={onDeleteCodeBlock}
+            />
+          </div>
         </div>
       );
 
@@ -699,11 +701,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           tabIndex={-1}
           aria-label="Database block"
         >
-          <DatabaseBlock
-            databaseId={block.databaseId}
-            initialViewId={block.viewId}
-            mode="inline"
-          />
+          <div className="osio-block-scroll-x">
+            <DatabaseBlock
+              databaseId={block.databaseId}
+              initialViewId={block.viewId}
+              mode="inline"
+            />
+          </div>
         </div>
       );
 
@@ -726,11 +730,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           aria-label="Full-page database block"
           className="my-3 min-h-[520px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
         >
-          <DatabaseBlock
-            databaseId={block.databaseId}
-            initialViewId={block.viewId}
-            mode="full"
-          />
+          <div className="osio-block-scroll-x h-full">
+            <DatabaseBlock
+              databaseId={block.databaseId}
+              initialViewId={block.viewId}
+              mode="full"
+            />
+          </div>
         </div>
       );
 

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:03:32 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 05:03:33 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 16:05:14 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -115,5 +115,6 @@ export interface Block {
   layoutMode?: LayoutMode;
   layoutConfig?: Partial<LayoutConfig>;
   layoutCells?: LayoutCell[];
+  schemaVersion?: number;
   [key: string]: unknown;	/** Arbitrary metadata */
 }

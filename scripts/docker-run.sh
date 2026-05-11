@@ -18,6 +18,7 @@ run_inside_container() {
     test-e2e) exec pnpm exec playwright test "$@" ;;
     test-e2e-serial) exec pnpm exec playwright test --workers=1 "$@" ;;
     test-e2e-smoke) exec pnpm exec playwright test tests/e2e/smoke "$@" ;;
+    test-canvas) exec node --experimental-strip-types --experimental-loader ./tests/canvas/ts-extension-loader.mjs --test tests/canvas/*.test.ts "$@" ;;
     test-doctor) exec node tests/test-env-doctor.mjs "$@" ;;
     test-bridge) exec node --test tests/bridge/*.test.mjs "$@" ;;
     bridge-api) exec node scripts/bridge-api.mjs "$@" ;;
@@ -64,6 +65,9 @@ case "${COMMAND}" in
   test-e2e-smoke)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests pnpm exec playwright test tests/e2e/smoke "$@"
     ;;
+  test-canvas)
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh test-canvas "$@"
+    ;;
   test-doctor)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests node tests/test-env-doctor.mjs "$@"
     ;;
@@ -80,7 +84,7 @@ case "${COMMAND}" in
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh mcp-claude "$@"
     ;;
   *)
-    echo "Usage: $0 {build|preview|typecheck|lint|lint-fix|test-e2e|test-e2e-serial|test-e2e-smoke|test-doctor|test-bridge|quality|bridge-api|mcp-claude}" >&2
+    echo "Usage: $0 {build|preview|typecheck|lint|lint-fix|test-e2e|test-e2e-serial|test-e2e-smoke|test-canvas|test-doctor|test-bridge|quality|bridge-api|mcp-claude}" >&2
     exit 2
     ;;
 esac

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 05:03:33 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 16:05:14 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -206,8 +206,9 @@ function layoutCellsOf(block: Block): LayoutCell[] {
 function blocksFromCell(cell: LayoutCell | undefined): Block[] {
   if (!cell) return EMPTY_BLOCKS;
   if (Array.isArray(cell.blocks) && cell.blocks.length > 0) {
-    if (cell.blocks.every(isBlockLike)) return cell.blocks;
-    const blocks = cell.blocks.filter(isBlockLike);
+    const candidateBlocks: unknown[] = cell.blocks;
+    if (candidateBlocks.every(isBlockLike)) return candidateBlocks;
+    const blocks = candidateBlocks.filter(isBlockLike);
     if (blocks.length > 0) return blocks;
   }
 

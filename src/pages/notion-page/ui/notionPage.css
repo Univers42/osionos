@@ -436,7 +436,7 @@
 
 .osionos-layout-cell[data-layout-sizing="auto-height"],
 .osionos-layout-cell[data-layout-sizing="auto"] {
-  align-self: stretch;
+  align-self: start;
   height: auto;
   overflow: visible;
 }
@@ -445,7 +445,7 @@
   justify-self: start;
   width: max-content;
   max-width: 100%;
-  overflow: auto;
+  overflow: visible;
 }
 
 .osionos-layout-cell[data-layout-wrap="false"] {
@@ -482,9 +482,10 @@
 .osionos-layout-cell[data-layout-cell-resizing="true"] {
   z-index: 5;
   width: var(--osionos-layout-cell-preview-width);
-  height: var(--osionos-layout-cell-preview-height);
-  min-height: var(--osionos-layout-cell-preview-height);
+  height: var(--osionos-layout-cell-preview-height) !important;
+  min-height: var(--osionos-layout-cell-preview-height) !important;
   max-width: none;
+  overflow: visible !important;
   transition: outline-color var(--osio-motion-standard), box-shadow var(--osio-motion-standard);
   will-change: width, height, transform;
 }
@@ -509,28 +510,67 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--osio-danger) 24%, transparent);
 }
 
+/* A layout cell defines a fixed visual frame horizontally. Content never grows
+   the cell wider; wide content scrolls inside the content region. Vertically,
+   fixed cells scroll while auto-sizing cells grow with content. */
 .osionos-layout-cell-editor {
   box-sizing: border-box;
-  min-height: 100%;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: visible;
+  flex-direction: column;
   padding: calc(var(--osio-cell-padding-block) + 20px) var(--osio-cell-padding-inline) var(--osio-cell-padding-block);
 }
 
 .osionos-layout-cell-surface-anchor {
-  min-height: 100%;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
 }
 
 .osionos-layout-cell[data-layout-sizing="fixed"] .osionos-layout-cell-editor,
 .osionos-layout-cell[data-layout-cell-resizing="true"] .osionos-layout-cell-editor {
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+}
+
+.osionos-layout-cell[data-layout-sizing="auto-height"] .osionos-layout-cell-editor,
+.osionos-layout-cell[data-layout-sizing="auto"] .osionos-layout-cell-editor,
+.osionos-layout-cell[data-layout-sizing="auto-width"] .osionos-layout-cell-editor {
+  height: auto;
+  min-height: var(--osio-cell-min-row-height, 96px);
+  overflow-y: visible;
+}
+
+.osionos-layout-cell[data-layout-sizing="auto-width"] .osionos-layout-cell-editor {
+  overflow-x: visible;
 }
 
 .osionos-layout-cell[data-layout-sizing="fixed"] .osionos-layout-cell-surface-anchor,
 .osionos-layout-cell[data-layout-cell-resizing="true"] .osionos-layout-cell-surface-anchor {
   height: 100%;
+  min-height: calc(100% + var(--osio-cell-padding-block) + var(--osio-cell-padding-block) + 20px);
+  overflow: visible;
+}
+
+.osionos-layout-cell[data-layout-sizing="auto-height"] .osionos-layout-cell-surface-anchor,
+.osionos-layout-cell[data-layout-sizing="auto"] .osionos-layout-cell-surface-anchor,
+.osionos-layout-cell[data-layout-sizing="auto-width"] .osionos-layout-cell-surface-anchor {
+  height: auto;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.osio-block-scroll-x {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .osionos-layout-cell-deferred {
@@ -587,7 +627,7 @@
   min-height: 0;
   height: 100%;
   max-height: 100%;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .osionos-layout-cell[data-layout-sizing="auto-height"] .osionos-database-block,
@@ -655,10 +695,11 @@
 
 .osionos-database-block {
   min-width: 0;
+  overflow: auto;
 }
 
 .osionos-database-block--inline {
-  overflow: visible;
+  overflow: auto;
 }
 
 .osionos-layout-cell-drag {

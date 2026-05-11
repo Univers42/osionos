@@ -9,8 +9,10 @@ import { Grid3X3, Plus, SlidersHorizontal, X } from "lucide-react";
 
 import { createViewShowcaseCells } from "@/widgets/database-view/model/databaseViewCatalog";
 import type { Block } from "@/entities/block";
+import { isCanvasV2Enabled } from "@/shared/config/featureFlags";
 import { usePageStore } from "@/store/usePageStore";
 import { BlockEditorSurface, type SurfaceBlockEditorProps } from "../BlockEditorSurface";
+import { useCanvasStoreBridge, type CanvasPersistHandler } from "./store/canvasStore";
 
 type LayoutMode = "inline" | "full_page";
 type LayoutGuideVisibility = "auto" | "always" | "never";
@@ -135,6 +137,7 @@ const LAYOUT_CONFIG_LIMITS = {
 const CELL_MIN_CONTENT_WIDTH = 280;
 const CELL_COMFORTABLE_WIDTH = 480;
 const CELL_MIN_ROW_HEIGHT = 96;
+type LayoutGridStyle = React.CSSProperties & Record<"--osionos-layout-dot-size" | "--osionos-layout-row-size", string>;
 const LAYOUT_PANEL_WIDTHS: Record<LayoutPanelKind, number> = {
   settings: 260,
   inspector: 304,
@@ -646,12 +649,14 @@ function useLayoutDismissAndUndo({
   }, [clearCollision, interactionMode, layoutRootRef, selectCell, selectedCellId]);
 }
 
-export const LayoutBlockEditor: React.FC<{
+interface LayoutBlockEditorProps {
   block: Block;
   pageId: string;
   onUpdateBlock?: (blockId: string, updates: Partial<Block>) => void;
   renderBlockEditor: (props: SurfaceBlockEditorProps) => React.ReactNode;
-}> = ({ block, pageId, onUpdateBlock, renderBlockEditor }) => {
+}
+
+const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, pageId, onUpdateBlock, renderBlockEditor }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [resizingCell, setResizingCell] = useState<LayoutResizePreview | null>(null);
@@ -1204,6 +1209,14 @@ export const LayoutBlockEditor: React.FC<{
   const layoutPanelStyle = {
     "--osionos-layout-panel-width": `${layoutPanelKind ? LAYOUT_PANEL_WIDTHS[layoutPanelKind] : 0}px`,
   } as React.CSSProperties;
+  const gridStyle: LayoutGridStyle = {
+    width: config.wrap ? "100%" : `${Math.max(960, config.columns * CELL_MIN_CONTENT_WIDTH)}px`,
+    gridTemplateColumns: `repeat(${config.columns}, minmax(0, 1fr))`,
+    gridAutoRows: `${config.rowHeight}px`,
+    gap: `${config.gap}px`,
+    "--osionos-layout-dot-size": "16px",
+    "--osionos-layout-row-size": `${config.rowHeight + config.gap}px`,
+  };
 
   return (
     <section
@@ -1309,14 +1322,7 @@ export const LayoutBlockEditor: React.FC<{
               if (target?.closest("[data-layout-cell-id], .osionos-layout-empty-state")) return;
               selectCell(null);
             }}
-            style={{
-              width: config.wrap ? "100%" : `${Math.max(960, config.columns * CELL_MIN_CONTENT_WIDTH)}px`,
-              gridTemplateColumns: `repeat(${config.columns}, minmax(0, 1fr))`,
-              gridAutoRows: `${config.rowHeight}px`,
-              gap: `${config.gap}px`,
-              "--osionos-layout-dot-size": "16px",
-              "--osionos-layout-row-size": `${config.rowHeight + config.gap}px`,
-            }}
+            style={gridStyle}
           >
             <LayoutAlignmentGuidesLayer guides={alignmentGuides} />
 
@@ -1367,6 +1373,21 @@ export const LayoutBlockEditor: React.FC<{
       </div>
     </section>
   );
+};
+
+const LayoutBlockEditorV2Bridge: React.FC<LayoutBlockEditorProps> = (props) => {
+  const { block, onUpdateBlock } = props;
+  const persist = useCallback<CanvasPersistHandler>(
+    (layoutBlockId, patch) => onUpdateBlock?.(layoutBlockId, patch),
+    [onUpdateBlock],
+  );
+  useCanvasStoreBridge(block.id, block, onUpdateBlock ? persist : undefined);
+  return <LayoutBlockEditorLegacy {...props} />;
+};
+
+export const LayoutBlockEditor: React.FC<LayoutBlockEditorProps> = (props) => {
+  if (isCanvasV2Enabled()) return <LayoutBlockEditorV2Bridge {...props} />;
+  return <LayoutBlockEditorLegacy {...props} />;
 };
 
 const LayoutAlignmentGuidesLayer: React.FC<{ guides: LayoutAlignmentGuides | null }> = ({ guides }) => (

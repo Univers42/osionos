@@ -20,6 +20,7 @@
     "test:e2e": "bash scripts/docker-run.sh test-e2e",
     "test:e2e:serial": "bash scripts/docker-run.sh test-e2e-serial",
     "test:e2e:smoke": "bash scripts/docker-run.sh test-e2e-smoke",
+    "test:canvas": "bash scripts/docker-run.sh test-canvas",
     "test:doctor": "bash scripts/docker-run.sh test-doctor",
     "test:bridge": "bash scripts/docker-run.sh test-bridge",
     "test:quality": "bash scripts/docker-run.sh quality",

@@ -1,0 +1,90 @@
+.osio-canvas-v2-debug-shell {
+  --osio-canvas-bg: #1E1E1E;
+  --osio-canvas-panel: var(--osio-bg-surface);
+  --osio-canvas-panel-border: var(--osio-border-default);
+  --osio-canvas-cell-bg: var(--osio-bg-elevated);
+  --osio-canvas-cell-border: color-mix(in srgb, var(--osio-border-default) 72%, transparent);
+  --osio-canvas-selection: var(--osio-accent);
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 280px;
+  min-height: 100vh;
+  background: var(--osio-canvas-bg);
+  color: var(--osio-fg-default);
+}
+
+.osio-canvas-v2-panel {
+  border-right: 1px solid var(--osio-canvas-panel-border);
+  background: var(--osio-canvas-panel);
+  padding: 12px;
+}
+
+.osio-canvas-v2-panel:last-child {
+  border-right: 0;
+  border-left: 1px solid var(--osio-canvas-panel-border);
+}
+
+.osio-canvas-v2-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.osio-canvas-v2-toolbar button {
+  min-height: 32px;
+  border: 1px solid var(--osio-border-default);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: var(--osio-bg-subtle);
+  color: var(--osio-fg-default);
+  font-size: 12px;
+}
+
+.osio-canvas-v2-workspace {
+  overflow: auto;
+  padding: 40px;
+}
+
+.osio-canvas-v2-stage {
+  position: relative;
+  min-width: 100%;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.18) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.osio-canvas-v2-cell {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  border: 1px solid var(--osio-canvas-cell-border);
+  border-radius: 6px;
+  padding: 12px;
+  background: var(--osio-canvas-cell-bg);
+  color: var(--osio-fg-default);
+  text-align: left;
+}
+
+.osio-canvas-v2-cell[data-selected="true"] {
+  border-color: var(--osio-canvas-selection);
+  box-shadow: 0 0 0 1px var(--osio-canvas-selection);
+}
+
+.osio-canvas-v2-cell-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.osio-canvas-v2-cell-meta {
+  color: var(--osio-fg-muted);
+  font-family: var(--osio-font-family-mono);
+  font-size: 11px;
+}
+
+.osio-canvas-v2-json {
+  max-height: calc(100vh - 80px);
+  overflow: auto;
+  white-space: pre-wrap;
+  font-family: var(--osio-font-family-mono);
+  font-size: 11px;
+}

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:37 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 05:03:33 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 16:05:14 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -57,8 +57,8 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     return (
       <div
         className={[
-          'osionos-database-block w-full min-w-0',
-          mode === 'full' ? 'osionos-database-block--full h-full overflow-auto' : 'osionos-database-block--inline my-2',
+          'osionos-database-block w-full min-w-0 overflow-auto',
+          mode === 'full' ? 'osionos-database-block--full h-full' : 'osionos-database-block--inline my-2',
         ].join(' ')}
         data-database-id={resolvedDatabaseId}
         data-database-view-id={knownViewId}
@@ -79,8 +79,8 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
   return (
     <div
       className={[
-        'osionos-database-block w-full min-w-0',
-        mode === 'full' ? 'osionos-database-block--full h-full overflow-auto' : 'osionos-database-block--inline my-2',
+        'osionos-database-block w-full min-w-0 overflow-auto',
+        mode === 'full' ? 'osionos-database-block--full h-full' : 'osionos-database-block--inline my-2',
       ].join(' ')}
       data-database-id={resolvedDatabaseId}
       data-database-view-id={resolvedInitialView}
