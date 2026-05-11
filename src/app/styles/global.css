@@ -34,6 +34,9 @@
   --color-osio-danger: var(--osio-danger);
   --color-osio-danger-hover: var(--osio-danger-hover);
   --color-osio-danger-fg: var(--osio-danger-fg);
+  --color-osio-success: var(--osio-success);
+  --color-osio-success-hover: var(--osio-success-hover);
+  --color-osio-success-fg: var(--osio-success-fg);
 
   --spacing: var(--osio-space-1);
 
@@ -127,6 +130,9 @@
   --osio-danger: #B42318;
   --osio-danger-hover: #8E1C13;
   --osio-danger-fg: #FFFFFF;
+  --osio-success: #1F6B3A;
+  --osio-success-hover: #15522A;
+  --osio-success-fg: #FFFFFF;
   --osio-overlay: rgba(11, 18, 32, 0.45);
 
   --osio-block-tint-gray-fg: #4F5B66;
@@ -182,6 +188,9 @@
   --osio-danger: #FFB4AB;
   --osio-danger-hover: #FFDAD6;
   --osio-danger-fg: #0B1220;
+  --osio-success: #9BD9AE;
+  --osio-success-hover: #C1E8CC;
+  --osio-success-fg: #0B1220;
   --osio-overlay: rgba(0, 0, 0, 0.72);
 
   --osio-block-tint-gray-fg: #D1D5DB;
@@ -232,6 +241,7 @@
   --color-surface: var(--osio-bg-surface);
   --color-border: var(--osio-border-default);
   --color-text-danger: var(--osio-danger);
+  --color-text-success: var(--osio-success);
   --color-backdrop: var(--osio-overlay);
 }
 

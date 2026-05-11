@@ -491,7 +491,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 
 	if (locked) {
 		return (
-			<div data-testid="locked-page-body" className={`relative flex flex-col ${className}`}>
+			<div data-testid="locked-page-body" className={`relative flex min-w-0 flex-col ${className}`}>
 				{blocks.length === 0 ? (
 					<p className="py-8 text-sm italic text-[var(--osio-fg-subtle)]">This page is locked and has no content.</p>
 				) : blocks.map((block, index) => <ReadOnlyBlock key={block.id} block={block} index={index} />)}
@@ -504,7 +504,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 			<button
 				type="button"
 				data-page-editor-empty-trigger
-				className={`min-h-[120px] flex-1 cursor-text text-left ${className}`}
+				className={`min-h-[120px] min-w-0 flex-1 cursor-text text-left ${className}`}
 				onClick={() => handleInitBlock(blocks)}
 			>
 				<p className="select-none pt-1 text-sm italic text-[var(--osio-fg-subtle)]">{emptyPlaceholder}</p>
@@ -513,7 +513,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	}
 
 	return (
-		<div ref={selectionRootRef} className={`relative flex flex-col ${className}`} onPointerDown={handleSelectionPointerDown}>
+		<div ref={selectionRootRef} className={`relative flex min-w-0 flex-col ${className}`} onPointerDown={handleSelectionPointerDown}>
 			<BlockTree
 				blocks={blocks}
 				pageId={pageId}

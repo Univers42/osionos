@@ -1,0 +1,104 @@
+{
+  "layoutConfig": {
+    "columns": 12,
+    "rows": 8,
+    "gap": 16,
+    "columnGap": 16,
+    "rowGap": 16,
+    "rowHeight": 96,
+    "wrap": true,
+    "autoArrange": false,
+    "snapToGrid": true,
+    "guideVisibility": "auto",
+    "preview": false,
+    "theme": "spacious"
+  },
+  "layoutCells": [
+    {
+      "id": "fixture-cell-hero",
+      "colStart": 1,
+      "colSpan": 4,
+      "rowStart": 1,
+      "rowSpan": 2,
+      "label": "Hero",
+      "tint": "color-mix(in srgb, #0B63CE 12%, var(--osio-bg-surface))",
+      "blocks": [
+        {
+          "id": "fixture-block-hero-title",
+          "type": "heading_3",
+          "content": "Canvas migration fixture"
+        },
+        {
+          "id": "fixture-block-hero-copy",
+          "type": "paragraph",
+          "content": "Round-trip coverage for legacy grid cells."
+        }
+      ],
+      "type": "text",
+      "content": "Canvas migration fixture",
+      "blockType": "heading_3",
+      "textColor": "var(--osio-fg-default)",
+      "backgroundColor": "var(--osio-bg-surface)",
+      "sizing": "fixed",
+      "horizontalConstraint": "left",
+      "verticalConstraint": "top",
+      "wrap": true,
+      "padding": "comfortable",
+      "fontSize": "large"
+    },
+    {
+      "id": "fixture-cell-offset",
+      "colStart": 5,
+      "colSpan": 3,
+      "rowStart": 1,
+      "rowSpan": 3,
+      "offset": { "x": 8, "y": 4 },
+      "label": "Offset card",
+      "tint": "color-mix(in srgb, #1F6B3A 12%, var(--osio-bg-surface))",
+      "blocks": [
+        {
+          "id": "fixture-block-offset",
+          "type": "paragraph",
+          "content": "Offset and stretch constraints survive migration."
+        }
+      ],
+      "type": "color",
+      "content": "Offset and stretch constraints survive migration.",
+      "blockType": "paragraph",
+      "textColor": "#1F2933",
+      "backgroundColor": "#D6E9D8",
+      "sizing": "fixed",
+      "horizontalConstraint": "stretch",
+      "verticalConstraint": "stretch",
+      "wrap": false,
+      "padding": "spacious",
+      "fontSize": "base"
+    },
+    {
+      "id": "fixture-cell-hug",
+      "colStart": 8,
+      "colSpan": 5,
+      "rowStart": 4,
+      "rowSpan": 2,
+      "label": "Declarative hug",
+      "blocks": [
+        {
+          "id": "fixture-block-hug",
+          "type": "paragraph",
+          "content": "Hug is declarative in Phase 1 and renders as fixed."
+        }
+      ],
+      "type": "spacer",
+      "content": "Hug is declarative in Phase 1 and renders as fixed.",
+      "blockType": "paragraph",
+      "textColor": "var(--osio-fg-default)",
+      "backgroundColor": "var(--osio-bg-muted)",
+      "sizing": "fixed",
+      "horizontalConstraint": "scale",
+      "verticalConstraint": "hug",
+      "wrap": true,
+      "padding": "compact",
+      "fontSize": "small"
+    }
+  ]
+}

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 05:03:33 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 16:05:14 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,6 +31,7 @@ import {
 } from "@/shared/config/workspaceConfigStore";
 import { SettingsCenter } from "@/features/settings/SettingsCenter";
 import { ToastViewport } from "@/shared/ui";
+import { CanvasDebugRoute } from "@/features/block-editor/ui/canvas/__demo__/CanvasDebugRoute";
 
 type UserSessions = Record<string, UserSession>;
 
@@ -99,6 +100,11 @@ async function seedEmptyOnlineWorkspaces(sessions: UserSessions, jwt: string) {
   await usePageStore.getState().seedOnlinePages(workspaceMap, jwt);
 }
 
+function isDevCanvasDebugRoute() {
+  if (!import.meta.env.DEV || globalThis.window === undefined) return false;
+  return globalThis.window.location.pathname === "/__canvas-debug" || globalThis.window.location.hash.includes("__canvas-debug");
+}
+
 /**
  * Root of the Playground app.
  *
@@ -163,6 +169,10 @@ const App: React.FC = () => {
     }
     clearWorkspaceAppearance();
   }, [activeWorkspace?._id, storedWorkspaceConfig]);
+
+  if (isDevCanvasDebugRoute()) {
+    return <CanvasDebugRoute />;
+  }
 
   if (!ready) {
     return (
