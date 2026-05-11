@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/10 00:35:50 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 05:16:36 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -139,6 +139,12 @@ interface LayoutResizePreview {
   colSpan: number;
   rowStart: number;
   rowSpan: number;
+  visual: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
 }
 
 interface LayoutMovePreview {
@@ -469,24 +475,7 @@ function resolveMovePlacement(
   const desired = normalizeMovePlacement(movingCell, config, desiredPlacement);
   const desiredCell = { ...movingCell, ...desired, offset: undefined };
   if (!layoutCellOverlapsAny(desiredCell, cells)) return { ...desired, collided: false };
-
-  const maxColStart = Math.max(1, config.columns - movingCell.colSpan + 1);
-  let bestPlacement: Pick<LayoutCell, "colStart" | "rowStart"> | null = null;
-  let bestScore = Number.POSITIVE_INFINITY;
-
-  for (let rowStart = Math.max(1, desired.rowStart - 2); rowStart <= desired.rowStart + 2; rowStart += 1) {
-    for (let colStart = Math.max(1, desired.colStart - 2); colStart <= Math.min(maxColStart, desired.colStart + 2); colStart += 1) {
-      const candidate = { ...movingCell, colStart, rowStart, offset: undefined };
-      if (layoutCellOverlapsAny(candidate, cells)) continue;
-      const score = Math.abs(colStart - desired.colStart) + Math.abs(rowStart - desired.rowStart);
-      if (score < bestScore) {
-        bestScore = score;
-        bestPlacement = { colStart, rowStart };
-      }
-    }
-  }
-
-  return bestPlacement ? { ...bestPlacement, collided: false } : { ...desired, collided: true };
+  return { ...desired, collided: true };
 }
 
 function previewCellSwap(cells: LayoutCell[], draggedCellId: string, targetCellId: string): LayoutCell[] {
@@ -601,7 +590,11 @@ function resizePreviewEqual(left: LayoutResizePreview | null, right: LayoutResiz
     left.colStart === right.colStart &&
     left.colSpan === right.colSpan &&
     left.rowStart === right.rowStart &&
-    left.rowSpan === right.rowSpan;
+    left.rowSpan === right.rowSpan &&
+    left.visual.x === right.visual.x &&
+    left.visual.y === right.visual.y &&
+    left.visual.width === right.visual.width &&
+    left.visual.height === right.visual.height;
 }
 
 function movePreviewEqual(left: LayoutMovePreview | null, right: LayoutMovePreview | null): boolean {
@@ -1872,6 +1865,12 @@ const LayoutBlockEditor: React.FC<{
       colSpan: cell.colSpan,
       rowStart: cell.rowStart,
       rowSpan: cell.rowSpan,
+      visual: {
+        x: startOffset.x,
+        y: startOffset.y,
+        width: startRect.width,
+        height: startRect.height,
+      },
     };
     let latestStyle = {
       x: startOffset.x,
@@ -1930,6 +1929,12 @@ const LayoutBlockEditor: React.FC<{
           colSpan: nextColSpan,
           rowStart: nextRowStart,
           rowSpan: nextRowSpan,
+          visual: {
+            x: nextX,
+            y: nextY,
+            width: Math.max(spanWidth(minColSpan), nextWidth),
+            height: Math.max(spanHeight(minRowSpan), nextHeight),
+          },
         },
         style: {
           x: nextX,
@@ -1947,6 +1952,7 @@ const LayoutBlockEditor: React.FC<{
       cellElement.style.setProperty("--osionos-layout-cell-preview-width", `${latestStyle.width}px`);
       cellElement.style.setProperty("--osionos-layout-cell-preview-height", `${latestStyle.height}px`);
       cellElement.dataset.layoutCellCollision = layoutCellOverlapsAny({ ...cell, ...latestPreview }, cellsRef.current) ? "true" : "";
+      setResizingCell((currentPreview) => resizePreviewEqual(currentPreview, latestPreview) ? currentPreview : latestPreview);
     };
 
     const queuePreview = (clientX: number, clientY: number) => {
@@ -2037,16 +2043,11 @@ const LayoutBlockEditor: React.FC<{
     const startLogicalLeftInGrid = startLeftInGrid - startOffset.x;
     const startLogicalTopInGrid = startTopInGrid - startOffset.y;
 
-    const offsetForPlacement = (placement: Pick<LayoutCell, "colStart" | "rowStart">): LayoutCellOffset => ({
-      x: Math.round((placement.colStart - 1) * columnStep - startLogicalLeftInGrid),
-      y: Math.round((placement.rowStart - 1) * rowStep - startLogicalTopInGrid),
-    });
-
     let frame = 0;
     let latestMove: LayoutMovePreview = { id: cell.id, offset: startOffset };
     let latestPlacement = { colStart: cell.colStart, rowStart: cell.rowStart, collided: false };
 
-    const moveFromPointer = (clientX: number, clientY: number, altKey: boolean) => {
+    const moveFromPointer = (clientX: number, clientY: number) => {
       const scrollDeltaX = globalThis.scrollX - startScrollX + (scrollContainer?.scrollLeft ?? 0) - startContainerScrollLeft;
       const scrollDeltaY = globalThis.scrollY - startScrollY;
       const deltaX = clientX - startX + scrollDeltaX;
@@ -2061,7 +2062,7 @@ const LayoutBlockEditor: React.FC<{
       };
       const resolvedPlacement = resolveMovePlacement(currentCells, cell, config, desiredPlacement);
       return {
-        move: { id: cell.id, offset: altKey ? rawOffset : offsetForPlacement(resolvedPlacement) },
+        move: { id: cell.id, offset: rawOffset },
         placement: resolvedPlacement,
       };
     };
@@ -2082,12 +2083,12 @@ const LayoutBlockEditor: React.FC<{
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       autoScroller.update(moveEvent.clientX, moveEvent.clientY);
-      const next = moveFromPointer(moveEvent.clientX, moveEvent.clientY, moveEvent.altKey);
+      const next = moveFromPointer(moveEvent.clientX, moveEvent.clientY);
       queueMove(next.move, next.placement);
     };
 
     const handlePointerUp = (upEvent: PointerEvent) => {
-      const next = moveFromPointer(upEvent.clientX, upEvent.clientY, upEvent.altKey);
+      const next = moveFromPointer(upEvent.clientX, upEvent.clientY);
       latestMove = next.move;
       latestPlacement = next.placement;
       if (frame) cancelAnimationFrame(frame);
@@ -2254,7 +2255,7 @@ const LayoutBlockEditor: React.FC<{
             style={{
               width: config.wrap ? "100%" : `${Math.max(960, config.columns * CELL_MIN_CONTENT_WIDTH)}px`,
               gridTemplateColumns: `repeat(${config.columns}, minmax(0, 1fr))`,
-              gridAutoRows: `minmax(${config.rowHeight}px, auto)`,
+              gridAutoRows: `${config.rowHeight}px`,
               gap: `${config.gap}px`,
               "--osionos-layout-dot-size": "16px",
               "--osionos-layout-row-size": `${config.rowHeight + config.gap}px`,
@@ -2396,22 +2397,27 @@ const LayoutCellViewComponent: React.FC<LayoutCellViewProps> = ({
   onStartMove,
 }) => {
   const liveCell = resizePreview ?? cell;
-  const liveOffset = movePreview?.offset ?? cell.offset;
-  const cellMinHeight = liveCell.rowSpan * config.rowHeight + Math.max(0, liveCell.rowSpan - 1) * config.gap;
+  const visualResize = resizePreview?.visual;
+  const liveOffset = visualResize ?? movePreview?.offset ?? cell.offset;
+  const cellMinHeight = visualResize?.height ?? liveCell.rowSpan * config.rowHeight + Math.max(0, liveCell.rowSpan - 1) * config.gap;
   const source = useMemo(
     () => ({ kind: "cell" as const, pageId, layoutBlockId, cellId: cell.id }),
     [cell.id, layoutBlockId, pageId],
   );
   const databasePreview = useMemo(() => layoutCellDatabasePreview(cell.blocks), [cell.blocks]);
   const cellStyle = useMemo(() => ({
-    gridColumn: `${liveCell.colStart} / span ${liveCell.colSpan}`,
-    gridRow: `${liveCell.rowStart} / span ${liveCell.rowSpan}`,
+    gridColumn: `${cell.colStart} / span ${cell.colSpan}`,
+    gridRow: `${cell.rowStart} / span ${cell.rowSpan}`,
     color: cell.textColor,
     backgroundColor: cell.backgroundColor,
     "--osionos-layout-cell-min-height": `${cellMinHeight}px`,
     "--osionos-layout-cell-offset-x": `${liveOffset?.x ?? 0}px`,
     "--osionos-layout-cell-offset-y": `${liveOffset?.y ?? 0}px`,
-  }) as React.CSSProperties, [cell.backgroundColor, cell.textColor, cellMinHeight, liveCell, liveOffset]);
+    ...(visualResize ? {
+      "--osionos-layout-cell-preview-width": `${visualResize.width}px`,
+      "--osionos-layout-cell-preview-height": `${visualResize.height}px`,
+    } : null),
+  }) as React.CSSProperties, [cell.backgroundColor, cell.colSpan, cell.colStart, cell.rowSpan, cell.rowStart, cell.textColor, cellMinHeight, liveOffset, visualResize]);
 
   const handlePointerDownCapture = useCallback((event: React.PointerEvent<HTMLElement>) => {
     if (config.preview || event.button !== 0) return;
@@ -2437,6 +2443,7 @@ const LayoutCellViewComponent: React.FC<LayoutCellViewProps> = ({
       data-layout-cell-drop-target={dataFlag(isDropTarget)}
       data-layout-cell-collision={dataFlag(isCollision)}
       data-layout-cell-moving={dataFlag(movePreview?.id === cell.id)}
+      data-layout-cell-resizing={dataFlag(Boolean(resizePreview))}
       data-layout-cell-heavy={dataFlag(hasHeavyContent)}
       data-layout-sizing={cell.sizing ?? "fixed"}
       data-layout-wrap={cell.wrap === false ? "false" : "true"}

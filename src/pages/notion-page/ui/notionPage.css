@@ -436,7 +436,7 @@
 
 .osionos-layout-cell[data-layout-sizing="auto-height"],
 .osionos-layout-cell[data-layout-sizing="auto"] {
-  align-self: start;
+  align-self: stretch;
   height: auto;
   overflow: visible;
 }
@@ -599,7 +599,7 @@
   position: absolute;
   left: -34px;
   right: 8px;
-  top: -34px;
+  top: 0;
   z-index: calc(var(--osio-z-raised) + 1);
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) auto auto;
