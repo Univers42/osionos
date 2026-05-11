@@ -3,7 +3,7 @@ import React from "react";
 import type { BlockNode } from "../ast";
 import { parse } from "../parser";
 import { renderTable, renderInlines } from "./reactHelpers";
-export { renderInlines };
+export { renderInlines } from "./reactHelpers";
 import {
   resolveIndexedMarkdownMode,
   resolveMarkdownMode,
@@ -36,6 +36,8 @@ export interface ReactRenderOptions {
   resolveBlockMode?: MarkdownModeResolver<BlockNode>;
   /** Open external links in new tab (default: true) */
   externalLinks?: boolean;
+  /** Render raw HTML blocks. Disabled by default for safety. */
+  allowHtml?: boolean;
   /** Custom code block renderer (for syntax highlighting integrations) */
   codeBlockRenderer?: (
     lang: string,
@@ -71,6 +73,7 @@ const defaults: Required<
   classPrefix: "md",
   mode: "reading",
   externalLinks: true,
+  allowHtml: false,
 };
 
 export function renderReact(
@@ -300,6 +303,13 @@ function renderBlock(
     }
 
     case "html_block":
+      if (!o.allowHtml) {
+        return React.createElement(
+          "pre",
+          { key, "data-block-state": blockState },
+          React.createElement("code", null, node.value),
+        );
+      }
       return React.createElement("div", {
         key,
         "data-block-state": blockState,

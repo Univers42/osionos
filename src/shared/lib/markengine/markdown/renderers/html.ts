@@ -3,13 +3,7 @@
 //
 
 import type { BlockNode, InlineNode } from "../ast";
-import {
-  getInlineBackgroundCss,
-  getInlineCodeCss,
-  getInlineTextColorCss,
-  shouldSuppressInlineBackground,
-  unwrapCodeRichStyles,
-} from "./inlineStyleHelpers";
+import { renderInlineNodesToHtml } from "./inlineHtml";
 import {
   resolveIndexedMarkdownMode,
   resolveMarkdownMode,
@@ -17,6 +11,7 @@ import {
   type MarkdownModeState,
   type MarkdownViewMode,
 } from "./renderMode";
+import { escapeHtml } from "../../renderCore";
 
 export interface HtmlRenderOptions {
   wrapperClass?: string;
@@ -228,77 +223,13 @@ function renderInlines(
   nodes: InlineNode[],
   o: ResolvedHtmlRenderOptions,
 ): string {
-  return nodes.map((n) => renderInline(n, o)).join("");
-}
-
-function renderInline(node: InlineNode, o: ResolvedHtmlRenderOptions): string {
-  switch (node.type) {
-    case "text":
-      return esc(node.value);
-    case "bold":
-      return `<strong>${renderInlines(node.children, o)}</strong>`;
-    case "italic":
-      return `<em style="font-style:italic">${renderInlines(node.children, o)}</em>`;
-    case "bold_italic":
-      return `<strong><em style="font-style:italic">${renderInlines(node.children, o)}</em></strong>`;
-    case "strikethrough":
-      return `<del style="text-decoration-color:currentColor">${renderInlines(node.children, o)}</del>`;
-    case "underline":
-      return `<u>${renderInlines(node.children, o)}</u>`;
-    case "text_color":
-      return `<span data-inline-type="text_color" data-inline-color="${esc(node.color)}" style="${getInlineTextColorCss(node.color)}">${renderInlines(node.children, o)}</span>`;
-    case "background_color":
-      return `<span data-inline-type="background_color" data-inline-color="${esc(node.color)}" style="${getInlineBackgroundCss(node.color, shouldSuppressInlineBackground(node.children))}">${renderInlines(node.children, o)}</span>`;
-    case "code_rich": {
-      const {
-        nodes: codeChildren,
-        textColor,
-        backgroundColor,
-      } = unwrapCodeRichStyles(node.children);
-      const style = getInlineCodeCss(textColor, backgroundColor);
-      return `<code class="inline-code" data-inline-type="code" style="${style}">${renderInlines(codeChildren, o)}</code>`;
-    }
-    case "code":
-      return `<code class="inline-code" data-inline-type="code" style="${getInlineCodeCss()}">${esc(node.value)}</code>`;
-    case "link": {
-      const attrs = [
-        `href="${esc(node.href)}"`,
-        node.title ? `title="${esc(node.title)}"` : "",
-        o.externalLinks && isExternal(node.href)
-          ? 'target="_blank" rel="noopener noreferrer"'
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      return `<a ${attrs}>${renderInlines(node.children, o)}</a>`;
-    }
-    case "image": {
-      const titleAttr = node.title ? ` title="${esc(node.title)}"` : "";
-      return `<img src="${esc(node.src)}" alt="${esc(node.alt)}"${titleAttr} />`;
-    }
-    case "line_break":
-      return "<br />";
-    case "highlight":
-      return `<mark>${renderInlines(node.children, o)}</mark>`;
-    case "math_inline":
-      return `<span class="${o.classPrefix}-math-inline">${esc(node.value)}</span>`;
-    case "footnote_ref":
-      return `<sup><a href="#fn-${esc(node.label)}">[${esc(node.label)}]</a></sup>`;
-    case "emoji":
-      return node.value;
-    default:
-      return "";
-  }
+  return renderInlineNodesToHtml(nodes, {
+    classPrefix: o.classPrefix,
+    editorChrome: false,
+    externalLinks: o.externalLinks,
+  });
 }
 
 function esc(str: string): string {
-  return str
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function isExternal(href: string): boolean {
-  return /^https?:\/\//.test(href);
+  return escapeHtml(str);
 }

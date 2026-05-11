@@ -5,7 +5,6 @@ import {
   renderInlineNodesToHtml,
   type InlineHtmlOptions,
 } from "./renderers/inlineHtml";
-import { renderInlines, type ReactRenderOptions } from "./renderers/react";
 import { parse, parseInline } from "./parser";
 
 export type { BlockDetection } from "./shortcutsDetect";
@@ -18,17 +17,6 @@ export function parseInlineMarkdown(
   // Use the full parser's inline engine → convert to HTML
   const nodes = parseInline(text);
   return renderInlineNodesToHtml(nodes, options);
-}
-
-/**
- * Render a markdown string to React elements.
- */
-export function renderInlineToReact(
-  text: string,
-  o: ReactRenderOptions = {},
-): React.ReactNode {
-  const nodes = parseInline(text);
-  return renderInlines(nodes, o);
 }
 
 /**
@@ -163,56 +151,6 @@ function listItemToBlock(
   return block;
 }
 
-function inlineToPlain(nodes: InlineNode[]): string {
-  return nodes
-    .map((n) => {
-      switch (n.type) {
-        case "text":
-          return n.value;
-        case "bold":
-        case "italic":
-        case "bold_italic":
-        case "strikethrough":
-        case "underline":
-        case "highlight":
-        case "text_color":
-        case "background_color":
-        case "code_rich":
-          return inlineToPlain(n.children);
-        case "code":
-          return n.value;
-        case "link":
-          return inlineToPlain(n.children);
-        case "image":
-          return n.alt;
-        case "emoji":
-          return n.value;
-        case "line_break":
-          return "\n";
-        case "math_inline":
-          return n.value;
-        case "footnote_ref":
-          return `[${n.label}]`;
-        default:
-          return "";
-      }
-    })
-    .join("");
-}
-
-function blockToPlain(node: BlockNode): string {
-  switch (node.type) {
-    case "paragraph":
-      return inlineToPlain(node.children);
-    case "heading":
-      return inlineToPlain(node.children);
-    case "blockquote":
-      return node.children.map((child) => blockToPlain(child)).join("\n");
-    default:
-      return "";
-  }
-}
-
 /**
  * Reconstruct markdown source from inline AST nodes, preserving
  * formatting delimiters so the editor can re-parse them for rendering.
@@ -267,17 +205,4 @@ function inlineToMarkdown(nodes: InlineNode[]): string {
       }
     })
     .join("");
-}
-
-function blockToMarkdown(node: BlockNode): string {
-  switch (node.type) {
-    case "paragraph":
-      return inlineToMarkdown(node.children);
-    case "heading":
-      return inlineToMarkdown(node.children);
-    case "blockquote":
-      return node.children.map((child) => blockToMarkdown(child)).join("\n");
-    default:
-      return "";
-  }
 }

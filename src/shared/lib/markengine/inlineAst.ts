@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import type { InlineNode } from "./markdown/index";
+import type { InlineNode } from "./markdown/ast";
 
 export type WrapperNode = Extract<
   InlineNode,

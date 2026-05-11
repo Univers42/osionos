@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { parseInline } from "./markdown/index";
+import { parseInline } from "./markdown/parser";
 import { normalizeInlineNodes, serializeInlineNodes } from "./inlineAst";
 
 /** Normalize inline markdown into a canonical serialized form. */

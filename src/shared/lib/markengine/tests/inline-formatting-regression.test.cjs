@@ -220,6 +220,15 @@ test("internal page links can render a friendly unavailable fallback title", () 
   assert.doesNotMatch(html, />abc123<\/span>/);
 });
 
+test("inline HTML renderer strips unsafe link and image schemes", () => {
+  const linkHtml = parseInlineMarkdown("[bad](javascript:alert(1))");
+  const imageHtml = parseInlineMarkdown("![bad](javascript:alert(1))");
+
+  assert.match(linkHtml, /href="#"/);
+  assert.doesNotMatch(linkHtml, /javascript:/i);
+  assert.equal(imageHtml, "");
+});
+
 test("typing inside colored text preserves the active color wrapper", () => {
   const result = applyInlineTextEdit(
     "[color=#2563EB]delta[/color] zeta",

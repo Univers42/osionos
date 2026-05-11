@@ -82,6 +82,13 @@ test("parses inline links and code spans", () => {
   assert.equal(nodes[4].kind, "text");
 });
 
+test("sanitizes unsafe href schemes in rendered html", () => {
+  const result = compileMarkdownToHtml("[bad](javascript:alert(1))");
+
+  assert.match(result.html, /href="#"/);
+  assert.doesNotMatch(result.html, /javascript:/i);
+});
+
 test("supports incremental reparsing", () => {
   const previousText = "# Title\n\nA *fast* **AST** engine.";
   const previousResult = parseMarkdown(previousText, { documentVersion: 1 });

@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import type { InlineNode } from "./markdown/index";
+import type { InlineNode } from "./markdown/ast";
 import { normalizeInlineNodes, serializeInlineNodes } from "./inlineAst";
 import {
   getElementFormattingState,
@@ -100,7 +100,7 @@ function readDomNode(node: Node): DomReadResult {
 }
 
 function readTextNode(node: Node): DomReadResult {
-  const value = (node.textContent ?? "").replace(/\u200B/g, "");
+  const value = (node.textContent ?? "").replaceAll("\u200B", "");
   return value
     ? {
         nodes: [{ type: "text", value }],
