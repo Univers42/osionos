@@ -119,7 +119,3 @@ function stripUrlControlAndSpaceChars(value: string): string {
   }
   return result;
 }
-
-export function escapeHtmlAttribute(value: string): string {
-  return escapeHtml(value);
-}

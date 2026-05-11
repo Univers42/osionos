@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "../../../..",
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  },
+  "include": [
+    "*.ts",
+    "*.tsx",
+    "inline*.ts",
+    "markdown/**/*.ts",
+    "markdown/**/*.tsx",
+    "renderCore.ts",
+    "shortcuts.ts",
+    "shortcutsDetect.ts",
+    "src/**/*.ts"
+  ],
+  "exclude": ["bench", "coverage", "dist", "node_modules", "scripts", "tests"]
+}

@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   inlineAst.ts                                       :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/16 22:23:48 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/16 22:23:49 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/05/11 21:15:28 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -80,7 +80,11 @@ export function normalizeInlineNodes(nodes: InlineNode[]): InlineNode[] {
       }
 
       if (previousNode.type === "text" && nextNode.type === "text") {
-        previousNode.value += nextNode.value;
+        normalizedNodes.pop();
+        normalizedNodes.push({
+          type: "text",
+          value: previousNode.value + nextNode.value,
+        });
         continue;
       }
 
@@ -89,10 +93,13 @@ export function normalizeInlineNodes(nodes: InlineNode[]): InlineNode[] {
         hasInlineChildren(nextNode) &&
         canMergeSiblingWrappers(previousNode, nextNode)
       ) {
-        previousNode.children = normalizeInlineNodes([
-          ...previousNode.children,
-          ...nextNode.children,
-        ]);
+        normalizedNodes.pop();
+        normalizedNodes.push(
+          cloneWrapperNode(
+            previousNode,
+            normalizeInlineNodes([...previousNode.children, ...nextNode.children]),
+          ),
+        );
         continue;
       }
 
@@ -316,10 +323,10 @@ function normalizeInlineNode(node: InlineNode): InlineNode[] {
     return [node];
   }
 
-  if (!hasInlineChildren(node)) {
-    return [node];
-  }
+  return hasInlineChildren(node) ? normalizeWrapperInlineNode(node) : [node];
+}
 
+function normalizeWrapperInlineNode(node: WrapperNode): InlineNode[] {
   const normalizedChildren = normalizeInlineNodes(node.children);
   if (normalizedChildren.length === 0) {
     return [];
@@ -336,7 +343,21 @@ function normalizeInlineNode(node: InlineNode): InlineNode[] {
     canFlattenNestedWrapper(node, child) ? child.children : [child],
   );
 
+  if (areInlineNodeListReferencesEqual(flattenedChildren, node.children)) {
+    return [node];
+  }
+
   return [cloneWrapperNode(node, flattenedChildren)];
+}
+
+function areInlineNodeListReferencesEqual(
+  left: InlineNode[],
+  right: InlineNode[],
+) {
+  return (
+    left.length === right.length &&
+    left.every((node, index) => node === right[index])
+  );
 }
 
 function serializeInlineNode(node: InlineNode): string {

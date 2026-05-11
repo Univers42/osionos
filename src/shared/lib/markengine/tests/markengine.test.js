@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:27:36 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:27:37 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 21:03:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -105,6 +105,122 @@ test("supports incremental reparsing", () => {
   assert.match(renderHtml(next.ast), /very fast/);
 });
 
+function createRandom(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+}
+
+function pick(random, values) {
+  return values[Math.floor(random() * values.length)];
+}
+
+function createRandomDocument(random) {
+  const lines = [];
+  const blockCount = 3 + Math.floor(random() * 12);
+  for (let block = 0; block < blockCount; block++) {
+    const kind = pick(random, ["paragraph", "heading", "list", "quote"]);
+    if (kind === "heading") {
+      lines.push(`${"#".repeat(1 + Math.floor(random() * 3))} ${pick(random, ["Alpha", "Beta", "Gamma"])}`);
+    } else if (kind === "list") {
+      const count = 1 + Math.floor(random() * 4);
+      for (let item = 0; item < count; item++) {
+        lines.push(`- ${pick(random, ["one", "two", "three"])} ${Math.floor(random() * 10)}`);
+      }
+    } else if (kind === "quote") {
+      lines.push(`> ${pick(random, ["quoted", "noted", "saved"])} ${Math.floor(random() * 10)}`);
+    } else {
+      const count = 1 + Math.floor(random() * 3);
+      for (let line = 0; line < count; line++) {
+        lines.push(`${pick(random, ["plain", "soft", "fast"])} ${Math.floor(random() * 100)} ${pick(random, ["text", "words", "inline *em*"])}`);
+      }
+    }
+    if (block + 1 < blockCount && random() < 0.8) lines.push("");
+  }
+  return lines.join("\n");
+}
+
+function applyPatch(source, patch) {
+  const lines = source.replaceAll(/\r\n?/g, "\n").split("\n");
+  const fromLine = Math.max(0, Math.min(patch.fromLine, lines.length - 1));
+  const toLine = Math.max(0, Math.min(patch.toLine, lines.length - 1));
+  return [
+    ...lines.slice(0, Math.min(fromLine, toLine)),
+    ...patch.text.replaceAll(/\r\n?/g, "\n").split("\n"),
+    ...lines.slice(Math.max(fromLine, toLine) + 1),
+  ].join("\n");
+}
+
+test("incremental parsing matches a full parse for random patches", () => {
+  const random = createRandom(0x5167a11d);
+  for (let sample = 0; sample < 500; sample++) {
+    const source = createRandomDocument(random);
+    const previous = parseMarkdown(source, { documentVersion: sample });
+    const lineCount = source.split("\n").length;
+    const fromLine = Math.floor(random() * lineCount);
+    const toLine = fromLine + Math.floor(random() * Math.min(3, lineCount - fromLine));
+    const replacementLines = 1 + Math.floor(random() * 3);
+    const text = Array.from(
+      { length: replacementLines },
+      () => `${pick(random, ["changed", "edited", "typed"])} ${Math.floor(random() * 100)} ${pick(random, ["text", "words", "line"])}`,
+    ).join("\n");
+    const patch = { fromLine, toLine, text };
+    const next = incrementalParse(source, previous, patch);
+    const full = parseMarkdown(applyPatch(source, patch), {
+      documentVersion: previous.ast.version + 1,
+    });
+
+    assert.deepEqual(next.ast, full.ast);
+    assert.deepEqual(next.blockIndex, full.blockIndex);
+  }
+});
+
+function createLineIsolatedDocument(lineCount) {
+  const lines = [];
+  for (let index = 0; index < lineCount; index++) {
+    lines.push(index % 2 === 0 ? `Paragraph ${index} with **inline** text.` : "");
+  }
+  return lines.join("\n");
+}
+
+test("incremental parsing matches a full parse for measured edit sizes", () => {
+  const measuredSizes = [
+    { lineCount: 1000, edits: 40 },
+    { lineCount: 5000, edits: 25 },
+    { lineCount: 10000, edits: 20 },
+    { lineCount: 50000, edits: 10 },
+    { lineCount: 200000, edits: 5 },
+  ];
+  let sample = 0;
+
+  for (const { lineCount, edits } of measuredSizes) {
+    const source = createLineIsolatedDocument(lineCount);
+    const previous = parseMarkdown(source, { documentVersion: lineCount });
+    const editableLines = Math.floor(lineCount / 2);
+
+    for (let edit = 0; edit < edits; edit++) {
+      const fromLine = ((edit * 997) % editableLines) * 2;
+      const patch = {
+        fromLine,
+        toLine: fromLine,
+        text: `Paragraph ${fromLine} with **inline** text.${edit}`,
+      };
+      const next = incrementalParse(source, previous, patch);
+      const full = parseMarkdown(applyPatch(source, patch), {
+        documentVersion: previous.ast.version + 1,
+      });
+
+      assert.deepEqual(next.ast, full.ast, `targeted sample ${sample}`);
+      assert.deepEqual(next.blockIndex, full.blockIndex, `targeted sample ${sample}`);
+      sample++;
+    }
+  }
+
+  assert.equal(sample, 100);
+});
+
 test("reports a diagnostic for an unterminated code fence", () => {
   const result = parseMarkdown("```ts\nconsole.log('x');\n");
 
@@ -144,6 +260,65 @@ test("parses ordered and unordered list shapes", () => {
   assert.equal(result.ast.children[0].items.length, 2);
   assert.equal(result.ast.children[1].kind, "list");
   assert.equal(result.ast.children[1].ordered, false);
+});
+
+test("covers block parser edge branches", () => {
+  const result = parseMarkdown(
+    [
+      "####### not a heading",
+      "##also not a heading",
+      "",
+      "***",
+      "",
+      "```",
+      "plain fence",
+      "```",
+      "",
+      "- [ ] open task",
+      "- [X] done task",
+    ].join("\n"),
+  );
+
+  assert.equal(result.diagnostics.length, 0);
+  assert.equal(result.ast.children[0].kind, "paragraph");
+  assert.equal(result.ast.children[1].kind, "thematic_break");
+  assert.equal(result.ast.children[2].kind, "code_block");
+  assert.equal(result.ast.children[2].language, null);
+  assert.equal(result.ast.children[3].kind, "list");
+  assert.equal(result.ast.children[3].items[0].checked, false);
+  assert.equal(result.ast.children[3].items[1].checked, true);
+
+  const paragraphStops = parseMarkdown(["alpha", "```", "code", "```", "bravo", "***"].join("\n"));
+  assert.equal(paragraphStops.ast.children[0].kind, "paragraph");
+  assert.equal(paragraphStops.ast.children[1].kind, "code_block");
+  assert.equal(paragraphStops.ast.children[2].kind, "paragraph");
+  assert.equal(paragraphStops.ast.children[3].kind, "thematic_break");
+
+  const shortParagraph = parseMarkdown("x");
+  assert.equal(shortParagraph.ast.children[0].kind, "paragraph");
+});
+
+test("covers inline parser delimiter fallback branches", () => {
+  const nodes = parseInlines(
+    "**strong** *em* **open *open [label] [empty]() [ok](https://example.com)",
+  );
+
+  assert.equal(nodes[0].kind, "strong");
+  assert.equal(nodes[2].kind, "emphasis");
+  assert.ok(nodes.some((node) => node.kind === "link"));
+  assert.ok(
+    nodes.some((node) => node.kind === "text" && node.value.includes("open *open")),
+  );
+
+  const malformed = parseInlines("[unterminated");
+  assert.equal(malformed.length, 1);
+  assert.ok(
+    malformed[0].kind === "text" && malformed[0].value.includes("unterminated"),
+  );
+
+  const emptyHref = parseInlines("[empty]()");
+  assert.equal(emptyHref.length, 1);
+  assert.ok(emptyHref[0].kind === "text" && emptyHref[0].value.includes("empty"));
 });
 
 test("renders markdown source syntax view", () => {

@@ -10,10 +10,22 @@ import {
 } from "./inlineStyleHelpers";
 import { isExternalUrl, sanitizeUrl } from "../../renderCore";
 
+export interface ReactRenderHelperOptions {
+  classPrefix: string;
+  externalLinks: boolean;
+  blockState?: string;
+  mathRenderer?: (value: string, display: boolean) => React.ReactElement;
+  imageRenderer?: (
+    src: string,
+    alt: string,
+    title?: string,
+  ) => React.ReactElement;
+  internalLinkRenderer?: (pageId: string) => React.ReactNode;
+}
+
 export function renderTable(
   node: Extract<BlockNode, { type: "table" }>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  o: any,
+  o: ReactRenderHelperOptions,
   key: number | string,
 ): React.ReactElement {
   const blockState =
@@ -74,16 +86,14 @@ export function renderTable(
 
 export function renderInlines(
   nodes: InlineNode[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  o: any,
+  o: ReactRenderHelperOptions,
 ): React.ReactNode[] {
   return nodes.map((n, i) => renderInlineNode(n, o, i));
 }
 
 export function renderInlineNode(
   node: InlineNode,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  o: any,
+  o: ReactRenderHelperOptions,
   key: number | string,
 ): React.ReactNode {
   switch (node.type) {
@@ -287,8 +297,3 @@ export function renderInlineNode(
   }
 }
 
-// HELPERS
-
-export function isExternal(href: string): boolean {
-  return isExternalUrl(href);
-}

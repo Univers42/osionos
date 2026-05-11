@@ -21,7 +21,7 @@ import {
   incrementalParse,
   parseMarkdown,
   renderHtml,
-} from "./markdown";
+} from ".";
 
 const parsed = parseMarkdown("# Title\n\nA *fast* engine.", {
   documentVersion: 1,
@@ -70,6 +70,28 @@ This split keeps the editor responsibilities separate:
 - `inlineFormatting.ts` compares AST selections structurally instead of serializing them with `JSON.stringify`, avoiding extra allocations on repeated formatting operations.
 - Shared inline style helpers reduce duplicated per-render style construction logic across renderer implementations.
 
+### Worker responsiveness
+
+Large documents can move parse and render work off the main thread through a single `MarkEngineWorker`. The worker is intentionally not a pool: parsing one Markdown document is sequential, and editor integrations usually have one active document parse at a time.
+
+```ts
+import { createBrowserMarkEngineWorkerClient } from ".";
+
+const engine = createBrowserMarkEngineWorkerClient(
+  new URL("./src/browser-worker.js", import.meta.url),
+  { syncThresholdBytes: 8 * 1024 },
+);
+
+const parsed = await engine.parse(markdownSource);
+const html = await engine.renderHtml(parsed.ast, {}, {
+  sourceByteLength: markdownSource.length,
+});
+```
+
+Node integrations can use `createNodeMarkEngineWorkerClient()` from the same public API. Sources above the threshold are encoded into transferable `ArrayBuffer`s before posting to the worker. Documents below the threshold run synchronously because the worker round trip costs more than the parse.
+
+This improves responsiveness, not throughput. A 1MB parse still costs CPU time, and end-to-end worker latency can include transfer plus structured-clone overhead; the win is that the main thread can keep handling input and paint. Run `npm run bench:worker-blocking` to compare main-thread timer delay for a 1MB parse on the main thread versus in `MarkEngineWorker`.
+
 ## Architecture notes
 
 - [src/block-parser.ts](src/block-parser.ts) handles block structure.
@@ -78,3 +100,12 @@ This split keeps the editor responsibilities separate:
 - [src/incremental.ts](src/incremental.ts) applies patches and reports changed nodes.
 
 For a deeper architecture overview, see [docs/Markdown_engine.md](docs/Markdown_engine.md).
+
+## How to add a new block type
+
+1. Add the typed AST shape in [src/types.ts](src/types.ts). Extend `BlockKind`, add a node interface with a precise `span`, and include that interface in the `BlockNode` union.
+2. Teach [src/block-parser.ts](src/block-parser.ts) to recognize the block before the paragraph fallback. Keep detection local and deterministic: parse only from `cursor`, return the parsed node, `nextLine`, and diagnostics, then let `parseMarkdown` add it to the block index.
+3. Preserve incremental parsing by making the new node span cover every source line it owns. [src/incremental.ts](src/incremental.ts) relies on those spans to choose the smallest safe reparse window.
+4. Render the new node in [src/renderer.ts](src/renderer.ts) and, when source-view output needs special markup, in [src/source-renderer.ts](src/source-renderer.ts).
+5. Add tests that cover detection, rendering, malformed input, and incremental edits around the new block. The CI gate requires at least 95% branch coverage for [src/block-parser.ts](src/block-parser.ts) and [src/inline-parser.ts](src/inline-parser.ts), so include both positive and fallback cases.
+6. Run `npm run check`, `npm run coverage:parsers`, and `npm run bench:ci` before opening a PR. The quality gate fails on explicit `any`, unused internal exports, circular imports, missing public API examples, and parser coverage drops.

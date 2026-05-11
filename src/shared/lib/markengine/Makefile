@@ -76,6 +76,7 @@ py-check: ## Syntax-check the Python tooling
 lint: ## Run the available code-quality checks
 	@echo -e "$(INFO) Running lint checks...$(RESET)"
 	@$(MAKE) -s typecheck
+	@$(NPM) run quality
 	@$(MAKE) -s py-check
 	@echo -e "$(SUCCESS) Lint checks passed$(RESET)"
 
