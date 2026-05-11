@@ -419,7 +419,7 @@
   outline: 2px solid transparent;
   outline-offset: -2px;
   transform: translate3d(var(--osionos-layout-cell-offset-x, 0), var(--osionos-layout-cell-offset-y, 0), 0);
-  transition: outline-color var(--osio-motion-standard), box-shadow var(--osio-motion-standard), transform var(--osio-motion-standard);
+  transition: outline-color var(--osio-motion-standard), box-shadow var(--osio-motion-standard);
   cursor: default;
 }
 
@@ -475,7 +475,7 @@
 .osionos-layout-cell[data-layout-cell-moving="true"] {
   z-index: 5;
   cursor: grabbing;
-  transition: outline-color var(--osio-motion-standard), box-shadow var(--osio-motion-standard);
+  transition: none;
   will-change: transform;
 }
 
@@ -486,7 +486,7 @@
   min-height: var(--osionos-layout-cell-preview-height) !important;
   max-width: none;
   overflow: visible !important;
-  transition: outline-color var(--osio-motion-standard), box-shadow var(--osio-motion-standard);
+  transition: none;
   will-change: width, height, transform;
 }
 
@@ -554,7 +554,7 @@
 .osionos-layout-cell[data-layout-sizing="fixed"] .osionos-layout-cell-surface-anchor,
 .osionos-layout-cell[data-layout-cell-resizing="true"] .osionos-layout-cell-surface-anchor {
   height: 100%;
-  min-height: calc(100% + var(--osio-cell-padding-block) + var(--osio-cell-padding-block) + 20px);
+  min-height: 0;
   overflow: visible;
 }
 

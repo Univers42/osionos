@@ -103,6 +103,8 @@ interface LayoutHistorySnapshot {
   selectedCellId: string | null;
 }
 
+type LayoutMeasuredCellHeights = ReadonlyMap<string, number>;
+
 type LayoutPanelKind = "settings" | "inspector";
 
 const LAYOUT_CELL_COLOR_SWATCHES = [
@@ -320,12 +322,31 @@ function clampLayoutCell(cell: LayoutCell, config: LayoutConfig): LayoutCell {
   };
 }
 
-function cellsOverlap(left: LayoutCell, right: LayoutCell): boolean {
+function layoutCellUsesContentHeight(cell: LayoutCell): boolean {
+  return cell.sizing === "auto-height" || cell.sizing === "auto" || cell.sizing === "auto-width";
+}
+
+function rowSpanForRenderedHeight(height: number, config: LayoutConfig): number {
+  if (!Number.isFinite(height) || height <= 0) return 1;
+  const rowStep = config.rowHeight + config.gap;
+  return clampNumber(Math.ceil((height + config.gap) / rowStep), 1, LAYOUT_CONFIG_LIMITS.rows[1], 1);
+}
+
+function collisionRowSpan(cell: LayoutCell, config?: LayoutConfig, measuredHeights?: LayoutMeasuredCellHeights): number {
+  if (!config || !measuredHeights || !layoutCellUsesContentHeight(cell)) return cell.rowSpan;
+  const measuredHeight = measuredHeights.get(cell.id);
+  if (!measuredHeight) return cell.rowSpan;
+  return Math.max(cell.rowSpan, rowSpanForRenderedHeight(measuredHeight, config));
+}
+
+function cellsOverlap(left: LayoutCell, right: LayoutCell, config?: LayoutConfig, measuredHeights?: LayoutMeasuredCellHeights): boolean {
+  const leftRowSpan = collisionRowSpan(left, config, measuredHeights);
+  const rightRowSpan = collisionRowSpan(right, config, measuredHeights);
   return !(
     left.colStart + left.colSpan <= right.colStart ||
     right.colStart + right.colSpan <= left.colStart ||
-    left.rowStart + left.rowSpan <= right.rowStart ||
-    right.rowStart + right.rowSpan <= left.rowStart
+    left.rowStart + leftRowSpan <= right.rowStart ||
+    right.rowStart + rightRowSpan <= left.rowStart
   );
 }
 
@@ -334,6 +355,7 @@ function findLayoutPlacement(
   config: LayoutConfig,
   colSpan: number,
   rowSpan: number,
+  measuredHeights?: LayoutMeasuredCellHeights,
 ): Pick<LayoutCell, "colStart" | "rowStart"> {
   const safeColSpan = Math.min(config.columns, Math.max(1, colSpan));
   const safeRowSpan = Math.max(1, rowSpan);
@@ -351,7 +373,7 @@ function findLayoutPlacement(
         content: "",
         blocks: [],
       };
-      if (placedCells.every((cell) => !cellsOverlap(candidate, cell))) {
+      if (placedCells.every((cell) => !cellsOverlap(candidate, cell, config, measuredHeights))) {
         return { colStart, rowStart };
       }
     }
@@ -380,12 +402,12 @@ function normalizeLayoutCells(cells: LayoutCell[], config: LayoutConfig): Layout
   return config.autoArrange ? packLayoutCells(clampedCells, config) : clampedCells;
 }
 
-function hasLayoutCellCollision(cells: LayoutCell[]): boolean {
-  return cells.some((cell, index) => cells.slice(index + 1).some((candidate) => cellsOverlap(cell, candidate)));
+function hasLayoutCellCollision(cells: LayoutCell[], config: LayoutConfig, measuredHeights?: LayoutMeasuredCellHeights): boolean {
+  return cells.some((cell, index) => cells.slice(index + 1).some((candidate) => cellsOverlap(cell, candidate, config, measuredHeights)));
 }
 
-function layoutCellOverlapsAny(cell: LayoutCell, cells: LayoutCell[]): boolean {
-  return cells.some((candidate) => candidate.id !== cell.id && cellsOverlap(cell, candidate));
+function layoutCellOverlapsAny(cell: LayoutCell, cells: LayoutCell[], config: LayoutConfig, measuredHeights?: LayoutMeasuredCellHeights): boolean {
+  return cells.some((candidate) => candidate.id !== cell.id && cellsOverlap(cell, candidate, config, measuredHeights));
 }
 
 function normalizeMovePlacement(
@@ -404,10 +426,11 @@ function resolveMovePlacement(
   movingCell: LayoutCell,
   config: LayoutConfig,
   desiredPlacement: Pick<LayoutCell, "colStart" | "rowStart">,
+  measuredHeights?: LayoutMeasuredCellHeights,
 ): Pick<LayoutCell, "colStart" | "rowStart"> & { collided: boolean } {
   const desired = normalizeMovePlacement(movingCell, config, desiredPlacement);
   const desiredCell = { ...movingCell, ...desired, offset: undefined };
-  if (!layoutCellOverlapsAny(desiredCell, cells)) return { ...desired, collided: false };
+  if (!layoutCellOverlapsAny(desiredCell, cells, config, measuredHeights)) return { ...desired, collided: false };
   return { ...desired, collided: true };
 }
 
@@ -440,10 +463,51 @@ function previewCellSwap(cells: LayoutCell[], draggedCellId: string, targetCellI
   });
 }
 
-function applyCollisionPolicy(cells: LayoutCell[], config: LayoutConfig, fallbackCells: LayoutCell[]): LayoutCell[] {
+function applyCollisionPolicy(cells: LayoutCell[], config: LayoutConfig, fallbackCells: LayoutCell[], measuredHeights?: LayoutMeasuredCellHeights): LayoutCell[] {
   const normalizedCells = cells.map((cell) => clampLayoutCell(cell, config));
   if (config.autoArrange) return packLayoutCells(normalizedCells, config);
-  return hasLayoutCellCollision(normalizedCells) ? fallbackCells : normalizedCells;
+  return hasLayoutCellCollision(normalizedCells, config, measuredHeights) ? fallbackCells : normalizedCells;
+}
+
+function layoutCellPlacementEqual(left: LayoutCell, right: LayoutCell): boolean {
+  return left.colStart === right.colStart &&
+    left.colSpan === right.colSpan &&
+    left.rowStart === right.rowStart &&
+    left.rowSpan === right.rowSpan;
+}
+
+function resolveMeasuredAutoHeightFootprints(cells: LayoutCell[], config: LayoutConfig, measuredHeights: LayoutMeasuredCellHeights): LayoutCell[] {
+  if (measuredHeights.size === 0) return cells;
+  let changed = false;
+  const expandedCells = cells.map((cell) => {
+    if (!layoutCellUsesContentHeight(cell)) return cell;
+    const rowSpan = collisionRowSpan(cell, config, measuredHeights);
+    if (rowSpan === cell.rowSpan) return cell;
+    changed = true;
+    return { ...cell, rowSpan };
+  });
+
+  if (!changed && !hasLayoutCellCollision(expandedCells, config)) return cells;
+
+  const placedCells: LayoutCell[] = [];
+  const cellsById = new Map<string, LayoutCell>();
+  const orderedCells = expandedCells
+    .map((cell, index) => ({ cell, index }))
+    .sort((left, right) => left.cell.rowStart - right.cell.rowStart || left.cell.colStart - right.cell.colStart || left.index - right.index);
+
+  for (const { cell } of orderedCells) {
+    let nextCell = cell;
+    let attempts = 0;
+    while (layoutCellOverlapsAny(nextCell, placedCells, config) && attempts < LAYOUT_CONFIG_LIMITS.rows[1] * 2) {
+      nextCell = { ...nextCell, rowStart: nextCell.rowStart + 1 };
+      attempts += 1;
+    }
+    placedCells.push(nextCell);
+    cellsById.set(cell.id, nextCell);
+  }
+
+  const nextCells = expandedCells.map((cell) => cellsById.get(cell.id) ?? cell);
+  return nextCells.some((cell, index) => !layoutCellPlacementEqual(cell, cells[index])) ? nextCells : cells;
 }
 
 function getLayoutMode(block: Block): LayoutMode {
@@ -673,6 +737,8 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
   const storedCells = Array.isArray(block.layoutCells) ? block.layoutCells as LayoutCell[] : EMPTY_LAYOUT_CELLS;
   const cells = useMemo(() => normalizeLayoutCells(storedCells, config), [storedCells, config]);
   const cellsRef = useRef<LayoutCell[]>(cells);
+  const measuredCellHeightsRef = useRef<Map<string, number>>(new Map());
+  const [measurementVersion, setMeasurementVersion] = useState(0);
   const layoutRootRef = useRef<HTMLElement | null>(null);
   const layoutHistoryRef = useRef<{ undoStack: LayoutHistorySnapshot[]; redoStack: LayoutHistorySnapshot[] }>({
     undoStack: [],
@@ -684,7 +750,24 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
   );
   useEffect(() => {
     cellsRef.current = cells;
+    const liveCellIds = new Set(cells.map((cell) => cell.id));
+    for (const cellId of measuredCellHeightsRef.current.keys()) {
+      if (!liveCellIds.has(cellId)) measuredCellHeightsRef.current.delete(cellId);
+    }
   }, [cells]);
+
+  const updateMeasuredCellHeight = useCallback((cellId: string, height: number | null) => {
+    if (height === null) {
+      if (measuredCellHeightsRef.current.delete(cellId)) setMeasurementVersion((version) => version + 1);
+      return;
+    }
+
+    const measuredHeight = Math.max(0, Math.round(height));
+    const previousHeight = measuredCellHeightsRef.current.get(cellId);
+    if (previousHeight === measuredHeight) return;
+    measuredCellHeightsRef.current.set(cellId, measuredHeight);
+    setMeasurementVersion((version) => version + 1);
+  }, []);
 
   useEffect(() => {
     layoutHistoryRef.current = { undoStack: [], redoStack: [] };
@@ -700,6 +783,14 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
     },
     [block.id, onUpdateBlock, pageId, updateBlock],
   );
+
+  useEffect(() => {
+    if (interactionMode) return;
+    const nextCells = resolveMeasuredAutoHeightFootprints(cellsRef.current, config, measuredCellHeightsRef.current);
+    if (nextCells === cellsRef.current) return;
+    cellsRef.current = nextCells;
+    updateLayout({ layoutCells: nextCells });
+  }, [cells, config, interactionMode, measurementVersion, updateLayout]);
 
   const captureLayoutSnapshot = useCallback((): LayoutHistorySnapshot => ({
     layoutConfig: structuredClone(config),
@@ -761,7 +852,7 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
 
   const updateCells = useCallback((nextCells: LayoutCell[], options: { allowCollisionFallback?: boolean } = {}) => {
     const normalizedCells = normalizeLayoutCells(nextCells, config);
-    if (!config.autoArrange && !options.allowCollisionFallback && hasLayoutCellCollision(normalizedCells)) {
+    if (!config.autoArrange && !options.allowCollisionFallback && hasLayoutCellCollision(normalizedCells, config, measuredCellHeightsRef.current)) {
       return false;
     }
     pushLayoutSnapshot();
@@ -776,7 +867,7 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
     const comfortableSpan = Math.max(1, Math.ceil(CELL_COMFORTABLE_WIDTH / columnWidth));
     const colSpan = Math.min(config.columns, Math.max(template?.colSpan ?? comfortableSpan, Math.ceil(CELL_MIN_CONTENT_WIDTH / columnWidth)));
     const rowSpan = Math.max(1, template?.rowSpan ?? 2);
-    const placement = findLayoutPlacement(currentCells, config, colSpan, rowSpan);
+    const placement = findLayoutPlacement(currentCells, config, colSpan, rowSpan, measuredCellHeightsRef.current);
     const nextCell: LayoutCell = {
       id: crypto.randomUUID(),
       colStart: template?.colStart ?? placement.colStart,
@@ -841,6 +932,7 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
       currentCells.map((cell) => (cell.id === cellId ? { ...cell, ...patch } : cell)),
       config,
       currentCells,
+      measuredCellHeightsRef.current,
     );
     const changed = nextCells !== currentCells;
     setCollisionCellId(changed ? null : cellId);
@@ -1013,7 +1105,7 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
       cellElement.style.setProperty("--osionos-layout-cell-offset-y", `${latestStyle.y}px`);
       cellElement.style.setProperty("--osionos-layout-cell-preview-width", `${latestStyle.width}px`);
       cellElement.style.setProperty("--osionos-layout-cell-preview-height", `${latestStyle.height}px`);
-      cellElement.dataset.layoutCellCollision = layoutCellOverlapsAny({ ...cell, ...latestPreview }, cellsRef.current) ? "true" : "";
+      cellElement.dataset.layoutCellCollision = layoutCellOverlapsAny({ ...cell, ...latestPreview }, cellsRef.current, config, measuredCellHeightsRef.current) ? "true" : "";
       setResizingCell((currentPreview) => resizePreviewEqual(currentPreview, latestPreview) ? currentPreview : latestPreview);
     };
 
@@ -1122,7 +1214,7 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
         colStart: Math.round((startLogicalLeftInGrid + deltaX) / columnStep) + 1,
         rowStart: Math.round((startLogicalTopInGrid + deltaY) / rowStep) + 1,
       };
-      const resolvedPlacement = resolveMovePlacement(currentCells, cell, config, desiredPlacement);
+      const resolvedPlacement = resolveMovePlacement(currentCells, cell, config, desiredPlacement, measuredCellHeightsRef.current);
       return {
         move: { id: cell.id, offset: rawOffset },
         placement: resolvedPlacement,
@@ -1366,6 +1458,7 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
                 onDeleteCell={removeCell}
                 onStartResize={startResize}
                 onStartMove={startMove}
+                onMeasureCell={updateMeasuredCellHeight}
               />
             ))}
           </div>
@@ -1428,6 +1521,7 @@ interface LayoutCellViewProps {
   onDeleteCell: (cellId: string) => void;
   onStartResize: (event: React.PointerEvent<HTMLElement>, cell: LayoutCell, edge: LayoutResizeEdge) => void;
   onStartMove: (event: React.PointerEvent<HTMLElement>, cell: LayoutCell) => void;
+  onMeasureCell: (cellId: string, height: number | null) => void;
 }
 
 function layoutCellViewPropsEqual(left: LayoutCellViewProps, right: LayoutCellViewProps): boolean {
@@ -1473,7 +1567,9 @@ const LayoutCellViewComponent: React.FC<LayoutCellViewProps> = ({
   onDeleteCell,
   onStartResize,
   onStartMove,
+  onMeasureCell,
 }) => {
+  const cellRef = useRef<HTMLElement | null>(null);
   const liveCell = resizePreview ?? cell;
   const visualResize = resizePreview?.visual;
   const liveOffset = visualResize ?? movePreview?.offset ?? cell.offset;
@@ -1511,8 +1607,30 @@ const LayoutCellViewComponent: React.FC<LayoutCellViewProps> = ({
     onFocusCell(cell.id);
   }, [cell, config.preview, onFocusCell, onStartResize]);
 
+  useEffect(() => {
+    if (!layoutCellUsesContentHeight(cell)) {
+      onMeasureCell(cell.id, null);
+      return undefined;
+    }
+
+    const cellElement = cellRef.current;
+    if (!cellElement) return undefined;
+
+    const measure = () => onMeasureCell(cell.id, cellElement.getBoundingClientRect().height);
+    measure();
+    if (typeof ResizeObserver === "undefined") return () => onMeasureCell(cell.id, null);
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(cellElement);
+    return () => {
+      observer.disconnect();
+      onMeasureCell(cell.id, null);
+    };
+  }, [cell, onMeasureCell]);
+
   return (
     <section
+      ref={cellRef}
       aria-label={cell.label || "Layout cell"}
       className="osionos-layout-cell group/cell"
       data-layout-cell-id={cell.id}
