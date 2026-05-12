@@ -117,27 +117,36 @@ type ListItemNodeLike = {
   checked?: boolean;
 };
 
+function isListBlock(node: BlockNode): boolean {
+  return (
+    node.type === "ordered_list" ||
+    node.type === "unordered_list" ||
+    node.type === "task_list"
+  );
+}
+
 function listItemToBlock(
   type: "bulleted_list" | "numbered_list" | "to_do",
   item: ListItemNodeLike,
   checked?: boolean,
 ): Block {
   const nestedBlocks = item.children.flatMap((child) => {
-    if (
-      child.type === "ordered_list" ||
-      child.type === "unordered_list" ||
-      child.type === "task_list"
-    ) {
+    if (isListBlock(child)) {
       return astToBlocks(child);
     }
 
     return [];
   });
+  const content = item.children
+    .filter((child) => !isListBlock(child))
+    .map((child) => blockToMarkdown(child))
+    .filter(Boolean)
+    .join("\n");
 
   const block: Block = {
     id: crypto.randomUUID(),
     type,
-    content: item.children.map((child) => blockToMarkdown(child)).join("\n"),
+    content,
   };
 
   if (checked !== undefined) {
@@ -149,6 +158,122 @@ function listItemToBlock(
   }
 
   return block;
+}
+
+function renderMarkdownListItemBody(item: ListItemNodeLike): string {
+  return item.children.map((child) => blockToMarkdown(child)).join("\n");
+}
+
+function indentMarkdownContinuation(markdown: string, prefixLength: number): string {
+  const continuationPrefix = " ".repeat(prefixLength);
+  return markdown
+    .split("\n")
+    .map((line, index) => (index === 0 ? line : `${continuationPrefix}${line}`))
+    .join("\n");
+}
+
+function blockToMarkdown(node: BlockNode): string {
+  switch (node.type) {
+    case "document":
+      return node.children.map((child) => blockToMarkdown(child)).join("\n\n");
+    case "paragraph":
+      return inlineToMarkdown(node.children);
+    case "heading":
+      return `${"#".repeat(node.level)} ${inlineToMarkdown(node.children)}`;
+    case "thematic_break":
+      return "---";
+    case "blockquote":
+      return node.children
+        .map((child) => blockToMarkdown(child))
+        .join("\n")
+        .split("\n")
+        .map((line) => (line ? `> ${line}` : ">"))
+        .join("\n");
+    case "code_block": {
+      const info = [node.lang, node.meta].filter(Boolean).join(" ");
+      return `\`\`\`${info}\n${node.value}\n\`\`\``;
+    }
+    case "ordered_list":
+      return node.children
+        .map((item, index) => {
+          const prefix = `${node.start + index}. `;
+          const body = renderMarkdownListItemBody(item);
+          return `${prefix}${indentMarkdownContinuation(body, prefix.length)}`;
+        })
+        .join("\n");
+    case "unordered_list":
+      return node.children
+        .map((item) => {
+          const prefix = "- ";
+          const body = renderMarkdownListItemBody(item);
+          return `${prefix}${indentMarkdownContinuation(body, prefix.length)}`;
+        })
+        .join("\n");
+    case "task_list":
+      return node.children
+        .map((item) => {
+          const prefix = `- [${item.checked ? "x" : " "}] `;
+          const body = renderMarkdownListItemBody(item);
+          return `${prefix}${indentMarkdownContinuation(body, prefix.length)}`;
+        })
+        .join("\n");
+    case "list_item":
+      return renderMarkdownListItemBody(node);
+    case "table": {
+      const header = `| ${node.head.cells
+        .map((cell) => inlineToMarkdown(cell.children))
+        .join(" | ")} |`;
+      const separator = `| ${node.alignments
+        .map((alignment) => {
+          if (alignment === "left") return ":---";
+          if (alignment === "right") return "---:";
+          if (alignment === "center") return ":---:";
+          return "---";
+        })
+        .join(" | ")} |`;
+      const rows = node.rows.map(
+        (row) =>
+          `| ${row.cells
+            .map((cell) => inlineToMarkdown(cell.children))
+            .join(" | ")} |`,
+      );
+      return [header, separator, ...rows].join("\n");
+    }
+    case "callout": {
+      const title = inlineToMarkdown(node.title);
+      const opening = title ? `> [!${node.kind}] ${title}` : `> [!${node.kind}]`;
+      const body = node.children
+        .map((child) => blockToMarkdown(child))
+        .join("\n")
+        .split("\n")
+        .map((line) => (line ? `> ${line}` : ">"))
+        .join("\n");
+      return body ? `${opening}\n${body}` : opening;
+    }
+    case "math_block":
+      return `$$\n${node.value}\n$$`;
+    case "html_block":
+      return node.value;
+    case "footnote_def":
+      return `[^${node.label}]: ${node.children.map((child) => blockToMarkdown(child)).join("\n")}`;
+    case "definition_list":
+      return node.items
+        .map((item) => {
+          const term = inlineToMarkdown(item.term);
+          const definitions = item.definitions.map(
+            (definition) => `: ${inlineToMarkdown(definition)}`,
+          );
+          return [term, ...definitions].join("\n");
+        })
+        .join("\n");
+    case "toggle": {
+      const summary = inlineToMarkdown(node.summary);
+      const body = node.children.map((child) => blockToMarkdown(child)).join("\n");
+      return body ? `> [toggle] ${summary}\n${body}` : `> [toggle] ${summary}`;
+    }
+    default:
+      return "";
+  }
 }
 
 /**

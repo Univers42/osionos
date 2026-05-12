@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/20 21:29:15 by rstancu           #+#    #+#             */
-/*   Updated: 2026/05/09 23:07:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 23:43:50 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -596,6 +596,15 @@ export async function pasteText(editor, text) {
   } finally {
     await handle.dispose();
   }
+}
+
+export async function pasteTextAtCurrentCaret(page, text) {
+  await ensureClipboardAccess(page);
+  await page.evaluate(async (value) => {
+    await navigator.clipboard.writeText(value);
+  }, text);
+  await page.keyboard.press(`${modifier()}+V`);
+  await waitForRenderStability(page);
 }
 
 export async function ensureClipboardAccess(page) {

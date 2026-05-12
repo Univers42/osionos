@@ -109,6 +109,21 @@ jobs:
         if: matrix.scope == 'markengine-submodule'
         run: docker build --target build src/shared/lib/markengine
 
+      - name: Setup Node.js for MarkEngine benchmarks
+        if: matrix.scope == 'markengine-submodule'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/shared/lib/markengine/package-lock.json
+
+      - name: Run MarkEngine benchmark guard
+        if: matrix.scope == 'markengine-submodule'
+        working-directory: src/shared/lib/markengine
+        run: |
+          npm ci
+          npm run bench:ci
+
       - name: Typecheck
         if: matrix.scope == 'root'
         run: make typecheck

@@ -1,4 +1,5 @@
 import type { Block, LayoutCell, LayoutMode } from "@/entities/block";
+import { InlineDocument } from "@/shared/lib/markengine";
 import { loadKnownDatabaseState } from "./knownDatabaseState";
 
 export type KnownDatabaseId =
@@ -144,7 +145,7 @@ type KnownDatabaseState = ReturnType<typeof loadKnownDatabaseState>;
 type KnownDatabasePage = KnownDatabaseState["pages"][string];
 
 const VIEW_INSIGHTS: Record<string, string> = {
-  "v-proj-dashboard": "Relation analytics ties projects to tasks, accounts, content, and equipment so the page starts with connected truth.",
+  "v-proj-dashboard": createInlineDocumentPlaygroundExample(),
   "v-tasks-board": "The board shows 8 tasks moving across 5 statuses, with 1 blocked item that should not be buried in a table.",
   "v-proj-timeline": "The timeline makes schedule pressure visible across 8 projects before anyone opens a project record.",
   "v-proj-chart": "Budget is not just finance context here: it frames active work against 530K USD of committed project scope.",
@@ -247,6 +248,19 @@ function heading3(content: string): Block {
 
 function paragraph(content: string): Block {
   return dashboardBlock("paragraph", content);
+}
+
+function createInlineDocumentPlaygroundExample(): string {
+  const base = InlineDocument.fromSource("InlineDocument keeps formatted typing on the AST.");
+  const formatted = base.applyFormatting({ start: 0, end: 14 }, {
+    type: "toggle_format",
+    format: "bold",
+  });
+  const edited = formatted.applyEdit({ start: 14, end: 14 }, {
+    type: "insert_text",
+    text: " handle",
+  });
+  return edited.doc.toSource();
 }
 
 function callout(content: string, icon: string): Block {
@@ -426,6 +440,7 @@ function createLayoutLabCell(placement: LayoutPlacement, metrics: DashboardMetri
     textColor: "var(--osio-fg-default)",
     blocks: [
       heading3("Data coverage"),
+      paragraph(createInlineDocumentPlaygroundExample()),
       paragraph(`The canvas mixes ${KNOWN_DATABASE_VIEWS.length} /view definitions across six databases, including dashboards, tables, boards, maps, feeds, timelines, charts, and calendars.`),
       todo(`${metrics.approvedContent}/${metrics.contentCount} content pieces approved.`, metrics.approvedContent === metrics.contentCount),
       todo(`${money(metrics.inventoryValue)} inventory value connected to project work.`, true),
