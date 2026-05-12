@@ -23,10 +23,16 @@ import {
   Plus,
   PlusSquare,
   Presentation,
+  Settings2,
   Sparkles,
   Trash2,
 } from "lucide-react";
 import type { Block } from "@/entities/block";
+import {
+  getTableColumnCount,
+  normalizeTableData,
+  resolveTableConfig,
+} from "@/entities/block/model/tableBlocks";
 import {
   BLOCK_COLOR_OPTIONS,
   ensureReadableTextColor,
@@ -57,6 +63,130 @@ interface OperationResult {
   blocks: Block[];
   focusBlockId?: string;
   focusAtEnd?: boolean;
+}
+
+type TableConfigUpdate = Partial<NonNullable<Block["tableConfig"]>>;
+
+function resolveBlockTableConfig(block: Block) {
+  const tableData = normalizeTableData(block.tableData);
+  return resolveTableConfig(block, getTableColumnCount(tableData), tableData.length);
+}
+
+function createTableContextMenuSections(
+  block: Block,
+  handleUnavailable: () => void,
+  handleSetTableConfig: (updates: TableConfigUpdate) => void,
+): BlockContextMenuSection[] {
+  if (block.type !== "table_block") return [];
+
+  const tableConfig = resolveBlockTableConfig(block);
+  const wrapEnabled = tableConfig.wrap !== false;
+  const bordersEnabled = tableConfig.showBorders !== false;
+  const headerRowEnabled = tableConfig.headerRow !== false;
+
+  return [
+    {
+      label: "Table",
+      items: [
+        {
+          icon: <Settings2 size={15} />,
+          label: "Table settings",
+          onClick: handleUnavailable,
+          subItems: [
+            {
+              icon: "Auto",
+              label: "Auto layout",
+              active: tableConfig.layoutMode === "auto",
+              onClick: () => handleSetTableConfig({ layoutMode: "auto" }),
+            },
+            {
+              icon: "Fit",
+              label: "Fit to width",
+              active: tableConfig.layoutMode === "fit",
+              onClick: () => handleSetTableConfig({ layoutMode: "fit" }),
+            },
+            {
+              icon: "Fixed",
+              label: "Fixed column widths",
+              active: tableConfig.layoutMode === "fixed",
+              onClick: () => handleSetTableConfig({ layoutMode: "fixed" }),
+            },
+            {
+              icon: "Wrap",
+              label: wrapEnabled ? "Wrap text" : "No text wrap",
+              active: wrapEnabled,
+              onClick: () => handleSetTableConfig({ wrap: !wrapEnabled }),
+            },
+            {
+              icon: "80",
+              label: "Compact columns",
+              active: tableConfig.minColumnWidth === 80,
+              onClick: () => handleSetTableConfig({ minColumnWidth: 80 }),
+            },
+            {
+              icon: "120",
+              label: "Standard columns",
+              active: tableConfig.minColumnWidth === 120,
+              onClick: () => handleSetTableConfig({ minColumnWidth: 120 }),
+            },
+            {
+              icon: "180",
+              label: "Wide columns",
+              active: tableConfig.minColumnWidth === 180,
+              onClick: () => handleSetTableConfig({ minColumnWidth: 180 }),
+            },
+            {
+              icon: "Sm",
+              label: "Compact padding",
+              active: tableConfig.cellPadding === "compact",
+              onClick: () => handleSetTableConfig({ cellPadding: "compact" }),
+            },
+            {
+              icon: "Md",
+              label: "Normal padding",
+              active: tableConfig.cellPadding === "normal",
+              onClick: () => handleSetTableConfig({ cellPadding: "normal" }),
+            },
+            {
+              icon: "Lg",
+              label: "Comfortable padding",
+              active: tableConfig.cellPadding === "comfortable",
+              onClick: () => handleSetTableConfig({ cellPadding: "comfortable" }),
+            },
+            {
+              icon: "H",
+              label: headerRowEnabled ? "Header row on" : "Header row off",
+              active: headerRowEnabled,
+              onClick: () => handleSetTableConfig({ headerRow: !headerRowEnabled }),
+            },
+            {
+              icon: "1st",
+              label: tableConfig.headerColumn ? "Header column on" : "Header column off",
+              active: tableConfig.headerColumn === true,
+              onClick: () => handleSetTableConfig({ headerColumn: !tableConfig.headerColumn }),
+            },
+            {
+              icon: "#",
+              label: bordersEnabled ? "Borders on" : "Borders off",
+              active: bordersEnabled,
+              onClick: () => handleSetTableConfig({ showBorders: !bordersEnabled }),
+            },
+            {
+              icon: "Alt",
+              label: tableConfig.stripedRows ? "Striped rows on" : "Striped rows off",
+              active: tableConfig.stripedRows === true,
+              onClick: () => handleSetTableConfig({ stripedRows: !tableConfig.stripedRows }),
+            },
+            {
+              icon: "↔",
+              label: "Reset column widths",
+              onClick: () => handleSetTableConfig({ columnWidths: [], layoutMode: "auto" }),
+            },
+          ],
+        },
+      ],
+    },
+  ];
 }
 
 export function useBlockContextMenu({
@@ -202,6 +332,29 @@ export function useBlockContextMenu({
     [applyOperation, content, contextMenu],
   );
 
+  const handleSetTableConfig = useCallback(
+    (updates: TableConfigUpdate) => {
+      if (!contextMenu) return;
+
+      const updateTree = (blocks: Block[]): Block[] =>
+        blocks.map((block) => ({
+          ...block,
+          ...(block.id === contextMenu.blockId && block.type === "table_block"
+            ? {
+                tableConfig: {
+                  ...resolveBlockTableConfig(block),
+                  ...updates,
+                },
+              }
+            : {}),
+          children: block.children ? updateTree(block.children) : undefined,
+        }));
+
+      applyOperation({ blocks: updateTree(content), focusBlockId: contextMenu.blockId });
+    },
+    [applyOperation, content, contextMenu],
+  );
+
   const handleUnavailable = useCallback(() => {
     closeContextMenu();
   }, [closeContextMenu]);
@@ -219,44 +372,47 @@ export function useBlockContextMenu({
   const contextMenuSections = useMemo<BlockContextMenuSection[]>(() => {
     if (!blockLocation) return [];
 
-    const sections: BlockContextMenuSection[] = [
-      {
-        label: "Insert",
-        items: [
-          {
-            icon: <PlusSquare size={15} />,
-            label: "Insert text above",
-            onClick: () => handleInsert("before"),
-          },
-          {
-            icon: <PlusSquare size={15} />,
-            label: "Insert text below",
-            onClick: () => handleInsert("after"),
-          },
-        ],
-      },
+    const insertSection: BlockContextMenuSection = {
+      label: "Insert",
+      items: [
+        {
+          icon: <PlusSquare size={15} />,
+          label: "Insert text above",
+          onClick: () => handleInsert("before"),
+        },
+        {
+          icon: <PlusSquare size={15} />,
+          label: "Insert text below",
+          onClick: () => handleInsert("after"),
+        },
+      ],
+    };
+
+    const moveItems: BlockContextMenuSection["items"] = [
+      ...(blockLocation.index > 0
+        ? [
+            {
+              icon: <ArrowUp size={15} />,
+              label: "Move up",
+              onClick: () => handleMove("up"),
+            },
+          ]
+        : []),
+      ...(blockLocation.index < blockLocation.siblings.length - 1
+        ? [
+            {
+              icon: <ArrowDown size={15} />,
+              label: "Move down",
+              onClick: () => handleMove("down"),
+            },
+          ]
+        : []),
     ];
+    const moveSections: BlockContextMenuSection[] = moveItems.length > 0
+      ? [{ label: "Move", items: moveItems }]
+      : [];
 
-    const moveItems = [];
-    if (blockLocation.index > 0) {
-      moveItems.push({
-        icon: <ArrowUp size={15} />,
-        label: "Move up",
-        onClick: () => handleMove("up"),
-      });
-    }
-    if (blockLocation.index < blockLocation.siblings.length - 1) {
-      moveItems.push({
-        icon: <ArrowDown size={15} />,
-        label: "Move down",
-        onClick: () => handleMove("down"),
-      });
-    }
-    if (moveItems.length > 0) {
-      sections.push({ label: "Move", items: moveItems });
-    }
-
-    sections.push({
+    const transformSection: BlockContextMenuSection = {
       items: [
         {
           icon: <MoveRight size={15} />,
@@ -416,7 +572,13 @@ export function useBlockContextMenu({
           ],
         },
       ],
-    });
+    };
+
+    const tableSections = createTableContextMenuSections(
+      blockLocation.block,
+      handleUnavailable,
+      handleSetTableConfig,
+    );
 
     const actionItems = [
       ...(blockLocation.block.content.trim()
@@ -448,7 +610,11 @@ export function useBlockContextMenu({
       },
     ];
 
-    sections.push(
+    return [
+      insertSection,
+      ...moveSections,
+      transformSection,
+      ...tableSections,
       { label: "Actions", items: actionItems },
       {
         items: [
@@ -461,10 +627,6 @@ export function useBlockContextMenu({
           },
         ],
       },
-    );
-
-    return [
-      ...sections,
       {
         items: [
           {
@@ -507,6 +669,7 @@ export function useBlockContextMenu({
     handleColumns,
     handleComment,
     handleSetBlockStyle,
+    handleSetTableConfig,
     handleToggleHeading,
     handleUnavailable,
   ]);

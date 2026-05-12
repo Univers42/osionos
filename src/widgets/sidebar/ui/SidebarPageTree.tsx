@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/09 23:07:10 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/12 15:06:51 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -32,6 +32,9 @@ import {
   type WorkspaceChannelType,
   workspaceConfigKey,
 } from "@/shared/config/workspaceConfigStore";
+
+const OSIONOS_MAIL_URL = ((import.meta.env as Record<string, string>)['VITE_MAIL_APP_URL'] ?? 'http://localhost:3002').trim();
+const OSIONOS_CALENDAR_URL = ((import.meta.env as Record<string, string>)['VITE_CALENDAR_APP_URL'] ?? 'http://localhost:3003').trim();
 
 interface WorkspaceRef {
   _id: string;
@@ -141,6 +144,17 @@ function runWorkspaceAction(action: Promise<unknown>) {
   action.catch((error: unknown) => {
     console.error("[SidebarPageTree] Workspace action failed", error);
   });
+}
+
+function openExternalApp(url: string) {
+  const destination = url.replace(/\/+$/, "");
+  if (!destination) return;
+  const opened = globalThis.open(destination, "_blank");
+  if (opened) {
+    opened.opener = null;
+    return;
+  }
+  globalThis.location.href = destination;
 }
 
 const CHANNEL_CATEGORIES: Array<{
@@ -520,22 +534,18 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         <SidebarNavItem
           icon={<Mail size={16} />}
           label="osionos Mail"
-          onClick={() => {
-            /* placeholder */
-          }}
+          onClick={() => openExternalApp(OSIONOS_MAIL_URL)}
         />
         <SidebarNavItem
           icon={<CalendarRange size={16} />}
           label="osionos Calendar"
-          onClick={() => {
-            /* placeholder */
-          }}
+          onClick={() => openExternalApp(OSIONOS_CALENDAR_URL)}
         />
         <SidebarNavItem
           icon={<Monitor size={16} />}
           label="osionos Desktop"
           onClick={() => {
-            /* placeholder */
+            globalThis.location.href = "/";
           }}
         />
       </SidebarSection>

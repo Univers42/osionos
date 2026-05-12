@@ -26,6 +26,7 @@ import {
   type InlineEditorSelectionOffsets,
 } from "@/shared/lib/markengine";
 import { useSlashSelect, repositionCursor } from "@/features/slash-commands";
+import { useUserStore } from "@/features/auth";
 import {
   isIndentable,
   isParentable,
@@ -35,6 +36,7 @@ import {
   enterCreatesChild,
   findBlockInTree,
 } from "@/entities/block";
+import { createTableBlockFromData } from "@/entities/block/model/tableBlocks";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
 import type { Block, LayoutCell } from "@/entities/block";
 import {
@@ -69,7 +71,7 @@ const fallbackBlocksByCell = new WeakMap<LayoutCell, {
   content: unknown;
 }>();
 
-function parsePipeTable(text: string): string[][] | null {
+function parsePipeTable(text: string): Partial<Block> | null {
   const lines = text
     .split("\n")
     .map((line) => line.trim())
@@ -91,6 +93,13 @@ function parsePipeTable(text: string): string[][] | null {
 
   const isSeparator = separator.every((cell) => /^:?-{3,}:?$/.test(cell));
   if (!isSeparator) return null;
+  const columnAlignments = separator.map((cell) => {
+    const trimmed = cell.trim();
+    if (trimmed.startsWith(":") && trimmed.endsWith(":")) return "center";
+    if (trimmed.endsWith(":")) return "right";
+    if (trimmed.startsWith(":")) return "left";
+    return null;
+  });
 
   const bodyRows = lines
     .slice(2)
@@ -100,8 +109,10 @@ function parsePipeTable(text: string): string[][] | null {
         Array.isArray(row) && row.length === header.length,
     );
 
-  const table = [header, ...bodyRows];
-  return table.length ? table : null;
+  const tableData = [header, ...bodyRows];
+  return tableData.length
+    ? createTableBlockFromData(tableData, { columnAlignments })
+    : null;
 }
 
 function shouldTryMarkdownShortcut(text: string): boolean {
@@ -739,7 +750,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       if (!parsedTable) return false;
 
       changeBlockType(pageId, blockId, "table_block");
-      updateBlock(pageId, blockId, { content: "", tableData: parsedTable });
+      updateBlock(pageId, blockId, parsedTable);
       return true;
     },
     [pageId, changeBlockType, updateBlock],

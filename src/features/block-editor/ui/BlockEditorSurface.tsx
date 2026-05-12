@@ -104,7 +104,7 @@ function isInteractiveSelectionTarget(target: EventTarget | null): boolean {
 	if (!(target instanceof Element)) return true;
 	return Boolean(
 		target.closest(
-			'button, input, textarea, select, a, [contenteditable="true"], [data-column-resize-handle], [data-layout-cell-handle]',
+			'button, input, textarea, select, a, [contenteditable="true"], [data-column-resize-handle], [data-layout-cell-handle], [data-table-handle]',
 		),
 	);
 }

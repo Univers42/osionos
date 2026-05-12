@@ -276,6 +276,16 @@ body {
   background: var(--osio-fg-muted);
 }
 
+.osio-scrollbar-hidden {
+  scrollbar-width: none;
+}
+
+.osio-scrollbar-hidden::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 /* ContentEditable placeholder */
 [contenteditable]:empty::before {
   content: attr(data-placeholder);
