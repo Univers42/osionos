@@ -51,6 +51,24 @@ export type LayoutCellHorizontalConstraint = 'left' | 'stretch' | 'scale';
 export type LayoutCellVerticalConstraint = 'top' | 'stretch' | 'hug';
 export type LayoutCellPadding = 'compact' | 'comfortable' | 'spacious';
 export type LayoutCellFontSize = 'small' | 'base' | 'large';
+export type TableBlockLayoutMode = 'auto' | 'fit' | 'fixed';
+export type TableBlockPadding = 'compact' | 'normal' | 'comfortable';
+export type TableBlockTextAlign = 'left' | 'center' | 'right' | null;
+
+export interface TableBlockConfig {
+  layoutMode?: TableBlockLayoutMode;
+  wrap?: boolean;
+  minColumnWidth?: number;
+  maxColumnWidth?: number;
+  cellPadding?: TableBlockPadding;
+  headerRow?: boolean;
+  headerColumn?: boolean;
+  showBorders?: boolean;
+  stripedRows?: boolean;
+  columnWidths?: Array<number | undefined>;
+  rowHeights?: Array<number | undefined>;
+  columnAlignments?: TableBlockTextAlign[];
+}
 
 export interface LayoutConfig {
   columns: number;
@@ -110,6 +128,7 @@ export interface Block {
   mediaWidth?: number;      /** Display width percentage for media blocks */
   placeholderText?: string; /** Temporary placeholder hint for empty transformed blocks */
   tableData?: string[][];	/** Table data (array of rows, each row is array of cell strings) */
+  tableConfig?: TableBlockConfig; /** Presentation and sizing options for simple table blocks */
   databaseId?: string;		/** Database reference ID (for database_inline / database_full_page) */
   viewId?: string;			/** View ID for database blocks */
   layoutMode?: LayoutMode;

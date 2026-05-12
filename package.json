@@ -32,6 +32,7 @@
     "@radix-ui/react-popover": "^1.1.15",
     "@radix-ui/react-slot": "^1.2.4",
     "@simplewebauthn/browser": "^13.3.0",
+    "@tanstack/react-virtual": "^3.13.24",
     "@types/d3-force": "3.0.10",
     "@types/qrcode": "^1.5.6",
     "@univers42/ui-collection": "^2.5.1",

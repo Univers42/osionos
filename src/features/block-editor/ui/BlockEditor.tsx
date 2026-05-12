@@ -38,6 +38,7 @@ import { ToggleBlockEditor } from "./ToggleBlockEditor";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
 import { LayoutBlockEditor } from "./canvas";
+import { TableBlockEditor } from "./table/TableBlockEditor";
 
 const LANGUAGES = [
   "plaintext",
@@ -64,12 +65,6 @@ const LANGUAGES = [
   "toml",
   "mermaid",
 ];
-
-function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
-  const nextValue = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(nextValue)) return fallback;
-  return Math.max(min, Math.min(max, Math.round(nextValue)));
-}
 
 function renderEquationToHtml(source: string): string {
   try {
@@ -214,7 +209,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     const handleOutside = (e: MouseEvent) => {
       if (
         langPickerRef.current &&
-        !langPickerRef.current.contains(e.target as Node)
+        e.target instanceof Node &&
+        !langPickerRef.current.contains(e.target)
       ) {
         setShowLangPicker(false);
       }
@@ -757,219 +753,3 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   }
 };
 
-const TableBlockEditor: React.FC<{
-  block: Block;
-  pageId: string;
-  style?: React.CSSProperties;
-  textStyle?: React.CSSProperties;
-  onDeleteTable?: () => void;
-}> = ({ block, pageId, style, textStyle, onDeleteTable }) => {
-  const updateBlock = usePageStore((s) => s.updateBlock);
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    row: number;
-    col: number;
-  } | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement | null>(null);
-
-  const data = useMemo(
-    () =>
-      block.tableData || [
-        ["", "", ""],
-        ["", "", ""],
-        ["", "", ""],
-      ],
-    [block.tableData],
-  );
-
-  const handleCellChange = useCallback(
-    (row: number, col: number, value: string) => {
-      const next = data.map((r, ri) =>
-        ri === row ? r.map((c, ci) => (ci === col ? value : c)) : [...r],
-      );
-      updateBlock(pageId, block.id, { tableData: next });
-    },
-    [data, updateBlock, pageId, block.id],
-  );
-
-  const addRow = useCallback(() => {
-    const cols = data[0]?.length || 3;
-    updateBlock(pageId, block.id, {
-      tableData: [...data, new Array(cols).fill("")],
-    });
-  }, [data, updateBlock, pageId, block.id]);
-
-  const addCol = useCallback(() => {
-    updateBlock(pageId, block.id, {
-      tableData: data.map((row) => [...row, ""]),
-    });
-  }, [data, updateBlock, pageId, block.id]);
-
-  const removeRow = useCallback(
-    (rowIndex: number) => {
-      if (data.length <= 1) return;
-      updateBlock(pageId, block.id, {
-        tableData: data.filter((_, idx) => idx !== rowIndex),
-      });
-    },
-    [data, updateBlock, pageId, block.id],
-  );
-
-  const removeCol = useCallback(
-    (colIndex: number) => {
-      const colCount = data[0]?.length ?? 0;
-      if (colCount <= 1) return;
-      updateBlock(pageId, block.id, {
-        tableData: data.map((row) => row.filter((_, idx) => idx !== colIndex)),
-      });
-    },
-    [data, updateBlock, pageId, block.id],
-  );
-
-  const openContextMenu = useCallback(
-    (e: React.MouseEvent, row: number, col: number) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setContextMenu({ x: e.clientX, y: e.clientY, row, col });
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (!contextMenu) return;
-
-    const handleMouseDown = (e: MouseEvent) => {
-      if (
-        contextMenuRef.current &&
-        !contextMenuRef.current.contains(e.target as Node)
-      ) {
-        setContextMenu(null);
-      }
-    };
-
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setContextMenu(null);
-    };
-
-    document.addEventListener("mousedown", handleMouseDown);
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", handleMouseDown);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, [contextMenu]);
-
-  const tableContextMenuStyle = useMemo<React.CSSProperties>(() => {
-    if (!contextMenu) return {};
-    const width = 180;
-    const height = 160;
-    const viewportWidth = globalThis.innerWidth;
-    const viewportHeight = globalThis.innerHeight;
-    const left = clampNumber(contextMenu.x, 8, viewportWidth - width - 8, 8);
-    const belowTop = contextMenu.y;
-    const aboveTop = contextMenu.y - height;
-    const top = belowTop + height > viewportHeight - 8 && aboveTop > 8
-      ? aboveTop
-      : clampNumber(belowTop, 8, viewportHeight - height - 8, 8);
-    return { left, top };
-  }, [contextMenu]);
-
-  return (
-    <div className="group/table my-2 border border-[var(--osio-border-default)] rounded-lg overflow-visible relative" style={style}>
-      <div className="overflow-auto max-h-[26rem]">
-        <table className="w-max min-w-full text-sm">
-          <tbody>
-            {data.map((row, ri) => (
-              <tr
-                key={`row-${ri}`} // NOSONAR - positional keys are correct for table grid cells
-                className={
-                  ri === 0
-                    ? "bg-[var(--osio-bg-subtle)] font-medium"
-                    : ""
-                }
-              >
-                {row.map((cell, ci) => (
-                  <td
-                    key={`cell-${ri}-${ci}`} // NOSONAR - positional keys are correct for table grid cells
-                    className="border-b border-r border-[var(--osio-border-default)] last:border-r-0 px-0 py-0 min-w-[120px] text-[var(--osio-fg-default)]"
-                    style={textStyle}
-                    onContextMenu={(e) => openContextMenu(e, ri, ci)}
-                  >
-                    <input
-                      type="text"
-                      value={cell}
-                      onChange={(e) => handleCellChange(ri, ci, e.target.value)}
-                      className="w-full bg-transparent px-3 py-1.5 outline-none focus:bg-[var(--osio-bg-hover)]"
-                      style={textStyle}
-                    />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <button
-        type="button"
-        onClick={addCol}
-        aria-label="Add column"
-        className="absolute -right-3 top-1/2 z-[var(--osio-z-raised)] flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-sm text-[var(--osio-fg-muted)] opacity-0 shadow-sm transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)] group-hover/table:opacity-100"
-      >
-        +
-      </button>
-      <button
-        type="button"
-        onClick={addRow}
-        aria-label="Add row"
-        className="absolute -bottom-3 left-1/2 z-[var(--osio-z-raised)] flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-sm text-[var(--osio-fg-muted)] opacity-0 shadow-sm transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)] group-hover/table:opacity-100"
-      >
-        +
-      </button>
-
-      {contextMenu && (
-        <div
-          ref={contextMenuRef}
-          className="fixed z-[var(--osio-z-popover)] min-w-[180px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-lg py-1"
-          style={tableContextMenuStyle}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              removeRow(contextMenu.row);
-              setContextMenu(null);
-            }}
-            disabled={data.length <= 1}
-            className="w-full px-3 py-1.5 text-left text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-subtle)] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Delete row
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              removeCol(contextMenu.col);
-              setContextMenu(null);
-            }}
-            disabled={(data[0]?.length ?? 0) <= 1}
-            className="w-full px-3 py-1.5 text-left text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-subtle)] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Delete column
-          </button>
-          <div className="my-1 border-t border-[var(--osio-border-default)]" />
-          <button
-            type="button"
-            onClick={() => {
-              onDeleteTable?.();
-              setContextMenu(null);
-            }}
-            disabled={!onDeleteTable}
-            className="w-full px-3 py-1.5 text-left text-sm text-[var(--osio-danger)] hover:bg-[var(--osio-bg-subtle)] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Delete table
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};

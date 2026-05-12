@@ -1,5 +1,6 @@
 // Markdown shortcuts — inline parsing and block conversion
 import type { BlockType, Block } from "@/entities/block";
+import { createTableBlockFromData } from "../../../../entities/block/model/tableBlocks";
 import type { BlockNode, InlineNode } from "./ast";
 import {
   renderInlineNodesToHtml,
@@ -86,7 +87,7 @@ function astToBlocks(node: BlockNode): Block[] {
       return [
         {
           id: crypto.randomUUID(),
-          type: "callout" as BlockType,
+          type: "callout",
           content: node.children.map((c) => blockToMarkdown(c)).join("\n"),
         },
       ];
@@ -102,8 +103,9 @@ function astToBlocks(node: BlockNode): Block[] {
         {
           id: crypto.randomUUID(),
           type: "table_block",
-          content: "",
-          tableData: [header, ...rows],
+          ...createTableBlockFromData([header, ...rows], {
+            columnAlignments: node.alignments,
+          }),
         },
       ];
     }

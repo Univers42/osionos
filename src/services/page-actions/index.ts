@@ -16,6 +16,8 @@ import type { Block } from "@/entities/block";
 import type { PageEntry } from "@/entities/page";
 import type { PageConfig } from "@/shared/config/pageConfigStore";
 
+const PAGE_ACTION_SYNC_ENABLED = ((import.meta.env as Record<string, string>)["VITE_PAGE_ACTION_SYNC_ENABLED"] ?? "").toLowerCase() === "true";
+
 export type PageActionName =
   | "copy_link"
   | "copy_page_contents"
@@ -339,7 +341,7 @@ export async function syncPageActionEvent(
   jwt: string | undefined,
   payload: Record<string, unknown> = {},
 ) {
-  if (!jwt) return;
+  if (!jwt || !PAGE_ACTION_SYNC_ENABLED) return;
   try {
     await api.post(`/api/pages/${pageId}/actions`, { action, payload }, jwt);
   } catch {

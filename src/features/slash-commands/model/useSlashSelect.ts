@@ -20,6 +20,7 @@ import {
   type MediaBlockType,
   findBlockInTree,
 } from "@/entities/block";
+import { createDefaultTableBlock } from "@/entities/block/model/tableBlocks";
 import type { SlashMenuState } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
 import { focusEditableBlock } from "@/features/block-editor/model/blockDomFocus";
 import { createViewShowcaseLayoutContent } from "@/widgets/database-view/model/databaseViewCatalog";
@@ -145,16 +146,7 @@ export function useSlashSelect({
       }
 
       if (selectedType === "table_block") {
-        const newBlock: Block = {
-          id: crypto.randomUUID(),
-          type: "table_block",
-          content: "",
-          tableData: [
-            ["", "", ""],
-            ["", "", ""],
-            ["", "", ""],
-          ],
-        };
+        const newBlock = createDefaultTableBlock();
         insertBlock(pageId, blockId, newBlock);
         return;
       }

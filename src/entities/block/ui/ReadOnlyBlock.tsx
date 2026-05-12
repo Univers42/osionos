@@ -20,6 +20,7 @@ import { DatabaseBlock } from '@/widgets/database-view';
 import { CalloutBlockReadOnly } from "./CalloutBlockReadOnly";
 import { CodeBlockReadOnly } from "./CodeBlockReadOnly";
 import { MediaBlockReadOnly } from "./MediaBlockReadOnly";
+import { TableBlockReadOnly } from "./TableBlockReadOnly";
 import { renderInlineToReact } from '@/shared/lib/markengine';
 import { InternalPageLink } from "@/entities/page";
 
@@ -407,41 +408,3 @@ const ToggleBlockReadOnly: React.FC<{ block: Block; bulletDepth: number; numbere
   );
 };
 
-const TableBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
-  const data = block.tableData ?? [];
-  if (!data.length) {
-    return (
-      <div className="my-2 rounded border border-[var(--osio-border-default)] px-3 py-2 text-xs text-[var(--osio-fg-subtle)]">
-        Empty table
-      </div>
-    );
-  }
-
-  return (
-    <div className="my-2 border border-[var(--osio-border-default)] rounded-lg overflow-auto">
-      <table className="w-max min-w-full text-sm">
-        <tbody>
-          {data.map((row, ri) => (
-            <tr
-              key={`row-${row.join("¦")}`}
-              className={
-                ri === 0
-                  ? "bg-[var(--osio-bg-subtle)] font-medium"
-                  : ""
-              }
-            >
-              {row.map((cell, ci) => (
-                <td
-                  key={`cell-${ri}-${ci}`}
-                  className="border-b border-r border-[var(--osio-border-default)] last:border-r-0 px-3 py-1.5 min-w-[120px] text-[var(--osio-fg-default)]"
-                >
-                  <InlineMarkdown content={cell} />
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-};
