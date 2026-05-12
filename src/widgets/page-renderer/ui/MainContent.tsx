@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 18:04:52 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 21:03:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -35,7 +35,7 @@ import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 import "./homeVariants.css";
 
-const HOME_DASHBOARD_VERSION = 7;
+const HOME_DASHBOARD_VERSION = 8;
 const HOME_VARIANT_STORAGE_KEY = "osionos.home.variant";
 const EMPTY_PAGES: PageEntry[] = [];
 

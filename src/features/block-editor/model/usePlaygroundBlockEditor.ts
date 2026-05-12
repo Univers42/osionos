@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 16:05:14 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/12 12:59:46 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,11 +18,12 @@ import React, {
   useCallback,
 } from "react";
 import { usePageStore } from "@/store/usePageStore";
-import { useUserStore } from "@/features/auth";
 import {
   detectBlockType,
+  getInlineEditorSelectionOffsets,
   getCalloutIconForKind,
   parseMarkdownToBlocks,
+  type InlineEditorSelectionOffsets,
 } from "@/shared/lib/markengine";
 import { useSlashSelect, repositionCursor } from "@/features/slash-commands";
 import {
@@ -127,25 +128,6 @@ function normalizeCreatedPageTitleFromLinkQuery(query: string): string {
 
   const withoutClosingBrackets = trimmed.slice(0, -2).trimEnd();
   return withoutClosingBrackets || "Untitled";
-}
-
-function toBlockUpdates(block: Block): Partial<Block> {
-  return {
-    content: block.content,
-    children: block.children,
-    checked: block.checked,
-    language: block.language,
-    color: block.color,
-    collapsed: block.collapsed,
-    asset: block.asset,
-    tableData: block.tableData,
-    databaseId: block.databaseId,
-    viewId: block.viewId,
-    textColor: block.textColor,
-    backgroundColor: block.backgroundColor,
-    headingLevel: block.headingLevel,
-    widthRatio: block.widthRatio,
-  };
 }
 
 function findChildrenForParent(
@@ -366,6 +348,102 @@ function insertBlockAfterInEditorTree(blocks: Block[], afterBlockId: string, blo
 
   if (!insertInto(nextBlocks)) nextBlocks.push(blockToInsert);
   return nextBlocks;
+}
+
+function replaceBlockInEditorTree(blocks: Block[], blockId: string, replacement: Block[]): Block[] {
+  const nextBlocks = cloneBlocks(blocks);
+
+  const replaceIn = (list: Block[]): boolean => {
+    for (let index = 0; index < list.length; index += 1) {
+      if (list[index].id === blockId) {
+        list.splice(index, 1, ...replacement);
+        return true;
+      }
+      if (list[index].children && replaceIn(list[index].children!)) return true;
+    }
+    return false;
+  };
+
+  return replaceIn(nextBlocks) ? nextBlocks : blocks;
+}
+
+function clampOffset(offset: number, max: number): number {
+  return Math.max(0, Math.min(offset, max));
+}
+
+function resolvePasteSelectionOffsets(
+  event: React.ClipboardEvent,
+  fallbackContent: string,
+): InlineEditorSelectionOffsets {
+  const target = event.currentTarget;
+  const fallbackOffset = fallbackContent.length;
+
+  if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
+    return {
+      start: target.selectionStart ?? fallbackOffset,
+      end: target.selectionEnd ?? fallbackOffset,
+    };
+  }
+
+  if (target instanceof HTMLElement) {
+    const offsets = getInlineEditorSelectionOffsets(target);
+    if (offsets) return offsets;
+  }
+
+  return { start: fallbackOffset, end: fallbackOffset };
+}
+
+function isBlockStructuredMarkdown(text: string): boolean {
+  if (/\n\s*\n/.test(text)) return true;
+
+  return text
+    .split("\n")
+    .some((line) => {
+      const trimmed = line.trim();
+      return (
+        /^#{1,6}\s+/.test(trimmed) ||
+        /^(```|~~~)/.test(trimmed) ||
+        /^[-*+]\s+/.test(trimmed) ||
+        /^\d+\.\s+/.test(trimmed) ||
+        /^[-*+]\s+\[[ xX]\]\s+/.test(trimmed) ||
+        /^>\s?/.test(trimmed) ||
+        /^[-*_]{3,}$/.test(trimmed) ||
+        /^\|.*\|$/.test(trimmed) ||
+        /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(trimmed)
+      );
+    });
+}
+
+function buildMarkdownPasteReplacement(
+  currentBlock: Block,
+  pastedBlocks: Block[],
+  offsets: InlineEditorSelectionOffsets,
+): Block[] {
+  const content = currentBlock.content ?? "";
+  if (isEffectivelyEmpty(content)) return pastedBlocks;
+
+  const start = clampOffset(Math.min(offsets.start, offsets.end), content.length);
+  const end = clampOffset(Math.max(offsets.start, offsets.end), content.length);
+  const before = content.slice(0, start);
+  const after = content.slice(end);
+  const replacement: Block[] = [];
+
+  if (before.length > 0) {
+    replacement.push({ ...currentBlock, content: before });
+  }
+
+  replacement.push(...pastedBlocks);
+
+  if (after.length > 0) {
+    replacement.push({
+      ...currentBlock,
+      id: crypto.randomUUID(),
+      content: after,
+      children: undefined,
+    });
+  }
+
+  return replacement;
 }
 
 function deleteBlockFromEditorTree(blocks: Block[], blockId: string): Block[] {
@@ -1047,36 +1125,28 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
   const handlePaste = useCallback(
     (e: React.ClipboardEvent, blockId: string) => {
-      const raw = e.clipboardData.getData("text/plain");
-      const markdown = raw.replaceAll("\r\n", "\n").trim();
-      if (!markdown) return;
+      const currentBlock = findBlockInTree(contentRef.current, blockId);
+      if (!currentBlock || currentBlock.type === "code") return;
+
+      const rawMarkdown = e.clipboardData.getData("text/markdown");
+      const rawPlainText = e.clipboardData.getData("text/plain");
+      const raw = rawMarkdown || rawPlainText;
+      if (!raw) return;
+
+      const markdown = raw.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+      if (!markdown.trim() || !isBlockStructuredMarkdown(markdown)) return;
 
       const parsed = parseMarkdownToBlocks(markdown);
       if (parsed.length === 0) return;
 
-      const shouldTransformSingleBlock =
-        parsed.length === 1 &&
-        (parsed[0].type !== "paragraph" ||
-          markdown.includes("```") ||
-          markdown.includes("~~~"));
-
-      if (parsed.length === 1 && !shouldTransformSingleBlock) return;
-
       e.preventDefault();
 
-      const [first, ...rest] = parsed;
-      changeBlockType(pageId, blockId, first.type);
-      updateBlock(pageId, blockId, toBlockUpdates(first));
-
-      let afterBlockId = blockId;
-      for (const nextBlock of rest) {
-        insertBlock(pageId, afterBlockId, nextBlock);
-        afterBlockId = nextBlock.id;
-      }
-
-      focusBlock(afterBlockId, true);
+      const offsets = resolvePasteSelectionOffsets(e, currentBlock.content ?? "");
+      const replacement = buildMarkdownPasteReplacement(currentBlock, parsed, offsets);
+      updatePageContent(pageId, replaceBlockInEditorTree(contentRef.current, blockId, replacement));
+      focusBlock(parsed.at(-1)?.id ?? replacement.at(-1)?.id ?? blockId, true);
     },
-    [pageId, changeBlockType, updateBlock, insertBlock, focusBlock],
+    [pageId, updatePageContent, focusBlock],
   );
 
   const handleContainerEnter = useCallback(
