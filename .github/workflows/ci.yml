@@ -22,6 +22,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 env:
   GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/osionos
@@ -71,6 +72,8 @@ jobs:
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
           cache-from: type=gha,scope=osionos-prod
           cache-to: type=gha,scope=osionos-prod,mode=max
 

@@ -10,7 +10,10 @@ test-results/
 .env
 .env.*
 !.env.example
+.env*local
+.env\ copy*
 .env*.bak
+.vault/
 
 ### Node ###
 # Logs

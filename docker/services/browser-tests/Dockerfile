@@ -13,7 +13,7 @@ RUN corepack enable \
 
 COPY package.json pnpm-lock.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-  pnpm install --frozen-lockfile --store-dir /pnpm/store
+  pnpm install --frozen-lockfile --prefer-offline --store-dir /pnpm/store
 
 RUN pnpm exec playwright install --with-deps chromium \
   && rm -rf /var/lib/apt/lists/*
