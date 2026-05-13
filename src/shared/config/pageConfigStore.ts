@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:24:31 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/09 18:49:04 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/13 19:18:51 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -191,7 +191,8 @@ export function pageConfigKey(userId: string, pageId: string): string {
 }
 
 async function persistPageConfigToApi(pageId: string, config: PageConfig) {
-  const jwt = useUserStore.getState().activeJwt();
+  const state = useUserStore.getState();
+  const jwt = state.activePageJwt() || state.activeJwt();
   if (!jwt) return;
 
   try {
