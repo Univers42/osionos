@@ -13,7 +13,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
-import '@notion-db/object-database/theme.css';
+import "@/shared/notion-database-sys/src/index.css";
 import 'leaflet/dist/leaflet.css';
 import './styles/_graphical-chart.scss';
 import './styles/global.css';

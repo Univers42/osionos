@@ -43,8 +43,8 @@ export default defineConfig(({ mode }) => {
           replacement: path.resolve(root, 'src/shared/notion-database-sys/packages/contract-types/src/index.ts'),
         },
         {
-          find: '@',
-          replacement: path.resolve(root, 'src'),
+          find: /^@\//,
+          replacement: `${path.resolve(root, 'src')}/`,
         },
       ],
     },
