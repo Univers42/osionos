@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/09 23:07:10 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/12 23:14:08 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -75,8 +75,16 @@ export interface ActivePage {
   databaseId?: string | null;
 }
 
+export interface PageIndexEntry {
+  workspaceId: string;
+  index: number;
+}
+
 export interface PageStore {
   pages: Record<string, PageEntry[]>; // keyed by workspaceId
+  pageIdsByWorkspace: Record<string, string[]>; // stable ID lists keyed by workspaceId
+  pagesIndex: Record<string, PageIndexEntry>; // O(1) page lookup index
+  pageRevisions: Record<string, number>; // monotonically increments per page mutation
   activePage: ActivePage | null;
   navigationPath: ActivePage[]; // breadcrumb path based on navigation history
   recents: ActivePage[]; // last 10 opened
@@ -168,6 +176,10 @@ export interface PageStore {
     newType: BlockType,
   ) => void;
   updatePageContent: (pageId: string, blocks: Block[]) => void;
+  patchPage: (
+    pageId: string,
+    patch: Partial<PageEntry> | ((page: PageEntry) => Partial<PageEntry>),
+  ) => void;
   updatePageTitle: (pageId: string, title: string) => void;
 
   // Selectors

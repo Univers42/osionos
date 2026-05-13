@@ -22,6 +22,7 @@ import { CodeBlockReadOnly } from "./CodeBlockReadOnly";
 import { MediaBlockReadOnly } from "./MediaBlockReadOnly";
 import { TableBlockReadOnly } from "./TableBlockReadOnly";
 import { renderInlineToReact } from '@/shared/lib/markengine';
+import { timed } from '@/shared/lib/perf/measure';
 import { InternalPageLink } from "@/entities/page";
 
 interface BlockProps {
@@ -31,16 +32,38 @@ interface BlockProps {
   numberedDepth?: number;
 }
 
+const INLINE_MARKDOWN_CACHE_LIMIT = 2000;
+const inlineMarkdownCache = new Map<string, React.ReactNode>();
+
 function renderInternalPageLink(pageId: string) {
   return <InternalPageLink pageId={pageId} />;
+}
+
+function renderCachedInlineMarkdown(content: string): React.ReactNode {
+  const cached = inlineMarkdownCache.get(content);
+  if (cached !== undefined) {
+    inlineMarkdownCache.delete(content);
+    inlineMarkdownCache.set(content, cached);
+    return cached;
+  }
+
+  const rendered = timed("renderInlineToReact", () => renderInlineToReact(content, {
+    internalLinkRenderer: renderInternalPageLink,
+  }));
+  inlineMarkdownCache.set(content, rendered);
+
+  if (inlineMarkdownCache.size > INLINE_MARKDOWN_CACHE_LIMIT) {
+    const oldestKey = inlineMarkdownCache.keys().next().value;
+    if (oldestKey !== undefined) inlineMarkdownCache.delete(oldestKey);
+  }
+
+  return rendered;
 }
 
 const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
   const renderedContent = useMemo(() => {
     if (!content) return null;
-    return renderInlineToReact(content, {
-      internalLinkRenderer: renderInternalPageLink,
-    });
+    return renderCachedInlineMarkdown(content);
   }, [content]);
 
   return <>{renderedContent}</>;
@@ -98,7 +121,16 @@ function renderNestedChildren(block: Block, bulletDepth: number, numberedDepth: 
   );
 }
 
-export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0 }) => {
+function areReadOnlyBlockPropsEqual(previous: BlockProps, next: BlockProps): boolean {
+  return (
+    previous.block === next.block &&
+    previous.index === next.index &&
+    (previous.bulletDepth ?? 0) === (next.bulletDepth ?? 0) &&
+    (previous.numberedDepth ?? 0) === (next.numberedDepth ?? 0)
+  );
+}
+
+const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0 }) => {
   switch (block.type) {
     case "paragraph":
       return (
@@ -363,6 +395,8 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
       );
   }
 };
+
+export const ReadOnlyBlock = React.memo(ReadOnlyBlockImpl, areReadOnlyBlockPropsEqual);
 
 /**
  * Toggle read-only: renders summary + chevron.

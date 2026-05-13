@@ -6,17 +6,30 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:16:19 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 20:16:20 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/12 18:59:04 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 export type CaretPlacement = "start" | "end";
+export const VIRTUAL_BLOCK_FOCUS_EVENT = "osionos:block-focus-request";
 
-function resolveEditableBlock(blockId: string): HTMLElement | null {
+function requestVirtualBlockFocus(blockId: string, placement: CaretPlacement) {
+  if (typeof document === "undefined") return;
+  document.dispatchEvent(
+    new CustomEvent(VIRTUAL_BLOCK_FOCUS_EVENT, {
+      detail: { blockId, placement },
+    }),
+  );
+}
+
+function resolveEditableBlock(blockId: string, placement: CaretPlacement): HTMLElement | null {
   const block = document.querySelector(`[data-block-id="${blockId}"]`);
   if (!block) {
     return null;
   }
+
+  const tableCell = resolveTableCell(block as HTMLElement, placement);
+  if (tableCell) return tableCell;
 
   // Priority: contenteditable → textarea → input → direct child button → wrapper
   const editable =
@@ -32,6 +45,33 @@ function resolveEditableBlock(blockId: string): HTMLElement | null {
   }
 
   return editable;
+}
+
+function resolveTableCell(block: HTMLElement, placement: CaretPlacement): HTMLElement | null {
+  if (block.dataset.blockType !== "table_block") return null;
+  const cellFrames = Array.from(block.querySelectorAll<HTMLElement>("[data-table-cell]"));
+  if (cellFrames.length === 0) return null;
+
+  if (placement === "start") return cellFrames[0].querySelector<HTMLElement>("[contenteditable]");
+
+  const lastRowCell = cellFrames.reduce<HTMLElement | null>((candidate, frame) => {
+    const address = parseTableCellAddress(frame.dataset.tableCell);
+    const candidateAddress = parseTableCellAddress(candidate?.dataset.tableCell);
+    if (!address) return candidate;
+    if (!candidateAddress || address.rowIndex > candidateAddress.rowIndex) return frame;
+    if (address.rowIndex === candidateAddress.rowIndex && address.columnIndex === 0) return frame;
+    return candidate;
+  }, null);
+
+  return lastRowCell?.querySelector<HTMLElement>("[contenteditable]") ?? null;
+}
+
+function parseTableCellAddress(value: string | undefined): { rowIndex: number; columnIndex: number } | null {
+  const [row, column] = value?.split(":") ?? [];
+  const rowIndex = Number(row);
+  const columnIndex = Number(column);
+  if (!Number.isInteger(rowIndex) || !Number.isInteger(columnIndex)) return null;
+  return { rowIndex, columnIndex };
 }
 
 function placeCaret(target: HTMLElement, placement: CaretPlacement) {
@@ -61,12 +101,21 @@ export function focusEditableBlock(
   placement: CaretPlacement = "start",
   remainingFrames = 10,
 ) {
+  let requestedVirtualScroll = false;
+  const retry = () => {
+    requestAnimationFrame(focusAttempt);
+    globalThis.setTimeout(focusAttempt, 0);
+  };
   const focusAttempt = () => {
-    const editable = resolveEditableBlock(blockId);
+    const editable = resolveEditableBlock(blockId, placement);
     if (!editable) {
+      if (!requestedVirtualScroll) {
+        requestedVirtualScroll = true;
+        requestVirtualBlockFocus(blockId, placement);
+      }
       if (remainingFrames > 0) {
         remainingFrames -= 1;
-        requestAnimationFrame(focusAttempt);
+        retry();
       }
       return;
     }
@@ -77,11 +126,11 @@ export function focusEditableBlock(
 
     if (document.activeElement !== editable && remainingFrames > 0) {
       remainingFrames -= 1;
-      requestAnimationFrame(focusAttempt);
+      retry();
     }
   };
 
-  requestAnimationFrame(focusAttempt);
+  retry();
 }
 
 /**

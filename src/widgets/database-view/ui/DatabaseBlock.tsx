@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:37 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 18:04:52 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/12 23:14:08 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,6 +23,7 @@ import {
   DEFAULT_OBJECT_DATABASE_VIEW_ID,
 } from '@/store/useDatabaseStore';
 import { usePageStore } from '@/store/usePageStore';
+import { derivePageState } from '@/store/pageStore.helpers';
 import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseViewCatalog';
 import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
 import { getObjectDatabaseAdapter } from '../model/objectDatabaseAdapter';
@@ -135,9 +136,10 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
       content: toOsionosBlocks(databasePage.content),
     };
 
-    usePageStore.setState((current) => ({
-      pages: upsertOsionosDatabasePage(current.pages, workspaceId, nextEntry),
-    }));
+    usePageStore.setState((current) => derivePageState(
+      upsertOsionosDatabasePage(current.pages, workspaceId, nextEntry),
+      current.pageIdsByWorkspace,
+    ));
   }, [activePage?.id, activeUserId, database, databasePage, pageId, title, workspaceId]);
 
   React.useEffect(() => {

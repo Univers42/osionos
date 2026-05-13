@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 16:05:14 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/12 18:59:04 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -95,6 +95,7 @@ interface BlockEditorProps {
   onPaste?: (e: React.ClipboardEvent) => void;
   onDeleteCodeBlock?: () => void;
   onUpdateBlock?: (blockId: string, updates: Partial<Block>) => void;
+  onBeforeStructuralEdit?: () => void;
   onRequestSlashMenu?: (position: { x: number; y: number }) => void;
   renderChildren?: () => React.ReactNode;
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
@@ -112,6 +113,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   onPaste,
   onDeleteCodeBlock,
   onUpdateBlock,
+  onBeforeStructuralEdit,
   focusBlock,
   onRequestSlashMenu,
   renderChildren,
@@ -665,6 +667,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             }
           }}
           tabIndex={-1}
+          data-table-block-shell
           aria-label="Table block"
         >
           <div className="osio-block-scroll-x">
@@ -674,6 +677,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               style={editableStyle}
               textStyle={editableStyle}
               onDeleteTable={onDeleteCodeBlock}
+              onBeforeStructuralEdit={onBeforeStructuralEdit}
             />
           </div>
         </div>

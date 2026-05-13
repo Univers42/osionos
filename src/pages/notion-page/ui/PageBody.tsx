@@ -6,12 +6,13 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 20:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/12 18:59:04 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { PlaygroundPageEditor } from '@/features/block-editor';
+import { isPerfEnabled } from '@/shared/lib/perf/measure';
 
 interface PageBodyProps {
   pageId: string;
@@ -23,6 +24,15 @@ interface PageBodyProps {
  * the markengine for markdown shortcuts and block-level editing.
  */
 export const PageBody: React.FC<PageBodyProps> = ({ pageId, locked = false }) => {
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
+
+  useEffect(() => () => {
+    if (isPerfEnabled()) {
+      console.info(`[perf] PageBody renders before unmount: ${renderCountRef.current}`);
+    }
+  }, []);
+
   return (
     <div className="osionos-page-body">
       <PlaygroundPageEditor pageId={pageId} locked={locked} />

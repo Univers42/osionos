@@ -7,5 +7,9 @@ export function renderInlineToReact(
   options: ReactRenderOptions = {},
 ): React.ReactNode {
   const nodes = parseInline(text);
-  return renderInlines(nodes, options);
+  return renderInlines(nodes, {
+    ...options,
+    classPrefix: options.classPrefix ?? "md",
+    externalLinks: options.externalLinks ?? true,
+  });
 }

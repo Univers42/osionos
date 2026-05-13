@@ -159,5 +159,9 @@ export function useBlockHistory(
     historyRef.current = { undoStack: [], redoStack: [] };
   }, []);
 
-  return { pushSnapshot, undo, redo, clearHistory };
+  const canUndo = useCallback(() => historyRef.current.undoStack.length > 0, []);
+
+  const canRedo = useCallback(() => historyRef.current.redoStack.length > 0, []);
+
+  return { pushSnapshot, undo, redo, clearHistory, canUndo, canRedo };
 }

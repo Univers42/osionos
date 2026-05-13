@@ -10,8 +10,10 @@ import type {
 } from "@notion-db/object-database";
 
 import seedState from "@/shared/notion-database-sys/src/store/dbms/mongodb/_notion_state.json";
+import { timed } from "@/shared/lib/perf/measure";
 
 export const KNOWN_DATABASE_STATE_STORAGE_KEY = "osionos.knownDatabaseState.v1";
+const KNOWN_DATABASE_STATE_FLUSH_DELAY_MS = 1000;
 
 type KnownDatabaseStoreState = {
   state: NotionState;
@@ -29,6 +31,17 @@ export interface PersistableObjectDatabaseAdapter extends ObjectDatabaseAdapter 
 }
 
 const knownDatabaseAdapterCache = new Map<string, PersistableObjectDatabaseAdapter>();
+let pendingKnownDatabaseState: NotionState | null = null;
+let pendingKnownDatabaseStateMicrotask = false;
+let pendingKnownDatabaseStateDebounceHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
+let pendingKnownDatabaseStateIdleHandle: number | null = null;
+let pendingKnownDatabaseStateTimeoutHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
+
+type KnownDatabaseRequestIdleCallback = (
+  callback: IdleRequestCallback,
+  options?: IdleRequestOptions,
+) => number;
+type KnownDatabaseCancelIdleCallback = (handle: number) => void;
 
 export const useKnownDatabaseStateStore = create<KnownDatabaseStoreState>((set) => ({
   state: loadKnownDatabaseState(),
@@ -69,6 +82,7 @@ export function getKnownDatabaseAdapter(options: KnownDatabaseAdapterOptions = {
 
 export function loadKnownDatabaseState(): NotionState {
   const seeded = seedSnapshot();
+  if (pendingKnownDatabaseState) return cloneState(pendingKnownDatabaseState);
   if (globalThis.window === undefined) return seeded;
 
   try {
@@ -82,14 +96,101 @@ export function loadKnownDatabaseState(): NotionState {
 
 export function persistKnownDatabaseState(state: NotionState): NotionState {
   const nextState = cloneState(state);
-  if (globalThis.window !== undefined) {
-    try {
-      globalThis.localStorage.setItem(KNOWN_DATABASE_STATE_STORAGE_KEY, JSON.stringify(nextState));
-    } catch {
-      // localStorage can be unavailable or quota-limited.
-    }
-  }
+  scheduleKnownDatabaseStatePersist(nextState);
   return nextState;
+}
+
+export function flushKnownDatabaseStatePersist() {
+  cancelKnownDatabaseStateFlush();
+
+  if (!pendingKnownDatabaseState) return;
+
+  const nextState = pendingKnownDatabaseState;
+  pendingKnownDatabaseState = null;
+
+  if (globalThis.window !== undefined) {
+    timed("persistKnownDatabaseState", () => {
+      try {
+        globalThis.localStorage.setItem(KNOWN_DATABASE_STATE_STORAGE_KEY, JSON.stringify(nextState));
+      } catch {
+        // localStorage can be unavailable or quota-limited.
+      }
+    });
+  }
+}
+
+if (globalThis.window !== undefined) {
+  globalThis.addEventListener("beforeunload", flushKnownDatabaseStatePersist);
+}
+
+function scheduleKnownDatabaseStatePersist(state: NotionState) {
+  pendingKnownDatabaseState = state;
+
+  if (pendingKnownDatabaseStateMicrotask) return;
+
+  pendingKnownDatabaseStateMicrotask = true;
+  queueMicrotask(() => {
+    pendingKnownDatabaseStateMicrotask = false;
+    scheduleDebouncedKnownDatabaseStateFlush();
+  });
+}
+
+function scheduleDebouncedKnownDatabaseStateFlush() {
+  if (pendingKnownDatabaseStateDebounceHandle !== null) {
+    globalThis.clearTimeout(pendingKnownDatabaseStateDebounceHandle);
+  }
+
+  pendingKnownDatabaseStateDebounceHandle = globalThis.setTimeout(() => {
+    pendingKnownDatabaseStateDebounceHandle = null;
+    scheduleIdleKnownDatabaseStateFlush();
+  }, KNOWN_DATABASE_STATE_FLUSH_DELAY_MS);
+}
+
+function scheduleIdleKnownDatabaseStateFlush() {
+  if (pendingKnownDatabaseStateIdleHandle !== null || pendingKnownDatabaseStateTimeoutHandle !== null) return;
+
+  const requestIdle = (globalThis as typeof globalThis & {
+    requestIdleCallback?: KnownDatabaseRequestIdleCallback;
+  }).requestIdleCallback;
+
+  if (requestIdle) {
+    pendingKnownDatabaseStateIdleHandle = requestIdle(() => {
+      pendingKnownDatabaseStateIdleHandle = null;
+      flushKnownDatabaseStatePersist();
+    });
+    return;
+  }
+
+  pendingKnownDatabaseStateTimeoutHandle = globalThis.setTimeout(() => {
+    pendingKnownDatabaseStateTimeoutHandle = null;
+    flushKnownDatabaseStatePersist();
+  }, 0);
+}
+
+function cancelKnownDatabaseStateFlush() {
+  if (pendingKnownDatabaseStateDebounceHandle !== null) {
+    globalThis.clearTimeout(pendingKnownDatabaseStateDebounceHandle);
+    pendingKnownDatabaseStateDebounceHandle = null;
+  }
+
+  if (pendingKnownDatabaseStateTimeoutHandle !== null) {
+    globalThis.clearTimeout(pendingKnownDatabaseStateTimeoutHandle);
+    pendingKnownDatabaseStateTimeoutHandle = null;
+  }
+
+  if (pendingKnownDatabaseStateIdleHandle === null) return;
+
+  const cancelIdle = (globalThis as typeof globalThis & {
+    cancelIdleCallback?: KnownDatabaseCancelIdleCallback;
+  }).cancelIdleCallback;
+
+  if (cancelIdle) {
+    cancelIdle(pendingKnownDatabaseStateIdleHandle);
+  } else {
+    globalThis.clearTimeout(pendingKnownDatabaseStateIdleHandle);
+  }
+
+  pendingKnownDatabaseStateIdleHandle = null;
 }
 
 class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
@@ -103,11 +204,24 @@ class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
 
   async findPages(query: PageQuery): Promise<Page[]> {
     const state = useKnownDatabaseStateStore.getState().state;
-    let pages = Object.values(state.pages);
-    if (query.databaseId) pages = pages.filter((page) => page.databaseId === query.databaseId);
-    if (query.filter) pages = pages.filter((page) => matchesDocFilter(page, query.filter ?? {}));
-    if (query.sort?.length) pages = sortPages(pages, query.sort);
-    if (query.limit !== undefined) pages = pages.slice(0, query.limit);
+    const limit = normalizeQueryLimit(query.limit);
+    const shouldSort = Boolean(query.sort?.length);
+    const pages: Page[] = [];
+
+    if (limit === 0) return [];
+
+    for (const pageId in state.pages) {
+      const page = state.pages[pageId];
+      if (!matchesPageQuery(page, query)) continue;
+      pages.push(page);
+      if (!shouldSort && limit !== undefined && pages.length >= limit) break;
+    }
+
+    if (shouldSort) {
+      const sortedPages = sortPages(pages, query.sort ?? []);
+      return (limit === undefined ? sortedPages : sortedPages.slice(0, limit)).map(clone);
+    }
+
     return pages.map(clone);
   }
 
@@ -305,6 +419,17 @@ function mergeChangedRecords<TRecord>(
     if (!(recordId in nextRecords)) delete merged[recordId];
   }
   return merged;
+}
+
+function normalizeQueryLimit(limit: PageQuery["limit"]): number | undefined {
+  if (limit === undefined) return undefined;
+  const numericLimit = Math.floor(Number(limit));
+  return Number.isFinite(numericLimit) && numericLimit >= 0 ? numericLimit : undefined;
+}
+
+function matchesPageQuery(page: Page, query: PageQuery): boolean {
+  if (query.databaseId && page.databaseId !== query.databaseId) return false;
+  return query.filter ? matchesDocFilter(page, query.filter) : true;
 }
 
 function matchesDocFilter(page: Page, filter: NonNullable<PageQuery["filter"]>): boolean {

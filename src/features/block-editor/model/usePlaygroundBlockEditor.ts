@@ -52,6 +52,16 @@ import type {
 } from "./playgroundBlockEditor.helpers";
 import { useBlockContextMenu } from "./useBlockContextMenu";
 import { focusEditableBlock } from "./blockDomFocus";
+import {
+  clearBlockDraft,
+  clearBlockDraftsForSource,
+  flushAllBlockDraftsForSource,
+  flushBlockDraft,
+  rebaseBlockDraft,
+  setBlockDraft,
+  setBlockDraftCommitter,
+  type BlockDraftCommitReason,
+} from "./blockDraftStore";
 
 export type PlaygroundBlockEditorSource =
   | string
@@ -262,7 +272,7 @@ function findLayoutCellBlocks(
     }
   }
 
-  return [];
+  return EMPTY_BLOCKS;
 }
 
 function patchLayoutCellBlocks(
@@ -599,7 +609,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   const [pageSelector, setPageSelector] =
     useState<PageSelectorMenuState | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const contentRef = useRef<Block[]>([]);
+  const contentRef = useRef<Block[]>(content);
 
   /** Focus a block element after a short delay. */
   const focusBlock = useCallback((blockId: string, cursorEnd = false) => {
@@ -621,6 +631,22 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     [pageId, source],
   );
 
+  const flushPendingDrafts = useCallback(
+    (reason: BlockDraftCommitReason = "structural") => {
+      flushAllBlockDraftsForSource(sourceKey, reason);
+      return contentRef.current;
+    },
+    [sourceKey],
+  );
+
+  const flushPendingBlockDraft = useCallback(
+    (blockId: string, reason: BlockDraftCommitReason = "structural") => {
+      flushBlockDraft(sourceKey, blockId, reason);
+      return contentRef.current;
+    },
+    [sourceKey],
+  );
+
   const replaceContent = useCallback(
     (blocks: Block[]) => updatePageContent(pageId, blocks),
     [pageId, updatePageContent],
@@ -632,63 +658,74 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         ...block,
         ...updates,
       })));
+      if (typeof updates.content === "string") {
+        rebaseBlockDraft(sourceKey, blockId, updates.content);
+      }
     },
-    [pageId, updatePageContent],
+    [pageId, sourceKey, updatePageContent],
   );
 
   const insertBlock = useCallback(
     (_pid: string, afterBlockId: string, block: Block) => {
+      flushPendingDrafts("structural");
       updatePageContent(pageId, insertBlockAfterInEditorTree(contentRef.current, afterBlockId, block));
     },
-    [pageId, updatePageContent],
+    [flushPendingDrafts, pageId, updatePageContent],
   );
 
   const deleteBlock = useCallback(
     (_pid: string, blockId: string) => {
+      flushPendingDrafts("structural");
       updatePageContent(pageId, deleteBlockFromEditorTree(contentRef.current, blockId));
+      clearBlockDraft(sourceKey, blockId);
     },
-    [pageId, updatePageContent],
+    [flushPendingDrafts, pageId, sourceKey, updatePageContent],
   );
 
   const changeBlockType = useCallback(
     (_pid: string, blockId: string, newType: Block["type"]) => {
+      flushPendingBlockDraft(blockId, "shortcut");
       updatePageContent(pageId, updateBlockInEditorTree(contentRef.current, blockId, (block) => ({
         ...block,
         type: newType,
       })));
     },
-    [pageId, updatePageContent],
+    [flushPendingBlockDraft, pageId, updatePageContent],
   );
 
   const moveBlock = useCallback(
     (_pid: string, blockId: string, targetIndex: number, parentBlockId: string | null = null) => {
+      flushPendingDrafts("structural");
       updatePageContent(pageId, moveBlockInEditorTree(contentRef.current, blockId, targetIndex, parentBlockId));
     },
-    [pageId, updatePageContent],
+    [flushPendingDrafts, pageId, updatePageContent],
   );
 
   const moveBlockAcrossTree = useCallback(
     (_pid: string, blockId: string, targetParentBlockId: string | null, targetIndex: number) => {
+      flushPendingDrafts("structural");
       updatePageContent(pageId, moveBlockAcrossEditorTree(contentRef.current, blockId, targetParentBlockId, targetIndex));
     },
-    [pageId, updatePageContent],
+    [flushPendingDrafts, pageId, updatePageContent],
   );
 
   const indentBlock = useCallback(
     (_pid: string, blockId: string) => {
+      flushPendingBlockDraft(blockId, "structural");
       updatePageContent(pageId, indentBlockInEditorTree(contentRef.current, blockId));
     },
-    [pageId, updatePageContent],
+    [flushPendingBlockDraft, pageId, updatePageContent],
   );
 
   const outdentBlock = useCallback(
     (_pid: string, blockId: string) => {
+      flushPendingBlockDraft(blockId, "structural");
       updatePageContent(pageId, outdentBlockInEditorTree(contentRef.current, blockId));
     },
-    [pageId, updatePageContent],
+    [flushPendingBlockDraft, pageId, updatePageContent],
   );
 
-  const { pushSnapshot, undo, redo, clearHistory } = useBlockHistory(
+  const { pushSnapshot, undo, redo, clearHistory, canUndo, canRedo } = useBlockHistory(
     sourceKey,
     updatePageContent,
     focusBlock,
@@ -720,6 +757,18 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     },
     [pageId, updateBlock],
   );
+
+  useEffect(
+    () => setBlockDraftCommitter(sourceKey, (blockId, text) => {
+      persistBlockText(blockId, text);
+    }),
+    [persistBlockText, sourceKey],
+  );
+
+  useEffect(() => () => {
+    flushAllBlockDraftsForSource(sourceKey, "unmount");
+    clearBlockDraftsForSource(sourceKey);
+  }, [sourceKey]);
 
   const tryHandleCodeOrTable = useCallback(
     (blockId: string, text: string): boolean => {
@@ -845,11 +894,11 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   /** Handle content change — detects '/' trigger and markdown shortcuts. */
   const handleBlockChange = useCallback(
     (blockId: string, text: string) => {
-      persistBlockText(blockId, text);
+      const block = findBlockInTree(contentRef.current, blockId);
+      setBlockDraft(sourceKey, blockId, block?.content ?? "", text);
       if (tryHandleCodeOrTable(blockId, text)) return;
 
       // Code blocks are plain-text editors: no slash menu or markdown shortcuts.
-      const block = findBlockInTree(contentRef.current, blockId);
       if (block?.type === "code") return;
 
       if (tryHandleSlashMenu(blockId, text)) return;
@@ -857,7 +906,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       tryHandleMarkdownShortcut(blockId, text);
     },
     [
-      persistBlockText,
+      sourceKey,
       tryHandleCodeOrTable,
       tryHandleSlashMenu,
       tryHandlePageSelectorMenu,
@@ -1136,6 +1185,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
   const handlePaste = useCallback(
     (e: React.ClipboardEvent, blockId: string) => {
+      flushPendingBlockDraft(blockId, "structural");
       const currentBlock = findBlockInTree(contentRef.current, blockId);
       if (!currentBlock || currentBlock.type === "code") return;
 
@@ -1157,7 +1207,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       updatePageContent(pageId, replaceBlockInEditorTree(contentRef.current, blockId, replacement));
       focusBlock(parsed.at(-1)?.id ?? replacement.at(-1)?.id ?? blockId, true);
     },
-    [pageId, updatePageContent, focusBlock],
+    [flushPendingBlockDraft, pageId, updatePageContent, focusBlock],
   );
 
   const handleContainerEnter = useCallback(
@@ -1193,14 +1243,20 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       if (e.key === "z" && !e.shiftKey) {
         // Only intercept if we have structural history; otherwise let
         // the browser handle native text undo.
+        if (!canUndo()) return false;
+        flushPendingDrafts("undo-redo");
         if (undo(contentRef.current)) {
+          clearBlockDraftsForSource(sourceKey);
           e.preventDefault();
           return true;
         }
         return false;
       }
       if ((e.key === "z" && e.shiftKey) || e.key === "y") {
+        if (!canRedo()) return false;
+        flushPendingDrafts("undo-redo");
         if (redo(contentRef.current)) {
+          clearBlockDraftsForSource(sourceKey);
           e.preventDefault();
           return true;
         }
@@ -1208,7 +1264,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       }
       return false;
     },
-    [undo, redo],
+    [canRedo, canUndo, flushPendingDrafts, redo, sourceKey, undo],
   );
 
   /** Push an undo snapshot if the key will trigger a structural block mutation. */
@@ -1218,20 +1274,22 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         e.key === "Tab" || e.key === "Enter" ||
         ((e.key === "Backspace" || e.key === "Delete") && isEmptyForDeletion);
       if (isStructural) {
+        flushPendingDrafts("structural");
         pushSnapshot(contentRef.current);
       }
     },
-    [pushSnapshot],
+    [flushPendingDrafts, pushSnapshot],
   );
 
   /** Try Enter-key actions (new block creation). Returns true if handled. */
   const handleEnterAction = useCallback(
     (e: React.KeyboardEvent, blockId: string, blockType: Block["type"]) => {
       if (e.key !== "Enter" || e.shiftKey) return false;
+      flushPendingBlockDraft(blockId, "structural");
       handleEnterKey(e, blockId, blockType, slashMenu, pageId, insertBlock, focusBlock);
       return true;
     },
-    [slashMenu, pageId, insertBlock, focusBlock],
+    [flushPendingBlockDraft, slashMenu, pageId, insertBlock, focusBlock],
   );
 
   /** Try Escape-key actions (close menus). */
@@ -1258,7 +1316,6 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         : contentRef.current;
       const block = content.find((b) => b.id === blockId);
       if (!block) return;
-      const blockIdx = content.findIndex((b) => b.id === blockId);
       const liveText =
         (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
       const isEmpty = isEffectivelyEmpty(liveText);
@@ -1266,21 +1323,27 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       maybePushStructuralSnapshot(e, isEmptyForDeletion);
 
+      const nextContent = parentBlockId
+        ? (findChildrenForParent(contentRef.current, parentBlockId) ?? [])
+        : contentRef.current;
+      const nextBlock = nextContent.find((b) => b.id === blockId) ?? block;
+      const nextBlockIdx = nextContent.findIndex((b) => b.id === blockId);
+
       const handled =
-        handleBlockIndentation(e, blockId, block, content) ||
-        handleParagraphSpaceShortcut(e, blockId, block) ||
-        handleToggleHeadingSpaceShortcut(e, blockId, block) ||
-        handleEmptyListEnter(e, blockId, block, blockIdx, content, isEmpty) ||
-        handleEmptyTodoEnter(e, blockId, block, isEmpty) ||
-        handleEmptyListDelete(e, blockId, block, blockIdx, content, isEmpty) ||
-        handleDividerDelete(e, blockId, block, blockIdx, content) ||
-        (e.key === "Enter" && block.type === "code") ||
-        handleContainerEnter(e, blockId, block);
+        handleBlockIndentation(e, blockId, nextBlock, nextContent) ||
+        handleParagraphSpaceShortcut(e, blockId, nextBlock) ||
+        handleToggleHeadingSpaceShortcut(e, blockId, nextBlock) ||
+        handleEmptyListEnter(e, blockId, nextBlock, nextBlockIdx, nextContent, isEmpty) ||
+        handleEmptyTodoEnter(e, blockId, nextBlock, isEmpty) ||
+        handleEmptyListDelete(e, blockId, nextBlock, nextBlockIdx, nextContent, isEmpty) ||
+        handleDividerDelete(e, blockId, nextBlock, nextBlockIdx, nextContent) ||
+        (e.key === "Enter" && nextBlock.type === "code") ||
+        handleContainerEnter(e, blockId, nextBlock);
 
       if (handled) return;
-      if (handleEnterAction(e, blockId, block.type)) return;
-      if (handleEmptyBackspace(e, blockId, block, blockIdx, content, parentBlockId, isEmptyForDeletion)) return;
-      if (handleArrowNavigation(e, blockId, content)) return;
+      if (handleEnterAction(e, blockId, nextBlock.type)) return;
+      if (handleEmptyBackspace(e, blockId, nextBlock, nextBlockIdx, nextContent, parentBlockId, isEmptyForDeletion)) return;
+      if (handleArrowNavigation(e, blockId, nextContent)) return;
       handleEscapeAction(e);
     },
     [
@@ -1380,10 +1443,11 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   /** Wrap updatePageContent so context menu operations push undo snapshots. */
   const updatePageContentWithHistory = useCallback(
     (pid: string, blocks: Block[]) => {
-      pushSnapshot(contentRef.current);
+      const currentContent = flushPendingDrafts("structural");
+      pushSnapshot(currentContent);
       updatePageContent(pid, blocks);
     },
-    [pushSnapshot, updatePageContent],
+    [flushPendingDrafts, pushSnapshot, updatePageContent],
   );
 
   const {
@@ -1423,6 +1487,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     (targetPageId: string) => {
       if (!pageSelector) return;
       const { blockId } = pageSelector;
+      flushPendingBlockDraft(blockId, "shortcut");
       const block = findBlockInTree(contentRef.current, blockId);
       if (!block) return;
 
@@ -1436,7 +1501,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       }
       setPageSelector(null);
     },
-    [pageSelector, pageId, updateBlock],
+    [flushPendingBlockDraft, pageSelector, pageId, updateBlock],
   );
 
   const handlePageSelectorCreate = useCallback(async () => {
@@ -1529,6 +1594,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     handleInitBlock,
     registerBlockRef,
     focusBlock,
+    flushPendingDrafts,
     content,
     source,
     sourceKey,

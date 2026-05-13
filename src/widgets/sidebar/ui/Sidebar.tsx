@@ -6,15 +6,16 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 05:03:33 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/12 23:14:08 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useUserStore, WorkspaceSwitcher } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { useUIStore } from "@/shared/config/uiStore";
+import { isPerfEnabled, recordRender } from "@/shared/lib/perf/measure";
 import { SidebarTopNav } from "./SidebarTopNav";
 import { SidebarPageTree } from "./SidebarPageTree";
 import { SidebarFooter } from "./SidebarFooter";
@@ -33,15 +34,26 @@ export const Sidebar: React.FC<Props> = ({
   onOpenSettings,
   onOpenTrash,
 }) => {
-  const session = useUserStore((s) => s.activeSession());
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
+  recordRender("Sidebar");
+
+  useEffect(() => () => {
+    if (isPerfEnabled()) {
+      console.info(`[perf] Sidebar renders before unmount: ${renderCountRef.current}`);
+    }
+  }, []);
+
+  const activeUserId = useUserStore((s) => s.activeUserId);
   const jwt = useUserStore((s) => s.activePageJwt() ?? "");
-  const activeWorkspace = useUserStore((s) => s.activeWorkspace());
-  const activePage = usePageStore((s) => s.activePage);
+  const activeWorkspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
+  const activeWorkspaceOwnerId = useUserStore((s) => s.activeWorkspace()?.ownerId ?? "");
+  const activePageId = usePageStore((s) => s.activePage?.id ?? null);
+  const activePageKind = usePageStore((s) => s.activePage?.kind ?? null);
   const recents = usePageStore((s) => s.recents);
   const fetchPages = usePageStore((s) => s.fetchPages);
   const openPage = usePageStore((s) => s.openPage);
   const addPage = usePageStore((s) => s.addPage);
-  const pagesByWorkspace = usePageStore((s) => s.pages);
 
   const isSidebarOpen = useUIStore((s) => s.isSidebarOpen);
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);
@@ -50,23 +62,20 @@ export const Sidebar: React.FC<Props> = ({
   const [showInviteCTA, setShowInviteCTA] = useState(true);
 
   const privateWorkspaces = useMemo(
-    () => activeWorkspace && activeWorkspace.ownerId === session?.userId ? [activeWorkspace] : [],
-    [activeWorkspace, session?.userId],
+    () => activeWorkspaceId && activeWorkspaceOwnerId === activeUserId ? [{ _id: activeWorkspaceId }] : [],
+    [activeUserId, activeWorkspaceId, activeWorkspaceOwnerId],
   );
   const sharedWorkspaces = useMemo(
-    () => activeWorkspace && activeWorkspace.ownerId !== session?.userId ? [activeWorkspace] : [],
-    [activeWorkspace, session?.userId],
+    () => activeWorkspaceId && activeWorkspaceOwnerId !== activeUserId ? [{ _id: activeWorkspaceId }] : [],
+    [activeUserId, activeWorkspaceId, activeWorkspaceOwnerId],
   );
 
   // Fetch pages whenever the active user's workspaces change
   useEffect(() => {
-    const allWs = [...privateWorkspaces, ...sharedWorkspaces];
-    for (const ws of allWs) {
-      if (jwt) fetchPages(ws._id, jwt);
-    }
-  }, [privateWorkspaces, sharedWorkspaces, jwt, fetchPages]);
+    if (activeWorkspaceId && jwt) fetchPages(activeWorkspaceId, jwt);
+  }, [activeWorkspaceId, jwt, fetchPages]);
 
-  function handleAddToWorkspace(wsId: string) {
+  const handleAddToWorkspace = useCallback((wsId: string) => {
     addPage(wsId, "Untitled", jwt).then((page) => {
       if (page)
         openPage({
@@ -76,7 +85,7 @@ export const Sidebar: React.FC<Props> = ({
           title: page.title,
         });
     });
-  }
+  }, [addPage, jwt, openPage]);
 
   function handleResizePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -100,18 +109,22 @@ export const Sidebar: React.FC<Props> = ({
     globalThis.addEventListener("pointerup", handlePointerUp, { once: true });
   }
 
+  const sidebarStyle: React.CSSProperties & { "--sidebar-width": string } = {
+    "--sidebar-width": `${sidebarWidth}px`,
+  };
+
   return (
     <aside
       className={[
         styles.sidebar,
         isSidebarOpen ? "" : styles.sidebarClosed,
       ].join(" ")}
-      style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
+      style={sidebarStyle}
     >
       <WorkspaceSwitcher />
 
       <SidebarTopNav
-        isHomeActive={activePage === null}
+        isHomeActive={activePageId === null}
         onOpenHome={onOpenHome}
       />
 
@@ -126,11 +139,12 @@ export const Sidebar: React.FC<Props> = ({
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-1.5 pb-5">
         <SidebarPageTree
           recents={recents}
-          activePage={activePage}
+          activePageId={activePageId}
+          activePageKind={activePageKind}
+          activeWorkspaceId={activeWorkspaceId}
           openPage={openPage}
           privateWorkspaces={privateWorkspaces}
           sharedWorkspaces={sharedWorkspaces}
-          pagesByWorkspace={pagesByWorkspace}
           jwt={jwt}
           onAddToWorkspace={handleAddToWorkspace}
         />
