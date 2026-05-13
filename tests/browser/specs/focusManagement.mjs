@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   focusManagement.mjs                                :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/27 10:00:13 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/27 10:00:14 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/05/13 13:52:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
