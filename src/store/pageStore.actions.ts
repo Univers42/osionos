@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 05:03:33 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/12 23:14:08 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,6 +29,7 @@ import {
   saveRecents,
   getAllDescendantIds,
   savePagesCache,
+  derivePageState,
   mergeWorkspacePages,
   isValidMove,
   nextDuplicateTitle,
@@ -46,7 +47,7 @@ export function createSeedOfflinePages(set: SetFn, get: GetFn) {
     const existingPages = get().pages;
     if (Object.keys(existingPages).length > 0) {
       const mergedPages = mergeMissingSeedPages(existingPages);
-      set({ pages: mergedPages, seeded: true });
+      set((s) => ({ ...derivePageState(mergedPages, s.pageIdsByWorkspace), seeded: true }));
       savePagesCache(mergedPages);
       return;
     }
@@ -55,7 +56,7 @@ export function createSeedOfflinePages(set: SetFn, get: GetFn) {
       if (!grouped[sp.workspaceId]) grouped[sp.workspaceId] = [];
       grouped[sp.workspaceId].push(seedToEntry(sp));
     }
-    set({ pages: grouped, seeded: true });
+    set((s) => ({ ...derivePageState(grouped, s.pageIdsByWorkspace), seeded: true }));
     savePagesCache(grouped);
   };
 }
@@ -96,12 +97,12 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
           pageJwt,
         );
         set((s) => ({
-          pages: {
+          ...derivePageState({
             ...s.pages,
             [realWsId]: [...(s.pages[realWsId] ?? []), page],
-          },
+          }, s.pageIdsByWorkspace),
         }));
-        savePagesCache(get().pages);
+        savePagesCache(get().pages, realWsId);
       } catch (err) {
         console.warn("[pageStore] Failed to seed page:", sp.title, err);
       }
@@ -123,15 +124,15 @@ export function createFetchPages(set: SetFn, get: GetFn) {
         pageJwt,
       );
       set((s) => ({
-        pages: {
+        ...derivePageState({
           ...s.pages,
           [workspaceId]: mergeWorkspacePages(s.pages[workspaceId], data),
-        },
+        }, s.pageIdsByWorkspace),
         loadingIds: new Set(
           [...s.loadingIds].filter((id) => id !== workspaceId),
         ),
       }));
-      savePagesCache(get().pages);
+      savePagesCache(get().pages, workspaceId);
     } catch {
       set((s) => ({
         loadingIds: new Set(
@@ -153,16 +154,16 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
       const fullPage = await api.get<PageEntry>(`/api/pages/${pageId}`, pageJwt);
       if (!fullPage) return;
       set((s) => ({
-        pages: updatePageInState(s.pages, pageId, (p) => ({
+        ...derivePageState(updatePageInState(s.pages, pageId, (p) => ({
           ...p,
           content: fullPage.content ?? p.content,
           title: fullPage.title ?? p.title,
           icon: fullPage.icon ?? p.icon,
           cover: fullPage.cover ?? p.cover,
           updatedAt: fullPage.updatedAt ?? p.updatedAt,
-        })),
+        })), s.pageIdsByWorkspace),
       }));
-      savePagesCache(get().pages);
+      savePagesCache(get().pages, page.workspaceId);
     } catch (err) {
       console.warn("[pageStore] fetchPageContent failed:", pageId, err);
     }
@@ -211,12 +212,12 @@ export function createAddPage(set: SetFn, get: GetFn) {
           updatedAt: page.updatedAt ?? new Date().toISOString(),
         };
         set((s) => ({
-          pages: {
+          ...derivePageState({
             ...s.pages,
             [workspaceId]: [...(s.pages[workspaceId] ?? []), pageWithTimestamp],
-          },
+          }, s.pageIdsByWorkspace),
         }));
-        savePagesCache(get().pages);
+        savePagesCache(get().pages, workspaceId);
         return pageWithTimestamp;
       } catch {
         return null;
@@ -238,12 +239,12 @@ export function createAddPage(set: SetFn, get: GetFn) {
       surface: options.surface,
     };
     set((s) => ({
-      pages: {
+      ...derivePageState({
         ...s.pages,
         [workspaceId]: [...(s.pages[workspaceId] ?? []), newPage],
-      },
+      }, s.pageIdsByWorkspace),
     }));
-    savePagesCache(get().pages);
+    savePagesCache(get().pages, workspaceId);
     return newPage;
   };
 }
@@ -291,12 +292,12 @@ export function createAddDatabasePage(set: SetFn, get: GetFn) {
           updatedAt: page.updatedAt ?? new Date().toISOString(),
         };
         set((s) => ({
-          pages: {
+          ...derivePageState({
             ...s.pages,
             [workspaceId]: [...(s.pages[workspaceId] ?? []), pageWithTimestamp],
-          },
+          }, s.pageIdsByWorkspace),
         }));
-        savePagesCache(get().pages);
+        savePagesCache(get().pages, workspaceId);
         return pageWithTimestamp;
       } catch {
         return null;
@@ -318,12 +319,12 @@ export function createAddDatabasePage(set: SetFn, get: GetFn) {
       content: [],
     };
     set((s) => ({
-      pages: {
+      ...derivePageState({
         ...s.pages,
         [workspaceId]: [...(s.pages[workspaceId] ?? []), newPage],
-      },
+      }, s.pageIdsByWorkspace),
     }));
-    savePagesCache(get().pages);
+    savePagesCache(get().pages, workspaceId);
     return newPage;
   };
 }
@@ -356,17 +357,19 @@ export function createArchivePage(set: SetFn, get: GetFn) {
         saveRecents(newRecents);
       }
 
-      return {
-        pages: {
+      const pages = {
           ...s.pages,
           [workspaceId]: wsPages.map((p) =>
             archivedIds.has(p._id) ? { ...p, archivedAt } : p,
           ),
-        },
+        };
+
+      return {
+        ...derivePageState(pages, s.pageIdsByWorkspace),
         recents: newRecents,
       };
     });
-    savePagesCache(get().pages);
+    savePagesCache(get().pages, workspaceId);
   };
 }
 
@@ -426,7 +429,7 @@ export function createDuplicatePage(set: SetFn, get: GetFn) {
         ...s.pages,
         [workspaceId]: nextPages,
       };
-      savePagesCache(nextAllPages);
+      savePagesCache(nextAllPages, workspaceId);
 
       if (newRootPage) {
         const newActivePage: ActivePage = {
@@ -444,13 +447,13 @@ export function createDuplicatePage(set: SetFn, get: GetFn) {
         saveRecents(recents);
 
         return {
-          pages: nextAllPages,
+          ...derivePageState(nextAllPages, s.pageIdsByWorkspace),
           activePage: newActivePage,
           recents,
         };
       }
 
-      return { pages: nextAllPages };
+      return derivePageState(nextAllPages, s.pageIdsByWorkspace);
     });
 
     return newRootId;
@@ -512,8 +515,8 @@ export function createMovePage(set: SetFn, get: GetFn) {
           p._id === pageId ? { ...p, parentPageId: targetParentId ?? null } : p,
         );
 
-        savePagesCache(nextPages);
-        return { pages: nextPages };
+        savePagesCache(nextPages, sourceWorkspaceId);
+        return derivePageState(nextPages, s.pageIdsByWorkspace);
       } else {
         // Cross-workspace move
         const sourceList = nextPages[sourceWorkspaceId] ?? [];
@@ -561,10 +564,10 @@ export function createMovePage(set: SetFn, get: GetFn) {
         }
 
         saveRecents(updatedRecents);
-        savePagesCache(nextPages);
+        savePagesCache(nextPages, [sourceWorkspaceId, targetWorkspaceId]);
 
         return {
-          pages: nextPages,
+          ...derivePageState(nextPages, s.pageIdsByWorkspace),
           recents: updatedRecents,
           activePage: updatedActivePage,
         };
@@ -595,16 +598,16 @@ export function createRestorePage(set: SetFn, get: GetFn) {
       const descendantIds = getAllDescendantIds(wsPages, pageId);
       const restoredIds = new Set([pageId, ...descendantIds]);
 
-      return {
-        pages: {
+      const pages = {
           ...s.pages,
           [workspaceId]: wsPages.map((p) =>
             restoredIds.has(p._id) ? { ...p, archivedAt: null } : p,
           ),
-        },
-      };
+        };
+
+      return derivePageState(pages, s.pageIdsByWorkspace);
     });
-    savePagesCache(get().pages);
+    savePagesCache(get().pages, workspaceId);
   };
 }
 
@@ -638,16 +641,18 @@ export function createDeletePage(set: SetFn, get: GetFn) {
         saveRecents(recents);
       }
 
-      return {
-        pages: {
+      const pages = {
           ...s.pages,
           [workspaceId]: wsPages.filter((p) => !deletedIds.has(p._id)),
-        },
+        };
+
+      return {
+        ...derivePageState(pages, s.pageIdsByWorkspace),
         activePage:
           s.activePage && deletedIds.has(s.activePage.id) ? null : s.activePage,
         recents,
       };
     });
-    savePagesCache(get().pages);
+    savePagesCache(get().pages, workspaceId);
   };
 }

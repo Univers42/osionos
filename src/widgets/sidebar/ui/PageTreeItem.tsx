@@ -13,17 +13,44 @@
 import React, { useState, useMemo } from "react";
 import { ChevronRight, Plus } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
+import { useShallow } from "zustand/react/shallow";
 import { usePageStore, type PageEntry } from "@/store/usePageStore";
 import { PageOptionsMenu } from "@/features/page-management";
 import {
   canReadPage,
-  getCurrentPageAccessContext,
+  usePageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
 
 const EMPTY_WORKSPACE_PAGES: readonly PageEntry[] = [];
+type PageStoreState = ReturnType<typeof usePageStore.getState>;
+
+function selectPageTreeEntry(state: PageStoreState, pageId: string): PageEntry | null {
+  const index = state.pagesIndex[pageId];
+  const page = index ? state.pages[index.workspaceId]?.[index.index] : undefined;
+  if (!page) return null;
+  return {
+    _id: page._id,
+    title: page.title,
+    icon: page.icon,
+    workspaceId: page.workspaceId,
+    ownerId: page.ownerId,
+    visibility: page.visibility,
+    collaborators: page.collaborators,
+    parentPageId: page.parentPageId,
+    databaseId: page.databaseId,
+    archivedAt: page.archivedAt,
+    surface: page.surface,
+  };
+}
+
+function selectChildPageIds(pages: readonly PageEntry[], parentPageId: string): string[] {
+  return pages
+    .filter((page) => page.parentPageId === parentPageId && !page.archivedAt)
+    .map((page) => page._id);
+}
 
 interface Props {
-  page: PageEntry;
+  pageId: string;
   workspaceId: string;
   jwt: string;
   depth?: number;
@@ -37,7 +64,7 @@ interface Props {
  * – Click opens the page in MainContent
  */
 export const PageTreeItem: React.FC<Props> = ({
-  page,
+  pageId,
   workspaceId,
   jwt,
   depth = 0,
@@ -47,27 +74,22 @@ export const PageTreeItem: React.FC<Props> = ({
 
   const openPage = usePageStore((s) => s.openPage);
   const addPage = usePageStore((s) => s.addPage);
+  const page = usePageStore(useShallow((s) => selectPageTreeEntry(s, pageId)));
+  const childPageIds = usePageStore(useShallow((s) => selectChildPageIds(s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES, pageId)));
+  const accessContext = usePageAccessContext();
 
-  // Access raw pages array (stable reference) and derive children outside selector
-  const wsPages = usePageStore(
-    (s) => s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES,
-  );
-  const accessContext = getCurrentPageAccessContext();
   const children = useMemo(
-    () =>
-      (wsPages ?? []).filter(
-        (p) =>
-          p.parentPageId === page._id &&
-          !p.archivedAt &&
-          canReadPage(p, accessContext),
-      ),
-    [wsPages, page._id, accessContext],
+    () => childPageIds,
+    [childPageIds],
   );
-  const isActive = activeId === page._id;
+  if (!page || page.archivedAt || !canReadPage(page, accessContext)) return null;
+  const pageEntry = page;
+
+  const isActive = activeId === pageEntry._id;
   const hasChildren = children.length > 0;
   const paddingLeft = `calc(var(--osio-space-2) + ${depth} * var(--osio-space-4))`;
 
-  const fallbackIcon = page.databaseId ? "icon:table" : "icon:page";
+  const fallbackIcon = pageEntry.databaseId ? "icon:table" : "icon:page";
 
   function handleOpen(e: React.MouseEvent) {
     e.stopPropagation();
@@ -76,18 +98,18 @@ export const PageTreeItem: React.FC<Props> = ({
 
   function handleOpenPage() {
     openPage({
-      id: page._id,
+      id: pageEntry._id,
       workspaceId,
-      kind: page.databaseId ? "database" : "page",
-      title: page.title,
-      icon: page.icon,
-      databaseId: page.databaseId,
+      kind: pageEntry.databaseId ? "database" : "page",
+      title: pageEntry.title,
+      icon: pageEntry.icon,
+      databaseId: pageEntry.databaseId,
     });
   }
 
   async function handleAddChild(e: React.MouseEvent) {
     e.stopPropagation();
-    const child = await addPage(workspaceId, "Untitled", jwt, page._id);
+    const child = await addPage(workspaceId, "Untitled", jwt, pageEntry._id);
     if (child) {
       setExpanded(true);
       openPage({
@@ -142,8 +164,8 @@ export const PageTreeItem: React.FC<Props> = ({
               : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
           ].join(" ")}
         >
-          {page.icon ? (
-            <AssetRenderer value={page.icon} size={14} className="shrink-0" />
+          {pageEntry.icon ? (
+            <AssetRenderer value={pageEntry.icon} size={14} className="shrink-0" />
           ) : (
             <AssetRenderer
               value={fallbackIcon}
@@ -153,7 +175,7 @@ export const PageTreeItem: React.FC<Props> = ({
           )}
 
           <span className="flex-1 text-left truncate ml-1">
-            {page.title || "Untitled"}
+            {pageEntry.title || "Untitled"}
           </span>
         </button>
 
@@ -165,9 +187,9 @@ export const PageTreeItem: React.FC<Props> = ({
           ].join(" ")}
         >
           <PageOptionsMenu
-            pageId={page._id}
+            pageId={pageEntry._id}
             workspaceId={workspaceId}
-            pageTitle={page.title || "Untitled"}
+            pageTitle={pageEntry.title || "Untitled"}
             isActivePage={isActive}
             onRedirectHome={() =>
               usePageStore.setState({ activePage: null, navigationPath: [] })
@@ -187,10 +209,10 @@ export const PageTreeItem: React.FC<Props> = ({
       {/* Recurse for children */}
       {expanded &&
         hasChildren &&
-        children.map((child) => (
+        children.map((childId) => (
           <PageTreeItem
-            key={child._id}
-            page={child}
+            key={childId}
+            pageId={childId}
             workspaceId={workspaceId}
             jwt={jwt}
             depth={depth + 1}

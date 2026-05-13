@@ -1,40 +1,9 @@
-import React, {
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  AlignCenter,
-  AlignLeft,
-  AlignRight,
-  PanelTop,
-  Plus,
-  RotateCcw,
-  Settings2,
-} from "lucide-react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Plus } from "lucide-react";
 
-import type { Block, TableBlockConfig, TableBlockPadding, TableBlockTextAlign } from "@/entities/block";
-import {
-  addTableColumn,
-  addTableRow,
-  clampTableColumnWidth,
-  clampTableRowHeight,
-  getTableAlignmentClassName,
-  getTableColumnCount,
-  getTablePaddingClassName,
-  insertConfigColumn,
-  insertConfigRow,
-  normalizeTableData,
-  removeConfigColumn,
-  removeTableColumn,
-  removeConfigRow,
-  removeTableRow,
-  resolveTableConfig,
-} from "@/entities/block/model/tableBlocks";
+import type { Block, TableBlockConfig, TableBlockTextAlign } from "@/entities/block";
+import { addTableColumn, addTableRow, clampTableColumnWidth, clampTableRowHeight, getTableAlignmentClassName, getTableColumnCount, getTablePaddingClassName, insertConfigColumn, insertConfigRow, normalizeTableData, removeConfigColumn, removeConfigRow, removeTableColumn, removeTableRow, resolveTableConfig } from "@/entities/block/model/tableBlocks";
+import { focusEditableBlock } from "@/features/block-editor/model/blockDomFocus";
 import { usePageStore } from "@/store/usePageStore";
 
 interface TableBlockEditorProps {
@@ -43,618 +12,217 @@ interface TableBlockEditorProps {
   style?: React.CSSProperties;
   textStyle?: React.CSSProperties;
   onDeleteTable?: () => void;
+  onBeforeStructuralEdit?: () => void;
 }
 
-interface CellMenuState {
-  x: number;
-  y: number;
-  rowIndex: number;
-  columnIndex: number;
+type Axis = "column" | "row";
+type CellCommit = (value: string, flush?: boolean) => void;
+type ScheduleCellCommit = (rowIndex: number, columnIndex: number, value: string, flush?: boolean) => void;
+type InsertPreview = { axis: Axis; offset: number } | null;
+type CellAddress = { rowIndex: number; columnIndex: number };
+type CaretPlacement = "start" | "end";
+type CellKeyHandler = (event: React.KeyboardEvent<HTMLDivElement>, rowIndex: number, columnIndex: number) => void;
+type CellFocusHandler = (cellId: string) => void;
+type StructuralEditRunner = (nextData: string[][], nextConfig: TableBlockConfig, target: CellAddress, placement?: CaretPlacement) => void;
+
+interface CellKeyContext {
+  columnCount: number;
+  config: TableBlockConfig;
+  data: string[][];
+  root: HTMLElement | null;
+  source: string[][];
+  focusCell: (rowIndex: number, columnIndex: number, placement?: CaretPlacement) => void;
+  runStructuralEdit: StructuralEditRunner;
 }
 
-const TABLE_CONTEXT_MENU_WIDTH = 200;
-const TABLE_CONTEXT_MENU_HEIGHT = 216;
-const SETTINGS_PANEL_WIDTH = 292;
-const MAX_AUTO_COLUMN_WIDTH = 420;
-const CELL_COMMIT_DELAY_MS = 220;
-const INSERT_DRAG_THRESHOLD_PX = 8;
-const ROW_ESTIMATE_HEIGHT = 42;
-const ROW_VIRTUALIZATION_THRESHOLD = 80;
+const CELL_COMMIT_DELAY_MS = 200;
+const INSERT_STEP_PX = 80;
+const ROW_ESTIMATE_HEIGHT = 40;
+const CELL_PROPS = {
+  contentEditable: "plaintext-only",
+  suppressContentEditableWarning: true,
+  role: "textbox",
+  tabIndex: 0,
+  "aria-multiline": true,
+} satisfies React.HTMLAttributes<HTMLDivElement>;
+const ADD_BUTTON_CLASS = "z-[var(--osio-z-raised)] flex h-6 w-6 items-center justify-center rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-muted)] opacity-0 shadow-sm transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)] group-hover/table:opacity-100 group-focus-within/table:opacity-100";
 
-export const TableBlockEditor: React.FC<TableBlockEditorProps> = ({
-  block,
-  pageId,
-  style,
-  textStyle,
-  onDeleteTable,
-}) => {
+export const TableBlockEditor: React.FC<TableBlockEditorProps> = ({ block, pageId, style, textStyle, onDeleteTable, onBeforeStructuralEdit }) => {
   const updateBlock = usePageStore((state) => state.updateBlock);
-  const [contextMenu, setContextMenu] = useState<CellMenuState | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const contextMenuRef = useRef<HTMLDivElement | null>(null);
-  const settingsRef = useRef<HTMLDivElement | null>(null);
-  const inputRefs = useRef(new Map<string, HTMLTextAreaElement>());
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const cellCommitTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
-  const hasPendingCellCommitRef = useRef(false);
-
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const commitTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+  const pendingCommitRef = useRef(false);
   const blockData = useMemo(() => normalizeTableData(block.tableData), [block.tableData]);
   const [draftData, setDraftData] = useState(blockData);
-  const latestDraftDataRef = useRef(draftData);
+  const latestDataRef = useRef(draftData);
   const data = draftData;
-  const deferredData = useDeferredValue(data);
   const columnCount = getTableColumnCount(data);
-  const resolvedBlockConfig = useMemo(
-    () => resolveTableConfig({ tableConfig: block.tableConfig }, columnCount, data.length),
-    [block.tableConfig, columnCount, data.length],
-  );
-  const [draftConfig, setDraftConfig] = useState(resolvedBlockConfig);
-  const config = draftConfig;
-  const shouldVirtualizeRows = data.length > ROW_VIRTUALIZATION_THRESHOLD;
+  const resolvedConfig = useMemo(() => resolveTableConfig({ tableConfig: block.tableConfig }, columnCount, data.length), [block.tableConfig, columnCount, data.length]);
+  const [config, setConfig] = useState(resolvedConfig);
+  const [insertPreview, setInsertPreview] = useState<InsertPreview>(null);
+  const [selectedCell, setSelectedCell] = useState<string | null>(null);
+  const updateTable = useCallback((updates: Partial<Block>) => updateBlock(pageId, block.id, updates), [block.id, pageId, updateBlock]);
 
-  const rowVirtualizer = useVirtualizer({
-    count: data.length,
-    enabled: shouldVirtualizeRows,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: (index) => config.rowHeights?.[index] ?? ROW_ESTIMATE_HEIGHT,
-    overscan: 8,
-  });
-  const virtualRows = shouldVirtualizeRows ? rowVirtualizer.getVirtualItems() : null;
-
+  useEffect(() => { latestDataRef.current = draftData; }, [draftData]);
   useEffect(() => {
-    latestDraftDataRef.current = draftData;
-  }, [draftData]);
-
-  useEffect(() => {
-    if (!hasPendingCellCommitRef.current && !tableDataEqual(blockData, latestDraftDataRef.current)) {
+    if (!pendingCommitRef.current && !tableDataEqual(blockData, latestDataRef.current)) {
+      latestDataRef.current = blockData;
       setDraftData(blockData);
     }
   }, [blockData]);
+  useEffect(() => { setConfig(resolvedConfig); }, [resolvedConfig]);
 
-  useEffect(() => {
-    setDraftConfig(resolvedBlockConfig);
-  }, [resolvedBlockConfig]);
+  const flushCellCommit = useCallback(() => {
+    if (commitTimerRef.current !== null) globalThis.clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = null;
+    if (!pendingCommitRef.current) return;
+    pendingCommitRef.current = false;
+    setDraftData(latestDataRef.current);
+    updateTable({ tableData: latestDataRef.current });
+  }, [updateTable]);
+  useEffect(() => () => flushCellCommit(), [flushCellCommit]);
 
-  const updateTable = useCallback(
-    (updates: Partial<Block>) => {
-      updateBlock(pageId, block.id, updates);
-    },
-    [block.id, pageId, updateBlock],
-  );
-
-  const scheduleTableDataCommit = useCallback(
-    (nextData: string[][]) => {
-      latestDraftDataRef.current = nextData;
-      hasPendingCellCommitRef.current = true;
-      if (cellCommitTimerRef.current !== null) {
-        globalThis.clearTimeout(cellCommitTimerRef.current);
-      }
-      cellCommitTimerRef.current = globalThis.setTimeout(() => {
-        cellCommitTimerRef.current = null;
-        hasPendingCellCommitRef.current = false;
-        updateTable({ tableData: latestDraftDataRef.current });
-      }, CELL_COMMIT_DELAY_MS);
-    },
-    [updateTable],
-  );
-
-  useEffect(() => () => {
-    if (cellCommitTimerRef.current !== null) {
-      globalThis.clearTimeout(cellCommitTimerRef.current);
-      cellCommitTimerRef.current = null;
+  const scheduleCellCommit = useCallback<ScheduleCellCommit>((rowIndex, columnIndex, value, flush = false) => {
+    latestDataRef.current = updateTableCellValue(latestDataRef.current, rowIndex, columnIndex, value);
+    pendingCommitRef.current = true;
+    if (flush) {
+      flushCellCommit();
+      return;
     }
-    if (hasPendingCellCommitRef.current) {
-      updateTable({ tableData: latestDraftDataRef.current });
-    }
+    if (commitTimerRef.current !== null) globalThis.clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = globalThis.setTimeout(flushCellCommit, CELL_COMMIT_DELAY_MS);
+  }, [flushCellCommit]);
+  const cellCommitHandlers = useMemo(() => createCellCommitHandlers(data.length, columnCount, scheduleCellCommit), [columnCount, data.length, scheduleCellCommit]);
+
+  const commitStructure = useCallback((nextData: string[][], nextConfig: TableBlockConfig) => {
+    if (commitTimerRef.current !== null) globalThis.clearTimeout(commitTimerRef.current);
+    commitTimerRef.current = null;
+    pendingCommitRef.current = false;
+    latestDataRef.current = nextData;
+    setDraftData(nextData);
+    setConfig(nextConfig);
+    updateTable({ tableData: nextData, tableConfig: nextConfig });
+  }, [updateTable]);
+  const commitConfig = useCallback((nextConfig: TableBlockConfig) => {
+    setConfig(nextConfig);
+    updateTable({ tableConfig: nextConfig });
   }, [updateTable]);
 
-  useEffect(() => {
-    inputRefs.current.forEach((node) => resizeTextarea(node));
-  }, [config.wrap, config.cellPadding]);
+  const focusTableCell = useCallback((rowIndex: number, columnIndex: number, placement: CaretPlacement = "start") => {
+    if (!focusCell(tableRef.current, rowIndex, columnIndex, placement)) {
+      focusCellWhenReady(tableRef.current, rowIndex, columnIndex, placement);
+    }
+  }, []);
+  const runStructuralEdit = useCallback((nextData: string[][], nextConfig: TableBlockConfig, target: CellAddress, placement: CaretPlacement = "start") => {
+    onBeforeStructuralEdit?.();
+    commitStructure(nextData, nextConfig);
+    focusTableCell(target.rowIndex, target.columnIndex, placement);
+  }, [commitStructure, focusTableCell, onBeforeStructuralEdit]);
+  const handleCellFocus = useCallback<CellFocusHandler>((cellId) => setSelectedCell(cellId), []);
 
-  const updateConfig = useCallback(
-    (patch: TableBlockConfig) => {
-      const nextConfig = { ...config, ...patch };
-      setDraftConfig(nextConfig);
-      updateTable({ tableConfig: nextConfig });
-    },
-    [config, updateTable],
-  );
-
-  const focusCell = useCallback((rowIndex: number, columnIndex: number) => {
-    requestAnimationFrame(() => {
-      inputRefs.current.get(cellKey(rowIndex, columnIndex))?.focus();
+  const handleCellKeyDown = useCallback<CellKeyHandler>((event, rowIndex, columnIndex) => {
+    event.stopPropagation();
+    handleTableCellKey(event, rowIndex, columnIndex, {
+      columnCount,
+      config,
+      data,
+      root: rootRef.current,
+      source: latestDataRef.current,
+      focusCell: focusTableCell,
+      runStructuralEdit,
     });
-  }, []);
+  }, [columnCount, config, data.length, focusTableCell, runStructuralEdit]);
 
-  const handleCellChange = useCallback(
-    (rowIndex: number, columnIndex: number, value: string) => {
-      setDraftData((currentData) => {
-        const nextData = updateTableCellValue(currentData, rowIndex, columnIndex, value);
-        scheduleTableDataCommit(nextData);
-        return nextData;
-      });
-    },
-    [scheduleTableDataCommit],
-  );
-
-  const handleAddRow = useCallback(
-    (afterRow?: number) => {
-      const insertAfter = afterRow ?? data.length - 1;
-      const nextData = addTableRow(data, insertAfter);
-      const nextConfig = insertConfigRow(config, insertAfter);
-      setDraftData(nextData);
-      setDraftConfig(nextConfig);
-      updateTable({ tableData: nextData, tableConfig: nextConfig });
-      focusCell(insertAfter + 1, 0);
-    },
-    [config, data, focusCell, updateTable],
-  );
-
-  const handleAddColumn = useCallback(
-    (afterColumn?: number) => {
-      const insertAfter = afterColumn ?? columnCount - 1;
-      const nextData = addTableColumn(data, insertAfter);
-      const nextConfig = insertConfigColumn(config, insertAfter);
-      setDraftData(nextData);
-      setDraftConfig(nextConfig);
-      updateTable({
-        tableData: nextData,
-        tableConfig: nextConfig,
-      });
-      focusCell(0, insertAfter + 1);
-    },
-    [columnCount, config, data, focusCell, updateTable],
-  );
-
-  const handleRemoveRow = useCallback(
-    (rowIndex: number) => {
-      const nextData = removeTableRow(data, rowIndex);
-      const nextConfig = removeConfigRow(config, rowIndex);
-      setDraftData(nextData);
-      setDraftConfig(nextConfig);
-      updateTable({ tableData: nextData, tableConfig: nextConfig });
-    },
-    [config, data, updateTable],
-  );
-
-  const handleRemoveColumn = useCallback(
-    (columnIndex: number) => {
-      const nextData = removeTableColumn(data, columnIndex);
-      const nextConfig = removeConfigColumn(config, columnIndex);
-      setDraftData(nextData);
-      setDraftConfig(nextConfig);
-      updateTable({
-        tableData: nextData,
-        tableConfig: nextConfig,
-      });
-    },
-    [config, data, updateTable],
-  );
-
-  const resetColumnWidths = useCallback(() => {
-    updateConfig({ columnWidths: undefined, layoutMode: "auto" });
-  }, [updateConfig]);
-
-  const updateColumnAlignment = useCallback(
-    (columnIndex: number, alignment: TableBlockTextAlign) => {
-      const alignments = Array.from({ length: columnCount }, (_, index) =>
-        config.columnAlignments?.[index] ?? null,
-      );
-      alignments[columnIndex] = alignment;
-      updateConfig({ columnAlignments: alignments });
-    },
-    [columnCount, config.columnAlignments, updateConfig],
-  );
-
-  const commitResizedConfig = useCallback(
-    (nextConfig: TableBlockConfig) => {
-      setDraftConfig(nextConfig);
-      updateTable({ tableConfig: nextConfig });
-    },
-    [updateTable],
-  );
-
-  const startColumnResize = useCallback(
-    (event: React.PointerEvent, columnIndex: number) => {
-      event.preventDefault();
-      event.stopPropagation();
-      event.currentTarget.setPointerCapture(event.pointerId);
-
-      const startX = event.clientX;
-      const startWidth = config.columnWidths?.[columnIndex]
-        ?? inferColumnWidth(data, columnIndex, config.minColumnWidth, config.maxColumnWidth);
-      let latestWidth = startWidth;
-      let animationFrame = 0;
-
-      const nextConfigWithWidth = () => {
-        const widths = Array.from({ length: columnCount }, (_, index) =>
-          config.columnWidths?.[index],
-        );
-        widths[columnIndex] = latestWidth;
-        return {
-          ...config,
-          layoutMode: "fixed",
-          columnWidths: widths,
-        } satisfies TableBlockConfig;
-      };
-
-      const handleMove = (moveEvent: PointerEvent) => {
-        latestWidth = clampTableColumnWidth(startWidth + moveEvent.clientX - startX, startWidth);
-        if (!animationFrame) {
-          animationFrame = requestAnimationFrame(() => {
-            animationFrame = 0;
-            setDraftConfig(nextConfigWithWidth());
-          });
-        }
-      };
-
-      const handleUp = () => {
-        if (animationFrame) cancelAnimationFrame(animationFrame);
-        commitResizedConfig(nextConfigWithWidth());
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-        globalThis.removeEventListener("pointermove", handleMove);
-        globalThis.removeEventListener("pointerup", handleUp);
-      };
-
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      globalThis.addEventListener("pointermove", handleMove);
-      globalThis.addEventListener("pointerup", handleUp, { once: true });
-    },
-    [columnCount, commitResizedConfig, config, data],
-  );
-
-  const startRowResize = useCallback(
-    (event: React.PointerEvent, rowIndex: number) => {
-      event.preventDefault();
-      event.stopPropagation();
-      event.currentTarget.setPointerCapture(event.pointerId);
-
-      const startY = event.clientY;
-      const startHeight = config.rowHeights?.[rowIndex]
-        ?? Math.max(event.currentTarget.closest("tr")?.getBoundingClientRect().height ?? ROW_ESTIMATE_HEIGHT, ROW_ESTIMATE_HEIGHT);
-      let latestHeight = startHeight;
-      let animationFrame = 0;
-
-      const nextConfigWithHeight = () => {
-        const heights = Array.from({ length: data.length }, (_, index) => config.rowHeights?.[index]);
-        heights[rowIndex] = latestHeight;
-        return {
-          ...config,
-          rowHeights: heights,
-        } satisfies TableBlockConfig;
-      };
-
-      const handleMove = (moveEvent: PointerEvent) => {
-        latestHeight = clampTableRowHeight(startHeight + moveEvent.clientY - startY, startHeight);
-        if (!animationFrame) {
-          animationFrame = requestAnimationFrame(() => {
-            animationFrame = 0;
-            setDraftConfig(nextConfigWithHeight());
-          });
-        }
-      };
-
-      const handleUp = () => {
-        if (animationFrame) cancelAnimationFrame(animationFrame);
-        commitResizedConfig(nextConfigWithHeight());
-        rowVirtualizer.measure();
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-        globalThis.removeEventListener("pointermove", handleMove);
-        globalThis.removeEventListener("pointerup", handleUp);
-      };
-
-      document.body.style.cursor = "row-resize";
-      document.body.style.userSelect = "none";
-      globalThis.addEventListener("pointermove", handleMove);
-      globalThis.addEventListener("pointerup", handleUp, { once: true });
-    },
-    [commitResizedConfig, config, data.length, rowVirtualizer],
-  );
-
-  const startColumnInsertDrag = useCallback(
-    (event: React.PointerEvent, columnIndex: number) => {
-      event.preventDefault();
-      event.stopPropagation();
-      event.currentTarget.setPointerCapture(event.pointerId);
-
-      const startX = event.clientX;
-      let shouldInsert = false;
-
-      const handleMove = (moveEvent: PointerEvent) => {
-        shouldInsert = Math.abs(moveEvent.clientX - startX) >= INSERT_DRAG_THRESHOLD_PX;
-      };
-
-      const handleUp = () => {
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-        globalThis.removeEventListener("pointermove", handleMove);
-        globalThis.removeEventListener("pointerup", handleUp);
-        if (shouldInsert) handleAddColumn(columnIndex);
-      };
-
-      document.body.style.cursor = "grabbing";
-      document.body.style.userSelect = "none";
-      globalThis.addEventListener("pointermove", handleMove);
-      globalThis.addEventListener("pointerup", handleUp, { once: true });
-    },
-    [handleAddColumn],
-  );
-
-  const startRowInsertDrag = useCallback(
-    (event: React.PointerEvent, rowIndex: number) => {
-      event.preventDefault();
-      event.stopPropagation();
-      event.currentTarget.setPointerCapture(event.pointerId);
-
-      const startY = event.clientY;
-      let shouldInsert = false;
-
-      const handleMove = (moveEvent: PointerEvent) => {
-        shouldInsert = Math.abs(moveEvent.clientY - startY) >= INSERT_DRAG_THRESHOLD_PX;
-      };
-
-      const handleUp = () => {
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
-        globalThis.removeEventListener("pointermove", handleMove);
-        globalThis.removeEventListener("pointerup", handleUp);
-        if (shouldInsert) handleAddRow(rowIndex);
-      };
-
-      document.body.style.cursor = "grabbing";
-      document.body.style.userSelect = "none";
-      globalThis.addEventListener("pointermove", handleMove);
-      globalThis.addEventListener("pointerup", handleUp, { once: true });
-    },
-    [handleAddRow],
-  );
-
-  const openContextMenu = useCallback(
-    (event: React.MouseEvent, rowIndex: number, columnIndex: number) => {
-      event.preventDefault();
-      event.stopPropagation();
-      setContextMenu({ x: event.clientX, y: event.clientY, rowIndex, columnIndex });
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const handleMouseDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (contextMenuRef.current && !contextMenuRef.current.contains(target)) {
-        setContextMenu(null);
-      }
-      if (settingsRef.current && !settingsRef.current.contains(target)) {
-        setSettingsOpen(false);
-      }
+  const startColumnResize = useCallback((event: React.PointerEvent, columnIndex: number) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = config.columnWidths?.[columnIndex] ?? event.currentTarget.closest("td")?.getBoundingClientRect().width ?? 160;
+    let latestWidth = startWidth;
+    const move = (moveEvent: PointerEvent) => {
+      latestWidth = clampTableColumnWidth(startWidth + moveEvent.clientX - startX, startWidth);
+      tableRef.current?.style.setProperty(`--osio-table-col-${columnIndex}-width`, `${latestWidth}px`);
     };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setContextMenu(null);
-        setSettingsOpen(false);
-      }
+    const up = () => {
+      const widths = Array.from({ length: columnCount }, (_, index) => config.columnWidths?.[index]);
+      widths[columnIndex] = latestWidth;
+      commitConfig({ ...config, layoutMode: "fixed", columnWidths: widths });
+      stopPointerDrag(move, up);
     };
+    startPointerDrag("col-resize", move, up);
+  }, [columnCount, commitConfig, config]);
 
-    document.addEventListener("mousedown", handleMouseDown);
-    document.addEventListener("keydown", handleEscape);
-
-    return () => {
-      document.removeEventListener("mousedown", handleMouseDown);
-      document.removeEventListener("keydown", handleEscape);
+  const startRowResize = useCallback((event: React.PointerEvent, rowIndex: number) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startY = event.clientY;
+    const startHeight = config.rowHeights?.[rowIndex] ?? event.currentTarget.closest("tr")?.getBoundingClientRect().height ?? ROW_ESTIMATE_HEIGHT;
+    let latestHeight = startHeight;
+    const move = (moveEvent: PointerEvent) => {
+      latestHeight = clampTableRowHeight(startHeight + moveEvent.clientY - startY, startHeight);
+      tableRef.current?.style.setProperty(`--osio-table-row-${rowIndex}-height`, `${latestHeight}px`);
     };
-  }, []);
+    const up = () => {
+      const heights = Array.from({ length: data.length }, (_, index) => config.rowHeights?.[index]);
+      heights[rowIndex] = latestHeight;
+      commitConfig({ ...config, rowHeights: heights });
+      stopPointerDrag(move, up);
+    };
+    startPointerDrag("row-resize", move, up);
+  }, [commitConfig, config, data.length]);
 
-  const contextMenuStyle = useMemo<React.CSSProperties>(() => {
-    if (!contextMenu) return {};
-    return getViewportMenuStyle(
-      contextMenu.x,
-      contextMenu.y,
-      TABLE_CONTEXT_MENU_WIDTH,
-      TABLE_CONTEXT_MENU_HEIGHT,
-    );
-  }, [contextMenu]);
+  const startEdgeInsert = useCallback((event: React.PointerEvent, axis: Axis) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const start = axis === "column" ? event.clientX : event.clientY;
+    let inserted = 0;
+    let nextData = latestDataRef.current;
+    let nextConfig = config;
+    const insertLive = (target: number) => {
+      const delta = target - inserted;
+      if (delta <= 0) return;
+      [nextData, nextConfig] = axis === "column" ? appendTableColumns(nextData, nextConfig, delta) : appendTableRows(nextData, nextConfig, delta);
+      inserted = target;
+      latestDataRef.current = nextData;
+      setDraftData(nextData);
+      setConfig(nextConfig);
+    };
+    setInsertPreview({ axis, offset: 0 });
+    const move = (moveEvent: PointerEvent) => {
+      const current = axis === "column" ? moveEvent.clientX : moveEvent.clientY;
+      const offset = Math.max(0, current - start);
+      insertLive(Math.floor(offset / INSERT_STEP_PX));
+      setInsertPreview({ axis, offset });
+    };
+    const up = () => {
+      setInsertPreview(null);
+      insertLive(Math.max(1, inserted));
+      commitStructure(nextData, nextConfig);
+      stopPointerDrag(move, up);
+    };
+    startPointerDrag(axis === "column" ? "ew-resize" : "ns-resize", move, up);
+  }, [commitStructure, config]);
 
-  const columnStyles = useMemo(
-    () => Array.from({ length: columnCount }, (_, columnIndex) => {
-      const explicitWidth = config.columnWidths?.[columnIndex];
-      const inferredWidth = config.layoutMode === "auto"
-        ? inferColumnWidth(deferredData, columnIndex, config.minColumnWidth, config.maxColumnWidth)
-        : undefined;
-      const width = explicitWidth ?? inferredWidth;
-
-      return {
-        minWidth: config.minColumnWidth,
-        width,
-        maxWidth: config.wrap ? config.maxColumnWidth ?? MAX_AUTO_COLUMN_WIDTH : undefined,
-      } satisfies React.CSSProperties;
-    }),
-    [columnCount, config, deferredData],
-  );
-
-  const visibleRows = useMemo(
-    () => virtualRows
-      ? virtualRows.map((virtualRow) => ({ key: virtualRow.key, rowIndex: virtualRow.index, row: data[virtualRow.index] }))
-      : data.map((row, rowIndex) => ({ key: rowIndex, rowIndex, row })),
-    [data, virtualRows],
-  );
-  const topVirtualPadding = virtualRows?.[0]?.start ?? 0;
-  const lastVirtualRow = virtualRows?.[virtualRows.length - 1];
-  const bottomVirtualPadding = lastVirtualRow
-    ? Math.max(0, rowVirtualizer.getTotalSize() - lastVirtualRow.end)
-    : 0;
-  const scrollRegionClassName = [
-    "osio-scrollbar-hidden overflow-x-auto rounded-lg",
-    shouldVirtualizeRows ? "max-h-[70vh] overflow-y-auto" : "overflow-y-hidden",
-  ].join(" ");
-
-  const tableClassName = [
-    "text-sm",
-    config.layoutMode === "fit" ? "min-w-full w-full" : "min-w-full w-max",
-    config.layoutMode === "fixed" ? "table-fixed" : "table-auto",
-  ].join(" ");
+  const columnStyles = useMemo(() => createColumnStyles(columnCount, config), [columnCount, config]);
+  const tableClassName = ["text-sm", config.layoutMode === "fit" ? "min-w-full w-full" : "min-w-full w-max", config.layoutMode === "fixed" ? "table-fixed" : "table-auto"].join(" ");
 
   return (
-    <div
-      className="group/table relative my-2 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
-      style={style}
-    >
-      <div className="absolute right-2 top-2 z-[var(--osio-z-raised)] opacity-0 transition-opacity group-hover/table:opacity-100 focus-within:opacity-100">
-        <button
-          type="button"
-          aria-label="Table settings"
-          onClick={() => setSettingsOpen((open) => !open)}
-          className="flex h-7 w-7 items-center justify-center rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-muted)] shadow-sm hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]"
-        >
-          <Settings2 size={15} />
-        </button>
-      </div>
-
-      <div ref={scrollRef} className={scrollRegionClassName}>
-        <table className={tableClassName} style={{ tableLayout: config.layoutMode === "fixed" ? "fixed" : "auto" }}>
-          <colgroup>
-            {columnStyles.map((columnStyle, columnIndex) => (
-              <col
-                key={`col-${columnIndex}`} // NOSONAR - table columns are position-based in tableData
-                style={columnStyle}
-              />
-            ))}
-          </colgroup>
-          <tbody>
-            {topVirtualPadding > 0 ? <VirtualSpacer height={topVirtualPadding} columnCount={columnCount} /> : null}
-            {visibleRows.map(({ key, row, rowIndex }) => (
-              <TableDataRow
-                key={key}
-                row={row}
-                rowIndex={rowIndex}
-                columnCount={columnCount}
-                config={config}
-                textStyle={textStyle}
-                inputRefs={inputRefs.current}
-                onCellChange={handleCellChange}
-                onContextMenu={openContextMenu}
-                onColumnResize={startColumnResize}
-                onRowResize={startRowResize}
-                onColumnInsertDrag={startColumnInsertDrag}
-                onRowInsertDrag={startRowInsertDrag}
-              />
-            ))}
-            {bottomVirtualPadding > 0 ? <VirtualSpacer height={bottomVirtualPadding} columnCount={columnCount} /> : null}
-          </tbody>
+    <div ref={rootRef} className="group/table relative my-2" data-can-delete-table={Boolean(onDeleteTable)} style={style}>
+      <div role="grid" aria-rowcount={data.length} aria-colcount={columnCount} aria-keyshortcuts="Tab Shift+Tab ArrowUp ArrowDown ArrowLeft ArrowRight Escape Ctrl+Shift+ArrowUp Ctrl+Shift+ArrowDown Ctrl+Shift+ArrowLeft Ctrl+Shift+ArrowRight Ctrl+Shift+Backspace Ctrl+Delete" className="overflow-x-auto overflow-y-visible rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
+        <table ref={tableRef} className={tableClassName} style={{ tableLayout: config.layoutMode === "fixed" ? "fixed" : "auto" }}>
+          <colgroup>{columnStyles.map((columnStyle, columnIndex) => <col key={getColumnKey(columnIndex)} style={columnStyle} />)}</colgroup>
+          <tbody>{data.map((row, rowIndex) => (
+            <TableDataRow key={getRowKey(rowIndex)} row={row} rowIndex={rowIndex} columnCount={columnCount} config={config} textStyle={textStyle} selectedCell={selectedCell} commitHandlers={cellCommitHandlers[rowIndex]} onColumnResize={startColumnResize} onRowResize={startRowResize} onCellKeyDown={handleCellKeyDown} onCellFocus={handleCellFocus} />
+          ))}</tbody>
         </table>
       </div>
-
-      <button
-        type="button"
-        onClick={() => handleAddColumn()}
-        aria-label="Add column"
-        className="absolute -right-3 top-1/2 z-[var(--osio-z-raised)] flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-muted)] opacity-0 shadow-sm transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)] group-hover/table:opacity-100"
-      >
-        <Plus size={14} />
-      </button>
-      <button
-        type="button"
-        onClick={() => handleAddRow()}
-        aria-label="Add row"
-        className="absolute -bottom-3 left-1/2 z-[var(--osio-z-raised)] flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-muted)] opacity-0 shadow-sm transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)] group-hover/table:opacity-100"
-      >
-        <Plus size={14} />
-      </button>
-
-      {settingsOpen && (
-        <TableSettingsPanel
-          ref={settingsRef}
-          config={config}
-          onChange={updateConfig}
-          onResetColumnWidths={resetColumnWidths}
-        />
-      )}
-
-      {contextMenu && (
-        <div
-          ref={contextMenuRef}
-          className="fixed z-[var(--osio-z-popover)] min-w-[200px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-lg"
-          style={contextMenuStyle}
-        >
-          <TableMenuButton onClick={() => {
-            handleAddRow(contextMenu.rowIndex);
-            setContextMenu(null);
-          }}>
-            Insert row below
-          </TableMenuButton>
-          <TableMenuButton onClick={() => {
-            handleAddColumn(contextMenu.columnIndex);
-            setContextMenu(null);
-          }}>
-            Insert column right
-          </TableMenuButton>
-          <div className="my-1 border-t border-[var(--osio-border-default)]" />
-          <div className="px-2 py-1">
-            <div className="mb-1 text-xs font-medium text-[var(--osio-fg-muted)]">Align column</div>
-            <div className="flex gap-1">
-              <AlignmentButton alignment="left" current={config.columnAlignments?.[contextMenu.columnIndex] ?? null} onClick={() => updateColumnAlignment(contextMenu.columnIndex, "left")} />
-              <AlignmentButton alignment="center" current={config.columnAlignments?.[contextMenu.columnIndex] ?? null} onClick={() => updateColumnAlignment(contextMenu.columnIndex, "center")} />
-              <AlignmentButton alignment="right" current={config.columnAlignments?.[contextMenu.columnIndex] ?? null} onClick={() => updateColumnAlignment(contextMenu.columnIndex, "right")} />
-            </div>
-          </div>
-          <div className="my-1 border-t border-[var(--osio-border-default)]" />
-          <TableMenuButton disabled={data.length <= 1} onClick={() => {
-            handleRemoveRow(contextMenu.rowIndex);
-            setContextMenu(null);
-          }}>
-            Delete row
-          </TableMenuButton>
-          <TableMenuButton disabled={columnCount <= 1} onClick={() => {
-            handleRemoveColumn(contextMenu.columnIndex);
-            setContextMenu(null);
-          }}>
-            Delete column
-          </TableMenuButton>
-          <div className="my-1 border-t border-[var(--osio-border-default)]" />
-          <TableMenuButton danger disabled={!onDeleteTable} onClick={() => {
-            onDeleteTable?.();
-            setContextMenu(null);
-          }}>
-            Delete table
-          </TableMenuButton>
-        </div>
-      )}
+      <EdgeInsertButton axis="column" onPointerDown={(event) => startEdgeInsert(event, "column")} />
+      <EdgeInsertButton axis="row" onPointerDown={(event) => startEdgeInsert(event, "row")} />
+      {insertPreview ? <InsertGhost preview={insertPreview} /> : null}
     </div>
   );
 };
-
-function VirtualSpacer({ height, columnCount }: Readonly<{ height: number; columnCount: number }>) {
-  return (
-    <tr>
-      <td colSpan={columnCount} style={{ height, padding: 0, border: 0 }} />
-    </tr>
-  );
-}
-
-function updateTableCellValue(
-  data: string[][],
-  rowIndex: number,
-  columnIndex: number,
-  value: string,
-): string[][] {
-  return data.map((row, currentRowIndex) => {
-    if (currentRowIndex !== rowIndex) return row;
-    return row.map((cell, currentColumnIndex) => currentColumnIndex === columnIndex ? value : cell);
-  });
-}
-
-function tableDataEqual(left: string[][], right: string[][]): boolean {
-  if (left === right) return true;
-  if (left.length !== right.length) return false;
-  return left.every((row, rowIndex) => {
-    const otherRow = right[rowIndex];
-    return row.length === otherRow.length && row.every((cell, columnIndex) => cell === otherRow[columnIndex]);
-  });
-}
 
 interface TableDataRowProps {
   row: string[];
@@ -662,468 +230,310 @@ interface TableDataRowProps {
   columnCount: number;
   config: TableBlockConfig;
   textStyle?: React.CSSProperties;
-  inputRefs: Map<string, HTMLTextAreaElement>;
-  onCellChange: (rowIndex: number, columnIndex: number, value: string) => void;
-  onContextMenu: (event: React.MouseEvent, rowIndex: number, columnIndex: number) => void;
+  selectedCell: string | null;
+  commitHandlers: CellCommit[];
   onColumnResize: (event: React.PointerEvent, columnIndex: number) => void;
   onRowResize: (event: React.PointerEvent, rowIndex: number) => void;
-  onColumnInsertDrag: (event: React.PointerEvent, columnIndex: number) => void;
-  onRowInsertDrag: (event: React.PointerEvent, rowIndex: number) => void;
+  onCellKeyDown: CellKeyHandler;
+  onCellFocus: CellFocusHandler;
 }
 
-const TableDataRow = React.memo(function TableDataRow({
-  row,
-  rowIndex,
-  columnCount,
-  config,
-  textStyle,
-  inputRefs,
-  onCellChange,
-  onContextMenu,
-  onColumnResize,
-  onRowResize,
-  onColumnInsertDrag,
-  onRowInsertDrag,
-}: Readonly<TableDataRowProps>) {
-  const rowHeight = config.rowHeights?.[rowIndex];
-  return (
-    <tr
-      className={getRowClassName(rowIndex, config)}
-      style={rowHeight ? { height: rowHeight } : undefined}
-    >
-      {Array.from({ length: columnCount }, (_, columnIndex) => (
-        <TableCell
-          key={`cell-${rowIndex}-${columnIndex}`}
-          cell={row[columnIndex] ?? ""}
-          rowIndex={rowIndex}
-          columnIndex={columnIndex}
-          config={config}
-          rowHeight={rowHeight}
-          textStyle={textStyle}
-          inputRefs={inputRefs}
-          isFirstRow={rowIndex === 0}
-          isFirstColumn={columnIndex === 0}
-          onCellChange={onCellChange}
-          onContextMenu={onContextMenu}
-          onColumnResize={onColumnResize}
-          onRowResize={onRowResize}
-          onColumnInsertDrag={onColumnInsertDrag}
-          onRowInsertDrag={onRowInsertDrag}
-        />
-      ))}
-    </tr>
-  );
+const TableDataRow = React.memo(function TableDataRow({ row, rowIndex, columnCount, config, textStyle, selectedCell, commitHandlers, onColumnResize, onRowResize, onCellKeyDown, onCellFocus }: Readonly<TableDataRowProps>) {
+  const height = config.rowHeights?.[rowIndex];
+  const rowStyle: React.CSSProperties = { height: `var(--osio-table-row-${rowIndex}-height, ${toCssSize(height)})` };
+  return <tr className={getRowClassName(rowIndex, config)} style={rowStyle}>{Array.from({ length: columnCount }, (_, columnIndex) => {
+    const alignment = config.columnAlignments?.[columnIndex] ?? null;
+    const isHeader = (config.headerRow !== false && rowIndex === 0) || (config.headerColumn === true && columnIndex === 0);
+    const cellId = `${rowIndex}:${columnIndex}`;
+    return (
+      <td key={getCellKey(rowIndex, columnIndex)} role="gridcell" aria-selected={selectedCell === cellId ? "true" : undefined} aria-rowindex={rowIndex + 1} aria-colindex={columnIndex + 1} data-table-cell={cellId} className={getCellFrameClassName(config, alignment, rowIndex, columnIndex)} style={textStyle}>
+        <EditableTableCell cellId={cellId} initialValue={row[columnIndex] ?? ""} rowIndex={rowIndex} columnIndex={columnIndex} alignment={alignment} onCommit={commitHandlers[columnIndex]} isHeader={isHeader} onKeyDown={onCellKeyDown} onFocus={onCellFocus} />
+        {rowIndex === 0 ? <ColumnResizeDivider columnIndex={columnIndex} onPointerDown={onColumnResize} /> : null}
+        {columnIndex === 0 ? <RowResizeDivider rowIndex={rowIndex} onPointerDown={onRowResize} /> : null}
+      </td>
+    );
+  })}</tr>;
 });
 
-interface TableCellProps {
-  cell: string;
+interface EditableTableCellProps {
+  cellId: string;
+  initialValue: string;
   rowIndex: number;
   columnIndex: number;
-  config: TableBlockConfig;
-  rowHeight?: number;
-  textStyle?: React.CSSProperties;
-  inputRefs: Map<string, HTMLTextAreaElement>;
-  isFirstRow: boolean;
-  isFirstColumn: boolean;
-  onCellChange: (rowIndex: number, columnIndex: number, value: string) => void;
-  onContextMenu: (event: React.MouseEvent, rowIndex: number, columnIndex: number) => void;
-  onColumnResize: (event: React.PointerEvent, columnIndex: number) => void;
-  onRowResize: (event: React.PointerEvent, rowIndex: number) => void;
-  onColumnInsertDrag: (event: React.PointerEvent, columnIndex: number) => void;
-  onRowInsertDrag: (event: React.PointerEvent, rowIndex: number) => void;
+  alignment: TableBlockTextAlign;
+  onCommit: CellCommit;
+  isHeader: boolean;
+  onKeyDown: CellKeyHandler;
+  onFocus: CellFocusHandler;
 }
 
-const TableCell = React.memo(function TableCell({
-  cell,
-  rowIndex,
-  columnIndex,
-  config,
-  rowHeight,
-  textStyle,
-  inputRefs,
-  isFirstRow,
-  isFirstColumn,
-  onCellChange,
-  onContextMenu,
-  onColumnResize,
-  onRowResize,
-  onColumnInsertDrag,
-  onRowInsertDrag,
-}: Readonly<TableCellProps>) {
-  const alignment = config.columnAlignments?.[columnIndex] ?? null;
-  const inputStyle = rowHeight
-    ? { ...textStyle, minHeight: Math.max(32, rowHeight - 2) }
-    : textStyle;
+const EditableTableCell = React.memo(function EditableTableCell({ cellId, initialValue, rowIndex, columnIndex, alignment, onCommit, isHeader, onKeyDown, onFocus }: Readonly<EditableTableCellProps>) {
+  const cellRef = useRef<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const node = cellRef.current;
+    if (node && document.activeElement !== node && node.textContent !== initialValue) node.textContent = initialValue;
+  }, [cellId, initialValue]);
+  const commitFromNode = useCallback((flush = false) => onCommit(cellRef.current?.textContent ?? "", flush), [onCommit]);
+  return React.createElement("div", {
+    ref: cellRef,
+    ...CELL_PROPS,
+    "aria-label": `Row ${rowIndex + 1}, column ${columnIndex + 1}`,
+    "data-table-cell-id": cellId,
+    className: ["min-h-8 w-full bg-transparent outline-none", "whitespace-pre-wrap break-words", getTableAlignmentClassName(alignment), isHeader ? "font-medium" : ""].join(" "),
+    onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => onKeyDown(event, rowIndex, columnIndex),
+    onFocus: () => onFocus(cellId),
+    onInput: () => commitFromNode(false),
+    onBlur: () => commitFromNode(true),
+  });
+}, areCellsEqual);
 
-  return (
-    <td
-      className={getCellClassName(config, alignment, rowIndex, columnIndex)}
-      style={textStyle}
-      onContextMenu={(event) => onContextMenu(event, rowIndex, columnIndex)}
-    >
-      <textarea
-        ref={(node) => setInputRef(inputRefs, rowIndex, columnIndex, node)}
-        value={cell}
-        rows={1}
-        wrap={config.wrap === false ? "off" : "soft"}
-        onChange={(event) => {
-          onCellChange(rowIndex, columnIndex, event.target.value);
-          resizeTextarea(event.currentTarget);
-        }}
-        className={getInputClassName(config)}
-        style={inputStyle}
-      />
-
-      {isFirstRow ? (
-        <BorderDragHandle
-          orientation="column-insert"
-          label={`Drag to insert column after ${columnIndex + 1}`}
-          onPointerDown={(event) => onColumnInsertDrag(event, columnIndex)}
-        />
-      ) : null}
-      {isFirstColumn ? (
-        <BorderDragHandle
-          orientation="row-insert"
-          label={`Drag to insert row after ${rowIndex + 1}`}
-          onPointerDown={(event) => onRowInsertDrag(event, rowIndex)}
-        />
-      ) : null}
-      <BorderDragHandle
-        orientation="column-resize"
-        label={`Resize column ${columnIndex + 1}`}
-        onPointerDown={(event) => onColumnResize(event, columnIndex)}
-      />
-      <BorderDragHandle
-        orientation="row-resize"
-        label={`Resize row ${rowIndex + 1}`}
-        onPointerDown={(event) => onRowResize(event, rowIndex)}
-      />
-    </td>
-  );
-});
-
-function BorderDragHandle({
-  orientation,
-  label,
-  onPointerDown,
-}: Readonly<{
-  orientation: "column-insert" | "row-insert" | "column-resize" | "row-resize";
-  label: string;
-  onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void;
-}>) {
-  const className = {
-    "column-insert": "absolute -right-6 top-1/2 z-[var(--osio-z-popover)] flex h-5 w-5 -translate-y-1/2 cursor-grab items-center justify-center rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-muted)] opacity-0 shadow-sm transition-opacity hover:text-[var(--osio-fg-default)] group-hover/table:opacity-100 active:cursor-grabbing",
-    "row-insert": "absolute -bottom-6 left-1/2 z-[var(--osio-z-popover)] flex h-5 w-5 -translate-x-1/2 cursor-grab items-center justify-center rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-muted)] opacity-0 shadow-sm transition-opacity hover:text-[var(--osio-fg-default)] group-hover/table:opacity-100 active:cursor-grabbing",
-    "column-resize": "absolute right-0 top-0 z-[var(--osio-z-raised)] flex h-full w-2 cursor-col-resize items-center justify-center opacity-0 transition-colors hover:bg-[var(--osio-accent)]/30 group-hover/table:opacity-100",
-    "row-resize": "absolute bottom-0 left-0 z-[var(--osio-z-raised)] flex h-2 w-full cursor-row-resize items-center justify-center opacity-0 transition-colors hover:bg-[var(--osio-accent)]/30 group-hover/table:opacity-100",
-  }[orientation];
-
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      data-table-handle
-      data-table-insert-handle={orientation.endsWith("insert") ? "true" : undefined}
-      data-table-resize-handle={orientation.endsWith("resize") ? "true" : undefined}
-      onPointerDown={onPointerDown}
-      className={className}
-    >
-      <GrabHandleIcon orientation={orientation} />
-    </button>
-  );
+function ColumnResizeDivider({ columnIndex, onPointerDown }: Readonly<{ columnIndex: number; onPointerDown: (event: React.PointerEvent, columnIndex: number) => void }>) {
+  return <div data-table-handle className="absolute right-0 top-0 z-[var(--osio-z-raised)] h-full w-[6px] cursor-col-resize before:absolute before:right-0 before:top-0 before:h-full before:w-px before:bg-transparent hover:before:bg-[var(--osio-accent)]" onPointerDown={(event) => onPointerDown(event, columnIndex)} />;
 }
 
-function GrabHandleIcon({ orientation }: Readonly<{ orientation: "column-insert" | "row-insert" | "column-resize" | "row-resize" }>) {
-  const vertical = orientation.startsWith("column");
-  return (
-    <svg className="h-3 w-3" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
-      {vertical ? (
-        <>
-          <circle cx="4" cy="3" r="1" />
-          <circle cx="8" cy="3" r="1" />
-          <circle cx="4" cy="6" r="1" />
-          <circle cx="8" cy="6" r="1" />
-          <circle cx="4" cy="9" r="1" />
-          <circle cx="8" cy="9" r="1" />
-        </>
-      ) : (
-        <>
-          <circle cx="3" cy="4" r="1" />
-          <circle cx="6" cy="4" r="1" />
-          <circle cx="9" cy="4" r="1" />
-          <circle cx="3" cy="8" r="1" />
-          <circle cx="6" cy="8" r="1" />
-          <circle cx="9" cy="8" r="1" />
-        </>
-      )}
-    </svg>
-  );
+function RowResizeDivider({ rowIndex, onPointerDown }: Readonly<{ rowIndex: number; onPointerDown: (event: React.PointerEvent, rowIndex: number) => void }>) {
+  return <div data-table-handle className="absolute bottom-0 left-0 z-[var(--osio-z-raised)] h-[6px] w-full cursor-row-resize before:absolute before:bottom-0 before:left-0 before:h-px before:w-full before:bg-transparent hover:before:bg-[var(--osio-accent)]" onPointerDown={(event) => onPointerDown(event, rowIndex)} />;
 }
 
-const TableSettingsPanel = React.forwardRef<HTMLDivElement, {
-  config: TableBlockConfig;
-  onChange: (patch: TableBlockConfig) => void;
-  onResetColumnWidths: () => void;
-}>(({ config, onChange, onResetColumnWidths }, ref) => (
-  <div
-    ref={ref}
-    className="absolute right-0 top-10 z-[var(--osio-z-popover)] rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-3 text-sm text-[var(--osio-fg-default)] shadow-xl"
-    style={{ width: SETTINGS_PANEL_WIDTH }}
-  >
-    <div className="mb-3 flex items-center justify-between gap-2">
-      <div className="font-medium">Table</div>
-      <button
-        type="button"
-        onClick={onResetColumnWidths}
-        className="flex h-7 items-center gap-1 rounded-md px-2 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]"
-      >
-        <RotateCcw size={13} />
-        Reset widths
-      </button>
-    </div>
-
-    <SettingsRow label="Layout">
-      <SegmentedControl
-        value={config.layoutMode ?? "auto"}
-        options={["auto", "fit", "fixed"]}
-        onChange={(layoutMode) => onChange({ layoutMode })}
-      />
-    </SettingsRow>
-
-    <SettingsRow label="Padding">
-      <SegmentedControl<TableBlockPadding>
-        value={config.cellPadding ?? "normal"}
-        options={["compact", "normal", "comfortable"]}
-        onChange={(cellPadding) => onChange({ cellPadding })}
-      />
-    </SettingsRow>
-
-    <label className="mb-3 flex items-center justify-between gap-3">
-      <span className="text-xs font-medium text-[var(--osio-fg-muted)]">Minimum width</span>
-      <input
-        type="number"
-        min={56}
-        max={640}
-        value={config.minColumnWidth ?? 96}
-        onChange={(event) => onChange({ minColumnWidth: clampTableColumnWidth(event.target.value, 96) })}
-        className="h-8 w-24 rounded-md border border-[var(--osio-border-default)] bg-transparent px-2 text-right outline-none focus:ring-1 focus:ring-[var(--osio-accent)]"
-      />
-    </label>
-
-    <div className="space-y-2">
-      <ToggleRow label="Wrap text" checked={config.wrap !== false} onChange={(wrap) => onChange({ wrap })} />
-      <ToggleRow label="Header row" checked={config.headerRow !== false} onChange={(headerRow) => onChange({ headerRow })} icon={<PanelTop size={14} />} />
-      <ToggleRow label="Borders" checked={config.showBorders !== false} onChange={(showBorders) => onChange({ showBorders })} />
-      <ToggleRow label="Striped rows" checked={config.stripedRows === true} onChange={(stripedRows) => onChange({ stripedRows })} />
-    </div>
-  </div>
-));
-
-TableSettingsPanel.displayName = "TableSettingsPanel";
-
-function TableMenuButton({
-  children,
-  danger = false,
-  disabled = false,
-  onClick,
-}: Readonly<{
-  children: React.ReactNode;
-  danger?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-}>) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={[
-        "w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--osio-bg-subtle)] disabled:cursor-not-allowed disabled:opacity-40",
-        danger ? "text-[var(--osio-danger)]" : "text-[var(--osio-fg-default)]",
-      ].join(" ")}
-    >
-      {children}
-    </button>
-  );
+function EdgeInsertButton({ axis, onPointerDown }: Readonly<{ axis: Axis; onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => void }>) {
+  const axisClass = axis === "column" ? "absolute -right-3 top-1/2 -translate-y-1/2 cursor-ew-resize" : "absolute -bottom-3 left-1/2 -translate-x-1/2 cursor-ns-resize";
+  return <button type="button" aria-label={axis === "column" ? "Add column" : "Add row"} data-table-handle onPointerDown={onPointerDown} className={`${axisClass} ${ADD_BUTTON_CLASS}`}><Plus size={14} /></button>;
 }
 
-function SettingsRow<T extends string>({
-  label,
-  children,
-}: Readonly<{
-  label: string;
-  children: React.ReactNode;
-}>) {
-  return (
-    <div className="mb-3">
-      <div className="mb-1.5 text-xs font-medium text-[var(--osio-fg-muted)]">{label}</div>
-      {children}
-    </div>
-  );
+function InsertGhost({ preview }: Readonly<{ preview: NonNullable<InsertPreview> }>) {
+  const style = preview.axis === "column" ? { transform: `translateX(${preview.offset}px)` } : { transform: `translateY(${preview.offset}px)` };
+  const className = preview.axis === "column" ? "absolute right-0 top-0 h-full w-px bg-[var(--osio-accent)]" : "absolute bottom-0 left-0 h-px w-full bg-[var(--osio-accent)]";
+  return <div className={`${className} pointer-events-none z-[var(--osio-z-popover)]`} style={style} />;
 }
 
-function SegmentedControl<T extends string>({
-  value,
-  options,
-  onChange,
-}: Readonly<{
-  value: T;
-  options: readonly T[];
-  onChange: (value: T) => void;
-}>) {
-  return (
-    <div className="grid gap-1 rounded-md bg-[var(--osio-bg-subtle)] p-1" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
-      {options.map((option) => (
-        <button
-          key={option}
-          type="button"
-          onClick={() => onChange(option)}
-          className={[
-            "rounded px-2 py-1 text-xs capitalize transition-colors",
-            value === option
-              ? "bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-sm"
-              : "text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]",
-          ].join(" ")}
-        >
-          {option}
-        </button>
-      ))}
-    </div>
-  );
+function appendTableColumns(data: string[][], config: TableBlockConfig, count: number): [string[][], TableBlockConfig] {
+  let nextData = data;
+  let nextConfig = config;
+  for (let index = 0; index < count; index += 1) {
+    const afterColumn = getTableColumnCount(nextData) - 1;
+    nextData = addTableColumn(nextData, afterColumn);
+    nextConfig = insertConfigColumn(nextConfig, afterColumn);
+  }
+  return [nextData, nextConfig];
 }
 
-function ToggleRow({
-  label,
-  checked,
-  icon,
-  onChange,
-}: Readonly<{
-  label: string;
-  checked: boolean;
-  icon?: React.ReactNode;
-  onChange: (checked: boolean) => void;
-}>) {
-  return (
-    <label className="flex items-center justify-between gap-3 rounded-md px-1 py-1 hover:bg-[var(--osio-bg-subtle)]">
-      <span className="flex items-center gap-2 text-sm">
-        {icon}
-        {label}
-      </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 accent-[var(--osio-accent)]"
-      />
-    </label>
-  );
+function appendTableRows(data: string[][], config: TableBlockConfig, count: number): [string[][], TableBlockConfig] {
+  let nextData = data;
+  let nextConfig = config;
+  for (let index = 0; index < count; index += 1) {
+    const afterRow = nextData.length - 1;
+    nextData = addTableRow(nextData, afterRow);
+    nextConfig = insertConfigRow(nextConfig, afterRow);
+  }
+  return [nextData, nextConfig];
 }
 
-function AlignmentButton({
-  alignment,
-  current,
-  onClick,
-}: Readonly<{
-  alignment: Exclude<TableBlockTextAlign, null>;
-  current: TableBlockTextAlign;
-  onClick: () => void;
-}>) {
-  let Icon = AlignLeft;
-  if (alignment === "center") Icon = AlignCenter;
-  if (alignment === "right") Icon = AlignRight;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={`Align ${alignment}`}
-      className={[
-        "flex h-7 w-8 items-center justify-center rounded-md border border-[var(--osio-border-default)] hover:bg-[var(--osio-bg-subtle)]",
-        current === alignment ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]" : "text-[var(--osio-fg-muted)]",
-      ].join(" ")}
-    >
-      <Icon size={14} />
-    </button>
-  );
+function handleTableCellKey(event: React.KeyboardEvent<HTMLDivElement>, rowIndex: number, columnIndex: number, context: CellKeyContext) {
+  if (handleStructuralKey(event, rowIndex, columnIndex, context)) return;
+  if (handleEscapeKey(event, context.root)) return;
+  if (handleTabKey(event, rowIndex, columnIndex, context)) return;
+  if (handleVerticalExitKey(event, rowIndex, context)) return;
+  handleHorizontalCaretKey(event, rowIndex, columnIndex, context);
 }
+
+function handleStructuralKey(event: React.KeyboardEvent<HTMLDivElement>, rowIndex: number, columnIndex: number, context: CellKeyContext): boolean {
+  const command = event.ctrlKey || event.metaKey;
+  const lastRow = context.data.length - 1;
+  const lastColumn = context.columnCount - 1;
+  const structural = command && event.shiftKey;
+  if (structural && event.key === "ArrowDown") return runHandled(event, () => context.runStructuralEdit(addTableRow(context.source, rowIndex), insertConfigRow(context.config, rowIndex), { rowIndex: rowIndex + 1, columnIndex }));
+  if (structural && event.key === "ArrowUp") return runHandled(event, () => context.runStructuralEdit(insertTableRowBefore(context.source, rowIndex), insertConfigRow(context.config, rowIndex - 1), { rowIndex, columnIndex }));
+  if (structural && event.key === "ArrowRight") return runHandled(event, () => context.runStructuralEdit(addTableColumn(context.source, columnIndex), insertConfigColumn(context.config, columnIndex), { rowIndex, columnIndex: columnIndex + 1 }));
+  if (structural && event.key === "ArrowLeft") return runHandled(event, () => context.runStructuralEdit(insertTableColumnBefore(context.source, columnIndex), insertConfigColumn(context.config, columnIndex - 1), { rowIndex, columnIndex }));
+  if (structural && event.key === "Backspace") return runHandled(event, () => { if (context.data.length > 1) context.runStructuralEdit(removeTableRow(context.source, rowIndex), removeConfigRow(context.config, rowIndex), { rowIndex: Math.min(rowIndex, lastRow - 1), columnIndex }); });
+  if (command && !event.shiftKey && event.key === "Delete") return runHandled(event, () => { if (context.columnCount > 1) context.runStructuralEdit(removeTableColumn(context.source, columnIndex), removeConfigColumn(context.config, columnIndex), { rowIndex, columnIndex: Math.min(columnIndex, lastColumn - 1) }); });
+  return false;
+}
+
+function handleEscapeKey(event: React.KeyboardEvent<HTMLDivElement>, root: HTMLElement | null): boolean {
+  if (event.key !== "Escape") return false;
+  return runHandled(event, () => focusTableBlockShell(root));
+}
+
+function handleTabKey(event: React.KeyboardEvent<HTMLDivElement>, rowIndex: number, columnIndex: number, context: CellKeyContext): boolean {
+  if (event.key !== "Tab") return false;
+  return runHandled(event, () => {
+    const next = event.shiftKey ? getPreviousCell(rowIndex, columnIndex, context.columnCount) : getNextCell(rowIndex, columnIndex, context.columnCount, context.data.length);
+    if (next) {
+      context.focusCell(next.rowIndex, next.columnIndex, event.shiftKey ? "end" : "start");
+    } else if (!event.shiftKey) {
+      const lastRow = context.data.length - 1;
+      context.runStructuralEdit(addTableRow(context.source, lastRow), insertConfigRow(context.config, lastRow), { rowIndex: lastRow + 1, columnIndex: 0 });
+    }
+  });
+}
+
+function handleVerticalExitKey(event: React.KeyboardEvent<HTMLDivElement>, rowIndex: number, context: CellKeyContext): boolean {
+  if (event.key === "ArrowUp" && rowIndex === 0) return runHandled(event, () => exitTable(context.root, "up"));
+  if (event.key === "ArrowDown" && rowIndex === context.data.length - 1) return runHandled(event, () => exitTable(context.root, "down"));
+  return false;
+}
+
+function handleHorizontalCaretKey(event: React.KeyboardEvent<HTMLDivElement>, rowIndex: number, columnIndex: number, context: CellKeyContext): boolean {
+  if (event.shiftKey) return false;
+  if (event.key === "ArrowLeft" && isCaretAtStart(event.currentTarget)) return runHandled(event, () => {
+    const previous = getPreviousCell(rowIndex, columnIndex, context.columnCount);
+    if (previous) context.focusCell(previous.rowIndex, previous.columnIndex, "end");
+  });
+  if (event.key === "ArrowRight" && isCaretAtEnd(event.currentTarget)) return runHandled(event, () => {
+    const next = getNextCell(rowIndex, columnIndex, context.columnCount, context.data.length);
+    if (next) context.focusCell(next.rowIndex, next.columnIndex, "start");
+  });
+  return false;
+}
+
+function runHandled(event: React.KeyboardEvent<HTMLDivElement>, action: () => void): true {
+  event.preventDefault();
+  action();
+  return true;
+}
+
+function getPreviousCell(rowIndex: number, columnIndex: number, columnCount: number): CellAddress | null {
+  if (columnIndex > 0) return { rowIndex, columnIndex: columnIndex - 1 };
+  if (rowIndex > 0) return { rowIndex: rowIndex - 1, columnIndex: columnCount - 1 };
+  return null;
+}
+
+function getNextCell(rowIndex: number, columnIndex: number, columnCount: number, rowCount: number): CellAddress | null {
+  if (columnIndex < columnCount - 1) return { rowIndex, columnIndex: columnIndex + 1 };
+  if (rowIndex < rowCount - 1) return { rowIndex: rowIndex + 1, columnIndex: 0 };
+  return null;
+}
+
+function insertTableRowBefore(tableData: string[][], rowIndex: number): string[][] {
+  const data = normalizeTableData(tableData);
+  const insertAt = Math.max(0, Math.min(rowIndex, data.length));
+  const row = new Array(getTableColumnCount(data)).fill("");
+  return [...data.slice(0, insertAt), row, ...data.slice(insertAt)];
+}
+
+function insertTableColumnBefore(tableData: string[][], columnIndex: number): string[][] {
+  const data = normalizeTableData(tableData);
+  const insertAt = Math.max(0, Math.min(columnIndex, getTableColumnCount(data)));
+  return data.map((row) => [...row.slice(0, insertAt), "", ...row.slice(insertAt)]);
+}
+
+function focusCell(table: HTMLElement | null, rowIndex: number, columnIndex: number, placement: CaretPlacement = "start"): boolean {
+  const cell = table?.querySelector<HTMLElement>(`[data-table-cell="${rowIndex}:${columnIndex}"] [contenteditable]`);
+  if (!cell) return false;
+  cell.focus();
+  placeCaret(cell, placement);
+  return true;
+}
+
+function focusCellWhenReady(table: HTMLElement | null, rowIndex: number, columnIndex: number, placement: CaretPlacement, attempts = 8) {
+  if (attempts <= 0 || focusCell(table, rowIndex, columnIndex, placement)) return;
+  const retry = () => focusCellWhenReady(table, rowIndex, columnIndex, placement, attempts - 1);
+  requestAnimationFrame(retry);
+  globalThis.setTimeout(retry, 0);
+}
+
+function placeCaret(target: HTMLElement, placement: CaretPlacement) {
+  const selection = globalThis.getSelection();
+  if (!selection) return;
+  const range = document.createRange();
+  range.selectNodeContents(target);
+  range.collapse(placement !== "end");
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function isCaretAtStart(cell: HTMLElement): boolean {
+  const selection = globalThis.getSelection();
+  if (!selection?.rangeCount) return true;
+  const range = selection.getRangeAt(0);
+  if (!range.collapsed) return false;
+  const testRange = document.createRange();
+  testRange.setStart(cell, 0);
+  testRange.setEnd(range.startContainer, range.startOffset);
+  return testRange.toString().length === 0;
+}
+
+function isCaretAtEnd(cell: HTMLElement): boolean {
+  const selection = globalThis.getSelection();
+  if (!selection?.rangeCount) return true;
+  const range = selection.getRangeAt(0);
+  if (!range.collapsed) return false;
+  const testRange = document.createRange();
+  testRange.setStart(range.endContainer, range.endOffset);
+  testRange.setEnd(cell, cell.childNodes.length);
+  return testRange.toString().length === 0;
+}
+
+function focusTableBlockShell(root: HTMLElement | null) {
+  const shell = root?.closest<HTMLElement>("[data-table-block-shell]") ?? root?.closest<HTMLElement>("article") ?? root;
+  if (!shell) return;
+  if (!shell.hasAttribute("tabindex")) shell.setAttribute("tabindex", "-1");
+  shell.focus();
+}
+
+function exitTable(root: HTMLElement | null, direction: "up" | "down") {
+  const block = root?.closest<HTMLElement>("[data-block-id]");
+  if (!block) return;
+  const blocks = Array.from(document.querySelectorAll<HTMLElement>("[data-block-id]"));
+  const target = blocks[blocks.indexOf(block) + (direction === "up" ? -1 : 1)];
+  if (target?.dataset.blockId) focusEditableBlock(target.dataset.blockId, direction === "up" ? "end" : "start");
+}
+
+function createCellCommitHandlers(rowCount: number, columnCount: number, schedule: ScheduleCellCommit): CellCommit[][] {
+  return Array.from({ length: rowCount }, (_, rowIndex) => createRowCommitHandlers(rowIndex, columnCount, schedule));
+}
+
+function createRowCommitHandlers(rowIndex: number, columnCount: number, schedule: ScheduleCellCommit): CellCommit[] {
+  return Array.from({ length: columnCount }, (_, columnIndex) => (value, flush) => schedule(rowIndex, columnIndex, value, flush));
+}
+
+function createColumnStyles(columnCount: number, config: TableBlockConfig): React.CSSProperties[] {
+  return Array.from({ length: columnCount }, (_, columnIndex) => {
+    const width = config.columnWidths?.[columnIndex];
+    return { minWidth: config.minColumnWidth, width: `var(--osio-table-col-${columnIndex}-width, ${toCssSize(width)})`, maxWidth: config.wrap ? config.maxColumnWidth : undefined };
+  });
+}
+
+function toCssSize(value: number | undefined): string { return value == null ? "auto" : `${value}px`; }
+
+function startPointerDrag(cursor: string, move: (event: PointerEvent) => void, up: () => void) {
+  document.body.style.cursor = cursor;
+  document.body.style.userSelect = "none";
+  globalThis.addEventListener("pointermove", move);
+  globalThis.addEventListener("pointerup", up, { once: true });
+}
+
+function stopPointerDrag(move: (event: PointerEvent) => void, up: () => void) {
+  document.body.style.cursor = "";
+  document.body.style.userSelect = "";
+  globalThis.removeEventListener("pointermove", move);
+  globalThis.removeEventListener("pointerup", up);
+}
+
+function updateTableCellValue(data: string[][], rowIndex: number, columnIndex: number, value: string): string[][] {
+  return data.map((row, currentRowIndex) => currentRowIndex === rowIndex ? row.map((cell, currentColumnIndex) => currentColumnIndex === columnIndex ? value : cell) : row);
+}
+
+function tableDataEqual(left: string[][], right: string[][]): boolean {
+  return left.length === right.length && left.every((row, rowIndex) => row.length === right[rowIndex].length && row.every((cell, columnIndex) => cell === right[rowIndex][columnIndex]));
+}
+
+function getColumnKey(columnIndex: number): string { return `col-${columnIndex}`; }
+function getCellKey(rowIndex: number, columnIndex: number): string { return `cell-${rowIndex}-${columnIndex}`; }
+function getRowKey(rowIndex: number): string { return `row-${rowIndex}`; }
 
 function getRowClassName(rowIndex: number, config: TableBlockConfig): string {
   const classes = [];
   if (config.headerRow !== false && rowIndex === 0) classes.push("bg-[var(--osio-bg-subtle)] font-medium");
-  if (config.stripedRows && rowIndex > 0 && rowIndex % 2 === 0) classes.push("bg-[var(--osio-bg-muted)]/40");
+  if (config.stripedRows && rowIndex > 0 && rowIndex % 2 === 0) classes.push("bg-[var(--osio-bg-subtle)]/50");
   return classes.join(" ");
 }
 
-function getCellClassName(
-  config: TableBlockConfig,
-  alignment: TableBlockTextAlign,
-  rowIndex: number,
-  columnIndex: number,
-): string {
-  return [
-    "relative px-0 py-0 text-[var(--osio-fg-default)] align-top",
-    getTableAlignmentClassName(alignment),
-    config.showBorders === false ? "" : "border-b border-r border-[var(--osio-border-default)] last:border-r-0",
-    config.headerColumn && columnIndex === 0 ? "font-medium bg-[var(--osio-bg-subtle)]" : "",
-    config.headerRow !== false && rowIndex === 0 ? "font-medium" : "",
-  ].filter(Boolean).join(" ");
+function getCellFrameClassName(config: TableBlockConfig, alignment: TableBlockTextAlign, rowIndex: number, columnIndex: number): string {
+  return ["relative text-[var(--osio-fg-default)] align-top focus-within:bg-[var(--osio-bg-hover)]", getTablePaddingClassName(config.cellPadding), getTableAlignmentClassName(alignment), config.wrap === false ? "whitespace-nowrap" : "whitespace-normal break-words", config.showBorders === false ? "" : "border-b border-r border-[var(--osio-border-default)] last:border-r-0", config.headerColumn && columnIndex === 0 ? "font-medium bg-[var(--osio-bg-subtle)]" : "", config.headerRow !== false && rowIndex === 0 ? "font-medium" : ""].filter(Boolean).join(" ");
 }
 
-function getInputClassName(config: TableBlockConfig): string {
-  return [
-    "block min-h-8 w-full resize-none overflow-hidden bg-transparent outline-none focus:bg-[var(--osio-bg-hover)]",
-    getTablePaddingClassName(config.cellPadding),
-    config.wrap === false ? "whitespace-pre" : "whitespace-pre-wrap break-words",
-  ].join(" ");
-}
-
-function inferColumnWidth(
-  data: string[][],
-  columnIndex: number,
-  minColumnWidth = 96,
-  maxColumnWidth?: number,
-): number {
-  const longestContent = data.reduce((longest, row) => {
-    const value = row[columnIndex] ?? "";
-    return Math.max(longest, value.length);
-  }, 0);
-  const estimatedWidth = Math.max(minColumnWidth, Math.min(MAX_AUTO_COLUMN_WIDTH, longestContent * 8 + 48));
-  return maxColumnWidth ? Math.min(estimatedWidth, maxColumnWidth) : estimatedWidth;
-}
-
-function getViewportMenuStyle(x: number, y: number, width: number, height: number): React.CSSProperties {
-  const viewportWidth = globalThis.innerWidth;
-  const viewportHeight = globalThis.innerHeight;
-  const left = Math.max(8, Math.min(x, viewportWidth - width - 8));
-  const belowTop = y;
-  const aboveTop = y - height;
-  const top = belowTop + height > viewportHeight - 8 && aboveTop > 8
-    ? aboveTop
-    : Math.max(8, Math.min(belowTop, viewportHeight - height - 8));
-  return { left, top };
-}
-
-function setInputRef(
-  refs: Map<string, HTMLTextAreaElement>,
-  rowIndex: number,
-  columnIndex: number,
-  node: HTMLTextAreaElement | null,
-) {
-  const key = cellKey(rowIndex, columnIndex);
-  if (node) {
-    refs.set(key, node);
-    resizeTextarea(node);
-    return;
-  }
-
-  refs.delete(key);
-}
-
-function cellKey(rowIndex: number, columnIndex: number): string {
-  return `${rowIndex}:${columnIndex}`;
-}
-
-function resizeTextarea(node: HTMLTextAreaElement) {
-  node.style.height = "auto";
-  node.style.height = `${node.scrollHeight}px`;
+function areCellsEqual(previous: Readonly<EditableTableCellProps>, next: Readonly<EditableTableCellProps>): boolean {
+  return previous.cellId === next.cellId && previous.initialValue === next.initialValue && previous.rowIndex === next.rowIndex && previous.columnIndex === next.columnIndex && previous.alignment === next.alignment && previous.onCommit === next.onCommit && previous.onKeyDown === next.onKeyDown && previous.onFocus === next.onFocus && previous.isHeader === next.isHeader;
 }

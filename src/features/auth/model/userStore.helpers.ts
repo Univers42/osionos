@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 19:49:09 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/12 23:14:09 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -45,7 +45,7 @@ export type BridgeSessionImport = {
   message?: string;
 };
 
-export function isBridgeAppToken(token: string | null | undefined): boolean {
+export function isBridgeAppToken(token: string | null | undefined): token is string {
   return typeof token === 'string' && token.startsWith(BRIDGE_APP_TOKEN_PREFIX);
 }
 

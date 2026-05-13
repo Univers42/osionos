@@ -15,9 +15,9 @@ import { MessageSquare, Send } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
 
 import { usePageStore } from "@/store/usePageStore";
-import { savePagesCache } from "@/store/pageStore.helpers";
 import { useUserStore } from "@/features/auth";
 import { pageConfigKey, resolvePageConfig, usePageConfigStore } from "@/shared/config/pageConfigStore";
+import { isPerfEnabled } from "@/shared/lib/perf/measure";
 import {
   initRealtimeMessagesBridge,
   type RealtimeMessage,
@@ -36,7 +36,7 @@ import {
   PageIcon,
   PageProperties,
   PageTitle,
-  type PageEntry,
+  type ActivePage,
   type PagePropertyEntry,
 } from "@/entities/page";
 import { PageBody } from "./PageBody";
@@ -49,33 +49,18 @@ interface OsionosPageProps {
 
 const EMPTY_MESSAGES: RealtimeMessage[] = [];
 
-function updatePagePropertyInPages(
-  pagesByWorkspace: Record<string, PageEntry[]>,
-  pageId: string,
-  propertyKey: string,
-  value: PagePropertyEntry["value"],
-): Record<string, PageEntry[]> {
-  const newPages = { ...pagesByWorkspace };
-  for (const wsId of Object.keys(newPages)) {
-    newPages[wsId] = newPages[wsId].map((page) => updatePageProperty(page, pageId, propertyKey, value));
-  }
-  return newPages;
-}
+type ActivePageMetadataPatch = Partial<Pick<ActivePage, "cover" | "icon" | "title">>;
 
-function updatePageProperty(
-  page: PageEntry,
-  pageId: string,
-  propertyKey: string,
-  value: PagePropertyEntry["value"],
-): PageEntry {
-  if (page._id !== pageId) return page;
-  return {
-    ...page,
-    updatedAt: new Date().toISOString(),
-    properties: (page.properties ?? []).map((property) => (
-      property.key === propertyKey ? { ...property, value } : property
-    )),
-  };
+function patchActivePageMetadata(pageId: string, patch: ActivePageMetadataPatch) {
+  usePageStore.setState((state) => {
+    if (state.activePage?.id !== pageId) return {};
+    const activePage = { ...state.activePage, ...patch };
+    return {
+      activePage,
+      navigationPath: state.navigationPath.map((entry) => (entry.id === pageId ? { ...entry, ...patch } : entry)),
+      recents: state.recents.map((entry) => (entry.id === pageId ? { ...entry, ...patch } : entry)),
+    };
+  });
 }
 
 /**
@@ -96,10 +81,19 @@ function updatePageProperty(
  *  └──────────────────────────────────────┘
  */
 export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
+  const renderCountRef = React.useRef(0);
+  renderCountRef.current += 1;
+
+  useEffect(() => () => {
+    if (isPerfEnabled()) {
+      console.info(`[perf] OsionosPage renders before unmount: ${renderCountRef.current}`);
+    }
+  }, []);
+
   const page = usePageStore((s) => s.pageById(pageId));
   const activePage = usePageStore((s) => s.activePage);
-  const openPage = usePageStore((s) => s.openPage);
   const updatePageTitle = usePageStore((s) => s.updatePageTitle);
+  const patchPage = usePageStore((s) => s.patchPage);
   const activeUserId = useUserStore((s) => s.activeUserId);
   const persona = useUserStore((s) => s.activePersona());
   const safeUserId = activeUserId || "anonymous";
@@ -159,50 +153,26 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
     (newTitle: string) => {
       if (pageConfig.locked) return;
       updatePageTitle(pageId, newTitle);
-      if (activePage?.id === pageId) {
-        openPage({ ...activePage, title: newTitle });
-      }
+      patchActivePageMetadata(pageId, { title: newTitle });
     },
-    [pageConfig.locked, pageId, activePage, openPage, updatePageTitle],
+    [pageConfig.locked, pageId, updatePageTitle],
   );
 
   const handleChangeIcon = useCallback(
     (newIcon: string) => {
       if (pageConfig.locked) return;
       /* Persist icon on the page entry — we store it in the store's PageEntry */
-      usePageStore.setState((s) => {
-        const newPages = { ...s.pages };
-        for (const wsId of Object.keys(newPages)) {
-          newPages[wsId] = newPages[wsId].map((p) =>
-            p._id === pageId ? { ...p, icon: newIcon } : p,
-          );
-        }
-        savePagesCache(newPages);
-        return { pages: newPages };
-      });
-      if (activePage?.id === pageId) {
-        openPage({ ...activePage, icon: newIcon });
-      }
+      patchPage(pageId, { icon: newIcon });
+      patchActivePageMetadata(pageId, { icon: newIcon });
     },
-    [pageConfig.locked, pageId, activePage, openPage],
+    [pageConfig.locked, pageId, patchPage],
   );
 
   const handleRemoveIcon = useCallback(() => {
     if (pageConfig.locked) return;
-    usePageStore.setState((s) => {
-      const newPages = { ...s.pages };
-      for (const wsId of Object.keys(newPages)) {
-        newPages[wsId] = newPages[wsId].map((p) =>
-          p._id === pageId ? { ...p, icon: undefined } : p,
-        );
-      }
-        savePagesCache(newPages);
-      return { pages: newPages };
-    });
-    if (activePage?.id === pageId) {
-      openPage({ ...activePage, icon: undefined });
-    }
-  }, [pageConfig.locked, pageId, activePage, openPage]);
+    patchPage(pageId, { icon: undefined });
+    patchActivePageMetadata(pageId, { icon: undefined });
+  }, [pageConfig.locked, pageId, patchPage]);
 
   const handleAddIcon = useCallback(() => {
     const emoji = randomUiCollectionEmoji();
@@ -212,39 +182,17 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
   const handleChangeCover = useCallback(
     (newCover: string) => {
       if (pageConfig.locked) return;
-      usePageStore.setState((s) => {
-        const newPages = { ...s.pages };
-        for (const wsId of Object.keys(newPages)) {
-          newPages[wsId] = newPages[wsId].map((p) =>
-            p._id === pageId ? { ...p, cover: newCover } : p,
-          );
-        }
-        savePagesCache(newPages);
-        return { pages: newPages };
-      });
-      if (activePage?.id === pageId) {
-        openPage({ ...activePage, cover: newCover });
-      }
+      patchPage(pageId, { cover: newCover });
+      patchActivePageMetadata(pageId, { cover: newCover });
     },
-    [pageConfig.locked, pageId, activePage, openPage],
+    [pageConfig.locked, pageId, patchPage],
   );
 
   const handleRemoveCover = useCallback(() => {
     if (pageConfig.locked) return;
-    usePageStore.setState((s) => {
-      const newPages = { ...s.pages };
-      for (const wsId of Object.keys(newPages)) {
-        newPages[wsId] = newPages[wsId].map((p) =>
-          p._id === pageId ? { ...p, cover: undefined } : p,
-        );
-      }
-        savePagesCache(newPages);
-      return { pages: newPages };
-    });
-    if (activePage?.id === pageId) {
-      openPage({ ...activePage, cover: undefined });
-    }
-  }, [pageConfig.locked, pageId, activePage, openPage]);
+    patchPage(pageId, { cover: undefined });
+    patchActivePageMetadata(pageId, { cover: undefined });
+  }, [pageConfig.locked, pageId, patchPage]);
 
   const handleAddCover = useCallback(() => {
     if (pageConfig.locked) return;
@@ -262,13 +210,14 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
   const handleChangePageProperty = useCallback(
     (propertyKey: string, value: PagePropertyEntry["value"]) => {
       if (pageConfig.locked) return;
-      usePageStore.setState((s) => {
-        const newPages = updatePagePropertyInPages(s.pages, pageId, propertyKey, value);
-        savePagesCache(newPages);
-        return { pages: newPages };
-      });
+      patchPage(pageId, (currentPage) => ({
+        updatedAt: new Date().toISOString(),
+        properties: (currentPage.properties ?? []).map((property) => (
+          property.key === propertyKey ? { ...property, value } : property
+        )),
+      }));
     },
-    [pageConfig.locked, pageId],
+    [pageConfig.locked, pageId, patchPage],
   );
 
   const handleSubmitComment = useCallback(
@@ -292,6 +241,17 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
   const hasFullPageLayout = page?.content?.length === 1 &&
     page.content[0]?.type === "layout" &&
     page.content[0]?.layoutMode === "full_page";
+  const pageStyle: React.CSSProperties & {
+    "--page-font-family": string;
+    "--page-font-size-scale": string | number;
+    "--page-content-max-width": string;
+    "--page-content-padding-inline": string;
+  } = {
+    "--page-font-family": pageConfig.cssTokens.fontFamily,
+    "--page-font-size-scale": pageConfig.cssTokens.fontSizeScale,
+    "--page-content-max-width": pageConfig.cssTokens.contentMaxWidth,
+    "--page-content-padding-inline": pageConfig.cssTokens.contentPaddingInline,
+  };
 
   return (
     <div
@@ -304,12 +264,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
         pageConfig.locked ? "osionos-page--locked" : "",
         pageConfig.presentationMode ? "osionos-page--present" : "",
       ].filter(Boolean).join(" ")}
-      style={{
-        "--page-font-family": pageConfig.cssTokens.fontFamily,
-        "--page-font-size-scale": pageConfig.cssTokens.fontSizeScale,
-        "--page-content-max-width": pageConfig.cssTokens.contentMaxWidth,
-        "--page-content-padding-inline": pageConfig.cssTokens.contentPaddingInline,
-      } as React.CSSProperties}
+      style={pageStyle}
     >
       <PageHeaderBar
         key={pageId}

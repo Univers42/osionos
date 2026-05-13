@@ -17,6 +17,7 @@ import type {
   PageVisibility,
 } from "@/entities/page";
 import type { UserSession } from "@/entities/user";
+import { useSyncExternalStore } from "react";
 
 export interface PageAccessContext {
   userId: string;
@@ -29,9 +30,42 @@ interface PlaygroundUserStoreLike {
   getState: () => {
     activeSession: () => UserSession | null;
   };
+  subscribe: (listener: () => void) => () => void;
 }
 
 const USER_STORE_KEY = "__playgroundUserStore";
+let lastAccessSession: UserSession | null | undefined;
+let lastAccessContext: PageAccessContext | null = null;
+
+function getUserStore(): PlaygroundUserStoreLike | undefined {
+  return (globalThis as Record<string, unknown>)[USER_STORE_KEY] as
+    | PlaygroundUserStoreLike
+    | undefined;
+}
+
+function createMemoizedPageAccessContext(
+  session: UserSession | null | undefined,
+): PageAccessContext | null {
+  if (session === lastAccessSession) return lastAccessContext;
+  lastAccessSession = session;
+  lastAccessContext = createPageAccessContext(session);
+  return lastAccessContext;
+}
+
+function subscribeToUserStore(listener: () => void): () => void {
+  return getUserStore()?.subscribe(listener) ?? (() => undefined);
+}
+
+function getPageAccessSnapshot(): PageAccessContext | null {
+  const store = getUserStore();
+  if (!store) return null;
+
+  try {
+    return createMemoizedPageAccessContext(store.getState().activeSession());
+  } catch {
+    return null;
+  }
+}
 
 export function createPageAccessContext(
   session: UserSession | null | undefined,
@@ -55,16 +89,15 @@ export function createPageAccessContext(
 }
 
 export function getCurrentPageAccessContext(): PageAccessContext | null {
-  const store = (globalThis as Record<string, unknown>)[USER_STORE_KEY] as
-    | PlaygroundUserStoreLike
-    | undefined;
-  if (!store) return null;
+  return getPageAccessSnapshot();
+}
 
-  try {
-    return createPageAccessContext(store.getState().activeSession());
-  } catch {
-    return null;
-  }
+export function usePageAccessContext(): PageAccessContext | null {
+  return useSyncExternalStore(
+    subscribeToUserStore,
+    getPageAccessSnapshot,
+    getPageAccessSnapshot,
+  );
 }
 
 export function normalizePageVisibility(value: unknown): PageVisibility {
