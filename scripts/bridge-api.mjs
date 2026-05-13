@@ -9,6 +9,19 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
 
+function readOptionalEnvFile(file) {
+	if (!existsSync(file)) return '';
+	try {
+		return readFileSync(file, 'utf8');
+	} catch (error) {
+		if (error?.code === 'EACCES' || error?.code === 'ENOENT') {
+			console.warn(`[osionos-bridge] skipped unreadable optional env file: ${file}`);
+			return '';
+		}
+		throw error;
+	}
+}
+
 for (const file of [
 	resolve(APP_ROOT, '.env.local'),
 	resolve(APP_ROOT, '.env'),
@@ -17,8 +30,9 @@ for (const file of [
 	resolve(APP_ROOT, '../../opposite-osiris/.env'),
 	resolve(APP_ROOT, '../../../apps/baas/.env.local'),
 ]) {
-	if (!existsSync(file)) continue;
-	for (const rawLine of readFileSync(file, 'utf8').split(/\r?\n/)) {
+	const envText = readOptionalEnvFile(file);
+	if (!envText) continue;
+	for (const rawLine of envText.split(/\r?\n/)) {
 		const line = rawLine.trim();
 		if (!line || line.startsWith('#') || !line.includes('=')) continue;
 		const [key, ...valueParts] = line.split('=');
