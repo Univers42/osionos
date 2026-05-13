@@ -6,7 +6,7 @@
 #    By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/04/08 19:07:11 by dlesieur          #+#    #+#              #
-#    Updated: 2026/05/06 23:46:20 by dlesieur         ###   ########.fr        #
+#    Updated: 2026/05/13 14:47:53 by dlesieur         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -47,7 +47,7 @@ pnpm-lock: ## Regenerate pnpm-lock.yaml inside Docker after package changes
 install: ## Install pnpm dependencies inside Docker volumes
 	@echo -e "$(CYAN)Installing dependencies inside Docker…$(RESET)"
 	$(DC) build playground
-	$(DC) run --rm --no-deps playground pnpm install --frozen-lockfile --store-dir /pnpm/store
+	$(DC) run --rm --no-deps playground pnpm install --frozen-lockfile --prefer-offline --store-dir /pnpm/store
 	@echo -e "$(GREEN)✔ Docker dependencies installed$(RESET)"
 
 pnpm-install: install ## Alias for Docker-only pnpm install

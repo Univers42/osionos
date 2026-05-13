@@ -8,7 +8,7 @@ ENV npm_config_update_notifier=false
 
 FROM base AS deps
 COPY package.json package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci --include=dev
+RUN --mount=type=cache,target=/root/.npm npm ci --include=dev --ignore-scripts
 
 FROM deps AS build
 COPY tsconfig.json vite.config.ts markdown.ts ./
