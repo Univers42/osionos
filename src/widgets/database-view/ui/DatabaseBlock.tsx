@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:37 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/12 23:14:08 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/13 19:11:53 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,7 +26,7 @@ import { usePageStore } from '@/store/usePageStore';
 import { derivePageState } from '@/store/pageStore.helpers';
 import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseViewCatalog';
 import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
-import { getObjectDatabaseAdapter } from '../model/objectDatabaseAdapter';
+import { getObjectDatabaseAdapter, hasObjectDatabaseRemoteAdapter } from '../model/objectDatabaseAdapter';
 
 const INLINE_KNOWN_DATABASE_LOAD_LIMIT = 8;
 
@@ -52,6 +52,11 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     () => getKnownDatabaseAdapter({ inlineLoadLimit: mode === 'inline' ? INLINE_KNOWN_DATABASE_LOAD_LIMIT : undefined }),
     [mode],
   );
+  const fallbackDatabaseAdapter = React.useMemo(
+    () => getKnownDatabaseAdapter({ inlineLoadLimit: mode === 'inline' ? INLINE_KNOWN_DATABASE_LOAD_LIMIT : undefined }),
+    [mode],
+  );
+  const remoteDatabaseAdapter = React.useMemo(() => getObjectDatabaseAdapter(), []);
   const renderPage = React.useCallback<NonNullable<ObjectDatabaseProps['renderPage']>>(
     (pageId, state, onClose) => <DatabaseObjectPage pageId={pageId} state={state} onClose={onClose} />,
     [],
@@ -90,12 +95,13 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
       data-database-view-id={resolvedInitialView}
     >
       <ObjectDatabase
-        adapter={getObjectDatabaseAdapter()}
+        adapter={hasObjectDatabaseRemoteAdapter() && remoteDatabaseAdapter ? remoteDatabaseAdapter : fallbackDatabaseAdapter}
         databaseId={resolvedDatabaseId}
         initialView={resolvedInitialView}
         mode={resolvedMode}
         renderPage={renderPage}
         className={mode === 'full' ? 'h-full' : undefined}
+        chrome="single-view"
       />
     </div>
   );

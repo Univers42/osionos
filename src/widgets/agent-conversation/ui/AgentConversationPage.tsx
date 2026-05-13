@@ -52,10 +52,14 @@ type StreamPayload = Record<string, unknown> & {
 
 const AGENT_THREADS_STORAGE_KEY = "osionos:agent-conversations";
 const AGENT_SETTINGS_STORAGE_KEY = "osionos:agent-settings";
-const CONFIGURED_CLAUDE_BRIDGE_URL = ((import.meta.env as Record<string, string>)["VITE_OSIONOS_BRIDGE_URL"] ?? "").trim().replace(/\/$/, "");
+const CONFIGURED_CLAUDE_BRIDGE_URL = (
+  (import.meta.env as Record<string, string>)["VITE_OSIONOS_BRIDGE_URL"]
+  ?? (import.meta.env as Record<string, string>)["VITE_API_URL"]
+  ?? ""
+).trim().replace(/\/$/, "");
 const CLAUDE_BRIDGE_URLS = CONFIGURED_CLAUDE_BRIDGE_URL
   ? [CONFIGURED_CLAUDE_BRIDGE_URL]
-  : ["http://localhost:4001", "http://localhost:4000"];
+  : ["http://localhost:4000"];
 const DEFAULT_PROMPT = "Ask Claude anything, or ask it to create/update osionos pages through MCP.";
 const EMPTY_WORKSPACE_PAGES: PageEntry[] = [];
 

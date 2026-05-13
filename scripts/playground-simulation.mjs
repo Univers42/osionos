@@ -4,13 +4,13 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-const websiteUrl = process.env.PLAYGROUND_WEBSITE_URL ?? 'http://127.0.0.1:4322';
-const appUrl = process.env.PLAYGROUND_APP_URL ?? 'http://127.0.0.1:3001';
-const bridgeUrl = process.env.PLAYGROUND_BRIDGE_URL ?? 'http://127.0.0.1:4000';
-const mailUrl = process.env.PLAYGROUND_MAIL_URL ?? 'http://127.0.0.1:3002';
-const mailBridgeUrl = process.env.PLAYGROUND_MAIL_BRIDGE_URL ?? 'http://127.0.0.1:4100';
-const calendarUrl = process.env.PLAYGROUND_CALENDAR_URL ?? 'http://127.0.0.1:3003';
-const calendarBridgeUrl = process.env.PLAYGROUND_CALENDAR_BRIDGE_URL ?? 'http://127.0.0.1:4200';
+const websiteUrl = process.env.PLAYGROUND_WEBSITE_URL ?? 'https://127.0.0.1:4322';
+const appUrl = process.env.PLAYGROUND_APP_URL ?? 'https://127.0.0.1:3001';
+const bridgeUrl = process.env.PLAYGROUND_BRIDGE_URL ?? 'https://127.0.0.1:4000';
+const mailUrl = process.env.PLAYGROUND_MAIL_URL ?? 'https://127.0.0.1:3002';
+const mailBridgeUrl = process.env.PLAYGROUND_MAIL_BRIDGE_URL ?? 'https://127.0.0.1:4100';
+const calendarUrl = process.env.PLAYGROUND_CALENDAR_URL ?? 'https://127.0.0.1:3003';
+const calendarBridgeUrl = process.env.PLAYGROUND_CALENDAR_BRIDGE_URL ?? 'https://127.0.0.1:4200';
 const requireExternalSync = process.env.PLAYGROUND_REQUIRE_EXTERNAL_SYNC === '1';
 const appOrigin = new URL(appUrl);
 const headless = process.env.PLAYGROUND_HEADLESS !== '0';
@@ -186,7 +186,7 @@ async function openSidebarApp(label, expectedUrl) {
 }
 
 const browser = await chromium.launch({ headless, slowMo: Number.isFinite(slowMo) ? slowMo : 0 });
-const context = await browser.newContext({ viewport: { width: 1440, height: 960 } });
+const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1440, height: 960 } });
 page = await context.newPage();
 
 try {

@@ -22,6 +22,8 @@ services:
       - .:/app
       - playground_node_modules:/app/node_modules
       - playground_pnpm_store:/pnpm/store
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: ["pnpm", "exec", "vite", "--host", "0.0.0.0", "--port", "3001", "--strictPort"]
     depends_on:
       mongodb:

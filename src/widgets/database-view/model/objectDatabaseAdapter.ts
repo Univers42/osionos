@@ -1,12 +1,17 @@
 import { RemoteAdapter, type ObjectDatabaseAdapter } from '@notion-db/object-database';
 
-const DEFAULT_CONTRACT_SERVER_URL = 'http://localhost:4100';
-
 let sharedAdapter: ObjectDatabaseAdapter | null = null;
 
-export function getObjectDatabaseAdapter(): ObjectDatabaseAdapter {
+export function hasObjectDatabaseRemoteAdapter(): boolean {
+  return Boolean(import.meta.env.VITE_CONTRACT_SERVER_URL);
+}
+
+export function getObjectDatabaseAdapter(): ObjectDatabaseAdapter | null {
+  const contractServerUrl = import.meta.env.VITE_CONTRACT_SERVER_URL;
+  if (!contractServerUrl) return null;
+
   sharedAdapter ??= new RemoteAdapter({
-    baseUrl: import.meta.env.VITE_CONTRACT_SERVER_URL || DEFAULT_CONTRACT_SERVER_URL,
+    baseUrl: contractServerUrl,
     token: import.meta.env.VITE_CONTRACT_SERVER_TOKEN || undefined,
   });
 

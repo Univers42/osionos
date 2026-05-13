@@ -43,9 +43,29 @@ const DEFAULT_JSON_BODY_LIMIT_BYTES = 16_384;
 const PAGE_JSON_BODY_LIMIT_BYTES = 2 * 1024 * 1024;
 const DEFAULT_UNSPLASH_PER_PAGE = 12;
 const MAX_UNSPLASH_PER_PAGE = 24;
+const TRANSLATION_FETCH_TIMEOUT_MS = 6_000;
 const MAX_CLAUDE_TOOL_RESULT_TEXT = 120_000;
 const PAGE_VISIBILITY_VALUES = new Set(['private', 'shared', 'public']);
 const PAGE_SURFACE_VALUES = new Set(['page', 'agent', 'home']);
+const TRANSLATABLE_BLOCK_TYPES = new Set([
+	'paragraph',
+	'heading_1',
+	'heading_2',
+	'heading_3',
+	'heading_4',
+	'heading_5',
+	'heading_6',
+	'bulleted_list',
+	'numbered_list',
+	'to_do',
+	'toggle',
+	'quote',
+	'callout',
+	'image',
+	'video',
+	'audio',
+	'file',
+]);
 const WORKSPACE_PERMISSIONS = new Set(['create', 'read', 'update', 'delete', 'admin']);
 const CLAUDE_AGENT_VALUES = new Set(['general-purpose', 'Explore', 'Plan']);
 const CLAUDE_MODEL_VALUES = new Set(['default', 'sonnet', 'opus', 'haiku']);
@@ -76,6 +96,7 @@ export function configFromEnv(env = process.env) {
 		serviceKey: env.SERVICE_ROLE_KEY ?? env.KONG_SERVICE_API_KEY ?? env.BAAS_SERVICE_ROLE_KEY ?? '',
 		requireBaas: env.OSIONOS_BRIDGE_REQUIRE_BAAS === 'true',
 		persistence: env.OSIONOS_BRIDGE_PERSISTENCE ?? 'auto',
+		translationApiUrl: (env.OSIONOS_TRANSLATION_API_URL ?? env.VITE_TRANSLATION_API_URL ?? '').trim(),
 		timestampSkewMs: Number(env.OSIONOS_BRIDGE_TIMESTAMP_SKEW_MS ?? DEFAULT_TIMESTAMP_SKEW_MS),
 		handoffTtlMs: Number(env.OSIONOS_BRIDGE_HANDOFF_TTL_MS ?? DEFAULT_HANDOFF_TTL_MS),
 		sessionTtlSeconds: Number(env.OSIONOS_APP_SESSION_TTL_SECONDS ?? DEFAULT_SESSION_TTL_SECONDS),
@@ -147,6 +168,12 @@ function requireUuid(value, fieldName) {
 	return normalized;
 }
 
+function requirePageReference(value) {
+	const normalized = safeText(value, 220);
+	if (!normalized) throw Object.assign(new Error('pageId is required.'), { status: 422 });
+	return normalized;
+}
+
 function optionalUuid(value, fieldName) {
 	if (value === null) return null;
 	if (value === undefined || value === '') return undefined;
@@ -159,6 +186,14 @@ function hasOwn(value, key) {
 
 function safeJsonArray(value, fallback = []) {
 	return Array.isArray(value) ? value : fallback;
+}
+
+function safeJsonObject(value, fieldName, fallback = {}) {
+	if (value === undefined) return fallback;
+	if (!value || typeof value !== 'object' || Array.isArray(value)) {
+		throw Object.assign(new Error(`${fieldName} must be an object.`), { status: 422 });
+	}
+	return value;
 }
 
 function safeTimestampOrNull(value, fieldName) {
@@ -463,6 +498,39 @@ async function fetchPageRow(pageId, config, fetchImpl) {
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
+async function fetchPageRowIfUuid(pageId, config, fetchImpl) {
+	if (!UUID_REGEX.test(pageId)) return null;
+	return fetchPageRow(pageId, config, fetchImpl);
+}
+
+async function fetchPageConfigRow(pageId, userId, config, fetchImpl) {
+	const query = postgrestQuery({
+		page_id: `eq.${requirePageReference(pageId)}`,
+		user_id: `eq.${requireUuid(userId, 'userId')}`,
+		select: 'config,updated_at',
+		limit: '1',
+	});
+	const rows = await baasRest(config, fetchImpl, `osionos_page_configurations?${query}`);
+	return Array.isArray(rows) ? rows[0] ?? null : null;
+}
+
+async function requirePageScopeAccess(request, pageId, payload, permission, config, fetchImpl = fetch) {
+	const normalizedPageId = requirePageReference(pageId);
+	const row = await fetchPageRowIfUuid(normalizedPageId, config, fetchImpl);
+	if (row) {
+		const authContext = await requireWorkspaceAccess(request, row.workspace_id, permission, config, fetchImpl);
+		return { pageId: normalizedPageId, workspaceId: row.workspace_id, authContext, row };
+	}
+
+	const tokenContext = verifyAppSessionToken(bearerToken(request), config);
+	const requestedWorkspaceId = UUID_REGEX.test(String(payload?.workspaceId ?? '')) ? String(payload.workspaceId) : '';
+	const workspaceId = requestedWorkspaceId && tokenContext.workspaceIds.includes(requestedWorkspaceId)
+		? requestedWorkspaceId
+		: tokenContext.workspaceIds[0];
+	const authContext = await requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl);
+	return { pageId: normalizedPageId, workspaceId, authContext, row: null };
+}
+
 async function listPageRows(workspaceId, config, fetchImpl, filters = {}) {
 	const query = postgrestQuery({
 		workspace_id: `eq.${workspaceId}`,
@@ -635,6 +703,16 @@ function safeUnsplashPerPage(value) {
 	return Math.min(Math.max(Math.trunc(parsed), 1), MAX_UNSPLASH_PER_PAGE);
 }
 
+async function fetchWithTimeout(fetchImpl, url, options = {}, timeoutMs = TRANSLATION_FETCH_TIMEOUT_MS) {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), timeoutMs);
+	try {
+		return await fetchImpl(url, { ...options, signal: controller.signal });
+	} finally {
+		clearTimeout(timeout);
+	}
+}
+
 export async function searchUnsplashPhotos({ query, perPage, orientation } = {}, config = configFromEnv(), fetchImpl = fetch) {
 	if (!config.unsplashAccessKey) {
 		throw Object.assign(new Error('Unsplash access key is not configured on the osionos bridge.'), { status: 503 });
@@ -665,6 +743,110 @@ export async function searchUnsplashPhotos({ query, perPage, orientation } = {},
 		results: Array.isArray(payload.results) ? payload.results : [],
 		total: Number.isFinite(payload.total) ? payload.total : undefined,
 	};
+}
+
+function safeTranslationLocale(value) {
+	const locale = (safeText(value, 32) || 'fr').toLowerCase();
+	if (!/^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,2}$/.test(locale)) {
+		throw Object.assign(new Error('targetLocale must be a locale code.'), { status: 422 });
+	}
+	return locale;
+}
+
+function parseGoogleTranslateResponse(payload) {
+	if (!Array.isArray(payload) || !Array.isArray(payload[0])) return null;
+	const translated = payload[0]
+		.map((part) => Array.isArray(part) && typeof part[0] === 'string' ? part[0] : '')
+		.join('')
+		.trim();
+	return translated || null;
+}
+
+function parseTranslationResponse(payload) {
+	if (!payload || typeof payload !== 'object') return null;
+	const translated = payload.translatedText ?? payload.translation ?? payload.text;
+	return typeof translated === 'string' && translated.trim() ? translated : null;
+}
+
+async function translateWithConfiguredEndpoint(text, targetLocale, config, fetchImpl) {
+	if (!config.translationApiUrl) return null;
+	let url;
+	try {
+		url = new URL(config.translationApiUrl);
+	} catch {
+		return null;
+	}
+	const response = await fetchWithTimeout(fetchImpl, url.toString(), {
+		method: 'POST',
+		headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+		body: JSON.stringify({ text, targetLocale, sourceLocale: 'auto' }),
+	});
+	if (!response.ok) return null;
+	return parseTranslationResponse(await response.json().catch(() => null));
+}
+
+async function translateWithGoogle(text, targetLocale, fetchImpl) {
+	const url = new URL('https://translate.googleapis.com/translate_a/single');
+	url.searchParams.set('client', 'gtx');
+	url.searchParams.set('sl', 'auto');
+	url.searchParams.set('tl', targetLocale);
+	url.searchParams.set('dt', 't');
+	url.searchParams.set('q', text);
+	const response = await fetchWithTimeout(fetchImpl, url.toString());
+	if (!response.ok) return null;
+	return parseGoogleTranslateResponse(await response.json().catch(() => null));
+}
+
+async function translateWithMyMemory(text, targetLocale, fetchImpl) {
+	const url = new URL('https://api.mymemory.translated.net/get');
+	url.searchParams.set('q', text);
+	url.searchParams.set('langpair', `auto|${targetLocale}`);
+	const response = await fetchWithTimeout(fetchImpl, url.toString());
+	if (!response.ok) return null;
+	const payload = await response.json().catch(() => null);
+	const translated = payload?.responseData?.translatedText;
+	return typeof translated === 'string' && translated.trim() ? translated : null;
+}
+
+async function translateText(text, targetLocale, config, fetchImpl, cache) {
+	if (typeof text !== 'string' || !text.trim()) return text;
+	const cacheKey = `${targetLocale}\u0000${text}`;
+	const cached = cache.get(cacheKey);
+	if (cached) return cached;
+	const promise = (async () => {
+		for (const translator of [
+			() => translateWithConfiguredEndpoint(text, targetLocale, config, fetchImpl),
+			() => translateWithGoogle(text, targetLocale, fetchImpl),
+			() => translateWithMyMemory(text, targetLocale, fetchImpl),
+		]) {
+			try {
+				const translated = await translator();
+				if (translated && !translated.startsWith(`[${targetLocale}] `)) return translated;
+			} catch {
+				// Try the next provider.
+			}
+		}
+		return text;
+	})();
+	cache.set(cacheKey, promise);
+	return promise;
+}
+
+async function translateBlock(block, targetLocale, config, fetchImpl, cache) {
+	if (!block || typeof block !== 'object' || Array.isArray(block)) return block;
+	const next = { ...block };
+	if (TRANSLATABLE_BLOCK_TYPES.has(String(block.type)) && typeof block.content === 'string') {
+		next.content = await translateText(block.content, targetLocale, config, fetchImpl, cache);
+	}
+	if (Array.isArray(block.tableData)) {
+		next.tableData = await Promise.all(block.tableData.map((row) => Array.isArray(row)
+			? Promise.all(row.map((cell) => translateText(cell, targetLocale, config, fetchImpl, cache)))
+			: row));
+	}
+	if (Array.isArray(block.children)) {
+		next.children = await Promise.all(block.children.map((child) => translateBlock(child, targetLocale, config, fetchImpl, cache)));
+	}
+	return next;
 }
 
 async function readJson(request, maxBytes = DEFAULT_JSON_BODY_LIMIT_BYTES) {
@@ -871,6 +1053,12 @@ function pageIdFromPath(pathname) {
 	return requireUuid(decodeURIComponent(match[1]), 'pageId');
 }
 
+function pageSubresourceIdFromPath(pathname, subresource) {
+	const parts = pathname.split('/');
+	if (parts.length !== 5 || parts[1] !== 'api' || parts[2] !== 'pages' || parts[4] !== subresource) return '';
+	return requirePageReference(decodeURIComponent(parts[3]));
+}
+
 async function handlePageList(url, request, response, config, fetchImpl) {
 	const workspaceId = requireUuid(url.searchParams.get('workspaceId'), 'workspaceId');
 	await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
@@ -897,10 +1085,25 @@ async function handlePageRead(url, request, response, config, fetchImpl) {
 	return true;
 }
 
+async function handlePageConfigRead(url, request, response, config, fetchImpl) {
+	const pageId = pageSubresourceIdFromPath(url.pathname, 'config');
+	if (!pageId) return false;
+	const { authContext } = await requirePageScopeAccess(request, pageId, {}, 'read', config, fetchImpl);
+	const configRow = await fetchPageConfigRow(pageId, authContext.userId, config, fetchImpl);
+	json(response, 200, {
+		ok: true,
+		pageId,
+		config: configRow?.config && typeof configRow.config === 'object' ? configRow.config : {},
+		updatedAt: configRow?.updated_at ?? null,
+	}, config);
+	return true;
+}
+
 async function handlePagesGet(url, request, response, config, fetchImpl) {
 	if (url.pathname === '/api/pages' || url.pathname === '/api/pages/all') {
 		return handlePageList(url, request, response, config, fetchImpl);
 	}
+	if (await handlePageConfigRead(url, request, response, config, fetchImpl)) return true;
 	return handlePageRead(url, request, response, config, fetchImpl);
 }
 
@@ -918,7 +1121,7 @@ async function handlePageCreate(request, response, config, fetchImpl) {
 }
 
 async function handleWorkspaceValidate(request, response, config, fetchImpl) {
-	const payload = await readJson(request);
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const workspaceId = requireUuid(payload.workspaceId, 'workspaceId');
 	const authContext = await requireWorkspaceAccess(request, workspaceId, normalizePermission(payload.permission), config, fetchImpl);
 	json(response, 200, {
@@ -967,6 +1170,71 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	return true;
 }
 
+async function handlePageConfigPatch(url, request, response, config, fetchImpl) {
+	const pageId = pageSubresourceIdFromPath(url.pathname, 'config');
+	if (!pageId) return false;
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const { authContext, workspaceId } = await requirePageScopeAccess(request, pageId, payload, 'update', config, fetchImpl);
+	const pageConfig = safeJsonObject(payload.config, 'config');
+	const rows = await baasRest(config, fetchImpl, 'osionos_page_configurations?on_conflict=user_id,page_id', {
+		method: 'POST',
+		body: {
+			page_id: pageId,
+			workspace_id: workspaceId,
+			user_id: authContext.userId,
+			config: pageConfig,
+			updated_at: new Date().toISOString(),
+		},
+		prefer: 'resolution=merge-duplicates,return=representation',
+	});
+	const row = Array.isArray(rows) ? rows[0] : rows;
+	json(response, 200, { ok: true, pageId, config: row?.config ?? pageConfig, updatedAt: row?.updated_at ?? null }, config);
+	return true;
+}
+
+async function handlePageActionCreate(url, request, response, config, fetchImpl) {
+	const pageId = pageSubresourceIdFromPath(url.pathname, 'actions');
+	if (!pageId) return false;
+	const payload = await readJson(request);
+	const { authContext, workspaceId } = await requirePageScopeAccess(request, pageId, payload, 'update', config, fetchImpl);
+	const action = safeText(payload.action, 80);
+	if (!action) throw Object.assign(new Error('Page action is required.'), { status: 422 });
+	const rows = await baasRest(config, fetchImpl, 'osionos_page_action_events', {
+		method: 'POST',
+		body: {
+			page_id: pageId,
+			workspace_id: workspaceId,
+			user_id: authContext.userId,
+			action,
+			payload: safeJsonObject(payload.payload, 'payload'),
+		},
+		prefer: 'return=representation',
+	});
+	const row = Array.isArray(rows) ? rows[0] : rows;
+	json(response, 201, { ok: true, eventId: row?.id ?? null, pageId, action }, config);
+	return true;
+}
+
+async function handlePageTranslate(url, request, response, config, fetchImpl) {
+	const pageId = pageSubresourceIdFromPath(url.pathname, 'translate');
+	if (!pageId) return false;
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const { row } = await requirePageScopeAccess(request, pageId, payload, 'read', config, fetchImpl);
+	const targetLocale = safeTranslationLocale(payload.targetLocale);
+	const cache = new Map();
+	const sourceTitle = row ? row.title : safeText(payload.title, 500);
+	const sourceContent = row ? safeJsonArray(row.content) : safeJsonArray(payload.content);
+	json(response, 200, {
+		ok: true,
+		pageId,
+		targetLocale,
+		translatedAt: new Date().toISOString(),
+		title: await translateText(sourceTitle, targetLocale, config, fetchImpl, cache),
+		content: await Promise.all(sourceContent.map((block) => translateBlock(block, targetLocale, config, fetchImpl, cache))),
+	}, config);
+	return true;
+}
+
 async function handlePageDelete(url, request, response, config, fetchImpl) {
 	const pageId = pageIdFromPath(url.pathname);
 	if (!pageId) return false;
@@ -986,6 +1254,8 @@ async function handlePageDelete(url, request, response, config, fetchImpl) {
 async function handlePagesPost(url, request, response, config, fetchImpl) {
 	if (url.pathname === '/api/pages') return handlePageCreate(request, response, config, fetchImpl);
 	if (url.pathname === '/api/auth/workspace/validate') return handleWorkspaceValidate(request, response, config, fetchImpl);
+	if (await handlePageActionCreate(url, request, response, config, fetchImpl)) return true;
+	if (await handlePageTranslate(url, request, response, config, fetchImpl)) return true;
 	return false;
 }
 
@@ -1054,6 +1324,7 @@ async function handleBridgeRequest(request, response, context) {
 		context.replayStore,
 		context.fetchImpl,
 	)) return;
+	if (request.method === 'PATCH' && await handlePageConfigPatch(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'PATCH' && await handlePageUpdate(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'DELETE' && await handlePageDelete(url, request, response, context.config, context.fetchImpl)) return;
 	json(response, 404, { ok: false, message: 'Not found.' }, context.config);

@@ -26,6 +26,7 @@ import {
   usePageActions,
 } from '@/entities/page';
 import type { PageConfig, PageFont, PageVersion } from '@/shared/config/pageConfigStore';
+import { useToastStore } from '@/shared/ui';
 import { usePageStore } from '@/store/usePageStore';
 
 import { PageBreadcrumbs } from './PageBreadcrumbs';
@@ -115,8 +116,12 @@ const VersionsPanel: React.FC<{ versions: PageVersion[]; onRestore: (version: Pa
   </div>
 );
 
-function runPageAction(work: Promise<unknown> | void) {
-  Promise.resolve(work).catch(() => undefined);
+function actionErrorMessage(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : 'Page action failed.';
+}
+
+function runPageAction(work: Promise<unknown> | void, onError: (message: string) => void) {
+  Promise.resolve(work).catch((error) => onError(actionErrorMessage(error)));
 }
 
 function openPageActionsHome() {
@@ -127,6 +132,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
   const actions = usePageActions(pageId, workspaceId);
   const [configOpen, setConfigOpen] = useState(false);
   const [actionQuery, setActionQuery] = useState('');
+  const pushToast = useToastStore((state) => state.push);
   const importInputRef = useRef<HTMLInputElement>(null);
   const normalizedQuery = actionQuery.trim().toLowerCase();
   const hasActionMatch = useMemo(() => !normalizedQuery || ACTION_LABELS.some((label) => label.includes(normalizedQuery)), [normalizedQuery]);
@@ -134,7 +140,11 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
   function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (file) runPageAction(actions.importFile(file));
+    if (file) runPageAction(actions.importFile(file), showActionError);
+  }
+
+  function showActionError(message: string) {
+    pushToast({ kind: 'error', title: message });
   }
 
   return (
@@ -171,7 +181,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                         <button
                           key={font.id}
                           type="button"
-                          onClick={() => runPageAction(actions.setFont(font.id))}
+                          onClick={() => runPageAction(actions.setFont(font.id), showActionError)}
                           className={`rounded-md px-2 py-2 text-center hover:bg-[var(--osio-bg-hover)] ${actions.config.font === font.id ? 'text-[var(--osio-accent)]' : ''}`}
                         >
                           <span className={`block text-xl ${fontSampleClass(font.id)}`}>{font.sample}</span>
@@ -181,44 +191,44 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                     </div>
 
                     <div className="border-t border-[var(--osio-border-default)] py-1">
-                      <MenuButton icon={<Link size={16} />} label="Copy link" onClick={() => runPageAction(actions.copyLink())} />
-                      <MenuButton icon={<Clipboard size={16} />} label="Copy page contents" onClick={() => runPageAction(actions.copyContents())} />
-                      <MenuButton icon={<Copy size={16} />} label="Duplicate" shortcut="Ctrl+D" onClick={() => runPageAction(actions.duplicate())} />
-                      <MenuButton icon={<Trash2 size={16} />} label="Move to Trash" destructive onClick={() => runPageAction(actions.moveToTrash())} />
+                      <MenuButton icon={<Link size={16} />} label="Copy link" onClick={() => runPageAction(actions.copyLink(), showActionError)} />
+                      <MenuButton icon={<Clipboard size={16} />} label="Copy page contents" onClick={() => runPageAction(actions.copyContents(), showActionError)} />
+                      <MenuButton icon={<Copy size={16} />} label="Duplicate" shortcut="Ctrl+D" onClick={() => runPageAction(actions.duplicate(), showActionError)} />
+                      <MenuButton icon={<Trash2 size={16} />} label="Move to Trash" destructive onClick={() => runPageAction(actions.moveToTrash(), showActionError)} />
                     </div>
 
                     <div className="border-t border-[var(--osio-border-default)] py-1">
-                      <MenuButton icon={<Presentation size={16} />} label="Present" shortcut="Ctrl+Alt+P" checked={actions.config.presentationMode} badge="Beta" onClick={() => runPageAction(actions.present())} />
-                      <MenuButton icon={<Text size={16} />} label="Small text" checked={actions.config.smallText} onClick={() => runPageAction(actions.toggleSmallText())} />
-                      <MenuButton icon={<Maximize2 size={16} />} label="Full width" checked={actions.config.fullWidth} onClick={() => runPageAction(actions.toggleFullWidth())} />
-                      <MenuButton icon={<Lock size={16} />} label="Lock page" checked={actions.config.locked} onClick={() => runPageAction(actions.toggleLock())} />
+                      <MenuButton icon={<Presentation size={16} />} label="Present" shortcut="Ctrl+Alt+P" checked={actions.config.presentationMode} badge="Beta" onClick={() => runPageAction(actions.present(), showActionError)} />
+                      <MenuButton icon={<Text size={16} />} label="Small text" checked={actions.config.smallText} onClick={() => runPageAction(actions.toggleSmallText(), showActionError)} />
+                      <MenuButton icon={<Maximize2 size={16} />} label="Full width" checked={actions.config.fullWidth} onClick={() => runPageAction(actions.toggleFullWidth(), showActionError)} />
+                      <MenuButton icon={<Lock size={16} />} label="Lock page" checked={actions.config.locked} onClick={() => runPageAction(actions.toggleLock(), showActionError)} />
                       <div className="flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--osio-bg-hover)]">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--osio-fg-muted)]"><Languages size={16} /></span>
                         <span className="min-w-0 flex-1 truncate">Translate</span>
                         <select value={actions.translateLocale} className="max-w-28 rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-1.5 py-1 text-xs text-[var(--osio-fg-default)] outline-none" onChange={(event) => actions.setTranslateLocale(event.target.value)}>
                           {TRANSLATION_LANGUAGES.map((language) => <option key={language.locale} value={language.locale}>{language.label}</option>)}
                         </select>
-                        <button type="button" className="rounded bg-[var(--osio-accent)] px-2 py-1 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90" onClick={() => runPageAction(actions.translate())}>Apply</button>
+                        <button type="button" className="rounded bg-[var(--osio-accent)] px-2 py-1 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90" onClick={() => runPageAction(actions.translate(actions.translateLocale), showActionError)}>Apply</button>
                       </div>
                     </div>
 
                     <div className="border-t border-[var(--osio-border-default)] py-1">
                       <input ref={importInputRef} type="file" accept=".json,.md,.markdown,.txt" className="hidden" onChange={handleImportFile} />
                       <MenuButton icon={<Import size={16} />} label="Import" onClick={() => importInputRef.current?.click()} />
-                      <MenuButton icon={<Download size={16} />} label="Export" onClick={() => runPageAction(actions.exportPage())} />
+                      <MenuButton icon={<Download size={16} />} label="Export" onClick={() => runPageAction(actions.exportPage(), showActionError)} />
                     </div>
 
                     <div className="border-t border-[var(--osio-border-default)] py-1">
                       <MenuButton icon={<Clock size={16} />} label="Updates & analytics" onClick={actions.openAnalytics} />
                       <MenuButton icon={<History size={16} />} label="Version history" onClick={actions.openVersionHistory} />
-                      <MenuButton icon={<Bell size={16} />} label="Notify me" checked={actions.config.notifications.comments} trailing="Comments" onClick={() => runPageAction(actions.toggleNotifications())} />
-                      <MenuButton icon={<Plug size={16} />} label="Connections" trailing={actions.config.connections.length ? 'MongoDB' : 'None'} checked={actions.config.connections.length > 0} onClick={() => runPageAction(actions.manageConnections())} />
+                      <MenuButton icon={<Bell size={16} />} label="Notify me" checked={actions.config.notifications.comments} trailing="Comments" onClick={() => runPageAction(actions.toggleNotifications(), showActionError)} />
+                      <MenuButton icon={<Plug size={16} />} label="Connections" trailing={actions.config.connections.length ? 'MongoDB' : 'None'} checked={actions.config.connections.length > 0} onClick={() => runPageAction(actions.manageConnections(), showActionError)} />
                     </div>
                   </>
                 )}
 
                 {actions.detailPanel === 'analytics' && <AnalyticsPanel config={actions.config} />}
-                {actions.detailPanel === 'versions' && <VersionsPanel versions={actions.versions} onRestore={(version) => runPageAction(actions.restoreVersion(version))} />}
+                {actions.detailPanel === 'versions' && <VersionsPanel versions={actions.versions} onRestore={(version) => runPageAction(actions.restoreVersion(version), showActionError)} />}
 
                 <div className="border-t border-[var(--osio-border-default)] px-3 py-2 text-xs text-[var(--osio-fg-subtle)]">
                   <p>Word count: {actions.wordCount} words</p>

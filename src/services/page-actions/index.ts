@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:24:19 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/13 19:18:51 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -315,7 +315,7 @@ export async function translatePage(
     try {
       const translated = await api.post<TranslateResponse>(
         `/api/pages/${page._id}/translate`,
-        { targetLocale },
+        { targetLocale, workspaceId: page.workspaceId, title: page.title, content: page.content ?? [] },
         jwt,
       );
       if (!looksLikePrefixTranslation(translated.title, targetLocale)) {
