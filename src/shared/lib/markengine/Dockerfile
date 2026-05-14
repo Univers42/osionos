@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24-alpine AS base
+FROM public.ecr.aws/docker/library/node:24-alpine AS base
 WORKDIR /app
 ENV npm_config_fund=false
 ENV npm_config_audit=false
