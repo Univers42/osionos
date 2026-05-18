@@ -58,14 +58,27 @@ This keeps the implementation easier to reason about than a large monolithic dis
 
 ## Incremental Updates
 
-Incremental parsing is currently line-range based:
+Incremental parsing is block-range based:
 
-- apply the patch to the previous text
-- reparse the document
-- compare block index entries
-- return changed node ids plus diagnostics
+- apply the line patch to the previous text
+- find the blocks intersecting the edit range
+- expand to stable block boundaries, currently blank lines, headings, and fenced-code boundaries
+- reparse only that bounded line window
+- splice the parsed blocks into the existing top-level block list
+- keep unchanged downstream blocks as-is when line numbers do not shift
+- reparse downstream blocks only when an insertion or deletion shifts line-number-based ids and spans
 
-That is a pragmatic baseline for editor integration. It is not yet a fine-grained AST diff engine, but it is deterministic and easy to verify.
+Parsed blocks in the edited window are cached by source hash plus starting line. This lets unchanged boundary blocks be reused when the edit sits next to, but does not alter, those blocks.
+
+The incremental parser deliberately falls back to a full parse when correctness could depend on wider document context:
+
+- the patch text contains a structural delimiter: <code>```</code>, `$$`, or `---`
+- the previous parse contains an unterminated fenced code block touched by the patch
+- the chosen reparse window would produce a block that crosses the stable lower boundary
+
+`changedNodeIds` reports the ids of inserted or structurally changed blocks in the spliced region. Pure downstream line shifts are not reported as structural changes.
+
+`incrementalParse` is O(edit-window) for parsing work and O(document) for text/result assembly. In the Phase 2 closeout probe, one-line typing stayed roughly linear at about 0.07-0.09 ms per 1K document lines through 200K lines; at 50K lines the dominant cost was patch application plus line splitting, followed by complete `children` and `blockIndex` handoff. This is expected while the public contract accepts and returns whole strings plus a complete AST.
 
 ## Usage
 
@@ -74,7 +87,7 @@ import {
   compileMarkdownToHtml,
   incrementalParse,
   parseMarkdown,
-} from "./markdown";
+} from "..";
 
 const parsed = parseMarkdown("# Title\n\nA *fast* engine.", {
   documentVersion: 1,

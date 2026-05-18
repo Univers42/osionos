@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   usePageActions.ts                                  :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useUserStore } from '@/features/auth';
@@ -67,11 +79,6 @@ function formatEditedLabel(updatedAt: string | undefined, now: number): string {
   return `Edited ${days} day${days === 1 ? '' : 's'} ago`;
 }
 
-function pageVersionSignature(page: { title: string; content?: unknown[] } | null | undefined): string {
-  if (!page) return '';
-  return JSON.stringify({ title: page.title, content: page.content ?? [] });
-}
-
 function textWordCount(value: string | undefined): number {
   return String(value ?? '').split(/\s+/).filter(Boolean).length;
 }
@@ -96,12 +103,13 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
   const archivePage = usePageStore((state) => state.archivePage);
   const updatePageTitle = usePageStore((state) => state.updatePageTitle);
   const updatePageContent = usePageStore((state) => state.updatePageContent);
+  const pageRevision = usePageStore((state) => (pageId ? state.pageRevisions[pageId] ?? 0 : 0));
   const pushToast = useToastStore((state) => state.push);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [detailPanel, setDetailPanel] = useState<'analytics' | 'versions' | null>(null);
   const [translateLocale, setTranslateLocale] = useState(config.activeTranslation?.locale ?? 'fr');
-  const lastVersionSignatureRef = useRef<string | null>(null);
+  const lastVersionRevisionRef = useRef<number | null>(null);
   const versionTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
   const versionCounterRef = useRef(0);
 
@@ -110,28 +118,26 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     return () => globalThis.clearInterval(id);
   }, []);
 
-  const currentVersionSignature = useMemo(() => pageVersionSignature(page), [page]);
-
   useEffect(() => {
     if (!page || !pageId) return undefined;
-    if (lastVersionSignatureRef.current === null) {
-      lastVersionSignatureRef.current = currentVersionSignature;
+    if (lastVersionRevisionRef.current === null) {
+      lastVersionRevisionRef.current = pageRevision;
       return undefined;
     }
-    if (lastVersionSignatureRef.current === currentVersionSignature) return undefined;
+    if (lastVersionRevisionRef.current === pageRevision) return undefined;
     if (versionTimerRef.current) globalThis.clearTimeout(versionTimerRef.current);
     versionTimerRef.current = globalThis.setTimeout(() => {
       const latestPage = usePageStore.getState().pageById(pageId);
       if (!latestPage) return;
-      const latestSignature = pageVersionSignature(latestPage);
-      if (lastVersionSignatureRef.current === latestSignature) return;
+      const latestRevision = usePageStore.getState().pageRevisions[pageId] ?? 0;
+      if (lastVersionRevisionRef.current === latestRevision) return;
       versionCounterRef.current += 1;
       addVersion(safeUserId, pageId, {
         title: latestPage.title || 'Untitled',
         content: latestPage.content ?? [],
         label: `Autosave ${versionCounterRef.current}`,
       }).catch(() => undefined);
-      lastVersionSignatureRef.current = latestSignature;
+      lastVersionRevisionRef.current = latestRevision;
     }, VERSION_AUTOSAVE_DELAY_MS);
     return () => {
       if (versionTimerRef.current) {
@@ -139,7 +145,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
         versionTimerRef.current = null;
       }
     };
-  }, [addVersion, currentVersionSignature, page, pageId, safeUserId]);
+  }, [addVersion, page, pageId, pageRevision, safeUserId]);
 
   const editedLabel = useMemo(() => formatEditedLabel(page?.updatedAt, clockNow), [clockNow, page?.updatedAt]);
   const wordCount = useMemo(() => wordCountFromPage(page), [page]);
@@ -164,7 +170,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
   const updatePageSetting = useCallback(async (updates: Partial<PageConfig>, action: PageActionName, message: string) => {
     if (!pageId) return;
     await updateConfig(safeUserId, pageId, updates);
-    await logAction(action, message, updates as Record<string, unknown>);
+    await logAction(action, message, updates);
   }, [logAction, pageId, safeUserId, updateConfig]);
 
   const setFont = useCallback((font: PageFont) => updatePageSetting({ font }, 'small_text', `${font} font applied`), [updatePageSetting]);
@@ -266,9 +272,9 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     await snapshot('Before version restore');
     updatePageTitle(pageId, version.title);
     updatePageContent(pageId, version.content);
-    lastVersionSignatureRef.current = pageVersionSignature({ title: version.title, content: version.content });
+    lastVersionRevisionRef.current = usePageStore.getState().pageRevisions[pageId] ?? pageRevision;
     await logAction('version_history', 'Version restored', { versionId: version.id });
-  }, [logAction, pageId, snapshot, updatePageContent, updatePageTitle]);
+  }, [logAction, pageId, pageRevision, snapshot, updatePageContent, updatePageTitle]);
 
   return {
     actionMessage,

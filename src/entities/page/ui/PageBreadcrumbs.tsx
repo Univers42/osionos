@@ -1,8 +1,22 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   PageBreadcrumbs.tsx                                :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import React, { useCallback, useMemo } from "react";
 import { ChevronRight } from "lucide-react";
 
 import type { PageEntry } from "@/entities/page";
 import { usePageStore } from "@/store/usePageStore";
+
+const EMPTY_WORKSPACE_PAGES: PageEntry[] = [];
 
 interface PageBreadcrumbsProps {
   pageId: string;
@@ -34,8 +48,8 @@ export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
   const resolvedWorkspaceId = page?.workspaceId ?? activePage?.workspaceId;
 
   const workspacePages = usePageStore((s) => {
-    if (!resolvedWorkspaceId) return [];
-    return s.pages[resolvedWorkspaceId] ?? [];
+    if (!resolvedWorkspaceId) return EMPTY_WORKSPACE_PAGES;
+    return s.pages[resolvedWorkspaceId] ?? EMPTY_WORKSPACE_PAGES;
   });
 
   const breadcrumbs = useMemo(() => {
@@ -45,21 +59,18 @@ export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
       navigationPath.at(-1)?.id === pageId
     ) {
       // Convert ActivePage to PageEntry format for consistent rendering
-      const entries = navigationPath.map(
-        (ap) =>
-          ({
-            _id: ap.id,
-            workspaceId: ap.workspaceId,
-            title: ap.title ?? "Untitled",
-            icon: ap.icon,
-          }) as PageEntry,
-      );
+      const entries: PageEntry[] = navigationPath.map((ap) => ({
+        _id: ap.id,
+        workspaceId: ap.workspaceId,
+        title: ap.title ?? "Untitled",
+        icon: ap.icon,
+      }));
 
       // Use the reactive page title for the current page (last crumb)
       // so the breadcrumb updates when the user edits the title.
       if (page && entries.length > 0) {
-        const last = entries[entries.length - 1];
-        entries[entries.length - 1] = { ...last, title: page.title || "Untitled" };
+        const last = entries.at(-1);
+        if (last) entries[entries.length - 1] = { ...last, title: page.title || "Untitled" };
       }
 
       return entries;
@@ -68,14 +79,13 @@ export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
     // Fall back to parentPageId hierarchy
     if (!page) {
       if (activePage?.id !== pageId) return [];
-      return [
-        {
-          _id: activePage.id,
-          workspaceId: activePage.workspaceId,
-          title: activePage.title ?? "Untitled",
-          icon: activePage.icon,
-        } as PageEntry,
-      ];
+      const fallbackEntry: PageEntry = {
+        _id: activePage.id,
+        workspaceId: activePage.workspaceId,
+        title: activePage.title ?? "Untitled",
+        icon: activePage.icon,
+      };
+      return [fallbackEntry];
     }
 
     const pageById = new Map(workspacePages.map((entry) => [entry._id, entry]));

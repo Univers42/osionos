@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:24:19 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/13 19:18:51 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,8 @@ import { parseMarkdownToBlocks } from "@/shared/lib/markengine";
 import type { Block } from "@/entities/block";
 import type { PageEntry } from "@/entities/page";
 import type { PageConfig } from "@/shared/config/pageConfigStore";
+
+const PAGE_ACTION_SYNC_ENABLED = ((import.meta.env as Record<string, string>)["VITE_PAGE_ACTION_SYNC_ENABLED"] ?? "").toLowerCase() === "true";
 
 export type PageActionName =
   | "copy_link"
@@ -313,7 +315,7 @@ export async function translatePage(
     try {
       const translated = await api.post<TranslateResponse>(
         `/api/pages/${page._id}/translate`,
-        { targetLocale },
+        { targetLocale, workspaceId: page.workspaceId, title: page.title, content: page.content ?? [] },
         jwt,
       );
       if (!looksLikePrefixTranslation(translated.title, targetLocale)) {
@@ -339,7 +341,7 @@ export async function syncPageActionEvent(
   jwt: string | undefined,
   payload: Record<string, unknown> = {},
 ) {
-  if (!jwt) return;
+  if (!jwt || !PAGE_ACTION_SYNC_ENABLED) return;
   try {
     await api.post(`/api/pages/${pageId}/actions`, { action, payload }, jwt);
   } catch {

@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   osionos-mcp-server.mjs                             :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #!/usr/bin/env node
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -34,7 +46,7 @@ for (const file of ENV_FILES) {
 }
 
 const DEFAULT_BRIDGE_URL = `http://localhost:${process.env.OSIONOS_BRIDGE_PORT ?? '4000'}`;
-const DEFAULT_API_URL = 'http://localhost:4200';
+const DEFAULT_API_URL = DEFAULT_BRIDGE_URL;
 const SERVER_NAME = 'osionos-mcp';
 const SERVER_VERSION = '0.1.0';
 const TEXT_LIMIT = 60_000;
@@ -149,9 +161,10 @@ function configuredApiCandidates() {
   return unique([
     process.env.OSIONOS_MCP_API_URL,
     process.env.OSIONOS_API_URL,
-    process.env.NOTION_API_URL,
-    DEFAULT_API_URL,
     process.env.VITE_API_URL,
+    bridgeUrl(),
+    DEFAULT_API_URL,
+    process.env.NOTION_API_URL,
   ]);
 }
 
@@ -176,6 +189,10 @@ function bridgeIdentity() {
   const name = String(process.env.OSIONOS_MCP_NAME ?? 'Claude MCP').trim() || 'Claude MCP';
   const subject = String(process.env.OSIONOS_MCP_SUBJECT ?? uuidFromHash(`osionos-mcp:${email}`)).trim();
   return { provider: 'prismatica', subject, email, name };
+}
+
+function bridgeAssertion() {
+  return { ...bridgeIdentity(), jti: randomUUID() };
 }
 
 function bridgeSecret() {
@@ -232,13 +249,25 @@ async function probeJson(url) {
   }
 }
 
+async function probeApiCandidate(candidate) {
+  const bridgeHealth = await probeJson(`${candidate}/api/auth/bridge/health`);
+  if (bridgeHealth.ok && bridgeHealth.body?.service === 'osionos-bridge') {
+    return { ok: true, kind: 'osionos-bridge', health: bridgeHealth };
+  }
+  const health = await probeJson(`${candidate}/health`);
+  const service = typeof health.body?.service === 'string' ? health.body.service.toLowerCase() : '';
+  if (health.ok && service.includes('osionos')) {
+    return { ok: true, kind: service, health };
+  }
+  return { ok: false, health };
+}
+
 async function resolveApiUrl() {
   if (cachedApiUrl) return cachedApiUrl;
   const candidates = configuredApiCandidates();
   for (const candidate of candidates) {
-    const health = await probeJson(`${candidate}/health`);
-    if (!health.ok || !health.body || typeof health.body !== 'object') continue;
-    if (health.body.service === 'osionos-bridge') continue;
+    const probe = await probeApiCandidate(candidate);
+    if (!probe.ok) continue;
     cachedApiUrl = candidate;
     return cachedApiUrl;
   }
@@ -256,6 +285,35 @@ function tokenExpiresAt(token) {
   }
 }
 
+function handoffTokenFromPayload(payload) {
+  const directToken = String(payload?.token ?? payload?.bridgeToken ?? '').trim();
+  if (directToken) return directToken;
+  const redirectUrl = String(payload?.redirectUrl ?? '').trim();
+  if (!redirectUrl) return '';
+  try {
+    const hash = new URL(redirectUrl).hash.replace(/^#/, '');
+    return new URLSearchParams(hash).get('bridge_token') ?? '';
+  } catch {
+    return '';
+  }
+}
+
+async function consumeBridgeHandoff(apiUrl, payload) {
+  if (payload?.accessToken) return payload;
+  if (payload?.session?.accessToken) return payload.session;
+  const token = handoffTokenFromPayload(payload);
+  if (!token) return payload;
+  const consumed = await fetchJson(`${apiUrl}/api/auth/bridge/consume`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ token }),
+  });
+  return consumed?.session ?? consumed;
+}
+
 async function apiSession() {
   const envJwt = String(process.env.OSIONOS_MCP_JWT ?? '').trim();
   if (envJwt) return envJwt;
@@ -264,7 +322,7 @@ async function apiSession() {
   if (secrets.length === 0) {
     throw new Error('OSIONOS_BRIDGE_SHARED_SECRET or JWT_SECRET is required for local MCP API sessions.');
   }
-  const body = bridgeIdentity();
+  const body = bridgeAssertion();
   const apiUrl = await resolveApiUrl();
   let payload = null;
   let lastAuthError = null;
@@ -272,7 +330,7 @@ async function apiSession() {
     const timestamp = String(Date.now());
     const signature = createHmac('sha256', secret).update(`${timestamp}.${stableStringify(body)}`).digest('hex');
     try {
-      payload = await fetchJson(`${apiUrl}/api/auth/bridge/session`, {
+      const sessionPayload = await fetchJson(`${apiUrl}/api/auth/bridge/session`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -282,6 +340,7 @@ async function apiSession() {
         },
         body: JSON.stringify(body),
       });
+      payload = await consumeBridgeHandoff(apiUrl, sessionPayload);
       break;
     } catch (error) {
       lastAuthError = error;
@@ -660,7 +719,7 @@ server.registerTool('osionos_status', {
   const bridgeHealth = await probeJson(`${bridgeUrl()}/api/auth/bridge/health`);
   const apiChecks = [];
   for (const candidate of configuredApiCandidates()) {
-    apiChecks.push({ url: candidate, health: await probeJson(`${candidate}/health`) });
+    apiChecks.push({ url: candidate, probe: await probeApiCandidate(candidate) });
   }
   const resolvedApiUrl = await resolveApiUrl();
   return textResult({

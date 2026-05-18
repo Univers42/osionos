@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   terminalUtils.ts                                   :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:17 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:17 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 /**
  * Terminal utility helpers: ANSI stripping, callout colors/icons.
  */
@@ -5,7 +17,6 @@
 import { C } from './terminalAnsi';
 
 export function stripAnsi(str: string): string {
-  // eslint-disable-next-line no-control-regex
   return str.replaceAll(/\x1b\[[0-9;]*m/g, '');
 }
 

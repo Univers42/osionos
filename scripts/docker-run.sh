@@ -1,3 +1,15 @@
+# **************************************************************************** #
+#                                                                              #
+#                                                         :::      ::::::::    #
+#    docker-run.sh                                      :+:      :+:    :+:    #
+#                                                     +:+ +:+         +:+      #
+#    By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+         #
+#                                                 +#+#+#+#+#+   +#+            #
+#    Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#              #
+#    Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr        #
+#                                                                              #
+# **************************************************************************** #
+
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -81,7 +93,11 @@ case "${COMMAND}" in
     (cd ../../.. && docker compose up -d --build osionos-bridge)
     ;;
   mcp-claude)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh mcp-claude "$@"
+    OSIONOS_MCP_BRIDGE_URL="${OSIONOS_MCP_BRIDGE_URL:-http://host.docker.internal:4000}" \
+    OSIONOS_MCP_API_URL="${OSIONOS_MCP_API_URL:-http://host.docker.internal:4000}" \
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm -T --no-deps \
+      -e OSIONOS_MCP_BRIDGE_URL -e OSIONOS_MCP_API_URL \
+      playground bash scripts/docker-run.sh mcp-claude "$@"
     ;;
   *)
     echo "Usage: $0 {build|preview|typecheck|lint|lint-fix|test-e2e|test-e2e-serial|test-e2e-smoke|test-canvas|test-doctor|test-bridge|quality|bridge-api|mcp-claude}" >&2

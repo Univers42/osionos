@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 16:05:14 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/12 23:14:08 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,7 +16,7 @@ import type { UserSession } from "@/entities/user";
 import { useUserStore } from "@/features/auth";
 import { isBridgeSession, PRISMATICA_URL } from "@/features/auth/model/userStore.helpers";
 import { usePageStore } from "@/store/usePageStore";
-import { savePagesCache, saveRecents } from "@/store/pageStore.helpers";
+import { derivePageState, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
 import { Sidebar } from "@/widgets/sidebar";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
 import { MainContent } from "@/widgets/page-renderer";
@@ -57,7 +57,14 @@ function ensureBridgeWorkspacePages(session: UserSession | null | undefined) {
     }
     savePagesCache(pages);
     saveRecents(recents);
-    return { pages, recents, activePage, navigationPath, seeded: true, showTrash: false };
+    return {
+      ...derivePageState(pages, pageState.pageIdsByWorkspace),
+      recents,
+      activePage,
+      navigationPath,
+      seeded: true,
+      showTrash: false,
+    };
   });
 }
 

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:26:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:26:01 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 21:03:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -57,6 +57,18 @@ export type {
   MarkdownViewMode,
 } from "./src/render-mode";
 export { ReadingMode, LivePreviewMode, SourceMode } from "./src/render-mode";
+export {
+  DEFAULT_MARKENGINE_WORKER_SYNC_THRESHOLD_BYTES,
+  MarkEngineWorker,
+  createBrowserMarkEngineWorkerClient,
+  type MarkEngineWorkerEndpoint,
+  type MarkEngineWorkerOptions,
+  type MarkEngineWorkerRenderOptions,
+} from "./src/worker-client";
+export {
+  createNodeMarkEngineWorkerClient,
+  type NodeMarkEngineWorkerOptions,
+} from "./src/node-worker-client";
 
 export function parseMarkdown(
   source: string,

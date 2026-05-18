@@ -1,3 +1,15 @@
+# **************************************************************************** #
+#                                                                              #
+#                                                         :::      ::::::::    #
+#    Makefile                                           :+:      :+:    :+:    #
+#                                                     +:+ +:+         +:+      #
+#    By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+         #
+#                                                 +#+#+#+#+#+   +#+            #
+#    Created: 2026/05/18 21:19:17 by dlesieur          #+#    #+#              #
+#    Updated: 2026/05/18 21:19:17 by dlesieur         ###   ########.fr        #
+#                                                                              #
+# **************************************************************************** #
+
 SHELL := /usr/bin/bash
 .SHELLFLAGS := -ec
 
@@ -76,6 +88,7 @@ py-check: ## Syntax-check the Python tooling
 lint: ## Run the available code-quality checks
 	@echo -e "$(INFO) Running lint checks...$(RESET)"
 	@$(MAKE) -s typecheck
+	@$(NPM) run quality
 	@$(MAKE) -s py-check
 	@echo -e "$(SUCCESS) Lint checks passed$(RESET)"
 

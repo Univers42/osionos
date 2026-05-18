@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 05:03:33 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/12 23:14:09 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -45,8 +45,31 @@ export type BridgeSessionImport = {
   message?: string;
 };
 
-export function isBridgeAppToken(token: string | null | undefined): boolean {
+export function isBridgeAppToken(token: string | null | undefined): token is string {
   return typeof token === 'string' && token.startsWith(BRIDGE_APP_TOKEN_PREFIX);
+}
+
+function decodeBridgeAppTokenPayload(token: string | null | undefined): Record<string, unknown> | null {
+  if (!isBridgeAppToken(token)) return null;
+  const [, encodedPayload, signature, extra] = token.split('.');
+  if (!encodedPayload || !signature || extra !== undefined) return null;
+  try {
+    const paddedPayload = `${encodedPayload}${'='.repeat((4 - encodedPayload.length % 4) % 4)}`;
+    const json = globalThis.atob(paddedPayload.replaceAll('-', '+').replaceAll('_', '/'));
+    const payload = JSON.parse(json) as unknown;
+    return payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? payload as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function isBridgeAppTokenExpired(token: string | null | undefined, now = Date.now()): boolean {
+  if (!isBridgeAppToken(token)) return false;
+  const payload = decodeBridgeAppTokenPayload(token);
+  const exp = Number(payload?.exp);
+  return !Number.isFinite(exp) || exp <= Math.floor(now / 1000);
 }
 
 export function apiJwtFromSessionToken(token: string | null | undefined): string {
@@ -55,6 +78,7 @@ export function apiJwtFromSessionToken(token: string | null | undefined): string
 }
 
 export function pageApiJwtFromSessionToken(token: string | null | undefined): string {
+  if (isBridgeAppTokenExpired(token)) return '';
   return token ?? '';
 }
 

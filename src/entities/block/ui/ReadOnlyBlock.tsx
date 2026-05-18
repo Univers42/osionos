@@ -1,6 +1,18 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
+/*   ReadOnlyBlock.tsx                                  :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
 /*   ReadOnlyBlock.tsx                                   :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
@@ -20,7 +32,9 @@ import { DatabaseBlock } from '@/widgets/database-view';
 import { CalloutBlockReadOnly } from "./CalloutBlockReadOnly";
 import { CodeBlockReadOnly } from "./CodeBlockReadOnly";
 import { MediaBlockReadOnly } from "./MediaBlockReadOnly";
+import { TableBlockReadOnly } from "./TableBlockReadOnly";
 import { renderInlineToReact } from '@/shared/lib/markengine';
+import { timed } from '@/shared/lib/perf/measure';
 import { InternalPageLink } from "@/entities/page";
 
 interface BlockProps {
@@ -30,16 +44,38 @@ interface BlockProps {
   numberedDepth?: number;
 }
 
+const INLINE_MARKDOWN_CACHE_LIMIT = 2000;
+const inlineMarkdownCache = new Map<string, React.ReactNode>();
+
 function renderInternalPageLink(pageId: string) {
   return <InternalPageLink pageId={pageId} />;
+}
+
+function renderCachedInlineMarkdown(content: string): React.ReactNode {
+  const cached = inlineMarkdownCache.get(content);
+  if (cached !== undefined) {
+    inlineMarkdownCache.delete(content);
+    inlineMarkdownCache.set(content, cached);
+    return cached;
+  }
+
+  const rendered = timed("renderInlineToReact", () => renderInlineToReact(content, {
+    internalLinkRenderer: renderInternalPageLink,
+  }));
+  inlineMarkdownCache.set(content, rendered);
+
+  if (inlineMarkdownCache.size > INLINE_MARKDOWN_CACHE_LIMIT) {
+    const oldestKey = inlineMarkdownCache.keys().next().value;
+    if (oldestKey !== undefined) inlineMarkdownCache.delete(oldestKey);
+  }
+
+  return rendered;
 }
 
 const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
   const renderedContent = useMemo(() => {
     if (!content) return null;
-    return renderInlineToReact(content, {
-      internalLinkRenderer: renderInternalPageLink,
-    });
+    return renderCachedInlineMarkdown(content);
   }, [content]);
 
   return <>{renderedContent}</>;
@@ -97,7 +133,16 @@ function renderNestedChildren(block: Block, bulletDepth: number, numberedDepth: 
   );
 }
 
-export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0 }) => {
+function areReadOnlyBlockPropsEqual(previous: BlockProps, next: BlockProps): boolean {
+  return (
+    previous.block === next.block &&
+    previous.index === next.index &&
+    (previous.bulletDepth ?? 0) === (next.bulletDepth ?? 0) &&
+    (previous.numberedDepth ?? 0) === (next.numberedDepth ?? 0)
+  );
+}
+
+const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0 }) => {
   switch (block.type) {
     case "paragraph":
       return (
@@ -363,6 +408,8 @@ export const ReadOnlyBlock: React.FC<BlockProps> = ({ block, index, bulletDepth 
   }
 };
 
+export const ReadOnlyBlock = React.memo(ReadOnlyBlockImpl, areReadOnlyBlockPropsEqual);
+
 /**
  * Toggle read-only: renders summary + chevron.
  * Children use the same renderNestedChildren path as all other block types.
@@ -407,41 +454,3 @@ const ToggleBlockReadOnly: React.FC<{ block: Block; bulletDepth: number; numbere
   );
 };
 
-const TableBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
-  const data = block.tableData ?? [];
-  if (!data.length) {
-    return (
-      <div className="my-2 rounded border border-[var(--osio-border-default)] px-3 py-2 text-xs text-[var(--osio-fg-subtle)]">
-        Empty table
-      </div>
-    );
-  }
-
-  return (
-    <div className="my-2 border border-[var(--osio-border-default)] rounded-lg overflow-auto">
-      <table className="w-max min-w-full text-sm">
-        <tbody>
-          {data.map((row, ri) => (
-            <tr
-              key={`row-${row.join("¦")}`}
-              className={
-                ri === 0
-                  ? "bg-[var(--osio-bg-subtle)] font-medium"
-                  : ""
-              }
-            >
-              {row.map((cell, ci) => (
-                <td
-                  key={`cell-${ri}-${ci}`}
-                  className="border-b border-r border-[var(--osio-border-default)] last:border-r-0 px-3 py-1.5 min-w-[120px] text-[var(--osio-fg-default)]"
-                >
-                  <InlineMarkdown content={cell} />
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-};

@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   HomeKnowledgeGraph.tsx                             :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:22 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:22 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LocateFixed, ZoomIn, ZoomOut } from "lucide-react";
 import {
@@ -14,7 +26,7 @@ import {
 import type { Block } from "@/entities/block";
 import type { PageEntry, PagePropertyEntry } from "@/entities/page";
 import { useUserStore } from "@/features/auth";
-import { savePagesCache } from "@/store/pageStore.helpers";
+import { derivePageState, savePagesCache } from "@/store/pageStore.helpers";
 import { usePageStore } from "@/store/usePageStore";
 import { useKnownDatabaseStateStore } from "@/widgets/database-view/model/knownDatabaseState";
 import {
@@ -159,7 +171,7 @@ export const HomeKnowledgeGraph: React.FC = () => {
         [workspaceId]: upsertPage(state.pages[workspaceId] ?? [], page),
       };
       savePagesCache(pages);
-      return { pages };
+      return derivePageState(pages, state.pageIdsByWorkspace);
     });
     openPage({ id: page._id, workspaceId, kind: "page", title: page.title, icon: page.icon });
   }, [openPage, ownerId, workspaceId]);

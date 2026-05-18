@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/01 16:40:43 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/02 01:19:23 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 22:04:13 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -96,9 +96,12 @@ export interface DefinitionItem {
 
 // ─── Convenience type guard helpers ───────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function isInlineNode(node: any): node is InlineNode {
-  return node && typeof node.type === 'string' && [
+function isTypedRecord(node: unknown): node is { type: string } {
+  return typeof node === 'object' && node !== null && 'type' in node && typeof node.type === 'string';
+}
+
+export function isInlineNode(node: unknown): node is InlineNode {
+  return isTypedRecord(node) && [
     'text', 'bold', 'italic', 'bold_italic', 'strikethrough', 'underline',
     'text_color', 'background_color', 'code_rich',
     'code', 'link', 'image', 'line_break', 'highlight', 'math_inline',
@@ -106,9 +109,8 @@ export function isInlineNode(node: any): node is InlineNode {
   ].includes(node.type);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function isBlockNode(node: any): node is BlockNode {
-  return node && typeof node.type === 'string' && [
+export function isBlockNode(node: unknown): node is BlockNode {
+  return isTypedRecord(node) && [
     'document', 'paragraph', 'heading', 'blockquote', 'code_block',
     'ordered_list', 'unordered_list', 'task_list', 'list_item',
     'thematic_break', 'table', 'callout', 'math_block', 'html_block',

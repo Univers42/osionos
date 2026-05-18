@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:27:42 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:27:43 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 22:04:13 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -143,7 +143,7 @@ function parseCodeBlock(
     kind: "code_block",
     language,
     value: content.join("\n"),
-    span: span(startLine, endLine, 0, lines[endLine]?.length ?? 0),
+    span: span(startLine, endLine, 0, lines[endLine].length),
   };
 
   return {
@@ -180,12 +180,8 @@ function parseBlockquote(
 function parseList(
   lines: string[],
   startLine: number,
+  firstMarker: NonNullable<ReturnType<typeof parseListMarker>>,
 ): { node: ListNode; nextLine: number } {
-  const firstMarker = parseListMarker(lines[startLine]);
-  if (!firstMarker) {
-    throw new Error("parseList called on non-list line");
-  }
-
   let cursor = startLine;
   const items: ListItemNode[] = [];
 
@@ -224,13 +220,13 @@ function parseList(
   return { node, nextLine: cursor };
 }
 
-interface ParsedBlock {
+export interface ParsedBlock {
   node: BlockNode;
   nextLine: number;
   diagnostics: ParseDiagnostic[];
 }
 
-function indexBlock(blockIndex: BlockRange[], node: BlockNode): void {
+export function indexBlock(blockIndex: BlockRange[], node: BlockNode): void {
   blockIndex.push({
     id: node.id,
     startLine: node.span.startLine,
@@ -253,7 +249,10 @@ function parseParagraphRange(lines: string[], cursor: number): number {
   return paraEnd;
 }
 
-function parseBlockAt(lines: string[], cursor: number): ParsedBlock | null {
+export function parseBlockAtLine(
+  lines: string[],
+  cursor: number,
+): ParsedBlock | null {
   const line = lines[cursor];
   const trimmed = line.trim();
 
@@ -290,8 +289,9 @@ function parseBlockAt(lines: string[], cursor: number): ParsedBlock | null {
     return { node, nextLine: cursor + 1, diagnostics: [] };
   }
 
-  if (parseListMarker(line)) {
-    const { node, nextLine } = parseList(lines, cursor);
+  const listMarker = parseListMarker(line);
+  if (listMarker) {
+    const { node, nextLine } = parseList(lines, cursor, listMarker);
     return { node, nextLine, diagnostics: [] };
   }
 
@@ -311,7 +311,7 @@ export function parseMarkdown(
 
   let cursor = 0;
   while (cursor < lines.length) {
-    const parsed = parseBlockAt(lines, cursor);
+    const parsed = parseBlockAtLine(lines, cursor);
     if (!parsed) {
       cursor++;
       continue;
@@ -327,7 +327,7 @@ export function parseMarkdown(
     kind: "document",
     version: options.documentVersion ?? 0,
     children,
-    span: span(0, Math.max(0, lines.length - 1), 0, lines.at(-1)?.length ?? 0),
+    span: span(0, Math.max(0, lines.length - 1), 0, (lines.at(-1) as string).length),
   };
 
   return { ast: doc, blockIndex, diagnostics };

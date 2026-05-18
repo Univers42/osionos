@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:37 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 16:05:14 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/13 19:11:53 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,9 +23,10 @@ import {
   DEFAULT_OBJECT_DATABASE_VIEW_ID,
 } from '@/store/useDatabaseStore';
 import { usePageStore } from '@/store/usePageStore';
+import { derivePageState } from '@/store/pageStore.helpers';
 import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseViewCatalog';
 import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
-import { getObjectDatabaseAdapter } from '../model/objectDatabaseAdapter';
+import { getObjectDatabaseAdapter, hasObjectDatabaseRemoteAdapter } from '../model/objectDatabaseAdapter';
 
 const INLINE_KNOWN_DATABASE_LOAD_LIMIT = 8;
 
@@ -51,6 +52,11 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     () => getKnownDatabaseAdapter({ inlineLoadLimit: mode === 'inline' ? INLINE_KNOWN_DATABASE_LOAD_LIMIT : undefined }),
     [mode],
   );
+  const fallbackDatabaseAdapter = React.useMemo(
+    () => getKnownDatabaseAdapter({ inlineLoadLimit: mode === 'inline' ? INLINE_KNOWN_DATABASE_LOAD_LIMIT : undefined }),
+    [mode],
+  );
+  const remoteDatabaseAdapter = React.useMemo(() => getObjectDatabaseAdapter(), []);
   const renderPage = React.useCallback<NonNullable<ObjectDatabaseProps['renderPage']>>(
     (pageId, state, onClose) => <DatabaseObjectPage pageId={pageId} state={state} onClose={onClose} />,
     [],
@@ -89,12 +95,13 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
       data-database-view-id={resolvedInitialView}
     >
       <ObjectDatabase
-        adapter={getObjectDatabaseAdapter()}
+        adapter={hasObjectDatabaseRemoteAdapter() && remoteDatabaseAdapter ? remoteDatabaseAdapter : fallbackDatabaseAdapter}
         databaseId={resolvedDatabaseId}
         initialView={resolvedInitialView}
         mode={resolvedMode}
         renderPage={renderPage}
         className={mode === 'full' ? 'h-full' : undefined}
+        chrome="single-view"
       />
     </div>
   );
@@ -135,9 +142,10 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
       content: toOsionosBlocks(databasePage.content),
     };
 
-    usePageStore.setState((current) => ({
-      pages: upsertOsionosDatabasePage(current.pages, workspaceId, nextEntry),
-    }));
+    usePageStore.setState((current) => derivePageState(
+      upsertOsionosDatabasePage(current.pages, workspaceId, nextEntry),
+      current.pageIdsByWorkspace,
+    ));
   }, [activePage?.id, activeUserId, database, databasePage, pageId, title, workspaceId]);
 
   React.useEffect(() => {

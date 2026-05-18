@@ -22,6 +22,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 env:
   GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/osionos
@@ -71,6 +72,8 @@ jobs:
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
           cache-from: type=gha,scope=osionos-prod
           cache-to: type=gha,scope=osionos-prod,mode=max
 
@@ -108,6 +111,21 @@ jobs:
       - name: Build MarkEngine image
         if: matrix.scope == 'markengine-submodule'
         run: docker build --target build src/shared/lib/markengine
+
+      - name: Setup Node.js for MarkEngine benchmarks
+        if: matrix.scope == 'markengine-submodule'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/shared/lib/markengine/package-lock.json
+
+      - name: Run MarkEngine benchmark guard
+        if: matrix.scope == 'markengine-submodule'
+        working-directory: src/shared/lib/markengine
+        run: |
+          npm ci
+          npm run bench:ci
 
       - name: Typecheck
         if: matrix.scope == 'root'

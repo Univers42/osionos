@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # docker/services/node/Dockerfile
 #
 # Base development image for the monorepo.
@@ -5,10 +6,11 @@
 # Dependencies are installed once and cached in a named volume.
 # Source code is bind-mounted at runtime for instant HMR.
 
-FROM node:22-alpine
+FROM public.ecr.aws/docker/library/node:22-alpine
 
 # Build essentials for native Node addons (cmake-js, bcrypt, etc.)
-RUN apk add --no-cache python3 make g++ cmake git bash
+RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+	apk add --update-cache python3 make g++ cmake git bash
 
 # Enable pnpm via corepack (built into Node 22)
 ENV PNPM_HOME=/pnpm

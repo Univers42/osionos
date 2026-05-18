@@ -1,4 +1,17 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   databaseViewCatalog.ts                             :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:22 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:22 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import type { Block, LayoutCell, LayoutMode } from "@/entities/block";
+import { InlineDocument } from "@/shared/lib/markengine";
 import { loadKnownDatabaseState } from "./knownDatabaseState";
 
 export type KnownDatabaseId =
@@ -144,7 +157,7 @@ type KnownDatabaseState = ReturnType<typeof loadKnownDatabaseState>;
 type KnownDatabasePage = KnownDatabaseState["pages"][string];
 
 const VIEW_INSIGHTS: Record<string, string> = {
-  "v-proj-dashboard": "Relation analytics ties projects to tasks, accounts, content, and equipment so the page starts with connected truth.",
+  "v-proj-dashboard": createInlineDocumentPlaygroundExample(),
   "v-tasks-board": "The board shows 8 tasks moving across 5 statuses, with 1 blocked item that should not be buried in a table.",
   "v-proj-timeline": "The timeline makes schedule pressure visible across 8 projects before anyone opens a project record.",
   "v-proj-chart": "Budget is not just finance context here: it frames active work against 530K USD of committed project scope.",
@@ -217,10 +230,31 @@ export function getKnownDatabaseView(viewId: string): KnownDatabaseView | undefi
   return KNOWN_DATABASE_VIEWS.find((viewDefinition) => viewDefinition.id === viewId);
 }
 
-export function createDatabaseViewBlock(viewId: string): Block {
+interface ViewShowcaseOptions {
+  idScope?: string;
+}
+
+function stableDashboardId(...parts: Array<number | string | null | undefined>): string {
+  return parts
+    .filter((part) => part !== null && part !== undefined && String(part).trim().length > 0)
+    .map((part) => String(part).trim().toLowerCase().replaceAll(/[^a-z0-9_-]+/g, "-"))
+    .join("-")
+    .replaceAll(/-+/g, "-")
+    .replaceAll(/^-|-$/g, "");
+}
+
+function stableDashboardCellId(idScope: string, viewId: string, placementIndex: number, role?: string): string {
+  return stableDashboardId(idScope, "cell", placementIndex, viewId, role);
+}
+
+function stableDashboardBlockId(cellId: string, role: string): string {
+  return stableDashboardId(cellId, "block", role);
+}
+
+export function createDatabaseViewBlock(viewId: string, id?: string): Block {
   const viewDefinition = getKnownDatabaseView(viewId) ?? KNOWN_DATABASE_VIEWS[0];
   return {
-    id: crypto.randomUUID(),
+    id: id ?? crypto.randomUUID(),
     type: "database_inline",
     content: "",
     databaseId: viewDefinition.databaseId,
@@ -230,31 +264,44 @@ export function createDatabaseViewBlock(viewId: string): Block {
 
 function dashboardBlock(type: Block["type"], content: string, extra: Partial<Block> = {}): Block {
   return {
-    id: crypto.randomUUID(),
+    ...extra,
+    id: extra.id ?? crypto.randomUUID(),
     type,
     content,
-    ...extra,
   };
 }
 
-function heading2(content: string): Block {
-  return dashboardBlock("heading_2", content);
+function heading2(content: string, id?: string): Block {
+  return dashboardBlock("heading_2", content, id ? { id } : {});
 }
 
-function heading3(content: string): Block {
-  return dashboardBlock("heading_3", content);
+function heading3(content: string, id?: string): Block {
+  return dashboardBlock("heading_3", content, id ? { id } : {});
 }
 
-function paragraph(content: string): Block {
-  return dashboardBlock("paragraph", content);
+function paragraph(content: string, id?: string): Block {
+  return dashboardBlock("paragraph", content, id ? { id } : {});
 }
 
-function callout(content: string, icon: string): Block {
-  return dashboardBlock("callout", content, { color: icon });
+function createInlineDocumentPlaygroundExample(): string {
+  const base = InlineDocument.fromSource("InlineDocument keeps formatted typing on the AST.");
+  const formatted = base.applyFormatting({ start: 0, end: 14 }, {
+    type: "toggle_format",
+    format: "bold",
+  });
+  const edited = formatted.applyEdit({ start: 14, end: 14 }, {
+    type: "insert_text",
+    text: " handle",
+  });
+  return edited.doc.toSource();
 }
 
-function todo(content: string, checked = false): Block {
-  return dashboardBlock("to_do", content, { checked });
+function callout(content: string, icon: string, id?: string): Block {
+  return dashboardBlock("callout", content, { color: icon, ...(id ? { id } : {}) });
+}
+
+function todo(content: string, checked = false, id?: string): Block {
+  return dashboardBlock("to_do", content, { checked, ...(id ? { id } : {}) });
 }
 
 function money(value: number): string {
@@ -335,7 +382,7 @@ function createDashboardCell(
 ): LayoutCell {
   const blocks = options.blocks ?? [];
   return {
-    id: crypto.randomUUID(),
+    id: options.id ?? crypto.randomUUID(),
     ...placement,
     label: options.label,
     type: "text",
@@ -355,13 +402,16 @@ function createDashboardCell(
 function createViewCell(
   viewId: string,
   placement: LayoutPlacement,
-  paletteIndex: number,
+  placementIndex: number,
+  idScope: string,
   options: Partial<LayoutCell> = {},
 ): LayoutCell {
   const viewDefinition = getKnownDatabaseView(viewId) ?? KNOWN_DATABASE_VIEWS[0];
-  const palette = CELL_PALETTE[paletteIndex % CELL_PALETTE.length];
+  const palette = CELL_PALETTE[placementIndex % CELL_PALETTE.length];
+  const cellId = stableDashboardCellId(idScope, viewDefinition.id, placementIndex);
 
   return createDashboardCell(placement, {
+    id: cellId,
     label: `${viewDefinition.databaseName} · ${viewDefinition.name}`,
     backgroundColor: palette.backgroundColor,
     textColor: palette.textColor,
@@ -370,72 +420,82 @@ function createViewCell(
     padding: options.padding ?? (viewDefinition.type === "dashboard" ? "compact" : "comfortable"),
     fontSize: options.fontSize ?? "base",
     blocks: [
-      heading3(`${VIEW_TYPE_ICONS[viewDefinition.type]} ${viewDefinition.databaseName} · ${viewDefinition.name}`),
-      paragraph(VIEW_INSIGHTS[viewDefinition.id] ?? viewDefinition.description),
-      createDatabaseViewBlock(viewDefinition.id),
+      heading3(`${VIEW_TYPE_ICONS[viewDefinition.type]} ${viewDefinition.databaseName} · ${viewDefinition.name}`, stableDashboardBlockId(cellId, "heading")),
+      paragraph(VIEW_INSIGHTS[viewDefinition.id] ?? viewDefinition.description, stableDashboardBlockId(cellId, "insight")),
+      createDatabaseViewBlock(viewDefinition.id, stableDashboardBlockId(cellId, "database")),
     ],
   });
 }
 
-function createHeroCell(placement: LayoutPlacement, metrics: DashboardMetrics, focusViewId: string): LayoutCell {
+function createHeroCell(placement: LayoutPlacement, metrics: DashboardMetrics, focusViewId: string, idScope: string): LayoutCell {
   const focusView = getKnownDatabaseView(focusViewId) ?? getKnownDatabaseView("v-prod-table") ?? KNOWN_DATABASE_VIEWS[0];
+  const cellId = stableDashboardCellId(idScope, focusView.id, 0, "hero");
   return createDashboardCell(placement, {
+    id: cellId,
     label: "Command center",
     backgroundColor: "color-mix(in srgb, #111827 6%, var(--osio-bg-surface))",
     textColor: "var(--osio-fg-default)",
     padding: "spacious",
     blocks: [
-      heading2("Workspace command center"),
-      paragraph(`A cross-functional canvas built from live known database state: ${metrics.taskCount} tasks, ${metrics.projectCount} projects, ${metrics.crmCount} CRM accounts, ${metrics.contentCount} content items, ${metrics.inventoryCount} inventory assets, and ${metrics.productCount} product records.`),
-      callout(`${money(metrics.projectBudget)} project budget, ${money(metrics.pipelineValue)} pipeline value, ${metrics.storyPoints} story points, and ${metrics.productStockUnits.toLocaleString()} product units are visible without leaving Home. Featured /view: ${focusView.databaseName} · ${focusView.name}.`, "◈"),
+      heading2("Workspace command center", stableDashboardBlockId(cellId, "heading")),
+      paragraph(`A cross-functional canvas built from live known database state: ${metrics.taskCount} tasks, ${metrics.projectCount} projects, ${metrics.crmCount} CRM accounts, ${metrics.contentCount} content items, ${metrics.inventoryCount} inventory assets, and ${metrics.productCount} product records.`, stableDashboardBlockId(cellId, "summary")),
+      callout(`${money(metrics.projectBudget)} project budget, ${money(metrics.pipelineValue)} pipeline value, ${metrics.storyPoints} story points, and ${metrics.productStockUnits.toLocaleString()} product units are visible without leaving Home. Featured /view: ${focusView.databaseName} · ${focusView.name}.`, "◈", stableDashboardBlockId(cellId, "callout")),
     ],
   });
 }
 
-function createWorkCell(placement: LayoutPlacement, metrics: DashboardMetrics): LayoutCell {
+function createWorkCell(placement: LayoutPlacement, metrics: DashboardMetrics, focusViewId: string, idScope: string): LayoutCell {
+  const cellId = stableDashboardCellId(idScope, focusViewId, 1, "work");
   return createDashboardCell(placement, {
+    id: cellId,
     label: "Daily triage",
     backgroundColor: "color-mix(in srgb, #0f766e 12%, var(--osio-bg-surface))",
     textColor: "var(--osio-fg-default)",
     padding: "spacious",
     blocks: [
-      heading3("Today focus"),
-      paragraph(`${metrics.highPriorityTasks} high-priority tasks, ${metrics.urgentTasks} urgent task, ${metrics.blockedTasks} blocker, and ${metrics.completedTasks} completed item across ${metrics.storyPoints} story points.`),
+      heading3("Today focus", stableDashboardBlockId(cellId, "heading")),
+      paragraph(`${metrics.highPriorityTasks} high-priority tasks, ${metrics.urgentTasks} urgent task, ${metrics.blockedTasks} blocker, and ${metrics.completedTasks} completed item across ${metrics.storyPoints} story points.`, stableDashboardBlockId(cellId, "summary")),
     ],
   });
 }
 
-function createGrowthCell(placement: LayoutPlacement, metrics: DashboardMetrics): LayoutCell {
+function createGrowthCell(placement: LayoutPlacement, metrics: DashboardMetrics, focusViewId: string, idScope: string): LayoutCell {
+  const cellId = stableDashboardCellId(idScope, focusViewId, 2, "growth");
   return createDashboardCell(placement, {
+    id: cellId,
     label: "Growth radar",
     backgroundColor: "color-mix(in srgb, #b45309 12%, var(--osio-bg-surface))",
     textColor: "var(--osio-fg-default)",
     padding: "spacious",
     blocks: [
-      heading3("Growth radar"),
-      paragraph(`${money(metrics.pipelineValue)} pipeline value across ${metrics.crmCount} accounts and ${metrics.activeProjects} active projects.`),
-      paragraph(`${metrics.productCount} products, ${metrics.averageProductRating} average rating, ${metrics.featuredProducts} featured products, and ${money(metrics.productRevenuePotential)} catalog value.`),
+      heading3("Growth radar", stableDashboardBlockId(cellId, "heading")),
+      paragraph(`${money(metrics.pipelineValue)} pipeline value across ${metrics.crmCount} accounts and ${metrics.activeProjects} active projects.`, stableDashboardBlockId(cellId, "pipeline")),
+      paragraph(`${metrics.productCount} products, ${metrics.averageProductRating} average rating, ${metrics.featuredProducts} featured products, and ${money(metrics.productRevenuePotential)} catalog value.`, stableDashboardBlockId(cellId, "products")),
     ],
   });
 }
 
-function createLayoutLabCell(placement: LayoutPlacement, metrics: DashboardMetrics): LayoutCell {
+function createLayoutLabCell(placement: LayoutPlacement, metrics: DashboardMetrics, focusViewId: string, idScope: string): LayoutCell {
+  const cellId = stableDashboardCellId(idScope, focusViewId, 3, "coverage");
   return createDashboardCell(placement, {
+    id: cellId,
     label: "Data coverage",
     backgroundColor: "color-mix(in srgb, #7c3aed 9%, var(--osio-bg-surface))",
     textColor: "var(--osio-fg-default)",
     blocks: [
-      heading3("Data coverage"),
-      paragraph(`The canvas mixes ${KNOWN_DATABASE_VIEWS.length} /view definitions across six databases, including dashboards, tables, boards, maps, feeds, timelines, charts, and calendars.`),
-      todo(`${metrics.approvedContent}/${metrics.contentCount} content pieces approved.`, metrics.approvedContent === metrics.contentCount),
-      todo(`${money(metrics.inventoryValue)} inventory value connected to project work.`, true),
+      heading3("Data coverage", stableDashboardBlockId(cellId, "heading")),
+      paragraph(createInlineDocumentPlaygroundExample(), stableDashboardBlockId(cellId, "inline-document")),
+      paragraph(`The canvas mixes ${KNOWN_DATABASE_VIEWS.length} /view definitions across six databases, including dashboards, tables, boards, maps, feeds, timelines, charts, and calendars.`, stableDashboardBlockId(cellId, "coverage")),
+      todo(`${metrics.approvedContent}/${metrics.contentCount} content pieces approved.`, metrics.approvedContent === metrics.contentCount, stableDashboardBlockId(cellId, "approved")),
+      todo(`${money(metrics.inventoryValue)} inventory value connected to project work.`, true, stableDashboardBlockId(cellId, "inventory")),
     ],
   });
 }
 
-export function createViewShowcaseCells(focusViewId = "v-prod-table"): LayoutCell[] {
+export function createViewShowcaseCells(focusViewId = "v-prod-table", options: ViewShowcaseOptions = {}): LayoutCell[] {
   const metrics = getDashboardMetrics();
   const focusView = getKnownDatabaseView(focusViewId)?.id ?? "v-prod-table";
+  const idScope = options.idScope ?? stableDashboardId("showcase", focusView);
   const viewIds = [
     focusView,
     "v-prod-dashboard",
@@ -453,17 +513,18 @@ export function createViewShowcaseCells(focusViewId = "v-prod-table"): LayoutCel
   ].filter((viewId, index, viewList) => viewList.indexOf(viewId) === index);
 
   return [
-    createHeroCell(SHOWCASE_PLACEMENTS[0], metrics, focusView),
-    createWorkCell(SHOWCASE_PLACEMENTS[1], metrics),
-    createGrowthCell(SHOWCASE_PLACEMENTS[2], metrics),
-    createLayoutLabCell(SHOWCASE_PLACEMENTS[3], metrics),
-    ...SHOWCASE_PLACEMENTS.slice(4).map((placement, index) => createViewCell(viewIds[index] ?? viewIds[0], placement, index)),
+    createHeroCell(SHOWCASE_PLACEMENTS[0], metrics, focusView, idScope),
+    createWorkCell(SHOWCASE_PLACEMENTS[1], metrics, focusView, idScope),
+    createGrowthCell(SHOWCASE_PLACEMENTS[2], metrics, focusView, idScope),
+    createLayoutLabCell(SHOWCASE_PLACEMENTS[3], metrics, focusView, idScope),
+    ...SHOWCASE_PLACEMENTS.slice(4).map((placement, index) => createViewCell(viewIds[index] ?? viewIds[0], placement, index + 4, idScope)),
   ];
 }
 
-export function createViewShowcaseLayout(mode: LayoutMode, focusViewId?: string): Block {
+export function createViewShowcaseLayout(mode: LayoutMode, focusViewId?: string, options: ViewShowcaseOptions = {}): Block {
+  const idScope = options.idScope ?? stableDashboardId("showcase", crypto.randomUUID());
   return {
-    id: crypto.randomUUID(),
+    id: stableDashboardId(idScope, "layout", mode, focusViewId ?? "default"),
     type: "layout",
     content: "",
     layoutMode: mode,
@@ -479,10 +540,10 @@ export function createViewShowcaseLayout(mode: LayoutMode, focusViewId?: string)
       preview: false,
       theme: "spacious",
     },
-    layoutCells: createViewShowcaseCells(focusViewId),
+    layoutCells: createViewShowcaseCells(focusViewId, { idScope }),
   };
 }
 
-export function createViewShowcaseLayoutContent(mode: LayoutMode, focusViewId?: string): Block[] {
-  return [createViewShowcaseLayout(mode, focusViewId)];
+export function createViewShowcaseLayoutContent(mode: LayoutMode, focusViewId?: string, options: ViewShowcaseOptions = {}): Block[] {
+  return [createViewShowcaseLayout(mode, focusViewId, options)];
 }

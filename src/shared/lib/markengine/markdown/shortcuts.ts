@@ -1,11 +1,23 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   shortcuts.ts                                       :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:17 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:17 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 // Markdown shortcuts — inline parsing and block conversion
 import type { BlockType, Block } from "@/entities/block";
+import { createTableBlockFromData } from "../../../../entities/block/model/tableBlocks";
 import type { BlockNode, InlineNode } from "./ast";
 import {
   renderInlineNodesToHtml,
   type InlineHtmlOptions,
 } from "./renderers/inlineHtml";
-import { renderInlines, type ReactRenderOptions } from "./renderers/react";
 import { parse, parseInline } from "./parser";
 
 export type { BlockDetection } from "./shortcutsDetect";
@@ -18,17 +30,6 @@ export function parseInlineMarkdown(
   // Use the full parser's inline engine → convert to HTML
   const nodes = parseInline(text);
   return renderInlineNodesToHtml(nodes, options);
-}
-
-/**
- * Render a markdown string to React elements.
- */
-export function renderInlineToReact(
-  text: string,
-  o: ReactRenderOptions = {},
-): React.ReactNode {
-  const nodes = parseInline(text);
-  return renderInlines(nodes, o);
 }
 
 /**
@@ -98,7 +99,7 @@ function astToBlocks(node: BlockNode): Block[] {
       return [
         {
           id: crypto.randomUUID(),
-          type: "callout" as BlockType,
+          type: "callout",
           content: node.children.map((c) => blockToMarkdown(c)).join("\n"),
         },
       ];
@@ -114,8 +115,9 @@ function astToBlocks(node: BlockNode): Block[] {
         {
           id: crypto.randomUUID(),
           type: "table_block",
-          content: "",
-          tableData: [header, ...rows],
+          ...createTableBlockFromData([header, ...rows], {
+            columnAlignments: node.alignments,
+          }),
         },
       ];
     }
@@ -129,27 +131,36 @@ type ListItemNodeLike = {
   checked?: boolean;
 };
 
+function isListBlock(node: BlockNode): boolean {
+  return (
+    node.type === "ordered_list" ||
+    node.type === "unordered_list" ||
+    node.type === "task_list"
+  );
+}
+
 function listItemToBlock(
   type: "bulleted_list" | "numbered_list" | "to_do",
   item: ListItemNodeLike,
   checked?: boolean,
 ): Block {
   const nestedBlocks = item.children.flatMap((child) => {
-    if (
-      child.type === "ordered_list" ||
-      child.type === "unordered_list" ||
-      child.type === "task_list"
-    ) {
+    if (isListBlock(child)) {
       return astToBlocks(child);
     }
 
     return [];
   });
+  const content = item.children
+    .filter((child) => !isListBlock(child))
+    .map((child) => blockToMarkdown(child))
+    .filter(Boolean)
+    .join("\n");
 
   const block: Block = {
     id: crypto.randomUUID(),
     type,
-    content: item.children.map((child) => blockToMarkdown(child)).join("\n"),
+    content,
   };
 
   if (checked !== undefined) {
@@ -163,51 +174,117 @@ function listItemToBlock(
   return block;
 }
 
-function inlineToPlain(nodes: InlineNode[]): string {
-  return nodes
-    .map((n) => {
-      switch (n.type) {
-        case "text":
-          return n.value;
-        case "bold":
-        case "italic":
-        case "bold_italic":
-        case "strikethrough":
-        case "underline":
-        case "highlight":
-        case "text_color":
-        case "background_color":
-        case "code_rich":
-          return inlineToPlain(n.children);
-        case "code":
-          return n.value;
-        case "link":
-          return inlineToPlain(n.children);
-        case "image":
-          return n.alt;
-        case "emoji":
-          return n.value;
-        case "line_break":
-          return "\n";
-        case "math_inline":
-          return n.value;
-        case "footnote_ref":
-          return `[${n.label}]`;
-        default:
-          return "";
-      }
-    })
-    .join("");
+function renderMarkdownListItemBody(item: ListItemNodeLike): string {
+  return item.children.map((child) => blockToMarkdown(child)).join("\n");
 }
 
-function blockToPlain(node: BlockNode): string {
+function indentMarkdownContinuation(markdown: string, prefixLength: number): string {
+  const continuationPrefix = " ".repeat(prefixLength);
+  return markdown
+    .split("\n")
+    .map((line, index) => (index === 0 ? line : `${continuationPrefix}${line}`))
+    .join("\n");
+}
+
+function blockToMarkdown(node: BlockNode): string {
   switch (node.type) {
+    case "document":
+      return node.children.map((child) => blockToMarkdown(child)).join("\n\n");
     case "paragraph":
-      return inlineToPlain(node.children);
+      return inlineToMarkdown(node.children);
     case "heading":
-      return inlineToPlain(node.children);
+      return `${"#".repeat(node.level)} ${inlineToMarkdown(node.children)}`;
+    case "thematic_break":
+      return "---";
     case "blockquote":
-      return node.children.map((child) => blockToPlain(child)).join("\n");
+      return node.children
+        .map((child) => blockToMarkdown(child))
+        .join("\n")
+        .split("\n")
+        .map((line) => (line ? `> ${line}` : ">"))
+        .join("\n");
+    case "code_block": {
+      const info = [node.lang, node.meta].filter(Boolean).join(" ");
+      return `\`\`\`${info}\n${node.value}\n\`\`\``;
+    }
+    case "ordered_list":
+      return node.children
+        .map((item, index) => {
+          const prefix = `${node.start + index}. `;
+          const body = renderMarkdownListItemBody(item);
+          return `${prefix}${indentMarkdownContinuation(body, prefix.length)}`;
+        })
+        .join("\n");
+    case "unordered_list":
+      return node.children
+        .map((item) => {
+          const prefix = "- ";
+          const body = renderMarkdownListItemBody(item);
+          return `${prefix}${indentMarkdownContinuation(body, prefix.length)}`;
+        })
+        .join("\n");
+    case "task_list":
+      return node.children
+        .map((item) => {
+          const prefix = `- [${item.checked ? "x" : " "}] `;
+          const body = renderMarkdownListItemBody(item);
+          return `${prefix}${indentMarkdownContinuation(body, prefix.length)}`;
+        })
+        .join("\n");
+    case "list_item":
+      return renderMarkdownListItemBody(node);
+    case "table": {
+      const header = `| ${node.head.cells
+        .map((cell) => inlineToMarkdown(cell.children))
+        .join(" | ")} |`;
+      const separator = `| ${node.alignments
+        .map((alignment) => {
+          if (alignment === "left") return ":---";
+          if (alignment === "right") return "---:";
+          if (alignment === "center") return ":---:";
+          return "---";
+        })
+        .join(" | ")} |`;
+      const rows = node.rows.map(
+        (row) =>
+          `| ${row.cells
+            .map((cell) => inlineToMarkdown(cell.children))
+            .join(" | ")} |`,
+      );
+      return [header, separator, ...rows].join("\n");
+    }
+    case "callout": {
+      const title = inlineToMarkdown(node.title);
+      const opening = title ? `> [!${node.kind}] ${title}` : `> [!${node.kind}]`;
+      const body = node.children
+        .map((child) => blockToMarkdown(child))
+        .join("\n")
+        .split("\n")
+        .map((line) => (line ? `> ${line}` : ">"))
+        .join("\n");
+      return body ? `${opening}\n${body}` : opening;
+    }
+    case "math_block":
+      return `$$\n${node.value}\n$$`;
+    case "html_block":
+      return node.value;
+    case "footnote_def":
+      return `[^${node.label}]: ${node.children.map((child) => blockToMarkdown(child)).join("\n")}`;
+    case "definition_list":
+      return node.items
+        .map((item) => {
+          const term = inlineToMarkdown(item.term);
+          const definitions = item.definitions.map(
+            (definition) => `: ${inlineToMarkdown(definition)}`,
+          );
+          return [term, ...definitions].join("\n");
+        })
+        .join("\n");
+    case "toggle": {
+      const summary = inlineToMarkdown(node.summary);
+      const body = node.children.map((child) => blockToMarkdown(child)).join("\n");
+      return body ? `> [toggle] ${summary}\n${body}` : `> [toggle] ${summary}`;
+    }
     default:
       return "";
   }
@@ -267,17 +344,4 @@ function inlineToMarkdown(nodes: InlineNode[]): string {
       }
     })
     .join("");
-}
-
-function blockToMarkdown(node: BlockNode): string {
-  switch (node.type) {
-    case "paragraph":
-      return inlineToMarkdown(node.children);
-    case "heading":
-      return inlineToMarkdown(node.children);
-    case "blockquote":
-      return node.children.map((child) => blockToMarkdown(child)).join("\n");
-    default:
-      return "";
-  }
 }

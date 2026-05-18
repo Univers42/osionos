@@ -1,9 +1,21 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   AgentConversationPage.tsx                          :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:22 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:22 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, CheckCircle2, FilePlus2, Loader2, RotateCcw, Send, SlidersHorizontal, TerminalSquare, XCircle } from "lucide-react";
 
 import type { Block } from "@/entities/block";
 import { useUserStore } from "@/features/auth";
-import { usePageStore } from "@/store/usePageStore";
+import { usePageStore, type PageEntry } from "@/store/usePageStore";
 
 interface AgentConversationPageProps {
   pageId: string;
@@ -52,11 +64,16 @@ type StreamPayload = Record<string, unknown> & {
 
 const AGENT_THREADS_STORAGE_KEY = "osionos:agent-conversations";
 const AGENT_SETTINGS_STORAGE_KEY = "osionos:agent-settings";
-const CONFIGURED_CLAUDE_BRIDGE_URL = ((import.meta.env as Record<string, string>)["VITE_OSIONOS_BRIDGE_URL"] ?? "").trim().replace(/\/$/, "");
+const CONFIGURED_CLAUDE_BRIDGE_URL = (
+  (import.meta.env as Record<string, string>)["VITE_OSIONOS_BRIDGE_URL"]
+  ?? (import.meta.env as Record<string, string>)["VITE_API_URL"]
+  ?? ""
+).trim().replace(/\/$/, "");
 const CLAUDE_BRIDGE_URLS = CONFIGURED_CLAUDE_BRIDGE_URL
   ? [CONFIGURED_CLAUDE_BRIDGE_URL]
-  : ["http://localhost:4001", "http://localhost:4000"];
+  : ["http://localhost:4000"];
 const DEFAULT_PROMPT = "Ask Claude anything, or ask it to create/update osionos pages through MCP.";
+const EMPTY_WORKSPACE_PAGES: PageEntry[] = [];
 
 const TOOL_OPTIONS: Array<{ value: AgentToolKey; label: string }> = [
   { value: "app", label: "App map" },
@@ -229,7 +246,7 @@ function applyBlockMetadata(block: Block, record: Record<string, unknown>) {
 
 function applyBlockLayoutMetadata(block: Block, record: Record<string, unknown>) {
   if (record.layoutMode === "inline" || record.layoutMode === "full_page") block.layoutMode = record.layoutMode;
-  if (record.layoutConfig && typeof record.layoutConfig === "object") block.layoutConfig = record.layoutConfig as Block["layoutConfig"];
+  if (record.layoutConfig && typeof record.layoutConfig === "object") block.layoutConfig = record.layoutConfig;
   if ([1, 2, 3, 4, 5, 6].includes(Number(record.headingLevel))) block.headingLevel = Number(record.headingLevel) as Block["headingLevel"];
 }
 
@@ -354,7 +371,7 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
   const activeWorkspace = useUserStore((state) => state.activeWorkspace());
   const jwt = useUserStore((state) => state.activePageJwt() ?? "");
   const workspaceId = page?.workspaceId ?? activeWorkspace?._id ?? "";
-  const workspacePages = usePageStore((state) => workspaceId ? state.pages[workspaceId] ?? [] : []);
+  const workspacePages = usePageStore((state) => workspaceId ? state.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES : EMPTY_WORKSPACE_PAGES);
   const [draft, setDraft] = useState(DEFAULT_PROMPT);
   const [messages, setMessages] = useState<AgentMessage[]>(() => loadMessages(pageId));
   const [settings, setSettings] = useState<AgentRunSettings>(() => readSettings(pageId));
