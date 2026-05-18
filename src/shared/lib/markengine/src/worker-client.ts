@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   worker-client.ts                                   :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:17 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:17 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import { parseMarkdown } from "./block-parser";
 import { incrementalParse as incrementalParseFromSource } from "./incremental";
 import { renderHtml as renderDocumentHtml, type RenderHtmlOptions } from "./renderer";

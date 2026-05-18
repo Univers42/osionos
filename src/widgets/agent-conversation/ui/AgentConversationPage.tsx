@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   AgentConversationPage.tsx                          :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:22 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:22 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, CheckCircle2, FilePlus2, Loader2, RotateCcw, Send, SlidersHorizontal, TerminalSquare, XCircle } from "lucide-react";
 
