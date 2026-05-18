@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # **************************************************************************** #
 #                                                                              #
 #                                                         :::      ::::::::    #
@@ -10,7 +11,6 @@
 #                                                                              #
 # **************************************************************************** #
 
-#!/usr/bin/env bash
 # wait-sonarqube.sh
 #
 # Polls the SonarQube health endpoint until the server reports UP.

@@ -1,3 +1,4 @@
+#!/bin/bash
 # **************************************************************************** #
 #                                                                              #
 #                                                         :::      ::::::::    #
@@ -10,7 +11,6 @@
 #                                                                              #
 # **************************************************************************** #
 
-#!/bin/bash
 set -e
 MONGO_USER="${MONGO_INITDB_ROOT_USERNAME:-osionos_user}"
 MONGO_PASS="${MONGO_INITDB_ROOT_PASSWORD:-osionos_pass}"

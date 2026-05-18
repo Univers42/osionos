@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # **************************************************************************** #
 #                                                                              #
 #                                                         :::      ::::::::    #
@@ -10,7 +11,6 @@
 #                                                                              #
 # **************************************************************************** #
 
-#!/usr/bin/env bash
 # ensure-sonar-token.sh — Provision a SonarQube analysis token for local dev.
 #
 # On first boot the default credentials are admin/admin.  This script:
