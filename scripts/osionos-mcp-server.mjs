@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
@@ -10,7 +11,6 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#!/usr/bin/env node
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
