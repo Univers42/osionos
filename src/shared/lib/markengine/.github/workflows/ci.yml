@@ -41,6 +41,12 @@ jobs:
       - name: Lint
         run: make lint
 
+      - name: Parser coverage
+        run: npm run coverage:parsers
+
+      - name: Benchmark regression guard
+        run: npm run bench:ci
+
   ci-required:
     name: ci-required
     runs-on: ubuntu-latest

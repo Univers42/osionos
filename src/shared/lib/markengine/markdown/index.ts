@@ -86,4 +86,5 @@ export {
   parseMarkdownToBlocks,
   BLOCK_SHORTCUTS,
 } from "./shortcuts";
+export { renderInlineToReact } from "./shortcutsReact";
 export type { BlockDetection } from "./shortcuts";

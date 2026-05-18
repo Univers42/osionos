@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 20:17:01 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 05:03:33 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/13 13:52:58 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -49,6 +49,7 @@ import {
   X,
 } from 'lucide-react';
 import { AssetRenderer } from '@univers42/ui-collection';
+import { useShallow } from 'zustand/react/shallow';
 
 import { useUserStore, type StaticPersona } from '@/features/auth';
 import { TRANSLATION_LANGUAGES, fontSampleClass, usePageActions, type PageEntry } from '@/entities/page';
@@ -58,6 +59,7 @@ import { API_BASE, api, getActiveJwt } from '@/shared/api/client';
 import { useAssetLibraryStore, type AccountAsset, type AccountAssetKind } from '@/shared/config/assetLibraryStore';
 import { useUIStore } from '@/shared/config/uiStore';
 import { usePageStore } from '@/store/usePageStore';
+import { derivePageState } from '@/store/pageStore.helpers';
 import {
   MCP_TOOL_OPTIONS,
   recordSettingsAction,
@@ -1105,7 +1107,7 @@ const NotificationsPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }
 };
 
 const PageNotificationOverridesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const pages = usePageStore((state) => Object.values(state.pages).flat().slice(0, 8));
+  const pages = usePageStore(useShallow((state) => Object.values(state.pages).flat().slice(0, 8)));
   const [enabledIds, setEnabledIds] = useState(() => new Set(pages.filter((page) => page.visibility !== 'private').map((page) => page._id)));
   return (
     <Modal open onClose={onClose} title="Page notification settings" size="md">
@@ -1554,14 +1556,17 @@ const PublicPagesPanel = () => {
   const userId = useUserStore((state) => state.activeUserId) || 'anonymous';
   const workspace = useUserStore((state) => state.activeWorkspace());
   const workspaceId = workspace?._id ?? 'local-workspace';
-  const pages = usePageStore((state) => state.pages[workspaceId] ?? []);
+  const pages = usePageStore((state) => state.pages[workspaceId] ?? EMPTY_PAGES);
   const firstPublicPage = pages.find((page) => page.visibility === 'public');
   const storedSettings = useWorkspaceSettingsStore((state) => state.data[workspaceId]);
   const update = useWorkspaceSettingsStore((state) => state.update);
   const domains = storedSettings?.publicDomains ?? [];
 
   function publishPage(pageId: string, publicValue: boolean) {
-    usePageStore.setState((state) => ({ pages: { ...state.pages, [workspaceId]: (state.pages[workspaceId] ?? []).map((page) => page._id === pageId ? { ...page, visibility: publicValue ? 'public' : 'private' } : page) } }));
+    usePageStore.setState((state) => derivePageState({
+      ...state.pages,
+      [workspaceId]: (state.pages[workspaceId] ?? []).map((page) => page._id === pageId ? { ...page, visibility: publicValue ? 'public' : 'private' } : page),
+    }, state.pageIdsByWorkspace));
     recordSettingsAction('public_page_toggle', { pageId, publicValue });
   }
 
@@ -1733,7 +1738,7 @@ const BillingPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId = 'local
     } else if (field === 'invoiceEmails') {
       update(workspaceId, { invoiceEmails: value.split(',').map((item) => item.trim()).filter(Boolean) });
     } else {
-      update(workspaceId, { [field]: value } as Partial<BillingState>);
+      update(workspaceId, { [field]: value });
     }
     setModal(null);
   }

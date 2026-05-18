@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:27:34 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:27:35 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 21:03:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -50,6 +50,9 @@ const { applyInlineFormatting } = loadModule(
 );
 const { applyInlineTextEdit } = loadModule(
   "src/shared/lib/markengine/inlineTextEditing.ts",
+);
+const { InlineDocument } = loadModule(
+  "src/shared/lib/markengine/inlineDocument.ts",
 );
 const { parseInlineMarkdown } = loadModule(
   "src/shared/lib/markengine/shortcuts.ts",
@@ -220,6 +223,15 @@ test("internal page links can render a friendly unavailable fallback title", () 
   assert.doesNotMatch(html, />abc123<\/span>/);
 });
 
+test("inline HTML renderer strips unsafe link and image schemes", () => {
+  const linkHtml = parseInlineMarkdown("[bad](javascript:alert(1))");
+  const imageHtml = parseInlineMarkdown("![bad](javascript:alert(1))");
+
+  assert.match(linkHtml, /href="#"/);
+  assert.doesNotMatch(linkHtml, /javascript:/i);
+  assert.equal(imageHtml, "");
+});
+
 test("typing inside colored text preserves the active color wrapper", () => {
   const result = applyInlineTextEdit(
     "[color=#2563EB]delta[/color] zeta",
@@ -262,6 +274,35 @@ test("backspace removes text without discarding the surrounding formatting", () 
   assert.equal(result.source, "[b][color=#2563EB]delt[/color][/b]");
   assert.equal(result.selection.start, 4);
   assert.equal(result.selection.end, 4);
+});
+
+test("InlineDocument applies formatting and memoizes source/html on the handle", () => {
+  const doc = InlineDocument.fromSource("alpha beta");
+  const formatted = doc.applyFormatting(createSelection(0, 5), {
+    type: "toggle_format",
+    format: "bold",
+  });
+
+  assert.notEqual(formatted, doc);
+  assert.equal(formatted.toSource(), "[b]alpha[/b] beta");
+  assert.equal(formatted.toSource(), formatted.toSource());
+  assert.match(formatted.toHtml(), /<strong>alpha<\/strong> beta/);
+  assert.equal(formatted.toHtml(), formatted.toHtml());
+});
+
+test("InlineDocument edits mutate the AST without reparsing unchanged siblings", () => {
+  const doc = InlineDocument.fromSource("[b]hello[/b] [i]world[/i]");
+  const beforeNodes = doc.nodes();
+  const italicNode = beforeNodes[2];
+  const result = doc.applyEdit(createSelection(5, 5), {
+    type: "insert_text",
+    text: "!",
+  });
+
+  assert.equal(result.selection.start, 6);
+  assert.equal(result.selection.end, 6);
+  assert.equal(result.doc.toSource(), "[b]hello![/b] [i]world[/i]");
+  assert.equal(result.doc.nodes()[2], italicNode);
 });
 
 test("DOM reads require normalization when browser nests identical color wrappers", () => {

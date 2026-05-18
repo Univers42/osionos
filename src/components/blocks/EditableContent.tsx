@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/08 19:04:24 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/07 16:29:52 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/12 23:14:09 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -612,6 +612,9 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   );
   const linkPickerRef = useRef<HTMLDivElement | null>(null);
   const canonicalSourceRef = useRef(content);
+  const lastEmittedSourceRef = useRef(content);
+  const pendingChangeRef = useRef<string | null>(null);
+  const pendingChangeFrameRef = useRef<number | null>(null);
   const renderedContentCache = useRef<{ source: string; html: string }>({
     source: "",
     html: "",
@@ -695,7 +698,41 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
   useEffect(() => {
     canonicalSourceRef.current = content;
+    lastEmittedSourceRef.current = content;
   }, [content]);
+
+  const cancelPendingChangeFrame = useCallback(() => {
+    if (pendingChangeFrameRef.current === null) return;
+    cancelAnimationFrame(pendingChangeFrameRef.current);
+    pendingChangeFrameRef.current = null;
+  }, []);
+
+  const emitChange = useCallback((source: string) => {
+    if (source === lastEmittedSourceRef.current) return;
+    lastEmittedSourceRef.current = source;
+    onChange(source);
+  }, [onChange]);
+
+  const flushPendingChange = useCallback((fallbackSource?: string | null) => {
+    cancelPendingChangeFrame();
+    const nextSource = pendingChangeRef.current ?? fallbackSource;
+    pendingChangeRef.current = null;
+    if (nextSource != null) emitChange(nextSource);
+  }, [cancelPendingChangeFrame, emitChange]);
+
+  const scheduleChange = useCallback((source: string) => {
+    pendingChangeRef.current = source;
+    if (pendingChangeFrameRef.current !== null) return;
+
+    pendingChangeFrameRef.current = requestAnimationFrame(() => {
+      pendingChangeFrameRef.current = null;
+      const nextSource = pendingChangeRef.current;
+      pendingChangeRef.current = null;
+      if (nextSource != null) emitChange(nextSource);
+    });
+  }, [emitChange]);
+
+  useEffect(() => () => flushPendingChange(), [flushPendingChange]);
 
   const renderContent = useCallback(
     (nextContent: string, renderMathAsSource = isFocused.current) => {
@@ -776,9 +813,9 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     const { source } = readInlineEditorDomState(ref.current);
     const normalizedSource = normalizeInlineSource(source);
     canonicalSourceRef.current = normalizedSource;
-    onChange(normalizedSource);
+    flushPendingChange(normalizedSource);
     return normalizedSource;
-  }, [onChange]);
+  }, [flushPendingChange]);
 
   const handleInput = useCallback(() => {
     if (isComposing.current) {
@@ -806,9 +843,9 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       }
     }
 
-    onChange(normalizedSource);
+    scheduleChange(normalizedSource);
     requestAnimationFrame(updateSelectionSnapshot);
-  }, [getRenderedInlineHtml, onChange, updateSelectionSnapshot]);
+  }, [getRenderedInlineHtml, scheduleChange, updateSelectionSnapshot]);
 
   const handleKeyUp = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -873,7 +910,8 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         return;
       }
 
-      onChange(nextContent);
+      flushPendingChange();
+      emitChange(nextContent);
       renderContent(nextContent);
       root.focus();
 
@@ -885,7 +923,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         updateSelectionSnapshot();
       });
     },
-    [onChange, renderContent, selectionSnapshot, updateSelectionSnapshot],
+    [emitChange, flushPendingChange, renderContent, selectionSnapshot, updateSelectionSnapshot],
   );
 
   const handleToggleInlineFormat = useCallback(
@@ -985,10 +1023,14 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         return;
       }
 
+      if (e.key.length !== 1 || e.metaKey || e.ctrlKey || e.altKey) {
+        flushPendingChange(canonicalSourceRef.current);
+      }
+
       onKeyDown(e);
       requestAnimationFrame(updateSelectionSnapshot);
     },
-    [handleInlineFormattingShortcut, onKeyDown, updateSelectionSnapshot],
+    [flushPendingChange, handleInlineFormattingShortcut, onKeyDown, updateSelectionSnapshot],
   );
 
   const handleApplyExternalLink = useCallback(

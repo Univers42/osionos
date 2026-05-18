@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 05:03:32 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 19:49:09 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,6 +22,7 @@ import {
   createOfflineWorkspace,
   fetchWorkspaces,
   apiJwtFromSessionToken,
+  pageApiJwtFromSessionToken,
   isBridgeSession,
   loginPersona,
   partition,
@@ -518,7 +519,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
 
   activeJwt: () => apiJwtFromSessionToken(get().activeSession()?.accessToken) || null,
 
-  activePageJwt: () => get().activeSession()?.accessToken || null,
+  activePageJwt: () => pageApiJwtFromSessionToken(get().activeSession()?.accessToken) || null,
 
   personaById: (id: string) => get().personas.find(p => p.id === id),
 }));

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:25:40 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:25:41 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/11 22:04:13 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,63 +14,14 @@ import {
   DEFAULT_COLOR_PRESETS,
   type ColorPickerPreset,
 } from '@univers42/ui-collection';
+import { normalizeHexColor, normalizeInlineColorToken } from './inlineColorTokens';
+export { normalizeInlineColorToken } from './inlineColorTokens';
 
 export interface InlineColorOption extends ColorPickerPreset {
   id: string;
   textColor: string;
   backgroundColor: string;
   swatch: string;
-}
-
-const LEGACY_INLINE_COLOR_ALIASES: Record<string, string> = {
-  gray: '#334155',
-  brown: '#F59E0B',
-  orange: '#F59E0B',
-  yellow: '#F59E0B',
-  green: '#10B981',
-  blue: '#0EA5E9',
-  purple: '#4F46E5',
-  pink: '#F43F5E',
-  red: '#F43F5E',
-  slate: '#334155',
-  indigo: '#4F46E5',
-  sky: '#0EA5E9',
-  emerald: '#10B981',
-  amber: '#F59E0B',
-  rose: '#F43F5E',
-  white: '#FFFFFF',
-  black: '#0F172A',
-};
-
-function normalizeHexColor(value: string | undefined | null): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const normalized = value.trim().toUpperCase();
-  if (/^#[0-9A-F]{6}$/.test(normalized) || /^#[0-9A-F]{8}$/.test(normalized)) {
-    return normalized;
-  }
-
-  const shortMatch = normalized.match(/^#([0-9A-F]{3,4})$/);
-  if (!shortMatch) {
-    const rgbMatch = normalized.match(
-      /^RGBA?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(?:\d+|\d*\.\d+))?\s*\)$/,
-    );
-    if (!rgbMatch) {
-      return null;
-    }
-
-    const rgb = rgbMatch.slice(1, 4).map((channel) =>
-      Number.parseInt(channel, 10).toString(16).padStart(2, '0').toUpperCase(),
-    );
-    return `#${rgb.join('')}`;
-  }
-
-  const [r, g, b, a] = shortMatch[1].split('');
-  return a
-    ? `#${r}${r}${g}${g}${b}${b}${a}${a}`
-    : `#${r}${r}${g}${g}${b}${b}`;
 }
 
 function hexToRgba(hex: string, alpha: number) {
@@ -107,15 +58,6 @@ const INLINE_COLOR_MAP = new Map(
   INLINE_COLOR_OPTIONS.map((option) => [option.id, option] as const),
 );
 
-export function normalizeInlineColorToken(token: string) {
-  const normalizedHex = normalizeHexColor(token);
-  if (normalizedHex) {
-    return normalizedHex;
-  }
-
-  const alias = token.trim().toLowerCase();
-  return LEGACY_INLINE_COLOR_ALIASES[alias] ?? null;
-}
 
 export function getInlineColorOption(colorId: string) {
   const normalizedColor = normalizeInlineColorToken(colorId);

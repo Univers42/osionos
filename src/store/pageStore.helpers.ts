@@ -6,17 +6,20 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 05:03:33 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/13 13:52:58 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import type { Block, BlockType } from "@/entities/block";
 import type { SeedPage } from "../data/seedPages";
-import type { ActivePage, PageEntry } from "@/entities/page";
+import type { ActivePage, PageEntry, PageIndexEntry } from "@/entities/page";
+import { timed } from "@/shared/lib/perf/measure";
 
 const RECENTS_KEY = "pg:recents";
-const PAGE_CACHE_KEY = "pg:pages";
-const PAGE_CACHE_SAVE_DELAY_MS = 180;
+const LEGACY_PAGE_CACHE_KEYS = ["osio:pages", "pg:pages"];
+const PAGE_CACHE_WORKSPACE_PREFIX = "osio:pages:";
+const PAGE_CACHE_SAVE_DEBOUNCE_MS = 750;
+const PAGE_CACHE_IDLE_FALLBACK_MS = 50;
 const DUPLICATE_TITLE_SUFFIX_RE = /^(.*)\((\d{1,10})\)$/;
 // Maximum positive value for a signed 32-bit integer.
 const MAX_SIGNED_INT32 = 2147483647;
@@ -24,6 +27,12 @@ const MAX_SIGNED_INT32 = 2147483647;
 /** A 24-hex-char string that looks like a MongoDB ObjectId. */
 const OBJECT_ID_RE = /^[a-f\d]{24}$/i;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+interface PageDerivedState {
+  pages: Record<string, PageEntry[]>;
+  pageIdsByWorkspace: Record<string, string[]>;
+  pagesIndex: Record<string, PageIndexEntry>;
+}
 
 /** Returns `true` when `id` looks like a valid MongoDB ObjectId. */
 export function isMongoId(id: string): boolean {
@@ -84,55 +93,220 @@ export function saveRecents(recents: ActivePage[]) {
 }
 
 export function loadPagesCache(): Record<string, PageEntry[]> {
-  try {
-    return JSON.parse(localStorage.getItem(PAGE_CACHE_KEY) ?? "{}") as Record<
-      string,
-      PageEntry[]
-    >;
-  } catch {
-    return {};
-  }
+  const splitCache = loadSplitPagesCache();
+  if (Object.keys(splitCache).length > 0) return splitCache;
+
+  return migrateLegacyPagesCache();
 }
 
-export function savePagesCache(pages: Record<string, PageEntry[]>) {
-  try {
-    localStorage.setItem(PAGE_CACHE_KEY, JSON.stringify(pages));
-  } catch {
-    // localStorage might be unavailable (e.g. private browsing quota)
+export function derivePageState(
+  pages: Record<string, PageEntry[]>,
+  previousPageIdsByWorkspace: Record<string, string[]> = {},
+): PageDerivedState {
+  const pageIdsByWorkspace: Record<string, string[]> = {};
+  const pagesIndex: Record<string, PageIndexEntry> = {};
+
+  for (const [workspaceId, workspacePages] of Object.entries(pages)) {
+    const pageIds = workspacePages.map((page, index) => {
+      pagesIndex[page._id] = { workspaceId, index };
+      return page._id;
+    });
+    const previousPageIds = previousPageIdsByWorkspace[workspaceId];
+    pageIdsByWorkspace[workspaceId] = areStringArraysEqual(previousPageIds, pageIds)
+      ? previousPageIds
+      : pageIds;
   }
+
+  return { pages, pageIdsByWorkspace, pagesIndex };
+}
+
+function areStringArraysEqual(left: readonly string[] | undefined, right: readonly string[]): left is string[] {
+  return !!left && left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+export function savePagesCache(
+  pages: Record<string, PageEntry[]>,
+  dirtyWorkspaceIds?: string | string[],
+) {
+  enqueuePagesCachePersist(pages, dirtyWorkspaceIds);
 }
 
 let pendingPagesCache: Record<string, PageEntry[]> | null = null;
-let pendingPagesCacheTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingPagesCacheMicrotask = false;
+let pendingPagesCacheDebounceHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
+let pendingPagesCacheIdleHandle: number | null = null;
+let pendingPagesCacheTimeoutHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
+const dirtyWorkspaceIds = new Set<string>();
 
-export function schedulePagesCachePersist(pages: Record<string, PageEntry[]>) {
+type RequestIdleCallback = (
+  callback: IdleRequestCallback,
+  options?: IdleRequestOptions,
+) => number;
+type CancelIdleCallback = (handle: number) => void;
+
+export function schedulePagesCachePersist(
+  pages: Record<string, PageEntry[]>,
+  dirtyWorkspaceIds?: string | string[],
+) {
+  enqueuePagesCachePersist(pages, dirtyWorkspaceIds);
+}
+
+function enqueuePagesCachePersist(
+  pages: Record<string, PageEntry[]>,
+  workspaceIds?: string | string[],
+) {
   pendingPagesCache = pages;
+  markDirtyWorkspaces(workspaceIds ?? Object.keys(pages));
 
-  if (pendingPagesCacheTimer) {
-    clearTimeout(pendingPagesCacheTimer);
+  if (pendingPagesCacheMicrotask) {
+    return;
   }
 
-  pendingPagesCacheTimer = setTimeout(() => {
-    flushScheduledPagesCachePersist();
-  }, PAGE_CACHE_SAVE_DELAY_MS);
+  pendingPagesCacheMicrotask = true;
+  queueMicrotask(() => {
+    pendingPagesCacheMicrotask = false;
+    scheduleDebouncedPagesCacheFlush();
+  });
 }
 
 export function flushScheduledPagesCachePersist() {
-  if (pendingPagesCacheTimer) {
-    clearTimeout(pendingPagesCacheTimer);
-    pendingPagesCacheTimer = null;
-  }
+  cancelIdlePagesCacheFlush();
 
   if (!pendingPagesCache) {
     return;
   }
 
-  savePagesCache(pendingPagesCache);
+  const pages = pendingPagesCache;
+  const workspaceIds = [...dirtyWorkspaceIds];
   pendingPagesCache = null;
+  dirtyWorkspaceIds.clear();
+
+  timed("savePagesCache", () => {
+    try {
+      for (const workspaceId of workspaceIds) {
+        const workspacePages = pages[workspaceId];
+        if (workspacePages) {
+          localStorage.setItem(workspaceCacheKey(workspaceId), JSON.stringify(workspacePages));
+        } else {
+          localStorage.removeItem(workspaceCacheKey(workspaceId));
+        }
+      }
+      for (const legacyKey of LEGACY_PAGE_CACHE_KEYS) {
+        localStorage.removeItem(legacyKey);
+      }
+    } catch {
+      // localStorage might be unavailable (e.g. private browsing quota)
+    }
+  });
 }
 
 if (globalThis.window !== undefined) {
-  globalThis.addEventListener("beforeunload", flushScheduledPagesCachePersist);
+  globalThis.addEventListener("pagehide", flushScheduledPagesCachePersist);
+}
+
+function loadSplitPagesCache(): Record<string, PageEntry[]> {
+  const pages: Record<string, PageEntry[]> = {};
+
+  try {
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(PAGE_CACHE_WORKSPACE_PREFIX)) continue;
+      const workspaceId = key.slice(PAGE_CACHE_WORKSPACE_PREFIX.length);
+      pages[workspaceId] = JSON.parse(localStorage.getItem(key) ?? "[]") as PageEntry[];
+    }
+  } catch {
+    return {};
+  }
+
+  return pages;
+}
+
+function migrateLegacyPagesCache(): Record<string, PageEntry[]> {
+  for (const legacyKey of LEGACY_PAGE_CACHE_KEYS) {
+    try {
+      const raw = localStorage.getItem(legacyKey);
+      if (!raw) continue;
+      const pages = JSON.parse(raw) as Record<string, PageEntry[]>;
+      for (const [workspaceId, workspacePages] of Object.entries(pages)) {
+        localStorage.setItem(workspaceCacheKey(workspaceId), JSON.stringify(workspacePages));
+      }
+      localStorage.removeItem(legacyKey);
+      return pages;
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+function workspaceCacheKey(workspaceId: string): string {
+  return `${PAGE_CACHE_WORKSPACE_PREFIX}${workspaceId}`;
+}
+
+function markDirtyWorkspaces(workspaceIds: string | string[]) {
+  const ids = Array.isArray(workspaceIds) ? workspaceIds : [workspaceIds];
+  for (const workspaceId of ids) {
+    if (workspaceId) dirtyWorkspaceIds.add(workspaceId);
+  }
+}
+
+function scheduleDebouncedPagesCacheFlush() {
+  if (pendingPagesCacheDebounceHandle !== null) {
+    globalThis.clearTimeout(pendingPagesCacheDebounceHandle);
+  }
+
+  pendingPagesCacheDebounceHandle = globalThis.setTimeout(() => {
+    pendingPagesCacheDebounceHandle = null;
+    scheduleIdlePagesCacheFlush();
+  }, PAGE_CACHE_SAVE_DEBOUNCE_MS);
+}
+
+function scheduleIdlePagesCacheFlush() {
+  if (pendingPagesCacheIdleHandle !== null || pendingPagesCacheTimeoutHandle !== null) return;
+
+  const requestIdle = (globalThis as typeof globalThis & {
+    requestIdleCallback?: RequestIdleCallback;
+  }).requestIdleCallback;
+
+  if (requestIdle) {
+    pendingPagesCacheIdleHandle = requestIdle(() => {
+      pendingPagesCacheIdleHandle = null;
+      flushScheduledPagesCachePersist();
+    });
+    return;
+  }
+
+  pendingPagesCacheTimeoutHandle = globalThis.setTimeout(() => {
+    pendingPagesCacheTimeoutHandle = null;
+    flushScheduledPagesCachePersist();
+  }, PAGE_CACHE_IDLE_FALLBACK_MS);
+}
+
+function cancelIdlePagesCacheFlush() {
+  if (pendingPagesCacheDebounceHandle !== null) {
+    globalThis.clearTimeout(pendingPagesCacheDebounceHandle);
+    pendingPagesCacheDebounceHandle = null;
+  }
+
+  if (pendingPagesCacheTimeoutHandle !== null) {
+    globalThis.clearTimeout(pendingPagesCacheTimeoutHandle);
+    pendingPagesCacheTimeoutHandle = null;
+  }
+
+  if (pendingPagesCacheIdleHandle === null) return;
+
+  const cancelIdle = (globalThis as typeof globalThis & {
+    cancelIdleCallback?: CancelIdleCallback;
+  }).cancelIdleCallback;
+
+  if (cancelIdle) {
+    cancelIdle(pendingPagesCacheIdleHandle);
+  } else {
+    clearTimeout(pendingPagesCacheIdleHandle);
+  }
+
+  pendingPagesCacheIdleHandle = null;
 }
 
 export function mergeWorkspacePages(

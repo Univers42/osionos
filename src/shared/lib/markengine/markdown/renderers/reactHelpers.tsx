@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   reactHelpers.tsx                                   :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:17 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:17 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 // React renderer — table, inline, and helper functions
 import React from "react";
 import type { BlockNode, InlineNode } from "../ast";
@@ -8,11 +20,24 @@ import {
   shouldSuppressInlineBackground,
   unwrapCodeRichStyles,
 } from "./inlineStyleHelpers";
+import { isExternalUrl, sanitizeUrl } from "../../renderCore";
+
+export interface ReactRenderHelperOptions {
+  classPrefix: string;
+  externalLinks: boolean;
+  blockState?: string;
+  mathRenderer?: (value: string, display: boolean) => React.ReactElement;
+  imageRenderer?: (
+    src: string,
+    alt: string,
+    title?: string,
+  ) => React.ReactElement;
+  internalLinkRenderer?: (pageId: string) => React.ReactNode;
+}
 
 export function renderTable(
   node: Extract<BlockNode, { type: "table" }>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  o: any,
+  o: ReactRenderHelperOptions,
   key: number | string,
 ): React.ReactElement {
   const blockState =
@@ -73,16 +98,14 @@ export function renderTable(
 
 export function renderInlines(
   nodes: InlineNode[],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  o: any,
+  o: ReactRenderHelperOptions,
 ): React.ReactNode[] {
   return nodes.map((n, i) => renderInlineNode(n, o, i));
 }
 
 export function renderInlineNode(
   node: InlineNode,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  o: any,
+  o: ReactRenderHelperOptions,
   key: number | string,
 ): React.ReactNode {
   switch (node.type) {
@@ -193,10 +216,11 @@ export function renderInlineNode(
       );
 
     case "link": {
-      const isExt = isExternal(node.href);
+      const href = sanitizeUrl(node.href);
+      const isExt = isExternalUrl(href);
       const props: Record<string, unknown> = {
         key,
-        href: node.href,
+        href: href || "#",
         title: node.title || undefined,
         className: "editor-link",
         ...(o.externalLinks && isExt
@@ -228,12 +252,14 @@ export function renderInlineNode(
       );
 
     case "image": {
+      const src = sanitizeUrl(node.src);
+      if (!src) return null;
       if (o.imageRenderer) {
-        return o.imageRenderer(node.src, node.alt, node.title);
+        return o.imageRenderer(src, node.alt, node.title);
       }
       return React.createElement("img", {
         key,
-        src: node.src,
+        src,
         alt: node.alt,
         title: node.title || undefined,
       });
@@ -283,8 +309,3 @@ export function renderInlineNode(
   }
 }
 
-// HELPERS
-
-export function isExternal(href: string): boolean {
-  return /^https?:\/\//.test(href);
-}

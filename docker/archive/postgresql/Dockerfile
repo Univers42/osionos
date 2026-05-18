@@ -1,4 +1,4 @@
-FROM postgres:16-alpine
+FROM public.ecr.aws/docker/library/postgres:16-alpine
 
 LABEL maintainer="dlesieur"
 LABEL description="osionos DBMS — PostgreSQL 16 with custom config & tooling"

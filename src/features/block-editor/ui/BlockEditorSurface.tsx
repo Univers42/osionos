@@ -1,8 +1,26 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   BlockEditorSurface.tsx                             :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus } from "lucide-react";
 
 import type { Block } from "@/entities/block";
 import { isParentable, selfRendersChildren } from "@/entities/block";
+import {
+	estimateBlockHeight,
+	ROOT_BLOCK_VIRTUALIZATION_OVERSCAN,
+	ROOT_BLOCK_VIRTUALIZATION_THRESHOLD,
+} from "@/entities/block/model/blockVirtualization";
 import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import {
@@ -12,6 +30,8 @@ import {
 import { BlockContextMenu } from "./BlockContextMenu";
 import { PageSelectorMenu } from "./PageSelectorMenu";
 import { getBlockSurfaceStyle } from "../model/blockColors";
+import { VIRTUAL_BLOCK_FOCUS_EVENT } from "../model/blockDomFocus";
+import { commitBlockDraft, useBlockDraftContent } from "../model/blockDraftStore";
 
 type DropPosition = "above" | "below" | "inside" | "left" | "right" | null;
 const DND_TYPE = "application/x-playground-block-id";
@@ -61,6 +81,7 @@ export interface SurfaceBlockEditorProps {
 	onPaste?: (e: React.ClipboardEvent) => void;
 	onDeleteCodeBlock?: () => void;
 	onUpdateBlock?: (blockId: string, updates: Partial<Block>) => void;
+	onBeforeStructuralEdit?: () => void;
 	onRequestSlashMenu?: (position: { x: number; y: number }) => void;
 	renderChildren?: () => React.ReactNode;
 	focusBlock: (blockId: string, cursorEnd?: boolean) => void;
@@ -104,7 +125,7 @@ function isInteractiveSelectionTarget(target: EventTarget | null): boolean {
 	if (!(target instanceof Element)) return true;
 	return Boolean(
 		target.closest(
-			'button, input, textarea, select, a, [contenteditable="true"], [data-column-resize-handle], [data-layout-cell-handle]',
+			'button, input, textarea, select, a, [contenteditable="true"], [data-column-resize-handle], [data-layout-cell-handle], [data-table-handle]',
 		),
 	);
 }
@@ -352,6 +373,21 @@ function getDropIndicatorClassName(position: Exclude<DropPosition, null>) {
 	}
 }
 
+function resolveScrollElement(root: HTMLElement | null): HTMLElement | null {
+	return root?.closest<HTMLElement>(".osionos-page") ?? null;
+}
+
+function measureScrollMargin(root: HTMLElement, scrollElement: HTMLElement): number {
+	const rootRect = root.getBoundingClientRect();
+	const scrollRect = scrollElement.getBoundingClientRect();
+	return Math.max(0, rootRect.top - scrollRect.top + scrollElement.scrollTop);
+}
+
+function getVirtualFocusBlockId(event: Event): string | null {
+	const detail = (event as CustomEvent<{ blockId?: unknown }>).detail;
+	return typeof detail?.blockId === "string" ? detail.blockId : null;
+}
+
 export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	pageId,
 	source,
@@ -393,6 +429,8 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		updateContent,
 		moveBlock,
 		moveBlockAcrossTree,
+		pushSnapshot,
+		flushPendingDrafts,
 	} = usePlaygroundBlockEditor(source ?? pageId);
 	const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
 	const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
@@ -409,14 +447,14 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 
 	useEffect(() => {
 		const entry: SurfaceRegistryEntry = {
-			getContent: () => blocksRef.current,
+			getContent: () => flushPendingDrafts("structural"),
 			updateContent,
 		};
 		surfaceRegistry.set(sourceKey, entry);
 		return () => {
 			if (surfaceRegistry.get(sourceKey) === entry) surfaceRegistry.delete(sourceKey);
 		};
-	}, [sourceKey, updateContent]);
+	}, [flushPendingDrafts, sourceKey, updateContent]);
 
 	useEffect(() => {
 		const syncFocusedBlock = () => {
@@ -449,6 +487,12 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	const handleRequestSlashMenu = useCallback((blockId: string, position: { x: number; y: number }) => {
 		setSlashMenu({ blockId, position, filter: "" });
 	}, [setSlashMenu]);
+
+	const handleBeforeStructuralEdit = useCallback(() => {
+		const currentBlocks = flushPendingDrafts("structural");
+		blocksRef.current = currentBlocks;
+		pushSnapshot(currentBlocks);
+	}, [flushPendingDrafts, pushSnapshot]);
 
 	const updateMouseSelection = useCallback((rect: SelectionRect) => {
 		const root = selectionRootRef.current;
@@ -535,6 +579,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 				onUpdateBlock={(blockId, updates) => updateBlock(pageId, blockId, updates)}
 				registerRef={registerBlockRef}
 				focusBlock={focusBlock}
+				onBeforeStructuralEdit={handleBeforeStructuralEdit}
 				onRequestSlashMenu={handleRequestSlashMenu}
 				onContextMenu={openContextMenu}
 				renderBlockEditor={renderBlockEditor}
@@ -557,8 +602,10 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 					position={slashMenu.position}
 					filter={slashMenu.filter}
 					onSelect={(item) => {
+						const currentBlocks = flushPendingDrafts("shortcut");
+						blocksRef.current = currentBlocks;
 						if (item.kind === "turn-into") {
-							handleSlashTurnIntoSelect(item.blockType, blocks, {
+							handleSlashTurnIntoSelect(item.blockType, currentBlocks, {
 								calloutIcon: item.calloutIcon,
 								placeholderText: item.placeholderText,
 								layoutMode: item.layoutMode,
@@ -566,20 +613,24 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 							return;
 						}
 						if (item.kind === "create-page") {
-							runEditorAction(handleSlashCreatePageSelect(blocks));
+							runEditorAction(handleSlashCreatePageSelect(currentBlocks));
 							return;
 						}
 						if (item.kind === "inline") {
-							handleSlashInlineSelect(item.insertText, blocks);
+							handleSlashInlineSelect(item.insertText, currentBlocks);
 							return;
 						}
 						if (item.kind === "database-view") {
-							handleSlashDatabaseViewSelect(item.databaseId, item.viewId, blocks);
+							handleSlashDatabaseViewSelect(item.databaseId, item.viewId, currentBlocks);
 							return;
 						}
-						handleSlashSelect(item.blockType, blocks, item.calloutIcon, item.layoutMode);
+						handleSlashSelect(item.blockType, currentBlocks, item.calloutIcon, item.layoutMode);
 					}}
-					onMediaSelect={(kind, value) => handleSlashMediaSelect(kind, value, blocks)}
+					onMediaSelect={(kind, value) => {
+						const currentBlocks = flushPendingDrafts("shortcut");
+						blocksRef.current = currentBlocks;
+						handleSlashMediaSelect(kind, value, currentBlocks);
+					}}
 					onClose={() => setSlashMenu(null)}
 				/>
 			) : null}
@@ -633,6 +684,7 @@ interface BlockTreeProps {
 	onUpdateBlock: (blockId: string, updates: Partial<Block>) => void;
 	registerRef: (blockId: string, el: HTMLElement | null) => void;
 	focusBlock: (blockId: string, cursorEnd?: boolean) => void;
+	onBeforeStructuralEdit: () => void;
 	onContextMenu: (e: React.MouseEvent, blockId: string) => void;
 	onRequestSlashMenu: (blockId: string, position: { x: number; y: number }) => void;
 	renderBlockEditor: (props: SurfaceBlockEditorProps) => React.ReactNode;
@@ -664,33 +716,110 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 	onUpdateBlock,
 	registerRef,
 	focusBlock,
+	onBeforeStructuralEdit,
 	onContextMenu,
 	onRequestSlashMenu,
 	renderBlockEditor,
 }) => {
-	let numberedCounter = 0;
-
-	return (
-		<ul
-			data-testid={isRoot ? "block-tree-root" : `${parentBlockType ?? "nested"}-children`}
-			data-parent-block-type={parentBlockType ?? ""}
-			data-parent-block-id={parentBlockId ?? ""}
-			className={`${getNestedTreeClassName(parentBlockType, isRoot)} m-0 list-none p-0`}
-		>
-			{blocks.map((block) => {
+		const listRef = useRef<HTMLUListElement | null>(null);
+		const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
+		const [scrollMargin, setScrollMargin] = useState(0);
+		const renderItems = useMemo(() => {
+			let numberedCounter = 0;
+			return blocks.map((block) => {
 				const numberedIndex = block.type === "numbered_list" ? ++numberedCounter : 0;
 				if (block.type !== "numbered_list") numberedCounter = 0;
 				const nextNumberedDepth = block.type === "numbered_list" ? numberedDepth + 1 : numberedDepth;
 				const nextBulletDepth = block.type === "bulleted_list" ? bulletDepth + 1 : bulletDepth;
 				const isHighlighted = isHighlightedBranch || (highlightedRootBlockId !== null && block.id === highlightedRootBlockId);
 
-				return (
-					<li key={block.id} className="group/block-branch rounded-md">
-						<DraggablePlaygroundBlock
-							block={block}
-							blocks={blocks}
+				return { block, numberedIndex, nextNumberedDepth, nextBulletDepth, isHighlighted };
+			});
+		}, [blocks, bulletDepth, highlightedRootBlockId, isHighlightedBranch, numberedDepth]);
+		const shouldVirtualize = isRoot && blocks.length >= ROOT_BLOCK_VIRTUALIZATION_THRESHOLD;
+		const virtualizer = useVirtualizer({
+			count: shouldVirtualize ? renderItems.length : 0,
+			getScrollElement: () => scrollElement,
+			estimateSize: (index) => estimateBlockHeight(renderItems[index]?.block ?? blocks[0]),
+			getItemKey: (index) => renderItems[index]?.block.id ?? index,
+			overscan: ROOT_BLOCK_VIRTUALIZATION_OVERSCAN,
+			scrollMargin,
+		});
+
+		useLayoutEffect(() => {
+			if (!shouldVirtualize) return;
+			const root = listRef.current;
+			const nextScrollElement = resolveScrollElement(root);
+			if (!root || !nextScrollElement) return;
+
+			const updateScrollMargin = () => {
+				setScrollElement(nextScrollElement);
+				setScrollMargin(measureScrollMargin(root, nextScrollElement));
+			};
+
+			updateScrollMargin();
+			const resizeObserver = new ResizeObserver(updateScrollMargin);
+			resizeObserver.observe(root);
+			resizeObserver.observe(nextScrollElement);
+			globalThis.addEventListener("resize", updateScrollMargin);
+			return () => {
+				resizeObserver.disconnect();
+				globalThis.removeEventListener("resize", updateScrollMargin);
+			};
+		}, [blocks.length, shouldVirtualize]);
+
+		useEffect(() => {
+			if (!shouldVirtualize) return;
+			const handleVirtualFocus = (event: Event) => {
+				const blockId = getVirtualFocusBlockId(event);
+				if (!blockId) return;
+				const index = renderItems.findIndex((item) => item.block.id === blockId);
+				if (index < 0) return;
+				virtualizer.scrollToIndex(index, { align: "auto" });
+			};
+
+			document.addEventListener(VIRTUAL_BLOCK_FOCUS_EVENT, handleVirtualFocus);
+			return () => document.removeEventListener(VIRTUAL_BLOCK_FOCUS_EVENT, handleVirtualFocus);
+		}, [renderItems, shouldVirtualize, virtualizer]);
+
+		const renderItem = (item: (typeof renderItems)[number]) => {
+			const { block, numberedIndex, nextNumberedDepth, nextBulletDepth, isHighlighted } = item;
+
+			return (
+				<>
+					<DraggablePlaygroundBlock
+						block={block}
+						blocks={blocks}
+						pageId={pageId}
+						parentBlockId={parentBlockId}
+						moveBlock={moveBlock}
+						moveBlockAcrossTree={moveBlockAcrossTree}
+						updateContent={updateContent}
+						source={source}
+						sourceKey={sourceKey}
+						rootBlocks={rootBlocks}
+						draggedBlockId={draggedBlockId}
+						setDraggedBlockId={setDraggedBlockId}
+						selectedBlockIds={selectedBlockIds}
+						onContextMenu={onContextMenu}
+					>
+						<EditableBlock
 							pageId={pageId}
+							block={block}
 							parentBlockId={parentBlockId}
+							numberedIndex={numberedIndex}
+							numberedDepth={numberedDepth}
+							bulletDepth={bulletDepth}
+							isHighlighted={isHighlighted}
+							onChange={onChange}
+							onKeyDown={onKeyDown}
+							onPaste={onPaste}
+							onDeleteBlock={onDeleteBlock}
+							onUpdateBlock={onUpdateBlock}
+							registerRef={registerRef}
+							focusBlock={focusBlock}
+							onBeforeStructuralEdit={onBeforeStructuralEdit}
+							onRequestSlashMenu={onRequestSlashMenu}
 							moveBlock={moveBlock}
 							moveBlockAcrossTree={moveBlockAcrossTree}
 							updateContent={updateContent}
@@ -701,23 +830,22 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 							setDraggedBlockId={setDraggedBlockId}
 							selectedBlockIds={selectedBlockIds}
 							onContextMenu={onContextMenu}
-						>
-							<EditableBlock
+							renderBlockEditor={renderBlockEditor}
+						/>
+					</DraggablePlaygroundBlock>
+
+					{shouldRenderChildren(block) ? (
+						<div className={isHighlighted ? "rounded-md bg-[var(--osio-bg-subtle)]" : "rounded-md transition-colors"}>
+							<BlockTree
+								blocks={block.children!}
 								pageId={pageId}
-								block={block}
-								parentBlockId={parentBlockId}
-								numberedIndex={numberedIndex}
-								numberedDepth={numberedDepth}
-								bulletDepth={bulletDepth}
-								isHighlighted={isHighlighted}
-								onChange={onChange}
-								onKeyDown={onKeyDown}
-								onPaste={onPaste}
-								onDeleteBlock={onDeleteBlock}
-								onUpdateBlock={onUpdateBlock}
-								registerRef={registerRef}
-								focusBlock={focusBlock}
-								onRequestSlashMenu={onRequestSlashMenu}
+								parentBlockType={block.type}
+								parentBlockId={block.id}
+								numberedDepth={nextNumberedDepth}
+								bulletDepth={nextBulletDepth}
+								highlightedRootBlockId={highlightedRootBlockId}
+								selectedBlockIds={selectedBlockIds}
+								isHighlightedBranch={isHighlighted}
 								moveBlock={moveBlock}
 								moveBlockAcrossTree={moveBlockAcrossTree}
 								updateContent={updateContent}
@@ -726,45 +854,67 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 								rootBlocks={rootBlocks}
 								draggedBlockId={draggedBlockId}
 								setDraggedBlockId={setDraggedBlockId}
-								selectedBlockIds={selectedBlockIds}
+								onChange={onChange}
+								onKeyDown={onKeyDown}
+								onPaste={onPaste}
+								onDeleteBlock={onDeleteBlock}
+								onUpdateBlock={onUpdateBlock}
+								registerRef={registerRef}
+								focusBlock={focusBlock}
+								onBeforeStructuralEdit={onBeforeStructuralEdit}
 								onContextMenu={onContextMenu}
+								onRequestSlashMenu={onRequestSlashMenu}
 								renderBlockEditor={renderBlockEditor}
 							/>
-						</DraggablePlaygroundBlock>
+						</div>
+					) : null}
+				</>
+			);
+		};
 
-						{shouldRenderChildren(block) ? (
-							<div className={isHighlighted ? "rounded-md bg-[var(--osio-bg-subtle)]" : "rounded-md transition-colors"}>
-								<BlockTree
-									blocks={block.children!}
-									pageId={pageId}
-									parentBlockType={block.type}
-									parentBlockId={block.id}
-									numberedDepth={nextNumberedDepth}
-									bulletDepth={nextBulletDepth}
-									highlightedRootBlockId={highlightedRootBlockId}
-									selectedBlockIds={selectedBlockIds}
-									isHighlightedBranch={isHighlighted}
-									moveBlock={moveBlock}
-									moveBlockAcrossTree={moveBlockAcrossTree}
-									updateContent={updateContent}
-									source={source}
-									sourceKey={sourceKey}
-									rootBlocks={rootBlocks}
-									draggedBlockId={draggedBlockId}
-									setDraggedBlockId={setDraggedBlockId}
-									onChange={onChange}
-									onKeyDown={onKeyDown}
-									onPaste={onPaste}
-									onDeleteBlock={onDeleteBlock}
-									onUpdateBlock={onUpdateBlock}
-									registerRef={registerRef}
-									focusBlock={focusBlock}
-									onContextMenu={onContextMenu}
-									onRequestSlashMenu={onRequestSlashMenu}
-									renderBlockEditor={renderBlockEditor}
-								/>
-							</div>
-						) : null}
+		if (shouldVirtualize) {
+			return (
+				<ul
+					ref={listRef}
+					data-testid="block-tree-root"
+					data-parent-block-type=""
+					data-parent-block-id=""
+					className="relative m-0 list-none p-0"
+					style={{ height: virtualizer.getTotalSize() }}
+				>
+					{virtualizer.getVirtualItems().map((virtualItem) => {
+						const item = renderItems[virtualItem.index];
+						if (!item) return null;
+
+						return (
+							<li
+								key={virtualItem.key}
+								data-index={virtualItem.index}
+								data-virtual-block-id={item.block.id}
+								ref={virtualizer.measureElement}
+								className="group/block-branch absolute left-0 right-0 top-0 rounded-md"
+								style={{ transform: `translateY(${virtualItem.start - scrollMargin}px)` }}
+							>
+								{renderItem(item)}
+							</li>
+						);
+					})}
+				</ul>
+			);
+		}
+
+	return (
+		<ul
+			data-testid={isRoot ? "block-tree-root" : `${parentBlockType ?? "nested"}-children`}
+			data-parent-block-type={parentBlockType ?? ""}
+			data-parent-block-id={parentBlockId ?? ""}
+			className={`${getNestedTreeClassName(parentBlockType, isRoot)} m-0 list-none p-0`}
+		>
+			{renderItems.map((item) => {
+				const { block } = item;
+				return (
+					<li key={block.id} className="group/block-branch rounded-md">
+						{renderItem(item)}
 					</li>
 				);
 			})}
@@ -838,7 +988,8 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		const draggedId = e.dataTransfer.getData(DND_TYPE) || payload?.blockId;
 		if (!draggedId || draggedId === block.id) return;
 
-		const draggedBlock = findBlockById(rootBlocks, draggedId) ?? payload?.block ?? null;
+		const currentRootBlocks = surfaceRegistry.get(sourceKey)?.getContent() ?? rootBlocks;
+		const draggedBlock = findBlockById(currentRootBlocks, draggedId) ?? payload?.block ?? null;
 		if (!draggedBlock || blockContainsBlock(draggedBlock, block.id)) return;
 		if (source.kind === "cell" && blockContainsBlockOrSelf(draggedBlock, source.layoutBlockId)) return;
 
@@ -852,13 +1003,13 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 			const originResult = removeBlockById(originSurface.getContent(), draggedId);
 			if (!originResult.removed) return;
 			originSurface.updateContent(originResult.blocks);
-			updateContent(insertExternalBlockByDropIntent(rootBlocks, originResult.removed, block.id, intent));
+			updateContent(insertExternalBlockByDropIntent(currentRootBlocks, originResult.removed, block.id, intent));
 			setDraggedBlockId(null);
 			return;
 		}
 
 		if (intent.position === "left" || intent.position === "right") {
-			updateContent(splitBlocksIntoColumns(rootBlocks, draggedId, block.id, intent.position));
+			updateContent(splitBlocksIntoColumns(currentRootBlocks, draggedId, block.id, intent.position));
 			setDraggedBlockId(null);
 			return;
 		}
@@ -937,6 +1088,7 @@ interface EditableBlockProps {
 	onUpdateBlock: (blockId: string, updates: Partial<Block>) => void;
 	registerRef: (blockId: string, el: HTMLElement | null) => void;
 	focusBlock: (blockId: string, cursorEnd?: boolean) => void;
+	onBeforeStructuralEdit: () => void;
 	onRequestSlashMenu: (blockId: string, position: { x: number; y: number }) => void;
 	moveBlock: (pageId: string, blockId: string, targetIndex: number, parentBlockId?: string | null) => void;
 	moveBlockAcrossTree: (pageId: string, blockId: string, targetParentBlockId: string | null, targetIndex: number) => void;
@@ -966,6 +1118,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 	onUpdateBlock,
 	registerRef,
 	focusBlock,
+	onBeforeStructuralEdit,
 	onRequestSlashMenu,
 	moveBlock,
 	moveBlockAcrossTree,
@@ -979,10 +1132,37 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 	onContextMenu,
 	renderBlockEditor,
 }) => {
+	const draftContent = useBlockDraftContent(sourceKey, block.id, block.content);
+	const editorBlock = useMemo(
+		() => draftContent === block.content ? block : { ...block, content: draftContent },
+		[block, draftContent],
+	);
 	const handleChange = useCallback((text: string) => onChange(block.id, text), [block.id, onChange]);
 	const handleKey = useCallback((e: React.KeyboardEvent) => onKeyDown(e, block.id, parentBlockId), [block.id, onKeyDown, parentBlockId]);
 	const handlePaste = useCallback((e: React.ClipboardEvent) => onPaste(e, block.id), [block.id, onPaste]);
-	const refCb = useCallback((el: HTMLDivElement | null) => registerRef(block.id, el), [block.id, registerRef]);
+	const blockElementRef = useRef<HTMLDivElement | null>(null);
+	const refCb = useCallback((el: HTMLDivElement | null) => {
+		blockElementRef.current = el;
+		registerRef(block.id, el);
+	}, [block.id, registerRef]);
+
+	useEffect(() => {
+		const element = blockElementRef.current;
+		if (!element) return;
+
+		const handleFocusOut = (event: FocusEvent) => {
+			const nextTarget = event.relatedTarget as Node | null;
+			if (nextTarget && element.contains(nextTarget)) return;
+			commitBlockDraft(sourceKey, block.id, "blur");
+		};
+
+		element.addEventListener("focusout", handleFocusOut);
+		return () => element.removeEventListener("focusout", handleFocusOut);
+	}, [block.id, sourceKey]);
+
+	useEffect(() => () => {
+		commitBlockDraft(sourceKey, block.id, "unmount");
+	}, [block.id, sourceKey]);
 
 	const renderChildren = useCallback(() => {
 		if (!block.children?.length) return null;
@@ -1019,6 +1199,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 									onUpdateBlock={onUpdateBlock}
 									registerRef={registerRef}
 									focusBlock={focusBlock}
+									onBeforeStructuralEdit={onBeforeStructuralEdit}
 									onContextMenu={onContextMenu}
 									onRequestSlashMenu={onRequestSlashMenu}
 									renderBlockEditor={renderBlockEditor}
@@ -1066,18 +1247,19 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 				onUpdateBlock={onUpdateBlock}
 				registerRef={registerRef}
 				focusBlock={focusBlock}
+					onBeforeStructuralEdit={onBeforeStructuralEdit}
 				onContextMenu={onContextMenu}
 				onRequestSlashMenu={onRequestSlashMenu}
 				renderBlockEditor={renderBlockEditor}
 			/>
 		);
-	}, [block.children, block.id, block.type, bulletDepth, draggedBlockId, focusBlock, isHighlighted, moveBlock, moveBlockAcrossTree, numberedDepth, onChange, onContextMenu, onDeleteBlock, onKeyDown, onPaste, onRequestSlashMenu, onUpdateBlock, pageId, registerRef, renderBlockEditor, rootBlocks, selectedBlockIds, setDraggedBlockId, source, sourceKey, updateContent]);
+	}, [block.children, block.id, block.type, bulletDepth, draggedBlockId, focusBlock, isHighlighted, moveBlock, moveBlockAcrossTree, numberedDepth, onBeforeStructuralEdit, onChange, onContextMenu, onDeleteBlock, onKeyDown, onPaste, onRequestSlashMenu, onUpdateBlock, pageId, registerRef, renderBlockEditor, rootBlocks, selectedBlockIds, setDraggedBlockId, source, sourceKey, updateContent]);
 
 	return (
 		<div data-block-id={block.id} data-block-type={block.type} ref={refCb} className="-mx-1 rounded-md px-1" style={getBlockSurfaceStyle(block)}>
 			{renderBlockEditor({
 				pageId,
-				block,
+				block: editorBlock,
 				numberedIndex,
 				numberedDepth,
 				bulletDepth,
@@ -1087,6 +1269,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 				onPaste: handlePaste,
 				onDeleteCodeBlock: () => onDeleteBlock(block.id),
 				onUpdateBlock,
+				onBeforeStructuralEdit,
 				focusBlock,
 				onRequestSlashMenu: (position) => onRequestSlashMenu(block.id, position),
 				renderChildren,

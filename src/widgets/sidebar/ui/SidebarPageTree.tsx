@@ -6,13 +6,14 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/09 23:07:10 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/05/13 13:52:58 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Plus, Mail, CalendarRange, Monitor, Hash, Lock, MessageSquare, Volume2, Video, GitBranch, Archive, Bot } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
+import { useShallow } from "zustand/react/shallow";
 
 import type { ActivePage, PageEntry } from "@/entities/page";
 import { SidebarNavItem } from "./SidebarNavItem";
@@ -22,8 +23,9 @@ import { PageOptionsMenu } from "@/features/page-management";
 import { usePageStore } from "@/store/usePageStore";
 import {
   canReadPage,
-  getCurrentPageAccessContext,
+  usePageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
+import { isPerfEnabled } from "@/shared/lib/perf/measure";
 import { useUserStore } from "@/features/auth";
 import {
   resolveWorkspaceConfig,
@@ -32,6 +34,43 @@ import {
   type WorkspaceChannelType,
   workspaceConfigKey,
 } from "@/shared/config/workspaceConfigStore";
+
+const OSIONOS_MAIL_URL = ((import.meta.env as Record<string, string>)['VITE_MAIL_APP_URL'] ?? 'http://localhost:3002').trim();
+const OSIONOS_CALENDAR_URL = ((import.meta.env as Record<string, string>)['VITE_CALENDAR_APP_URL'] ?? 'http://localhost:3003').trim();
+const EMPTY_PAGE_IDS: readonly string[] = [];
+const EMPTY_WORKSPACE_PAGES: readonly PageEntry[] = [];
+type PageStoreState = ReturnType<typeof usePageStore.getState>;
+type RootPageBucket = "agent" | "private" | "owned-shared" | "shared-workspace";
+
+function selectPageAccessEntry(state: PageStoreState, pageId: string): PageEntry | null {
+  const index = state.pagesIndex[pageId];
+  const page = index ? state.pages[index.workspaceId]?.[index.index] : undefined;
+  if (!page) return null;
+  return {
+    _id: page._id,
+    title: page.title,
+    workspaceId: page.workspaceId,
+    ownerId: page.ownerId,
+    visibility: page.visibility,
+    collaborators: page.collaborators,
+  };
+}
+
+function selectRootPageIds(
+  pages: readonly PageEntry[],
+  bucket: RootPageBucket,
+  accessContext: ReturnType<typeof usePageAccessContext>,
+): string[] {
+  return pages
+    .filter((page) => {
+      if (page.parentPageId || page.archivedAt || !canReadPage(page, accessContext)) return false;
+      if (bucket === "agent") return page.surface === "agent";
+      if (bucket === "private") return page.surface !== "agent" && page.surface !== "home" && page.visibility !== "shared";
+      if (bucket === "owned-shared") return page.surface !== "agent" && page.surface !== "home" && page.visibility === "shared";
+      return page.surface !== "home";
+    })
+    .map((page) => page._id);
+}
 
 interface WorkspaceRef {
   _id: string;
@@ -50,8 +89,8 @@ const RecentPageActions: React.FC<RecentPageActionsProps> = ({
   onRedirectHome,
   onAddChild,
 }) => {
-  const page = usePageStore((s) => s.pageById(recent.id));
-  const accessContext = getCurrentPageAccessContext();
+  const page = usePageStore(useShallow((s) => selectPageAccessEntry(s, recent.id)));
+  const accessContext = usePageAccessContext();
 
   if (!page || !canReadPage(page, accessContext)) {
     return null;
@@ -93,8 +132,8 @@ const RecentSidebarItem: React.FC<RecentSidebarItemProps> = ({
   onRedirectHome,
   onAddChild,
 }) => {
-  const page = usePageStore((s) => s.pageById(recent.id));
-  const accessContext = getCurrentPageAccessContext();
+  const page = usePageStore(useShallow((s) => selectPageAccessEntry(s, recent.id)));
+  const accessContext = usePageAccessContext();
 
   if (!page || !canReadPage(page, accessContext)) {
     return null;
@@ -128,11 +167,12 @@ const RecentSidebarItem: React.FC<RecentSidebarItemProps> = ({
 
 interface SidebarPageTreeProps {
   recents: ActivePage[];
-  activePage: ActivePage | null;
+  activePageId: string | null;
+  activePageKind: ActivePage["kind"] | null;
+  activeWorkspaceId: string;
   openPage: (page: ActivePage) => void;
   privateWorkspaces: WorkspaceRef[];
   sharedWorkspaces: WorkspaceRef[];
-  pagesByWorkspace: Record<string, PageEntry[]>;
   jwt: string;
   onAddToWorkspace: (wsId: string) => void;
 }
@@ -141,6 +181,17 @@ function runWorkspaceAction(action: Promise<unknown>) {
   action.catch((error: unknown) => {
     console.error("[SidebarPageTree] Workspace action failed", error);
   });
+}
+
+function openExternalApp(url: string) {
+  const destination = url.replace(/\/+$/, "");
+  if (!destination) return;
+  const opened = globalThis.open(destination, "_blank");
+  if (opened) {
+    opened.opener = null;
+    return;
+  }
+  globalThis.location.href = destination;
 }
 
 const CHANNEL_CATEGORIES: Array<{
@@ -169,39 +220,52 @@ function channelTypeLabel(type: WorkspaceChannelType): string {
 /** Scrollable page-tree area: Recents, Agents, Private, Shared, osionos apps. */
 export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   recents,
-  activePage,
+  activePageId,
+  activePageKind,
+  activeWorkspaceId,
   openPage,
   privateWorkspaces,
   sharedWorkspaces,
-  pagesByWorkspace,
   jwt,
   onAddToWorkspace,
 }) => {
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
+
+  useEffect(() => () => {
+    if (isPerfEnabled()) {
+      console.info(`[perf] SidebarPageTree renders before unmount: ${renderCountRef.current}`);
+    }
+  }, []);
+
   const addPage = usePageStore((s) => s.addPage);
-  const pageById = usePageStore((s) => s.pageById);
   const activeUserId = useUserStore((s) => s.activeUserId);
-  const activeWorkspace = useUserStore((s) => s.activeWorkspace());
-  const activeWorkspaceId = activeWorkspace?._id ?? privateWorkspaces[0]?._id ?? sharedWorkspaces[0]?._id ?? "";
   const workspaceKey = workspaceConfigKey(activeUserId || "anonymous", activeWorkspaceId || "workspace");
   const storedWorkspaceConfig = useWorkspaceConfigStore((s) => s.configs[workspaceKey]);
   const workspaceConfig = useMemo(() => resolveWorkspaceConfig(storedWorkspaceConfig), [storedWorkspaceConfig]);
   const addChannel = useWorkspaceConfigStore((s) => s.addChannel);
   const addThread = useWorkspaceConfigStore((s) => s.addThread);
   const updateChannel = useWorkspaceConfigStore((s) => s.updateChannel);
-  const accessContext = getCurrentPageAccessContext();
+  const accessContext = usePageAccessContext();
   const safeActiveUserId = activeUserId || "anonymous";
+  const workspacePagesKey = activeWorkspaceId || "";
+  const agentPageIds = usePageStore(useShallow((s) => selectRootPageIds(s.pages[workspacePagesKey] ?? EMPTY_WORKSPACE_PAGES, "agent", accessContext)));
+  const privatePageIds = usePageStore(useShallow((s) => selectRootPageIds(s.pages[workspacePagesKey] ?? EMPTY_WORKSPACE_PAGES, "private", accessContext)));
+  const ownedSharedPageIds = usePageStore(useShallow((s) => selectRootPageIds(s.pages[workspacePagesKey] ?? EMPTY_WORKSPACE_PAGES, "owned-shared", accessContext)));
+  const sharedWorkspaceRootPageIds = usePageStore(useShallow((s) => (
+    sharedWorkspaces.length > 0
+      ? selectRootPageIds(s.pages[workspacePagesKey] ?? EMPTY_WORKSPACE_PAGES, "shared-workspace", accessContext)
+      : EMPTY_PAGE_IDS
+  )));
 
-  const rootChannels = workspaceConfig.channels.filter((channel) => !channel.parentChannelId);
-  const visibleRootChannels = rootChannels.filter((channel) => channel.visibility === "workspace" || channel.memberIds.includes(safeActiveUserId));
-
-  const activeWorkspacePages = (pagesByWorkspace[activeWorkspaceId] ?? []).filter(
-    (page) => !page.parentPageId && !page.archivedAt && canReadPage(page, accessContext),
+  const rootChannels = useMemo(
+    () => workspaceConfig.channels.filter((channel) => !channel.parentChannelId),
+    [workspaceConfig.channels],
   );
-  const agentPages = activeWorkspacePages.filter((page) => page.surface === "agent");
-  const ownedSharedPages = activeWorkspacePages.filter((page) => page.surface !== "agent" && page.surface !== "home" && page.visibility === "shared");
-  const sharedWorkspaceRootPages = sharedWorkspaces.flatMap((workspace) => (
-    pagesByWorkspace[workspace._id] ?? []
-  ).filter((page) => !page.parentPageId && !page.archivedAt && page.surface !== "home" && canReadPage(page, accessContext)));
+  const visibleRootChannels = useMemo(
+    () => rootChannels.filter((channel) => channel.visibility === "workspace" || channel.memberIds.includes(safeActiveUserId)),
+    [rootChannels, safeActiveUserId],
+  );
 
   function channelIcon(type: WorkspaceChannelType, restricted: boolean) {
     if (restricted) return <Lock size={14} />;
@@ -306,7 +370,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         <SidebarNavItem
           icon={<GitBranch size={13} />}
           label={thread.name}
-          active={activePage?.kind === "channel" && activePage.id === thread.id}
+          active={activePageKind === "channel" && activePageId === thread.id}
           onClick={() => openChannel(thread)}
           rightElement={<span className="pr-2 text-[10px] uppercase text-[var(--osio-fg-subtle)]">thread</span>}
         />
@@ -320,7 +384,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         <SidebarNavItem
           icon={channelIcon(channel.type, channel.visibility === "members")}
           label={channel.name}
-          active={activePage?.kind === "channel" && activePage.id === channel.id}
+          active={activePageKind === "channel" && activePageId === channel.id}
           onClick={() => openChannel(channel)}
           rightElement={
             <div className="mr-1 flex items-center gap-0.5">
@@ -390,16 +454,12 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
       <SidebarSection label="Recents">
         {recents.length > 0 ? (
           recents
-            .filter((r) => {
-              const page = pageById(r.id);
-              return !!page && canReadPage(page, accessContext);
-            })
             .slice(0, 8)
             .map((r) => (
               <RecentSidebarItem
                 key={r.id}
                 recent={r}
-                activePageId={activePage?.id}
+                activePageId={activePageId}
                 onOpenPage={openPage}
                 onRedirectHome={() =>
                   usePageStore.setState({
@@ -418,14 +478,14 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
       </SidebarSection>
 
       <SidebarSection label="Agents" onAdd={createAgentPage}>
-        {agentPages.map((page) => (
+        {agentPageIds.map((pageId) => (
           <PageTreeItem
-            key={page._id}
-            page={page}
+            key={pageId}
+            pageId={pageId}
             workspaceId={activeWorkspaceId}
             jwt={jwt}
             depth={0}
-            activeId={activePage?.id}
+            activeId={activePageId}
           />
         ))}
         <SidebarNavItem
@@ -453,9 +513,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
       </SidebarSection>
 
       {privateWorkspaces.map((ws) => {
-        const pages = (pagesByWorkspace[ws._id] ?? []).filter(
-          (p) => !p.parentPageId && !p.archivedAt && p.visibility !== "shared" && p.surface !== "agent" && p.surface !== "home" && canReadPage(p, accessContext),
-        );
+        const pageIds = ws._id === activeWorkspaceId ? privatePageIds : EMPTY_PAGE_IDS;
         return (
           <SidebarSection
             key={ws._id}
@@ -466,19 +524,19 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
               /* placeholder */
             }}
           >
-            {pages.length === 0 && (
+            {pageIds.length === 0 && (
               <p className="px-2 py-1 text-xs text-[var(--osio-fg-subtle)] italic">
                 No pages yet
               </p>
             )}
-            {pages.map((page) => (
+            {pageIds.map((pageId) => (
               <PageTreeItem
-                key={page._id}
-                page={page}
+                key={pageId}
+                pageId={pageId}
                 workspaceId={ws._id}
                 jwt={jwt}
                 depth={0}
-                activeId={activePage?.id}
+                activeId={activePageId}
               />
             ))}
           </SidebarSection>
@@ -486,27 +544,27 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
       })}
 
       <SidebarSection label="Shared" onAdd={createSharedPage}>
-        {ownedSharedPages.map((page) => (
+        {ownedSharedPageIds.map((pageId) => (
           <PageTreeItem
-            key={page._id}
-            page={page}
-            workspaceId={page.workspaceId}
+            key={pageId}
+            pageId={pageId}
+            workspaceId={activeWorkspaceId}
             jwt={jwt}
             depth={0}
-            activeId={activePage?.id}
+            activeId={activePageId}
           />
         ))}
-        {sharedWorkspaceRootPages.map((page) => (
+        {sharedWorkspaceRootPageIds.map((pageId) => (
           <PageTreeItem
-            key={page._id}
-            page={page}
-            workspaceId={page.workspaceId}
+            key={pageId}
+            pageId={pageId}
+            workspaceId={activeWorkspaceId}
             jwt={jwt}
             depth={0}
-            activeId={activePage?.id}
+            activeId={activePageId}
           />
         ))}
-        {ownedSharedPages.length === 0 && sharedWorkspaceRootPages.length === 0 ? (
+        {ownedSharedPageIds.length === 0 && sharedWorkspaceRootPageIds.length === 0 ? (
           <SidebarNavItem
             icon={<Plus size={14} className="text-[var(--osio-accent)]" />}
             label="Start collaborating"
@@ -520,22 +578,18 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         <SidebarNavItem
           icon={<Mail size={16} />}
           label="osionos Mail"
-          onClick={() => {
-            /* placeholder */
-          }}
+          onClick={() => openExternalApp(OSIONOS_MAIL_URL)}
         />
         <SidebarNavItem
           icon={<CalendarRange size={16} />}
           label="osionos Calendar"
-          onClick={() => {
-            /* placeholder */
-          }}
+          onClick={() => openExternalApp(OSIONOS_CALENDAR_URL)}
         />
         <SidebarNavItem
           icon={<Monitor size={16} />}
           label="osionos Desktop"
           onClick={() => {
-            /* placeholder */
+            globalThis.location.href = "/";
           }}
         />
       </SidebarSection>

@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   inlineStyleHelpers.ts                              :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:17 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:17 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 import type { InlineNode } from "../ast";
 
 export type InlineStyleMap = Record<string, string>;
@@ -17,7 +29,7 @@ const INLINE_CODE_STYLE_MAP = {
   ["--inline-background-radius" as const]: "0",
 } satisfies InlineStyleMap;
 
-export const INLINE_CODE_STYLE = styleMapToCss(INLINE_CODE_STYLE_MAP);
+const INLINE_CODE_STYLE = styleMapToCss(INLINE_CODE_STYLE_MAP);
 
 const INLINE_BACKGROUND_RADIUS = "0.18em";
 const INLINE_BACKGROUND_PADDING = "0";

@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   useBlockHistory.ts                                 :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: claude <claude@anthropic.com>              +#+  +:+       +#+        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/03 12:00:00 by claude            #+#    #+#             */
-/*   Updated: 2026/05/03 12:00:00 by claude           ###   ########.fr       */
+/*   Updated: 2026/05/13 13:52:59 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -159,5 +159,9 @@ export function useBlockHistory(
     historyRef.current = { undoStack: [], redoStack: [] };
   }, []);
 
-  return { pushSnapshot, undo, redo, clearHistory };
+  const canUndo = useCallback(() => historyRef.current.undoStack.length > 0, []);
+
+  const canRedo = useCallback(() => historyRef.current.redoStack.length > 0, []);
+
+  return { pushSnapshot, undo, redo, clearHistory, canUndo, canRedo };
 }

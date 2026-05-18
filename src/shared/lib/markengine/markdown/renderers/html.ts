@@ -1,15 +1,21 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   html.ts                                            :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:17 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:17 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 // HTML Renderer — AST → HTML string
 //
 //
 
 import type { BlockNode, InlineNode } from "../ast";
-import {
-  getInlineBackgroundCss,
-  getInlineCodeCss,
-  getInlineTextColorCss,
-  shouldSuppressInlineBackground,
-  unwrapCodeRichStyles,
-} from "./inlineStyleHelpers";
+import { renderInlineNodesToHtml } from "./inlineHtml";
 import {
   resolveIndexedMarkdownMode,
   resolveMarkdownMode,
@@ -17,6 +23,7 @@ import {
   type MarkdownModeState,
   type MarkdownViewMode,
 } from "./renderMode";
+import { escapeHtml } from "../../renderCore";
 
 export interface HtmlRenderOptions {
   wrapperClass?: string;
@@ -50,22 +57,43 @@ export function renderHtml(
 ): string {
   const o: ResolvedHtmlRenderOptions = { ...defaults, ...opts };
   const modeState = resolveMarkdownMode(o.mode);
-  const inner = blocks
-    .map((block, index) => {
-      const blockState = resolveIndexedMarkdownMode(
-        o.mode,
-        index,
-        block,
-        o.blockModes,
-        o.resolveBlockMode,
-      );
-      return renderBlock(block, o, blockState);
-    })
-    .join("\n");
+  const inner = renderTopLevelBlocks(blocks, o);
   if (o.wrapperClass) {
     return `<article class="${esc(o.wrapperClass)}" data-mode="${modeState.name}">\n${inner}\n</article>`;
   }
   return inner;
+}
+
+function renderTopLevelBlocks(
+  blocks: BlockNode[],
+  o: ResolvedHtmlRenderOptions,
+): string {
+  let html = "";
+  for (let index = 0; index < blocks.length; index++) {
+    const blockState = resolveIndexedMarkdownMode(
+      o.mode,
+      index,
+      blocks[index],
+      o.blockModes,
+      o.resolveBlockMode,
+    );
+    if (index > 0) html += "\n";
+    html += renderBlock(blocks[index], o, blockState);
+  }
+  return html;
+}
+
+function renderChildBlocks(
+  blocks: BlockNode[],
+  o: ResolvedHtmlRenderOptions,
+  modeState: MarkdownModeState,
+): string {
+  let html = "";
+  for (let index = 0; index < blocks.length; index++) {
+    if (index > 0) html += "\n";
+    html += renderBlock(blocks[index], o, modeState);
+  }
+  return html;
 }
 
 function renderBlock(
@@ -76,7 +104,7 @@ function renderBlock(
   const blockStateAttr = ` data-block-state="${modeState.getBlockState()}"`;
   switch (node.type) {
     case "document":
-      return node.children.map((c) => renderBlock(c, o, modeState)).join("\n");
+      return renderChildBlocks(node.children, o, modeState);
 
     case "paragraph":
       return `<p${blockStateAttr}>${renderInlines(node.children, o)}</p>`;
@@ -88,7 +116,7 @@ function renderBlock(
     }
 
     case "blockquote":
-      return `<blockquote${blockStateAttr}>\n${node.children.map((c) => renderBlock(c, o, modeState)).join("\n")}\n</blockquote>`;
+      return `<blockquote${blockStateAttr}>\n${renderChildBlocks(node.children, o, modeState)}\n</blockquote>`;
 
     case "code_block": {
       const langClass = node.lang ? ` class="language-${esc(node.lang)}"` : "";
@@ -97,31 +125,15 @@ function renderBlock(
     }
 
     case "unordered_list":
-      return `<ul${blockStateAttr}>\n${node.children
-        .map(
-          (c) =>
-            `<li${blockStateAttr}>${c.children.map((b) => renderBlock(b, o, modeState)).join("\n")}</li>`,
-        )
-        .join("\n")}\n</ul>`;
+      return `<ul${blockStateAttr}>\n${renderListItems(node.children, o, modeState, blockStateAttr)}\n</ul>`;
 
     case "ordered_list": {
       const start = node.start === 1 ? "" : ` start="${node.start}"`;
-      return `<ol${start}${blockStateAttr}>\n${node.children
-        .map(
-          (c) =>
-            `<li${blockStateAttr}>${c.children.map((b) => renderBlock(b, o, modeState)).join("\n")}</li>`,
-        )
-        .join("\n")}\n</ol>`;
+      return `<ol${start}${blockStateAttr}>\n${renderListItems(node.children, o, modeState, blockStateAttr)}\n</ol>`;
     }
 
     case "task_list":
-      return `<ul class="${o.classPrefix}-task-list"${blockStateAttr}>\n${node.children
-        .map((item) => {
-          const checked = item.checked ? " checked disabled" : " disabled";
-          const inner = renderTaskItemContent(item.children, o, modeState);
-          return `<li class="${o.classPrefix}-task-item"${blockStateAttr}><input type="checkbox"${checked} />${inner}</li>`;
-        })
-        .join("\n")}\n</ul>`;
+      return `<ul class="${o.classPrefix}-task-list"${blockStateAttr}>\n${renderTaskListItems(node.children, o, modeState, blockStateAttr)}\n</ul>`;
 
     case "thematic_break":
       return `<hr${blockStateAttr} />`;
@@ -134,9 +146,7 @@ function renderBlock(
       const title = node.title.length
         ? `<div class="${o.classPrefix}-callout-title">${renderInlines(node.title, o)}</div>\n`
         : "";
-      const body = node.children
-        .map((c) => renderBlock(c, o, modeState))
-        .join("\n");
+      const body = renderChildBlocks(node.children, o, modeState);
       return `<div class="${cls}"${blockStateAttr}>\n${title}${body}\n</div>`;
     }
 
@@ -148,30 +158,18 @@ function renderBlock(
 
     case "footnote_def": {
       const id = `fn-${esc(node.label)}`;
-      const body = node.children
-        .map((c) => renderBlock(c, o, modeState))
-        .join("\n");
+      const body = renderChildBlocks(node.children, o, modeState);
       return `<div id="${id}" class="${o.classPrefix}-footnote"${blockStateAttr}>\n<sup>${esc(node.label)}</sup>\n${body}\n</div>`;
     }
 
     case "definition_list": {
-      const items = node.items
-        .map(
-          (item) =>
-            `<dt>${renderInlines(item.term, o)}</dt>\n` +
-            item.definitions
-              .map((def) => `<dd>${renderInlines(def, o)}</dd>`)
-              .join("\n"),
-        )
-        .join("\n");
+      const items = renderDefinitionItems(node.items, o);
       return `<dl${blockStateAttr}>\n${items}\n</dl>`;
     }
 
     case "toggle": {
       const summary = renderInlines(node.summary, o);
-      const body = node.children
-        .map((c) => renderBlock(c, o, modeState))
-        .join("\n");
+      const body = renderChildBlocks(node.children, o, modeState);
       return `<details${blockStateAttr}>\n<summary>${summary}</summary>\n${body}\n</details>`;
     }
 
@@ -189,7 +187,55 @@ function renderTaskItemContent(
   if (nodes.length === 1 && nodes[0].type === "paragraph") {
     return renderInlines(nodes[0].children, o);
   }
-  return nodes.map((b) => renderBlock(b, o, modeState)).join("\n");
+  return renderChildBlocks(nodes, o, modeState);
+}
+
+function renderListItems(
+  nodes: { children: BlockNode[] }[],
+  o: ResolvedHtmlRenderOptions,
+  modeState: MarkdownModeState,
+  blockStateAttr: string,
+): string {
+  let html = "";
+  for (let index = 0; index < nodes.length; index++) {
+    if (index > 0) html += "\n";
+    html += `<li${blockStateAttr}>${renderChildBlocks(nodes[index].children, o, modeState)}</li>`;
+  }
+  return html;
+}
+
+function renderTaskListItems(
+  nodes: { checked: boolean; children: BlockNode[] }[],
+  o: ResolvedHtmlRenderOptions,
+  modeState: MarkdownModeState,
+  blockStateAttr: string,
+): string {
+  let html = "";
+  for (let index = 0; index < nodes.length; index++) {
+    const item = nodes[index];
+    const checked = item.checked ? " checked disabled" : " disabled";
+    const inner = renderTaskItemContent(item.children, o, modeState);
+    if (index > 0) html += "\n";
+    html += `<li class="${o.classPrefix}-task-item"${blockStateAttr}><input type="checkbox"${checked} />${inner}</li>`;
+  }
+  return html;
+}
+
+function renderDefinitionItems(
+  items: Extract<BlockNode, { type: "definition_list" }>["items"],
+  o: ResolvedHtmlRenderOptions,
+): string {
+  let html = "";
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    if (index > 0) html += "\n";
+    html += `<dt>${renderInlines(item.term, o)}</dt>\n`;
+    for (let definitionIndex = 0; definitionIndex < item.definitions.length; definitionIndex++) {
+      if (definitionIndex > 0) html += "\n";
+      html += `<dd>${renderInlines(item.definitions[definitionIndex], o)}</dd>`;
+    }
+  }
+  return html;
 }
 
 function renderTable(
@@ -203,23 +249,23 @@ function renderTable(
     return a ? ` style="text-align:${a}"` : "";
   };
 
-  const headCells = node.head.cells
-    .map((c, i) => `<th${alignStyle(i)}>${renderInlines(c.children, o)}</th>`)
-    .join("");
+  let headCells = "";
+  for (let index = 0; index < node.head.cells.length; index++) {
+    const cell = node.head.cells[index];
+    headCells += `<th${alignStyle(index)}>${renderInlines(cell.children, o)}</th>`;
+  }
 
-  const bodyRows = node.rows
-    .map(
-      (row) =>
-        "<tr>" +
-        row.cells
-          .map(
-            (c, i) =>
-              `<td${alignStyle(i)}>${renderInlines(c.children, o)}</td>`,
-          )
-          .join("") +
-        "</tr>",
-    )
-    .join("\n");
+  let bodyRows = "";
+  for (let rowIndex = 0; rowIndex < node.rows.length; rowIndex++) {
+    const row = node.rows[rowIndex];
+    if (rowIndex > 0) bodyRows += "\n";
+    bodyRows += "<tr>";
+    for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex++) {
+      const cell = row.cells[cellIndex];
+      bodyRows += `<td${alignStyle(cellIndex)}>${renderInlines(cell.children, o)}</td>`;
+    }
+    bodyRows += "</tr>";
+  }
 
   return `<table${blockStateAttr}>\n<thead><tr>${headCells}</tr></thead>\n<tbody>\n${bodyRows}\n</tbody>\n</table>`;
 }
@@ -228,77 +274,13 @@ function renderInlines(
   nodes: InlineNode[],
   o: ResolvedHtmlRenderOptions,
 ): string {
-  return nodes.map((n) => renderInline(n, o)).join("");
-}
-
-function renderInline(node: InlineNode, o: ResolvedHtmlRenderOptions): string {
-  switch (node.type) {
-    case "text":
-      return esc(node.value);
-    case "bold":
-      return `<strong>${renderInlines(node.children, o)}</strong>`;
-    case "italic":
-      return `<em style="font-style:italic">${renderInlines(node.children, o)}</em>`;
-    case "bold_italic":
-      return `<strong><em style="font-style:italic">${renderInlines(node.children, o)}</em></strong>`;
-    case "strikethrough":
-      return `<del style="text-decoration-color:currentColor">${renderInlines(node.children, o)}</del>`;
-    case "underline":
-      return `<u>${renderInlines(node.children, o)}</u>`;
-    case "text_color":
-      return `<span data-inline-type="text_color" data-inline-color="${esc(node.color)}" style="${getInlineTextColorCss(node.color)}">${renderInlines(node.children, o)}</span>`;
-    case "background_color":
-      return `<span data-inline-type="background_color" data-inline-color="${esc(node.color)}" style="${getInlineBackgroundCss(node.color, shouldSuppressInlineBackground(node.children))}">${renderInlines(node.children, o)}</span>`;
-    case "code_rich": {
-      const {
-        nodes: codeChildren,
-        textColor,
-        backgroundColor,
-      } = unwrapCodeRichStyles(node.children);
-      const style = getInlineCodeCss(textColor, backgroundColor);
-      return `<code class="inline-code" data-inline-type="code" style="${style}">${renderInlines(codeChildren, o)}</code>`;
-    }
-    case "code":
-      return `<code class="inline-code" data-inline-type="code" style="${getInlineCodeCss()}">${esc(node.value)}</code>`;
-    case "link": {
-      const attrs = [
-        `href="${esc(node.href)}"`,
-        node.title ? `title="${esc(node.title)}"` : "",
-        o.externalLinks && isExternal(node.href)
-          ? 'target="_blank" rel="noopener noreferrer"'
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      return `<a ${attrs}>${renderInlines(node.children, o)}</a>`;
-    }
-    case "image": {
-      const titleAttr = node.title ? ` title="${esc(node.title)}"` : "";
-      return `<img src="${esc(node.src)}" alt="${esc(node.alt)}"${titleAttr} />`;
-    }
-    case "line_break":
-      return "<br />";
-    case "highlight":
-      return `<mark>${renderInlines(node.children, o)}</mark>`;
-    case "math_inline":
-      return `<span class="${o.classPrefix}-math-inline">${esc(node.value)}</span>`;
-    case "footnote_ref":
-      return `<sup><a href="#fn-${esc(node.label)}">[${esc(node.label)}]</a></sup>`;
-    case "emoji":
-      return node.value;
-    default:
-      return "";
-  }
+  return renderInlineNodesToHtml(nodes, {
+    classPrefix: o.classPrefix,
+    editorChrome: false,
+    externalLinks: o.externalLinks,
+  });
 }
 
 function esc(str: string): string {
-  return str
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function isExternal(href: string): boolean {
-  return /^https?:\/\//.test(href);
+  return escapeHtml(str);
 }

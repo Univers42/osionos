@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   parserBlockList.ts                                 :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:17 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:17 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 // Markdown parser — list block parsers (task, ordered, unordered)
 import type { BlockNode, ListItemNode, TaskItemNode } from "./ast";
 import type { ParseContext } from "./parserBlockHelpers";
@@ -86,7 +98,7 @@ export function parseTaskList(
     const match = /^[-*+]\s+\[([ xX])\]\s+(.*)/.exec(trimmed);
     if (!match) break;
 
-    if (baseIndent === null) baseIndent = indent;
+    baseIndent ??= indent;
     if (indent !== baseIndent) break;
 
     advance(ctx);
@@ -115,7 +127,7 @@ export function parseOrderedList(
     const match = /^(\d{1,9})([.)]\s+)(.*)/.exec(trimmed);
     if (!match) break;
 
-    if (baseIndent === null) baseIndent = indent;
+    baseIndent ??= indent;
     if (indent !== baseIndent) break;
 
     advance(ctx);
@@ -146,7 +158,7 @@ export function parseUnorderedList(
     const match = /^[-*+]\s+(.*)/.exec(trimmed);
     if (!match) break;
 
-    if (baseIndent === null) baseIndent = indent;
+    baseIndent ??= indent;
     if (indent !== baseIndent) break;
 
     advance(ctx);
