@@ -46,6 +46,7 @@ import {
   getAdjacentRenderedBlockId,
 } from "./playgroundBlockEditor.helpers";
 import { useBlockHistory } from "./useBlockHistory";
+import { getInlineMarkAtCaretEnd } from "./inlineMarkHelpers";
 import type {
   SlashMenuState,
   PageSelectorMenuState,
@@ -1165,6 +1166,28 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
   const handleArrowNavigation = useCallback(
     (e: React.KeyboardEvent, blockId: string, content: Block[]): boolean => {
+      if (
+        e.key === "ArrowRight" &&
+        !e.shiftKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey
+      ) {
+        const mark = getInlineMarkAtCaretEnd(e.target as HTMLElement);
+        if (mark) {
+          e.preventDefault();
+          const sel = globalThis.getSelection();
+          if (sel) {
+            const r = document.createRange();
+            r.setStartAfter(mark);
+            r.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(r);
+          }
+          return true;
+        }
+      }
+
       if (e.key === "ArrowUp") {
         if (handleArrowUp(blockId, content, focusBlock)) e.preventDefault();
         return true;
