@@ -418,3 +418,7 @@ body {
     transform: translateY(0);
   }
 }
+
+.group\/block:hover:not(:has(.group\/block:hover)) .osio-drag-handle {
+  opacity: 1;
+}

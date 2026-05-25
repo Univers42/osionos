@@ -1063,7 +1063,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 				onClick={(e) => onContextMenu(e, block.id)}
 				onDragStart={handleDragStart}
 				onDragEnd={handleDragEnd}
-				className={`absolute -left-7 ${handleTop} cursor-grab rounded p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-muted)] group-hover/block:opacity-100 active:cursor-grabbing`}
+				className={`absolute -left-7 ${handleTop} cursor-grab rounded p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-muted)] osio-drag-handle active:cursor-grabbing`}
 				aria-label="Drag to reorder block"
 				title="Drag to reorder"
 			>
