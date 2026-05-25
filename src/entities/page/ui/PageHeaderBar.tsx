@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Bell,
   Check,
@@ -38,7 +38,7 @@ import {
   usePageActions,
 } from '@/entities/page';
 import type { PageConfig, PageFont, PageVersion } from '@/shared/config/pageConfigStore';
-import { useToastStore } from '@/shared/ui';
+import { useClickOutside, useEscapeKey, useToastStore } from '@/shared/ui';
 import { usePageStore } from '@/store/usePageStore';
 
 import { PageBreadcrumbs } from './PageBreadcrumbs';
@@ -146,8 +146,15 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
   const [actionQuery, setActionQuery] = useState('');
   const pushToast = useToastStore((state) => state.push);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuBoundaryRefs = useMemo(() => [triggerRef, menuRef] as const, []);
   const normalizedQuery = actionQuery.trim().toLowerCase();
   const hasActionMatch = useMemo(() => !normalizedQuery || ACTION_LABELS.some((label) => label.includes(normalizedQuery)), [normalizedQuery]);
+
+  const closeConfig = useCallback(() => setConfigOpen(false), []);
+  useClickOutside(menuBoundaryRefs, closeConfig, configOpen);
+  useEscapeKey(closeConfig, configOpen);
 
   function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -170,6 +177,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
           <span className="hidden whitespace-nowrap text-sm text-[var(--osio-fg-subtle)] sm:inline">{actions.editedLabel}</span>
           <div className="relative">
             <button
+              ref={triggerRef}
               type="button"
               onClick={() => setConfigOpen((open) => !open)}
               className="flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
@@ -178,7 +186,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
               <MoreHorizontal size={18} />
             </button>
             {configOpen && (
-              <div className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 max-h-[80vh] w-72 overflow-y-auto rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-2 shadow-xl">
+              <div ref={menuRef} className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 max-h-[80vh] w-72 overflow-y-auto rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-2 shadow-xl">
                 <div className="px-3 pb-2">
                   <div className="flex h-8 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2">
                     <Search size={14} className="text-[var(--osio-fg-muted)]" />
