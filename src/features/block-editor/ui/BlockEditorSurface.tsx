@@ -922,6 +922,18 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 	);
 };
 
+function getHeadingClasses(type: Block["type"]): { pt: string; handleTop: string } {
+	switch (type) {
+		case "heading_1": return { pt: "pt-6", handleTop: "top-8" };
+		case "heading_2": return { pt: "pt-5", handleTop: "top-7" };
+		case "heading_3": return { pt: "pt-4", handleTop: "top-6" };
+		case "heading_4": return { pt: "pt-3", handleTop: "top-5" };
+		case "heading_5":
+		case "heading_6": return { pt: "pt-2", handleTop: "top-4" };
+		default:          return { pt: "",     handleTop: "top-2" };
+	}
+}
+
 interface DraggablePlaygroundBlockProps {
 	block: Block;
 	blocks: Block[];
@@ -1030,6 +1042,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 
 	const isDragged = draggedBlockId === block.id;
 	const isSelected = selectedBlockIds.has(block.id);
+	const { pt, handleTop } = getHeadingClasses(block.type);
 
 	return (
 		<article
@@ -1037,7 +1050,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 			data-draggable-block-id={block.id}
 			data-selected={isSelected ? "true" : undefined}
 			data-block-type={block.type}
-			className={`group/block relative rounded-md transition-colors transition-opacity hover:bg-[var(--osio-bg-subtle)] focus-within:bg-[var(--osio-bg-subtle)] ${isDragged ? "opacity-40" : ""} ${isSelected ? "bg-[var(--osio-accent)]/10 ring-1 ring-[var(--osio-accent)]/35" : ""}`}
+			className={`group/block relative rounded-md transition-colors transition-opacity hover:bg-[var(--osio-bg-subtle)] focus-within:bg-[var(--osio-bg-subtle)] ${pt} ${isDragged ? "opacity-40" : ""} ${isSelected ? "bg-[var(--osio-accent)]/10 ring-1 ring-[var(--osio-accent)]/35" : ""}`}
 			onContextMenu={(e) => onContextMenu(e, block.id)}
 			onDragOver={handleDragOver}
 			onDragLeave={handleDragLeave}
@@ -1050,7 +1063,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 				onClick={(e) => onContextMenu(e, block.id)}
 				onDragStart={handleDragStart}
 				onDragEnd={handleDragEnd}
-				className="absolute -left-7 top-2 cursor-grab rounded p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-muted)] group-hover/block:opacity-100 active:cursor-grabbing"
+				className={`absolute -left-7 ${handleTop} cursor-grab rounded p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-muted)] group-hover/block:opacity-100 active:cursor-grabbing`}
 				aria-label="Drag to reorder block"
 				title="Drag to reorder"
 			>

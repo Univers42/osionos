@@ -227,7 +227,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-2xl font-bold text-[var(--osio-fg-default)] mt-6 mb-1 leading-tight"
+          className="text-2xl font-bold text-[var(--osio-fg-default)] leading-tight"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 1")}
           onChange={onChange}
@@ -241,7 +241,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-xl font-semibold text-[var(--osio-fg-default)] mt-5 mb-1 leading-tight"
+          className="text-xl font-semibold text-[var(--osio-fg-default)] leading-tight"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 2")}
           onChange={onChange}
@@ -255,7 +255,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-lg font-semibold text-[var(--osio-fg-default)] mt-4 mb-0.5 leading-snug"
+          className="text-lg font-semibold text-[var(--osio-fg-default)] leading-snug"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 3")}
           onChange={onChange}
@@ -270,7 +270,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-base font-semibold text-[var(--osio-fg-default)] mt-3 mb-0.5 leading-snug"
+          className="text-base font-semibold text-[var(--osio-fg-default)] leading-snug"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 4")}
           onChange={onChange}
@@ -285,7 +285,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-sm font-semibold text-[var(--osio-fg-default)] mt-2 mb-0.5 leading-snug"
+          className="text-sm font-semibold text-[var(--osio-fg-default)] leading-snug"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 5")}
           onChange={onChange}
@@ -300,7 +300,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-xs font-semibold text-[var(--osio-fg-muted)] mt-2 mb-0.5 leading-snug tracking-wide"
+          className="text-xs font-semibold text-[var(--osio-fg-muted)] leading-snug tracking-wide"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 6")}
           onChange={onChange}
