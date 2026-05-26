@@ -409,7 +409,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "column_list":
       return (
-        <div className="my-1 rounded-lg border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-2">
+        <div className="my-1 rounded-lg border border-dashed border-[var(--osio-border-default)] px-2 py-2">
           {renderChildren?.() ?? (
             <span className="text-xs text-[var(--osio-fg-subtle)]">Columns</span>
           )}

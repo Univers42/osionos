@@ -419,6 +419,6 @@ body {
   }
 }
 
-.group\/block:hover:not(:has(.group\/block:hover)) .osio-drag-handle {
+.group\/block:hover:not(:has(.group\/block:hover)) > .osio-drag-handle {
   opacity: 1;
 }
