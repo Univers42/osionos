@@ -1183,7 +1183,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 		if (block.type === "column_list") {
 			const columns = block.children;
 			return (
-				<div className="flex items-stretch gap-0 rounded-md border border-dashed border-transparent hover:border-[var(--osio-border-default)]">
+				<div className="flex items-stretch gap-0 rounded-md">
 					{columns.map((column, index) => (
 						<React.Fragment key={column.id}>
 							<div className="min-w-0 px-1" style={{ flexGrow: normalizeColumnRatio(column, columns.length), flexBasis: 0 }}>
