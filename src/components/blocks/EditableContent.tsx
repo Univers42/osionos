@@ -330,6 +330,7 @@ interface InlineSelectionToolbarProps {
   onFormatItalic: () => void;
   onFormatStrike: () => void;
   onFormatCode: () => void;
+  onFormatUnderline: () => void;
   onFormatTextColor: (color: InlineColorOption) => void;
   onFormatBackgroundColor: (color: InlineColorOption) => void;
   onOpenSlashMenu: () => void;
@@ -348,6 +349,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
   onFormatItalic,
   onFormatStrike,
   onFormatCode,
+  onFormatUnderline,
   onFormatTextColor,
   onFormatBackgroundColor,
   onOpenSlashMenu,
@@ -410,6 +412,15 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
           onClick={onFormatItalic}
         >
           I
+        </button>
+        <button
+          type="button"
+          title="Underline"
+          className={TOOLBAR_BUTTON_BASE}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onFormatUnderline}
+        >
+          U
         </button>
         <button
           type="button"
@@ -553,6 +564,12 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
               <span>Italic</span>
               <span className="text-[var(--osio-fg-muted)]">
                 Ctrl/Cmd + I
+              </span>
+            </li>
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
+              <span>Underline</span>
+              <span className="text-[var(--osio-fg-muted)]">
+                Ctrl/Cmd + U
               </span>
             </li>
             <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
@@ -927,7 +944,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   );
 
   const handleToggleInlineFormat = useCallback(
-    (format: "bold" | "italic" | "strikethrough") => {
+    (format: "bold" | "italic" | "strikethrough" | "underline") => {
       applyInlineFormattingCommand({
         type: "toggle_format",
         format,
@@ -990,6 +1007,12 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       if (key === "i") {
         event.preventDefault();
         handleToggleInlineFormat("italic");
+        return true;
+      }
+
+      if (key === "u") {
+        event.preventDefault();
+        handleToggleInlineFormat("underline");
         return true;
       }
 
@@ -1199,6 +1222,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
               }}
               onFormatBold={() => handleToggleInlineFormat("bold")}
               onFormatItalic={() => handleToggleInlineFormat("italic")}
+              onFormatUnderline={() => handleToggleInlineFormat("underline")}
               onFormatStrike={() => handleToggleInlineFormat("strikethrough")}
               onFormatCode={handleToggleCode}
               onFormatTextColor={(color) => handleApplyColor("text", color)}
