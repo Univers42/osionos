@@ -237,4 +237,58 @@ export const contextMenuScenarios = [
       expect((await visibleBlockTexts(page)).filter((text) => text === "Parent")).toHaveLength(1);
     },
   ),
+  defineScenario(
+    "5. Context Menu",
+    "Visual layout",
+    "items container does not overflow into footer (no overlap, no card escape)",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createParagraphs(page, ["Visual bug test"]);
+      await openBlockContextMenuForEditor(getEditors(page).first());
+
+      // Scroll to bottom: no-op with overflow-visible (bug), scrolls with overflow-y-auto (fix).
+      // With overflow-visible the last item (Ask AI) renders at its natural overflowing position;
+      // with overflow-y-auto it scrolls into the visible area and stays within the container.
+      await page.getByRole("menu").evaluate((el) => { el.scrollTop = el.scrollHeight; });
+
+      const lastItemBox = await contextMenuItem(page, "Ask AI").boundingBox();
+      const footerBox = await page.getByText("Last edited by current user").boundingBox();
+      const cardBox = await page.getByRole("menu").locator("..").boundingBox();
+
+      // Symptom A: last item must not visually overlap the footer
+      expect(lastItemBox.y + lastItemBox.height).toBeLessThanOrEqual(footerBox.y + 1);
+      // Symptom B: last item must not escape the card's painted boundary
+      expect(lastItemBox.y + lastItemBox.height).toBeLessThanOrEqual(cardBox.y + cardBox.height + 1);
+    },
+  ),
+  defineScenario(
+    "5. Context Menu",
+    "Visual layout",
+    "Turn into and Color submenus still open after subItems guard changes",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createParagraphs(page, ["Test"]);
+      await openBlockContextMenuForEditor(getEditors(page).first());
+
+      await expect(contextMenuItem(page, "Turn into").locator("text=›")).toBeVisible();
+      await contextMenuItem(page, "Turn into").hover();
+      await expect(page.locator("[data-submenu-panel]")).toBeVisible();
+    },
+  ),
+  defineScenario(
+    "5. Context Menu",
+    "Component settings",
+    "Component settings item appears in the menu and opens no submenu",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createParagraphs(page, ["Test"]);
+      await openBlockContextMenuForEditor(getEditors(page).first());
+      await expect(contextMenuItem(page, "Component settings")).toBeVisible();
+      await expect(
+        contextMenuItem(page, "Component settings").locator("text=›"),
+      ).toHaveCount(0);
+      await contextMenuItem(page, "Component settings").hover();
+      await expect(page.locator("[data-submenu-panel]")).toHaveCount(0);
+    },
+  ),
 ];
