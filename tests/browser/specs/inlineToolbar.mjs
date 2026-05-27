@@ -513,4 +513,86 @@ export const inlineToolbarScenarios = [
       await expect(toolbarButton(page, "Bold")).toHaveCount(0);
     },
   ),
+  defineScenario(
+    "11. Inline Text Selection & Formatting Toolbar",
+    "Format actions",
+    "the underline button toggles underline on and off",
+    async ({ page, appUrl }) => {
+      const editor = await createFormattedParagraph(page, appUrl);
+      await selectText(editor, "alpha");
+      await toolbarButton(page, "Underline").click();
+      expect(await wrapperCount(editor, "u")).toBeGreaterThan(0);
+      await selectText(editor, "alpha");
+      await toolbarButton(page, "Underline").click();
+      expect(await wrapperCount(editor, "u")).toBe(0);
+    },
+  ),
+  defineScenario(
+    "11. Inline Text Selection & Formatting Toolbar",
+    "Keyboard shortcuts",
+    "Ctrl+B toggles bold via keyboard shortcut",
+    async ({ page, appUrl }) => {
+      const editor = await createFormattedParagraph(page, appUrl);
+      await selectText(editor, "alpha");
+      await page.keyboard.press("Control+b");
+      expect(await wrapperCount(editor, "strong")).toBeGreaterThan(0);
+      await selectText(editor, "alpha");
+      await page.keyboard.press("Control+b");
+      expect(await wrapperCount(editor, "strong")).toBe(0);
+    },
+  ),
+  defineScenario(
+    "11. Inline Text Selection & Formatting Toolbar",
+    "Keyboard shortcuts",
+    "Ctrl+I toggles italic via keyboard shortcut",
+    async ({ page, appUrl }) => {
+      const editor = await createFormattedParagraph(page, appUrl);
+      await selectText(editor, "beta");
+      await page.keyboard.press("Control+i");
+      expect(await wrapperCount(editor, "em")).toBeGreaterThan(0);
+      await selectText(editor, "beta");
+      await page.keyboard.press("Control+i");
+      expect(await wrapperCount(editor, "em")).toBe(0);
+    },
+  ),
+  defineScenario(
+    "11. Inline Text Selection & Formatting Toolbar",
+    "Keyboard shortcuts",
+    "Ctrl+U toggles underline via keyboard shortcut",
+    async ({ page, appUrl }) => {
+      const editor = await createFormattedParagraph(page, appUrl);
+      await selectText(editor, "gamma");
+      await page.keyboard.press("Control+u");
+      expect(await wrapperCount(editor, "u")).toBeGreaterThan(0);
+      await selectText(editor, "gamma");
+      await page.keyboard.press("Control+u");
+      expect(await wrapperCount(editor, "u")).toBe(0);
+    },
+  ),
+  defineScenario(
+    "11. Inline Text Selection & Formatting Toolbar",
+    "Keyboard shortcuts",
+    "Meta+U (Mac Cmd+U) toggles underline via keyboard shortcut",
+    async ({ page, appUrl }) => {
+      const editor = await createFormattedParagraph(page, appUrl);
+      await selectText(editor, "gamma");
+      await page.keyboard.press("Meta+u");
+      expect(await wrapperCount(editor, "u")).toBeGreaterThan(0);
+      await selectText(editor, "gamma");
+      await page.keyboard.press("Meta+u");
+      expect(await wrapperCount(editor, "u")).toBe(0);
+    },
+  ),
+  defineScenario(
+    "11. Inline Text Selection & Formatting Toolbar",
+    "Keyboard shortcuts",
+    "the keyboard shortcuts panel lists the Underline entry",
+    async ({ page, appUrl }) => {
+      const editor = await createFormattedParagraph(page, appUrl);
+      await selectText(editor, "alpha");
+      await toolbarButton(page, "Keyboard shortcuts").click();
+      await expect(page.locator("text=Underline")).toBeVisible();
+      await expect(page.locator("text=Ctrl/Cmd + U")).toBeVisible();
+    },
+  ),
 ];
