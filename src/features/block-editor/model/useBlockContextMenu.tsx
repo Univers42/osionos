@@ -608,6 +608,12 @@ export function useBlockContextMenu({
         shortcut: "Ctrl+⇧+P",
         onClick: handleUnavailable,
       },
+      {
+        icon: <Settings2 size={15} />,
+        label: "Component settings",
+        subItems: [],
+        onClick: handleUnavailable,
+      },
     ];
 
     return [
