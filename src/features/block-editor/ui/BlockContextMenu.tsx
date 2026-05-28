@@ -263,6 +263,10 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
 
   const openItemSubmenu = useCallback(
     (target: HTMLElement) => {
+      if (item.panelOnly) {
+        setOpenSubmenu(item.label);
+        return;
+      }
       if (!item.subItems?.length) {
         setSubmenuAnchor(null);
         setOpenSubmenu(null);
@@ -273,7 +277,7 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
       setSubmenuAnchor({ top: rect.top, left: rect.left });
       setOpenSubmenu(item.label);
     },
-    [item.label, item.subItems, setOpenSubmenu],
+    [item.label, item.panelOnly, item.subItems, setOpenSubmenu],
   );
 
   const closeItemSubmenu = useCallback(() => {
@@ -288,7 +292,7 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
       onMouseEnter={(event) => openItemSubmenu(event.currentTarget)}
       onClick={(event) => {
         if (item.disabled) return;
-        if (item.subItems?.length) {
+        if (item.subItems?.length || item.panelOnly) {
           if (openSubmenu === item.label) closeItemSubmenu();
           else openItemSubmenu(event.currentTarget);
           return;
@@ -299,7 +303,7 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
         if (item.disabled) return;
-        if (item.subItems?.length) {
+        if (item.subItems?.length || item.panelOnly) {
           if (openSubmenu === item.label) closeItemSubmenu();
           else openItemSubmenu(event.currentTarget);
           return;
@@ -317,10 +321,10 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
           {item.shortcut}
         </span>
       ) : null}
-      {item.subItems?.length ? (
+      {item.subItems?.length || item.panelOnly ? (
         <span className="text-[var(--osio-fg-subtle)]">›</span>
       ) : null}
-      {item.subItems?.length && openSubmenu === item.label ? (
+      {item.subItems?.length && !item.panelOnly && openSubmenu === item.label ? (
         <SubmenuPanel
           anchor={submenuAnchor}
           parentWidth={parentWidth}
@@ -376,7 +380,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
   }, [menu, width]);
 
   const profilePanelPosition = useMemo(() => {
-    if (!position || openSubmenu !== "Color") return null;
+    if (!position || openSubmenu !== "Create color profile") return null;
     return clampAnchoredPanelPosition(
       position,
       width,
@@ -431,7 +435,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             className="h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)] focus:border-[var(--osio-accent)]"
           />
         </div>
-        <div className="max-h-[430px] overflow-y-auto" role="menu">
+        <div className="max-h-[400px] overflow-y-auto" role="menu">
         {visibleSections.map((section, index) => (
           <div key={`${section.label ?? "section"}-${index}`}>
             {section.label ? (

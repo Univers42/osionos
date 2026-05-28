@@ -36,6 +36,7 @@ export interface BlockContextMenuItem {
   shortcut?: string;
   disabled?: boolean;
   subItems?: BlockContextMenuItem[];
+  panelOnly?: true;
 }
 
 export interface BlockContextMenuSection {

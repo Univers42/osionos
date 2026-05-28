@@ -537,11 +537,6 @@ export function useBlockContextMenu({
                   ),
                 }),
             })),
-            {
-              icon: <Plus size={14} />,
-              label: "Create color profile",
-              onClick: () => undefined,
-            },
             ...(colorProfiles.length > 0
               ? [
                   {
@@ -570,6 +565,12 @@ export function useBlockContextMenu({
                 ]
               : []),
           ],
+        },
+        {
+          icon: <Plus size={15} />,
+          label: "Create color profile",
+          panelOnly: true,
+          onClick: () => undefined,
         },
       ],
     };
