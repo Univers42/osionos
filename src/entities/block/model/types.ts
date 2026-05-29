@@ -117,7 +117,8 @@ export interface Block {
   content: string;
   children?: Block[];		/** Children blocks (for toggle, nested lists, etc.) */
   checked?: boolean;		/** Whether a to_do is checked */
-  language?: string;		/** Programming language for code blocks */		
+  language?: string;		/** Programming language for code blocks */
+  codeView?: "preview" | "source";		/** View mode for renderable code blocks (default: preview) */
   color?: string;			/** Color for callouts, etc. */
   textColor?: string;		/** Optional block text color */
   backgroundColor?: string; /** Optional block background color */

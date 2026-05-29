@@ -17,7 +17,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Code, Copy, Eye } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
 import katex from "katex";
 import "katex/dist/katex.min.css";
@@ -65,6 +65,8 @@ const LANGUAGES = [
   "toml",
   "mermaid",
 ];
+
+const RENDERABLE_LANGUAGES = new Set(["mermaid"]);
 
 function renderEquationToHtml(source: string): string {
   try {
@@ -125,6 +127,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [isEquationEditing, setIsEquationEditing] = useState(false);
   const equationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const langPickerRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const codeHighlightRef = useRef<HTMLDivElement | null>(null);
   const editableStyle = useMemo(
     () => getBlockTextStyle(block),
     [block],
@@ -133,9 +137,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     () => getBlockSurfaceStyle(block),
     [block],
   );
-  const isMermaidCode =
-    block.type === "code" &&
-    (block.language || "plaintext").trim().toLowerCase() === "mermaid";
+  const codeView = (block.codeView ?? "preview") as "preview" | "source";
+  const isRenderable = RENDERABLE_LANGUAGES.has(block.language ?? "");
   const codeCaretColor = editableStyle?.color ?? "var(--osio-fg-default)";
   const renderSurfaceBlockEditor = useCallback((props: SurfaceBlockEditorProps) => <BlockEditor {...props} />, []);
 
@@ -158,6 +161,15 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     },
     [commitBlockUpdate, block.id],
   );
+
+  useEffect(() => {
+    const ta = textareaRef.current;
+    const hl = codeHighlightRef.current;
+    if (!ta || !hl) return;
+    const sync = () => { hl.scrollLeft = ta.scrollLeft; };
+    ta.addEventListener("scroll", sync, { passive: true });
+    return () => ta.removeEventListener("scroll", sync);
+  }, [codeView]);
 
   const handleCodeTextareaKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -474,46 +486,62 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 </div>
               )}
             </div>
-            <button
-              type="button"
-              title="Copy code"
-              className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-              onClick={handleCopyCode}
-            >
-              {copiedCode ? <Check size={14} /> : <Copy size={14} />}
-            </button>
+            <div className="flex items-center gap-1">
+              {isRenderable && (
+                <button
+                  type="button"
+                  title={codeView === "preview" ? "Show source" : "Show preview"}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+                  onClick={() =>
+                    commitBlockUpdate(block.id, {
+                      codeView: codeView === "preview" ? "source" : "preview",
+                    })
+                  }
+                >
+                  {codeView === "preview" ? <Code size={14} /> : <Eye size={14} />}
+                </button>
+              )}
+              <button
+                type="button"
+                title="Copy code"
+                className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+                onClick={handleCopyCode}
+              >
+                {copiedCode ? <Check size={14} /> : <Copy size={14} />}
+              </button>
+            </div>
           </div>
           <div className="p-0">
-            <div className="relative min-h-[150px] overflow-hidden">
-              <CodeSyntaxHighlight
-                code={block.content || " "}
-                language={block.language}
-                className="pointer-events-none min-h-[150px] overflow-hidden p-3"
-                codeClassName="block min-h-[150px] whitespace-pre-wrap break-words font-mono text-sm leading-6"
+            {isRenderable && codeView === "preview" ? (
+              <MermaidDiagram
+                chart={block.content}
+                className="rounded-b-md p-4 bg-[var(--osio-bg-subtle)] overflow-x-auto"
               />
-              <textarea
-                value={block.content}
-                onChange={(e) => onChange(e.target.value)}
-                onKeyDown={handleCodeTextareaKeyDown}
-                placeholder={getBlockPlaceholder(block, "Code…")}
-                spellCheck={false}
-                className="absolute inset-0 h-full min-h-[150px] w-full resize-y overflow-auto bg-transparent p-3 font-mono text-sm leading-6 text-transparent outline-none selection:bg-[rgba(35,131,226,0.28)] placeholder:text-[var(--osio-fg-subtle)]"
-                style={{
-                  tabSize: 2,
-                  color: "transparent",
-                  caretColor: codeCaretColor,
-                  WebkitTextFillColor: "transparent",
-                }}
-              />
-            </div>
-            {isMermaidCode && block.content.trim() && (
-              <div className="mt-3 pt-3 border-t border-[var(--osio-border-default)]">
-                <p className="mb-2 font-mono text-xs text-[var(--osio-fg-muted)]">
-                  Mermaid preview
-                </p>
-                <MermaidDiagram
-                  chart={block.content}
-                  className="rounded-md border border-[var(--osio-border-default)] p-3 bg-[var(--osio-bg-subtle)] overflow-x-auto"
+            ) : (
+              <div className="relative min-h-[150px]">
+                <div ref={codeHighlightRef} className="overflow-x-auto">
+                  <CodeSyntaxHighlight
+                    code={block.content || " "}
+                    language={block.language}
+                    className="pointer-events-none min-h-[150px] p-3"
+                    codeClassName="block min-h-[150px] whitespace-pre font-mono text-sm leading-6"
+                  />
+                </div>
+                <textarea
+                  ref={textareaRef}
+                  value={block.content}
+                  onChange={(e) => onChange(e.target.value)}
+                  onKeyDown={handleCodeTextareaKeyDown}
+                  placeholder={getBlockPlaceholder(block, "Code…")}
+                  spellCheck={false}
+                  className="absolute inset-0 h-full min-h-[150px] w-full resize-y overflow-auto bg-transparent p-3 font-mono text-sm leading-6 text-transparent outline-none selection:bg-[rgba(35,131,226,0.28)] placeholder:text-[var(--osio-fg-subtle)]"
+                  style={{
+                    tabSize: 2,
+                    color: "transparent",
+                    caretColor: codeCaretColor,
+                    WebkitTextFillColor: "transparent",
+                    whiteSpace: "pre",
+                  }}
                 />
               </div>
             )}
