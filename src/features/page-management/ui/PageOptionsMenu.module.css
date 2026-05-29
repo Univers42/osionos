@@ -1,0 +1,69 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   PageOptionsMenu.module.scss                        :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+.dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 5px);
+  width: 200px;
+  background-color: var(--osio-bg-surface);
+  border: 1px solid var(--osio-border-default);
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(15, 15, 15, 0.05), 0 3px 6px rgba(15, 15, 15, 0.1), 0 9px 24px rgba(15, 15, 15, 0.2);
+  z-index: var(--osio-z-popover);
+  padding: 6px;
+  animation: scaleIn 0.1s ease-out;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 14px;
+  border-radius: 4px;
+  color: var(--osio-fg-default);
+  background-color: var(--osio-bg-surface);
+  transition: background-color 0.1s ease;
+  cursor: pointer;
+  border: none;
+}
+.menuItem:hover {
+  background-color: var(--osio-bg-hover);
+  color: var(--osio-fg-strong);
+}
+.menuItem svg {
+  color: var(--osio-fg-default);
+}
+.menuItem.destructive {
+  color: var(--osio-danger);
+}
+.menuItem.destructive svg {
+  color: var(--osio-danger);
+}
+.menuItem.destructive:hover {
+  color: var(--osio-danger-hover);
+}
+.menuItem.destructive:hover svg {
+  color: var(--osio-danger-hover);
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}/*# sourceMappingURL=PageOptionsMenu.module.css.map */

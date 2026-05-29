@@ -1,0 +1,149 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   MovePageModal.module.scss                          :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--osio-z-modal);
+  padding: var(--osio-space-4);
+  background-color: var(--osio-overlay);
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  width: 100%;
+  max-width: 450px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--osio-bg-surface);
+  border: 1px solid var(--osio-border-default);
+  border-radius: 0.5rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  animation: modal-enter 0.2s ease-out;
+}
+
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.header {
+  padding: var(--osio-space-3) var(--osio-space-4);
+  border-bottom: 1px solid var(--osio-border-default);
+  display: flex;
+  align-items: center;
+  gap: var(--osio-space-3);
+}
+
+.searchIcon {
+  color: var(--osio-fg-subtle);
+  flex-shrink: 0;
+}
+
+.searchInput {
+  width: 100%;
+  background: transparent;
+  border: none;
+  font-size: var(--osio-font-size-base);
+  color: var(--osio-fg-default);
+  outline: none;
+}
+.searchInput::-moz-placeholder {
+  color: var(--osio-fg-subtle);
+}
+.searchInput::placeholder {
+  color: var(--osio-fg-subtle);
+}
+
+.closeButton {
+  padding: var(--osio-space-1);
+  border-radius: var(--osio-space-1);
+  color: var(--osio-fg-subtle);
+  transition: colors 0.2s;
+}
+.closeButton:hover {
+  background-color: var(--osio-bg-hover);
+  color: var(--osio-fg-default);
+}
+
+.scrollArea {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--osio-space-2) 0;
+}
+
+.sectionLabel {
+  padding: var(--osio-space-2) var(--osio-space-4) var(--osio-space-1);
+  font-size: var(--osio-font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--osio-fg-subtle);
+}
+
+.listItem {
+  display: flex;
+  align-items: center;
+  gap: var(--osio-space-2);
+  padding: var(--osio-space-2) var(--osio-space-4);
+  width: 100%;
+  text-align: left;
+  font-size: var(--osio-font-size-base);
+  color: var(--osio-fg-default);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.listItem:hover, .listItem.focused {
+  background-color: var(--osio-bg-hover);
+}
+
+.breadcrumbs {
+  font-size: var(--osio-font-size-xs);
+  color: var(--osio-fg-subtle);
+  display: flex;
+  align-items: center;
+  gap: var(--osio-space-1);
+}
+
+.nested {
+  padding-left: var(--osio-space-8);
+}
+
+.itemIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.itemTitle {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emptyState {
+  padding: var(--osio-space-8);
+  text-align: center;
+  color: var(--osio-fg-subtle);
+  font-size: var(--osio-font-size-base);
+}/*# sourceMappingURL=MovePageModal.module.css.map */
