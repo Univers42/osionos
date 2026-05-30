@@ -184,4 +184,189 @@ export const codeBlockScenarios = [
       await expect(page.locator('button[title="Show preview"]')).toBeVisible();
     },
   ),
+
+  // ── T7b: Bug G — no permanent highlight in mermaid preview ──────────────
+
+  defineScenario(
+    "7b. Code block followups",
+    "Bug G: mermaid highlight",
+    "mermaid block in preview mode has transparent background at rest",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "mermaid");
+
+      await page.locator('button[title="Show source"]').click();
+      await waitForRenderStability(page);
+      const ta = getCodeTextarea(page);
+      await ta.fill("graph TD; A-->B");
+      await waitForRenderStability(page);
+
+      await page.locator('button[title="Show preview"]').click();
+      await waitForRenderStability(page);
+
+      const bg = await page.evaluate(() => {
+        const wrapper = document.querySelector(".rounded-b-md.overflow-x-auto");
+        return wrapper ? globalThis.getComputedStyle(wrapper).backgroundColor : null;
+      });
+      expect(bg).toBe("rgba(0, 0, 0, 0)");
+    },
+  ),
+
+  // ── T7b: Bug E — React-driven resize ────────────────────────────────────
+
+  defineScenario(
+    "7b. Code block followups",
+    "Bug E: resize handle",
+    "resize handle (cursor-ns-resize) is present on a typescript code block",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "typescript");
+      await expect(page.locator(".cursor-ns-resize")).toHaveCount(1);
+    },
+  ),
+
+  defineScenario(
+    "7b. Code block followups",
+    "Bug E: resize handle",
+    "dragging the handle upward shrinks the block",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "typescript");
+
+      const ta = getCodeTextarea(page);
+      await ta.fill(Array.from({ length: 20 }, (_, i) => `const line${i} = ${i};`).join("\n"));
+      await waitForRenderStability(page);
+
+      const getSourceHeight = () =>
+        page.evaluate(() => {
+          const ta = document.querySelector('textarea[placeholder="Code…"]');
+          return ta?.parentElement?.offsetHeight ?? 0;
+        });
+
+      const before = await getSourceHeight();
+
+      const handle = page.locator(".cursor-ns-resize");
+      const box = await handle.boundingBox();
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx, cy - 120, { steps: 10 });
+      await page.mouse.up();
+      await waitForRenderStability(page);
+
+      const after = await getSourceHeight();
+      expect(after).toBeLessThan(before);
+    },
+  ),
+
+  defineScenario(
+    "7b. Code block followups",
+    "Bug E: resize handle",
+    "dragging to minimum stops at 3 lines (96px)",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "typescript");
+
+      const handle = page.locator(".cursor-ns-resize");
+      const box = await handle.boundingBox();
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx, cy - 600, { steps: 20 });
+      await page.mouse.up();
+      await waitForRenderStability(page);
+
+      const height = await page.evaluate(() => {
+        const ta = document.querySelector('textarea[placeholder="Code…"]');
+        return ta?.parentElement?.offsetHeight ?? 0;
+      });
+      expect(height).toBeGreaterThanOrEqual(96);
+    },
+  ),
+
+  defineScenario(
+    "7b. Code block followups",
+    "Bug E: resize handle",
+    "heightLines persists after page reload",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const uniqueTitle = `resize-persist-${Date.now().toString(36)}`;
+      await page.getByRole("textbox", { name: "Page title" }).fill(uniqueTitle);
+      await insertCodeBlock(page, "typescript");
+
+      const handle = page.locator(".cursor-ns-resize");
+      const box = await handle.boundingBox();
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx, cy - 120, { steps: 10 });
+      await page.mouse.up();
+      await waitForRenderStability(page);
+
+      const heightBefore = await page.evaluate(() => {
+        const ta = document.querySelector('textarea[placeholder="Code…"]');
+        return ta?.parentElement?.offsetHeight ?? 0;
+      });
+
+      await page.reload({ waitUntil: "networkidle" });
+      const sidebarEntry = page.locator("nav button").filter({ hasText: uniqueTitle }).first();
+      await sidebarEntry.waitFor({ state: "visible", timeout: 15_000 });
+      await sidebarEntry.click();
+      await getCodeTextarea(page).waitFor({ state: "visible", timeout: 10_000 });
+      await waitForRenderStability(page);
+
+      const heightAfter = await page.evaluate(() => {
+        const ta = document.querySelector('textarea[placeholder="Code…"]');
+        return ta?.parentElement?.offsetHeight ?? 0;
+      });
+      expect(heightAfter).toBe(heightBefore);
+    },
+    { serial: true },
+  ),
+
+  // ── T7b: Bug F — resize handle in mermaid preview ────────────────────────
+
+  defineScenario(
+    "7b. Code block followups",
+    "Bug F: handle in mermaid preview",
+    "resize handle is visible on a mermaid block in preview mode",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "mermaid");
+      await expect(page.locator('button[title="Show source"]')).toBeVisible();
+      await expect(page.locator(".cursor-ns-resize")).toHaveCount(1);
+    },
+  ),
+
+  defineScenario(
+    "7b. Code block followups",
+    "Bug F: handle in mermaid preview",
+    "dragging the handle in mermaid preview mode applies a live height constraint",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "mermaid");
+      await waitForRenderStability(page);
+
+      const handle = page.locator(".cursor-ns-resize");
+      const box = await handle.boundingBox();
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx, cy + 100, { steps: 10 });
+
+      const wrapperHeightDuringDrag = await page.evaluate(() => {
+        const handleEl = document.querySelector(".cursor-ns-resize");
+        const body = handleEl?.closest(".rounded-md")?.querySelector(".p-0");
+        return body?.firstElementChild?.style?.height ?? "";
+      });
+
+      await page.mouse.up();
+
+      expect(wrapperHeightDuringDrag).toMatch(/^\d+px$/);
+    },
+  ),
 ];
