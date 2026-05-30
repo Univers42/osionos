@@ -369,4 +369,48 @@ export const codeBlockScenarios = [
       expect(wrapperHeightDuringDrag).toMatch(/^\d+px$/);
     },
   ),
+
+  defineScenario(
+    "7b. Code block followups",
+    "Bug F: handle in mermaid preview",
+    "resize handle remains visible after toggling source then back to preview",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "mermaid");
+      await page.locator('button[title="Show source"]').click();
+      await waitForRenderStability(page);
+      await page.locator('button[title="Show preview"]').click();
+      await waitForRenderStability(page);
+      await expect(page.locator(".cursor-ns-resize")).toHaveCount(1);
+    },
+  ),
+
+  defineScenario(
+    "7b. Code block followups",
+    "Bug E: resize handle",
+    "content is scrollable inside a source block resized to minimum",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "typescript");
+      const ta = getCodeTextarea(page);
+      await ta.fill(Array.from({ length: 20 }, (_, i) => `const line${i} = ${i};`).join("\n"));
+      await waitForRenderStability(page);
+
+      const handle = page.locator(".cursor-ns-resize");
+      const box = await handle.boundingBox();
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx, cy - 600, { steps: 20 });
+      await page.mouse.up();
+      await waitForRenderStability(page);
+
+      const scrollable = await page.evaluate(() => {
+        const textarea = document.querySelector('textarea[placeholder="Code…"]');
+        return textarea ? textarea.scrollHeight > textarea.clientHeight : false;
+      });
+      expect(scrollable).toBe(true);
+    },
+  ),
 ];
