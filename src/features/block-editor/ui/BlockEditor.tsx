@@ -83,6 +83,21 @@ function renderEquationToHtml(source: string): string {
   }
 }
 
+const CODE_LINE_HEIGHT = 24;
+const CODE_MIN_LINES = 3;
+
+function startCodeDrag(move: (e: PointerEvent) => void, up: () => void) {
+  document.body.style.cursor = "ns-resize";
+  document.body.style.userSelect = "none";
+  globalThis.addEventListener("pointermove", move);
+  globalThis.addEventListener("pointerup", up, { once: true });
+}
+function stopCodeDrag(move: (e: PointerEvent) => void, up: () => void) {
+  document.body.style.cursor = "";
+  document.body.style.userSelect = "";
+  globalThis.removeEventListener("pointermove", move);
+  globalThis.removeEventListener("pointerup", up);
+}
 
 
 interface BlockEditorProps {
@@ -124,11 +139,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const [showLangPicker, setShowLangPicker] = useState(false);
   const [showCalloutIconPicker, setShowCalloutIconPicker] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [dragHeightLines, setDragHeightLines] = useState<number | null>(null);
   const [isEquationEditing, setIsEquationEditing] = useState(false);
   const equationTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const langPickerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const codeHighlightRef = useRef<HTMLDivElement | null>(null);
+  const codeBodyRef = useRef<HTMLDivElement | null>(null);
   const editableStyle = useMemo(
     () => getBlockTextStyle(block),
     [block],
@@ -140,6 +157,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const codeView = (block.codeView ?? "preview") as "preview" | "source";
   const isRenderable = RENDERABLE_LANGUAGES.has(block.language ?? "");
   const codeCaretColor = editableStyle?.color ?? "var(--osio-fg-default)";
+  const activeHeightLines = dragHeightLines ?? (block.heightLines as number | undefined);
+  const codeHeightPx = activeHeightLines
+    ? activeHeightLines * CODE_LINE_HEIGHT + CODE_LINE_HEIGHT
+    : undefined;
   const renderSurfaceBlockEditor = useCallback((props: SurfaceBlockEditorProps) => <BlockEditor {...props} />, []);
 
   const commitBlockUpdate = useCallback(
@@ -162,14 +183,36 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     [commitBlockUpdate, block.id],
   );
 
+  const handleResizePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = e.clientY;
+    const startHeightPx = codeBodyRef.current?.offsetHeight ?? 150;
+    let latestLines = Math.max(CODE_MIN_LINES, Math.round((startHeightPx - CODE_LINE_HEIGHT) / CODE_LINE_HEIGHT));
+    const move = (ev: PointerEvent) => {
+      const newPx = startHeightPx + ev.clientY - startY;
+      latestLines = Math.max(CODE_MIN_LINES, Math.round((newPx - CODE_LINE_HEIGHT) / CODE_LINE_HEIGHT));
+      setDragHeightLines(latestLines);
+    };
+    const up = () => {
+      stopCodeDrag(move, up);
+      commitBlockUpdate(block.id, { heightLines: latestLines });
+    };
+    startCodeDrag(move, up);
+  }, [block.id, commitBlockUpdate]);
+
   useEffect(() => {
     const ta = textareaRef.current;
     const hl = codeHighlightRef.current;
     if (!ta || !hl) return;
-    const sync = () => { hl.scrollLeft = ta.scrollLeft; };
+    const sync = () => { hl.scrollLeft = ta.scrollLeft; hl.scrollTop = ta.scrollTop; };
     ta.addEventListener("scroll", sync, { passive: true });
     return () => ta.removeEventListener("scroll", sync);
   }, [codeView]);
+
+  useEffect(() => {
+    setDragHeightLines(null);
+  }, [block.heightLines]);
 
   const handleCodeTextareaKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -454,7 +497,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     case "code":
       return (
         <div
-          className="my-2 overflow-visible rounded-md border border-[var(--osio-border-default)] shadow-sm"
+          className="my-2 overflow-visible rounded-md border border-[var(--osio-border-default)] shadow-sm relative"
           style={surfaceStyle}
         >
           <div className="flex items-center justify-between gap-2 border-b border-[var(--osio-border-default)] bg-black/[0.03] px-3 py-1.5">
@@ -511,20 +554,31 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               </button>
             </div>
           </div>
-          <div className="p-0">
+          <div ref={codeBodyRef} className="p-0">
             {isRenderable && codeView === "preview" ? (
-              <MermaidDiagram
-                chart={block.content}
-                className="rounded-b-md p-4 bg-[var(--osio-bg-subtle)] overflow-x-auto"
-              />
+              <div style={codeHeightPx ? { height: codeHeightPx, overflow: "hidden" } : undefined}>
+                <MermaidDiagram
+                  chart={block.content}
+                  className="rounded-b-md p-4 overflow-x-auto"
+                />
+              </div>
             ) : (
-              <div className="relative min-h-[150px]">
-                <div ref={codeHighlightRef} className="overflow-x-auto">
+              <div
+                className="relative"
+                style={codeHeightPx
+                  ? { height: codeHeightPx, overflow: "hidden" }
+                  : { minHeight: 150 }}
+              >
+                <div
+                  ref={codeHighlightRef}
+                  className="overflow-x-auto"
+                  style={codeHeightPx ? { overflowY: "hidden" } : undefined}
+                >
                   <CodeSyntaxHighlight
                     code={block.content || " "}
                     language={block.language}
-                    className="pointer-events-none min-h-[150px] p-3"
-                    codeClassName="block min-h-[150px] whitespace-pre font-mono text-sm leading-6"
+                    className="pointer-events-none p-3"
+                    codeClassName="block whitespace-pre font-mono text-sm leading-6"
                   />
                 </div>
                 <textarea
@@ -534,7 +588,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                   onKeyDown={handleCodeTextareaKeyDown}
                   placeholder={getBlockPlaceholder(block, "Code…")}
                   spellCheck={false}
-                  className="absolute inset-0 h-full min-h-[150px] w-full resize-y overflow-auto bg-transparent p-3 font-mono text-sm leading-6 text-transparent outline-none selection:bg-[rgba(35,131,226,0.28)] placeholder:text-[var(--osio-fg-subtle)]"
+                  className="absolute inset-0 h-full w-full overflow-auto bg-transparent p-3 font-mono text-sm leading-6 text-transparent outline-none selection:bg-[rgba(35,131,226,0.28)] placeholder:text-[var(--osio-fg-subtle)]"
                   style={{
                     tabSize: 2,
                     color: "transparent",
@@ -546,6 +600,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               </div>
             )}
           </div>
+          <div
+            className="absolute bottom-0 right-0 h-4 w-4 cursor-ns-resize"
+            onPointerDown={handleResizePointerDown}
+          />
         </div>
       );
 

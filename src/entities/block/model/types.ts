@@ -119,6 +119,7 @@ export interface Block {
   checked?: boolean;		/** Whether a to_do is checked */
   language?: string;		/** Programming language for code blocks */
   codeView?: "preview" | "source";		/** View mode for renderable code blocks (default: preview) */
+  heightLines?: number;					/** Persisted height in lines for code blocks */
   color?: string;			/** Color for callouts, etc. */
   textColor?: string;		/** Optional block text color */
   backgroundColor?: string; /** Optional block background color */
