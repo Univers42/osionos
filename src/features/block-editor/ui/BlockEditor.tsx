@@ -86,17 +86,19 @@ function renderEquationToHtml(source: string): string {
 const CODE_LINE_HEIGHT = 24;
 const CODE_MIN_LINES = 3;
 
-function startCodeDrag(move: (e: PointerEvent) => void, up: () => void) {
+function startCodeDrag(move: (e: PointerEvent) => void, up: () => void, cancel: () => void) {
   document.body.style.cursor = "ns-resize";
   document.body.style.userSelect = "none";
   globalThis.addEventListener("pointermove", move);
   globalThis.addEventListener("pointerup", up, { once: true });
+  globalThis.addEventListener("pointercancel", cancel, { once: true });
 }
-function stopCodeDrag(move: (e: PointerEvent) => void, up: () => void) {
+function stopCodeDrag(move: (e: PointerEvent) => void, up: () => void, cancel: () => void) {
   document.body.style.cursor = "";
   document.body.style.userSelect = "";
   globalThis.removeEventListener("pointermove", move);
   globalThis.removeEventListener("pointerup", up);
+  globalThis.removeEventListener("pointercancel", cancel);
 }
 
 
@@ -146,6 +148,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const codeHighlightRef = useRef<HTMLDivElement | null>(null);
   const codeBodyRef = useRef<HTMLDivElement | null>(null);
+  const activeDragRef = useRef<{ move: (e: PointerEvent) => void; up: () => void; cancel: () => void } | null>(null);
   const editableStyle = useMemo(
     () => getBlockTextStyle(block),
     [block],
@@ -189,16 +192,26 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     const startY = e.clientY;
     const startHeightPx = codeBodyRef.current?.offsetHeight ?? 150;
     let latestLines = Math.max(CODE_MIN_LINES, Math.round((startHeightPx - CODE_LINE_HEIGHT) / CODE_LINE_HEIGHT));
-    const move = (ev: PointerEvent) => {
+    let move: (ev: PointerEvent) => void;
+    let up: () => void;
+    let cancel: () => void;
+    move = (ev: PointerEvent) => {
       const newPx = startHeightPx + ev.clientY - startY;
       latestLines = Math.max(CODE_MIN_LINES, Math.round((newPx - CODE_LINE_HEIGHT) / CODE_LINE_HEIGHT));
       setDragHeightLines(latestLines);
     };
-    const up = () => {
-      stopCodeDrag(move, up);
+    up = () => {
+      stopCodeDrag(move, up, cancel);
+      activeDragRef.current = null;
       commitBlockUpdate(block.id, { heightLines: latestLines });
     };
-    startCodeDrag(move, up);
+    cancel = () => {
+      stopCodeDrag(move, up, cancel);
+      activeDragRef.current = null;
+      setDragHeightLines(null);
+    };
+    activeDragRef.current = { move, up, cancel };
+    startCodeDrag(move, up, cancel);
   }, [block.id, commitBlockUpdate]);
 
   useEffect(() => {
@@ -213,6 +226,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   useEffect(() => {
     setDragHeightLines(null);
   }, [block.heightLines]);
+
+  useEffect(() => {
+    return () => {
+      const d = activeDragRef.current;
+      if (d) stopCodeDrag(d.move, d.up, d.cancel);
+    };
+  }, []);
 
   const handleCodeTextareaKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -556,7 +576,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           </div>
           <div ref={codeBodyRef} className="p-0">
             {isRenderable && codeView === "preview" ? (
-              <div style={codeHeightPx ? { height: codeHeightPx, overflow: "hidden" } : undefined}>
+              <div style={codeHeightPx ? { height: codeHeightPx, overflow: "auto" } : undefined}>
                 <MermaidDiagram
                   chart={block.content}
                   className="rounded-b-md p-4 overflow-x-auto"
