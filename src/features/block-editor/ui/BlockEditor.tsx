@@ -218,7 +218,11 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     const ta = textareaRef.current;
     const hl = codeHighlightRef.current;
     if (!ta || !hl) return;
-    const sync = () => { hl.scrollLeft = ta.scrollLeft; hl.scrollTop = ta.scrollTop; };
+    const sync = () => {
+      const code = hl.querySelector("code");
+      if (code) (code as HTMLElement).scrollLeft = ta.scrollLeft;
+      hl.scrollTop = ta.scrollTop;
+    };
     ta.addEventListener("scroll", sync, { passive: true });
     return () => ta.removeEventListener("scroll", sync);
   }, [codeView]);
@@ -296,6 +300,66 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     document.addEventListener("mousedown", handleOutside);
     return () => document.removeEventListener("mousedown", handleOutside);
   }, [showLangPicker]);
+
+  const codeBlockHeader = useMemo(
+    () => (
+      <div className="flex items-center justify-between gap-2 border-b border-[var(--osio-border-default)] bg-black/[0.03] px-3 py-1.5">
+        <div ref={langPickerRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setShowLangPicker((v) => !v)}
+            className="rounded px-1.5 py-0.5 font-mono text-xs text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+          >
+            {block.language || "plaintext"}
+          </button>
+          {showLangPicker && (
+            <div className="absolute top-full left-0 mt-1 bg-[var(--osio-bg-surface)] border border-[var(--osio-border-default)] rounded-lg shadow-lg z-[var(--osio-z-popover)] max-h-48 overflow-y-auto w-40">
+              {LANGUAGES.map((language) => (
+                <button
+                  key={language}
+                  type="button"
+                  onClick={() => handleLangSelect(language)}
+                  className={[
+                    "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-[var(--osio-bg-hover)]",
+                    language === (block.language || "plaintext")
+                      ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]"
+                      : "text-[var(--osio-fg-muted)]",
+                  ].join(" ")}
+                >
+                  {language}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {isRenderable && (
+            <button
+              type="button"
+              title={codeView === "preview" ? "Show source" : "Show preview"}
+              className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+              onClick={() =>
+                commitBlockUpdate(block.id, {
+                  codeView: codeView === "preview" ? "source" : "preview",
+                })
+              }
+            >
+              {codeView === "preview" ? <Code size={14} /> : <Eye size={14} />}
+            </button>
+          )}
+          <button
+            type="button"
+            title="Copy code"
+            className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+            onClick={handleCopyCode}
+          >
+            {copiedCode ? <Check size={14} /> : <Copy size={14} />}
+          </button>
+        </div>
+      </div>
+    ),
+    [block.language, block.id, showLangPicker, isRenderable, codeView, copiedCode, handleLangSelect, commitBlockUpdate, handleCopyCode, langPickerRef],
+  );
 
   switch (block.type) {
     case "heading_1":
@@ -517,63 +581,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     case "code":
       return (
         <div
-          className="my-2 overflow-visible rounded-md border border-[var(--osio-border-default)] shadow-sm relative"
+          className="my-2 overflow-visible rounded-md border border-[var(--osio-border-default)] shadow-sm relative bg-[var(--osio-bg-surface)]"
           style={surfaceStyle}
         >
-          <div className="flex items-center justify-between gap-2 border-b border-[var(--osio-border-default)] bg-black/[0.03] px-3 py-1.5">
-            <div ref={langPickerRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setShowLangPicker((v) => !v)}
-                className="rounded px-1.5 py-0.5 font-mono text-xs text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-              >
-                {block.language || "plaintext"}
-              </button>
-              {showLangPicker && (
-                <div className="absolute top-full left-0 mt-1 bg-[var(--osio-bg-surface)] border border-[var(--osio-border-default)] rounded-lg shadow-lg z-[var(--osio-z-popover)] max-h-48 overflow-y-auto w-40">
-                  {LANGUAGES.map((language) => (
-                    <button
-                      key={language}
-                      type="button"
-                      onClick={() => handleLangSelect(language)}
-                      className={[
-                        "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-[var(--osio-bg-hover)]",
-                        language === (block.language || "plaintext")
-                          ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]"
-                          : "text-[var(--osio-fg-muted)]",
-                      ].join(" ")}
-                    >
-                      {language}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              {isRenderable && (
-                <button
-                  type="button"
-                  title={codeView === "preview" ? "Show source" : "Show preview"}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-                  onClick={() =>
-                    commitBlockUpdate(block.id, {
-                      codeView: codeView === "preview" ? "source" : "preview",
-                    })
-                  }
-                >
-                  {codeView === "preview" ? <Code size={14} /> : <Eye size={14} />}
-                </button>
-              )}
-              <button
-                type="button"
-                title="Copy code"
-                className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-                onClick={handleCopyCode}
-              >
-                {copiedCode ? <Check size={14} /> : <Copy size={14} />}
-              </button>
-            </div>
-          </div>
+          {codeBlockHeader}
           <div ref={codeBodyRef} className="p-0">
             {isRenderable && codeView === "preview" ? (
               <div style={codeHeightPx ? { height: codeHeightPx, overflow: "auto" } : undefined}>
@@ -591,8 +602,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               >
                 <div
                   ref={codeHighlightRef}
-                  className="overflow-x-auto"
-                  style={codeHeightPx ? { overflowY: "hidden" } : undefined}
+                  className="overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  style={codeHeightPx ? { height: codeHeightPx } : undefined}
                 >
                   <CodeSyntaxHighlight
                     code={block.content || " "}
@@ -621,7 +632,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             )}
           </div>
           <div
-            className="absolute bottom-0 right-0 h-4 w-4 cursor-ns-resize"
+            className="absolute bottom-0 right-0 h-4 w-4 cursor-ns-resize z-[1]"
             onPointerDown={handleResizePointerDown}
           />
         </div>

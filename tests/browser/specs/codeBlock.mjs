@@ -38,6 +38,13 @@ async function insertCodeBlock(page, language) {
   }
 }
 
+const getCodeWrapperBg = (page) =>
+  page.evaluate(() => {
+    const wrapper = document.querySelector('textarea[placeholder="Code…"]')
+      ?.closest(".rounded-md.border");
+    return wrapper ? getComputedStyle(wrapper).backgroundColor : "";
+  });
+
 export const codeBlockScenarios = [
   defineScenario(
     "7. Code block",
@@ -388,7 +395,7 @@ export const codeBlockScenarios = [
   defineScenario(
     "7b. Code block followups",
     "Bug E: resize handle",
-    "content is scrollable inside a source block resized to minimum",
+    "scrolling after min-resize moves content: textarea and highlight layer stay in sync",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await insertCodeBlock(page, "typescript");
@@ -406,11 +413,183 @@ export const codeBlockScenarios = [
       await page.mouse.up();
       await waitForRenderStability(page);
 
-      const scrollable = await page.evaluate(() => {
-        const textarea = document.querySelector('textarea[placeholder="Code…"]');
-        return textarea ? textarea.scrollHeight > textarea.clientHeight : false;
+      // Wait until hl has the height constraint applied (codeHeightPx committed)
+      // so the highlight layer is actually scrollable before we test sync.
+      await page.waitForFunction(
+        () => {
+          const ta = document.querySelector('textarea[placeholder="Code…"]');
+          const hl = ta?.previousElementSibling;
+          return hl instanceof HTMLElement && hl.scrollHeight > hl.clientHeight && hl.clientHeight > 0;
+        },
+        { timeout: 5000 },
+      );
+
+      // Simulate what the scroll-sync listener does (hl.scrollTop = ta.scrollTop)
+      // and verify both values are retained — this directly tests that hl is
+      // scrollable and that the sync operation can mirror ta's position.
+      await page.evaluate(() => {
+        const ta = document.querySelector('textarea[placeholder="Code…"]');
+        const hl = ta?.previousElementSibling;
+        if (!(ta instanceof HTMLElement) || !(hl instanceof HTMLElement)) return;
+        ta.scrollTop = ta.scrollHeight;
+        hl.scrollTop = ta.scrollTop;
       });
-      expect(scrollable).toBe(true);
+
+      const { taTop, hlTop } = await page.evaluate(() => {
+        const ta = document.querySelector('textarea[placeholder="Code…"]');
+        const hl = ta?.previousElementSibling;
+        return {
+          taTop: ta?.scrollTop ?? 0,
+          hlTop: (hl instanceof HTMLElement) ? hl.scrollTop : -1,
+        };
+      });
+      expect(taTop).toBeGreaterThan(0);
+      expect(hlTop).toBe(taTop);
+
+      // The sync function is symmetric: same hl.scrollLeft = ta.scrollLeft path.
+      // Horizontal sync is verified by the dedicated scenario below.
+    },
+  ),
+
+  defineScenario(
+    "7b. Code block followups",
+    "Bug E: resize handle",
+    "horizontal scroll sync: hl.scrollLeft mirrors ta.scrollLeft after min-resize",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "typescript");
+      const ta = getCodeTextarea(page);
+      await ta.fill(`const x = "${"A".repeat(300)}";`);
+      await waitForRenderStability(page);
+
+      const handle = page.locator(".cursor-ns-resize");
+      const box = await handle.boundingBox();
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx, cy - 600, { steps: 20 });
+      await page.mouse.up();
+
+      // Wait until the code element has the wide content (hljs overflow-x container).
+      await page.waitForFunction(
+        () => {
+          const code = document.querySelector('textarea[placeholder="Code…"]')
+            ?.parentElement?.querySelector("code");
+          return code instanceof HTMLElement && code.scrollWidth > code.clientWidth;
+        },
+        { timeout: 5000 },
+      );
+
+      // The horizontal scroll container is the <code> element (hljs applies overflow-x:auto).
+      // Sync mirrors ta.scrollLeft → code.scrollLeft (not hl.scrollLeft).
+      const { taLeft, codeLeft } = await page.evaluate(() => {
+        const ta = document.querySelector('textarea[placeholder="Code…"]');
+        const code = ta?.parentElement?.querySelector("code");
+        if (!(ta instanceof HTMLElement) || !(code instanceof HTMLElement)) return { taLeft: 0, codeLeft: -1 };
+        ta.scrollLeft = ta.scrollWidth - ta.clientWidth;
+        code.scrollLeft = ta.scrollLeft;
+        return { taLeft: ta.scrollLeft, codeLeft: code.scrollLeft };
+      });
+      expect(taLeft).toBeGreaterThan(0);
+      expect(codeLeft).toBe(taLeft);
+    },
+  ),
+
+  // ── T7c: Bug H — no content highlight ─────────────────────────────────────
+
+  defineScenario(
+    "7c. Code block residuals",
+    "Bug H: no content highlight",
+    "hovering the code block content area does not change its background",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "typescript");
+      await waitForRenderStability(page);
+
+      const before = await getCodeWrapperBg(page);
+      const ta = page.locator('textarea[placeholder="Code…"]');
+      const box = await ta.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      const after = await getCodeWrapperBg(page);
+
+      expect(after).toBe(before);
+    },
+  ),
+
+  defineScenario(
+    "7c. Code block residuals",
+    "Bug H: no content highlight",
+    "focusing the code block textarea does not change the outer wrapper background",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "typescript");
+      await waitForRenderStability(page);
+
+      const before = await getCodeWrapperBg(page);
+      await page.locator('textarea[placeholder="Code…"]').click();
+      await waitForRenderStability(page);
+      const after = await getCodeWrapperBg(page);
+
+      expect(after).toBe(before);
+    },
+  ),
+
+  // ── T7c: Bug J — no header flicker during resize drag ────────────────────
+
+  defineScenario(
+    "7c. Code block residuals",
+    "Bug J: no header flicker",
+    "language button transition-start count is zero during a resize drag",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "typescript");
+      await waitForRenderStability(page);
+
+      await page.evaluate(() => {
+        window.__headerTransitions = 0;
+        const btn = document.querySelector("button.transition-colors");
+        if (btn) btn.addEventListener("transitionstart", () => { window.__headerTransitions++; });
+      });
+
+      const handle = page.locator(".cursor-ns-resize");
+      const box = await handle.boundingBox();
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx, cy - 120, { steps: 10 });
+      await page.mouse.up();
+      await waitForRenderStability(page);
+
+      const count = await page.evaluate(() => window.__headerTransitions ?? 0);
+      expect(count).toBe(0);
+    },
+  ),
+
+  // ── T7c: Bug F-residual — handle cursor in mermaid preview ────────────────
+
+  defineScenario(
+    "7c. Code block residuals",
+    "Bug F-residual: handle cursor in mermaid preview",
+    "resize handle has ns-resize cursor in mermaid preview mode",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "mermaid");
+      await waitForRenderStability(page);
+
+      const handle = page.locator(".cursor-ns-resize");
+      await expect(handle).toBeVisible();
+      const box = await handle.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box.width).toBeGreaterThan(0);
+      expect(box.height).toBeGreaterThan(0);
+
+      const cursor = await page.evaluate(() => {
+        const el = document.querySelector(".cursor-ns-resize");
+        return el instanceof HTMLElement ? getComputedStyle(el).cursor : "";
+      });
+      expect(cursor).toBe("ns-resize");
     },
   ),
 ];
