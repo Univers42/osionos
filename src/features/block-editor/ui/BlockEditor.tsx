@@ -225,7 +225,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     };
     ta.addEventListener("scroll", sync, { passive: true });
     return () => ta.removeEventListener("scroll", sync);
-  }, [codeView]);
+  }, [codeView, block.heightLines]);
 
   useEffect(() => {
     setDragHeightLines(null);
