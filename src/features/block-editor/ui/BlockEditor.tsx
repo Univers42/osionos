@@ -225,6 +225,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     };
     ta.addEventListener("scroll", sync, { passive: true });
     return () => ta.removeEventListener("scroll", sync);
+  // block.heightLines: re-register after committed resize so the listener is
+  // guaranteed present when hl first becomes scrollable, regardless of what
+  // mount/unmount sequences occurred before the drag completed.
   }, [codeView, block.heightLines]);
 
   useEffect(() => {
