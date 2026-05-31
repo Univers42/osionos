@@ -414,26 +414,34 @@ export const codeBlockScenarios = [
       await waitForRenderStability(page);
 
       // Wait until hl has the height constraint applied (codeHeightPx committed)
-      // so the highlight layer is actually scrollable before we test sync.
+      // so hl is actually scrollable before triggering the user-facing scroll event.
       await page.waitForFunction(
         () => {
           const ta = document.querySelector('textarea[placeholder="Code…"]');
           const hl = ta?.previousElementSibling;
           return hl instanceof HTMLElement && hl.scrollHeight > hl.clientHeight && hl.clientHeight > 0;
         },
+        null,
         { timeout: 5000 },
       );
 
-      // Simulate what the scroll-sync listener does (hl.scrollTop = ta.scrollTop)
-      // and verify both values are retained — this directly tests that hl is
-      // scrollable and that the sync operation can mirror ta's position.
-      await page.evaluate(() => {
-        const ta = document.querySelector('textarea[placeholder="Code…"]');
-        const hl = ta?.previousElementSibling;
-        if (!(ta instanceof HTMLElement) || !(hl instanceof HTMLElement)) return;
-        ta.scrollTop = ta.scrollHeight;
-        hl.scrollTop = ta.scrollTop;
-      });
+      // Position the mouse over the textarea and send a real wheel event.
+      // The browser fires a scroll event on ta which the useEffect listener
+      // (re-registered on block.heightLines change) catches to sync hl.scrollTop.
+      const taBox = await page.locator('textarea[placeholder="Code…"]').boundingBox();
+      await page.mouse.move(taBox.x + taBox.width / 2, taBox.y + taBox.height / 2);
+      await page.mouse.wheel(0, 400);
+
+      // Wait until BOTH ta and hl have scrolled — directly tests the sync invariant.
+      await page.waitForFunction(
+        () => {
+          const ta = document.querySelector('textarea[placeholder="Code…"]');
+          const hl = ta?.previousElementSibling;
+          return (ta?.scrollTop ?? 0) > 0 && hl instanceof HTMLElement && hl.scrollTop > 0;
+        },
+        null,
+        { timeout: 5000 },
+      );
 
       const { taTop, hlTop } = await page.evaluate(() => {
         const ta = document.querySelector('textarea[placeholder="Code…"]');
@@ -445,9 +453,6 @@ export const codeBlockScenarios = [
       });
       expect(taTop).toBeGreaterThan(0);
       expect(hlTop).toBe(taTop);
-
-      // The sync function is symmetric: same hl.scrollLeft = ta.scrollLeft path.
-      // Horizontal sync is verified by the dedicated scenario below.
     },
   ),
 
@@ -471,25 +476,45 @@ export const codeBlockScenarios = [
       await page.mouse.move(cx, cy - 600, { steps: 20 });
       await page.mouse.up();
 
-      // Wait until the code element has the wide content (hljs overflow-x container).
+      // Wait until ta has wide content (the 300-char fill) and hl has a bounded height
+      // (the resize committed). Both conditions are needed for the scrollable state.
       await page.waitForFunction(
         () => {
-          const code = document.querySelector('textarea[placeholder="Code…"]')
-            ?.parentElement?.querySelector("code");
-          return code instanceof HTMLElement && code.scrollWidth > code.clientWidth;
+          const ta = document.querySelector('textarea[placeholder="Code…"]');
+          const hl = ta?.previousElementSibling;
+          return (ta?.scrollWidth ?? 0) > (ta?.clientWidth ?? 0)
+            && hl instanceof HTMLElement
+            && hl.clientHeight > 0;
         },
+        null,
         { timeout: 5000 },
       );
 
-      // The horizontal scroll container is the <code> element (hljs applies overflow-x:auto).
-      // Sync mirrors ta.scrollLeft → code.scrollLeft (not hl.scrollLeft).
+      // Focus the textarea and press End to move cursor to the end of the long line.
+      // This scrolls the textarea horizontally and fires the scroll event synchronously.
+      // The sync listener then sets code.scrollLeft = ta.scrollLeft.
+      await page.locator('textarea[placeholder="Code…"]').focus();
+      await page.keyboard.press("Home"); // ensure cursor is at start first
+      await page.keyboard.press("End");  // move to end → scrolls right
+
+      // Wait until BOTH ta and code have scrolled horizontally.
+      await page.waitForFunction(
+        () => {
+          const ta = document.querySelector('textarea[placeholder="Code…"]');
+          const code = ta?.parentElement?.querySelector("code");
+          return (ta?.scrollLeft ?? 0) > 0 && code instanceof HTMLElement && code.scrollLeft > 0;
+        },
+        null,
+        { timeout: 5000 },
+      );
+
       const { taLeft, codeLeft } = await page.evaluate(() => {
         const ta = document.querySelector('textarea[placeholder="Code…"]');
         const code = ta?.parentElement?.querySelector("code");
-        if (!(ta instanceof HTMLElement) || !(code instanceof HTMLElement)) return { taLeft: 0, codeLeft: -1 };
-        ta.scrollLeft = ta.scrollWidth - ta.clientWidth;
-        code.scrollLeft = ta.scrollLeft;
-        return { taLeft: ta.scrollLeft, codeLeft: code.scrollLeft };
+        return {
+          taLeft: ta?.scrollLeft ?? 0,
+          codeLeft: (code instanceof HTMLElement) ? code.scrollLeft : -1,
+        };
       });
       expect(taLeft).toBeGreaterThan(0);
       expect(codeLeft).toBe(taLeft);
@@ -508,6 +533,8 @@ export const codeBlockScenarios = [
       await waitForRenderStability(page);
 
       const before = await getCodeWrapperBg(page);
+      // The wrapper must be opaque — otherwise the article's hover fill bleeds through.
+      expect(before, "wrapper must have an opaque background (fix not applied)").not.toBe("rgba(0, 0, 0, 0)");
       const ta = page.locator('textarea[placeholder="Code…"]');
       const box = await ta.boundingBox();
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -527,10 +554,38 @@ export const codeBlockScenarios = [
       await waitForRenderStability(page);
 
       const before = await getCodeWrapperBg(page);
+      expect(before, "wrapper must have an opaque background (fix not applied)").not.toBe("rgba(0, 0, 0, 0)");
       await page.locator('textarea[placeholder="Code…"]').click();
       await waitForRenderStability(page);
       const after = await getCodeWrapperBg(page);
 
+      expect(after).toBe(before);
+    },
+  ),
+
+  defineScenario(
+    "7c. Code block residuals",
+    "Bug H: no content highlight",
+    "hovering mermaid preview content does not change wrapper background",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "mermaid");
+      await waitForRenderStability(page);
+
+      const getWrapperBg = () =>
+        page.evaluate(() => {
+          const wrapper = document.querySelector(".cursor-ns-resize")?.parentElement;
+          return wrapper instanceof HTMLElement ? getComputedStyle(wrapper).backgroundColor : "";
+        });
+
+      const before = await getWrapperBg();
+      expect(before, "mermaid wrapper must be opaque (fix not applied)").not.toBe("rgba(0, 0, 0, 0)");
+
+      const handle = page.locator(".cursor-ns-resize");
+      const hBox = await handle.boundingBox();
+      // Hover over the content area (above the handle, inside the mermaid block body)
+      await page.mouse.move(hBox.x + hBox.width / 2, hBox.y - 40);
+      const after = await getWrapperBg();
       expect(after).toBe(before);
     },
   ),
@@ -547,9 +602,9 @@ export const codeBlockScenarios = [
       await waitForRenderStability(page);
 
       await page.evaluate(() => {
-        window.__headerTransitions = 0;
+        globalThis.__t7cHeaderTransitions = 0;
         const btn = document.querySelector("button.transition-colors");
-        if (btn) btn.addEventListener("transitionstart", () => { window.__headerTransitions++; });
+        if (btn) btn.addEventListener("transitionstart", () => { globalThis.__t7cHeaderTransitions++; });
       });
 
       const handle = page.locator(".cursor-ns-resize");
@@ -562,34 +617,116 @@ export const codeBlockScenarios = [
       await page.mouse.up();
       await waitForRenderStability(page);
 
-      const count = await page.evaluate(() => window.__headerTransitions ?? 0);
+      const count = await page.evaluate(() => globalThis.__t7cHeaderTransitions ?? 0);
       expect(count).toBe(0);
     },
   ),
 
-  // ── T7c: Bug F-residual — handle cursor in mermaid preview ────────────────
+  defineScenario(
+    "7c. Code block residuals",
+    "Bug J: no header flicker",
+    "language button text updates correctly after a drag (useMemo re-renders on language change)",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "typescript");
+      await waitForRenderStability(page);
+
+      const handle = page.locator(".cursor-ns-resize");
+      const box = await handle.boundingBox();
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx, cy - 60, { steps: 5 });
+      await page.mouse.up();
+      await waitForRenderStability(page);
+
+      await page.locator("button.font-mono").first().click();
+      await page.getByRole("button", { name: "javascript", exact: true }).waitFor({ state: "visible" });
+      await page.getByRole("button", { name: "javascript", exact: true }).click();
+      await waitForRenderStability(page);
+
+      const langText = await page.locator("button.font-mono").first().textContent();
+      expect(langText?.trim()).toBe("javascript");
+    },
+  ),
 
   defineScenario(
     "7c. Code block residuals",
-    "Bug F-residual: handle cursor in mermaid preview",
-    "resize handle has ns-resize cursor in mermaid preview mode",
+    "Bug J: no header flicker",
+    "copy button icon changes to check after click following a drag",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await insertCodeBlock(page, "typescript");
+      await waitForRenderStability(page);
+
+      const handle = page.locator(".cursor-ns-resize");
+      const box = await handle.boundingBox();
+      const cx = box.x + box.width / 2;
+      const cy = box.y + box.height / 2;
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx, cy - 60, { steps: 5 });
+      await page.mouse.up();
+      await waitForRenderStability(page);
+
+      // Mock clipboard so writeText() resolves immediately without requiring
+      // browser permissions (the test only cares that copiedCode state changes).
+      await page.evaluate(() => {
+        Object.defineProperty(navigator, "clipboard", {
+          configurable: true,
+          value: { writeText: () => Promise.resolve() },
+        });
+      });
+
+      const getIconHtml = () =>
+        page.evaluate(() => document.querySelector('button[title="Copy code"] svg')?.innerHTML ?? "");
+
+      const iconBefore = await getIconHtml();
+      await page.locator('button[title="Copy code"]').click();
+
+      await page.waitForFunction(
+        (before) => (document.querySelector('button[title="Copy code"] svg')?.innerHTML ?? "") !== before,
+        iconBefore,
+        { timeout: 3000 },
+      );
+
+      const iconAfter = await getIconHtml();
+      expect(iconAfter).not.toBe(iconBefore);
+    },
+  ),
+
+  // ── T7c: Bug F-residual — handle cursor and drag in mermaid preview ───────
+
+  defineScenario(
+    "7c. Code block residuals",
+    "Bug F-residual: handle in mermaid preview",
+    "dragging the handle in mermaid preview mode increases block height",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await insertCodeBlock(page, "mermaid");
       await waitForRenderStability(page);
 
-      const handle = page.locator(".cursor-ns-resize");
-      await expect(handle).toBeVisible();
-      const box = await handle.boundingBox();
-      expect(box).not.toBeNull();
-      expect(box.width).toBeGreaterThan(0);
-      expect(box.height).toBeGreaterThan(0);
+      const getOuterHeight = () =>
+        page.evaluate(() => {
+          const wrapper = document.querySelector(".cursor-ns-resize")?.parentElement;
+          return wrapper instanceof HTMLElement ? wrapper.offsetHeight : 0;
+        });
 
-      const cursor = await page.evaluate(() => {
-        const el = document.querySelector(".cursor-ns-resize");
-        return el instanceof HTMLElement ? getComputedStyle(el).cursor : "";
-      });
-      expect(cursor).toBe("ns-resize");
+      const before = await getOuterHeight();
+
+      const handle = page.locator(".cursor-ns-resize");
+      const hBox = await handle.boundingBox();
+      const cx = hBox.x + hBox.width / 2;
+      const cy = hBox.y + hBox.height / 2;
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx, cy + 100, { steps: 10 });
+      await page.mouse.up();
+      await waitForRenderStability(page);
+
+      const after = await getOuterHeight();
+      expect(after).toBeGreaterThan(before);
     },
   ),
 ];
