@@ -380,12 +380,17 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
   const mirroredExternalIds = useRef(new Set<string>());
   const title = page?.title || "Claude MCP agent";
 
-  useEffect(() => {
+  // react-doctor/no-adjust-state-on-prop-change: reset state during render with
+  // a `prev`-prop comparison rather than in a useEffect so the UI commits the
+  // new pageId and its initial state in a single paint.
+  const [prevPageId, setPrevPageId] = useState(pageId);
+  if (prevPageId !== pageId) {
+    setPrevPageId(pageId);
     setMessages(loadMessages(pageId));
     setSettings(readSettings(pageId));
     setDraft(DEFAULT_PROMPT);
     mirroredExternalIds.current = new Set();
-  }, [pageId]);
+  }
 
   useEffect(() => {
     writeThread(pageId, messages);

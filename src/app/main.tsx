@@ -12,6 +12,7 @@
 
 import { Profiler, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { MotionConfig } from "motion/react";
 import App from "./App.tsx";
 import { recordReactCommit } from '@/shared/lib/perf/measure';
 import '@notion-db/object-database/theme.css';
@@ -24,9 +25,14 @@ const root = document.getElementById("root");
 if (root) {
   createRoot(root).render(
     <StrictMode>
-      <Profiler id="App" onRender={recordReactCommit}>
-        <App />
-      </Profiler>
+      {/* react-doctor/require-reduced-motion: honour user's OS-level
+          prefers-reduced-motion preference for every motion component (WCAG
+          2.3.3). `reducedMotion="user"` is the recommended default. */}
+      <MotionConfig reducedMotion="user">
+        <Profiler id="App" onRender={recordReactCommit}>
+          <App />
+        </Profiler>
+      </MotionConfig>
     </StrictMode>,
   );
 }

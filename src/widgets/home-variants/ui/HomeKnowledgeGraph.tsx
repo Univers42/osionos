@@ -149,9 +149,14 @@ export const HomeKnowledgeGraph: React.FC = () => {
     });
     simulationRef.current = simulation;
 
+    // react-doctor/effect-needs-cleanup: explicitly remove the tick listener
+    // alongside `stop()` so any pending tick that fires before stop propagates
+    // cannot still call setNodes after unmount.
     return () => {
       cancelAnimationFrame(frame);
+      simulation.on("tick", null);
       simulation.stop();
+      simulationRef.current = null;
     };
   }, [simulationLinks]);
 

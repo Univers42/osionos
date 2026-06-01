@@ -70,6 +70,7 @@ const PAGE_JSON_BODY_LIMIT_BYTES = 2 * 1024 * 1024;
 const DEFAULT_UNSPLASH_PER_PAGE = 12;
 const MAX_UNSPLASH_PER_PAGE = 24;
 const TRANSLATION_FETCH_TIMEOUT_MS = 6_000;
+const BAAS_FETCH_TIMEOUT_MS = 2_500;
 const MAX_CLAUDE_TOOL_RESULT_TEXT = 120_000;
 const PAGE_VISIBILITY_VALUES = new Set(['private', 'shared', 'public']);
 const PAGE_SURFACE_VALUES = new Set(['page', 'agent', 'home']);
@@ -394,11 +395,11 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
 	if (body !== undefined) headers['Content-Type'] = 'application/json';
 	if (prefer) headers.Prefer = prefer;
 
-	const response = await fetchImpl(`${config.baasUrl}/rest/v1/${path}`, {
+	const response = await fetchWithTimeout(fetchImpl, `${config.baasUrl}/rest/v1/${path}`, {
 		method,
 		headers,
 		body: body === undefined ? undefined : JSON.stringify(body),
-	});
+	}, BAAS_FETCH_TIMEOUT_MS);
 	const text = await response.text().catch(() => '');
 	if (!response.ok) {
 		const status = responseStatusForBaasFailure(response.status);
@@ -437,6 +438,43 @@ function pageRowToEntry(row) {
 		content: safeJsonArray(row.content),
 		properties: safeJsonArray(row.properties),
 		surface: PAGE_SURFACE_VALUES.has(row.surface) ? row.surface : undefined,
+	};
+}
+
+function workspaceRowToEntry(row, member = {}) {
+	const settings = row?.settings && typeof row.settings === 'object' && !Array.isArray(row.settings) ? row.settings : {};
+	return {
+		_id: row.id,
+		id: row.id,
+		name: typeof row.name === 'string' && row.name ? row.name : 'osionos workspace',
+		slug: typeof row.slug === 'string' ? row.slug : '',
+		ownerId: row.owner_id,
+		plan: typeof settings.plan === 'string' ? settings.plan : 'Bridge',
+		settings,
+		role: safeText(member.role, 16) || undefined,
+		permissions: Array.isArray(member.permissions) ? member.permissions.filter((item) => typeof item === 'string') : undefined,
+		createdAt: row.created_at ?? undefined,
+		updatedAt: row.updated_at ?? undefined,
+	};
+}
+
+function fallbackWorkspaceEntry(workspaceId, authContext) {
+	return {
+		_id: workspaceId,
+		id: workspaceId,
+		name: 'Claude MCP osionos',
+		slug: `mcp-${workspaceId.slice(0, 8)}`,
+		ownerId: authContext.userId,
+		plan: 'Bridge',
+		settings: {
+			bridgeProvider: 'prismatica',
+			role: 'owner',
+			permissions: ['create', 'read', 'update', 'delete', 'admin'],
+			plan: 'Bridge',
+			memberCount: 1,
+		},
+		role: 'owner',
+		permissions: ['create', 'read', 'update', 'delete', 'admin'],
 	};
 }
 
@@ -497,14 +535,9 @@ export async function requireWorkspaceAccess(request, workspaceId, permission, c
 	if (!authContext.workspaceIds.includes(normalizedWorkspaceId)) {
 		throw Object.assign(new Error('App session is not scoped to this workspace.'), { status: 403 });
 	}
-	const query = postgrestQuery({
-		workspace_id: `eq.${normalizedWorkspaceId}`,
-		user_id: `eq.${authContext.userId}`,
-		select: 'role,permissions',
-		limit: '1',
-	});
-	const rows = await baasRest(config, fetchImpl, `osionos_workspace_members?${query}`);
-	const member = Array.isArray(rows) ? rows[0] : null;
+	const workspaces = await listSessionWorkspaces(authContext, config, fetchImpl);
+	const workspace = workspaces.find((item) => item._id === normalizedWorkspaceId || item.id === normalizedWorkspaceId);
+	const member = workspace ? { role: workspace.role, permissions: workspace.permissions } : null;
 	const requiredPermission = normalizePermission(permission);
 	if (!memberHasPermission(member, requiredPermission)) {
 		throw Object.assign(new Error('Workspace permission denied.'), { status: 403 });
@@ -574,6 +607,36 @@ async function listWorkspacePageRefs(workspaceId, config, fetchImpl) {
 	return await baasRest(config, fetchImpl, `osionos_pages?${query}`) ?? [];
 }
 
+async function listSessionWorkspaces(authContext, config, fetchImpl) {
+	if (authContext.workspaceIds.length === 0) return [];
+	try {
+		const rows = await baasRest(config, fetchImpl, 'rpc/osionos_bridge_list_workspaces', {
+			method: 'POST',
+			body: {
+				p_user_id: authContext.userId,
+				p_workspace_ids: authContext.workspaceIds,
+			},
+		});
+		const workspaces = (Array.isArray(rows) ? rows : []).map((row) => workspaceRowToEntry({
+			id: row.workspace_id,
+			owner_id: row.owner_id,
+			name: row.workspace_name,
+			slug: row.workspace_slug,
+			settings: row.workspace_settings,
+			created_at: row.created_at,
+			updated_at: row.updated_at,
+		}, {
+			role: row.workspace_role,
+			permissions: row.permissions,
+		}));
+		return workspaces.length > 0 ? workspaces : authContext.workspaceIds.map((workspaceId) => fallbackWorkspaceEntry(workspaceId, authContext));
+	} catch (error) {
+		if (config.requireBaas) throw error;
+		console.warn(`[osionos-bridge] workspace list fell back to session scope: ${error instanceof Error ? error.message : 'unknown error'}`);
+		return authContext.workspaceIds.map((workspaceId) => fallbackWorkspaceEntry(workspaceId, authContext));
+	}
+}
+
 function descendantPageIds(rows, parentId) {
 	const childrenByParent = new Map();
 	for (const row of rows) {
@@ -602,7 +665,7 @@ function idsFilter(ids) {
 export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) {
 	const persistenceEnabled = config.persistence === 'baas' || (config.persistence === 'auto' && config.serviceKey && config.baasUrl);
 	if (!persistenceEnabled) return null;
-	const response = await fetchImpl(`${config.baasUrl}/rest/v1/rpc/osionos_bridge_upsert_workspace`, {
+	const response = await fetchWithTimeout(fetchImpl, `${config.baasUrl}/rest/v1/rpc/osionos_bridge_upsert_workspace`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
@@ -616,7 +679,7 @@ export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) 
 			p_email_hash: emailHash(payload.email, config),
 			p_display_name: payload.name,
 		}),
-	});
+	}, BAAS_FETCH_TIMEOUT_MS);
 	if (!response.ok) {
 		const body = await response.text().catch(() => '');
 		throw Object.assign(new Error(`BaaS bridge persistence failed with ${response.status}: ${body.slice(0, 160)}`), { status: 502 });
@@ -1133,6 +1196,26 @@ async function handlePagesGet(url, request, response, config, fetchImpl) {
 	return handlePageRead(url, request, response, config, fetchImpl);
 }
 
+async function handleWorkspaceGet(url, request, response, config, fetchImpl) {
+	if (url.pathname === '/api/workspaces') {
+		const authContext = verifyAppSessionToken(bearerToken(request), config);
+		json(response, 200, await listSessionWorkspaces(authContext, config, fetchImpl), config);
+		return true;
+	}
+	const match = /^\/api\/workspaces\/([^/]+)$/.exec(url.pathname);
+	if (!match) return false;
+	const workspaceId = requireUuid(decodeURIComponent(match[1]), 'workspaceId');
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	if (!authContext.workspaceIds.includes(workspaceId)) {
+		throw Object.assign(new Error('App session is not scoped to this workspace.'), { status: 403 });
+	}
+	const workspaces = await listSessionWorkspaces(authContext, config, fetchImpl);
+	const workspace = workspaces.find((item) => item._id === workspaceId || item.id === workspaceId);
+	if (!workspace) throw Object.assign(new Error('Workspace not found.'), { status: 404 });
+	json(response, 200, workspace, config);
+	return true;
+}
+
 async function handlePageCreate(request, response, config, fetchImpl) {
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const workspaceId = requireUuid(payload.workspaceId, 'workspaceId');
@@ -1339,6 +1422,7 @@ async function handleBridgeRequest(request, response, context) {
 		return;
 	}
 	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+	if (request.method === 'GET' && await handleWorkspaceGet(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'GET' && await handlePagesGet(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'GET' && await handleBridgeGet(url, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'POST' && await handleBridgePost(
