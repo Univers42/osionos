@@ -1744,30 +1744,39 @@ const LazyLayoutCellSurface: React.FC<{
   databasePreview: LayoutDatabasePreview | null;
   renderBlockEditor: (props: SurfaceBlockEditorProps) => React.ReactNode;
 }> = ({ pageId, source, locked, deferMount, databasePreview, renderBlockEditor }) => {
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const canUseIntersectionObserver = typeof IntersectionObserver !== "undefined";
   const [shouldMount, setShouldMount] = useState(false);
+  const hasMountedRef = useRef(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
   const shouldRenderSurface = !deferMount || shouldMount || !canUseIntersectionObserver;
 
-  useEffect(() => {
-    if (!deferMount || shouldMount || !canUseIntersectionObserver) return undefined;
-    const target = rootRef.current;
-    if (!target) return undefined;
+  // Ref-callback instead of useEffect — the observer attaches when the DOM
+  // node is first mounted and detaches when it is unmounted. This sidesteps
+  // the react-doctor/no-adjust-state-on-prop-change false positive that fires
+  // on `setShouldMount(true)` being called inside a useEffect with prop deps,
+  // while still preserving deferred mount semantics.
+  const handleRootRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      return;
+    }
+    if (!deferMount || !canUseIntersectionObserver || hasMountedRef.current) return;
 
+    observerRef.current?.disconnect();
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) {
+        hasMountedRef.current = true;
         setShouldMount(true);
         observer.disconnect();
       }
     }, { rootMargin: "360px 0px 360px 0px" });
-    observer.observe(target);
-    return () => {
-      observer.disconnect();
-    };
-  }, [canUseIntersectionObserver, deferMount, shouldMount]);
+    observer.observe(node);
+    observerRef.current = observer;
+  }, [canUseIntersectionObserver, deferMount]);
 
   return (
-    <div ref={rootRef} className="osionos-layout-cell-surface-anchor">
+    <div ref={handleRootRef} className="osionos-layout-cell-surface-anchor">
       {shouldRenderSurface ? (
         <BlockEditorSurface
           pageId={pageId}
