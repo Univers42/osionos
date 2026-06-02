@@ -586,13 +586,38 @@ export function applyBlockInsert(
   };
 }
 
+/**
+ * Drop columns emptied of all content and unwrap a column_list back to plain
+ * blocks once 0 or 1 column remains, so dragging the content that created a
+ * column out of it can never leave an unremovable empty column behind.
+ */
+export function pruneColumns(blocks: Block[]): Block[] {
+  const result: Block[] = [];
+  for (const block of blocks) {
+    if (block.type === "column_list") {
+      const columns = (block.children ?? [])
+        .map((column) => ({ ...column, children: pruneColumns(column.children ?? []) }))
+        .filter((column) => (column.children?.length ?? 0) > 0);
+      if (columns.length === 0) continue;
+      if (columns.length === 1) {
+        result.push(...(columns[0].children ?? []));
+        continue;
+      }
+      result.push({ ...block, children: columns });
+      continue;
+    }
+    result.push(block.children ? { ...block, children: pruneColumns(block.children) } : block);
+  }
+  return result;
+}
+
 /** Creates a page updater that removes a block. */
 export function applyBlockDelete(
   blockId: string,
 ): (page: PageEntry) => PageEntry {
   return (page) => ({
     ...page,
-    content: deleteBlockFromTree(page.content ?? [], blockId),
+    content: pruneColumns(deleteBlockFromTree(page.content ?? [], blockId)),
   });
 }
 
@@ -634,7 +659,7 @@ export function applyBlockMove(
       reorderInArray(content);
     }
 
-    return { ...page, content };
+    return { ...page, content: pruneColumns(content) };
   };
 }
 
@@ -675,7 +700,7 @@ export function applyBlockMoveAcrossTree(
     if (!targetParentBlockId) {
       const bounded = Math.max(0, Math.min(targetIndex, withoutBlock.length));
       withoutBlock.splice(bounded, 0, extracted);
-      return { ...page, content: withoutBlock };
+      return { ...page, content: pruneColumns(withoutBlock) };
     }
 
     // Step 3: Insert as child of target parent
@@ -699,7 +724,7 @@ export function applyBlockMoveAcrossTree(
       withoutBlock.splice(Math.max(0, Math.min(targetIndex, withoutBlock.length)), 0, extracted);
     }
 
-    return { ...page, content: withoutBlock };
+    return { ...page, content: pruneColumns(withoutBlock) };
   };
 }
 

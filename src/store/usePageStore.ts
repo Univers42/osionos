@@ -26,6 +26,7 @@ import {
   applyBlockDelete,
   applyBlockMove,
   applyBlockMoveAcrossTree,
+  pruneColumns,
   applyBlockIndent,
   applyBlockOutdent,
   applyBlockTypeChange,
@@ -87,7 +88,7 @@ function buildNavigationPath(
 function applyPageContentUpdate(blocks: NonNullable<PageEntry["content"]>) {
   return (page: PageEntry): PageEntry => ({
     ...page,
-    content: blocks,
+    content: pruneColumns(blocks),
   });
 }
 
