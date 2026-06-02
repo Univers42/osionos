@@ -14,6 +14,7 @@ import { create } from "zustand";
 import {
   loadRecents,
   saveRecents,
+  saveActivePage,
   loadPagesCache,
   derivePageState,
   savePagesCache,
@@ -447,3 +448,10 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
 // Register store access for persistence layer (avoids circular imports)
 registerPageLookup((pageId) => usePageStore.getState().pageById(pageId));
+
+// Persist the open page so a refresh restores it instead of dropping to Home.
+usePageStore.subscribe((state, previous) => {
+  if (state.activePage?.id !== previous.activePage?.id) {
+    saveActivePage(state.activePage);
+  }
+});
