@@ -1164,6 +1164,33 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     ],
   );
 
+  // Backspace at the very start of a NON-empty indented block outdents it one
+  // level (Notion behaviour), instead of doing nothing. Repeated presses walk
+  // the block back out level by level; at root level it falls through to the
+  // default merge-with-previous. Empty blocks keep their existing handling.
+  const handleStartBackspaceOutdent = useCallback(
+    (
+      e: React.KeyboardEvent,
+      blockId: string,
+      block: Block,
+      parentBlockId: string | null,
+      isEmpty: boolean,
+    ): boolean => {
+      if (e.key !== "Backspace" || e.shiftKey || isEmpty || !parentBlockId) return false;
+
+      const editorEl = e.currentTarget as HTMLElement | null;
+      const offsets = editorEl ? getInlineEditorSelectionOffsets(editorEl) : null;
+      if (!offsets || offsets.start !== 0 || offsets.end !== 0) return false;
+
+      e.preventDefault();
+      flushPendingBlockDraft(blockId, "structural");
+      outdentBlock(pageId, blockId);
+      repositionCursor(blockId, block.content);
+      return true;
+    },
+    [pageId, outdentBlock, flushPendingBlockDraft],
+  );
+
   const handleArrowNavigation = useCallback(
     (e: React.KeyboardEvent, blockId: string, content: Block[]): boolean => {
       if (
@@ -1365,6 +1392,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       if (handled) return;
       if (handleEnterAction(e, blockId, nextBlock.type)) return;
+      if (handleStartBackspaceOutdent(e, blockId, nextBlock, parentBlockId, isEmpty)) return;
       if (handleEmptyBackspace(e, blockId, nextBlock, nextBlockIdx, nextContent, parentBlockId, isEmptyForDeletion)) return;
       if (handleArrowNavigation(e, blockId, nextContent)) return;
       handleEscapeAction(e);
@@ -1381,6 +1409,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       handleDividerDelete,
       handleContainerEnter,
       handleEnterAction,
+      handleStartBackspaceOutdent,
       handleEmptyBackspace,
       handleArrowNavigation,
       handleEscapeAction,
