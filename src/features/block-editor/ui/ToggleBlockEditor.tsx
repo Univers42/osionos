@@ -15,6 +15,7 @@ import { ChevronRight } from "lucide-react";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
 import type { Block } from "@/entities/block";
+import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { usePageStore } from "@/store/usePageStore";
 
 /* ── Types ──────────────────────────────────────────────────────────── */
@@ -41,21 +42,6 @@ interface ToggleBlockEditorProps {
  * communicates it to the store so BlockTree knows whether to render
  * the children subtree.
  */
-function getToggleHeadingClass(headingLevel: Block["headingLevel"]): string {
-  switch (headingLevel) {
-    case 1:
-      return "text-2xl font-bold";
-    case 2:
-      return "text-xl font-semibold";
-    case 3:
-      return "text-lg font-semibold";
-    case 4:
-      return "text-base font-semibold";
-    default:
-      return "text-sm";
-  }
-}
-
 export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
   block,
   pageId,
