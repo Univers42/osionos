@@ -98,6 +98,57 @@ export const markdownCombinationScenarios = [
   ),
   defineScenario(
     CONTAINER,
+    "Heading <-> toggle",
+    'typing "> " at the start of a heading turns it into a toggle that keeps the level',
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await activateFirstEditor(page);
+      const editor = getEditors(page).first();
+      await editor.click();
+      await page.keyboard.type("# ", { delay: 20 });
+      await waitForRenderStability(page);
+      await page.keyboard.type("My title", { delay: 15 });
+      await waitForRenderStability(page);
+      // Re-enter at the very start and type "> " to fold the heading into a toggle.
+      await editor.press("Home");
+      await page.keyboard.type("> ", { delay: 25 });
+      await waitForRenderStability(page);
+
+      const firstBlockType = await page.evaluate(
+        () => document.querySelector("[data-block-id]")?.dataset.blockType,
+      );
+      expect(firstBlockType).toBe("toggle");
+      const toggle = getEditors(page).first();
+      // Heading level 1 is preserved on the toggle summary (text-2xl).
+      expect(await summarySizeClass(toggle)).toBe("2xl");
+      await expect(toggle).toHaveText("My title");
+    },
+  ),
+  defineScenario(
+    CONTAINER,
+    "Heading <-> toggle",
+    'the compact "##> " form creates a toggle heading at the chosen level in one shot',
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await activateFirstEditor(page);
+      const editor = getEditors(page).first();
+      await editor.click();
+      await page.keyboard.type("##> ", { delay: 25 });
+      await waitForRenderStability(page);
+      await page.keyboard.type("Compact toggle", { delay: 15 });
+      await waitForRenderStability(page);
+
+      const firstBlockType = await page.evaluate(
+        () => document.querySelector("[data-block-id]")?.dataset.blockType,
+      );
+      expect(firstBlockType).toBe("toggle");
+      const toggle = getEditors(page).first();
+      expect(await summarySizeClass(toggle)).toBe("xl");
+      await expect(toggle).toHaveText("Compact toggle");
+    },
+  ),
+  defineScenario(
+    CONTAINER,
     "Collapsible list",
     "a bulleted item with a nested child collapses and re-expands",
     async ({ page, appUrl }) => {
