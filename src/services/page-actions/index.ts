@@ -99,9 +99,13 @@ function blockToMarkdown(block: Block, depth = 0): string {
 }
 
 export function serializePageToMarkdown(page: PageEntry): string {
-  const blocks = page.content ?? [];
-  const body = blocks.map((block) => blockToMarkdown(block)).join("\n\n");
+  const body = serializeBlocksToMarkdown(page.content ?? []);
   return `# ${page.title || "Untitled"}\n\n${body}`.trim();
+}
+
+/** Serializes a block list to markdown body source (no page-title heading). */
+export function serializeBlocksToMarkdown(blocks: Block[]): string {
+  return blocks.map((block) => blockToMarkdown(block)).join("\n\n");
 }
 
 export async function copyPageLink(pageId: string): Promise<string> {

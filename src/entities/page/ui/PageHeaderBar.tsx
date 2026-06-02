@@ -23,6 +23,7 @@ import {
   Languages,
   Link,
   Lock,
+  Code2,
   Maximize2,
   MoreHorizontal,
   Plug,
@@ -225,6 +226,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                       <MenuButton icon={<Text size={16} />} label="Small text" checked={actions.config.smallText} onClick={() => runPageAction(actions.toggleSmallText(), showActionError)} />
                       <MenuButton icon={<Maximize2 size={16} />} label="Full width" checked={actions.config.fullWidth} onClick={() => runPageAction(actions.toggleFullWidth(), showActionError)} />
                       <MenuButton icon={<Lock size={16} />} label="Lock page" checked={actions.config.locked} onClick={() => runPageAction(actions.toggleLock(), showActionError)} />
+                      <MenuButton icon={<Code2 size={16} />} label="Raw / code mode" checked={actions.config.rawMode} onClick={() => runPageAction(actions.toggleRawMode(), showActionError)} />
                       <div className="flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--osio-bg-hover)]">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--osio-fg-muted)]"><Languages size={16} /></span>
                         <span className="min-w-0 flex-1 truncate">Translate</span>

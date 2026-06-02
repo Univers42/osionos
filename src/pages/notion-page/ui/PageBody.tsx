@@ -13,6 +13,9 @@
 import React, { useEffect, useRef } from 'react';
 import { PlaygroundPageEditor } from '@/features/block-editor';
 import { isPerfEnabled } from '@/shared/lib/perf/measure';
+import { resolvePageConfig, usePageConfigStore } from '@/shared/config/pageConfigStore';
+import { useUserStore } from '@/features/auth';
+import { RawModeView } from '@/features/raw-mode';
 
 interface PageBodyProps {
   pageId: string;
@@ -21,17 +24,28 @@ interface PageBodyProps {
 
 /**
  * Content area — wraps the PlaygroundPageEditor which integrates
- * the markengine for markdown shortcuts and block-level editing.
+ * the markengine for markdown shortcuts and block-level editing. When the page
+ * is in raw mode it swaps in the VSCode-style markdown source editor instead.
  */
 export const PageBody: React.FC<PageBodyProps> = ({ pageId, locked = false }) => {
   const renderCountRef = useRef(0);
   renderCountRef.current += 1;
+  const userId = useUserStore((state) => state.activeUserId) || 'anonymous';
+  const rawMode = usePageConfigStore((state) => resolvePageConfig(state.configs[`${userId}:${pageId}`]).rawMode);
 
   useEffect(() => () => {
     if (isPerfEnabled()) {
       console.info(`[perf] PageBody renders before unmount: ${renderCountRef.current}`);
     }
   }, []);
+
+  if (rawMode) {
+    return (
+      <div className="osionos-raw-mode flex h-[calc(100vh-7rem)] min-h-[420px] w-full flex-col overflow-hidden rounded-lg border border-[var(--osio-border-default)]">
+        <RawModeView pageId={pageId} />
+      </div>
+    );
+  }
 
   return (
     <div className="osionos-page-body">
