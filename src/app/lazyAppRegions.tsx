@@ -28,6 +28,11 @@ const CanvasDebugRouteImpl = lazy(() =>
   })),
 );
 
+// Warm the page-renderer chunk in parallel with the entry bundle so it is ready
+// by the time auth resolves -- removes the lazy-load waterfall from LCP without
+// putting the editor back on the critical path.
+void import("@/widgets/page-renderer");
+
 const contentFallback = (
   <div className="flex h-full w-full items-center justify-center">
     <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--osio-accent)] border-t-transparent" />
