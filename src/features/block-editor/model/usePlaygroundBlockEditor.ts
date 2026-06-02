@@ -1149,6 +1149,15 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       if ((e.key !== "Backspace" && e.key !== "Delete") || !isEmpty)
         return false;
 
+      // Empty block sitting directly inside a column: delete it outright. The
+      // store prunes a column once it has no children (and unwraps a lone
+      // column back to plain blocks), so Backspace in an empty column removes
+      // the column instead of leaving an orphaned empty cell behind.
+      if (parentBlockId && findBlockInTree(contentRef.current, parentBlockId)?.type === "column") {
+        deleteAndFocusAdjacent(e, blockId);
+        return true;
+      }
+
       if (isHeadingBlock(block.type)) {
         e.preventDefault();
         changeBlockType(pageId, blockId, "paragraph");
