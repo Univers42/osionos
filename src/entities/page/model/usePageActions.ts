@@ -276,6 +276,11 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     await logAction('version_history', 'Version restored', { versionId: version.id });
   }, [logAction, pageId, pageRevision, snapshot, updatePageContent, updatePageTitle]);
 
+  const saveVersion = useCallback(async () => {
+    await snapshot('Saved version');
+    await logAction('version_history', 'Version saved');
+  }, [logAction, snapshot]);
+
   return {
     actionMessage,
     config,
@@ -303,5 +308,6 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     openAnalytics,
     manageConnections,
     restoreVersion,
+    saveVersion,
   };
 }
