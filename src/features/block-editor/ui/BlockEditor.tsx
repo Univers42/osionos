@@ -34,6 +34,7 @@ import { getNumberedMarker, getBulletMarker } from "@/entities/block/model/listM
 import { MediaBlockEditor } from "./MediaBlockEditor";
 import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
+import { BlockCollapseToggle } from "./BlockCollapseToggle";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
 import { LayoutBlockEditor } from "./canvas";
@@ -633,6 +634,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     case "quote":
       return (
         <div className="flex my-0.5 rounded-md px-1">
+          {block.children?.length ? (
+            <BlockCollapseToggle collapsed={block.collapsed} onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })} />
+          ) : null}
           <div className="w-1 bg-[var(--osio-fg-default)] rounded-full shrink-0 mr-3" style={editableStyle} />
           <div className="flex-1 min-w-0">
             <EditableContent
@@ -645,7 +649,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
             />
-            {renderChildren?.()}
+            {!block.collapsed && renderChildren?.()}
           </div>
         </div>
       );
@@ -654,9 +658,12 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       const icon = block.color || "💡";
       return (
         <div
-          className="my-0.5 flex items-start gap-3 rounded-lg border border-[var(--osio-border-default)] p-3"
+          className="my-0.5 flex items-start gap-2 rounded-lg border border-[var(--osio-border-default)] p-3"
           style={surfaceStyle}
         >
+          {block.children?.length ? (
+            <BlockCollapseToggle collapsed={block.collapsed} onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })} />
+          ) : null}
           <div className="relative shrink-0">
             <button
               type="button"
@@ -691,7 +698,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
             />
-            {renderChildren?.()}
+            {!block.collapsed && renderChildren?.()}
           </div>
         </div>
       );

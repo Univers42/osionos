@@ -26,6 +26,7 @@ import React, { useState, useMemo } from "react";
 import { EquationView } from "@/shared/ui/EquationView";
 import type { Block } from '@/entities/block';
 import { getNumberedMarker, getBulletMarker } from '@/entities/block/model/listMarkers';
+import { getToggleHeadingClass } from '@/entities/block/model/toggleHeading';
 import { ChevronRight } from "lucide-react";
 import { DatabaseBlock } from '@/widgets/database-view';
 import { CalloutBlockReadOnly } from "./CalloutBlockReadOnly";
@@ -427,7 +428,7 @@ const ToggleBlockReadOnly: React.FC<{ block: Block; bulletDepth: number; numbere
         </button>
         <button
           type="button"
-          className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 flex-1 cursor-pointer select-none text-left"
+          className={`${getToggleHeadingClass(block.headingLevel)} text-[var(--osio-fg-default)] leading-relaxed py-0.5 flex-1 cursor-pointer select-none text-left`}
           onClick={() => setExpanded((o) => !o)}
         >
           <InlineMarkdown content={block.content} />

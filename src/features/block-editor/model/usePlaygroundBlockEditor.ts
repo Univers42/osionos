@@ -1330,7 +1330,9 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         content: "",
       };
       const existingChildren = block.children ?? [];
-      updateBlock(pageId, blockId, { children: [...existingChildren, child] });
+      // Expand on child creation: a collapsed quote/callout would otherwise hide
+      // the new child (gated on !collapsed), losing focus and the keystroke.
+      updateBlock(pageId, blockId, { children: [...existingChildren, child], collapsed: false });
       focusBlock(child.id);
       return true;
     },
