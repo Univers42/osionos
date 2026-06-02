@@ -34,8 +34,12 @@ export function parseToggle(
   parseBlocks: ParseBlocksFn,
 ): BlockNode {
   const header = advance(ctx).trimStart();
-  const match = /^>\s*(?:\[\s*>\s*\]|\[toggle\])\s*(.*)$/i.exec(header);
-  const summaryText = match?.[1] ?? "";
+  // Two openers: the explicit "> [>]" / "> [toggle]" form, and the compact
+  // "#..######>" form (the editor's toggle-heading) which also carries a level.
+  const compact = /^(#{1,6})>\s*(.*)$/.exec(header);
+  const bracket = /^>\s*(?:\[\s*>\s*\]|\[toggle\])\s*(.*)$/i.exec(header);
+  const level = compact ? (compact[1].length as 1 | 2 | 3 | 4 | 5 | 6) : undefined;
+  const summaryText = compact?.[2] ?? bracket?.[1] ?? "";
 
   const bodyLines: string[] = [];
   while (ctx.pos < ctx.lines.length) {
@@ -55,6 +59,7 @@ export function parseToggle(
     type: "toggle",
     summary: parseInline(summaryText),
     children: parseBlocks(innerCtx, 0),
+    ...(level ? { level } : {}),
   };
 }
 

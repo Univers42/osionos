@@ -18,15 +18,19 @@ import type { Block } from "@/entities/block";
 //   callout  -> "> [!icon] title"   (children prefixed "> ")
 //   quote    -> "> text"            (children prefixed "> ")
 // This keeps the raw-mode round-trip (serialize -> parse) lossless for block
-// type, content, list/todo state, code language, headings 1-6, equations and
-// tables. Pure view state (collapsed) has no markdown form and is not emitted.
+// type, content, list/checkbox state, code language, headings 1-6, toggle
+// heading level, equations and tables. Pure view state (collapsed) has no
+// markdown form and is not emitted.
 
 function tableBlockToMarkdown(block: Block): string {
   const rows = block.tableData ?? [];
   if (rows.length === 0) return block.content ?? "";
   const aligns = block.tableConfig?.columnAlignments ?? [];
-  const toRow = (cells: string[]) =>
-    `| ${cells.map((cell) => cell.replace(/\|/g, "\\|")).join(" | ")} |`;
+  const escapedPipe = String.raw`\|`;
+  const toRow = (cells: string[]) => {
+    const escaped = cells.map((cell) => cell.replaceAll("|", escapedPipe)).join(" | ");
+    return `| ${escaped} |`;
+  };
   const separator = (rows[0] ?? []).map((_, index) => {
     const align = aligns[index];
     if (align === "left") return ":---";
@@ -68,13 +72,19 @@ export function blockToMarkdown(block: Block, depth = 0): string {
     case "numbered_list": line = `1. ${content}`; break;
     case "to_do": line = `- [${block.checked ? "x" : " "}] ${content}`; break;
     case "quote": line = `> ${content}`; break;
-    case "toggle": line = `> [>] ${content}`; break;
+    case "toggle":
+      // A toggle heading keeps its level via the compact "#..######>" opener;
+      // a plain toggle uses the explicit "> [>]" form (bare "> " is a quote).
+      line = block.headingLevel
+        ? `${"#".repeat(block.headingLevel)}> ${content}`
+        : `> [>] ${content}`;
+      break;
     case "callout": line = `> [!${block.color || "💡"}] ${content}`; break;
     case "divider": line = "---"; break;
     case "code": line = `\`\`\`${block.language ?? ""}\n${content}\n\`\`\``; break;
     case "equation": line = `$$\n${content}\n$$`; break;
     case "table_block": return tableBlockToMarkdown(block);
-    default: line = content;
+    // default: paragraph and any other type keep `content` as-is.
   }
   const children = childMarkdown(block, depth);
   return children ? `${line}\n${children}` : line;
