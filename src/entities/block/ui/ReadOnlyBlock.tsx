@@ -103,7 +103,7 @@ function getNestedChildrenClassName(type: Block["type"]) {
 }
 
 function renderNestedChildren(block: Block, bulletDepth: number, numberedDepth: number) {
-  if (!block.children?.length) {
+  if (!block.children?.length || block.collapsed) {
     return null;
   }
 
@@ -339,7 +339,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         <>
           <div className="flex my-0.5">
             <div className="w-1 bg-[var(--osio-fg-default)] rounded-full shrink-0 mr-3" />
-            <span className="text-sm text-[var(--osio-fg-muted)] leading-relaxed py-0.5 italic flex-1">
+            <span className={`${getToggleHeadingClass(block.headingLevel)} text-[var(--osio-fg-muted)] leading-relaxed py-0.5 italic flex-1`}>
               <InlineMarkdown content={block.content} />
             </span>
           </div>

@@ -141,7 +141,9 @@ function setsEqual(left: Set<string>, right: Set<string>): boolean {
 function shouldRenderChildren(block: Block): boolean {
 	if (!block.children?.length) return false;
 	if (selfRendersChildren(block.type)) return false;
-	if (block.type === "toggle" && block.collapsed) return false;
+	// Any externally-rendered container honours `collapsed` (toggle, but also
+	// collapsible list items): collapsed hides the nested subtree.
+	if (block.collapsed) return false;
 	return true;
 }
 
