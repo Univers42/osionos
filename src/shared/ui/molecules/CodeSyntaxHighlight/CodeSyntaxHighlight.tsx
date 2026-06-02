@@ -19,6 +19,7 @@ interface CodeSyntaxHighlightProps {
   language?: string;
   className?: string;
   codeClassName?: string;
+  style?: React.CSSProperties;
 }
 
 export const CodeSyntaxHighlight: React.FC<CodeSyntaxHighlightProps> = ({
@@ -26,6 +27,7 @@ export const CodeSyntaxHighlight: React.FC<CodeSyntaxHighlightProps> = ({
   language,
   className,
   codeClassName,
+  style,
 }) => {
   const hljsRef = useRef<Highlighter | null>(null);
   const [ready, setReady] = useState(0);
@@ -58,7 +60,7 @@ export const CodeSyntaxHighlight: React.FC<CodeSyntaxHighlightProps> = ({
   }, [ready, code, normalized]);
 
   return (
-    <pre className={className}>
+    <pre className={className} style={style}>
       <code
         className={["hljs", normalized ? `language-${normalized}` : "", codeClassName ?? ""]
           .filter(Boolean)

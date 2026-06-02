@@ -391,6 +391,9 @@ body {
   --osio-code-caret: #58a6ff;
   --osio-code-selection: rgba(56, 139, 253, 0.35);
   --osio-code-shadow: 0 1px 2px rgba(1, 4, 9, 0.5), 0 12px 28px -8px rgba(1, 4, 9, 0.45);
+  --osio-code-chip-bg: rgba(255, 255, 255, 0.04);
+  --osio-code-btn-hover: rgba(255, 255, 255, 0.1);
+  --osio-code-btn-active: rgba(255, 255, 255, 0.08);
 
   --osio-syntax-keyword: #ff7b72;
   --osio-syntax-string: #a5d6ff;
@@ -402,6 +405,33 @@ body {
   --osio-syntax-tag: #7ee787;
   --osio-syntax-attr: #d2a8ff;
   --osio-syntax-literal: #79c0ff;
+}
+
+/* Optional light variant of the card (per-block toggle). */
+.osio-code-card[data-code-theme="light"] {
+  --osio-code-bg: #fbfcfd;
+  --osio-code-header-bg: rgba(13, 17, 23, 0.025);
+  --osio-code-border: #d0d7de;
+  --osio-code-ring: rgba(13, 17, 23, 0.04);
+  --osio-code-fg: #1f2328;
+  --osio-code-fg-muted: #636c76;
+  --osio-code-caret: #0969da;
+  --osio-code-selection: rgba(9, 105, 218, 0.16);
+  --osio-code-shadow: 0 1px 2px rgba(31, 35, 40, 0.1), 0 8px 24px -10px rgba(31, 35, 40, 0.18);
+  --osio-code-chip-bg: rgba(13, 17, 23, 0.03);
+  --osio-code-btn-hover: rgba(13, 17, 23, 0.06);
+  --osio-code-btn-active: rgba(13, 17, 23, 0.08);
+
+  --osio-syntax-keyword: #cf222e;
+  --osio-syntax-string: #0a3069;
+  --osio-syntax-number: #0550ae;
+  --osio-syntax-comment: #6e7781;
+  --osio-syntax-function: #8250df;
+  --osio-syntax-type: #953800;
+  --osio-syntax-property: #0550ae;
+  --osio-syntax-tag: #116329;
+  --osio-syntax-attr: #6639ba;
+  --osio-syntax-literal: #0a3069;
 }
 
 .osio-code-card .hljs,
