@@ -919,7 +919,10 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
       if (e.key !== " " || block.type !== "paragraph") return false;
 
-      const detection = detectBlockType(`${block.content} `);
+      // Live DOM text so the shortcut sees the just-typed prefix immediately
+      // (e.g. compact "###>" -> toggle heading) instead of stale committed text.
+      const liveText = (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
+      const detection = detectBlockType(`${liveText} `);
       if (!detection) return false;
 
       e.preventDefault();
@@ -933,17 +936,41 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   const handleToggleHeadingSpaceShortcut = useCallback(
     (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
       if (e.key !== " " || block.type !== "toggle") return false;
-      if (!HEADING_SHORTCUT_RE.test(block.content)) return false;
+      // Read the live DOM text: the just-typed "#"s may not be committed yet,
+      // and if missed here the inserted space would convert to a plain heading.
+      const liveText = (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
+      if (!HEADING_SHORTCUT_RE.test(liveText)) return false;
 
       e.preventDefault();
       updateBlock(pageId, blockId, {
         content: "",
-        headingLevel: block.content.length as 1 | 2 | 3 | 4 | 5 | 6,
+        headingLevel: liveText.length as 1 | 2 | 3 | 4 | 5 | 6,
       });
       focusBlock(blockId);
       return true;
     },
     [pageId, updateBlock, focusBlock],
+  );
+
+  // Heading + ">" (typed at the start) -> a toggle that keeps the heading level
+  // (a collapsible "toggle heading"), the mirror of the toggle + "#" path above.
+  const handleHeadingToggleSpaceShortcut = useCallback(
+    (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
+      if (e.key !== " " || !isHeadingBlock(block.type)) return false;
+      // Read the live DOM text: the just-typed ">" may not be committed yet.
+      const liveText = (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
+      if (!liveText.startsWith(">")) return false;
+
+      const level = Number(block.type.slice("heading_".length)) as 1 | 2 | 3 | 4 | 5 | 6;
+      const rest = liveText.replace(/^>\s*/, "");
+      e.preventDefault();
+      changeBlockType(pageId, blockId, "toggle");
+      updateBlock(pageId, blockId, { content: rest, collapsed: false, headingLevel: level });
+      focusBlock(blockId);
+      repositionCursor(blockId, rest);
+      return true;
+    },
+    [pageId, changeBlockType, updateBlock, focusBlock],
   );
 
   const handleBlockIndentation = useCallback(
@@ -1408,6 +1435,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         handleBlockIndentation(e, blockId, nextBlock, nextContent) ||
         handleParagraphSpaceShortcut(e, blockId, nextBlock) ||
         handleToggleHeadingSpaceShortcut(e, blockId, nextBlock) ||
+        handleHeadingToggleSpaceShortcut(e, blockId, nextBlock) ||
         handleEmptyEnterOutdent(e, blockId, nextBlock, parentBlockId, isEmpty) ||
         handleEmptyListEnter(e, blockId, nextBlock, nextBlockIdx, nextContent, isEmpty) ||
         handleEmptyTodoEnter(e, blockId, nextBlock, isEmpty) ||
@@ -1429,6 +1457,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       handleBlockIndentation,
       handleParagraphSpaceShortcut,
       handleToggleHeadingSpaceShortcut,
+      handleHeadingToggleSpaceShortcut,
       handleEmptyEnterOutdent,
       handleEmptyListEnter,
       handleEmptyTodoEnter,
