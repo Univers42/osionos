@@ -18,6 +18,7 @@ import {
   createCodeBlock,
   createParagraphs,
   editorLeft,
+  focusEditorStart,
   focusTextareaEnd,
   getCodeTextarea,
   getEditors,
@@ -103,6 +104,33 @@ export const indentationScenarios = [
 
       expect(oneLevelOutdentedLeft).toBeLessThan(deeplyNestedLeft - 8);
       expect(oneLevelOutdentedLeft).toBeGreaterThan(rootLeft + 8);
+    },
+  ),
+  defineScenario(
+    "2. Indentation (Tab / Shift+Tab)",
+    "Basic indentation",
+    "Backspace at the start of an indented block outdents one level at a time",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createParagraphs(page, ["root", "L1", "L2"]);
+      const second = getEditors(page).nth(1);
+      const third = getEditors(page).nth(2);
+      await pressTab(second);
+      await pressTab(third);
+      await pressTab(third);
+      const rootLeft = await editorLeft(getEditors(page).first());
+      const deepLeft = await editorLeft(getEditors(page).nth(2));
+      expect(deepLeft).toBeGreaterThan(rootLeft + 8);
+
+      await focusEditorStart(getEditors(page).nth(2));
+      await page.keyboard.press("Backspace");
+      const afterOne = await editorLeft(getEditors(page).nth(2));
+      expect(afterOne).toBeLessThan(deepLeft - 8);
+      expect(afterOne).toBeGreaterThan(rootLeft + 8);
+
+      await focusEditorStart(getEditors(page).nth(2));
+      await page.keyboard.press("Backspace");
+      expectNearlyEqual(await editorLeft(getEditors(page).nth(2)), rootLeft);
     },
   ),
   defineScenario(
