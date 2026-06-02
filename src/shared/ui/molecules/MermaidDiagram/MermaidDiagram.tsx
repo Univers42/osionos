@@ -92,6 +92,27 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
     async function renderDiagram() {
       try {
         const mermaid = await ensureMermaidInitialized();
+
+        // Validate first: rendering an invalid/incomplete diagram (e.g. while it
+        // is still being typed) makes mermaid's d3 layout emit a storm of
+        // "<g> attribute transform: translate(undefined, NaN)" console errors.
+        // parse() with suppressErrors returns false instead, so we skip render.
+        const parsed = source.trim()
+          ? await mermaid.parse(source, { suppressErrors: true })
+          : false;
+
+        if (cancelled || renderTokenRef.current !== currentToken) return;
+
+        if (!parsed) {
+          target.innerHTML = "";
+          const pending = document.createElement("pre");
+          pending.className =
+            "text-xs leading-relaxed font-mono text-[var(--osio-fg-subtle)] whitespace-pre-wrap";
+          pending.textContent = source;
+          target.appendChild(pending);
+          return;
+        }
+
         const { svg, bindFunctions } = await mermaid.render(renderId, source);
 
         if (cancelled || renderTokenRef.current !== currentToken) {
