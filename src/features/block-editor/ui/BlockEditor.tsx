@@ -17,7 +17,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Check, Code, Copy, Eye } from "lucide-react";
+import { Check, Code, Copy, Eye, Hash, Moon, Sun } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
 import { EquationView } from "@/shared/ui/EquationView";
 
@@ -36,6 +36,7 @@ import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
 import { BlockCollapseToggle } from "./BlockCollapseToggle";
 import { BlockListCollapse } from "./BlockListCollapse";
+import { CodeGutter } from "@/entities/block/ui/CodeGutter";
 import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
@@ -121,6 +122,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const langPickerRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const codeHighlightRef = useRef<HTMLDivElement | null>(null);
+  const codeGutterRef = useRef<HTMLDivElement | null>(null);
   const codeBodyRef = useRef<HTMLDivElement | null>(null);
   const activeDragRef = useRef<{ move: (e: PointerEvent) => void; up: () => void; cancel: () => void } | null>(null);
   const editableStyle = useMemo(
@@ -134,6 +136,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const codeView = (block.codeView ?? "preview") as "preview" | "source";
   const isRenderable = RENDERABLE_LANGUAGES.has(block.language ?? "");
   const codeCaretColor = "var(--osio-code-caret)";
+  const codeShowLineNumbers = Boolean(block.lineNumbers);
+  const codeLineCount = Math.max(1, (block.content || "").split("\n").length);
+  const codeLnDigits = String(codeLineCount).length;
+  // Gutter column width and the matching left offset for the code + textarea so
+  // their text starts just past the gutter (ch units keep both perfectly aligned).
+  const codeGutterWidth = `calc(${codeLnDigits}ch + 2.5rem)`;
+  const codeTextLeft = codeShowLineNumbers ? `calc(${codeLnDigits}ch + 3.25rem)` : "1rem";
   const activeHeightLines = dragHeightLines ?? (block.heightLines as number | undefined);
   const codeHeightPx = activeHeightLines
     ? activeHeightLines * CODE_LINE_HEIGHT + CODE_LINE_HEIGHT
@@ -197,13 +206,16 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       const code = hl.querySelector("code");
       if (code) (code as HTMLElement).scrollLeft = ta.scrollLeft;
       hl.scrollTop = ta.scrollTop;
+      // Keep the (pinned) line-number gutter aligned with vertical scroll.
+      const gutter = codeGutterRef.current;
+      if (gutter) gutter.style.transform = `translateY(${-ta.scrollTop}px)`;
     };
     ta.addEventListener("scroll", sync, { passive: true });
     return () => ta.removeEventListener("scroll", sync);
   // block.heightLines: re-register after committed resize so the listener is
   // guaranteed present when hl first becomes scrollable, regardless of what
   // mount/unmount sequences occurred before the drag completed.
-  }, [codeView, block.heightLines]);
+  }, [codeView, block.heightLines, block.lineNumbers]);
 
   useEffect(() => {
     setDragHeightLines(null);
@@ -281,8 +293,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
   const codeBlockHeader = useMemo(
     () => (
-      <div className="flex items-center justify-between gap-2 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
-        <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
+        <div className="flex shrink-0 items-center gap-2.5">
           <span aria-hidden className="flex items-center gap-1.5">
             <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
             <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
@@ -292,7 +304,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             <button
               type="button"
               onClick={() => setShowLangPicker((v) => !v)}
-              className="rounded-md border border-[var(--osio-code-border)] bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide text-[var(--osio-code-fg-muted)] transition-colors hover:bg-white/[0.1] hover:text-[var(--osio-code-fg)]"
+              className="rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide text-[var(--osio-code-fg-muted)] transition-colors hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
             >
               {block.language || "plaintext"}
             </button>
@@ -315,7 +327,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                       type="button"
                       onClick={() => handleLangSelect(language)}
                       className={[
-                        "flex w-full items-center justify-between px-3 py-1.5 text-left font-mono text-xs transition-colors hover:bg-white/[0.06]",
+                        "flex w-full items-center justify-between px-3 py-1.5 text-left font-mono text-xs transition-colors hover:bg-[var(--osio-code-btn-hover)]",
                         language === (block.language || "plaintext")
                           ? "text-[var(--osio-code-fg)]"
                           : "text-[var(--osio-code-fg-muted)]",
@@ -330,12 +342,44 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-0.5">
+        <input
+          value={block.fileName ?? ""}
+          onChange={(event) => commitBlockUpdate(block.id, { fileName: event.target.value })}
+          placeholder="Untitled"
+          aria-label="Code file name"
+          name="code-file-name"
+          autoComplete="off"
+          spellCheck={false}
+          className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
+        />
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            title="Toggle line numbers"
+            aria-pressed={codeShowLineNumbers}
+            className={[
+              "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[var(--osio-code-btn-hover)]",
+              codeShowLineNumbers
+                ? "bg-[var(--osio-code-btn-active)] text-[var(--osio-code-fg)]"
+                : "text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]",
+            ].join(" ")}
+            onClick={() => commitBlockUpdate(block.id, { lineNumbers: !codeShowLineNumbers })}
+          >
+            <Hash size={13} />
+          </button>
+          <button
+            type="button"
+            title={block.codeTheme === "light" ? "Switch to dark" : "Switch to light"}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--osio-code-fg-muted)] transition-colors hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
+            onClick={() => commitBlockUpdate(block.id, { codeTheme: block.codeTheme === "light" ? "dark" : "light" })}
+          >
+            {block.codeTheme === "light" ? <Moon size={13} /> : <Sun size={13} />}
+          </button>
           {isRenderable && (
             <button
               type="button"
               title={codeView === "preview" ? "Show source" : "Show preview"}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-[var(--osio-code-fg-muted)] transition-colors hover:bg-white/[0.1] hover:text-[var(--osio-code-fg)]"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-[var(--osio-code-fg-muted)] transition-colors hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
               onClick={() =>
                 commitBlockUpdate(block.id, {
                   codeView: codeView === "preview" ? "source" : "preview",
@@ -349,7 +393,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             type="button"
             title="Copy code"
             className={[
-              "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-colors hover:bg-white/[0.1]",
+              "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-colors hover:bg-[var(--osio-code-btn-hover)]",
               copiedCode ? "text-[#3fb950]" : "text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]",
             ].join(" ")}
             onClick={handleCopyCode}
@@ -359,7 +403,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         </div>
       </div>
     ),
-    [block.language, block.id, showLangPicker, langQuery, isRenderable, codeView, copiedCode, handleLangSelect, commitBlockUpdate, handleCopyCode, langPickerRef],
+    [block.language, block.id, block.fileName, block.codeTheme, codeShowLineNumbers, showLangPicker, langQuery, isRenderable, codeView, copiedCode, handleLangSelect, commitBlockUpdate, handleCopyCode, langPickerRef],
   );
 
   switch (block.type) {
@@ -595,7 +639,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "code":
       return (
-        <div className="osio-code-card group/code relative my-3 rounded-xl border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-code-shadow)] ring-1 ring-inset ring-[var(--osio-code-ring)]">
+        <div
+          data-code-theme={block.codeTheme ?? "dark"}
+          className="osio-code-card group/code relative my-3 rounded-xl border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-code-shadow)] ring-1 ring-inset ring-[var(--osio-code-ring)]"
+        >
           {codeBlockHeader}
           <div ref={codeBodyRef} className="overflow-hidden rounded-b-xl">
             {isRenderable && codeView === "preview" ? (
@@ -620,7 +667,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                   <CodeSyntaxHighlight
                     code={block.content || " "}
                     language={block.language}
-                    className="pointer-events-none p-4"
+                    className="pointer-events-none py-4 pr-4"
+                    style={{ paddingLeft: codeTextLeft }}
                     codeClassName="block whitespace-pre font-mono text-sm leading-6 [tab-size:2]"
                   />
                 </div>
@@ -634,15 +682,24 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                   name="code-editor"
                   autoComplete="off"
                   spellCheck={false}
-                  className="absolute inset-0 h-full w-full overflow-auto bg-transparent p-4 font-mono text-sm leading-6 text-transparent outline-none selection:bg-[var(--osio-code-selection)] placeholder:text-[var(--osio-code-fg-muted)]"
+                  className="absolute inset-0 h-full w-full overflow-auto bg-transparent py-4 pr-4 font-mono text-sm leading-6 text-transparent outline-none selection:bg-[var(--osio-code-selection)] placeholder:text-[var(--osio-code-fg-muted)]"
                   style={{
                     tabSize: 2,
                     color: "transparent",
                     caretColor: codeCaretColor,
                     WebkitTextFillColor: "transparent",
                     whiteSpace: "pre",
+                    paddingLeft: codeTextLeft,
                   }}
                 />
+                {codeShowLineNumbers && (
+                  <div
+                    className="pointer-events-none absolute inset-y-0 left-0 overflow-hidden border-r border-[var(--osio-code-border)] bg-[var(--osio-code-bg)]"
+                    style={{ width: codeGutterWidth }}
+                  >
+                    <CodeGutter ref={codeGutterRef} lineCount={codeLineCount} className="will-change-transform" />
+                  </div>
+                )}
               </div>
             )}
           </div>

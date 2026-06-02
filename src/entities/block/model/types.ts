@@ -119,6 +119,9 @@ export interface Block {
   checked?: boolean;		/** Whether a to_do is checked */
   language?: string;		/** Programming language for code blocks */
   codeView?: "preview" | "source";		/** View mode for renderable code blocks (default: preview) */
+  fileName?: string;					/** Optional title/filename shown in a code block header */
+  codeTheme?: "dark" | "light";			/** Per-block code card theme (default: dark) */
+  lineNumbers?: boolean;				/** Show a line-number gutter in a code block */
   heightLines?: number;					/** Persisted height in lines for code blocks */
   color?: string;			/** Color for callouts, etc. */
   textColor?: string;		/** Optional block text color */
