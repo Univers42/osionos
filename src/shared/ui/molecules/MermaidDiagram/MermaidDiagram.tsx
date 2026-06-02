@@ -93,10 +93,18 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
       try {
         const mermaid = await ensureMermaidInitialized();
 
+        // Fonts must be ready before mermaid measures label text: measuring
+        // against an unloaded font yields 0/NaN widths, so dagre lays every node
+        // out at NaN coordinates -> a storm of "<g> transform: translate(undefined,
+        // NaN)" attribute errors. Awaiting fonts (idempotent) prevents that.
+        if (typeof document !== "undefined" && document.fonts) {
+          await document.fonts.ready;
+        }
+        if (cancelled || renderTokenRef.current !== currentToken) return;
+
         // Validate first: rendering an invalid/incomplete diagram (e.g. while it
-        // is still being typed) makes mermaid's d3 layout emit a storm of
-        // "<g> attribute transform: translate(undefined, NaN)" console errors.
-        // parse() with suppressErrors returns false instead, so we skip render.
+        // is still being typed) also makes mermaid's d3 layout emit the same NaN
+        // errors. parse() with suppressErrors returns false instead, so we skip.
         const parsed = source.trim()
           ? await mermaid.parse(source, { suppressErrors: true })
           : false;
@@ -118,6 +126,13 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
         if (cancelled || renderTokenRef.current !== currentToken) {
           cleanupMermaidOrphans(renderId);
           return;
+        }
+
+        // Defense in depth: if the layout still produced invalid coordinates,
+        // don't inject a broken SVG (which re-emits the browser attribute
+        // errors) — fall back to showing the source.
+        if (/translate\(\s*undefined|[\s(,]NaN/.test(svg)) {
+          throw new Error("mermaid layout produced NaN coordinates");
         }
 
         target.innerHTML = svg;
