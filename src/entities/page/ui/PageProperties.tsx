@@ -67,6 +67,7 @@ const PagePropertyValue: React.FC<{
     return (
       <select
         aria-label={property.key}
+        name={property.key}
         value={stringValue(property.value)}
         onChange={(event) => onChangeProperty(property.key, event.target.value)}
         className="w-full bg-transparent outline-none text-sm text-[var(--osio-fg-default)]"
@@ -88,6 +89,8 @@ const PagePropertyValue: React.FC<{
   return (
     <input
       aria-label={property.key}
+      name={property.key}
+      autoComplete="off"
       type={propertyInputType(property.type)}
       value={stringValue(property.value)}
       onChange={(event) => onChangeProperty(property.key, property.type === 'number' ? Number(event.target.value) : event.target.value)}
