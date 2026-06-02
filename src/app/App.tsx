@@ -19,7 +19,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
 import { Sidebar } from "@/widgets/sidebar";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
-import { MainContent } from "@/widgets/page-renderer";
+import { LazyCanvasDebugRoute, LazyMainContent } from "./lazyAppRegions";
 import { applyTheme, readStoredThemeMode } from "@/shared/config/theme";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
 import {
@@ -31,7 +31,6 @@ import {
 } from "@/shared/config/workspaceConfigStore";
 import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
 import { ToastViewport } from "@/shared/ui";
-import { CanvasDebugRoute } from "@/features/block-editor/ui/canvas/__demo__/CanvasDebugRoute";
 
 type UserSessions = Record<string, UserSession>;
 
@@ -178,7 +177,7 @@ const App: React.FC = () => {
   }, [activeWorkspace?._id, storedWorkspaceConfig]);
 
   if (isDevCanvasDebugRoute()) {
-    return <CanvasDebugRoute />;
+    return <LazyCanvasDebugRoute />;
   }
 
   if (!ready) {
@@ -242,7 +241,7 @@ const App: React.FC = () => {
 
       {/* Content area */}
       <main className="flex-1 flex min-w-0 overflow-hidden relative">
-        <MainContent />
+        <LazyMainContent />
       </main>
 
       <WorkspaceThemePanel />
