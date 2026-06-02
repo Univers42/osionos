@@ -203,7 +203,7 @@ const App: React.FC = () => {
           </p>
           <button
             type="button"
-            className="mt-5 inline-flex w-full items-center justify-center rounded-md bg-[var(--osio-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            className="mt-5 inline-flex w-full items-center justify-center rounded-md bg-[var(--osio-accent)] px-4 py-2 text-sm font-medium text-[var(--osio-accent-fg)] hover:opacity-90"
             onClick={() => { globalThis.location.href = PRISMATICA_URL; }}
           >
             Go to Prismatica
