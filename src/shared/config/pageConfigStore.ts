@@ -157,7 +157,7 @@ function buildCssTokens(config: PageConfig): PageCssTokens {
 
   return {
     fontFamily,
-    fontSizeScale: config.smallText ? 0.92 : 1,
+    fontSizeScale: config.smallText ? 0.85 : 1,
     contentMaxWidth: config.fullWidth ? 'none' : '900px',
     contentPaddingInline: config.fullWidth ? 'clamp(16px, 4vw, 48px)' : 'clamp(16px, 11%, 96px)',
   };

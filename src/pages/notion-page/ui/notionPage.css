@@ -52,35 +52,37 @@
 }
 
 .osionos-page--small-text {
-  font-size: calc(1rem * var(--page-font-size-scale, 0.92));
+  font-size: calc(1rem * var(--page-font-size-scale, 0.85));
 }
 
 .osionos-page--small-text .osionos-page-title {
-  font-size: calc(40px * var(--page-font-size-scale, 0.92));
+  font-size: calc(40px * var(--page-font-size-scale, 0.85));
 }
 
+/* Small text is a clearly more compact reading size (~15-20% smaller than the
+   default "larger" size) so the two modes read distinctly different. */
 .osionos-page--small-text .osionos-page-body :where(.text-xs) {
-  font-size: 0.6875rem !important;
+  font-size: 0.625rem !important;
 }
 
 .osionos-page--small-text .osionos-page-body :where(.text-sm) {
-  font-size: 0.8125rem !important;
+  font-size: 0.75rem !important;
 }
 
 .osionos-page--small-text .osionos-page-body :where(.text-base) {
-  font-size: 0.9375rem !important;
+  font-size: 0.84rem !important;
 }
 
 .osionos-page--small-text .osionos-page-body :where(.text-lg) {
-  font-size: 1.03125rem !important;
+  font-size: 0.95rem !important;
 }
 
 .osionos-page--small-text .osionos-page-body :where(.text-xl) {
-  font-size: 1.125rem !important;
+  font-size: 1.05rem !important;
 }
 
 .osionos-page--small-text .osionos-page-body :where(.text-2xl) {
-  font-size: 1.35rem !important;
+  font-size: 1.2rem !important;
 }
 
 .osionos-page--locked .osionos-page-body [contenteditable="true"] {
