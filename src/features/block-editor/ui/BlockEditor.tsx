@@ -294,6 +294,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 value={langQuery}
                 onChange={(e) => setLangQuery(e.target.value)}
                 placeholder="Search language…"
+                aria-label="Search code language"
+                name="code-language-search"
+                autoComplete="off"
                 className="w-full border-b border-[var(--osio-border-default)] bg-transparent px-3 py-1.5 text-xs outline-none placeholder:text-[var(--osio-fg-subtle)]"
               />
               <div className="max-h-44 overflow-y-auto">
@@ -604,6 +607,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                   onChange={(e) => onChange(e.target.value)}
                   onKeyDown={handleCodeTextareaKeyDown}
                   placeholder={getBlockPlaceholder(block, "Code…")}
+                  aria-label="Code editor"
+                  name="code-editor"
+                  autoComplete="off"
                   spellCheck={false}
                   className="absolute inset-0 h-full w-full overflow-auto bg-transparent p-3 font-mono text-sm leading-6 text-transparent outline-none selection:bg-[rgba(35,131,226,0.28)] placeholder:text-[var(--osio-fg-subtle)]"
                   style={{
