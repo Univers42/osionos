@@ -10,9 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
-import { escapeHtml, loadHighlighter, normalizeLanguage, type Highlighter } from "./highlighter";
+import { escapeHtml, loadHighlighterFor, normalizeLanguage, type Highlighter } from "./highlighter";
 
 interface CodeSyntaxHighlightProps {
   code: string;
@@ -27,14 +27,18 @@ export const CodeSyntaxHighlight: React.FC<CodeSyntaxHighlightProps> = ({
   className,
   codeClassName,
 }) => {
-  const [hljs, setHljs] = useState<Highlighter | null>(null);
+  const hljsRef = useRef<Highlighter | null>(null);
+  const [ready, setReady] = useState(0);
   const normalized = normalizeLanguage(language);
 
   useEffect(() => {
     if (!normalized) return;
     let active = true;
-    loadHighlighter().then((instance) => {
-      if (active) setHljs(instance);
+    loadHighlighterFor(normalized).then((instance) => {
+      hljsRef.current = instance;
+      // The hljs singleton ref is stable, so bump a version to re-highlight
+      // once the language grammar has registered.
+      if (active) setReady((value) => value + 1);
     });
     return () => {
       active = false;
@@ -42,6 +46,7 @@ export const CodeSyntaxHighlight: React.FC<CodeSyntaxHighlightProps> = ({
   }, [normalized]);
 
   const highlighted = useMemo(() => {
+    const hljs = hljsRef.current;
     if (!normalized || !hljs?.getLanguage(normalized)) return escapeHtml(code);
 
     try {
@@ -49,7 +54,8 @@ export const CodeSyntaxHighlight: React.FC<CodeSyntaxHighlightProps> = ({
     } catch {
       return escapeHtml(code);
     }
-  }, [hljs, code, normalized]);
+    // `ready` bumps when the grammar finishes loading -> recompute the highlight.
+  }, [ready, code, normalized]);
 
   return (
     <pre className={className}>
