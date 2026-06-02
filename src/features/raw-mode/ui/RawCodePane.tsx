@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useRef } from "react";
+import React, { useMemo, useRef } from "react";
 
 interface RawCodePaneProps {
   source: string;
@@ -30,13 +30,18 @@ export function RawCodePane({ source, onChange, showLineNumbers }: Readonly<RawC
     }
   };
 
+  // Rebuilding every number div on each keystroke is wasteful for large docs;
+  // the gutter only changes when the line count does.
+  const gutterNumbers = useMemo(
+    () => Array.from({ length: lineCount }, (_, index) => <div key={index}>{index + 1}</div>),
+    [lineCount],
+  );
+
   return (
     <div className="flex h-full min-h-0 overflow-hidden bg-[var(--osio-bg-surface)] font-mono text-[13px] leading-6">
       {showLineNumbers && (
         <div ref={gutterRef} aria-hidden className="select-none overflow-hidden border-r border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-3 text-right text-[var(--osio-fg-subtle)]">
-          {Array.from({ length: lineCount }, (_, index) => (
-            <div key={index}>{index + 1}</div>
-          ))}
+          {gutterNumbers}
         </div>
       )}
       <textarea
