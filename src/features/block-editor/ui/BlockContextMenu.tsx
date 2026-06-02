@@ -206,7 +206,7 @@ const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
         </div>
         <button
           type="submit"
-          className="w-full rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+          className="w-full rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--osio-accent-fg)] transition-opacity hover:opacity-90"
         >
           + Save profile
         </button>
