@@ -62,6 +62,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: path.resolve(root, 'build'),
+      sourcemap: true,
     },
     optimizeDeps: {
       entries: ['index.html'],
