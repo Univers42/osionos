@@ -19,8 +19,7 @@ import React, {
 } from "react";
 import { Check, Code, Copy, Eye } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
-import katex from "katex";
-import "katex/dist/katex.min.css";
+import { EquationView } from "@/shared/ui/EquationView";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
 import { DatabaseBlock } from "@/widgets/database-view/ui/DatabaseBlock";
@@ -68,20 +67,6 @@ const LANGUAGES = [
 
 const RENDERABLE_LANGUAGES = new Set(["mermaid"]);
 
-function renderEquationToHtml(source: string): string {
-  try {
-    return katex.renderToString(source || "E = mc^2", {
-      displayMode: true,
-      throwOnError: false,
-      strict: "ignore",
-    });
-  } catch {
-    return katex.renderToString(String.raw`\text{Invalid equation}`, {
-      displayMode: true,
-      throwOnError: false,
-    });
-  }
-}
 
 const CODE_LINE_HEIGHT = 24;
 const CODE_MIN_LINES = 3;
@@ -708,7 +693,6 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       );
     }
     case "equation": {
-      const equationHtml = renderEquationToHtml(block.content.trim());
       const shouldEditEquation = isSelected || isEquationEditing;
 
       return (
@@ -724,10 +708,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onClick={openEquationEditor}
             />
           )}
-          <div
+          <EquationView
+            source={block.content.trim()}
             className="overflow-x-auto text-[var(--osio-fg-default)]"
             style={editableStyle}
-            dangerouslySetInnerHTML={{ __html: equationHtml }}
           />
           {shouldEditEquation ? (
             <textarea

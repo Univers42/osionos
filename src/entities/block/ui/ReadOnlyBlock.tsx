@@ -23,8 +23,7 @@
 /* ************************************************************************** */
 
 import React, { useState, useMemo } from "react";
-import katex from "katex";
-import "katex/dist/katex.min.css";
+import { EquationView } from "@/shared/ui/EquationView";
 import type { Block } from '@/entities/block';
 import { getNumberedMarker, getBulletMarker } from '@/entities/block/model/listMarkers';
 import { ChevronRight } from "lucide-react";
@@ -80,14 +79,6 @@ const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
 
   return <>{renderedContent}</>;
 };
-
-function renderEquationToHtml(source: string): string {
-  return katex.renderToString(source || "E = mc^2", {
-    displayMode: true,
-    throwOnError: false,
-    strict: "ignore",
-  });
-}
 
 function getNestedChildrenClassName(type: Block["type"]) {
   if (type === "bulleted_list" || type === "numbered_list") {
@@ -304,9 +295,9 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
 
     case "equation":
       return (
-        <div
+        <EquationView
+          source={block.content}
           className="my-2 overflow-x-auto rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-3 text-[var(--osio-fg-default)]"
-          dangerouslySetInnerHTML={{ __html: renderEquationToHtml(block.content) }}
         />
       );
 
