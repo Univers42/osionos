@@ -376,6 +376,43 @@ body {
   color: var(--osio-syntax-literal) !important;
 }
 
+/* ── Code block ("/code") — high-contrast editor card ─────────────────── */
+/* The snippet card always renders on a dark surface for maximum contrast and
+   a polished, focused look, so its palette is fixed (bright) and independent
+   of the page light/dark theme. Tokens live on the card itself (they only
+   apply here) and inherit to its descendants. */
+.osio-code-card {
+  --osio-code-bg: #0d1117;
+  --osio-code-header-bg: rgba(255, 255, 255, 0.025);
+  --osio-code-border: #2a313a;
+  --osio-code-ring: rgba(240, 246, 252, 0.06);
+  --osio-code-fg: #e6edf3;
+  --osio-code-fg-muted: #99a3af;
+  --osio-code-caret: #58a6ff;
+  --osio-code-selection: rgba(56, 139, 253, 0.35);
+  --osio-code-shadow: 0 1px 2px rgba(1, 4, 9, 0.5), 0 12px 28px -8px rgba(1, 4, 9, 0.45);
+
+  --osio-syntax-keyword: #ff7b72;
+  --osio-syntax-string: #a5d6ff;
+  --osio-syntax-number: #79c0ff;
+  --osio-syntax-comment: #8b949e;
+  --osio-syntax-function: #d2a8ff;
+  --osio-syntax-type: #ffa657;
+  --osio-syntax-property: #79c0ff;
+  --osio-syntax-tag: #7ee787;
+  --osio-syntax-attr: #d2a8ff;
+  --osio-syntax-literal: #79c0ff;
+}
+
+.osio-code-card .hljs,
+.osio-code-card .hljs-subst {
+  color: var(--osio-code-fg) !important;
+}
+
+.osio-code-card ::selection {
+  background: var(--osio-code-selection);
+}
+
 /* Link and Mention Unification */
 .editor-link {
   color: var(--osio-accent) !important;

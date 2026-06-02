@@ -133,7 +133,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   );
   const codeView = (block.codeView ?? "preview") as "preview" | "source";
   const isRenderable = RENDERABLE_LANGUAGES.has(block.language ?? "");
-  const codeCaretColor = editableStyle?.color ?? "var(--osio-fg-default)";
+  const codeCaretColor = "var(--osio-code-caret)";
   const activeHeightLines = dragHeightLines ?? (block.heightLines as number | undefined);
   const codeHeightPx = activeHeightLines
     ? activeHeightLines * CODE_LINE_HEIGHT + CODE_LINE_HEIGHT
@@ -281,69 +281,80 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
   const codeBlockHeader = useMemo(
     () => (
-      <div className="flex items-center justify-between gap-2 border-b border-[var(--osio-border-default)] bg-black/[0.03] px-3 py-1.5">
-        <div ref={langPickerRef} className="relative">
-          <button
-            type="button"
-            onClick={() => setShowLangPicker((v) => !v)}
-            className="rounded px-1.5 py-0.5 font-mono text-xs text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-          >
-            {block.language || "plaintext"}
-          </button>
-          {showLangPicker && (
-            <div className="absolute top-full left-0 mt-1 w-44 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-lg z-[var(--osio-z-popover)]">
-              <input
-                autoFocus
-                value={langQuery}
-                onChange={(e) => setLangQuery(e.target.value)}
-                placeholder="Search language…"
-                aria-label="Search code language"
-                name="code-language-search"
-                autoComplete="off"
-                className="w-full border-b border-[var(--osio-border-default)] bg-transparent px-3 py-1.5 text-xs outline-none placeholder:text-[var(--osio-fg-subtle)]"
-              />
-              <div className="max-h-44 overflow-y-auto">
-                {LANGUAGES.filter((language) => language.includes(langQuery.trim().toLowerCase())).map((language) => (
-                  <button
-                    key={language}
-                    type="button"
-                    onClick={() => handleLangSelect(language)}
-                    className={[
-                      "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-[var(--osio-bg-hover)]",
-                      language === (block.language || "plaintext")
-                        ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]"
-                        : "text-[var(--osio-fg-muted)]",
-                    ].join(" ")}
-                  >
-                    {language}
-                  </button>
-                ))}
+      <div className="flex items-center justify-between gap-2 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
+        <div className="flex items-center gap-2.5">
+          <span aria-hidden className="flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+            <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
+            <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+          </span>
+          <div ref={langPickerRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowLangPicker((v) => !v)}
+              className="rounded-md border border-[var(--osio-code-border)] bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide text-[var(--osio-code-fg-muted)] transition-colors hover:bg-white/[0.1] hover:text-[var(--osio-code-fg)]"
+            >
+              {block.language || "plaintext"}
+            </button>
+            {showLangPicker && (
+              <div className="absolute top-full left-0 mt-1.5 w-48 overflow-hidden rounded-lg border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-xl z-[var(--osio-z-popover)] osio-code-card">
+                <input
+                  autoFocus
+                  value={langQuery}
+                  onChange={(e) => setLangQuery(e.target.value)}
+                  placeholder="Search language…"
+                  aria-label="Search code language"
+                  name="code-language-search"
+                  autoComplete="off"
+                  className="w-full border-b border-[var(--osio-code-border)] bg-transparent px-3 py-2 font-mono text-xs text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
+                />
+                <div className="max-h-48 overflow-y-auto py-1">
+                  {LANGUAGES.filter((language) => language.includes(langQuery.trim().toLowerCase())).map((language) => (
+                    <button
+                      key={language}
+                      type="button"
+                      onClick={() => handleLangSelect(language)}
+                      className={[
+                        "flex w-full items-center justify-between px-3 py-1.5 text-left font-mono text-xs transition-colors hover:bg-white/[0.06]",
+                        language === (block.language || "plaintext")
+                          ? "text-[var(--osio-code-fg)]"
+                          : "text-[var(--osio-code-fg-muted)]",
+                      ].join(" ")}
+                    >
+                      {language}
+                      {language === (block.language || "plaintext") && <Check size={12} className="text-[#3fb950]" />}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           {isRenderable && (
             <button
               type="button"
               title={codeView === "preview" ? "Show source" : "Show preview"}
-              className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-[var(--osio-code-fg-muted)] transition-colors hover:bg-white/[0.1] hover:text-[var(--osio-code-fg)]"
               onClick={() =>
                 commitBlockUpdate(block.id, {
                   codeView: codeView === "preview" ? "source" : "preview",
                 })
               }
             >
-              {codeView === "preview" ? <Code size={14} /> : <Eye size={14} />}
+              {codeView === "preview" ? <><Code size={13} /> Source</> : <><Eye size={13} /> Preview</>}
             </button>
           )}
           <button
             type="button"
             title="Copy code"
-            className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+            className={[
+              "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-colors hover:bg-white/[0.1]",
+              copiedCode ? "text-[#3fb950]" : "text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]",
+            ].join(" ")}
             onClick={handleCopyCode}
           >
-            {copiedCode ? <Check size={14} /> : <Copy size={14} />}
+            {copiedCode ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
           </button>
         </div>
       </div>
@@ -584,17 +595,14 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "code":
       return (
-        <div
-          className="my-2 overflow-visible rounded-md border border-[var(--osio-border-default)] shadow-sm relative bg-[var(--osio-bg-surface)]"
-          style={surfaceStyle}
-        >
+        <div className="osio-code-card group/code relative my-3 rounded-xl border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-code-shadow)] ring-1 ring-inset ring-[var(--osio-code-ring)]">
           {codeBlockHeader}
-          <div ref={codeBodyRef} className="p-0">
+          <div ref={codeBodyRef} className="overflow-hidden rounded-b-xl">
             {isRenderable && codeView === "preview" ? (
               <div style={codeHeightPx ? { height: codeHeightPx, overflow: "auto" } : undefined}>
                 <MermaidDiagram
                   chart={block.content}
-                  className="rounded-b-md p-4 overflow-x-auto"
+                  className="overflow-x-auto bg-white p-4"
                 />
               </div>
             ) : (
@@ -612,7 +620,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                   <CodeSyntaxHighlight
                     code={block.content || " "}
                     language={block.language}
-                    className="pointer-events-none p-3"
+                    className="pointer-events-none p-4"
                     codeClassName="block whitespace-pre font-mono text-sm leading-6 [tab-size:2]"
                   />
                 </div>
@@ -626,7 +634,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                   name="code-editor"
                   autoComplete="off"
                   spellCheck={false}
-                  className="absolute inset-0 h-full w-full overflow-auto bg-transparent p-3 font-mono text-sm leading-6 text-transparent outline-none selection:bg-[rgba(35,131,226,0.28)] placeholder:text-[var(--osio-fg-subtle)]"
+                  className="absolute inset-0 h-full w-full overflow-auto bg-transparent p-4 font-mono text-sm leading-6 text-transparent outline-none selection:bg-[var(--osio-code-selection)] placeholder:text-[var(--osio-code-fg-muted)]"
                   style={{
                     tabSize: 2,
                     color: "transparent",
@@ -639,7 +647,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             )}
           </div>
           <div
-            className="absolute bottom-0 right-0 h-4 w-4 cursor-ns-resize z-[1]"
+            className="absolute bottom-1 right-1 h-3.5 w-3.5 cursor-ns-resize rounded-sm opacity-0 transition-opacity group-hover/code:opacity-100 z-[1] bg-[linear-gradient(135deg,transparent_50%,var(--osio-code-fg-muted)_50%,var(--osio-code-fg-muted)_60%,transparent_60%,transparent_72%,var(--osio-code-fg-muted)_72%,var(--osio-code-fg-muted)_82%,transparent_82%)]"
             onPointerDown={handleResizePointerDown}
           />
         </div>
