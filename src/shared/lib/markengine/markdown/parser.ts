@@ -100,7 +100,7 @@ function tryParseNestedBlock(
   indent: number,
   parseFn: ParseBlocksFn,
 ): BlockNode | null {
-  if (/^>\s*(?:\[\s*>\s*\]|\[toggle\])\s*/i.test(trimmed))
+  if (/^>\s*(?:\[\s*>\s*\]|\[toggle\])\s*/i.test(trimmed) || /^#{1,6}>/.test(trimmed))
     return parseToggle(ctx, parseFn);
   if (/^>\s*\[!([^\]]+?)\]/.test(trimmed)) return parseCallout(ctx, parseFn);
   if (trimmed.startsWith("> ") || trimmed === ">")

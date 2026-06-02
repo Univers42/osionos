@@ -64,7 +64,7 @@ export type BlockNode =
   | { type: 'html_block'; value: string }
   | { type: 'footnote_def'; label: string; children: BlockNode[] }
   | { type: 'definition_list'; items: DefinitionItem[] }
-  | { type: 'toggle'; summary: InlineNode[]; children: BlockNode[] };
+  | { type: 'toggle'; summary: InlineNode[]; children: BlockNode[]; level?: 1 | 2 | 3 | 4 | 5 | 6 };
 
 export interface ListItemNode {
   type: 'list_item';

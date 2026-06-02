@@ -52,6 +52,16 @@ test("toggle survives as a toggle (not a quote)", () => {
   const out = roundTrip(make({ type: "toggle", content: "Toggle summary" }));
   assert.equal(out.type, "toggle");
   assert.equal(out.content, "Toggle summary");
+  assert.equal(out.headingLevel, undefined);
+});
+
+test("a toggle heading keeps its level through the round-trip", () => {
+  for (const level of [1, 2, 3, 4, 5, 6] as const) {
+    const out = roundTrip(make({ type: "toggle", content: `Toggle h${level}`, headingLevel: level }));
+    assert.equal(out.type, "toggle");
+    assert.equal(out.content, `Toggle h${level}`);
+    assert.equal(out.headingLevel, level);
+  }
 });
 
 test("callout survives with its icon and title", () => {

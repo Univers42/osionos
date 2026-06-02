@@ -112,6 +112,7 @@ function astToBlocks(node: BlockNode): Block[] {
         type: "toggle",
         content: inlineToMarkdown(node.summary),
       };
+      if (node.level) block.headingLevel = node.level;
       const children = node.children.flatMap((child) => astToBlocks(child));
       if (children.length > 0) block.children = children;
       return [block];

@@ -183,6 +183,34 @@ export const markdownCombinationScenarios = [
   ),
   defineScenario(
     CONTAINER,
+    "Raw-mode round-trip",
+    "a toggle heading keeps its level (text-xl) through a raw-mode Save",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await editor.click();
+      await page.keyboard.type("##> Toggle heading", { delay: 15 });
+      await waitForRenderStability(page);
+      expect(await summarySizeClass(getEditors(page).first())).toBe("xl");
+
+      await page.locator('button[aria-label="Open page configuration"]').first().click();
+      await page.getByRole("button", { name: "Raw / code mode" }).click();
+      const raw = page.locator("[data-raw-mode]");
+      await raw.waitFor();
+      // The compact "##>" opener is the editor's own toggle-heading dialect.
+      expect((await raw.locator("textarea").first().inputValue()).startsWith("##>")).toBe(true);
+      await raw.getByRole("button", { name: "Save" }).click({ force: true });
+      await waitForRenderStability(page);
+
+      const first = await page.evaluate(
+        () => document.querySelector("[data-block-id]")?.dataset.blockType,
+      );
+      expect(first).toBe("toggle");
+      expect(await summarySizeClass(getEditors(page).first())).toBe("xl");
+    },
+  ),
+  defineScenario(
+    CONTAINER,
     "Collapsible list",
     "a bulleted item with a nested child collapses and re-expands",
     async ({ page, appUrl }) => {
