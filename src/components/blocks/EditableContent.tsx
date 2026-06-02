@@ -19,7 +19,7 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import katex from "katex";
+import { getLoadedKatex, loadKatex, onKatexReady, renderMathToHtml } from "@/shared/lib/math/katexRuntime";
 import {
   ColorPickerBoard,
   type ColorPickerPreset,
@@ -170,19 +170,14 @@ function handleAnchorMouseDown(
   return true;
 }
 
+const INLINE_MATH_PATTERN = /\$[^$\n]+\$|\\\(|\\\[/;
+
 function renderInlineMathToHtml(source: string): string {
-  try {
-    return katex.renderToString(source, {
-      displayMode: false,
-      throwOnError: false,
-      strict: "ignore",
-    });
-  } catch {
-    return katex.renderToString(String.raw`\text{Invalid equation}`, {
-      displayMode: false,
-      throwOnError: false,
-    });
-  }
+  const html = renderMathToHtml(source, false);
+  if (html !== null) return html;
+  // katex has not loaded yet: show the raw source (escaped) until it upgrades.
+  const escaped = source.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return `<span class="osio-inline-math-pending">${escaped}</span>`;
 }
 
 function renderInlineHtmlPreservingLineBreaks(
@@ -627,6 +622,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const [recentInlineColors, setRecentInlineColors] = useState<string[]>(() =>
     loadRecentInlineColors(),
   );
+  const [katexReady, setKatexReady] = useState(() => Boolean(getLoadedKatex()));
   const linkPickerRef = useRef<HTMLDivElement | null>(null);
   const canonicalSourceRef = useRef(content);
   const lastEmittedSourceRef = useRef(content);
@@ -665,7 +661,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   );
 
   const getRenderedInlineHtml = useCallback((nextContent: string, renderMathAsSource: boolean) => {
-    const cacheKey = `${renderMathAsSource ? "source" : "rendered"}:${nextContent}`;
+    const cacheKey = `${renderMathAsSource ? "source" : "rendered"}:${katexReady}:${nextContent}`;
     if (renderedContentCache.current.source === cacheKey) {
       return renderedContentCache.current.html;
     }
@@ -678,7 +674,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       html,
     };
     return html;
-  }, []);
+  }, [katexReady]);
 
   useEffect(() => {
     const root = ref.current;
@@ -779,6 +775,21 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
     renderContent(content);
   }, [content, renderContent]);
+
+  // Lazily pull in katex only when this block actually contains inline math,
+  // then flip katexReady so the cached HTML re-renders with typeset math.
+  useEffect(() => {
+    if (katexReady || !INLINE_MATH_PATTERN.test(content)) return;
+    const unsubscribe = onKatexReady(() => setKatexReady(true));
+    void loadKatex();
+    return unsubscribe;
+  }, [content, katexReady]);
+
+  // Once katex is ready, re-render the typeset (unfocused) view. While focused,
+  // math is shown as raw source, so no katex upgrade is needed.
+  useEffect(() => {
+    if (katexReady && !isFocused.current) renderContent(content);
+  }, [katexReady, content, renderContent]);
 
   useEffect(() => {
     if (selectionSnapshot) {
