@@ -118,9 +118,11 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
           {/* Dropdown chevron */}
           <button
             type="button"
+            aria-label="More workspace options"
+            aria-expanded={open}
             onClick={() => setOpen(o => !o)}
             className={[
-              'flex items-center justify-center w-4 h-7 rounded shrink-0',
+              'flex items-center justify-center w-6 h-7 rounded shrink-0',
               'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]',
               'transition-all duration-100 cursor-pointer',
             ].join(' ')}
