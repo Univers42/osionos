@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 
 import type { Block } from '@/entities/block';
 
@@ -206,6 +206,45 @@ async function persistPageConfigToApi(pageId: string, config: PageConfig) {
   }
 }
 
+const MAX_PERSISTED_VERSIONS = 10;
+
+/** Returns the persisted blob with each page's version snapshots capped to
+ *  `perPageLimit`, used to shed weight when localStorage is over quota. */
+function capVersionsInPersistedValue(value: string, perPageLimit: number): string {
+  const parsed = JSON.parse(value);
+  const configs = parsed?.state?.configs as Record<string, { versions?: unknown[] }> | undefined;
+  if (configs) {
+    for (const key of Object.keys(configs)) {
+      const config = configs[key];
+      if (config && Array.isArray(config.versions)) config.versions = config.versions.slice(0, perPageLimit);
+    }
+  }
+  return JSON.stringify(parsed);
+}
+
+/**
+ * localStorage that never throws on quota: page-version snapshots are the heavy,
+ * disposable part, so on failure we progressively drop them (10 → 3 → 1 → 0) and
+ * retry. The page config itself (settings) is always preserved.
+ */
+const quotaSafeStorage: StateStorage = {
+  getItem: (name) => globalThis.localStorage?.getItem(name) ?? null,
+  removeItem: (name) => globalThis.localStorage?.removeItem(name),
+  setItem: (name, value) => {
+    const store = globalThis.localStorage;
+    if (!store) return;
+    const attempts = [value, ...[3, 1, 0].map((limit) => capVersionsInPersistedValue(value, limit))];
+    for (const candidate of attempts) {
+      try {
+        store.setItem(name, candidate);
+        return;
+      } catch {
+        // over quota — fall through to a leaner candidate
+      }
+    }
+  },
+};
+
 export const usePageConfigStore = create<PageConfigStore>()(
   persist(
     (set, get) => ({
@@ -272,7 +311,7 @@ export const usePageConfigStore = create<PageConfigStore>()(
           createdAt: new Date().toISOString(),
         };
         const nextConfig = resolvePageConfig(current, {
-          versions: [nextVersion, ...current.versions].slice(0, 20),
+          versions: [nextVersion, ...current.versions].slice(0, MAX_PERSISTED_VERSIONS),
         });
 
         set((state) => ({
@@ -288,6 +327,7 @@ export const usePageConfigStore = create<PageConfigStore>()(
     }),
     {
       name: 'osionos:page-configurations',
+      storage: createJSONStorage(() => quotaSafeStorage),
     },
   ),
 );
