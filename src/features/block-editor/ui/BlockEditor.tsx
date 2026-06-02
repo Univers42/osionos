@@ -40,29 +40,14 @@ import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
 
 const LANGUAGES = [
-  "plaintext",
-  "javascript",
-  "typescript",
-  "python",
-  "rust",
-  "cpp",
-  "c",
-  "java",
-  "go",
-  "html",
-  "css",
-  "json",
-  "yaml",
-  "markdown",
-  "bash",
-  "sql",
-  "ruby",
-  "php",
-  "swift",
-  "kotlin",
-  "lua",
-  "toml",
-  "mermaid",
+  "plaintext", "mermaid",
+  "javascript", "typescript", "python", "java", "c", "cpp", "csharp", "go",
+  "rust", "ruby", "php", "swift", "kotlin", "scala", "dart", "lua", "perl",
+  "r", "julia", "haskell", "elixir", "erlang", "clojure", "scheme", "lisp",
+  "ocaml", "fsharp", "bash", "powershell", "dos", "sql", "graphql", "yaml",
+  "json", "html", "xml", "css", "scss", "less", "markdown", "dockerfile",
+  "makefile", "toml", "nginx", "apache", "diff", "http", "protobuf", "groovy",
+  "objectivec", "matlab", "vbnet",
 ];
 
 const RENDERABLE_LANGUAGES = new Set(["mermaid"]);
@@ -124,6 +109,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
   const [showLangPicker, setShowLangPicker] = useState(false);
+  const [langQuery, setLangQuery] = useState("");
   const [showCalloutIconPicker, setShowCalloutIconPicker] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [dragHeightLines, setDragHeightLines] = useState<number | null>(null);
@@ -167,6 +153,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     (language: string) => {
       commitBlockUpdate(block.id, { language });
       setShowLangPicker(false);
+      setLangQuery("");
     },
     [commitBlockUpdate, block.id],
   );
@@ -301,22 +288,31 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             {block.language || "plaintext"}
           </button>
           {showLangPicker && (
-            <div className="absolute top-full left-0 mt-1 bg-[var(--osio-bg-surface)] border border-[var(--osio-border-default)] rounded-lg shadow-lg z-[var(--osio-z-popover)] max-h-48 overflow-y-auto w-40">
-              {LANGUAGES.map((language) => (
-                <button
-                  key={language}
-                  type="button"
-                  onClick={() => handleLangSelect(language)}
-                  className={[
-                    "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-[var(--osio-bg-hover)]",
-                    language === (block.language || "plaintext")
-                      ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]"
-                      : "text-[var(--osio-fg-muted)]",
-                  ].join(" ")}
-                >
-                  {language}
-                </button>
-              ))}
+            <div className="absolute top-full left-0 mt-1 w-44 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-lg z-[var(--osio-z-popover)]">
+              <input
+                autoFocus
+                value={langQuery}
+                onChange={(e) => setLangQuery(e.target.value)}
+                placeholder="Search language…"
+                className="w-full border-b border-[var(--osio-border-default)] bg-transparent px-3 py-1.5 text-xs outline-none placeholder:text-[var(--osio-fg-subtle)]"
+              />
+              <div className="max-h-44 overflow-y-auto">
+                {LANGUAGES.filter((language) => language.includes(langQuery.trim().toLowerCase())).map((language) => (
+                  <button
+                    key={language}
+                    type="button"
+                    onClick={() => handleLangSelect(language)}
+                    className={[
+                      "w-full text-left px-3 py-1.5 text-xs font-mono hover:bg-[var(--osio-bg-hover)]",
+                      language === (block.language || "plaintext")
+                        ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]"
+                        : "text-[var(--osio-fg-muted)]",
+                    ].join(" ")}
+                  >
+                    {language}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -346,7 +342,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         </div>
       </div>
     ),
-    [block.language, block.id, showLangPicker, isRenderable, codeView, copiedCode, handleLangSelect, commitBlockUpdate, handleCopyCode, langPickerRef],
+    [block.language, block.id, showLangPicker, langQuery, isRenderable, codeView, copiedCode, handleLangSelect, commitBlockUpdate, handleCopyCode, langPickerRef],
   );
 
   switch (block.type) {
@@ -535,8 +531,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       );
 
     case "column_list":
+      // Borderless like Notion: the flex row + resize handles (in renderChildren)
+      // carry the structure. No outer box, so columns don't nest borders/offset.
       return (
-        <div className="my-1 rounded-lg border border-dashed border-[var(--osio-border-default)] px-2 py-2">
+        <div className="my-1">
           {renderChildren?.() ?? (
             <span className="text-xs text-[var(--osio-fg-subtle)]">Columns</span>
           )}
@@ -545,9 +543,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "column":
       return (
-        <div className="min-h-10 rounded-md border border-dashed border-[var(--osio-border-default)] px-2 py-1">
+        <div className="min-h-10">
           {renderChildren?.() ?? (
-            <span className="text-xs text-[var(--osio-fg-subtle)]">Empty column</span>
+            <span className="text-xs text-[var(--osio-fg-subtle)] italic">Empty column</span>
           )}
         </div>
       );
@@ -597,7 +595,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                     code={block.content || " "}
                     language={block.language}
                     className="pointer-events-none p-3"
-                    codeClassName="block whitespace-pre font-mono text-sm leading-6"
+                    codeClassName="block whitespace-pre font-mono text-sm leading-6 [tab-size:2]"
                   />
                 </div>
                 <textarea
