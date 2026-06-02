@@ -115,7 +115,9 @@ export function isTableStart(ctx: ParseContext): boolean {
   const line1 = ctx.lines[ctx.pos].trim();
   const line2 = ctx.lines[ctx.pos + 1].trim();
   if (!line1.includes('|')) return false;
-  return /^\|?[\s:]*-{3,}[\s:]*(\|[\s:]*-{3,}[\s:]*)*\|?\s*$/.test(line2);
+  // GFM delimiter row: each cell is `:?-+:?` (optional alignment colons around
+  // one or more dashes), cells separated by pipes, outer pipes optional.
+  return /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(line2);
 }
 
 function parseTableRow(line: string): string[] {
