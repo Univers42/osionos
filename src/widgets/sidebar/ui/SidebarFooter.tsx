@@ -88,6 +88,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
             {/* Dismiss button */}
             <button
               type="button"
+              aria-label="Dismiss invitation"
               onClick={(e) => {
                 e.stopPropagation();
                 onDismissInvite();

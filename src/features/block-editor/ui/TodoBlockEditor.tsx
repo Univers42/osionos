@@ -44,6 +44,8 @@ export const TodoBlockEditor: React.FC<{
       <button
         type="button"
         data-testid="todo-checkbox"
+        aria-pressed={block.checked}
+        aria-label={block.checked ? "Mark to-do as not done" : "Mark to-do as done"}
         onClick={toggleChecked}
         className={[
           "shrink-0 mt-[3px] w-4 h-4 rounded border flex items-center justify-center cursor-pointer",

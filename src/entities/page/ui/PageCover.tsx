@@ -120,6 +120,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
         <button
           type="button"
           data-testid="page-cover-remove"
+          aria-label="Remove cover"
           className="osionos-page-cover-btn"
           onClick={handleRemove}
         >

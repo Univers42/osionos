@@ -1162,6 +1162,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         ref={ref}
         role="textbox"
         aria-multiline="true"
+        aria-label={placeholder || "Editable text block"}
         tabIndex={0}
         contentEditable
         suppressContentEditableWarning
