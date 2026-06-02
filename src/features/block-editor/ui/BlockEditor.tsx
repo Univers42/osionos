@@ -35,6 +35,8 @@ import { MediaBlockEditor } from "./MediaBlockEditor";
 import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
 import { BlockCollapseToggle } from "./BlockCollapseToggle";
+import { BlockListCollapse } from "./BlockListCollapse";
+import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
 import { LayoutBlockEditor } from "./canvas";
@@ -456,7 +458,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     case "bulleted_list": {
       const bulletStyle = getBulletMarker(bulletDepth);
       return (
-        <div className="flex items-start gap-2 pl-5">
+        <div className="group relative flex items-start gap-2 pl-5">
+          {block.children?.length ? (
+            <BlockListCollapse
+              collapsed={block.collapsed}
+              onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })}
+            />
+          ) : null}
           <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
             {bulletStyle === "disc" && (
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--osio-fg-subtle)] mt-[7px]" />
@@ -487,7 +495,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "numbered_list":
       return (
-        <div className="flex items-start gap-2 pl-5">
+        <div className="group relative flex items-start gap-2 pl-5">
+          {block.children?.length ? (
+            <BlockListCollapse
+              collapsed={block.collapsed}
+              onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })}
+            />
+          ) : null}
           <span className="text-sm leading-relaxed py-0.5 text-[var(--osio-fg-muted)] select-none shrink-0 w-6 text-center font-medium">
             {getNumberedMarker(numberedIndex, numberedDepth)}
           </span>
@@ -641,7 +655,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <div className="flex-1 min-w-0">
             <EditableContent
               content={block.content}
-              className="text-sm text-[var(--osio-fg-muted)] leading-relaxed py-0.5 italic"
+              className={`${getToggleHeadingClass(block.headingLevel)} text-[var(--osio-fg-muted)] leading-relaxed py-0.5 italic`}
               style={editableStyle}
               placeholder="Quote…"
               onChange={onChange}
@@ -690,7 +704,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <div className="flex-1 min-w-0">
             <EditableContent
               content={block.content}
-              className="py-0.5 text-sm leading-relaxed text-[var(--osio-fg-default)]"
+              className={`py-0.5 leading-relaxed text-[var(--osio-fg-default)] ${getToggleHeadingClass(block.headingLevel)}`}
               style={editableStyle}
               placeholder={getBlockPlaceholder(block, "Type '/' for commands…")}
               onChange={onChange}

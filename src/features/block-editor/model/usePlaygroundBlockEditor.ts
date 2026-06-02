@@ -31,6 +31,7 @@ import {
   isIndentable,
   isParentable,
   isHeadingBlock,
+  acceptsHeadingLevel,
   isListBlock,
   isEffectivelyEmpty,
   enterCreatesChild,
@@ -928,9 +929,13 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     [applyMarkdownDetection, focusBlock],
   );
 
-  const handleToggleHeadingSpaceShortcut = useCallback(
+  // Container ("#"..."######") + space -> size the container's summary like a
+  // heading without changing its type, for any collapsible container (toggle,
+  // quote, callout). This is what makes "toggle heading", "quote heading" and
+  // "callout heading" combine.
+  const handleContainerHeadingSpaceShortcut = useCallback(
     (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
-      if (e.key !== " " || block.type !== "toggle") return false;
+      if (e.key !== " " || !acceptsHeadingLevel(block.type)) return false;
       // Read the live DOM text: the just-typed "#"s may not be committed yet,
       // and if missed here the inserted space would convert to a plain heading.
       const liveText = (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
@@ -1431,7 +1436,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       const handled =
         handleBlockIndentation(e, blockId, nextBlock, nextContent) ||
         handleParagraphSpaceShortcut(e, blockId, nextBlock) ||
-        handleToggleHeadingSpaceShortcut(e, blockId, nextBlock) ||
+        handleContainerHeadingSpaceShortcut(e, blockId, nextBlock) ||
         handleHeadingToggleSpaceShortcut(e, blockId, nextBlock) ||
         handleEmptyEnterOutdent(e, blockId, nextBlock, parentBlockId, isEmpty) ||
         handleEmptyListEnter(e, blockId, nextBlock, nextBlockIdx, nextContent, isEmpty) ||
@@ -1453,7 +1458,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       maybePushStructuralSnapshot,
       handleBlockIndentation,
       handleParagraphSpaceShortcut,
-      handleToggleHeadingSpaceShortcut,
+      handleContainerHeadingSpaceShortcut,
       handleHeadingToggleSpaceShortcut,
       handleEmptyEnterOutdent,
       handleEmptyListEnter,

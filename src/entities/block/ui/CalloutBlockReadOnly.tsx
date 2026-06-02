@@ -26,6 +26,7 @@ import React, { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { Block } from '@/entities/block';
 import { CALLOUT_COLORS } from "@/entities/block";
+import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { parseInlineMarkdown } from '@/shared/lib/markengine';
 import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
 import { ReadOnlyBlock } from "./ReadOnlyBlock";
@@ -64,7 +65,7 @@ export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
       <span className={`text-lg shrink-0 ${colors.text}`}>{icon}</span>
       <div className="flex-1 min-w-0">
         <span
-          className={`text-sm ${colors.text} leading-relaxed py-0.5`}
+          className={`${getToggleHeadingClass(block.headingLevel)} ${colors.text} leading-relaxed py-0.5`}
           dangerouslySetInnerHTML={content ?? undefined}
         />
         {expanded && block.children?.length ? (

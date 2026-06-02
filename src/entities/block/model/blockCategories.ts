@@ -248,3 +248,10 @@ export function isListBlock(type: BlockType): boolean {
 export function isHeadingBlock(type: BlockType): boolean {
   return BLOCK_CATEGORIES[type].heading;
 }
+
+/** Can this block carry a `headingLevel` that sizes its summary text like a
+ *  heading? The collapsible containers (toggle, quote, callout) all can, which
+ *  is what makes "toggle heading", "quote heading" and "callout heading" work. */
+export function acceptsHeadingLevel(type: BlockType): boolean {
+  return type === "toggle" || type === "quote" || type === "callout";
+}
