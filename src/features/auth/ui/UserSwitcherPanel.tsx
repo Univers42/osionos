@@ -19,7 +19,7 @@ import { usePageStore } from '@/store/usePageStore';
 import {
   COLLECTION_ROLE_BADGES,
 } from '@/shared/lib/markengine/uiCollectionAssets';
-import { SettingsCenter } from '@/features/settings/SettingsCenter';
+import { LazySettingsCenter } from '@/features/settings/LazySettingsCenter';
 
 interface Props {
   onClose: () => void;
@@ -468,7 +468,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
       </footer>
       </div>
       {authOpen && <AuthDialog onClose={() => setAuthOpen(false)} />}
-      {settingsTab && <SettingsCenter initialTab={settingsTab === 'people' ? 'people' : 'general'} onClose={() => setSettingsTab(null)} />}
+      {settingsTab && <LazySettingsCenter initialTab={settingsTab === 'people' ? 'people' : 'general'} onClose={() => setSettingsTab(null)} />}
     </>
   );
 

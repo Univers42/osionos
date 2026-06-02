@@ -29,7 +29,7 @@ import {
   useWorkspaceConfigStore,
   workspaceConfigKey,
 } from "@/shared/config/workspaceConfigStore";
-import { SettingsCenter } from "@/features/settings/SettingsCenter";
+import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
 import { ToastViewport } from "@/shared/ui";
 import { CanvasDebugRoute } from "@/features/block-editor/ui/canvas/__demo__/CanvasDebugRoute";
 
@@ -246,7 +246,7 @@ const App: React.FC = () => {
       </main>
 
       <WorkspaceThemePanel />
-      {settingsOpen && <SettingsCenter initialTab="general" onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <LazySettingsCenter initialTab="general" onClose={() => setSettingsOpen(false)} />}
       <ToastViewport />
     </div>
   );
