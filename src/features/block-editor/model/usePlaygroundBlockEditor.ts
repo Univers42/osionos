@@ -46,7 +46,7 @@ import {
   getAdjacentRenderedBlockId,
 } from "./playgroundBlockEditor.helpers";
 import { useBlockHistory } from "./useBlockHistory";
-import { getInlineMarkAtCaretEnd } from "./inlineMarkHelpers";
+import { getInlineMarkAtCaretEnd, placeCaretAfterInlineMark } from "./inlineMarkHelpers";
 import type {
   SlashMenuState,
   PageSelectorMenuState,
@@ -1203,14 +1203,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         const mark = getInlineMarkAtCaretEnd(e.target as HTMLElement);
         if (mark) {
           e.preventDefault();
-          const sel = globalThis.getSelection();
-          if (sel) {
-            const r = document.createRange();
-            r.setStartAfter(mark);
-            r.collapse(true);
-            sel.removeAllRanges();
-            sel.addRange(r);
-          }
+          placeCaretAfterInlineMark(mark);
           return true;
         }
       }
