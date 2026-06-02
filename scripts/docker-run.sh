@@ -35,6 +35,7 @@ run_inside_container() {
     test-bridge) exec node --test tests/bridge/*.test.mjs "$@" ;;
     bridge-api) exec node scripts/bridge-api.mjs "$@" ;;
     mcp-claude) exec node scripts/osionos-mcp-server.mjs "$@" ;;
+    lighthouse) exec node scripts/lighthouse.mjs "$@" ;;
     quality) pnpm exec tsc --noEmit && exec pnpm exec eslint src/ --max-warnings=0 "$@" ;;
     *) echo "Unknown docker-run command: ${COMMAND}" >&2; exit 2 ;;
   esac

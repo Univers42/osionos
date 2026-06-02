@@ -24,7 +24,8 @@
     "test:doctor": "bash scripts/docker-run.sh test-doctor",
     "test:bridge": "bash scripts/docker-run.sh test-bridge",
     "test:quality": "bash scripts/docker-run.sh quality",
-    "test:setup": "bash scripts/docker-run.sh test-doctor"
+    "test:setup": "bash scripts/docker-run.sh test-doctor",
+    "lighthouse": "node scripts/lighthouse.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
