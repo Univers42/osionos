@@ -2019,6 +2019,8 @@ const LayoutCellHandleBar: React.FC<{
         }}
         placeholder="Untitled cell"
         aria-label="Cell title"
+        name="cell-title"
+        autoComplete="off"
       />
       <span className="osionos-layout-size-badge">⤢ {size.colSpan}×{size.rowSpan}</span>
       <div className="relative">
