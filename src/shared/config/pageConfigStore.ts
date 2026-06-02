@@ -81,6 +81,8 @@ export interface PageConfig {
   fullWidth: boolean;
   locked: boolean;
   presentationMode: boolean;
+  rawMode: boolean;
+  showLineNumbers: boolean;
   notifications: {
     comments: boolean;
   };
@@ -120,6 +122,8 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
   fullWidth: false,
   locked: false,
   presentationMode: false,
+  rawMode: false,
+  showLineNumbers: false,
   notifications: {
     comments: false,
   },
