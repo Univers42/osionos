@@ -136,6 +136,32 @@ export const indentationScenarios = [
   defineScenario(
     "2. Indentation (Tab / Shift+Tab)",
     "Basic indentation",
+    "Enter on an empty indented block outdents one level at a time",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createParagraphs(page, ["root", "L1", "L2"]);
+      await pressTab(getEditors(page).nth(1));
+      await pressTab(getEditors(page).nth(2));
+      await pressTab(getEditors(page).nth(2));
+      const rootLeft = await editorLeft(getEditors(page).first());
+      const deepLeft = await editorLeft(getEditors(page).nth(2));
+      expect(deepLeft).toBeGreaterThan(rootLeft + 8);
+
+      await clearAndType(getEditors(page).nth(2), "");
+      await getEditors(page).nth(2).click();
+      await page.keyboard.press("Enter");
+      const afterOne = await editorLeft(getEditors(page).nth(2));
+      expect(afterOne).toBeLessThan(deepLeft - 8);
+      expect(afterOne).toBeGreaterThan(rootLeft + 8);
+
+      await getEditors(page).nth(2).click();
+      await page.keyboard.press("Enter");
+      expectNearlyEqual(await editorLeft(getEditors(page).nth(2)), rootLeft);
+    },
+  ),
+  defineScenario(
+    "2. Indentation (Tab / Shift+Tab)",
+    "Basic indentation",
     "pressing Tab on the first root block does nothing",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
