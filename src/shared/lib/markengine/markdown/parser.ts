@@ -102,7 +102,7 @@ function tryParseNestedBlock(
 ): BlockNode | null {
   if (/^>\s*(?:\[\s*>\s*\]|\[toggle\])\s*/i.test(trimmed))
     return parseToggle(ctx, parseFn);
-  if (/^>\s*\[!(\w+)\]/.test(trimmed)) return parseCallout(ctx, parseFn);
+  if (/^>\s*\[!([^\]]+?)\]/.test(trimmed)) return parseCallout(ctx, parseFn);
   if (trimmed.startsWith("> ") || trimmed === ">")
     return parseBlockquote(ctx, parseFn);
   if (/^[-*+]\s+\[([ xX])\]\s/.test(trimmed))

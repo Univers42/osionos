@@ -149,6 +149,40 @@ export const markdownCombinationScenarios = [
   ),
   defineScenario(
     CONTAINER,
+    "Raw-mode round-trip",
+    "heading-4 and toggle keep their types through a raw-mode Save",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await editor.click();
+      // Heading + Enter makes a paragraph sibling (no container-child capture),
+      // which then becomes the toggle — two clean top-level blocks.
+      await page.keyboard.type("#### Heading four", { delay: 15 });
+      await page.keyboard.press("Enter");
+      await waitForRenderStability(page);
+      await page.keyboard.type("> Toggle me", { delay: 15 });
+      await waitForRenderStability(page);
+
+      const blockTypes = () =>
+        page.evaluate(() =>
+          [...document.querySelectorAll("[data-block-id]")].map((node) => node.dataset.blockType),
+        );
+      expect(await blockTypes()).toEqual(["heading_4", "toggle"]);
+
+      // Open raw mode, then Save (re-parses the serialized markdown).
+      await page.locator('button[aria-label="Open page configuration"]').first().click();
+      await page.getByRole("button", { name: "Raw / code mode" }).click();
+      const raw = page.locator("[data-raw-mode]");
+      await raw.waitFor();
+      await raw.getByRole("button", { name: "Save" }).click({ force: true });
+      await waitForRenderStability(page);
+
+      // Previously h4 -> plain text and toggle -> paragraph. Now lossless.
+      expect(await blockTypes()).toEqual(["heading_4", "toggle"]);
+    },
+  ),
+  defineScenario(
+    CONTAINER,
     "Collapsible list",
     "a bulleted item with a nested child collapses and re-expands",
     async ({ page, appUrl }) => {
