@@ -16,6 +16,7 @@ import type { ActivePage, PageEntry, PageIndexEntry } from "@/entities/page";
 import { timed } from "@/shared/lib/perf/measure";
 
 const RECENTS_KEY = "pg:recents";
+const ACTIVE_PAGE_KEY = "pg:activePage";
 const LEGACY_PAGE_CACHE_KEYS = ["osio:pages", "pg:pages"];
 const PAGE_CACHE_WORKSPACE_PREFIX = "osio:pages:";
 const PAGE_CACHE_SAVE_DEBOUNCE_MS = 750;
@@ -87,6 +88,24 @@ export function loadRecents(): ActivePage[] {
 export function saveRecents(recents: ActivePage[]) {
   try {
     localStorage.setItem(RECENTS_KEY, JSON.stringify(recents));
+  } catch {
+    // localStorage might be unavailable (e.g. private browsing quota)
+  }
+}
+
+export function loadActivePage(): ActivePage | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_PAGE_KEY);
+    return raw ? (JSON.parse(raw) as ActivePage) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveActivePage(page: ActivePage | null) {
+  try {
+    if (page) localStorage.setItem(ACTIVE_PAGE_KEY, JSON.stringify(page));
+    else localStorage.removeItem(ACTIVE_PAGE_KEY);
   } catch {
     // localStorage might be unavailable (e.g. private browsing quota)
   }

@@ -16,7 +16,7 @@ import type { UserSession } from "@/entities/user";
 import { useUserStore } from "@/features/auth";
 import { isBridgeSession, PRISMATICA_URL } from "@/features/auth/model/userStore.helpers";
 import { usePageStore } from "@/store/usePageStore";
-import { derivePageState, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
+import { derivePageState, loadActivePage, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
 import { Sidebar } from "@/widgets/sidebar";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
 import { LazyCanvasDebugRoute, LazyMainContent } from "./lazyAppRegions";
@@ -129,6 +129,10 @@ const App: React.FC = () => {
   const workspaceKey = workspaceConfigKey(activeUserId || "anonymous", activeWorkspace?._id ?? "workspace");
   const storedWorkspaceConfig = useWorkspaceConfigStore((s) => s.configs[workspaceKey]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Captured once at first render, before init effects can reset activePage,
+  // so a refresh can reopen the page the user was last on.
+  const [persistedActivePage] = useState(() => loadActivePage());
+  const seeded = usePageStore((s) => s.seeded);
   const ready = initialized;
 
   // Run once on mount
@@ -165,6 +169,17 @@ const App: React.FC = () => {
       })
       .catch(() => undefined);
   }, [initUsers, initialized]);
+
+  // After pages are loaded, reopen the page from the previous session (refresh
+  // should stay on the same page instead of dropping back to Home).
+  useEffect(() => {
+    if (!seeded || !persistedActivePage) return;
+    const store = usePageStore.getState();
+    if (store.activePage || store.showTrash) return;
+    if (store.pageById(persistedActivePage.id)) {
+      store.openPage(persistedActivePage);
+    }
+  }, [seeded, persistedActivePage]);
 
   useEffect(() => {
     if (!activeWorkspace?._id) return;
