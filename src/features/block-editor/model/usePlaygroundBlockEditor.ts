@@ -979,6 +979,29 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     [pageId, indentBlock, outdentBlock],
   );
 
+  // Enter on an empty *indented* block walks it back out one level at a time
+  // (Notion behaviour), for any indentable type. Only once it reaches the root
+  // do the list/to-do handlers below convert it to a paragraph.
+  const handleEmptyEnterOutdent = useCallback(
+    (
+      e: React.KeyboardEvent,
+      blockId: string,
+      block: Block,
+      parentBlockId: string | null,
+      isEmpty: boolean,
+    ): boolean => {
+      if (e.key !== "Enter" || e.shiftKey || !isEmpty || !parentBlockId) return false;
+      if (!isIndentable(block.type)) return false;
+
+      e.preventDefault();
+      flushPendingBlockDraft(blockId, "structural");
+      outdentBlock(pageId, blockId);
+      repositionCursor(blockId, "");
+      return true;
+    },
+    [pageId, outdentBlock, flushPendingBlockDraft],
+  );
+
   const handleEmptyListEnter = useCallback(
     (
       e: React.KeyboardEvent,
@@ -1376,6 +1399,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         handleBlockIndentation(e, blockId, nextBlock, nextContent) ||
         handleParagraphSpaceShortcut(e, blockId, nextBlock) ||
         handleToggleHeadingSpaceShortcut(e, blockId, nextBlock) ||
+        handleEmptyEnterOutdent(e, blockId, nextBlock, parentBlockId, isEmpty) ||
         handleEmptyListEnter(e, blockId, nextBlock, nextBlockIdx, nextContent, isEmpty) ||
         handleEmptyTodoEnter(e, blockId, nextBlock, isEmpty) ||
         handleEmptyListDelete(e, blockId, nextBlock, nextBlockIdx, nextContent, isEmpty) ||
@@ -1396,6 +1420,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       handleBlockIndentation,
       handleParagraphSpaceShortcut,
       handleToggleHeadingSpaceShortcut,
+      handleEmptyEnterOutdent,
       handleEmptyListEnter,
       handleEmptyTodoEnter,
       handleEmptyListDelete,
