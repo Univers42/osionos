@@ -18,6 +18,7 @@ import { RawModeHeader } from "./RawModeHeader";
 import { RawCodePane } from "./RawCodePane";
 import { RawPreviewPane } from "./RawPreviewPane";
 import { useRawMode } from "../model/useRawMode";
+import { useDebouncedValue } from "../model/useDebouncedValue";
 import { DEFAULT_RAW_LAYOUT, dropZoneFromX, ratioFromX, type RawLayout, type RawLayoutMode } from "../model/rawModeLayout";
 
 /** VSCode-style raw markdown editor: tabs, a resizable split, and a drag-the-
@@ -28,6 +29,10 @@ export function RawModeView({ pageId }: Readonly<{ pageId: string }>) {
   const userId = useUserStore((state) => state.activeUserId) || "anonymous";
   const showLineNumbers = usePageConfigStore((state) => resolvePageConfig(state.configs[`${userId}:${pageId}`]).showLineNumbers);
   const { source, edit, save, exit, dirty } = useRawMode(pageId);
+  // The preview parses + re-renders the whole document, so keep it off the
+  // keystroke path: the textarea tracks `source` live; the preview uses a
+  // debounced copy and so only re-renders when typing pauses (~150ms).
+  const previewSource = useDebouncedValue(source, 150);
   const [layout, setLayout] = useState<RawLayout>(DEFAULT_RAW_LAYOUT);
   const [dragZone, setDragZone] = useState<RawLayoutMode | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -76,7 +81,7 @@ export function RawModeView({ pageId }: Readonly<{ pageId: string }>) {
         )}
         {layout.mode !== "code" && (
           <div className="min-h-0 flex-1">
-            <RawPreviewPane source={source} />
+            <RawPreviewPane source={previewSource} />
           </div>
         )}
       </div>
