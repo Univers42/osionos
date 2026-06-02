@@ -773,24 +773,15 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
   const tryHandleCodeOrTable = useCallback(
     (blockId: string, text: string): boolean => {
-      const trimmedText = text.trim();
-      const language = trimmedText.startsWith("```")
-        ? trimmedText.slice(3).trim().toLowerCase()
-        : "";
-      const isLanguageSafe = [...language].every(
-        (char) =>
-          (char >= "a" && char <= "z") ||
-          (char >= "0" && char <= "9") ||
-          char === "_" ||
-          char === "+" ||
-          char === "-",
-      );
-
-      if (trimmedText.startsWith("```") && isLanguageSafe) {
+      // Only convert once the fence LINE is finished (a trailing space), so the
+      // language can be fully typed first: "```" alone used to convert
+      // immediately to plaintext, swallowing "mermaid"/"ts"/etc. into content.
+      const fenceMatch = /^\s*```([a-z0-9_+-]*)\s$/.exec(text);
+      if (fenceMatch) {
         changeBlockType(pageId, blockId, "code");
         updateBlock(pageId, blockId, {
           content: "",
-          language: language || "plaintext",
+          language: fenceMatch[1].toLowerCase() || "plaintext",
         });
         repositionCursor(blockId, "");
         return true;
@@ -886,6 +877,10 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       const detection = detectBlockType(text);
       if (!detection) return;
+      // Code fences are owned by tryHandleCodeOrTable, which waits for the fence
+      // line to finish so the language ("```mermaid") isn't swallowed; converting
+      // here on a bare "```" would lock the block to plaintext too early.
+      if (detection.type === "code") return;
 
       applyMarkdownDetection(blockId, detection);
     },
