@@ -95,14 +95,29 @@ function astToBlocks(node: BlockNode): Block[] {
       return node.children.map((item) =>
         listItemToBlock("to_do", item, item.checked),
       );
-    case "callout":
-      return [
-        {
-          id: crypto.randomUUID(),
-          type: "callout",
-          content: node.children.map((c) => blockToMarkdown(c)).join("\n"),
-        },
-      ];
+    case "callout": {
+      const block: Block = {
+        id: crypto.randomUUID(),
+        type: "callout",
+        content: inlineToMarkdown(node.title),
+        color: node.kind,
+      };
+      const children = node.children.flatMap((child) => astToBlocks(child));
+      if (children.length > 0) block.children = children;
+      return [block];
+    }
+    case "toggle": {
+      const block: Block = {
+        id: crypto.randomUUID(),
+        type: "toggle",
+        content: inlineToMarkdown(node.summary),
+      };
+      const children = node.children.flatMap((child) => astToBlocks(child));
+      if (children.length > 0) block.children = children;
+      return [block];
+    }
+    case "math_block":
+      return [{ id: crypto.randomUUID(), type: "equation", content: node.value }];
     case "table": {
       const header = node.head.cells.map((cell) =>
         inlineToMarkdown(cell.children),

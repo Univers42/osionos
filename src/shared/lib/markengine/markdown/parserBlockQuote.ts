@@ -88,7 +88,7 @@ export function parseCallout(
   parseBlocks: ParseBlocksFn,
 ): BlockNode {
   const firstLine = advance(ctx).trimStart();
-  const calloutMatch = /^>\s*\[!(\w+)\]\s*(.*)/.exec(firstLine);
+  const calloutMatch = /^>\s*\[!([^\]]+?)\]\s*(.*)/.exec(firstLine);
   const kind = calloutMatch?.[1] || "note";
   const titleText = calloutMatch?.[2] || "";
   const innerLines: string[] = [];
