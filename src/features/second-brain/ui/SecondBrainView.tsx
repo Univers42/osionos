@@ -17,7 +17,6 @@ import type { NotionState } from "@notion-db/object-database";
 import { useKnownDatabaseStateStore } from "@/widgets/database-view/model/knownDatabaseState";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
-import { liveNoteRowIds } from "../sync/noteScope";
 import { loadGraphSnapshot, saveGraphSnapshot } from "../sync/graphSnapshot";
 import { GRAPH_SOURCE } from "../featureFlag";
 import { type GraphModel, type NodeId, emptyModel } from "../model/graphModel";
@@ -30,7 +29,8 @@ import { LayoutController } from "../layout/layoutBridge";
 import { CanvasScene } from "../render/CanvasScene";
 import { resolveSceneTheme } from "../render/theme";
 import { accumulateGraph } from "../baas/accumulateGraph";
-import { configuredResources, edgesMount, edgesTable, fetchGraphFocus, fetchGraphOverview, isBaasGraphEnabled, notesTable, overlayTable } from "../baas/baasGraphClient";
+import { configuredResources, edgesMount, edgesTable, fetchGraphFocus, isBaasGraphEnabled, overlayTable } from "../baas/baasGraphClient";
+import { PAGE_GRAPH_RESOURCE, fetchCombinedOverview } from "../baas/pageGraphSource";
 import { aggregateCount } from "../baas/baasAggregate";
 import { mapGraphResponse } from "../baas/mapGraphResponse";
 import type { BaasGraphResponse } from "../baas/types";
@@ -60,7 +60,7 @@ export const SecondBrainView: React.FC = () => {
   const updatePageProperty = useKnownDatabaseStateStore((store) => store.updatePageProperty);
   const baasMode = isBaasGraphEnabled();
   const viewerId = useUserStore((store) => store.activeUserId) || null;
-  const noteResources = useMemo(() => new Set([notesTable()]), []);
+  const noteResources = useMemo(() => new Set([PAGE_GRAPH_RESOURCE]), []);
   const localModel = useMemo(() => deriveGraph(state, { source: GRAPH_SOURCE, tagConfig: deriveTagConfig(state) }), [state]);
 
   const [baasModel, setBaasModel] = useState<GraphModel | null>(null);
@@ -176,9 +176,12 @@ export const SecondBrainView: React.FC = () => {
   // BaaS mode: double-click a node to fetch + merge its neighborhood.
   const expand = useCallback((id: NodeId) => {
     if (!baasMode) return;
+    // Page (note) nodes arrive complete from the bridge overview (parent + tag edges);
+    // /query/v1 has no `osionos` mount, so don't attempt a focus fetch for them.
+    if (parseNodeId(id).resource === PAGE_GRAPH_RESOURCE) return;
     fetchGraphFocus(id)
       .then((response) => {
-        const mapped = mapGraphResponse(response, { noteResources, viewerId, liveNoteIds: liveNoteRowIds() });
+        const mapped = mapGraphResponse(response, { noteResources, viewerId });
         setBaasModel((prev) => accumulateGraph(prev ?? EMPTY_MODEL, mapped.model));
         setGuarantee(mapped.guarantee);
       })
@@ -192,7 +195,7 @@ export const SecondBrainView: React.FC = () => {
   useEffect(() => {
     if (!baasMode) return undefined;
     let active = true;
-    const mapOptions = { noteResources, viewerId, liveNoteIds: liveNoteRowIds() };
+    const mapOptions = { noteResources, viewerId };
     const applyResponse = (response: BaasGraphResponse, fromCache: boolean) => {
       const mapped = mapGraphResponse(response, mapOptions);
       setBaasModel(mapped.model);
@@ -217,7 +220,7 @@ export const SecondBrainView: React.FC = () => {
     void (async () => {
       for (let attempt = 0; attempt < 4 && active; attempt += 1) {
         try {
-          const response = await fetchGraphOverview();
+          const response = await fetchCombinedOverview();
           if (!active) return;
           saveGraphSnapshot(response); // cache the last-good graph for offline
           applyResponse(response, false);
@@ -246,8 +249,8 @@ export const SecondBrainView: React.FC = () => {
     setReloadKey((key) => key + 1);
   };
 
-  // Live refresh: editing a note publishes it (App's useNoteGraphSync, ~1.5s
-  // debounce); re-fetch the overview shortly after so it appears without a Retry.
+  // Live refresh: editing a page persists it (App's usePageSync outbox); re-fetch the
+  // overview shortly after so the change appears in the graph without a manual Retry.
   useEffect(() => {
     if (!baasMode) return undefined;
     let timer: ReturnType<typeof setTimeout> | null = null;

@@ -61,8 +61,6 @@ export { NOTE_COLOR, TAG_COLOR, databaseColor } from "./model/palette";
 
 export { GRAPH_SOURCE, SECOND_BRAIN_V2 } from "./featureFlag";
 export { SecondBrainView } from "./ui/SecondBrainView";
-export { useNoteGraphSync } from "./sync/useNoteGraphSync";
-export { publishNote, unpublishNote, noteRowId } from "./baas/publishNote";
 
 export type { BaasGenerators, BaasGraphResponse, BaasResource, GraphGuarantee } from "./baas/types";
 export { type MappedGraph, mapGraphResponse } from "./baas/mapGraphResponse";

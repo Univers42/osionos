@@ -15,7 +15,6 @@ import React, { useEffect, useState } from "react";
 import type { UserSession } from "@/entities/user";
 import { useUserStore } from "@/features/auth";
 import { isBridgeSession, PRISMATICA_URL } from "@/features/auth/model/userStore.helpers";
-import { useNoteGraphSync } from "@/features/second-brain/sync/useNoteGraphSync";
 import { usePageSync } from "@/store/sync/usePageSync";
 import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, loadActivePage, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
@@ -138,11 +137,9 @@ const App: React.FC = () => {
   const ready = initialized;
 
   // Persist pages to the BaaS (source of truth) with hydrate-on-load + offline outbox;
-  // zustand + localStorage are the cache.
+  // zustand + localStorage are the cache. The graph reads these canonical pages via the
+  // bridge (GET /api/graph/pages), so no separate note-mirror sync is needed.
   usePageSync();
-
-  // Publish osionos notes into the graph as they're created/edited (BaaS mode).
-  useNoteGraphSync();
 
   // Run once on mount
   useEffect(() => {
