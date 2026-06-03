@@ -30,6 +30,7 @@ import { AgentConversationPage } from "@/widgets/agent-conversation";
 import { OsionosPage } from "@/pages/notion-page";
 import { TrashView } from "@/pages/trash-view";
 import { HomeKnowledgeGraph } from "@/widgets/home-variants";
+import { SECOND_BRAIN_V2, SecondBrainView } from "@/features/second-brain";
 
 import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, savePagesCache } from "@/store/pageStore.helpers";
@@ -291,7 +292,7 @@ const LoadingPane: React.FC = () => (
 );
 
 function renderHomeVariantContent(variant: HomeVariant, homeDashboardPage: PageEntry | undefined): React.ReactNode {
-  if (variant === "graph") return <HomeKnowledgeGraph />;
+  if (variant === "graph") return SECOND_BRAIN_V2 ? <SecondBrainView /> : <HomeKnowledgeGraph />;
   if (homeDashboardPage) return <OsionosPage pageId={homeDashboardPage._id} />;
   return <LoadingPane />;
 }
