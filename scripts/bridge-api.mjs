@@ -17,6 +17,7 @@ import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pagesToGraph } from './bridge-graph.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -1207,7 +1208,29 @@ async function handlePageConfigRead(url, request, response, config, fetchImpl) {
 	return true;
 }
 
+/**
+ * Owner-scoped page graph from the CANONICAL osionos_pages (replaces the duplicate
+ * Mongo og_notes as the graph's note source). Returns the viewer's own pages as a
+ * BaaS graph (note nodes + parent + tag edges). Owner-scoping is authoritative here:
+ * we only include rows the caller owns, so the graph never leaks another user's pages.
+ */
+async function handleGraphPages(request, response, config, fetchImpl) {
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	const rows = [];
+	for (const workspaceId of authContext.workspaceIds) {
+		const wsRows = await listPageRows(workspaceId, config, fetchImpl, {});
+		for (const row of wsRows) {
+			if (row.owner_id == null || row.owner_id === authContext.userId) rows.push(row);
+		}
+	}
+	json(response, 200, pagesToGraph(rows), config);
+	return true;
+}
+
 async function handlePagesGet(url, request, response, config, fetchImpl) {
+	if (url.pathname === '/api/graph/pages') {
+		return handleGraphPages(request, response, config, fetchImpl);
+	}
 	if (url.pathname === '/api/pages' || url.pathname === '/api/pages/all') {
 		return handlePageList(url, request, response, config, fetchImpl);
 	}
