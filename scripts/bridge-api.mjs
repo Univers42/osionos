@@ -529,6 +529,25 @@ function memberHasPermission(member, permission) {
 	return permissions.includes('admin') || permissions.includes(permission);
 }
 
+/**
+ * Page-level authorization (defence in depth on top of requireWorkspaceAccess). A page
+ * may be mutated only by its OWNER, a workspace owner/admin, or an explicit collaborator
+ * with editor/owner role. Today bridge sessions only ever hold their own single-owner
+ * private workspace, so owner_id === access.userId always and this is a pass-through; it
+ * future-proofs multi-user workspaces. Future work (shared workspaces): when real
+ * multi-member shared/team workspaces land, align this with the client's canEditPage rule
+ * (any member of a shared workspace may edit any page in it) so client and server agree.
+ */
+function requirePageOwnership(existing, access) {
+	if (existing.owner_id == null) return; // legacy / unowned page — the workspace gate suffices
+	if (existing.owner_id === access.userId) return; // the page owner
+	if (access.role === 'owner' || access.role === 'admin') return; // workspace owner/admin
+	const collaborators = Array.isArray(existing.collaborators) ? existing.collaborators : [];
+	const role = collaborators.find((entry) => entry && entry.userId === access.userId)?.role;
+	if (role === 'editor' || role === 'owner') return; // explicit page collaborator
+	throw Object.assign(new Error('You do not have permission to modify this page.'), { status: 403 });
+}
+
 export async function requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl = fetch) {
 	const normalizedWorkspaceId = requireUuid(workspaceId, 'workspaceId');
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
@@ -1259,7 +1278,8 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	if (!pageId) return false;
 	const existing = await fetchPageRow(pageId, config, fetchImpl);
 	if (!existing) throw Object.assign(new Error('Page not found.'), { status: 404 });
-	await requireWorkspaceAccess(request, existing.workspace_id, 'update', config, fetchImpl);
+	const access = await requireWorkspaceAccess(request, existing.workspace_id, 'update', config, fetchImpl);
+	requirePageOwnership(existing, access);
 
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	if (hasOwn(payload, 'workspaceId') && payload.workspaceId !== existing.workspace_id) {
@@ -1349,7 +1369,8 @@ async function handlePageDelete(url, request, response, config, fetchImpl) {
 	if (!pageId) return false;
 	const row = await fetchPageRow(pageId, config, fetchImpl);
 	if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
-	await requireWorkspaceAccess(request, row.workspace_id, 'delete', config, fetchImpl);
+	const access = await requireWorkspaceAccess(request, row.workspace_id, 'delete', config, fetchImpl);
+	requirePageOwnership(row, access);
 	const refs = await listWorkspacePageRefs(row.workspace_id, config, fetchImpl);
 	const ids = [pageId, ...descendantPageIds(refs, pageId)];
 	await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(ids)}`, {
