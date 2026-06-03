@@ -10,14 +10,14 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseMarkdownToBlocks } from "@/shared/lib/markengine";
 import { serializeBlocksToMarkdown } from "@/services/page-actions";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { pageConfigKey, usePageConfigStore } from "@/shared/config/pageConfigStore";
 
-const PREVIEW_DEBOUNCE_MS = 150;
+const PREVIEW_DEBOUNCE_MS = 90;
 
 /**
  * Owns the raw-markdown source for a page while raw mode is open.
@@ -50,7 +50,10 @@ export function useRawMode(pageId: string) {
       setDirty(true);
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setPreviewSource(next), PREVIEW_DEBOUNCE_MS);
+    // The preview parse/render is a low-priority transition: React 19 time-
+    // slices it and yields back to the keyboard, so typing stays native-fast
+    // even while a large document re-renders in the background.
+    debounceRef.current = setTimeout(() => startTransition(() => setPreviewSource(next)), PREVIEW_DEBOUNCE_MS);
   }, []);
 
   const exit = useCallback(() => { void updateConfig(userId, pageId, { rawMode: false }); }, [pageId, updateConfig, userId]);
