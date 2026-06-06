@@ -126,7 +126,8 @@ export function derivePageState(
   const pagesIndex: Record<string, PageIndexEntry> = {};
 
   for (const [workspaceId, workspacePages] of Object.entries(pages)) {
-    const pageIds = (workspacePages ?? []).map((page, index) => {
+    const list = Array.isArray(workspacePages) ? workspacePages : [];
+    const pageIds = list.map((page, index) => {
       pagesIndex[page._id] = { workspaceId, index };
       return page._id;
     });
@@ -231,7 +232,8 @@ function loadSplitPagesCache(): Record<string, PageEntry[]> {
       const key = localStorage.key(index);
       if (!key?.startsWith(PAGE_CACHE_WORKSPACE_PREFIX)) continue;
       const workspaceId = key.slice(PAGE_CACHE_WORKSPACE_PREFIX.length);
-      pages[workspaceId] = JSON.parse(localStorage.getItem(key) ?? "[]") as PageEntry[];
+      const parsed = JSON.parse(localStorage.getItem(key) ?? "[]");
+      pages[workspaceId] = Array.isArray(parsed) ? (parsed as PageEntry[]) : [];
     }
   } catch {
     return {};
