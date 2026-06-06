@@ -601,11 +601,7 @@
 .osionos-layout-cell-deferred {
   min-height: max(220px, calc(var(--osionos-layout-cell-min-height, 320px) - 48px));
   border-radius: 6px;
-  background:
-    linear-gradient(90deg, transparent, color-mix(in srgb, var(--osio-bg-hover) 80%, transparent), transparent),
-    color-mix(in srgb, var(--osio-bg-subtle) 68%, transparent);
-  background-size: 180px 100%, 100% 100%;
-  animation: osionos-layout-deferred-pulse 1.6s ease-in-out infinite;
+  background: color-mix(in srgb, var(--osio-bg-subtle) 68%, transparent);
 }
 
 @keyframes osionos-layout-deferred-pulse {

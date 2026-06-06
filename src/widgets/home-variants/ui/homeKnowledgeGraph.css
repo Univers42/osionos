@@ -39,9 +39,8 @@
   overflow: hidden;
   border: 1px solid var(--osio-border-default);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--osio-bg-surface) 92%, transparent);
+  background: var(--osio-bg-surface);
   box-shadow: 0 14px 34px color-mix(in srgb, var(--osio-shadow) 14%, transparent);
-  backdrop-filter: blur(12px);
 }
 
 .osionos-home-graph-controls button {
@@ -180,7 +179,6 @@
   stroke: var(--osio-bg-surface);
   stroke-width: 2;
   opacity: 0.9;
-  filter: drop-shadow(0 4px 10px rgba(15, 23, 42, 0.16));
 }
 
 .osionos-home-graph-nodes .osionos-home-graph-hit-target {
@@ -204,7 +202,8 @@
 }
 
 .osionos-home-graph-nodes g[data-related="true"] circle {
-  filter: drop-shadow(0 8px 14px rgba(15, 23, 42, 0.2));
+  stroke: color-mix(in srgb, var(--osio-accent) 55%, var(--osio-bg-surface));
+  stroke-width: 3;
 }
 
 .osionos-home-graph-nodes text {
