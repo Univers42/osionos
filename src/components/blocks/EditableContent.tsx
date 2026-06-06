@@ -823,15 +823,23 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   useEffect(() => {
     const handleSelectionChange = () => updateSelectionSnapshot();
     document.addEventListener("selectionchange", handleSelectionChange);
-    window.addEventListener("resize", handleSelectionChange);
-    window.addEventListener("scroll", handleSelectionChange, true);
-
-    return () => {
-      document.removeEventListener("selectionchange", handleSelectionChange);
-      window.removeEventListener("resize", handleSelectionChange);
-      window.removeEventListener("scroll", handleSelectionChange, true);
-    };
+    return () => document.removeEventListener("selectionchange", handleSelectionChange);
   }, [updateSelectionSnapshot]);
+
+  // Reposition the floating toolbar on scroll/resize — but ONLY for the block
+  // that currently has a selection. Previously every block attached a
+  // capture-phase window scroll listener, so scrolling fired O(blocks) handlers
+  // per tick and stuttered. Now at most one block (the selected one) listens.
+  useEffect(() => {
+    if (!selectionSnapshot) return;
+    const reposition = () => updateSelectionSnapshot();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [selectionSnapshot, updateSelectionSnapshot]);
 
   const syncContentFromDom = useCallback(() => {
     if (!ref.current) {
