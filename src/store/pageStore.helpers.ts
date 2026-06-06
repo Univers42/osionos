@@ -126,7 +126,7 @@ export function derivePageState(
   const pagesIndex: Record<string, PageIndexEntry> = {};
 
   for (const [workspaceId, workspacePages] of Object.entries(pages)) {
-    const pageIds = workspacePages.map((page, index) => {
+    const pageIds = (workspacePages ?? []).map((page, index) => {
       pagesIndex[page._id] = { workspaceId, index };
       return page._id;
     });
