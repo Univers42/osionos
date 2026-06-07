@@ -175,7 +175,12 @@ export async function signupPersona(persona: StaticPersona) {
 }
 
 export async function fetchWorkspaces(jwt: string): Promise<Workspace[]> {
-  const apiJwt = apiJwtFromSessionToken(jwt);
+  // /api/workspaces is a BRIDGE call that accepts the osionos_v1 app-session token
+  // (like the page calls), so pass it through. apiJwtFromSessionToken() is the
+  // gotrue-JWT-only variant (returns '' for bridge tokens) and would skip the
+  // fetch entirely — leaving portal accounts with no workspaces (empty sidebar,
+  // no active workspace -> stuck spinner + dead buttons).
+  const apiJwt = pageApiJwtFromSessionToken(jwt);
   if (!apiJwt || !API_BASE) return [];  // offline mode — skip network call
   try {
     return await api.get<Workspace[]>('/api/workspaces', apiJwt);
