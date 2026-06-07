@@ -17,6 +17,7 @@ import {
   INITIAL_PERSONAS,
   ALLOW_OFFLINE_MODE,
   REQUIRE_BRIDGE_SESSION,
+  isPortalMode,
   type BridgeSessionImport,
   consumeBridgeSessionFromLocation,
   createOfflineWorkspace,
@@ -199,6 +200,18 @@ function bridgeOnlyMode() {
   return REQUIRE_BRIDGE_SESSION && !ALLOW_OFFLINE_MODE;
 }
 
+function portalRequiredState() {
+  return {
+    personas: [] as typeof INITIAL_PERSONAS,
+    sessions: {} as Record<string, UserSession>,
+    activeUserId: '',
+    activeWorkspaceByUser: {} as Record<string, string>,
+    initialized: true,
+    loading: false,
+    error: null as string | null,
+  };
+}
+
 function initialPersonas() {
   return uniquePersonas([...INITIAL_PERSONAS.map(p => ({ ...p })), ...readPersistedPersonas()]);
 }
@@ -240,7 +253,7 @@ async function connectedOrOfflineState(personas: typeof INITIAL_PERSONAS) {
   let firstUserId = '';
   const firstLogin = await loginPersona(INITIAL_PERSONAS[0]);
 
-  if (firstLogin) {
+  if (firstLogin?.ok) {
     const { userId, accessToken, refreshToken } = firstLogin;
     personas[0] = { ...personas[0], id: userId };
     const workspaces = await fetchWorkspaces(accessToken);
@@ -251,7 +264,7 @@ async function connectedOrOfflineState(personas: typeof INITIAL_PERSONAS) {
     const remainingResults = await Promise.all(INITIAL_PERSONAS.slice(1).map(loginPersona));
     for (let i = 0; i < remainingResults.length; i++) {
       const loginResult = remainingResults[i];
-      if (!loginResult) continue;
+      if (!loginResult?.ok) continue;
       const personaIndex = i + 1;
       personas[personaIndex] = { ...personas[personaIndex], id: loginResult.userId };
       const parts = partition(await fetchWorkspaces(loginResult.accessToken), loginResult.userId);
@@ -267,6 +280,7 @@ async function connectedOrOfflineState(personas: typeof INITIAL_PERSONAS) {
 async function resolveInitialState() {
   const bridgeSession = await consumeBridgeSessionFromLocation().catch(() => null) ?? readPersistedBridgeSession();
   if (bridgeSession) return { ...activateBridgeSession(bridgeSession), initialized: true, loading: false, error: null };
+  if (isPortalMode()) return portalRequiredState();
   if (bridgeOnlyMode()) return bridgeSessionRequiredState();
   const personas = initialPersonas();
   return connectedOrOfflineState(personas);
@@ -274,7 +288,7 @@ async function resolveInitialState() {
 
 /** Zustand store managing multi-user authentication and workspace access. */
 export const useUserStore = create<UserStore>((set, get) => ({
-  personas:     uniquePersonas([...INITIAL_PERSONAS.map(p => ({ ...p })), ...readPersistedPersonas()]),
+  personas:     isPortalMode() ? [] : uniquePersonas([...INITIAL_PERSONAS.map(p => ({ ...p })), ...readPersistedPersonas()]),
   sessions:     {},
   activeUserId: '',
   activeWorkspaceByUser: readPersistedContext().activeWorkspaceByUser ?? {},
@@ -290,7 +304,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
     try {
       set(await resolveInitialState());
     } catch {
-      set(bridgeOnlyMode() ? bridgeSessionRequiredState() : offlineState());
+      set(isPortalMode() ? portalRequiredState() : bridgeOnlyMode() ? bridgeSessionRequiredState() : offlineState());
     } finally {
       _initInProgress = false;
     }
@@ -326,10 +340,16 @@ export const useUserStore = create<UserStore>((set, get) => ({
     const loginResult = mode === 'signup'
       ? await signupPersona(persona)
       : await loginPersona(persona);
-    const userId = loginResult?.userId ?? `local-${crypto.randomUUID()}`;
+    if (isPortalMode() && !loginResult?.ok) {
+      const message = loginResult && 'message' in loginResult ? loginResult.message : null;
+      set({ error: message ?? 'Sign-in failed. Check your details and try again.', loading: false });
+      return false;
+    }
+    const ok = loginResult?.ok ? loginResult : null;
+    const userId = ok?.userId ?? `local-${crypto.randomUUID()}`;
     const storedPersona = { ...persona, id: userId };
-    const workspaces = loginResult ? await fetchWorkspaces(loginResult.accessToken) : [];
-    const parts = loginResult
+    const workspaces = ok ? await fetchWorkspaces(ok.accessToken) : [];
+    const parts = ok
       ? partition(workspaces, userId)
       : {
         privateWorkspaces: [createOfflineWorkspace(userId, `${displayName}'s workspace`)],
@@ -342,8 +362,8 @@ export const useUserStore = create<UserStore>((set, get) => ({
         ...state.sessions,
         [userId]: {
           userId,
-          accessToken: loginResult?.accessToken ?? '',
-          refreshToken: loginResult?.refreshToken ?? '',
+          accessToken: ok?.accessToken ?? '',
+          refreshToken: ok?.refreshToken ?? '',
           privateWorkspaces: parts.privateWorkspaces,
           sharedWorkspaces: parts.sharedWorkspaces,
         },
@@ -360,6 +380,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
         activeUserId: userId,
         activeWorkspaceByUser,
         sessions,
+        error: null,
       };
     });
 
