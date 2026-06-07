@@ -55,8 +55,11 @@ export interface PageEntry {
   content?: Block[];
   /** Editable properties shown below the page title. */
   properties?: PagePropertyEntry[];
-  /** Local surface classification used for private app-only spaces such as agents and home. */
-  surface?: "page" | "agent" | "home";
+  /** Local surface classification used for private app-only spaces such as agents and home.
+   *  "folder" = an organizing container: it groups child pages and acts as a graph hub, and
+   *  clicking it toggles expand/collapse instead of opening a page (a file may also act as a
+   *  folder; "folder" is the explicit, never-opens semantic). */
+  surface?: "page" | "agent" | "home" | "folder";
   /** Local version for generated home dashboard content. */
   homeDashboardVersion?: number;
 }

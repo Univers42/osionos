@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useEffect, useMemo, useRef } from "react";
-import { Plus, Mail, CalendarRange, Monitor, Hash, Lock, MessageSquare, Volume2, Video, GitBranch, Archive, Bot } from "lucide-react";
+import { Plus, FolderPlus, Mail, CalendarRange, Monitor, Hash, Lock, MessageSquare, Volume2, Video, GitBranch, Archive, Bot } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
 import { useShallow } from "zustand/react/shallow";
 
@@ -332,6 +332,12 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
     void createAndOpenPage(activeWorkspaceId, "Shared page", { visibility: "shared" });
   }
 
+  function createRootFolder(workspaceId: string, visibility: "private" | "shared") {
+    if (!workspaceId) return;
+    // A folder never opens, so we create it without navigating to it.
+    void addPage(workspaceId, "New folder", jwt, undefined, { surface: "folder", visibility });
+  }
+
   function createAgentPage() {
     void createAndOpenPage(activeWorkspaceId, "New agent", {
       icon: "icon:sparkles",
@@ -539,6 +545,12 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
                 activeId={activePageId}
               />
             ))}
+            <SidebarNavItem
+              icon={<FolderPlus size={14} />}
+              label="New folder"
+              subtle
+              onClick={() => createRootFolder(ws._id, "private")}
+            />
           </SidebarSection>
         );
       })}
@@ -572,6 +584,12 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
             onClick={createSharedPage}
           />
         ) : null}
+        <SidebarNavItem
+          icon={<FolderPlus size={14} />}
+          label="New folder"
+          subtle
+          onClick={() => createRootFolder(activeWorkspaceId, "shared")}
+        />
       </SidebarSection>
 
       <SidebarSection label="osionos apps">
