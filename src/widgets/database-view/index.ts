@@ -11,4 +11,8 @@
 /* ************************************************************************** */
 
 export * from './ui/DatabaseBlock';
+export * from './ui/WorkspaceDatabaseBlock';
 export * from './model/databaseViewCatalog';
+export * from './model/workspaceDatabaseConstants';
+export * from './model/workspaceNav';
+export * from './model/workspaceDatabasePage';

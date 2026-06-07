@@ -27,6 +27,8 @@ import { derivePageState } from '@/store/pageStore.helpers';
 import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseViewCatalog';
 import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
 import { getObjectDatabaseAdapter, hasObjectDatabaseRemoteAdapter } from '../model/objectDatabaseAdapter';
+import { isWorkspaceDatabaseId, isWorkspaceViewId } from '../model/workspaceDatabaseConstants';
+import { WorkspaceDatabaseBlock } from './WorkspaceDatabaseBlock';
 
 const INLINE_KNOWN_DATABASE_LOAD_LIMIT = 8;
 
@@ -61,6 +63,16 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     (pageId, state, onClose) => <DatabaseObjectPage pageId={pageId} state={state} onClose={onClose} />,
     [],
   );
+
+  if (isWorkspaceDatabaseId(resolvedDatabaseId) || isWorkspaceViewId(resolvedInitialView)) {
+    return (
+      <WorkspaceDatabaseBlock
+        databaseId={resolvedDatabaseId}
+        initialViewId={resolvedInitialView}
+        mode={mode}
+      />
+    );
+  }
 
   if (knownViewId) {
     return (
