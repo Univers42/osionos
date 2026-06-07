@@ -52,18 +52,23 @@ export function pageTreeGraph(pages: readonly PageTreeInput[]): { nodes: HomeGra
   const seen = new Set<string>();
   for (const page of pages) {
     if (page.parentPageId && ids.has(page.parentPageId)) {
-      addLink(links, seen, page.parentPageId, page.id, "contains", 1.6);
+      addLink(links, seen, nodeId(page.parentPageId), nodeId(page.id), "contains", 1.6);
     }
     for (const target of page.relations) {
-      if (target !== page.id && ids.has(target)) addLink(links, seen, page.id, target, "relation", 1.2);
+      if (target !== page.id && ids.has(target)) addLink(links, seen, nodeId(page.id), nodeId(target), "relation", 1.2);
     }
   }
   return { nodes, links };
 }
 
+/** Namespace osionos page ids so they never collide with notion-database-sys record ids. */
+function nodeId(pageId: string): string {
+  return `ws:${pageId}`;
+}
+
 function makePageNode(page: PageTreeInput, children: number): HomeGraphNode {
   return {
-    id: page.id,
+    id: nodeId(page.id),
     title: page.title || "Untitled",
     kind: page.isFolder ? "folder" : "page",
     databaseId: "workspace",
