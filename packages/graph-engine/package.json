@@ -1,0 +1,19 @@
+{
+  "name": "@osionos/graph-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-contained force-graph engine (Canvas2D + Web Worker d3-force) with an aurora-glass visual language and a thin React adapter. Decoupled from the host app: feed it a GraphModel, it renders.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "sideEffects": [
+    "*.css"
+  ],
+  "peerDependencies": {
+    "d3-force": "^3.0.0",
+    "motion": "^12.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}
