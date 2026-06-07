@@ -6,46 +6,72 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/03 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/06/07 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 /**
  * Pure transform: osionos_pages rows -> a BaaS graph (`{nodes, edges, guarantee}`,
  * graph-contract.md shape) so the engine-agnostic graph reads the CANONICAL page
- * record instead of the duplicate Mongo `og_notes`. Each content page is a node
- * (resource `osionos_pages`, rendered note-coloured by the client); edges are the
- * page hierarchy (child->parent `parent`) and tag-by-name (`tagged` -> a `tags` node
- * per distinct tag). Owner-scoping is done by the caller (handleGraphPages); this
- * module is side-effect-free and unit-testable.
+ * record instead of the duplicate Mongo `og_notes`. Nodes are pages AND folders
+ * (folders are organizing "gap" nodes). Edges are:
+ *   - `parent`   : the file/folder hierarchy (child -> parent_page_id),
+ *   - `relation` : explicit page<->page links from `relation`-typed properties,
+ *   - `tagged`   : tag-by-name (a `tags` node per distinct tag value).
+ * Folders are kept as nodes so a note nested under a folder is NOT orphaned — the
+ * earlier version excluded folders, which dropped every parent edge. Owner-scoping
+ * is done by the caller (handleGraphPages); this module is side-effect-free.
  */
 
 const MOUNT = 'osionos';
 const RESOURCE = 'osionos_pages';
 
-/** A content page = a note node: not archived, page surface, not a database page. */
-function isContentPageRow(row) {
-	return Boolean(row) && !row.archived_at && !row.database_id && (row.surface == null || row.surface === 'page');
+/** Graph-visible row: not archived, not a database page, not an app-only surface
+ *  (home/agent). Content pages (page/null) AND folders are included. */
+function isGraphPageRow(row) {
+	if (!row || row.archived_at || row.database_id) return false;
+	const s = row.surface;
+	return s == null || s === 'page' || s === 'folder';
+}
+
+function isFolderRow(row) {
+	return Boolean(row) && row.surface === 'folder';
 }
 
 /** Real tags from a page's properties (a tag / multi-select array property). */
 function pageTags(row) {
 	const props = Array.isArray(row.properties) ? row.properties : [];
 	const prop = props.find((entry) => entry && Array.isArray(entry.value)
-		&& (/tag/i.test(entry.label || '') || /tag/i.test(entry.key || '') || /multi|tag/i.test(String(entry.type || ''))));
+		&& String(entry.type || '') !== 'relation'
+		&& (/tag/i.test(entry.label || '') || /tag/i.test(entry.key || '') || /multi/i.test(String(entry.type || ''))));
 	return prop && Array.isArray(prop.value) ? prop.value.map(String).map((tag) => tag.trim()).filter(Boolean) : [];
 }
 
-/** One graph node per page (data fields are what the client's mapGraphResponse reads). */
+/** Target page ids from a page's `relation`-typed properties (the explicit links). */
+function pageRelations(row) {
+	const props = Array.isArray(row.properties) ? row.properties : [];
+	const out = [];
+	for (const prop of props) {
+		if (prop && prop.type === 'relation' && Array.isArray(prop.value)) {
+			for (const value of prop.value) if (typeof value === 'string' && value) out.push(value);
+		}
+	}
+	return out;
+}
+
+/** One graph node per page/folder (data fields are what the client's mapGraphResponse reads). */
 function pageNode(row) {
+	const folder = isFolderRow(row);
 	return {
 		id: `${MOUNT}:${RESOURCE}:${row.id}`,
 		mount: MOUNT,
-		resource: RESOURCE,
+		resource: folder ? 'folders' : RESOURCE,   // distinct resource -> client can colour folders
 		pk: String(row.id),
 		data: {
 			id: String(row.id),
 			title: typeof row.title === 'string' && row.title ? row.title : 'Untitled',
+			kind: folder ? 'folder' : 'page',
+			surface: row.surface ?? null,
 			visibility: row.visibility || 'private',
 			owner: row.owner_id ?? null,
 			workspaceId: row.workspace_id,
@@ -54,23 +80,37 @@ function pageNode(row) {
 	};
 }
 
-/** Build the owner-scoped page graph: note nodes + parent hierarchy + tag-by-name edges. */
+/** Build the owner-scoped page graph: page+folder nodes + parent + relation + tag edges. */
 export function pagesToGraph(rows) {
-	const pages = (Array.isArray(rows) ? rows : []).filter(isContentPageRow);
+	const pages = (Array.isArray(rows) ? rows : []).filter(isGraphPageRow);
 	const ids = new Set(pages.map((row) => String(row.id)));
 	const nodes = pages.map(pageNode);
 	const tagNodes = new Map();
 	const edges = [];
+	const seen = new Set();
+	const addEdge = (id, from, to, type) => {
+		if (seen.has(id)) return;
+		seen.add(id);
+		edges.push({ id, from, to, type });
+	};
+	const nodeId = (id) => `${MOUNT}:${RESOURCE}:${id}`;
 	for (const row of pages) {
-		const childId = `${MOUNT}:${RESOURCE}:${row.id}`;
+		const self = nodeId(row.id);
 		const parent = row.parent_page_id ? String(row.parent_page_id) : '';
 		if (parent && ids.has(parent)) {
-			edges.push({ id: `parent:${row.id}`, from: childId, to: `${MOUNT}:${RESOURCE}:${parent}`, type: 'parent' });
+			addEdge(`parent:${row.id}`, self, nodeId(parent), 'parent');
+		}
+		for (const target of pageRelations(row)) {
+			if (target !== String(row.id) && ids.has(target)) {
+				addEdge(`rel:${row.id}:${target}`, self, nodeId(target), 'relation');
+			}
 		}
 		for (const tag of pageTags(row)) {
 			const tagId = `${MOUNT}:tags:${tag}`;
-			if (!tagNodes.has(tagId)) tagNodes.set(tagId, { id: tagId, mount: MOUNT, resource: 'tags', pk: tag, data: { name: tag } });
-			edges.push({ id: `tagged:${row.id}:${tag}`, from: childId, to: tagId, type: 'tagged' });
+			if (!tagNodes.has(tagId)) {
+				tagNodes.set(tagId, { id: tagId, mount: MOUNT, resource: 'tags', pk: tag, data: { name: tag } });
+			}
+			addEdge(`tagged:${row.id}:${tag}`, self, tagId, 'tagged');
 		}
 	}
 	return { depth: 0, nodes: [...nodes, ...tagNodes.values()], edges, guarantee: 'subgraph_eventual' };
