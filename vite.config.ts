@@ -37,6 +37,7 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_AUTH_MODE': JSON.stringify(env.VITE_AUTH_MODE ?? ''),
       'import.meta.env.VITE_REQUIRE_BRIDGE_SESSION': JSON.stringify(env.VITE_REQUIRE_BRIDGE_SESSION ?? ''),
       'import.meta.env.VITE_ALLOW_OFFLINE_MODE': JSON.stringify(env.VITE_ALLOW_OFFLINE_MODE ?? ''),
+      'import.meta.env.VITE_BAAS_URL': JSON.stringify(env.VITE_BAAS_URL ?? ''),
     },
     resolve: {
       dedupe: ['react', 'react-dom'],
