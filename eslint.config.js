@@ -58,4 +58,28 @@ export default [
       react: { version: "detect" },
     },
   },
+  {
+    // Import firewall: @osionos/graph-engine core must stay decoupled and
+    // framework-agnostic. Data comes in via GraphModel; React lives in src/react/.
+    files: ["packages/graph-engine/src/core/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/*"],
+              message:
+                "graph-engine core must not import host-app code (@/...). Pass data in via GraphModel.",
+            },
+            {
+              group: ["react", "react-dom", "react/*", "react-dom/*"],
+              message:
+                "graph-engine core must be framework-agnostic. Keep React in packages/graph-engine/src/react/.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];
