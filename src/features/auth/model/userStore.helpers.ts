@@ -125,7 +125,7 @@ export async function loginPersona(persona: StaticPersona) {
   if (!API_BASE) return null; // no API configured → skip fetch entirely
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
+    const timeout = setTimeout(() => controller.abort(), 12000);
     const res = await fetch(
       `${API_BASE}/api/auth/login`,
       {
@@ -148,9 +148,9 @@ export async function signupPersona(persona: StaticPersona) {
   if (!API_BASE) return null;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
+    const timeout = setTimeout(() => controller.abort(), 12000);
     const res = await fetch(
-      `${API_BASE}/api/auth/signup`,
+      `${API_BASE}/api/auth/register`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
