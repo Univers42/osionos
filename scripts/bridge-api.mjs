@@ -120,6 +120,7 @@ export function configFromEnv(env = process.env) {
 		sharedSecret: env.OSIONOS_BRIDGE_SHARED_SECRET ?? '',
 		appSessionSecret: env.OSIONOS_APP_SESSION_SECRET ?? '',
 		baasUrl: (env.OSIONOS_BAAS_URL ?? env.PUBLIC_BAAS_URL ?? 'http://localhost:8000').replace(/\/$/, ''),
+		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''),
 		publicApiKey: env.PUBLIC_BAAS_ANON_KEY ?? env.KONG_PUBLIC_API_KEY ?? '',
 		serviceKey: env.SERVICE_ROLE_KEY ?? env.KONG_SERVICE_API_KEY ?? env.BAAS_SERVICE_ROLE_KEY ?? '',
 		requireBaas: env.OSIONOS_BRIDGE_REQUIRE_BAAS === 'true',
@@ -1447,7 +1448,70 @@ async function handleBridgeConsume(request, response, config, handoffStore) {
 	json(response, 200, consumeHandoffToken(token, handoffStore), config);
 }
 
+function bridgeTokenFromRedirect(redirectUrl) {
+	if (typeof redirectUrl !== 'string') return '';
+	const hashIndex = redirectUrl.indexOf('#');
+	if (hashIndex === -1) return '';
+	return new URLSearchParams(redirectUrl.slice(hashIndex + 1)).get('bridge_token') ?? '';
+}
+
+async function gatewayCall(fetchImpl, config, path, { headers = {}, body = '{}' } = {}) {
+	const res = await fetchWithTimeout(fetchImpl, `${config.gatewayUrl}${path}`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json', accept: 'application/json', ...headers },
+		body,
+	}, 12000);
+	const data = await res.json().catch(() => ({}));
+	return { res, data };
+}
+
+// Proxy the app's login/register to the hardened auth-gateway (server-side, so the
+// gateway's website-only CORS does not apply), then mint + return the osionos
+// session the app already consumes ({ user, accessToken, refreshToken }). Reuses
+// the gateway hardening (lockout/policy) + its register-time workspace creation.
+async function handleAuthProxy(url, request, response, config, handoffStore, fetchImpl) {
+	if (!config.gatewayUrl) throw Object.assign(new Error('Auth gateway is not configured.'), { status: 503 });
+	const payload = await readJson(request);
+	const email = safeText(payload.email, 320).trim().toLowerCase();
+	const password = safeText(payload.password, 512);
+	if (!email || !password) throw Object.assign(new Error('Email and password are required.'), { status: 422 });
+	const turnstileToken = 'localhost-turnstile-token';
+
+	if (url.pathname === '/api/auth/register') {
+		const rawName = safeText(payload.username ?? payload.name ?? email.split('@')[0], 64);
+		const username = (rawName.replace(/[^\w.-]/g, '') || `user${Date.now()}`).slice(0, 32);
+		const { res: rRes, data: rData } = await gatewayCall(fetchImpl, config, '/api/auth/register', {
+			body: JSON.stringify({ email, password, turnstileToken, profile: { username, confirmPassword: password } }),
+		});
+		if (!rRes.ok) { json(response, rRes.status || 422, { message: rData.message || 'Registration failed.' }, config); return; }
+	}
+
+	const { res: lRes, data: lData } = await gatewayCall(fetchImpl, config, '/api/auth/login', {
+		body: JSON.stringify({ email, password, turnstileToken }),
+	});
+	if (!lRes.ok || !lData.access_token) { json(response, lRes.status || 401, { message: lData.message || 'Invalid credentials.' }, config); return; }
+
+	const { res: sRes, data: sData } = await gatewayCall(fetchImpl, config, '/api/auth/osionos-session', {
+		headers: { authorization: `Bearer ${lData.access_token}` },
+	});
+	const bridgeToken = bridgeTokenFromRedirect(sData.redirectUrl);
+	if (!sRes.ok || !bridgeToken) { json(response, 502, { message: sData.message || 'Could not establish the app session.' }, config); return; }
+
+	const consumed = consumeHandoffToken(bridgeToken, handoffStore);
+	json(response, 200, {
+		user: { id: lData.user?.id ?? consumed.session.userId, email },
+		accessToken: consumed.session.accessToken,
+		refreshToken: typeof lData.refresh_token === 'string' ? lData.refresh_token : '',
+		workspaceIds: Array.isArray(consumed.persona?.workspaceIds) ? consumed.persona.workspaceIds : [],
+		session: consumed.session,
+	}, config);
+}
+
 async function handleBridgePost(url, request, response, config, handoffStore, replayStore, fetchImpl) {
+	if (url.pathname === '/api/auth/login' || url.pathname === '/api/auth/register') {
+		await handleAuthProxy(url, request, response, config, handoffStore, fetchImpl);
+		return true;
+	}
 	if (url.pathname === '/api/agent/claude/stream') {
 		await handleClaudeAgentStream(request, response, config);
 		return true;
