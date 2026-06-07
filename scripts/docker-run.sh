@@ -22,11 +22,11 @@ cd "${ROOT_DIR}"
 
 run_inside_container() {
   case "${COMMAND}" in
-    build) exec sh -c 'pnpm exec tsc --noEmit && pnpm exec vite build' ;;
+    build) exec sh -c 'pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit && pnpm exec tsc --noEmit && pnpm exec vite build' ;;
     preview) exec pnpm exec vite preview --host 0.0.0.0 "$@" ;;
-    typecheck) exec pnpm exec tsc --noEmit "$@" ;;
-    lint) exec pnpm exec eslint src/ --max-warnings=0 "$@" ;;
-    lint-fix) exec pnpm exec eslint src/ --fix "$@" ;;
+    typecheck) exec sh -c 'pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit && pnpm exec tsc --noEmit' ;;
+    lint) exec pnpm exec eslint src/ packages/ --max-warnings=0 "$@" ;;
+    lint-fix) exec pnpm exec eslint src/ packages/ --fix "$@" ;;
     test-e2e) exec pnpm exec playwright test "$@" ;;
     test-e2e-serial) exec pnpm exec playwright test --workers=1 "$@" ;;
     test-e2e-smoke) exec pnpm exec playwright test tests/e2e/smoke "$@" ;;
@@ -36,7 +36,7 @@ run_inside_container() {
     bridge-api) exec node scripts/bridge-api.mjs "$@" ;;
     mcp-claude) exec node scripts/osionos-mcp-server.mjs "$@" ;;
     lighthouse) exec node scripts/lighthouse.mjs "$@" ;;
-    quality) pnpm exec tsc --noEmit && exec pnpm exec eslint src/ --max-warnings=0 "$@" ;;
+    quality) pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit && pnpm exec tsc --noEmit && exec pnpm exec eslint src/ packages/ --max-warnings=0 "$@" ;;
     *) echo "Unknown docker-run command: ${COMMAND}" >&2; exit 2 ;;
   esac
 }
