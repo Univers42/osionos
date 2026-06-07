@@ -50,9 +50,9 @@ import {
   PagePropertiesPanel,
   PageTitle,
   type ActivePage,
-  type PagePropertyEntry,
 } from "@/entities/page";
 import { PageBody } from "./PageBody";
+import { usePageProperties } from "./usePageProperties";
 
 import "./notionPage.css";
 
@@ -220,40 +220,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
     [handleChangeCover],
   );
 
-  const handleChangePageProperty = useCallback(
-    (propertyKey: string, value: PagePropertyEntry["value"]) => {
-      if (pageConfig.locked) return;
-      patchPage(pageId, (currentPage) => ({
-        updatedAt: new Date().toISOString(),
-        properties: (currentPage.properties ?? []).map((property) => (
-          property.key === propertyKey ? { ...property, value } : property
-        )),
-      }));
-    },
-    [pageConfig.locked, pageId, patchPage],
-  );
-
-  const handleAddPageProperty = useCallback(
-    (property: PagePropertyEntry) => {
-      if (pageConfig.locked) return;
-      patchPage(pageId, (currentPage) => ({
-        updatedAt: new Date().toISOString(),
-        properties: [...(currentPage.properties ?? []), property],
-      }));
-    },
-    [pageConfig.locked, pageId, patchPage],
-  );
-
-  const handleRemovePageProperty = useCallback(
-    (propertyKey: string) => {
-      if (pageConfig.locked) return;
-      patchPage(pageId, (currentPage) => ({
-        updatedAt: new Date().toISOString(),
-        properties: (currentPage.properties ?? []).filter((property) => property.key !== propertyKey),
-      }));
-    },
-    [pageConfig.locked, pageId, patchPage],
-  );
+  const { onChangeValue, onAddProperty, onRemoveProperty } = usePageProperties(pageId, pageConfig.locked);
 
   const handleSubmitComment = useCallback(
     (event: { preventDefault: () => void }) => {
@@ -432,9 +399,9 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
           workspaceId={page?.workspaceId ?? ""}
           properties={page?.properties ?? []}
           editable={!pageConfig.locked}
-          onChangeValue={handleChangePageProperty}
-          onAddProperty={handleAddPageProperty}
-          onRemoveProperty={handleRemovePageProperty}
+          onChangeValue={onChangeValue}
+          onAddProperty={onAddProperty}
+          onRemoveProperty={onRemoveProperty}
         />
         {page?.workspaceId ? <PageConnections pageId={pageId} workspaceId={page.workspaceId} /> : null}
       </div>

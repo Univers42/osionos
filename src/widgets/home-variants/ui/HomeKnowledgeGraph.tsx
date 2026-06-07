@@ -35,6 +35,7 @@ import {
   type HomeGraphNode,
   type HomeGraphProperty,
 } from "../model/homeKnowledgeGraphData";
+import { toPageTreeInput, type PageTreeInput } from "../model/homePageTreeGraph";
 import "./homeKnowledgeGraph.css";
 
 interface SimNode extends HomeGraphNode, SimulationNodeDatum {}
@@ -79,6 +80,7 @@ const NODE_COLORS: Record<HomeGraphNode["kind"], string> = {
   inventory: "#4d7c0f",
   product: "#64748b",
   page: "#7c3aed",
+  folder: "#94a3b8", // muted slate: a "gap" node that only links/organizes (not a note)
 };
 
 const KIND_LABELS: Record<HomeGraphNode["kind"], string> = {
@@ -89,12 +91,20 @@ const KIND_LABELS: Record<HomeGraphNode["kind"], string> = {
   inventory: "Inventory",
   product: "Products",
   page: "Pages",
+  folder: "Folders",
 };
 
 export const HomeKnowledgeGraph: React.FC = () => {
   const knownDatabaseState = useKnownDatabaseStateStore((state) => state.state);
   const updatePageProperty = useKnownDatabaseStateStore((state) => state.updatePageProperty);
-  const graph = useMemo(() => createHomeKnowledgeGraph(knownDatabaseState), [knownDatabaseState]);
+  const activeUserId = useUserStore((state) => state.activeUserId);
+  const session = useUserStore((state) => state.activeSession());
+  const activeWorkspace = useUserStore((state) => state.activeWorkspace());
+  const workspaceId = activeWorkspace?._id ?? session?.privateWorkspaces[0]?._id ?? "";
+  const ownerId = activeUserId || session?.userId || null;
+  const wsPages = usePageStore((state) => state.pages[workspaceId]);
+  const pageTree = useMemo<PageTreeInput[]>(() => toPageTreeInput(wsPages), [wsPages]);
+  const graph = useMemo(() => createHomeKnowledgeGraph(knownDatabaseState, pageTree), [knownDatabaseState, pageTree]);
   const simulationLinks = useMemo<SimLink[]>(() => graph.links.map((link) => ({ ...link })), [graph.links]);
   const initialNodes = useMemo<SimNode[]>(() => createInitialNodes(graph.nodes, []), [graph.nodes]);
   const [nodes, setNodes] = useState<SimNode[]>(initialNodes);
@@ -102,9 +112,6 @@ export const HomeKnowledgeGraph: React.FC = () => {
   const [selectedNodeId, setSelectedNodeId] = useState(initialNodes[0]?.id ?? "");
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const [viewTransform, setViewTransform] = useState<ViewTransform>({ x: 0, y: 0, scale: 1 });
-  const activeUserId = useUserStore((state) => state.activeUserId);
-  const session = useUserStore((state) => state.activeSession());
-  const activeWorkspace = useUserStore((state) => state.activeWorkspace());
   const openPage = usePageStore((state) => state.openPage);
   const simulationRef = useRef<Simulation<SimNode, SimLink> | null>(null);
   const nodesRef = useRef<SimNode[]>(initialNodes);
@@ -112,8 +119,6 @@ export const HomeKnowledgeGraph: React.FC = () => {
   const panPointerRef = useRef<PanPointerState | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const viewTransformRef = useRef(viewTransform);
-  const workspaceId = activeWorkspace?._id ?? session?.privateWorkspaces[0]?._id ?? "";
-  const ownerId = activeUserId || session?.userId || null;
 
   useEffect(() => {
     nodesRef.current = nodes;
@@ -534,6 +539,7 @@ function nodeCenter(kind: HomeGraphNode["kind"]): { x: number; y: number } {
     inventory: { x: 670, y: 535 },
     product: { x: 900, y: 515 },
     page: { x: VIEWBOX_WIDTH / 2, y: VIEWBOX_HEIGHT / 2 },
+    folder: { x: VIEWBOX_WIDTH / 2, y: 150 },
   };
   return centers[kind];
 }
