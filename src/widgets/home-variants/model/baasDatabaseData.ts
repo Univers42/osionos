@@ -32,6 +32,7 @@ export interface DatabaseMount {
  */
 export async function fetchDatabaseCatalog(): Promise<DatabaseMount[]> {
   if (!baasConfigured()) return [];
+  // Sampled view: up to 400 rows per resource (an overview, not the authoritative row count).
   const overview = await fetchGraphOverview(configuredResources(), 400);
   const byMount = new Map<string, Map<string, BaasGraphNode[]>>();
   for (const node of overview.nodes) {
