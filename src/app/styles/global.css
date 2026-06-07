@@ -255,6 +255,16 @@
   --color-text-danger: var(--osio-danger);
   --color-text-success: var(--osio-success);
   --color-backdrop: var(--osio-overlay);
+
+  /* @osionos/graph-engine — aurora-glass backdrop (intentionally dark in both
+     themes; the graph is a luminous "night sky" surface). Override per-theme if
+     a light graph backdrop is ever wanted. */
+  --osio-graph-bg-0: #0b0a1f;
+  --osio-graph-bg-1: #160c30;
+  --osio-graph-aurora-1: #4338ca;
+  --osio-graph-aurora-2: #7c3aed;
+  --osio-graph-aurora-3: #2563eb;
+  --osio-graph-aurora-4: #a21caf;
 }
 
 html,
