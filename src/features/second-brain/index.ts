@@ -59,8 +59,10 @@ export {
 
 export { NOTE_COLOR, TAG_COLOR, databaseColor } from "./model/palette";
 
-export { GRAPH_SOURCE, SECOND_BRAIN_V2 } from "./featureFlag";
-export { SecondBrainView } from "./ui/SecondBrainView";
+export { GRAPH_SOURCE } from "./featureFlag";
+// Rendering (SecondBrainView + render/ + layout/) was cut over to
+// @osionos/graph-engine and removed. The model/baas/sync layers below remain —
+// the new graph view reuses them as its data adapters.
 
 export type { BaasGenerators, BaasGraphResponse, BaasResource, GraphGuarantee } from "./baas/types";
 export { type MappedGraph, mapGraphResponse } from "./baas/mapGraphResponse";
