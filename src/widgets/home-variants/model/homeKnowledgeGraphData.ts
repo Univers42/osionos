@@ -12,7 +12,9 @@
 
 import type { NotionState, PropertyType, SchemaProperty } from "@notion-db/object-database";
 
-export type HomeGraphNodeKind = "project" | "task" | "crm" | "content" | "inventory" | "product" | "page";
+import { pageTreeGraph, type PageTreeInput } from "./homePageTreeGraph";
+
+export type HomeGraphNodeKind = "project" | "task" | "crm" | "content" | "inventory" | "product" | "page" | "folder";
 
 export interface HomeGraphProperty {
   key: string;
@@ -63,11 +65,13 @@ const DATABASE_KIND: Record<string, HomeGraphNodeKind> = {
   "db-products": "product",
 };
 
-export function createHomeKnowledgeGraph(state: NotionState): HomeKnowledgeGraph {
-  const pages = Object.values(state.pages).filter((page) => !page.archived && state.databases[page.databaseId]);
-  const nodes = pages.map((page) => createNode(state, page.id));
-  const nodeIds = new Set(nodes.map((node) => node.id));
-  const links = createRelationLinks(state, nodeIds);
+export function createHomeKnowledgeGraph(state: NotionState, pageTree: readonly PageTreeInput[] = []): HomeKnowledgeGraph {
+  const dbPages = Object.values(state.pages).filter((page) => !page.archived && state.databases[page.databaseId]);
+  const dbNodes = dbPages.map((page) => createNode(state, page.id));
+  const nodeIds = new Set(dbNodes.map((node) => node.id));
+  const tree = pageTreeGraph(pageTree);
+  const nodes = [...dbNodes, ...tree.nodes];
+  const links = [...createRelationLinks(state, nodeIds), ...tree.links];
   const relationProperties = Object.values(state.databases).reduce(
     (total, database) => total + Object.values(database.properties).filter((property) => property.type === "relation").length,
     0,

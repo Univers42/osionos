@@ -24,9 +24,7 @@ export interface PageCollaborator {
   role: PageCollaboratorRole;
 }
 
-export type PagePropertyType =
-  | "text" | "date" | "select" | "url" | "number" | "checkbox" | "relation"
-  | "email" | "phone" | "person" | "multi_select" | "status";
+export type PagePropertyType = "text" | "date" | "select" | "url" | "number" | "checkbox" | "relation" | "email" | "phone" | "person" | "multi_select" | "status";
 
 export interface PagePropertyEntry {
   key: string;
@@ -57,10 +55,7 @@ export interface PageEntry {
   content?: Block[];
   /** Editable properties shown below the page title. */
   properties?: PagePropertyEntry[];
-  /** Local surface classification used for private app-only spaces such as agents and home.
-   *  "folder" = an organizing container: it groups child pages and acts as a graph hub, and
-   *  clicking it toggles expand/collapse instead of opening a page (a file may also act as a
-   *  folder; "folder" is the explicit, never-opens semantic). */
+  /** Surface classification (agents, home). "folder" = a container that groups children, acts as a graph hub, and never opens on click (a file may also act as a folder). */
   surface?: "page" | "agent" | "home" | "folder";
   /** Local version for generated home dashboard content. */
   homeDashboardVersion?: number;
