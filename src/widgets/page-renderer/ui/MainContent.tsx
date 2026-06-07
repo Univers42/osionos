@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { Suspense, useEffect, useRef, useState } from "react";
-import { ChevronDown, LayoutDashboard, Network } from "lucide-react";
+import { ChevronDown, LayoutDashboard, Network, Database } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
 import { ErrorBoundary } from "@/shared/ui";
@@ -29,7 +29,7 @@ import { ChannelMessagesView } from "@/widgets/channel-messages";
 import { AgentConversationPage } from "@/widgets/agent-conversation";
 import { OsionosPage } from "@/pages/notion-page";
 import { TrashView } from "@/pages/trash-view";
-import { HomeKnowledgeGraph } from "@/widgets/home-variants";
+import { HomeKnowledgeGraph, HomeDatabaseMode } from "@/widgets/home-variants";
 import { SECOND_BRAIN_V2, SecondBrainView } from "@/features/second-brain";
 
 import { usePageStore } from "@/store/usePageStore";
@@ -42,7 +42,7 @@ const HOME_DASHBOARD_VERSION = 8;
 const HOME_VARIANT_STORAGE_KEY = "osionos.home.variant";
 
 const HOME_DASHBOARD_FOCUS_VIEW_ID = "v-prod-table";
-type HomeVariant = "dashboard" | "graph";
+type HomeVariant = "dashboard" | "graph" | "database";
 
 function getHomeDashboardFocusViewId(page: PageEntry | undefined): string | undefined {
   const value = page?.properties?.find((property) => property.key === "focus_view")?.value;
@@ -130,7 +130,8 @@ export const MainContent: React.FC = () => {
   const firstPrivateWorkspaceId = useUserStore((s) => s.activeSession()?.privateWorkspaces[0]?._id ?? "");
   const [homeVariant, setHomeVariant] = useState<HomeVariant>(() => {
     if (globalThis.window === undefined) return "dashboard";
-    return globalThis.localStorage.getItem(HOME_VARIANT_STORAGE_KEY) === "graph" ? "graph" : "dashboard";
+    const stored = globalThis.localStorage.getItem(HOME_VARIANT_STORAGE_KEY);
+    return stored === "graph" || stored === "database" ? stored : "dashboard";
   });
 
   const firstWsId = activeWorkspaceId || firstPrivateWorkspaceId;
@@ -293,6 +294,7 @@ const LoadingPane: React.FC = () => (
 
 function renderHomeVariantContent(variant: HomeVariant, homeDashboardPage: PageEntry | undefined): React.ReactNode {
   if (variant === "graph") return SECOND_BRAIN_V2 ? <SecondBrainView /> : <HomeKnowledgeGraph />;
+  if (variant === "database") return <HomeDatabaseMode />;
   if (homeDashboardPage) return <OsionosPage pageId={homeDashboardPage._id} />;
   return <LoadingPane />;
 }
@@ -303,7 +305,7 @@ const HomeVariantShell: React.FC<{
   children: React.ReactNode;
 }> = ({ variant, onVariantChange, children }) => {
   const [open, setOpen] = useState(false);
-  const activeLabel = variant === "graph" ? "Second Brain" : "Dashboard";
+  const activeLabel = variant === "graph" ? "Second Brain" : variant === "database" ? "Database" : "Dashboard";
 
   return (
     <div className="osionos-home-shell">
@@ -334,6 +336,17 @@ const HomeVariantShell: React.FC<{
           >
             <Network size={16} aria-hidden="true" />
             <span>Second Brain</span>
+          </button>
+          <button
+            type="button"
+            data-active={variant === "database" ? "true" : undefined}
+            onClick={() => {
+              onVariantChange("database");
+              setOpen(false);
+            }}
+          >
+            <Database size={16} aria-hidden="true" />
+            <span>Database</span>
           </button>
         </div>
         <span className="osionos-home-variant-current">{activeLabel}</span>

@@ -11,3 +11,4 @@
 /* ************************************************************************** */
 
 export * from "./ui/HomeKnowledgeGraph";
+export * from "./ui/HomeDatabaseMode";
