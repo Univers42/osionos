@@ -74,7 +74,7 @@ const TRANSLATION_FETCH_TIMEOUT_MS = 6_000;
 const BAAS_FETCH_TIMEOUT_MS = 2_500;
 const MAX_CLAUDE_TOOL_RESULT_TEXT = 120_000;
 const PAGE_VISIBILITY_VALUES = new Set(['private', 'shared', 'public']);
-const PAGE_SURFACE_VALUES = new Set(['page', 'agent', 'home']);
+const PAGE_SURFACE_VALUES = new Set(['page', 'agent', 'home', 'folder']);
 const TRANSLATABLE_BLOCK_TYPES = new Set([
 	'paragraph',
 	'heading_1',
