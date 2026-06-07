@@ -35,6 +35,9 @@ const TEST_MODE = (import.meta.env as Record<string, string>)['MODE'] === 'test'
 export const REQUIRE_BRIDGE_SESSION = ((import.meta.env as Record<string, string>)['VITE_REQUIRE_BRIDGE_SESSION'] ?? (TEST_MODE ? 'false' : 'true')) !== 'false';
 export const ALLOW_OFFLINE_MODE = ((import.meta.env as Record<string, string>)['VITE_ALLOW_OFFLINE_MODE'] ?? (TEST_MODE ? 'true' : 'false')) === 'true';
 export const PRISMATICA_URL = ((import.meta.env as Record<string, string>)['VITE_PRISMATICA_URL'] ?? 'http://localhost:4322').trim();
+export const AUTH_MODE = ((import.meta.env as Record<string, string>)['VITE_AUTH_MODE'] ?? '').trim();
+/** Portal mode: the app shows its own login/sign-up portal (no mock, no website redirect). */
+export function isPortalMode(): boolean { return AUTH_MODE === 'portal'; }
 export const BRIDGE_APP_TOKEN_PREFIX = 'osionos_v1.';
 
 export type BridgeSessionImport = {
@@ -136,11 +139,11 @@ export async function loginPersona(persona: StaticPersona) {
       },
     );
     clearTimeout(timeout);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return { userId: data.user.id as string, accessToken: data.accessToken as string, refreshToken: data.refreshToken as string };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false as const, message: (data.message as string) || 'Invalid email or password.' };
+    return { ok: true as const, userId: data.user.id as string, accessToken: data.accessToken as string, refreshToken: data.refreshToken as string };
   } catch {
-    return null;
+    return { ok: false as const, message: 'Could not reach the server. Check your connection.' };
   }
 }
 
@@ -163,11 +166,11 @@ export async function signupPersona(persona: StaticPersona) {
       },
     );
     clearTimeout(timeout);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return { userId: data.user.id as string, accessToken: data.accessToken as string, refreshToken: data.refreshToken as string };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false as const, message: (data.message as string) || 'Could not create the account.' };
+    return { ok: true as const, userId: data.user.id as string, accessToken: data.accessToken as string, refreshToken: data.refreshToken as string };
   } catch {
-    return null;
+    return { ok: false as const, message: 'Could not reach the server. Check your connection.' };
   }
 }
 

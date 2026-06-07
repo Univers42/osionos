@@ -14,7 +14,8 @@ import React, { useEffect, useState } from "react";
 
 import type { UserSession } from "@/entities/user";
 import { useUserStore } from "@/features/auth";
-import { isBridgeSession, PRISMATICA_URL } from "@/features/auth/model/userStore.helpers";
+import { isBridgeSession, isPortalMode, PRISMATICA_URL } from "@/features/auth/model/userStore.helpers";
+import { Portal } from "@/features/auth/ui/Portal";
 import { usePageSync } from "@/store/sync/usePageSync";
 import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, loadActivePage, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
@@ -210,6 +211,10 @@ const App: React.FC = () => {
         </div>
       </div>
     );
+  }
+
+  if (isPortalMode() && !activeUserId) {
+    return <Portal />;
   }
 
   if (error === "bridge-session-required" || !activeUserId) {

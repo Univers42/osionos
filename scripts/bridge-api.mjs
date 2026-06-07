@@ -983,7 +983,8 @@ function requestOriginConfig(config, request) {
 	const origin = String(request.headers.origin ?? '');
 	if (/^https?:\/\/(localhost|127\.0\.0\.1):\d+$/i.test(origin)
 		|| /^tauri:\/\/localhost$/i.test(origin)
-		|| /^https?:\/\/tauri\.localhost$/i.test(origin)) {
+		|| /^https?:\/\/tauri\.localhost$/i.test(origin)
+		|| /^app:\/\/osionos$/i.test(origin)) {
 		return { ...config, allowedOrigin: origin };
 	}
 	return config;
