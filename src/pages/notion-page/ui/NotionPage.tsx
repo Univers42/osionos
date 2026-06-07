@@ -43,10 +43,11 @@ import {
 
 import {
   CoverAssetPicker,
+  PageConnections,
   PageCover,
   PageHeaderBar,
   PageIcon,
-  PageProperties,
+  PagePropertiesPanel,
   PageTitle,
   type ActivePage,
   type PagePropertyEntry,
@@ -232,6 +233,28 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
     [pageConfig.locked, pageId, patchPage],
   );
 
+  const handleAddPageProperty = useCallback(
+    (property: PagePropertyEntry) => {
+      if (pageConfig.locked) return;
+      patchPage(pageId, (currentPage) => ({
+        updatedAt: new Date().toISOString(),
+        properties: [...(currentPage.properties ?? []), property],
+      }));
+    },
+    [pageConfig.locked, pageId, patchPage],
+  );
+
+  const handleRemovePageProperty = useCallback(
+    (propertyKey: string) => {
+      if (pageConfig.locked) return;
+      patchPage(pageId, (currentPage) => ({
+        updatedAt: new Date().toISOString(),
+        properties: (currentPage.properties ?? []).filter((property) => property.key !== propertyKey),
+      }));
+    },
+    [pageConfig.locked, pageId, patchPage],
+  );
+
   const handleSubmitComment = useCallback(
     (event: { preventDefault: () => void }) => {
       event.preventDefault();
@@ -404,10 +427,16 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
 
         {/* Title */}
         <PageTitle title={title} onChangeTitle={handleChangeTitle} readOnly={pageConfig.locked} />
-        <PageProperties
+        <PagePropertiesPanel
+          pageId={pageId}
+          workspaceId={page?.workspaceId ?? ""}
           properties={page?.properties ?? []}
-          onChangeProperty={pageConfig.locked ? undefined : handleChangePageProperty}
+          editable={!pageConfig.locked}
+          onChangeValue={handleChangePageProperty}
+          onAddProperty={handleAddPageProperty}
+          onRemoveProperty={handleRemovePageProperty}
         />
+        {page?.workspaceId ? <PageConnections pageId={pageId} workspaceId={page.workspaceId} /> : null}
       </div>
 
       {/* Body: block editor powered by markengine */}

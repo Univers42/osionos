@@ -24,7 +24,9 @@ export interface PageCollaborator {
   role: PageCollaboratorRole;
 }
 
-export type PagePropertyType = "text" | "date" | "select" | "url" | "number" | "checkbox" | "relation";
+export type PagePropertyType =
+  | "text" | "date" | "select" | "url" | "number" | "checkbox" | "relation"
+  | "email" | "phone" | "person" | "multi_select" | "status";
 
 export interface PagePropertyEntry {
   key: string;
