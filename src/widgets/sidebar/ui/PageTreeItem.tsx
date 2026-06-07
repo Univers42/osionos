@@ -18,6 +18,7 @@ import { usePageStore, type PageEntry } from "@/store/usePageStore";
 import { PageOptionsMenu } from "@/features/page-management";
 import { canReadPage, usePageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { isFolderEntry, selectChildPageIds, selectPageTreeEntry } from "./pageTreeItem.helpers";
+import { SidebarRenameInput } from "./SidebarRenameInput";
 
 const EMPTY_WORKSPACE_PAGES: readonly PageEntry[] = [];
 
@@ -38,9 +39,11 @@ interface Props {
  */
 export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth = 0, activeId }) => {
   const [expanded, setExpanded] = useState(false);
+  const [renaming, setRenaming] = useState(false);
 
   const openPage = usePageStore((s) => s.openPage);
   const addPage = usePageStore((s) => s.addPage);
+  const updatePageTitle = usePageStore((s) => s.updatePageTitle);
   const page = usePageStore(useShallow((s) => selectPageTreeEntry(s, pageId)));
   const childPageIds = usePageStore(useShallow((s) => selectChildPageIds(s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES, pageId)));
   const accessContext = usePageAccessContext();
@@ -114,19 +117,32 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
           </span>
         )}
 
-        <button
-          type="button"
-          onClick={handleRowClick}
-          className={[
-            "flex min-w-0 flex-1 items-center gap-0.5 h-full rounded-md text-sm text-left transition-colors duration-100 pr-20",
-            isActive
-              ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
-              : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
-          ].join(" ")}
-        >
-          {renderRowIcon()}
-          <span className="flex-1 text-left truncate ml-1">{pageEntry.title || "Untitled"}</span>
-        </button>
+        {renaming ? (
+          <SidebarRenameInput
+            initialValue={pageEntry.title || ""}
+            onCommit={(value) => {
+              if (value) updatePageTitle(pageEntry._id, value);
+              setRenaming(false);
+            }}
+            onCancel={() => setRenaming(false)}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={handleRowClick}
+            onDoubleClick={(e) => { e.stopPropagation(); setRenaming(true); }}
+            title="Double-click to rename"
+            className={[
+              "flex min-w-0 flex-1 items-center gap-0.5 h-full rounded-md text-sm text-left transition-colors duration-100 pr-20",
+              isActive
+                ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
+                : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
+            ].join(" ")}
+          >
+            {renderRowIcon()}
+            <span className="flex-1 text-left truncate ml-1">{pageEntry.title || "Untitled"}</span>
+          </button>
+        )}
 
         {/* Action buttons — appear on hover */}
         <span
