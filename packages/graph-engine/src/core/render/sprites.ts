@@ -1,26 +1,23 @@
 /**
- * Pre-rendered "glassy orb" sprites — one per unique node color. Baking the glow
- * (via shadowBlur), the highlight sheen and the rim shade ONCE, then `drawImage`
- * per node, keeps thousands of nodes cheap while looking far richer than a flat
- * disc. Color manipulation is avoided entirely: highlight/shade are white/black
- * overlays, so any CSS color (hex/rgb/oklch) works.
+ * Pre-rendered node sprites — one per unique `shape|color` (see nodeShape.ts /
+ * nodeShapes.ts). Baking the matte backing + flat body + sheen + rim ONCE, then
+ * `drawImage` per node, keeps thousands of nodes cheap. Glow is NOT baked here (it
+ * is a dynamic emphasis pass), so the cache only depends on shape, color + theme.
  */
 
-const SPRITE = 128;
-/** Disc radius as a fraction of the sprite half-size (rest is glow padding). */
-export const DISC_FRACTION = 0.46;
+import { DISC_FRACTION, SPRITE, paintNode } from "./nodeShapes";
+import { parseStyleKey } from "./nodeShape";
+
+export { DISC_FRACTION };
 
 export class NodeSpriteCache {
   private readonly cache = new Map<string, HTMLCanvasElement>();
-  private glow: number;
+  private backing = "rgba(3, 2, 12, 0.66)";
 
-  constructor(glow = 1) {
-    this.glow = glow;
-  }
-
-  setGlow(glow: number): void {
-    if (glow !== this.glow) {
-      this.glow = glow;
+  /** The matte-backing color comes from the theme; changing it rebakes sprites. */
+  setTheme(backing: string): void {
+    if (backing !== this.backing) {
+      this.backing = backing;
       this.cache.clear();
     }
   }
@@ -29,58 +26,17 @@ export class NodeSpriteCache {
     this.cache.clear();
   }
 
-  get(color: string): HTMLCanvasElement {
-    const hit = this.cache.get(color);
+  /** Sprite for a `shape|color` style key, built + memoized on first use. */
+  get(key: string): HTMLCanvasElement {
+    const hit = this.cache.get(key);
     if (hit) return hit;
-    const sprite = this.build(color);
-    this.cache.set(color, sprite);
-    return sprite;
-  }
-
-  private build(color: string): HTMLCanvasElement {
+    const { shape, color } = parseStyleKey(key);
     const canvas = document.createElement("canvas");
     canvas.width = SPRITE;
     canvas.height = SPRITE;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return canvas;
-    const half = SPRITE / 2;
-    const rDisc = half * DISC_FRACTION;
-
-    // Baked glow halo.
-    ctx.save();
-    ctx.shadowColor = color;
-    ctx.shadowBlur = half * 0.55 * Math.min(1.5, Math.max(0, this.glow));
-    ctx.globalAlpha = Math.min(1, 0.55 + this.glow * 0.3);
-    ctx.fillStyle = color;
-    disc(ctx, half, half, rDisc);
-    ctx.restore();
-
-    // Solid body.
-    ctx.fillStyle = color;
-    disc(ctx, half, half, rDisc);
-
-    // Glassy highlight (top-left) + rim shade (bottom) — white/black only.
-    const hx = half - rDisc * 0.32;
-    const hy = half - rDisc * 0.4;
-    const sheen = ctx.createRadialGradient(hx, hy, 1, hx, hy, rDisc * 1.2);
-    sheen.addColorStop(0, "rgba(255,255,255,0.6)");
-    sheen.addColorStop(0.45, "rgba(255,255,255,0.08)");
-    sheen.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = sheen;
-    disc(ctx, half, half, rDisc);
-
-    const rim = ctx.createRadialGradient(half, half, rDisc * 0.55, half, half, rDisc);
-    rim.addColorStop(0, "rgba(0,0,0,0)");
-    rim.addColorStop(1, "rgba(0,0,0,0.28)");
-    ctx.fillStyle = rim;
-    disc(ctx, half, half, rDisc);
-
+    if (ctx) paintNode(ctx, shape, color, this.backing);
+    this.cache.set(key, canvas);
     return canvas;
   }
-}
-
-function disc(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fill();
 }
