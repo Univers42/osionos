@@ -2,16 +2,17 @@
  * Imperative Canvas2D scene orchestrator. React never participates in the draw
  * loop: positions arrive as flat arrays, the scene redraws only when dirty (or
  * while revealing), and delegates the actual drawing to `renderFrame`. Owns the
- * columnar SceneState, the glassy sprite cache, the camera, and interaction.
+ * columnar SceneState + sprite cache; camera math lives in SceneCamera and the
+ * selection/focus index tracking in SceneSelection, so this stays a thin façade.
  */
 
-import { type Camera, IDENTITY, screenToWorld, worldToScreen } from "../camera/transform";
-import type { WorldBounds } from "../camera/transform";
-import { fitBounds, panBy, zoomAt } from "../camera/controls";
+import type { Camera, WorldBounds } from "../camera/transform";
 import type { GraphModel, NodeId } from "../types";
 import { type Controls, DEFAULT_CONTROLS, type VisualState } from "../state/controls";
 import type { SceneTheme } from "../theme/tokens";
 import { SceneState } from "./sceneState";
+import { SceneCamera } from "./sceneCamera";
+import { SceneSelection } from "./sceneSelection";
 import { NodeSpriteCache } from "./sprites";
 import { hitTest } from "./cull";
 import { type RevealState, isRevealing, startReveal } from "./reveal";
@@ -24,23 +25,17 @@ export class CanvasScene implements InteractionHost {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly state = new SceneState();
   private readonly sprites = new NodeSpriteCache();
+  private readonly cam = new SceneCamera();
+  private readonly sel = new SceneSelection();
   private readonly interaction: SceneInteraction;
 
-  private width = 0;
-  private height = 0;
-  private dpr = 1;
-  private camera: Camera = { ...IDENTITY };
   private visual: VisualState = { ...DEFAULT_CONTROLS.visual };
   private tagColors = new Map<string, string>();
   private tagColorSig = "";
 
   private reveal: RevealState = startReveal(false, 0, 0);
   private hasRevealed = false;
-  private focusIndices: Set<number> | null = null;
-  private focusNodeIds: ReadonlySet<NodeId> | null = null;
   private hoverIndex = -1;
-  private selectedIndex = -1;
-  private selectedId: NodeId | null = null;
   private model: GraphModel | null = null;
 
   private rafId: number | null = null;
@@ -62,11 +57,9 @@ export class CanvasScene implements InteractionHost {
   }
 
   setSize(width: number, height: number, dpr: number): void {
-    this.width = width;
-    this.height = height;
-    this.dpr = Math.min(dpr, 2);
-    this.canvas.width = Math.round(width * this.dpr);
-    this.canvas.height = Math.round(height * this.dpr);
+    this.cam.setViewport(width, height, dpr);
+    this.canvas.width = Math.round(width * this.cam.dpr);
+    this.canvas.height = Math.round(height * this.cam.dpr);
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
     this.requestDraw();
@@ -76,27 +69,18 @@ export class CanvasScene implements InteractionHost {
     this.model = model;
     this.state.setGraph(model, this.tagColors);
     this.hoverIndex = -1;
-    this.recomputeIndices(); // keep selection/focus stable across edits & rebuilds
+    this.sel.recompute(this.state.idToIndex); // keep selection/focus stable across rebuilds
     const firstPopulate = !this.hasRevealed && model.nodes.length > 0;
     this.reveal = startReveal(firstPopulate && !this.reducedMotion, model.nodes.length, performance.now());
     if (firstPopulate) this.hasRevealed = true;
     this.requestDraw();
   }
 
-  setPositions(x: Float32Array, y: Float32Array): void {
-    if (this.state.setPositions(x, y)) this.requestDraw();
-  }
+  setPositions(x: Float32Array, y: Float32Array): void { if (this.state.setPositions(x, y)) this.requestDraw(); }
 
-  setLabels(labels: string[]): void {
-    this.state.setLabels(labels);
-    this.requestDraw();
-  }
+  setLabels(labels: string[]): void { this.state.setLabels(labels); this.requestDraw(); }
 
-  setTheme(theme: SceneTheme): void {
-    this.theme = theme;
-    this.sprites.setTheme(theme.nodeBacking);
-    this.requestDraw();
-  }
+  setTheme(theme: SceneTheme): void { this.theme = theme; this.sprites.setTheme(theme.nodeBacking); this.requestDraw(); }
 
   /** Apply console filters + visual settings (physics is handled by the engine). */
   setControls(controls: Controls): void {
@@ -111,105 +95,53 @@ export class CanvasScene implements InteractionHost {
     this.requestDraw();
   }
 
-  setSelected(id: NodeId | null): void {
-    this.selectedId = id;
-    this.selectedIndex = id == null ? -1 : this.state.idToIndex.get(id) ?? -1;
-    this.requestDraw();
-  }
+  setSelected(id: NodeId | null): void { this.sel.setSelected(id, this.state.idToIndex); this.requestDraw(); }
 
-  setFocus(ids: ReadonlySet<NodeId> | null): void {
-    this.focusNodeIds = ids;
-    this.recomputeFocus();
-    this.requestDraw();
-  }
+  setFocus(ids: ReadonlySet<NodeId> | null): void { this.sel.setFocus(ids, this.state.idToIndex); this.requestDraw(); }
 
-  private recomputeIndices(): void {
-    this.selectedIndex = this.selectedId == null ? -1 : this.state.idToIndex.get(this.selectedId) ?? -1;
-    this.recomputeFocus();
-  }
+  // ---- camera (delegates to SceneCamera) -----------------------------------
 
-  private recomputeFocus(): void {
-    if (!this.focusNodeIds) {
-      this.focusIndices = null;
-      return;
-    }
-    const set = new Set<number>();
-    for (const id of this.focusNodeIds) {
-      const index = this.state.idToIndex.get(id);
-      if (index !== undefined) set.add(index);
-    }
-    this.focusIndices = set;
-  }
+  getCamera(): Camera { return this.cam.camera; }
 
-  // ---- camera --------------------------------------------------------------
+  setCamera(camera: Camera): void { this.cam.camera = camera; this.requestDraw(); }
 
-  getCamera(): Camera { return this.camera; }
+  zoomBy(factor: number): void { this.cam.zoomBy(factor); this.requestDraw(); }
 
-  setCamera(camera: Camera): void {
-    this.camera = camera;
-    this.requestDraw();
-  }
+  resetView(): void { this.cam.reset(); this.requestDraw(); }
 
-  zoomBy(factor: number): void {
-    this.camera = zoomAt(this.camera, this.width / 2, this.height / 2, factor);
-    this.requestDraw();
-  }
-
-  resetView(): void {
-    this.camera = { ...IDENTITY };
-    this.requestDraw();
-  }
-
-  fit(): void {
-    const bounds = this.state.worldBounds();
-    if (bounds) this.camera = fitBounds(bounds, this.width, this.height);
-    this.requestDraw();
-  }
+  fit(): void { this.cam.fit(this.state.worldBounds()); this.requestDraw(); }
 
   focusOn(id: NodeId): void {
     const index = this.state.idToIndex.get(id);
     if (index === undefined) return;
-    const screen = worldToScreen(this.camera, this.state.posX[index], this.state.posY[index]);
-    this.camera = panBy(this.camera, this.width / 2 - screen.x, this.height / 2 - screen.y);
+    this.cam.centerOnWorld(this.state.posX[index], this.state.posY[index]);
     this.requestDraw();
   }
+
+  /** Center the camera on a world point (used by the minimap). */
+  centerOnWorld(worldX: number, worldY: number): void { this.cam.centerOnWorld(worldX, worldY); this.requestDraw(); }
 
   // ---- accessors / InteractionHost -----------------------------------------
 
   getModel(): GraphModel | null { return this.model; }
 
-  exportSvg(): string {
-    return sceneToSvg(this.state, this.theme, this.visual);
-  }
+  exportSvg(): string { return sceneToSvg(this.state, this.theme, this.visual); }
 
-  getViewportSize(): { width: number; height: number } {
-    return { width: this.width, height: this.height };
-  }
+  getViewportSize(): { width: number; height: number } { return { width: this.cam.width, height: this.cam.height }; }
 
   /** Live position buffers (no copy) for the minimap overview. */
   getPositionsRef(): { x: Float32Array; y: Float32Array; count: number; visible: Uint8Array } {
     return { x: this.state.posX, y: this.state.posY, count: this.state.count, visible: this.state.visible };
   }
 
-  /** Center the camera on a world point (used by the minimap). */
-  centerOnWorld(worldX: number, worldY: number): void {
-    const screen = worldToScreen(this.camera, worldX, worldY);
-    this.camera = panBy(this.camera, this.width / 2 - screen.x, this.height / 2 - screen.y);
-    this.requestDraw();
-  }
-
-  worldBounds(): WorldBounds | null {
-    return this.state.worldBounds();
-  }
+  worldBounds(): WorldBounds | null { return this.state.worldBounds(); }
 
   hitTestLocal(x: number, y: number): number {
-    const world = screenToWorld(this.camera, x, y);
+    const world = this.cam.screenToWorld(x, y);
     return hitTest(this.state, world.x, world.y, this.visual.nodeScale);
   }
 
-  idAt(index: number): NodeId {
-    return this.state.ids[index];
-  }
+  idAt(index: number): NodeId { return this.state.ids[index]; }
 
   setNodePosition(index: number, worldX: number, worldY: number): void {
     this.state.posX[index] = worldX;
@@ -241,19 +173,19 @@ export class CanvasScene implements InteractionHost {
     this.dirty = false;
     renderFrame({
       ctx: this.ctx,
-      width: this.width,
-      height: this.height,
-      dpr: this.dpr,
-      camera: this.camera,
+      width: this.cam.width,
+      height: this.cam.height,
+      dpr: this.cam.dpr,
+      camera: this.cam.camera,
       theme: this.theme,
       visual: this.visual,
       state: this.state,
       sprites: this.sprites,
       reveal: this.reveal,
       time: now,
-      focus: this.focusIndices,
+      focus: this.sel.focusIndices,
       hoverIndex: this.hoverIndex,
-      selectedIndex: this.selectedIndex,
+      selectedIndex: this.sel.selectedIndex,
       reducedMotion: this.reducedMotion,
     });
     if (this.dirty || isRevealing(this.reveal, now)) {
