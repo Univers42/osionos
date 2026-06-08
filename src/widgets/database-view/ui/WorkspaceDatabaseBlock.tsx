@@ -27,6 +27,8 @@ interface WorkspaceDatabaseBlockProps {
   databaseId: string;
   initialViewId?: string;
   mode?: "inline" | "full";
+  /** "full" shows the notion-database-sys chrome (view switcher); default single view. */
+  chrome?: "full" | "single-view";
 }
 
 /** A record peek that opens the EXISTING osionos page (records are real pages). */
@@ -67,6 +69,7 @@ export const WorkspaceDatabaseBlock: React.FC<WorkspaceDatabaseBlockProps> = ({
   databaseId,
   initialViewId,
   mode = "inline",
+  chrome = "single-view",
 }) => {
   const adapter = React.useMemo(() => getWorkspaceDatabaseAdapter(), []);
   const view = initialViewId
@@ -91,7 +94,7 @@ export const WorkspaceDatabaseBlock: React.FC<WorkspaceDatabaseBlockProps> = ({
         mode={mode === "full" ? "page" : "inline"}
         renderPage={renderPage}
         className={mode === "full" ? "h-full" : undefined}
-        chrome="single-view"
+        chrome={chrome}
       />
     </div>
   );

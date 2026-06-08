@@ -71,7 +71,11 @@ export function blockToMarkdown(block: Block, depth = 0): string {
     case "bulleted_list": line = `- ${content}`; break;
     case "numbered_list": line = `1. ${content}`; break;
     case "to_do": line = `- [${block.checked ? "x" : " "}] ${content}`; break;
-    case "quote": line = `> ${content}`; break;
+    case "quote":
+      // Prefix EVERY line so multi-line quotes (and a trailing "— Source" citation) stay
+      // inside the blockquote on round-trip instead of splitting into a sibling paragraph.
+      line = content.split("\n").map((l) => (l ? `> ${l}` : ">")).join("\n");
+      break;
     case "toggle":
       // A toggle heading keeps its level via the compact "#..######>" opener;
       // a plain toggle uses the explicit "> [>]" form (bare "> " is a quote).
@@ -79,7 +83,11 @@ export function blockToMarkdown(block: Block, depth = 0): string {
         ? `${"#".repeat(block.headingLevel)}> ${content}`
         : `> [>] ${content}`;
       break;
-    case "callout": line = `> [!${block.color || "💡"}] ${content}`; break;
+    case "callout": {
+      const cl = content.split("\n");
+      line = [`> [!${block.color || "💡"}] ${cl[0] ?? ""}`, ...cl.slice(1).map((l) => (l ? `> ${l}` : ">"))].join("\n");
+      break;
+    }
     case "divider": line = "---"; break;
     case "code": line = `\`\`\`${block.language ?? ""}\n${content}\n\`\`\``; break;
     case "equation": line = `$$\n${content}\n$$`; break;

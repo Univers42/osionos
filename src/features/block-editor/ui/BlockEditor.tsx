@@ -18,23 +18,27 @@ import React, {
   useState,
 } from "react";
 import { Check, Code, Copy, Eye, Hash, Moon, Sun } from "lucide-react";
-import { AssetRenderer } from "@univers42/ui-collection";
 import { EquationView } from "@/shared/ui/EquationView";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
 import { DatabaseBlock } from "@/widgets/database-view/ui/DatabaseBlock";
 import {
   getBlockPlaceholder,
+  calloutAccent,
+  calloutDisplayIcon,
+  calloutSurface,
+  resolveCalloutType,
   type Block,
 } from "@/entities/block";
 
 import { usePageStore } from "@/store/usePageStore";
-import { MermaidDiagram, CodeSyntaxHighlight, EmojiPicker } from "@/shared/ui";
+import { MermaidDiagram, CodeSyntaxHighlight, IconValueView } from "@/shared/ui";
 import { getNumberedMarker, getBulletMarker } from "@/entities/block/model/listMarkers";
 import { MediaBlockEditor } from "./MediaBlockEditor";
 import { TodoBlockEditor } from "./TodoBlockEditor";
 import { ToggleBlockEditor } from "./ToggleBlockEditor";
 import { BlockCollapseToggle } from "./BlockCollapseToggle";
+import { CalloutTypePicker } from "./CalloutTypePicker";
 import { BlockListCollapse } from "./BlockListCollapse";
 import { CodeGutter } from "@/entities/block/ui/CodeGutter";
 import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
@@ -722,7 +726,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               content={block.content}
               className={`${getToggleHeadingClass(block.headingLevel)} text-[var(--osio-fg-muted)] leading-relaxed py-0.5 italic`}
               style={editableStyle}
-              placeholder="Quote…"
+              placeholder="Quote… end a line with “— Source” to add a citation"
               onChange={onChange}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
@@ -734,50 +738,68 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       );
 
     case "callout": {
-      const icon = block.color || "💡";
+      // WYSIWYG: tint the surface + border + icon from the resolved semantic type while
+      // editing (read-only used to be the only place colour appeared). Body text stays default.
+      const calloutType = resolveCalloutType(block.color);
+      const accent = calloutAccent(calloutType);
+      const hasChildren = Boolean(block.children?.length);
       return (
         <div
-          className="my-0.5 flex items-start gap-2 rounded-lg border border-[var(--osio-border-default)] p-3"
-          style={surfaceStyle}
+          role="note"
+          aria-label={`${calloutType.label} callout`}
+          className="group/callout relative my-0.5 flex items-start gap-2 rounded-lg border p-3"
+          style={{ ...calloutSurface(calloutType), ...surfaceStyle }}
         >
-          {block.children?.length ? (
+          <span
+            className="pointer-events-none absolute right-2 top-1.5 select-none rounded px-1 text-[10px] font-semibold uppercase tracking-wide opacity-0 transition-opacity group-hover/callout:opacity-60"
+            style={{ color: accent }}
+            aria-hidden="true"
+          >
+            {calloutType.label}
+          </span>
+          {hasChildren ? (
             <BlockCollapseToggle collapsed={block.collapsed} onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })} />
           ) : null}
           <div className="relative shrink-0">
             <button
               type="button"
-              className="inline-flex cursor-pointer items-center justify-center rounded text-[var(--osio-fg-default)]"
-              aria-label="Change callout icon"
-              title="Change callout icon"
+              className="inline-flex cursor-pointer items-center justify-center rounded"
+              style={{ color: accent }}
+              aria-label="Change callout type"
+              title="Change callout type"
               onClick={() => setShowCalloutIconPicker((prev) => !prev)}
             >
-              <AssetRenderer value={icon} size={20} />
+              <IconValueView value={calloutDisplayIcon(block.color)} size={20} />
             </button>
             {showCalloutIconPicker && (
-              <EmojiPicker
-                current={icon}
-                onSelect={(nextIcon) => {
-                  commitBlockUpdate(block.id, { color: nextIcon });
-                }}
-                onRemove={() => {
-                  commitBlockUpdate(block.id, { color: "💡" });
-                }}
+              <CalloutTypePicker
+                current={block.color}
+                onSelect={(value) => commitBlockUpdate(block.id, { color: value })}
                 onClose={() => setShowCalloutIconPicker(false)}
               />
             )}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             <EditableContent
               content={block.content}
               className={`py-0.5 leading-relaxed text-[var(--osio-fg-default)] ${getToggleHeadingClass(block.headingLevel)}`}
               style={editableStyle}
-              placeholder={getBlockPlaceholder(block, "Type '/' for commands…")}
+              placeholder={getBlockPlaceholder(block, "Type… '/' for commands · Enter to add blocks inside")}
               onChange={onChange}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
             />
-            {!block.collapsed && renderChildren?.()}
+            {!hasChildren ? (
+              <p className="mt-0.5 select-none text-xs italic text-[var(--osio-fg-subtle)] opacity-0 transition-opacity group-hover/callout:opacity-100">
+                Press Enter, or Tab a block in, to nest anything here — text, lists, code, even another callout.
+              </p>
+            ) : null}
+            {!block.collapsed && hasChildren ? (
+              <div className="mt-1 border-l-2 pl-3" style={{ borderColor: accent }}>
+                {renderChildren?.()}
+              </div>
+            ) : null}
           </div>
         </div>
       );

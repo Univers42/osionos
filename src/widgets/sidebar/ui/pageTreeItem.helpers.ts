@@ -11,8 +11,21 @@
 /* ************************************************************************** */
 
 import { usePageStore, type PageEntry } from "@/store/usePageStore";
+import type { DropMode } from "../model/sidebarTreeDnd";
 
 type PageStoreState = ReturnType<typeof usePageStore.getState>;
+
+/**
+ * Classify a pointer position over a row: the top/bottom `edge` band (as a
+ * fraction of row height) means "drop as a same-depth sibling" (before/after),
+ * the middle means "drop inside as a child".
+ */
+export function computeDropMode(clientY: number, rect: DOMRect, edge = 0.3): DropMode {
+  const ratio = rect.height > 0 ? (clientY - rect.top) / rect.height : 0.5;
+  if (ratio < edge) return "before";
+  if (ratio > 1 - edge) return "after";
+  return "inside";
+}
 
 /** A folder is an organizing container that never opens a page (see PageEntry.surface). */
 export function isFolderEntry(page: Pick<PageEntry, "surface">): boolean {

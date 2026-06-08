@@ -75,6 +75,20 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: path.resolve(root, 'build'),
       sourcemap: true,
+      rollupOptions: {
+        output: {
+          // Split the big, stable vendors into their own chunks so they cache
+          // across deploys and download in parallel with the app entry instead
+          // of inflating it. react-dom dominates; keep the React runtime together.
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (/[/\\](react|react-dom|scheduler|use-sync-external-store)[/\\]/.test(id)) return 'vendor-react';
+            if (/[/\\](motion|framer-motion|motion-dom)[/\\]/.test(id)) return 'vendor-motion';
+            if (id.includes('@univers42')) return 'vendor-ui-collection';
+            return undefined;
+          },
+        },
+      },
     },
     optimizeDeps: {
       entries: ['index.html'],

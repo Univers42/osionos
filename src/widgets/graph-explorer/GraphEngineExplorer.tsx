@@ -12,9 +12,9 @@
 
 /**
  * App-side mount for the decoupled @osionos/graph-engine. Composes the package's
- * GraphView + GraphConsole with the app's NodeInspector, plus the chrome the
- * legacy view had (stats bar, offline indicator, empty-state/retry). The engine
- * owns rendering/interaction; the app owns data, editing and BaaS status.
+ * GraphView + GraphConsole with the chrome the legacy view had (stats bar, offline
+ * indicator, empty-state/retry). The engine owns rendering/interaction; the app
+ * owns data + BaaS status. Selecting a node focuses its neighborhood in-canvas.
  */
 
 import { type ReactElement, useMemo, useState } from "react";
@@ -30,13 +30,11 @@ import {
   useControls,
 } from "@osionos/graph-engine";
 import "@osionos/graph-engine/styles/graph.css";
-import { NodeInspector } from "@/features/second-brain/ui/NodeInspector";
 import { type GraphData, useGraphModel } from "./useGraphModel";
-import { useNodeEditing } from "./useNodeEditing";
 
 export function GraphEngineExplorer(): ReactElement {
   const data = useGraphModel();
-  const { model, baasMode } = data;
+  const { model } = data;
   const engineModel = model as unknown as EngineGraphModel;
   const { controls, update, reset } = useControls("osionos-graph-engine");
   const [engine, setEngine] = useState<GraphEngine | null>(null);
@@ -47,68 +45,31 @@ export function GraphEngineExplorer(): ReactElement {
     () => (selectedId ? neighborhood(engineModel, selectedId, 1) : null),
     [engineModel, selectedId],
   );
-  const selectedNode = selectedId ? model.nodeById.get(selectedId) ?? null : null;
-  const editing = useNodeEditing({
-    selectedNode,
-    model,
-    baasMode,
-    setBaasModel: data.setBaasModel,
-    state: data.state,
-    updatePageProperty: data.updatePageProperty,
-  });
 
   return (
-    <div className="flex h-full min-h-0 w-full">
-      <div className="relative min-h-0 flex-1">
-        <GraphView
-          model={engineModel}
-          controls={controls}
-          selectedId={selectedId}
-          focusIds={focusIds}
-          onSelect={setSelectedId}
-          onExpand={data.expand}
-          onReady={setEngine}
-        />
-        <GraphConsole
-          controls={controls}
-          update={update}
-          reset={reset}
-          legend={legend}
-          engine={engine}
-          onSelect={setSelectedId}
-        />
-        <StatsBar data={data} />
-        <div className="pointer-events-auto absolute bottom-3 right-3">
-          <Minimap engine={engine} />
-        </div>
-        {model.stats.nodes === 0 ? <EmptyState data={data} /> : null}
-        {editing.notice ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
-            <div className="pointer-events-auto max-w-[80%] truncate rounded-lg bg-black/75 px-3 py-1.5 text-xs text-white shadow-lg backdrop-blur">
-              {editing.notice}
-            </div>
-          </div>
-        ) : null}
+    <div className="relative h-full min-h-0 w-full">
+      <GraphView
+        model={engineModel}
+        controls={controls}
+        selectedId={selectedId}
+        focusIds={focusIds}
+        onSelect={setSelectedId}
+        onExpand={data.expand}
+        onReady={setEngine}
+      />
+      <GraphConsole
+        controls={controls}
+        update={update}
+        reset={reset}
+        legend={legend}
+        engine={engine}
+        onSelect={setSelectedId}
+      />
+      <StatsBar data={data} />
+      <div className="pointer-events-auto absolute bottom-3 right-3">
+        <Minimap engine={engine} />
       </div>
-
-      <aside className="w-72 shrink-0 overflow-auto border-l border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 text-sm">
-        {selectedNode ? (
-          <NodeInspector
-            node={selectedNode}
-            properties={editing.properties}
-            consistency={editing.consistency}
-            onCommit={editing.commitField}
-            onPromote={editing.promoteToNote}
-            onDemote={editing.demoteNote}
-            promoteAvailable={baasMode}
-          />
-        ) : (
-          <p className="text-[var(--osio-fg-muted)]">
-            Select a node to inspect and edit its record. Double-click a node to expand its
-            neighborhood. Notes are a separate color; data nodes are colored by database.
-          </p>
-        )}
-      </aside>
+      {model.stats.nodes === 0 ? <EmptyState data={data} /> : null}
     </div>
   );
 }

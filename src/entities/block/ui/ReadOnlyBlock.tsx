@@ -126,6 +126,17 @@ function renderNestedChildren(block: Block, bulletDepth: number, numberedDepth: 
   );
 }
 
+/** Split a quote's text into its body and an optional attribution — a trailing line starting
+ *  with an em-dash ("— Source" / "-- Source") renders as a <cite>. Round-trips as plain text. */
+function splitQuoteAttribution(content: string): { body: string; cite: string | null } {
+  const lines = content.split("\n");
+  const last = lines[lines.length - 1]?.trimStart() ?? "";
+  if (lines.length >= 1 && /^(—|--)\s+\S/.test(last)) {
+    return { body: lines.slice(0, -1).join("\n").trimEnd(), cite: last.replace(/^(—|--)\s+/, "") };
+  }
+  return { body: content, cite: null };
+}
+
 function areReadOnlyBlockPropsEqual(previous: BlockProps, next: BlockProps): boolean {
   return (
     previous.block === next.block &&
@@ -339,26 +350,36 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "file":
       return <MediaBlockReadOnly block={block} />;
 
-    case "quote":
+    case "quote": {
+      const { body, cite } = splitQuoteAttribution(block.content);
       return (
-        <>
-          <div className="flex my-0.5">
-            <div className="w-1 bg-[var(--osio-fg-default)] rounded-full shrink-0 mr-3" />
-            <span className={`${getToggleHeadingClass(block.headingLevel)} text-[var(--osio-fg-muted)] leading-relaxed py-0.5 italic flex-1`} style={surface}>
-              <InlineMarkdown content={block.content} />
+        <blockquote className="my-0.5 flex" style={surface}>
+          <div className="mr-3 w-1 shrink-0 rounded-full bg-[var(--osio-fg-muted)]" />
+          <div className="min-w-0 flex-1">
+            <span className={`${getToggleHeadingClass(block.headingLevel)} block py-0.5 italic leading-relaxed text-[var(--osio-fg-default)]`}>
+              <InlineMarkdown content={body} />
             </span>
+            {cite ? (
+              <cite className="mt-0.5 block text-sm not-italic text-[var(--osio-fg-muted)]">
+                {"— "}<InlineMarkdown content={cite} />
+              </cite>
+            ) : null}
+            {!block.collapsed && block.children?.length ? (
+              <div className="mt-1">
+                {block.children.map((child, index) => (
+                  <ReadOnlyBlock key={child.id} block={child} index={index} />
+                ))}
+              </div>
+            ) : null}
           </div>
-          {renderNestedChildren(block, bulletDepth, numberedDepth)}
-        </>
+        </blockquote>
       );
+    }
 
     case "callout":
-      return (
-        <>
-          <CalloutBlockReadOnly block={block} />
-          {renderNestedChildren(block, bulletDepth, numberedDepth)}
-        </>
-      );
+      // CalloutBlockReadOnly self-renders its children in its accent inset — do NOT also
+      // call renderNestedChildren here (that double-rendered every child block).
+      return <CalloutBlockReadOnly block={block} />;
 
     case "divider":
       return (
