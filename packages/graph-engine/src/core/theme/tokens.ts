@@ -10,6 +10,7 @@ import {
   AURORA_BANDS,
   AURORA_BG_BOTTOM,
   AURORA_BG_TOP,
+  NODE_BACKING,
   NOTE_COLOR,
 } from "./palette";
 
@@ -29,6 +30,8 @@ export interface SceneTheme {
   noteRing: string;
   /** Neon tint used for node/link glow. */
   glow: string;
+  /** Dark "moat" painted under each node sprite for legibility on the aurora. */
+  nodeBacking: string;
   /** Opacity applied to dimmed (out-of-focus) elements. */
   dimAlpha: number;
 }
@@ -49,7 +52,8 @@ export const DARK_THEME: SceneTheme = {
   hoverRing: "rgba(165, 180, 252, 0.65)",
   noteRing: NOTE_COLOR,
   glow: "rgba(124, 92, 246, 0.9)",
-  dimAlpha: 0.1,
+  nodeBacking: NODE_BACKING,
+  dimAlpha: 0.12,
 };
 
 /** Resolve a theme from `--osio-*` tokens on `root`, falling back to DARK_THEME. */
@@ -83,7 +87,8 @@ export function resolveSceneTheme(root: HTMLElement): SceneTheme {
     hoverRing: rgba(accent, 0.65),
     noteRing: rgb(note),
     glow: rgba(accent, 0.9),
-    dimAlpha: 0.1,
+    nodeBacking: read("--osio-graph-node-backing", NODE_BACKING),
+    dimAlpha: 0.12,
   };
 }
 
