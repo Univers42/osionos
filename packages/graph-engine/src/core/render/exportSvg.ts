@@ -8,6 +8,7 @@
 import type { SceneTheme } from "../theme/tokens";
 import type { VisualState } from "../state/controls";
 import type { EdgeBucketId, SceneState } from "./sceneState";
+import { shapeOf } from "./nodeShape";
 import { TIERS, tierWidth } from "./tiers";
 
 export function sceneToSvg(state: SceneState, theme: SceneTheme, visual: VisualState): string {
@@ -40,8 +41,14 @@ export function sceneToSvg(state: SceneState, theme: SceneTheme, visual: VisualS
   const nodes: string[] = [];
   for (let i = 0; i < state.count; i += 1) {
     if (state.visible[i] === 0) continue;
-    const r = (state.radius[i] * visual.nodeScale).toFixed(2);
-    nodes.push(`<circle cx="${f(state.posX[i])}" cy="${f(state.posY[i])}" r="${r}" fill="${state.fills[i]}"/>`);
+    const r = state.radius[i] * visual.nodeScale;
+    const cx = f(state.posX[i]);
+    const cy = f(state.posY[i]);
+    if (shapeOf(state.kind[i]) === "ring") {
+      nodes.push(`<circle cx="${cx}" cy="${cy}" r="${(r * 0.78).toFixed(2)}" fill="none" stroke="${state.fills[i]}" stroke-width="${(r * 0.5).toFixed(2)}"/>`);
+    } else {
+      nodes.push(`<circle cx="${cx}" cy="${cy}" r="${r.toFixed(2)}" fill="${state.fills[i]}"/>`);
+    }
   }
 
   return [

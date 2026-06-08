@@ -7,7 +7,8 @@ import type { ReactElement } from "react";
 import type { NodeKind } from "../../core/types";
 import type { Controls } from "../../core/state/controls";
 import type { Legend } from "../../core/model/legend";
-import { Toggle } from "./widgets";
+import { shapeOf } from "../../core/render/nodeShape";
+import { ShapeGlyph, Toggle } from "./widgets";
 
 const KIND_LABEL: Record<NodeKind, string> = {
   record: "Records",
@@ -39,6 +40,7 @@ export function FiltersPanel({ controls, legend, update }: FiltersPanelProps): R
         <Toggle
           key={entry.kind}
           label={KIND_LABEL[entry.kind]}
+          glyph={<ShapeGlyph shape={shapeOf(entry.kind)} />}
           count={entry.count}
           checked={!controls.filter.hiddenKinds.includes(entry.kind)}
           onChange={(v) => toggle("hiddenKinds", entry.kind, v)}

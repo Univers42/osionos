@@ -5,11 +5,26 @@
  */
 
 import type { ReactElement } from "react";
+import type { NodeShape } from "../../core/render/nodeShape";
 
 export function ColorDot({ color, size = 11 }: { color: string; size?: number }): ReactElement {
   return (
     <svg className="osio-gc-dot" width={size} height={size} viewBox="0 0 12 12" aria-hidden="true">
       <circle cx="6" cy="6" r="5" fill={color || "currentColor"} />
+    </svg>
+  );
+}
+
+/** The node "shape language" rendered as a tiny glyph for the kind legend. */
+export function ShapeGlyph({ shape, size = 12 }: { shape: NodeShape; size?: number }): ReactElement {
+  return (
+    <svg className="osio-gc-dot" width={size} height={size} viewBox="0 0 12 12" aria-hidden="true">
+      {shape === "ring" ? (
+        <circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" strokeWidth="2.4" />
+      ) : (
+        <circle cx="6" cy="6" r="5" fill="currentColor" />
+      )}
+      {shape === "note" && <circle cx="6" cy="6" r="2.1" fill="none" stroke="var(--osio-bg-panel)" strokeWidth="1.6" />}
     </svg>
   );
 }
@@ -48,6 +63,8 @@ export interface ToggleProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   color?: string;
+  /** A shape glyph shown instead of the color dot (used by the kind legend). */
+  glyph?: ReactElement;
   count?: number;
 }
 
@@ -55,7 +72,7 @@ export function Toggle(props: ToggleProps): ReactElement {
   return (
     <label className="osio-gc-toggle">
       <input type="checkbox" checked={props.checked} onChange={(e) => props.onChange(e.target.checked)} />
-      {props.color !== undefined && <ColorDot color={props.color} />}
+      {props.glyph ?? (props.color !== undefined && <ColorDot color={props.color} />)}
       <span className="osio-gc-toggle__label">{props.label}</span>
       {props.count !== undefined && <span className="osio-gc-count">{props.count}</span>}
     </label>
