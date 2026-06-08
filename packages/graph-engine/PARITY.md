@@ -88,4 +88,8 @@ visual language redesigned (decisions: flat constellation, shape + color, full p
 
 Gates: `vite build` green; `tsc -p packages/graph-engine` clean; package ESLint (incl.
 import firewall) 0 warnings; canvas units **16/16** (2 new: `shapeOf`/`styleKey` +
-`styleBuckets`). `scene.ts` is 267 lines — a pre-existing >200 godfile to split separately.
+`styleBuckets`).
+
+Also split the pre-existing `scene.ts` godfile (was 267 ln) into a thin façade
+(`scene.ts`, 199 ln) + `sceneCamera.ts` (45, camera/viewport math) + `sceneSelection.ts`
+(40, selection/focus index tracking) — all now ≤200 lines / a single class each.
