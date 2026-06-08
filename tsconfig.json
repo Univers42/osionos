@@ -39,6 +39,7 @@
   "exclude": [
     "src/shared/notion-database-sys/packages",
     "src/shared/notion-database-sys/playground",
-    "src/shared/notion-database-sys/examples"
+    "src/shared/notion-database-sys/examples",
+    "src/shared/notion-database-sys/vendor"
   ]
 }

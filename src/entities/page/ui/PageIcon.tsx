@@ -11,8 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useState } from 'react';
-import { AssetRenderer } from '@univers42/ui-collection';
-import { EmojiPicker } from '@/shared/ui';
+import { EmojiPicker, IconValueView } from '@/shared/ui';
 
 interface PageIconProps {
   /** Current icon as a canonical ui-collection value. */
@@ -51,7 +50,7 @@ export const PageIcon: React.FC<PageIconProps> = ({
         aria-label="Change page icon"
         title="Click to change icon"
       >
-        <AssetRenderer value={icon} size={78} />
+        <IconValueView value={icon} size={78} />
       </button>
 
       {showPicker && !disabled && (

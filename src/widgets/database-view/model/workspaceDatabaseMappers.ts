@@ -10,7 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import type { Page, SelectOption } from "@notion-db/object-database";
+import type { Page } from "@notion-db/object-database";
+import type { SelectOption } from "@notion-db/contract-types";
 import type { PageEntry } from "@/entities/page";
 import { DEFAULT_FILE_COVER, FILE, FOLD, WS_FILES_DB_ID, WS_FOLDERS_DB_ID } from "./workspaceDatabaseConstants";
 

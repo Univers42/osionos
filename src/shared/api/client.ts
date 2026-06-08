@@ -54,36 +54,68 @@ export function getActivePageJwt(): string | null {
   }
 }
 
-async function request<T>(
-  method: string,
-  path: string,
-  body?: unknown,
-  jwt?: string,
-): Promise<T> {
-  if (!API_BASE) {
-    throw new Error("VITE_API_URL is not configured.");
+// ── request hygiene ────────────────────────────────────────────────────────
+// Bound how many requests hit the bridge/BaaS at once and collapse identical
+// in-flight GETs. A view that needs many pages then drains politely instead of
+// firing hundreds of parallel calls (which the BaaS rate-limits → 429/502).
+const MAX_CONCURRENT_REQUESTS = 6;
+let activeRequests = 0;
+const slotWaiters: Array<() => void> = [];
+
+function acquireSlot(): Promise<void> {
+  if (activeRequests < MAX_CONCURRENT_REQUESTS) {
+    activeRequests += 1;
+    return Promise.resolve();
   }
+  return new Promise<void>((resolve) => slotWaiters.push(resolve));
+}
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (jwt) headers['Authorization'] = `Bearer ${jwt}`;
+function releaseSlot(): void {
+  const next = slotWaiters.shift();
+  if (next) next(); // hand the held slot straight to the next waiter (count unchanged)
+  else activeRequests -= 1;
+}
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: body == null ? undefined : JSON.stringify(body),
-  });
+/** Identical GETs that are still in flight share one network call + result. */
+const inflightGets = new Map<string, Promise<unknown>>();
 
-  if (!res.ok) {
-    const errorBody = await res.json().catch(() => null) as ApiErrorBody | null;
-    throw new ApiError(
-      errorBody?.error ?? errorBody?.message ?? `${method} ${path} → ${res.status} ${res.statusText}`,
-      res.status,
-      errorBody?.code ?? 'API_ERROR',
-      errorBody?.details,
-    );
+async function executeRequest<T>(method: string, path: string, body?: unknown, jwt?: string): Promise<T> {
+  if (!API_BASE) throw new Error("VITE_API_URL is not configured.");
+  await acquireSlot();
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (jwt) headers['Authorization'] = `Bearer ${jwt}`;
+
+    const res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      body: body == null ? undefined : JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.json().catch(() => null) as ApiErrorBody | null;
+      throw new ApiError(
+        errorBody?.error ?? errorBody?.message ?? `${method} ${path} → ${res.status} ${res.statusText}`,
+        res.status,
+        errorBody?.code ?? 'API_ERROR',
+        errorBody?.details,
+      );
+    }
+    if (res.status === 204) return undefined as T;
+    return res.json() as Promise<T>;
+  } finally {
+    releaseSlot();
   }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+}
+
+async function request<T>(method: string, path: string, body?: unknown, jwt?: string): Promise<T> {
+  if (method !== 'GET') return executeRequest<T>(method, path, body, jwt);
+  const key = `GET ${path}`;
+  const shared = inflightGets.get(key);
+  if (shared) return shared as Promise<T>;
+  const pending = executeRequest<T>(method, path, body, jwt).finally(() => inflightGets.delete(key));
+  inflightGets.set(key, pending);
+  return pending;
 }
 
 /** Thin fetch wrapper exposing typed GET/POST/PATCH/DELETE helpers. */

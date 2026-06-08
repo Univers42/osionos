@@ -12,13 +12,15 @@
 
 import React, { useEffect, useMemo, useRef } from "react";
 import { Plus, FolderPlus, Mail, CalendarRange, Monitor, Hash, Lock, MessageSquare, Volume2, Video, GitBranch, Archive, Bot } from "lucide-react";
-import { AssetRenderer } from "@univers42/ui-collection";
+import { IconValueView } from "@/shared/ui/atoms/IconValueView";
 import { useShallow } from "zustand/react/shallow";
 
 import type { ActivePage, PageEntry } from "@/entities/page";
 import { SidebarNavItem } from "./SidebarNavItem";
 import { SidebarSection } from "./SidebarSection";
 import { PageTreeItem } from "./PageTreeItem";
+import { SidebarTreeToolbar } from "./SidebarTreeToolbar";
+import { useSidebarTreeDnd } from "../model/sidebarTreeDnd";
 import { PageOptionsMenu } from "@/features/page-management";
 import { usePageStore } from "@/store/usePageStore";
 import {
@@ -145,9 +147,9 @@ const RecentSidebarItem: React.FC<RecentSidebarItemProps> = ({
     <SidebarNavItem
       icon={
         recent.icon ? (
-          <AssetRenderer value={recent.icon} size={14} />
+          <IconValueView value={recent.icon} size={14} />
         ) : (
-          <AssetRenderer value="icon:page" size={14} />
+          <IconValueView value="icon:page" size={14} />
         )
       }
       label={recent.title ?? "Untitled"}
@@ -239,6 +241,8 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   }, []);
 
   const addPage = usePageStore((s) => s.addPage);
+  const fetchPages = usePageStore((s) => s.fetchPages);
+  const bumpCollapse = useSidebarTreeDnd((s) => s.bumpCollapse);
   const activeUserId = useUserStore((s) => s.activeUserId);
   const workspaceKey = workspaceConfigKey(activeUserId || "anonymous", activeWorkspaceId || "workspace");
   const storedWorkspaceConfig = useWorkspaceConfigStore((s) => s.configs[workspaceKey]);
@@ -336,6 +340,10 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
     if (!workspaceId) return;
     // A folder never opens, so we create it without navigating to it.
     void addPage(workspaceId, "New folder", jwt, undefined, { surface: "folder", visibility });
+  }
+
+  function refreshTree(workspaceId: string) {
+    if (workspaceId) void fetchPages(workspaceId, jwt);
   }
 
   function createAgentPage() {
@@ -525,10 +533,14 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
             key={ws._id}
             label="Private"
             defaultOpen
-            onAdd={() => onAddToWorkspace(ws._id)}
-            onMore={() => {
-              /* placeholder */
-            }}
+            headerActions={
+              <SidebarTreeToolbar
+                onAddFile={() => onAddToWorkspace(ws._id)}
+                onAddFolder={() => createRootFolder(ws._id, "private")}
+                onCollapseAll={bumpCollapse}
+                onRefresh={() => refreshTree(ws._id)}
+              />
+            }
           >
             {pageIds.length === 0 && (
               <p className="px-2 py-1 text-xs text-[var(--osio-fg-subtle)] italic">
@@ -555,7 +567,17 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         );
       })}
 
-      <SidebarSection label="Shared" onAdd={createSharedPage}>
+      <SidebarSection
+        label="Shared"
+        headerActions={
+          <SidebarTreeToolbar
+            onAddFile={createSharedPage}
+            onAddFolder={() => createRootFolder(activeWorkspaceId, "shared")}
+            onCollapseAll={bumpCollapse}
+            onRefresh={() => refreshTree(activeWorkspaceId)}
+          />
+        }
+      >
         {ownedSharedPageIds.map((pageId) => (
           <PageTreeItem
             key={pageId}

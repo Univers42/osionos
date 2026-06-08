@@ -12,6 +12,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 
+import type { ActivePage } from "@/entities/page";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { pageConfigKey, resolvePageConfig, usePageConfigStore } from "@/shared/config/pageConfigStore";
@@ -25,6 +26,8 @@ import "./notionPage.css";
 
 interface OsionosPageProps {
   pageId: string;
+  /** Per-pane active-page ref for the header; falls back to the global one. */
+  activePageRef?: ActivePage | null;
 }
 
 /**
@@ -32,7 +35,7 @@ interface OsionosPageProps {
  * properties, connections — see PageHeader) + the block editor body (PageBody). The header
  * actions, comments, and property handlers live in their own files to keep this a thin shell.
  */
-export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
+export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef }) => {
   const renderCountRef = React.useRef(0);
   renderCountRef.current += 1;
 
@@ -43,7 +46,8 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId }) => {
   }, []);
 
   const page = usePageStore((s) => s.pageById(pageId));
-  const activePage = usePageStore((s) => s.activePage);
+  const globalActivePage = usePageStore((s) => s.activePage);
+  const activePage = activePageRef ?? globalActivePage;
   const activeUserId = useUserStore((s) => s.activeUserId);
   const safeUserId = activeUserId || "anonymous";
   const [commentsOpen, setCommentsOpen] = useState(false);

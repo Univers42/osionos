@@ -25,7 +25,7 @@
  * hydrate's seeds are honoured. No-op without a bridge. Mount once near the app root.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { API_BASE } from "@/shared/api/client";
@@ -36,18 +36,23 @@ import { hydratePagesFromBaas } from "./hydratePages";
 import { computeSyncActions, loadLedger, saveLedger } from "@/shared/sync/outboxLedger";
 
 const DEBOUNCE_MS = 800;
-/** While the server is unreachable, retry the pending writes on this cadence. */
+/** First retry delay when the server pushes back; doubles up to MAX_RETRY_MS. */
 const RETRY_MS = 15000;
+/** Cap on the exponential backoff so a recovered server is still picked up promptly. */
+const MAX_RETRY_MS = 120000;
 
 export function usePageSync(): void {
   const activeUserId = useUserStore((store) => store.activeUserId);
+  // The outbox must not publish before HYDRATE seeds the ledger, otherwise every page just
+  // pulled from the server looks "unsynced" and gets re-PATCHed — a needless write storm.
+  const hydratedRef = useRef(false);
 
   // HYDRATE from the BaaS (source of truth) once the signed-in user is known. Reactive on
   // activeUserId because auth resolves AFTER mount; merging never clobbers, so it is safe
   // to re-run on user switch.
   useEffect(() => {
     if (!API_BASE || !activeUserId) return;
-    hydratePagesFromBaas().catch(() => undefined);
+    hydratePagesFromBaas().catch(() => undefined).finally(() => { hydratedRef.current = true; });
   }, [activeUserId]);
 
   useEffect(() => {
@@ -57,13 +62,17 @@ export function usePageSync(): void {
     let flushing = false;
     let rerun = false;
     let disposed = false;
+    let backoff = RETRY_MS;
 
     const scheduleRetry = () => {
-      if (!retry && !disposed) retry = setTimeout(() => { retry = null; void flush(); }, RETRY_MS);
+      if (!retry && !disposed) retry = setTimeout(() => { retry = null; void flush(); }, backoff);
+      backoff = Math.min(backoff * 2, MAX_RETRY_MS); // back off so we never hammer a throttled server
     };
-    const clearRetry = () => { if (retry) { clearTimeout(retry); retry = null; } };
+    const clearRetry = () => { if (retry) { clearTimeout(retry); retry = null; } backoff = RETRY_MS; };
 
     const flush = async (): Promise<void> => {
+      // Wait for hydrate to seed the ledger before the first publish (re-check shortly).
+      if (!hydratedRef.current) { schedule(); return; }
       if (flushing) { rerun = true; return; } // serialize: never two flushes at once
       flushing = true;
       try {
@@ -80,9 +89,13 @@ export function usePageSync(): void {
           const stamp = desired.get(id);
           if (!page || stamp === undefined) continue;
           const result = await publishPage(page);
-          if (result === "ok") ledger[id] = stamp; // advance ONLY on confirm
-          else if (result === "gone") delete ledger[id]; // deleted/unowned → forget it
-          else failed = true; // transient → leave pending, retry
+          if (result === "ok") { ledger[id] = stamp; continue; } // advance ONLY on confirm
+          if (result === "gone") { delete ledger[id]; continue; } // deleted/unowned → forget it
+          // Transient (offline / 5xx / 429): STOP. Hammering the rest of the batch is what
+          // turns a rate-limited server into a self-sustaining 429/502 storm. Back off and
+          // resume next cycle — the pages already confirmed above stay advanced.
+          failed = true;
+          break;
         }
         for (const id of toUnpublish) delete ledger[id]; // left desired set → forget (no network)
         saveLedger(PAGE_OUTBOX_KEY, ledger);

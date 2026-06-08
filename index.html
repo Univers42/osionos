@@ -15,7 +15,23 @@
 		<link rel="apple-touch-icon" href="/favicon.svg" />
 	</head>
 	<body>
-		<div id="root"></div>
+		<!-- Static boot skeleton: paints at HTML-parse time (before the React/
+		     react-dom bundle parses), so First Contentful Paint no longer waits on
+		     JS. createRoot() replaces these children on mount; it mirrors the app's
+		     own "Signing in…" spinner (same full-screen centred layout + theme bg)
+		     so the handoff is seamless and adds no layout shift. -->
+		<div id="root">
+			<div id="app-boot" aria-hidden="true">
+				<div class="app-boot__spinner"></div>
+			</div>
+		</div>
+		<style>
+			#app-boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#ffffff}
+			.app-boot__spinner{width:32px;height:32px;border:3px solid #e5e7eb;border-top-color:#6b7280;border-radius:50%;animation:app-boot-spin .8s linear infinite}
+			@keyframes app-boot-spin{to{transform:rotate(360deg)}}
+			@media (prefers-color-scheme: dark){#app-boot{background:#111317}.app-boot__spinner{border-color:#2a2d31;border-top-color:#9aa0a6}}
+			@media (prefers-reduced-motion: reduce){.app-boot__spinner{animation-duration:1.6s}}
+		</style>
 		<script type="module" src="/src/app/main.tsx"></script>
 	</body>
 </html>

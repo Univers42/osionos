@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import { create } from "zustand";
+import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import {
   loadRecents,
   saveRecents,
@@ -181,6 +182,8 @@ export const usePageStore = create<PageStore>((set, get) => ({
     if (jwt && page.kind === "page") {
       get().fetchPageContent(page.id, jwt);
     }
+    // Reflect the opened page as a tab in the active pane (grid is the renderer).
+    useWorkspaceLayout.getState().syncFromActivePage(page);
   },
 
   clearWorkspace: (workspaceId) => {

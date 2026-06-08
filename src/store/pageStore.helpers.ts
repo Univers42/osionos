@@ -352,9 +352,12 @@ export function mergeWorkspacePages(
 
   const incomingIds = new Set(incomingPages.map((page) => page._id));
   for (const cachedPage of previousPages) {
-    if (!incomingIds.has(cachedPage._id)) {
-      mergedPages.push(cachedPage);
-    }
+    if (incomingIds.has(cachedPage._id)) continue;
+    // The incoming list is authoritative (GET /api/pages/all). A cached page it
+    // omits was deleted server-side — keep it ONLY if it's an unsynced local page
+    // (temp id); drop persisted ghosts so deletions reconcile instead of
+    // resurrecting (the duplicate-cleanup 404 flood / phantom rows).
+    if (!isPersistedPageId(cachedPage._id)) mergedPages.push(cachedPage);
   }
 
   return mergedPages;

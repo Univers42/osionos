@@ -10,7 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import type { DatabaseSchema, SchemaProperty, SelectOption, ViewConfig } from "@notion-db/object-database";
+import type { SchemaProperty } from "@notion-db/object-database";
+import type { DatabaseSchema, SelectOption, ViewConfig } from "@notion-db/contract-types";
 import {
   FILE,
   FOLD,

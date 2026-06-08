@@ -84,9 +84,12 @@ class WorkspaceDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   async removeProperty(): Promise<void> { /* fixed schema */ }
   async changePropertyType(_databaseId: string, _propertyId: string, _newType: PropertyType): Promise<void> { /* fixed schema */ }
 
-  persistState(next: NotionState, previous?: NotionState): void {
+  // Arrow property, not a method: the ObjectDatabase host EXTRACTS this function
+  // and calls it detached (object_database.tsx useAdapterStatePersistence), so
+  // `this` must be lexically bound or `this.emit` is undefined (crash loop).
+  persistState = (next: NotionState, previous?: NotionState): void => {
     if (applyWorkspacePersist(next, previous)) this.emit({ type: "state-replaced" });
-  }
+  };
 
   subscribe(callback: (event: ChangeEvent) => void): () => void {
     this.subscribers.add(callback);

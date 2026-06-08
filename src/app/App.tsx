@@ -20,6 +20,8 @@ import { usePageSync } from "@/store/sync/usePageSync";
 import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, loadActivePage, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
 import { Sidebar } from "@/widgets/sidebar";
+import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { homeTab, trashTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
 import { LazyCanvasDebugRoute, LazyMainContent } from "./lazyAppRegions";
 import { applyTheme, readStoredThemeMode } from "@/shared/config/theme";
@@ -246,20 +248,8 @@ const App: React.FC = () => {
       {/* Left sidebar */}
       <Sidebar
         onOpenSettings={() => setSettingsOpen(true)}
-        onOpenHome={() =>
-          usePageStore.setState({
-            activePage: null,
-            showTrash: false,
-            navigationPath: [],
-          })
-        }
-        onOpenTrash={() =>
-          usePageStore.setState({
-            activePage: null,
-            showTrash: true,
-            navigationPath: [],
-          })
-        }
+        onOpenHome={() => useWorkspaceLayout.getState().openTab(homeTab())}
+        onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
       />
 
       {/* Floating trigger for when sidebar is closed */}

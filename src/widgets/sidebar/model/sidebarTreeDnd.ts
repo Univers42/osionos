@@ -1,0 +1,59 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   sidebarTreeDnd.ts                                  :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/06/08 12:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/06/08 12:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+import { create } from "zustand";
+
+/**
+ * Where a dragged row would land relative to the hovered row:
+ * - "inside"  → becomes a child of the hovered row (depth + 1), shown as a tint.
+ * - "before" / "after" → becomes a sibling at the SAME depth (shares the hovered
+ *   row's parent), shown as a blue insertion line above / below.
+ *
+ * NOTE: the page model has no persisted sibling order yet, so "before"/"after"
+ * both re-parent to the hovered row's parent and append. Add an `order` column
+ * (PageEntry + BaaS) to honour the exact above/below index across reloads.
+ */
+export type DropMode = "inside" | "before" | "after";
+
+/** What kind of payload is mid-drag, so panes only react to relevant drags. */
+export type DragKind = "page" | "tab" | null;
+
+interface SidebarTreeDndState {
+  /** Id of the row currently being dragged (null when idle). */
+  draggingId: string | null;
+  /** What is being dragged across the workspace (sidebar page vs. a pane tab). */
+  dragKind: DragKind;
+  /** Row the pointer is hovering as a drop target. */
+  dropTargetId: string | null;
+  /** Resolved drop mode for `dropTargetId`. */
+  dropMode: DropMode | null;
+  /** Monotonic signal: bump to collapse every expanded folder in the tree. */
+  collapseToken: number;
+  beginDrag: (id: string) => void;
+  beginTabDrag: () => void;
+  endDrag: () => void;
+  setDropTarget: (id: string | null, mode: DropMode | null) => void;
+  bumpCollapse: () => void;
+}
+
+export const useSidebarTreeDnd = create<SidebarTreeDndState>((set) => ({
+  draggingId: null,
+  dragKind: null,
+  dropTargetId: null,
+  dropMode: null,
+  collapseToken: 0,
+  beginDrag: (id) => set({ draggingId: id, dragKind: "page", dropTargetId: null, dropMode: null }),
+  beginTabDrag: () => set({ dragKind: "tab", dropTargetId: null, dropMode: null }),
+  endDrag: () => set({ draggingId: null, dragKind: null, dropTargetId: null, dropMode: null }),
+  setDropTarget: (dropTargetId, dropMode) => set({ dropTargetId, dropMode }),
+  bumpCollapse: () => set((state) => ({ collapseToken: state.collapseToken + 1 })),
+}));

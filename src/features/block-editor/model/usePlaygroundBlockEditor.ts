@@ -852,6 +852,31 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     (blockId: string, detection: ReturnType<typeof detectBlockType>): void => {
       if (!detection) return;
 
+      // Inside a callout/quote, a markdown shortcut typed on the TITLE line NESTS the
+      // detected block INSIDE the container (it holds anything — toggle headings,
+      // headings, lists, even another callout) instead of converting the container
+      // away. Children are their own blocks, so a shortcut typed in one still converts
+      // it in place. (Code fences are owned by tryHandleCodeOrTable and excluded.)
+      const target = findBlockInTree(contentRef.current, blockId);
+      if (target && (target.type === "callout" || target.type === "quote") && detection.type !== "code") {
+        const child: Block = {
+          id: crypto.randomUUID(),
+          type: detection.type,
+          content: detection.remainingContent,
+          ...(detection.type === "to_do" ? { checked: Boolean(detection.checked) } : {}),
+          ...(detection.type === "callout" ? { color: getCalloutIconForKind(detection.kind ?? "note") } : {}),
+          ...(detection.type === "toggle" ? { collapsed: false } : {}),
+          ...(detection.headingLevel ? { headingLevel: detection.headingLevel } : {}),
+        };
+        updateBlock(pageId, blockId, {
+          content: "",
+          children: [...(target.children ?? []), child],
+          collapsed: false,
+        });
+        focusBlock(child.id);
+        return;
+      }
+
       changeBlockType(pageId, blockId, detection.type);
       updateBlock(pageId, blockId, {
         content: detection.remainingContent,
@@ -869,7 +894,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       });
       repositionCursor(blockId, detection.remainingContent);
     },
-    [pageId, changeBlockType, updateBlock],
+    [pageId, changeBlockType, updateBlock, focusBlock],
   );
 
   const tryHandleMarkdownShortcut = useCallback(

@@ -12,7 +12,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ChevronDown, PanelLeftClose, PenSquare } from 'lucide-react';
-import { AssetRenderer } from '@univers42/ui-collection';
+import { IconValueView } from "@/shared/ui/atoms/IconValueView";
 import { useUserStore , UserSwitcherPanel } from '@/features/auth';
 import { usePageStore } from '@/store/usePageStore';
 import { useUIStore } from '@/shared/config/uiStore';
@@ -75,7 +75,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
         >
           {/* Avatar (rounded square, like osionos) */}
           <span className="flex items-center justify-center w-[22px] h-[22px] shrink-0 rounded text-base leading-none">
-            <AssetRenderer
+            <IconValueView
               value={persona?.emoji ?? getCollectionEmojiValue('package')}
               size={18}
             />
