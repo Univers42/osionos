@@ -95,24 +95,38 @@ export class AuroraBackground {
     ctx.globalAlpha = 1;
     ctx.fillStyle = ramp;
     ctx.fillRect(0, 0, this.width, this.height);
-    if (this.style === "flat") return;
 
-    const drift = this.style === "aurora-calm" ? 0.45 : 1;
-    const intensity = this.style === "aurora-calm" ? 0.12 : 0.2;
-    ctx.globalCompositeOperation = "screen";
-    BANDS.forEach((band, i) => {
-      const t = this.reducedMotion ? 0 : now * band.speed * drift;
-      const cx = (band.hx + Math.sin(t + band.phase) * 0.06) * this.width;
-      const cy = (band.hy + Math.cos(t * 0.8 + band.phase) * 0.05) * this.height;
-      const r = Math.max(this.width, this.height) * (band.rx + band.ry);
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-      grad.addColorStop(0, this.theme.bands[i % this.theme.bands.length]);
-      grad.addColorStop(1, "transparent");
-      ctx.globalAlpha = intensity;
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, this.width, this.height);
-    });
+    if (this.style !== "flat") {
+      const drift = this.style === "aurora-calm" ? 0.45 : 1;
+      // Calmer than before (was 0.2): the data should lead, not the bands.
+      const intensity = this.style === "aurora-calm" ? 0.1 : 0.14;
+      ctx.globalCompositeOperation = "screen";
+      BANDS.forEach((band, i) => {
+        const t = this.reducedMotion ? 0 : now * band.speed * drift;
+        const cx = (band.hx + Math.sin(t + band.phase) * 0.06) * this.width;
+        const cy = (band.hy + Math.cos(t * 0.8 + band.phase) * 0.05) * this.height;
+        const r = Math.max(this.width, this.height) * (band.rx + band.ry);
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        grad.addColorStop(0, this.theme.bands[i % this.theme.bands.length]);
+        grad.addColorStop(1, "transparent");
+        ctx.globalAlpha = intensity;
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, this.width, this.height);
+      });
+    }
+
+    // Vignette: darken the edges so the graph centers the eye and the console
+    // glass separates from the field.
+    const vx = this.width / 2;
+    const vy = this.height / 2;
+    const vr = Math.max(this.width, this.height) * 0.75;
+    const vignette = ctx.createRadialGradient(vx, vy, vr * 0.35, vx, vy, vr);
+    vignette.addColorStop(0, "transparent");
+    vignette.addColorStop(1, "rgba(0, 0, 0, 0.4)");
     ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, this.width, this.height);
     ctx.globalAlpha = 1;
   }
 }

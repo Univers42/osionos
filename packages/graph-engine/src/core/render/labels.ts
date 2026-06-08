@@ -21,7 +21,6 @@ export function drawLabels(
   const showAll = camera.scale >= minScale;
   let budget = Math.round(60 + visual.labelDensity * 420);
 
-  ctx.font = "12px ui-sans-serif, system-ui, sans-serif";
   ctx.textBaseline = "middle";
 
   for (let i = 0; i < state.count; i += 1) {
@@ -31,7 +30,7 @@ export function drawLabels(
       if (!showAll || budget <= 0) continue;
       budget -= 1;
     }
-    drawLabel(ctx, theme.label, theme.labelHalo, state.labelText[i] ?? state.ids[i], i, d);
+    drawLabel(ctx, theme.label, theme.labelHalo, state.labelText[i] ?? state.ids[i], i, d, accent);
   }
 }
 
@@ -42,13 +41,19 @@ function drawLabel(
   text: string,
   index: number,
   d: DrawCtx,
+  accent: boolean,
 ): void {
   const { state, camera, visual } = d;
   const screen = worldToScreen(camera, state.posX[index], state.posY[index]);
-  const x = screen.x + state.radius[index] * visual.nodeScale * camera.scale + 5;
-  const width = ctx.measureText(text).width;
-  ctx.fillStyle = halo;
-  ctx.fillRect(x - 3, screen.y - 8, width + 6, 16);
+  const x = screen.x + state.radius[index] * visual.nodeScale * camera.scale + 6;
+  // Soft shadow halo (no opaque "sticker" box); accent labels read a touch bolder.
+  ctx.font = `${accent ? "600 " : ""}12px ui-sans-serif, system-ui, sans-serif`;
+  ctx.save();
+  ctx.shadowColor = halo;
+  ctx.shadowBlur = 5;
+  ctx.shadowOffsetY = 1;
   ctx.fillStyle = color;
   ctx.fillText(text, x, screen.y);
+  ctx.fillText(text, x, screen.y); // second pass deepens the halo for contrast
+  ctx.restore();
 }

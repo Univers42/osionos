@@ -46,7 +46,7 @@ export interface Controls {
 export const DEFAULT_CONTROLS: Controls = {
   filter: { hiddenDatabases: [], hiddenKinds: [], hiddenTags: [], tagColors: {} },
   physics: { ...DEFAULT_LAYOUT_PARAMS },
-  visual: { nodeScale: 1, linkScale: 1, labelDensity: 0.5, glow: 1, background: "aurora" },
+  visual: { nodeScale: 1, linkScale: 1, labelDensity: 0.5, glow: 1, background: "aurora-calm" },
   search: { query: "" },
 };
 

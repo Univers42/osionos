@@ -14,20 +14,20 @@ export function drawRings(d: DrawCtx, hoverIndex: number, selectedIndex: number)
   ctx.lineWidth = 1.5 / scale;
   for (let i = 0; i < state.count; i += 1) {
     if (!state.hasNote[i] || state.visible[i] === 0) continue;
-    const r = state.radius[i] * visual.nodeScale + 2.5;
+    const r = state.radius[i] * visual.nodeScale + 3;
     ctx.beginPath();
     ctx.arc(state.posX[i], state.posY[i], r, 0, Math.PI * 2);
     ctx.stroke();
   }
 
-  drawAccentRing(d, hoverIndex, theme.hoverRing, 2);
-  drawAccentRing(d, selectedIndex, theme.selectRing, 2.6);
+  drawAccentRing(d, hoverIndex, theme.hoverRing, 2.4, 4);
+  drawAccentRing(d, selectedIndex, theme.selectRing, 3.4, 5.5);
 }
 
-function drawAccentRing(d: DrawCtx, index: number, color: string, width: number): void {
+function drawAccentRing(d: DrawCtx, index: number, color: string, width: number, offset: number): void {
   const { ctx, state, visual, camera } = d;
   if (index < 0 || index >= state.count || state.visible[index] === 0) return;
-  const r = state.radius[index] * visual.nodeScale + 4;
+  const r = state.radius[index] * visual.nodeScale + offset;
   ctx.strokeStyle = color;
   ctx.lineWidth = width / camera.scale;
   ctx.beginPath();

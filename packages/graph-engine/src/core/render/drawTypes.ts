@@ -25,6 +25,8 @@ export interface DrawCtx {
   alpha: number;
   /** Focus neighborhood (node indices), or null when nothing is focused. */
   focus: ReadonlySet<number> | null;
+  /** When true, decorative effects (ambient hub glow) are suppressed. */
+  reducedMotion: boolean;
 }
 
 export const TAG_EDGE_MIN_SCALE = 0.45;
