@@ -27,6 +27,7 @@ import { edgeStroke, nodeFill } from "../../packages/graph-engine/src/core/theme
 import { DARK_THEME } from "../../packages/graph-engine/src/core/theme/tokens.ts";
 import { cloneControls, DEFAULT_CONTROLS } from "../../packages/graph-engine/src/core/state/controls.ts";
 import { SceneState } from "../../packages/graph-engine/src/core/render/sceneState.ts";
+import { parseStyleKey, shapeOf, styleKey } from "../../packages/graph-engine/src/core/render/nodeShape.ts";
 import { sceneToSvg } from "../../packages/graph-engine/src/core/render/exportSvg.ts";
 import { ForceLayout } from "../../packages/graph-engine/src/core/layout/forceLayout.ts";
 
@@ -151,6 +152,30 @@ test("SceneState builds buffers, groups edges, and applies filters", () => {
   state.applyFilters({ hiddenDatabases: ["db1"], hiddenKinds: [], hiddenTags: [], tagColors: {} });
   assert.equal(state.visible[state.idToIndex.get("a")], 0);
   assert.equal(state.visible[state.idToIndex.get("t")], 1); // tag has no databaseId
+});
+
+test("nodeShape: shapeOf maps kinds + styleKey round-trips", () => {
+  assert.equal(shapeOf("record"), "disc");
+  assert.equal(shapeOf("database"), "disc");
+  assert.equal(shapeOf("tag"), "ring");
+  assert.equal(shapeOf("note"), "note");
+  const parsed = parseStyleKey(styleKey("ring", "oklch(0.7 0.04 255)"));
+  assert.equal(parsed.shape, "ring");
+  assert.equal(parsed.color, "oklch(0.7 0.04 255)"); // color may itself contain no "|"
+});
+
+test("SceneState.styleBuckets groups by shape|color", () => {
+  const model = indexModel(
+    [node("a", "record", "db1", 1), node("b", "record", "db1", 0.5), node("t", "tag", null, 0.2)],
+    [edge("e1", "a", "b", "relation", 1)],
+  );
+  const state = new SceneState();
+  state.setGraph(model);
+  const keys = [...state.styleBuckets.keys()];
+  assert.ok(keys.some((k) => k.startsWith("ring|")), "tag renders as a ring");
+  const discBuckets = keys.filter((k) => k.startsWith("disc|"));
+  const discTotal = discBuckets.reduce((n, k) => n + (state.styleBuckets.get(k)?.length ?? 0), 0);
+  assert.equal(discTotal, 2); // two same-db records share one disc bucket
 });
 
 test("sceneToSvg emits a well-formed SVG with nodes and edges", () => {

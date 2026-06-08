@@ -67,3 +67,25 @@ reuses `second-brain/model`, `baas`, `sync`, `NodeInspector`):
   (camera moved to the package; covered by `graph-engine.test.ts`).
 
 Revert path: all deletions are in git history on `refactor_perf_and_mark`.
+
+## Visual refinement — "flat constellation" (2026-06-08)
+
+Follow-up pass after live data landed: the nodes read as dated glossy beads. Node
+visual language redesigned (decisions: flat constellation, shape + color, full pass):
+
+- **Nodes:** dropped the 0.6 white sheen + black rim + per-node baked glow. Now a dark
+  matte backing (legibility on the aurora at any hue) + flat solid core + ≤0.14 sheen +
+  crisp light rim. Higher-contrast database hues (`oklch 0.72 / 0.17`).
+- **Shape language:** record = filled disc, tag = hollow ring (hub), note = ringed orb.
+  Sprites batch by `shape|color` (was color-only) via a shared DOM-free `nodeShape.ts`.
+- **Glow** is now a dynamic emphasis pass (`glowPass.ts`): faint on degree hubs
+  (decorative → off under reduced motion), bright on hover/selected — not every node.
+- **Selection/hover:** bolder rings, and the node is raised above any overlap.
+- **Labels:** soft shadow halo (was an opaque "sticker" box); accent labels bolder.
+- **Background:** calmer bands (0.2 → 0.13 / calm 0.10) + a vignette; default `aurora-calm`.
+- **Legend:** kind chips show the shape glyph (`widgets.tsx`/`FiltersPanel`); SVG export
+  reflects shapes (tags as rings).
+
+Gates: `vite build` green; `tsc -p packages/graph-engine` clean; package ESLint (incl.
+import firewall) 0 warnings; canvas units **16/16** (2 new: `shapeOf`/`styleKey` +
+`styleBuckets`). `scene.ts` is 267 lines — a pre-existing >200 godfile to split separately.
