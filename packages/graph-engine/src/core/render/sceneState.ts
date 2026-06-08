@@ -10,6 +10,7 @@ import type { WorldBounds } from "../camera/transform";
 import type { FilterState } from "../state/controls";
 import { nodeFill } from "../theme/colors";
 import { weightToRadius } from "../model/weights";
+import { shapeOf, styleKey } from "./nodeShape";
 import { TIERS, strengthTier } from "./tiers";
 
 export const MIN_RADIUS = 5;
@@ -28,7 +29,8 @@ export class SceneState {
   databaseId: (string | null)[] = [];
   source: string[] = [];
   hasNote = new Uint8Array(0);
-  colorBuckets = new Map<string, number[]>();
+  /** Node indices grouped by `shape|color` so each sprite is blitted in one batch. */
+  styleBuckets = new Map<string, number[]>();
 
   edgeFrom = new Uint32Array(0);
   edgeTo = new Uint32Array(0);
@@ -86,7 +88,7 @@ export class SceneState {
   recolor(tagColors: Map<string, string>): void {
     this.tagColors = tagColors;
     this.fills = new Array<string>(this.count);
-    this.colorBuckets = new Map();
+    this.styleBuckets = new Map();
     for (let i = 0; i < this.count; i += 1) {
       const color = nodeFill(
         {
@@ -98,9 +100,10 @@ export class SceneState {
         tagColors,
       );
       this.fills[i] = color;
-      const bucket = this.colorBuckets.get(color);
+      const key = styleKey(shapeOf(this.kind[i]), color);
+      const bucket = this.styleBuckets.get(key);
       if (bucket) bucket.push(i);
-      else this.colorBuckets.set(color, [i]);
+      else this.styleBuckets.set(key, [i]);
     }
   }
 
