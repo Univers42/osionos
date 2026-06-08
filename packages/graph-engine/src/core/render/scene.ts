@@ -56,6 +56,7 @@ export class CanvasScene implements InteractionHost {
     if (!ctx) throw new Error("[graph-engine] 2D canvas context unavailable");
     this.canvas = canvas;
     this.ctx = ctx;
+    this.sprites.setTheme(theme.nodeBacking);
     this.interaction = new SceneInteraction(this, callbacks);
     this.requestDraw();
   }
@@ -93,14 +94,13 @@ export class CanvasScene implements InteractionHost {
 
   setTheme(theme: SceneTheme): void {
     this.theme = theme;
-    this.sprites.clear();
+    this.sprites.setTheme(theme.nodeBacking);
     this.requestDraw();
   }
 
   /** Apply console filters + visual settings (physics is handled by the engine). */
   setControls(controls: Controls): void {
     this.visual = controls.visual;
-    this.sprites.setGlow(controls.visual.glow);
     const sig = JSON.stringify(controls.filter.tagColors);
     if (sig !== this.tagColorSig) {
       this.tagColorSig = sig;
@@ -143,9 +143,7 @@ export class CanvasScene implements InteractionHost {
 
   // ---- camera --------------------------------------------------------------
 
-  getCamera(): Camera {
-    return this.camera;
-  }
+  getCamera(): Camera { return this.camera; }
 
   setCamera(camera: Camera): void {
     this.camera = camera;
@@ -178,9 +176,7 @@ export class CanvasScene implements InteractionHost {
 
   // ---- accessors / InteractionHost -----------------------------------------
 
-  getModel(): GraphModel | null {
-    return this.model;
-  }
+  getModel(): GraphModel | null { return this.model; }
 
   exportSvg(): string {
     return sceneToSvg(this.state, this.theme, this.visual);
@@ -258,6 +254,7 @@ export class CanvasScene implements InteractionHost {
       focus: this.focusIndices,
       hoverIndex: this.hoverIndex,
       selectedIndex: this.selectedIndex,
+      reducedMotion: this.reducedMotion,
     });
     if (this.dirty || isRevealing(this.reveal, now)) {
       this.rafId = requestAnimationFrame(() => this.frame());

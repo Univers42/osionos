@@ -14,7 +14,8 @@ import type { SceneState } from "./sceneState";
 import type { NodeSpriteCache } from "./sprites";
 import type { DrawCtx } from "./drawTypes";
 import { drawLinks } from "./links";
-import { drawNodes } from "./nodes";
+import { drawGlow } from "./glowPass";
+import { drawNodes, drawNodeSprite } from "./nodes";
 import { drawRings } from "./rings";
 import { drawLabels } from "./labels";
 
@@ -33,6 +34,7 @@ export interface FrameInput {
   focus: ReadonlySet<number> | null;
   hoverIndex: number;
   selectedIndex: number;
+  reducedMotion: boolean;
 }
 
 export function renderFrame(f: FrameInput): void {
@@ -52,6 +54,7 @@ export function renderFrame(f: FrameInput): void {
     reveal: f.reveal,
     alpha: 1,
     focus: f.focus,
+    reducedMotion: f.reducedMotion,
   };
 
   ctx.save();
@@ -62,12 +65,17 @@ export function renderFrame(f: FrameInput): void {
     const dim: DrawCtx = { ...base, alpha: f.theme.dimAlpha };
     drawLinks(dim);
     drawNodes(dim, f.sprites);
+    drawGlow(base, f.hoverIndex, f.selectedIndex);
     drawLinks(base, true);
     drawNodes(base, f.sprites, true);
   } else {
     drawLinks(base);
+    drawGlow(base, f.hoverIndex, f.selectedIndex);
     drawNodes(base, f.sprites);
   }
+  // Raise the hovered + selected node above any overlap, then ring them on top.
+  drawNodeSprite(base, f.sprites, f.selectedIndex);
+  if (f.hoverIndex !== f.selectedIndex) drawNodeSprite(base, f.sprites, f.hoverIndex);
   drawRings(base, f.hoverIndex, f.selectedIndex);
   ctx.restore();
 
