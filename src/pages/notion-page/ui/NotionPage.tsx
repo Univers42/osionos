@@ -46,7 +46,11 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
   }, []);
 
   const page = usePageStore((s) => s.pageById(pageId));
-  const globalActivePage = usePageStore((s) => s.activePage);
+  // Panes pass their own activePageRef, so they must NOT subscribe to the global
+  // activePage — otherwise focusing any one pane re-renders ALL open panes' editors
+  // (the pane-level React.memo can't stop a store subscription inside it). Only the
+  // single-view case (no ref) subscribes.
+  const globalActivePage = usePageStore((s) => (activePageRef ? null : s.activePage));
   const activePage = activePageRef ?? globalActivePage;
   const activeUserId = useUserStore((s) => s.activeUserId);
   const safeUserId = activeUserId || "anonymous";
