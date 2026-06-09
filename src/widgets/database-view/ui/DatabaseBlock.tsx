@@ -17,7 +17,6 @@ import { ObjectDatabase, type ObjectDatabaseProps } from '@notion-db/object-data
 import type { Block } from '@/entities/block';
 import type { PageEntry, PagePropertyEntry } from '@/entities/page';
 import { useUserStore } from '@/features/auth';
-import { OsionosPage } from '@/pages/notion-page/ui/NotionPage';
 import {
   DEFAULT_OBJECT_DATABASE_ID,
   DEFAULT_OBJECT_DATABASE_VIEW_ID,
@@ -26,9 +25,17 @@ import { usePageStore } from '@/store/usePageStore';
 import { derivePageState } from '@/store/pageStore.helpers';
 import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseViewCatalog';
 import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
+import { getLiveDatabaseAdapter, isLiveDatabaseId } from '../model/liveDatabaseAdapter';
 import { getObjectDatabaseAdapter, hasObjectDatabaseRemoteAdapter } from '../model/objectDatabaseAdapter';
 import { isWorkspaceDatabaseId, isWorkspaceViewId } from '../model/workspaceDatabaseConstants';
 import { WorkspaceDatabaseBlock } from './WorkspaceDatabaseBlock';
+
+// Async boundary: the full osionos page (and its editor tree) loads only when
+// a database row is opened — keeping the database view chunk free of the
+// editor (same code-split discipline as lazyViews.tsx).
+const OsionosPage = React.lazy(() =>
+  import('@/pages/notion-page/ui/NotionPage').then((m) => ({ default: m.OsionosPage })),
+);
 
 const INLINE_KNOWN_DATABASE_LOAD_LIMIT = 8;
 
@@ -59,10 +66,37 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     [mode],
   );
   const remoteDatabaseAdapter = React.useMemo(() => getObjectDatabaseAdapter(), []);
+  const liveDatabaseAdapter = React.useMemo(
+    () => (isLiveDatabaseId(resolvedDatabaseId) ? getLiveDatabaseAdapter(resolvedDatabaseId) : null),
+    [resolvedDatabaseId],
+  );
   const renderPage = React.useCallback<NonNullable<ObjectDatabaseProps['renderPage']>>(
     (pageId, state, onClose) => <DatabaseObjectPage pageId={pageId} state={state} onClose={onClose} />,
     [],
   );
+
+  if (liveDatabaseAdapter) {
+    return (
+      <div
+        className={[
+          'osionos-database-block w-full min-w-0 overflow-auto',
+          mode === 'full' ? 'osionos-database-block--full h-full' : 'osionos-database-block--inline my-2',
+        ].join(' ')}
+        data-database-id={resolvedDatabaseId}
+        data-database-view-id={resolvedInitialView}
+      >
+        <ObjectDatabase
+          adapter={liveDatabaseAdapter}
+          databaseId={resolvedDatabaseId}
+          initialView={resolvedInitialView}
+          mode={resolvedMode}
+          renderPage={renderPage}
+          className={mode === 'full' ? 'h-full' : undefined}
+          chrome="single-view"
+        />
+      </div>
+    );
+  }
 
   if (isWorkspaceDatabaseId(resolvedDatabaseId) || isWorkspaceViewId(resolvedInitialView)) {
     return (
@@ -197,7 +231,17 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
             Close
           </button>
         </div>
-        {osionosPage ? <OsionosPage pageId={pageId} /> : (
+        {osionosPage ? (
+          <React.Suspense
+            fallback={(
+              <div className="mx-auto max-w-3xl px-10 py-10 text-sm text-[var(--osio-fg-muted)]">
+                Loading page…
+              </div>
+            )}
+          >
+            <OsionosPage pageId={pageId} />
+          </React.Suspense>
+        ) : (
           <div className="mx-auto max-w-3xl px-10 py-10 text-sm text-[var(--osio-fg-muted)]">
             Page unavailable
           </div>
