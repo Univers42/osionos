@@ -16,8 +16,10 @@ import { readFileSync } from "node:fs";
 
 import { parseMarkdownToBlocks } from "../../src/shared/lib/markengine/markdown/shortcuts.ts";
 
+// Vendored copy of wiki/cybersecurity/auth-environment.md (the doc moved out
+// of the old monorepo docs/ path, which the test container never mounts).
 const AUTH_ENVIRONMENT_MARKDOWN = readFileSync(
-  new URL("../../../../../docs/auth-environment.md", import.meta.url),
+  new URL("./fixtures/auth-environment.md", import.meta.url),
   "utf8",
 );
 

@@ -17,8 +17,10 @@ import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
 import { tabToActivePage } from "@/widgets/workspace-grid/model/layoutSync";
+import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { HomeTabView } from "./HomeTabView";
 import { FolderTabView } from "./FolderTabView";
+import { PageBlocksRenderer } from "./PageBlocksRenderer";
 import {
   LazyAgentConversationPage,
   LazyChannelMessagesView,
@@ -33,11 +35,18 @@ const LoadingPane: React.FC = () => (
   </div>
 );
 
-/** A page tab: lazily fetch its content, then render agent or osionos view. */
-const PageTabView: React.FC<{ tab: WorkspaceTab }> = ({ tab }) => {
+/** A page tab: lazily fetch its content, then render agent or osionos view.
+ *  Only the FOCUSED pane mounts the heavy editable editor; the other open panes
+ *  render the cheap, already-virtualized read-only view (identical visuals, no
+ *  edit machinery). Focusing a pane swaps it to the editor. This turns "8 live
+ *  editors" — the dominant cost with many panes open — into "1 editor + N cheap
+ *  views" (VSCode-style: inactive splits are lightweight). */
+const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab, paneId }) => {
   const page = usePageStore((s) => s.pageById(tab.pageId));
   const fetchPageContent = usePageStore((s) => s.fetchPageContent);
   const jwt = useUserStore((s) => s.activePageJwt() ?? "");
+  // No paneId → single-pane (non-grid) context: always the live editor.
+  const isFocusedPane = useWorkspaceLayout((s) => !paneId || s.activePaneId === paneId);
 
   useEffect(() => {
     if (!page && jwt) fetchPageContent(tab.pageId, jwt);
@@ -47,6 +56,23 @@ const PageTabView: React.FC<{ tab: WorkspaceTab }> = ({ tab }) => {
   if (page.surface === "agent") {
     return <div className="h-full overflow-hidden"><LazyAgentConversationPage pageId={tab.pageId} /></div>;
   }
+  if (!isFocusedPane) {
+    // Cheap read-only preview for an unfocused split. `.osionos-page` is the scroll
+    // container PageBlocksRenderer virtualizes against. Click anywhere focuses the
+    // pane → activePaneId flips → this swaps to the live editor.
+    return (
+      <div className="osionos-page h-full overflow-auto bg-[var(--osio-bg-page)]">
+        <div className="mx-auto w-full max-w-3xl px-12 py-10">
+          {(page.icon || page.title) ? (
+            <h1 className="mb-4 text-3xl font-bold text-[var(--osio-fg-default)]">
+              {page.icon ? <span className="mr-2">{page.icon}</span> : null}{page.title}
+            </h1>
+          ) : null}
+          <PageBlocksRenderer blocks={page.content ?? []} />
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="h-full overflow-hidden">
       <LazyOsionosPage pageId={tab.pageId} activePageRef={tabToActivePage(tab)} />
@@ -55,7 +81,7 @@ const PageTabView: React.FC<{ tab: WorkspaceTab }> = ({ tab }) => {
 };
 
 /** Render the right view for one tab — the per-pane equivalent of MainContent. */
-export const PaneContent: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab, paneId }) => {
+const PaneContentImpl: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab, paneId }) => {
   if (tab.kind === "home") return <HomeTabView />;
 
   if (tab.kind === "folder") return <FolderTabView tab={tab} paneId={paneId} />;
@@ -97,8 +123,13 @@ export const PaneContent: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ 
   return (
     <ErrorBoundary>
       <Suspense fallback={<LoadingPane />}>
-        <PageTabView tab={tab} />
+        <PageTabView tab={tab} paneId={paneId} />
       </Suspense>
     </ErrorBoundary>
   );
 };
+
+// Memoized: a sibling pane gaining focus or a drag starting re-renders PaneView,
+// but the tab/paneId here are stable per layout node, so this editor subtree is
+// skipped — the dominant cost when 8 panes are open.
+export const PaneContent = React.memo(PaneContentImpl);

@@ -70,6 +70,7 @@ export function usePaneDnd(paneId: string) {
   }
 
   return {
+    dragActive,
     dropZone: dragActive ? zone : null,
     dropHandlers: { onDragOver, onDragLeave: () => setZone(null), onDrop },
   };
