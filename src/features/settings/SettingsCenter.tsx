@@ -12,10 +12,9 @@
 
 /* eslint-disable react/prop-types */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import JSZip from 'jszip';
-import i18n from 'i18next';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import QRCode from 'qrcode';
+// jszip / i18next / pdf-lib / qrcode are click-path only (export, language
+// change, invoice PDF, 2FA QR): they are imported dynamically at their call
+// sites so the settings chunk stays lean (~280KB of deps off its parse path).
 import { startRegistration } from '@simplewebauthn/browser';
 import {
   Bell,
@@ -295,11 +294,14 @@ function applyTheme(theme: 'light' | 'dark' | 'system') {
 }
 
 function changeLanguage(language: string) {
-  if (i18n.isInitialized) {
-    runAsync(i18n.changeLanguage(language));
-    return;
-  }
-  recordSettingsAction('i18n_change_stub', { language, todo: 'Initialize react-i18next app provider.' });
+  runAsync((async () => {
+    const { default: i18n } = await import('i18next');
+    if (i18n.isInitialized) {
+      await i18n.changeLanguage(language);
+      return;
+    }
+    recordSettingsAction('i18n_change_stub', { language, todo: 'Initialize react-i18next app provider.' });
+  })());
 }
 
 async function postAccountAction<T>(path: string, body: unknown): Promise<T | null> {
@@ -815,7 +817,8 @@ const TwoFactorModal: React.FC<{ enabled: boolean; onEnabled: (enabled: boolean)
   const toast = useToastStore((state) => state.push);
   useEffect(() => {
     if (enabled) return;
-    runAsync(postAccountAction<{ otpauthUrl?: string }>('/api/account/2fa/enroll', {}).then((response) => QRCode.toDataURL(response?.otpauthUrl ?? `otpauth://totp/osionos:${Date.now()}?secret=LOCALDEV&issuer=osionos`).then(setQrDataUrl)));
+    runAsync(Promise.all([import('qrcode'), postAccountAction<{ otpauthUrl?: string }>('/api/account/2fa/enroll', {})])
+      .then(([{ default: QRCode }, response]) => QRCode.toDataURL(response?.otpauthUrl ?? `otpauth://totp/osionos:${Date.now()}?secret=LOCALDEV&issuer=osionos`).then(setQrDataUrl)));
   }, [enabled]);
   return (
     <Modal open onClose={onClose} title="Two-step verification" size="sm">
@@ -1002,6 +1005,7 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
     } catch {
       recordSettingsAction('workspace_export_remote_failed', { workspaceId });
     }
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
     pages.forEach((page) => zip.file(`${safeSlug(page.title || 'untitled') || page._id}.json`, JSON.stringify(page, null, 2)));
     downloadBlob(`${safeSlug(settings.name)}.zip`, await zip.generateAsync({ type: 'blob' }));
@@ -1764,6 +1768,7 @@ const BillingPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId = 'local
 };
 
 async function downloadInvoicePdf(invoice: BillingInvoice) {
+  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595, 842]);
   const font = await pdf.embedFont(StandardFonts.Helvetica);

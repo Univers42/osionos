@@ -757,17 +757,29 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
     undoStack: [],
     redoStack: [],
   });
+  // Measured auto-height footprints are PRESENTATION state: they depend on
+  // this instance's rendered width, so they are resolved at render time and
+  // NEVER persisted. Persisting them (the old auto-write effect) made two
+  // views of the same page at different widths overwrite each other's spans
+  // through the page store in an infinite loop (React #185 — the app crashed
+  // the moment a pane resize made their measurements diverge).
+  const resolvedCells = useMemo(
+    () => resolveMeasuredAutoHeightFootprints(cells, config, measuredCellHeightsRef.current),
+    // measurementVersion invalidates the memo when a cell crosses a row boundary
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cells, config, measurementVersion],
+  );
   const selectedCell = useMemo(
-    () => cells.find((cell) => cell.id === selectedCellId) ?? null,
-    [cells, selectedCellId],
+    () => resolvedCells.find((cell) => cell.id === selectedCellId) ?? null,
+    [resolvedCells, selectedCellId],
   );
   useEffect(() => {
-    cellsRef.current = cells;
-    const liveCellIds = new Set(cells.map((cell) => cell.id));
+    cellsRef.current = resolvedCells;
+    const liveCellIds = new Set(resolvedCells.map((cell) => cell.id));
     for (const cellId of measuredCellHeightsRef.current.keys()) {
       if (!liveCellIds.has(cellId)) measuredCellHeightsRef.current.delete(cellId);
     }
-  }, [cells]);
+  }, [resolvedCells]);
 
   const configRef = useRef(config);
   useEffect(() => {
@@ -808,14 +820,6 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
     },
     [block.id, onUpdateBlock, pageId, updateBlock],
   );
-
-  useEffect(() => {
-    if (interactionMode) return;
-    const nextCells = resolveMeasuredAutoHeightFootprints(cellsRef.current, config, measuredCellHeightsRef.current);
-    if (nextCells === cellsRef.current) return;
-    cellsRef.current = nextCells;
-    updateLayout({ layoutCells: nextCells });
-  }, [cells, config, interactionMode, measurementVersion, updateLayout]);
 
   const captureLayoutSnapshot = useCallback((): LayoutHistorySnapshot => ({
     layoutConfig: structuredClone(config),
@@ -1451,11 +1455,11 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
           >
             <LayoutAlignmentGuidesLayer guides={alignmentGuides} />
 
-            {cells.length === 0 ? (
+            {resolvedCells.length === 0 ? (
               <LayoutEmptyState onAdd={() => addCell()} onTemplate={applyTemplate} />
             ) : null}
 
-            {cells.map((cell) => (
+            {resolvedCells.map((cell) => (
               <LayoutCellView
                 key={cell.id}
                 cell={cell}
