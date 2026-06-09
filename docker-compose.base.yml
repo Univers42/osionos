@@ -5,6 +5,9 @@ services:
     image: mongo:7.0
     container_name: playground_mongodb
     restart: unless-stopped
+    # Unbounded, WiredTiger grows its cache toward 50% of HOST RAM; the seeded
+    # playground data is ~100MB, so cap the container instead.
+    mem_limit: 512m
     ports:
       - "${MONGO_PORT:-27018}:27017"
     environment:

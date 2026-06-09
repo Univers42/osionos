@@ -22,13 +22,12 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState, useMemo } from "react";
+import React, { lazy, Suspense, useState, useMemo } from "react";
 import { EquationView } from "@/shared/ui/EquationView";
 import type { Block } from '@/entities/block';
 import { getNumberedMarker, getBulletMarker } from '@/entities/block/model/listMarkers';
 import { getToggleHeadingClass } from '@/entities/block/model/toggleHeading';
 import { ChevronRight } from "lucide-react";
-import { DatabaseBlock } from '@/widgets/database-view';
 import { CalloutBlockReadOnly } from "./CalloutBlockReadOnly";
 import { CodeBlockReadOnly } from "./CodeBlockReadOnly";
 import { MediaBlockReadOnly } from "./MediaBlockReadOnly";
@@ -37,6 +36,20 @@ import { renderInlineToReact } from '@/shared/lib/markengine';
 import { timed } from '@/shared/lib/perf/measure';
 import { InternalPageLink } from "@/entities/page";
 import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
+
+// Async boundary: database blocks are rare in rendered pages. Loading the
+// database view lazily (deep path, not the barrel) keeps the read-only
+// renderer — which every surface's warm path includes — free of the
+// database/editor tree (same code-split discipline as lazyViews.tsx).
+const DatabaseBlock = lazy(() =>
+  import("@/widgets/database-view/ui/DatabaseBlock").then((m) => ({ default: m.DatabaseBlock })),
+);
+
+const databaseLoadingFallback = (
+  <div className="my-2 flex items-center justify-center py-8">
+    <div className="animate-spin w-5 h-5 border-2 border-[var(--osio-accent)] border-t-transparent rounded-full" />
+  </div>
+);
 
 interface BlockProps {
   block: Block;
@@ -393,21 +406,25 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
 
     case "database_inline":
       return (
-        <DatabaseBlock
-          databaseId={block.databaseId}
-          initialViewId={block.viewId}
-          mode="inline"
-        />
+        <Suspense fallback={databaseLoadingFallback}>
+          <DatabaseBlock
+            databaseId={block.databaseId}
+            initialViewId={block.viewId}
+            mode="inline"
+          />
+        </Suspense>
       );
 
     case "database_full_page":
       return (
         <div className="my-3 min-h-[520px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
-          <DatabaseBlock
-            databaseId={block.databaseId}
-            initialViewId={block.viewId}
-            mode="full"
-          />
+          <Suspense fallback={databaseLoadingFallback}>
+            <DatabaseBlock
+              databaseId={block.databaseId}
+              initialViewId={block.viewId}
+              mode="full"
+            />
+          </Suspense>
         </div>
       );
 

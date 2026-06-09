@@ -13,7 +13,7 @@
 import React, { Suspense, useEffect, useState } from "react";
 import { ChevronDown, LayoutDashboard, Network, Database, Images } from "lucide-react";
 
-import { getHomeDashboardPageId } from "@/widgets/database-view/model/databaseViewCatalog";
+import { getHomeDashboardPageId } from "@/widgets/database-view/model/databaseViewCatalog.meta";
 import { WS_FILES_DB_ID, WS_FILES_TABLE_VIEW } from "@/widgets/database-view/model/workspaceDatabaseConstants";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
