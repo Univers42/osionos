@@ -13,13 +13,12 @@
 import React, { useEffect } from "react";
 
 import {
-  createViewShowcaseLayoutContent,
   getKnownDatabaseView,
   getHomeDashboardPageId,
   HOME_DASHBOARD_PAGE_ICON,
   HOME_DASHBOARD_PAGE_TITLE,
   KNOWN_DATABASE_VIEWS,
-} from "@/widgets/database-view/model/databaseViewCatalog";
+} from "@/widgets/database-view/model/databaseViewCatalog.meta";
 import { WorkspaceGrid } from "@/widgets/workspace-grid";
 import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, savePagesCache } from "@/store/pageStore.helpers";
@@ -44,7 +43,10 @@ function homeDashboardNeedsRefresh(page: PageEntry | undefined, focusViewId: str
   return Boolean(focusViewId && getHomeDashboardFocusViewId(page) !== focusViewId);
 }
 
-function createHomeDashboardPage(workspaceId: string, ownerId: string | null, focusViewId = HOME_DASHBOARD_FOCUS_VIEW_ID): PageEntry {
+type ShowcaseLayoutContentBuilder =
+  typeof import("@/widgets/database-view/model/databaseViewCatalog")["createViewShowcaseLayoutContent"];
+
+function createHomeDashboardPage(createContent: ShowcaseLayoutContentBuilder, workspaceId: string, ownerId: string | null, focusViewId = HOME_DASHBOARD_FOCUS_VIEW_ID): PageEntry {
   const focusView = getKnownDatabaseView(focusViewId) ?? getKnownDatabaseView(HOME_DASHBOARD_FOCUS_VIEW_ID);
   return {
     _id: getHomeDashboardPageId(workspaceId),
@@ -71,7 +73,7 @@ function createHomeDashboardPage(workspaceId: string, ownerId: string | null, fo
       },
       { key: "focus_view", label: "Featured /view", type: "text", value: focusView?.id ?? "v-prod-table" },
     ],
-    content: createViewShowcaseLayoutContent("full_page", focusView?.id, { idScope: getHomeDashboardPageId(workspaceId) }),
+    content: createContent("full_page", focusView?.id, { idScope: getHomeDashboardPageId(workspaceId) }),
     surface: "home",
     homeDashboardVersion: HOME_DASHBOARD_VERSION,
   };
@@ -96,26 +98,34 @@ export const MainContent: React.FC = () => {
     if (!firstWsId) return;
     if (!homeDashboardNeedsRefresh(homeDashboardPage, HOME_DASHBOARD_FOCUS_VIEW_ID)) return;
 
-    const nextHomePage = createHomeDashboardPage(firstWsId, activeUserId || null, HOME_DASHBOARD_FOCUS_VIEW_ID);
-    usePageStore.setState((state) => {
-      const existingPages = state.pages[firstWsId] ?? [];
-      const existingIndex = existingPages.findIndex((page) => page._id === nextHomePage._id && !page.archivedAt);
-      if (existingIndex >= 0) {
-        const existingHomePage = existingPages[existingIndex];
-        const migratedHomePage: PageEntry = {
-          ...nextHomePage,
-          title: existingHomePage.title || nextHomePage.title,
-          icon: existingHomePage.icon ?? nextHomePage.icon,
-          cover: existingHomePage.cover ?? nextHomePage.cover,
-        };
-        const pages = { ...state.pages, [firstWsId]: existingPages.map((page, index) => index === existingIndex ? migratedHomePage : page) };
+    // The showcase builder drags in the seeded database state (~600KB JSON),
+    // so it is loaded on demand: only when the dashboard needs (re)seeding —
+    // the common path (dashboard already current) never downloads it.
+    let cancelled = false;
+    void import("@/widgets/database-view/model/databaseViewCatalog").then(({ createViewShowcaseLayoutContent }) => {
+      if (cancelled) return;
+      const nextHomePage = createHomeDashboardPage(createViewShowcaseLayoutContent, firstWsId, activeUserId || null, HOME_DASHBOARD_FOCUS_VIEW_ID);
+      usePageStore.setState((state) => {
+        const existingPages = state.pages[firstWsId] ?? [];
+        const existingIndex = existingPages.findIndex((page) => page._id === nextHomePage._id && !page.archivedAt);
+        if (existingIndex >= 0) {
+          const existingHomePage = existingPages[existingIndex];
+          const migratedHomePage: PageEntry = {
+            ...nextHomePage,
+            title: existingHomePage.title || nextHomePage.title,
+            icon: existingHomePage.icon ?? nextHomePage.icon,
+            cover: existingHomePage.cover ?? nextHomePage.cover,
+          };
+          const pages = { ...state.pages, [firstWsId]: existingPages.map((page, index) => index === existingIndex ? migratedHomePage : page) };
+          savePagesCache(pages);
+          return derivePageState(pages, state.pageIdsByWorkspace);
+        }
+        const pages = { ...state.pages, [firstWsId]: [nextHomePage, ...existingPages] };
         savePagesCache(pages);
         return derivePageState(pages, state.pageIdsByWorkspace);
-      }
-      const pages = { ...state.pages, [firstWsId]: [nextHomePage, ...existingPages] };
-      savePagesCache(pages);
-      return derivePageState(pages, state.pageIdsByWorkspace);
+      });
     });
+    return () => { cancelled = true; };
   }, [activeUserId, firstWsId, homeDashboardPage]);
 
   return <WorkspaceGrid />;
