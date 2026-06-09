@@ -429,6 +429,16 @@
   height: 1px;
 }
 
+/* While a workspace pane is being reshaped (body flag set by PaneSplitter),
+   off-screen layout cells skip layout/paint entirely: a 12-pane workspace of
+   dashboards only relayouts the cells actually in view, instead of every cell
+   of every resized dashboard on every frame. Scoped to the drag so the paint
+   containment it implies can never clip an open popover during normal use. */
+body[data-pane-resizing] .osionos-layout-cell {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
+}
+
 .osionos-layout-cell {
   position: relative;
   z-index: 1;
