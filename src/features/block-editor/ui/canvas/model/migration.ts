@@ -23,6 +23,14 @@ import {
   type CanvasState,
 } from "./types";
 import { createCanvasHistory } from "./history";
+import {
+  legacySizingFromCanvas,
+  migrateHorizontalConstraint,
+  migrateVerticalConstraint,
+  sizingFromLegacy,
+  unmigrateHorizontalConstraint,
+  unmigrateVerticalConstraint,
+} from "./migrationMaps";
 
 export function gridConfigFromLegacy(config: Partial<LayoutConfig> | undefined): CanvasGridConfig {
   const gap = finiteNumber(config?.gap, 16);
@@ -55,7 +63,7 @@ export function migrate(legacyCell: LayoutCell, gridConfig: CanvasGridConfig, in
       horizontal: migrateHorizontalConstraint(legacyCell.horizontalConstraint),
       vertical: migrateVerticalConstraint(legacyCell.verticalConstraint),
     },
-    sizing: { width: "fixed", height: legacyCell.verticalConstraint === "hug" ? "hug" : "fixed" },
+    sizing: sizingFromLegacy(legacyCell.sizing),
     visuals: {
       label: legacyCell.label,
       tint: legacyCell.tint,
@@ -86,7 +94,7 @@ export function unmigrate(canvasCell: CanvasCell, gridConfig: CanvasGridConfig):
     blockType: canvasCell.blockType,
     textColor: canvasCell.visuals.foreground,
     backgroundColor: canvasCell.visuals.background,
-    sizing: "fixed" as const,
+    sizing: legacySizingFromCanvas(canvasCell.sizing),
     horizontalConstraint: unmigrateHorizontalConstraint(canvasCell.constraints.horizontal),
     verticalConstraint: unmigrateVerticalConstraint(canvasCell.constraints.vertical),
     wrap: canvasCell.wrap,
@@ -144,30 +152,6 @@ function gridCellFromFrame(frame: CanvasFrame, config: CanvasGridConfig): Pick<L
   const rowSpan = Math.max(1, Math.round((frame.height + config.rowGap) / (config.rowHeight + config.rowGap)));
   const offset = { x: frame.x - (colStart - 1) * (config.columnWidth + config.columnGap), y: frame.y - (rowStart - 1) * (config.rowHeight + config.rowGap) };
   return pruneUndefined({ colStart, colSpan, rowStart, rowSpan, offset: offset.x || offset.y ? offset : undefined });
-}
-
-function migrateHorizontalConstraint(value: LayoutCell["horizontalConstraint"]): CanvasCell["constraints"]["horizontal"] {
-  if (value === "stretch") return "min-max";
-  if (value === "scale") return "scale";
-  return "min";
-}
-
-function migrateVerticalConstraint(value: LayoutCell["verticalConstraint"]): CanvasCell["constraints"]["vertical"] {
-  if (value === "stretch") return "min-max";
-  if (value === "hug") return "hug";
-  return "min";
-}
-
-function unmigrateHorizontalConstraint(value: CanvasCell["constraints"]["horizontal"]): LayoutCell["horizontalConstraint"] {
-  if (value === "min-max") return "stretch";
-  if (value === "scale") return "scale";
-  return "left";
-}
-
-function unmigrateVerticalConstraint(value: CanvasCell["constraints"]["vertical"]): LayoutCell["verticalConstraint"] {
-  if (value === "min-max") return "stretch";
-  if (value === "hug") return "hug";
-  return "top";
 }
 
 function finiteNumber(value: unknown, fallback: number): number {
