@@ -100,3 +100,55 @@
   font-family: var(--osio-font-family-mono);
   font-size: 11px;
 }
+
+/* ---- In-page Canvas V2 stage (the real layout block editor) -------------- */
+/* Frames are authored in a fixed canvas space; --osio-canvas-sx (set by a    */
+/* ResizeObserver, no React) scales every horizontal value so the layout      */
+/* stays as fluid as the legacy CSS grid. --osio-cell-dx/dy/dw/dh carry the   */
+/* live gesture preview in frame px without a single re-render.              */
+
+.osio-canvas-v2-root .osio-canvas-v2-stage {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  background: none;
+}
+
+.osio-canvas-v2-root .osionos-layout-cell {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(var(--osio-canvas-sx, 1) * (var(--osio-cell-w, 0px) + var(--osio-cell-dw, 0px)));
+  transform: translate3d(
+    calc(var(--osio-canvas-sx, 1) * (var(--osio-cell-x, 0px) + var(--osio-cell-dx, 0px))),
+    calc(var(--osio-cell-y, 0px) + var(--osio-cell-dy, 0px)),
+    0
+  );
+  will-change: transform;
+}
+
+.osio-canvas-v2-root .osionos-layout-cell[data-layout-sizing="fixed"] {
+  height: calc(var(--osionos-layout-cell-min-height, 96px) + var(--osio-cell-dh, 0px));
+}
+
+.osio-canvas-v2-root .osionos-layout-cell[data-layout-sizing="auto-height"],
+.osio-canvas-v2-root .osionos-layout-cell[data-layout-sizing="auto"] {
+  height: auto;
+  min-height: calc(var(--osionos-layout-cell-min-height, 96px) + var(--osio-cell-dh, 0px));
+}
+
+/* Nested editors must not swallow pointer events mid-gesture. */
+.osio-canvas-v2-root [data-layout-interacting="true"] .osionos-layout-cell-editor {
+  pointer-events: none;
+  user-select: none;
+}
+
+.osio-canvas-v2-marquee {
+  position: absolute;
+  z-index: var(--osio-z-raised);
+  border: 1px solid var(--osio-accent);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--osio-accent) 10%, transparent);
+  pointer-events: none;
+}

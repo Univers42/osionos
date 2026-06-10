@@ -46,11 +46,14 @@ export function gridConfigFromLegacy(config: Partial<LayoutConfig> | undefined):
 }
 
 export function layoutConfigFromLegacy(config: Partial<LayoutConfig> | undefined): CanvasLayoutConfig {
+  const guideVisibility = config?.guideVisibility;
   return {
     ...gridConfigFromLegacy(config),
     rootFrame: CANVAS_DEFAULT_FRAME,
     parentMode: "layout-root",
     noOverlap: !(config?.autoArrange ?? false),
+    preview: Boolean(config?.preview),
+    guideVisibility: guideVisibility === "always" || guideVisibility === "never" ? guideVisibility : "auto",
   };
 }
 
@@ -145,7 +148,7 @@ function frameFromGridCell(cell: LayoutCell, config: CanvasGridConfig): CanvasFr
   };
 }
 
-function gridCellFromFrame(frame: CanvasFrame, config: CanvasGridConfig): Pick<LayoutCell, "colStart" | "colSpan" | "rowStart" | "rowSpan" | "offset"> {
+export function gridCellFromFrame(frame: CanvasFrame, config: CanvasGridConfig): Pick<LayoutCell, "colStart" | "colSpan" | "rowStart" | "rowSpan" | "offset"> {
   const colStart = Math.max(1, Math.round(frame.x / (config.columnWidth + config.columnGap)) + 1);
   const rowStart = Math.max(1, Math.round(frame.y / (config.rowHeight + config.rowGap)) + 1);
   const colSpan = Math.max(1, Math.round((frame.width + config.columnGap) / (config.columnWidth + config.columnGap)));

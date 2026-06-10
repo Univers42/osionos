@@ -24,7 +24,7 @@ import type { Block } from "@/entities/block";
 import { isCanvasV2Enabled } from "@/shared/config/featureFlags";
 import { usePageStore } from "@/store/usePageStore";
 import { BlockEditorSurface, type SurfaceBlockEditorProps } from "../BlockEditorSurface";
-import { useCanvasStoreBridge, type CanvasPersistHandler } from "./store/canvasStore";
+import { CanvasRoot } from "./view/CanvasRoot";
 
 type LayoutMode = "inline" | "full_page";
 type LayoutGuideVisibility = "auto" | "always" | "never";
@@ -1505,18 +1505,8 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
   );
 };
 
-const LayoutBlockEditorV2Bridge: React.FC<LayoutBlockEditorProps> = (props) => {
-  const { block, onUpdateBlock } = props;
-  const persist = useCallback<CanvasPersistHandler>(
-    (layoutBlockId, patch) => onUpdateBlock?.(layoutBlockId, patch),
-    [onUpdateBlock],
-  );
-  useCanvasStoreBridge(block.id, block, onUpdateBlock ? persist : undefined);
-  return <LayoutBlockEditorLegacy {...props} />;
-};
-
 export const LayoutBlockEditor: React.FC<LayoutBlockEditorProps> = (props) => {
-  if (isCanvasV2Enabled()) return <LayoutBlockEditorV2Bridge {...props} />;
+  if (isCanvasV2Enabled()) return <CanvasRoot {...props} />;
   return <LayoutBlockEditorLegacy {...props} />;
 };
 

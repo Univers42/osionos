@@ -43,5 +43,7 @@ function legacyConfigFromCanvasState(state: CanvasState): Partial<LayoutConfig> 
     rowGap: state.layoutConfig.rowGap,
     snapToGrid: state.layoutConfig.snapToGrid,
     autoArrange: !state.layoutConfig.noOverlap,
+    preview: state.layoutConfig.preview,
+    guideVisibility: state.layoutConfig.guideVisibility,
   };
 }

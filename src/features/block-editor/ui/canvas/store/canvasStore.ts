@@ -128,7 +128,19 @@ export function createCanvasStore(initialState: CanvasState): CanvasStoreApi {
         if (writeTimer) return;
         const signature = getBlockHydrationSignature(block);
         if (signature === get().migration.sourceSignature) return;
-        set(createCanvasStateFromBlock(block));
+        // Merge-hydrate: nested cell content commits through the page store
+        // (every draft flush), so a full state replacement here would wipe
+        // selection, history, and viewport on each typing pause.
+        const fresh = createCanvasStateFromBlock(block);
+        const previous = get();
+        const liveIds = new Set(fresh.cells.map((cell) => cell.id));
+        set({
+          ...fresh,
+          viewport: previous.viewport,
+          tool: previous.tool,
+          history: previous.history,
+          selectedIds: previous.selectedIds.filter((id) => liveIds.has(id)),
+        });
       },
       setPersistence: (handler) => {
         persist = handler;

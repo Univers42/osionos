@@ -16,11 +16,10 @@ import { useStore } from "zustand";
 import legacyLayout from "@/__fixtures__/legacy-layout.json";
 import type { Block, LayoutCell, LayoutConfig } from "@/entities/block";
 import { createCanvasStateFromBlock } from "../controller/persistence";
-import { translateFrame } from "../model/geometry";
-import { getNextZ } from "../model/selectors";
+import { roundFrameForDom, translateFrame } from "../model/geometry";
+import { getCellsOrderedByZ, getContentExtent, getNextZ } from "../model/selectors";
 import type { CanvasAction, CanvasCell } from "../model/types";
 import { createCanvasStore } from "../store/canvasStore";
-import { CanvasStage } from "../view/CanvasStage";
 import "../canvas.css";
 
 const legacyLayoutFixture = legacyLayout as {
@@ -59,11 +58,43 @@ export function CanvasDebugRoute() {
         </div>
       </aside>
       <main className="osio-canvas-v2-workspace">
-        <CanvasStage cells={cells} selectedIds={selectedIds} onSelect={(cellId) => dispatch({ type: "select", ids: [cellId] })} />
+        <DebugStage cells={cells} selectedIds={selectedIds} onSelect={(cellId) => dispatch({ type: "select", ids: [cellId] })} />
       </main>
       <aside className="osio-canvas-v2-panel">
         <pre className="osio-canvas-v2-json">{debugJson}</pre>
       </aside>
+    </div>
+  );
+}
+
+function DebugStage({ cells, selectedIds, onSelect }: { cells: CanvasCell[]; selectedIds: string[]; onSelect: (cellId: string) => void }) {
+  const selected = new Set(selectedIds);
+  const extent = getContentExtent(cells);
+  return (
+    <div className="osio-canvas-v2-stage" style={{ width: extent.width, height: extent.height }}>
+      {getCellsOrderedByZ(cells).map((cell) => {
+        const frame = roundFrameForDom(cell.frame);
+        return (
+          <button
+            key={cell.id}
+            type="button"
+            className="osio-canvas-v2-cell"
+            data-selected={selected.has(cell.id) ? "true" : "false"}
+            style={{
+              transform: `translate(${frame.x}px, ${frame.y}px)`,
+              width: `${frame.width}px`,
+              height: `${frame.height}px`,
+              zIndex: cell.z,
+              color: cell.visuals.foreground,
+              background: cell.visuals.background ?? cell.visuals.tint,
+            }}
+            onClick={() => onSelect(cell.id)}
+          >
+            <span className="osio-canvas-v2-cell-label">{cell.visuals.label || "Untitled"}</span>
+            <span className="osio-canvas-v2-cell-meta">{cell.frame.width} x {cell.frame.height}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
