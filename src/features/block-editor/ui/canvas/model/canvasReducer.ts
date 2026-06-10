@@ -22,7 +22,7 @@ import { getNextZ } from "./selectors";
 import type { CanvasAction, CanvasState } from "./types";
 
 const PERSISTABLE_ACTIONS = new Set<CanvasAction["type"]>([
-  "addCell", "updateCellFrame", "updateCellFrames", "updateCell", "removeCell", "removeCells",
+  "addCell", "setCells", "updateCellFrame", "updateCellFrames", "updateCell", "removeCell", "removeCells",
   "duplicateCell", "setCellZ", "setCellsZ", "setSnapToGrid", "setNoOverlap", "updateLayoutConfig",
   "undo", "redo",
 ]);
@@ -54,6 +54,8 @@ export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasS
       return updateLayoutConfigHandler(state, action.patch, withHistory);
     case "addCell":
       return withHistory(state, { ...state, cells: [...state.cells, { ...action.cell, z: action.cell.z ?? getNextZ(state.cells) }], selectedIds: [action.cell.id] });
+    case "setCells":
+      return withHistory(state, { ...state, cells: action.cells, selectedIds: [] });
     case "updateCellFrame":
       return updateCellFramesHandler(state, { [action.id]: action.frame }, false, withHistory);
     case "updateCellFrames":

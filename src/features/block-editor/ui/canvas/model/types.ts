@@ -128,6 +128,7 @@ export type CanvasAction =
   | { type: "setNoOverlap"; enabled: boolean }
   | { type: "updateLayoutConfig"; patch: Partial<Omit<CanvasLayoutConfig, "rootFrame" | "parentMode">> }
   | { type: "addCell"; cell: CanvasCell }
+  | { type: "setCells"; cells: CanvasCell[] }
   | { type: "updateCellFrame"; id: string; frame: CanvasFrame }
   | { type: "updateCellFrames"; frames: Record<string, CanvasFrame>; resolveCollisions?: boolean }
   | { type: "updateCell"; id: string; patch: CanvasCellPatch }

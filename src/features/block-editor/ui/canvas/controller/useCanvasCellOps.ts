@@ -14,6 +14,7 @@ import { useMemo, type RefObject } from "react";
 
 import { bottom, translateFrame } from "../model/geometry";
 import { getNextZ } from "../model/selectors";
+import { createTemplateCells, type CanvasTemplateKind } from "../model/templates";
 import type { CanvasStoreApi } from "../store/canvasStore";
 import type { CanvasInteractionStore } from "./interactionStore";
 import { useCanvasPointer, type CanvasPointerHandlers } from "./useCanvasPointer";
@@ -25,6 +26,7 @@ export interface CanvasCellOps extends CanvasPointerHandlers {
   addCell: () => void;
   duplicateCell: (cellId: string) => void;
   deleteCell: (cellId: string) => void;
+  applyTemplate: (kind: CanvasTemplateKind) => void;
 }
 
 const NEW_CELL_COL_SPAN = 4;
@@ -102,6 +104,10 @@ export function useCanvasCellOps(
     },
     deleteCell: (cellId) => {
       store.getState().dispatch({ type: "removeCells", ids: [cellId] });
+    },
+    applyTemplate: (kind) => {
+      const { layoutConfig, dispatch } = store.getState();
+      dispatch({ type: "setCells", cells: createTemplateCells(kind, layoutConfig) });
     },
   }), [pointer, store]);
 }
