@@ -10,6 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+// Side effect: registers the account-wide data-source catalog with NDS so
+// the view-settings Source picker can list and rebind to any database.
+import './model/dataSourceProvider';
+
 export * from './ui/DatabaseBlock';
 export * from './ui/WorkspaceDatabaseBlock';
 export * from './model/databaseViewCatalog';
