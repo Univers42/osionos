@@ -25,7 +25,9 @@ export type KnownDatabaseId =
   | "db-content"
   | "db-inventory"
   | "db-products"
-  | "db-projects";
+  | "db-projects"
+  | "db-milestones"
+  | "db-wikifiles";
 
 export type KnownDatabaseViewType =
   | "table"
@@ -132,6 +134,17 @@ export const KNOWN_DATABASE_VIEWS: KnownDatabaseView[] = [
   view("v-proj-timeline", "db-projects", "Projects", "Timeline", "timeline", "Project timeline with schedule visibility."),
   view("v-proj-dashboard", "db-projects", "Projects", "Relation Analytics", "dashboard", "Relation analytics across projects, tasks, CRM, content, and inventory."),
   view("v-proj-chart", "db-projects", "Projects", "Budget Chart", "chart", "Project budget chart."),
+  // Delivery Wiki (wikiSeed.ts): Milestones ↔ Files with relation-filtered views.
+  view("v-wiki-ms-table", "db-milestones", "Milestones", "All Milestones", "table", "Milestones with rollups (file count, total KB) and health formulas."),
+  view("v-wiki-ms-board", "db-milestones", "Milestones", "By Status", "board", "Milestone board grouped by delivery status."),
+  view("v-wiki-ms-timeline", "db-milestones", "Milestones", "Roadmap", "timeline", "Milestone roadmap from start to due date."),
+  view("v-wiki-files-table", "db-wikifiles", "Files", "All Files", "table", "The workspace filesystem — every artifact with source, size, and age."),
+  view("v-wiki-files-gallery", "db-wikifiles", "Files", "Collection", "gallery", "Gallery collection of every file card."),
+  view("v-wiki-files-board", "db-wikifiles", "Files", "By Source", "board", "Files grouped by source (notes, docs, images, datasets)."),
+  view("v-wiki-files-calendar", "db-wikifiles", "Files", "Activity Calendar", "calendar", "Files plotted on their last-modified date."),
+  view("v-wiki-files-pinned", "db-wikifiles", "Files", "Pinned", "list", "Pinned files only (checkbox filter)."),
+  view("v-wiki-notes-venus", "db-wikifiles", "Files", "Notes — Venus", "table", "Only the NOTES related to the Venus milestone (relation + select filter)."),
+  view("v-wiki-notes-mars", "db-wikifiles", "Files", "Notes — Mars", "table", "Only the NOTES related to the Mars milestone (relation + select filter)."),
 ];
 
 export function getKnownDatabaseView(viewId: string): KnownDatabaseView | undefined {
