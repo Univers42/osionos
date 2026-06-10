@@ -71,10 +71,14 @@ export interface CanvasGridConfig {
   snapToGrid: boolean;
 }
 
+export type CanvasGuideVisibility = "auto" | "always" | "never";
+
 export interface CanvasLayoutConfig extends CanvasGridConfig {
   rootFrame: CanvasFrame;
   parentMode: CanvasParentMode;
   noOverlap: boolean;
+  preview: boolean;
+  guideVisibility: CanvasGuideVisibility;
 }
 
 export interface CanvasViewport {
@@ -122,7 +126,7 @@ export type CanvasAction =
   | { type: "setViewport"; viewport: Partial<CanvasViewport> }
   | { type: "setSnapToGrid"; enabled: boolean }
   | { type: "setNoOverlap"; enabled: boolean }
-  | { type: "updateLayoutConfig"; patch: Partial<CanvasGridConfig> }
+  | { type: "updateLayoutConfig"; patch: Partial<Omit<CanvasLayoutConfig, "rootFrame" | "parentMode">> }
   | { type: "addCell"; cell: CanvasCell }
   | { type: "updateCellFrame"; id: string; frame: CanvasFrame }
   | { type: "updateCellFrames"; frames: Record<string, CanvasFrame>; resolveCollisions?: boolean }
