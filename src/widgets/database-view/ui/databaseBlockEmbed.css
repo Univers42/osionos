@@ -1,0 +1,72 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   databaseBlockEmbed.css                              :+:      :+:    :+:  */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/06/10 14:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/06/10 14:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+/*
+ * Native-block treatment for INLINE database embeds. The page (or layout
+ * cell) owns the frame, so the embed drops its own card chrome and the
+ * toolbar only appears when the reader engages with the block — at rest it
+ * is just the view name and a row count, like any other piece of content.
+ *
+ * Scope: `.osionos-database-block--inline .osionos-object-database-single-view`
+ * — full-page databases (`--full`, chrome="full") match nothing here and
+ * keep the complete standalone chrome. Host CSS is unlayered, so these rules
+ * win over the package's Tailwind utility layer without specificity games.
+ */
+
+.osionos-database-block--inline .osionos-object-database-single-view {
+  margin: 0;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.osionos-database-block--inline .osionos-object-database-single-view .odb-topbar {
+  background: transparent;
+  border-bottom-color: transparent;
+}
+
+/* Toolbar + persistent filter bar: hidden at rest, revealed on engagement.
+ * opacity (not display) keeps the controls in the tab order, so keyboard
+ * users reveal them via :focus-within; data-panels-open keeps them up while
+ * a portal-rendered panel/dialog is open and the pointer has left. */
+.osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-actions,
+.osionos-database-block--inline .osionos-object-database-single-view .odb-filter-bar {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--osio-motion-standard);
+}
+
+.osionos-database-block--inline .osionos-object-database-single-view:hover .odb-topbar-actions,
+.osionos-database-block--inline .osionos-object-database-single-view:focus-within .odb-topbar-actions,
+.osionos-database-block--inline .osionos-object-database-single-view .odb-topbar[data-panels-open] .odb-topbar-actions,
+.osionos-database-block--inline .osionos-object-database-single-view:hover .odb-filter-bar,
+.osionos-database-block--inline .osionos-object-database-single-view:focus-within .odb-filter-bar,
+.osionos-database-block--inline .osionos-object-database-single-view:has(.odb-topbar[data-panels-open]) .odb-filter-bar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The HOST floats its DataSourceButton pill at the top-right corner of every
+ * database block (BlockEditor, `absolute right-2 top-2`), revealed on the
+ * same block hover as the toolbar — reserve that corner so the pill never
+ * lands on the +New button. Scoped to the BlockEditor wrapper: full-page
+ * tabs without the pill keep the full-width toolbar. */
+.osio-block-scroll-x .odb-topbar > div:first-child {
+  padding-right: 96px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-actions,
+  .osionos-database-block--inline .osionos-object-database-single-view .odb-filter-bar {
+    transition: none;
+  }
+}
