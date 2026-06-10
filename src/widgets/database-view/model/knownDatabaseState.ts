@@ -23,6 +23,7 @@ import type {
 
 import seedState from "@/shared/notion-database-sys/src/store/dbms/mongodb/_notion_state.json";
 import { timed } from "@/shared/lib/perf/measure";
+import { applyWikiSeed } from "./wikiSeed";
 
 export const KNOWN_DATABASE_STATE_STORAGE_KEY = "osionos.knownDatabaseState.v1";
 const KNOWN_DATABASE_STATE_FLUSH_DELAY_MS = 1000;
@@ -526,7 +527,9 @@ function stringifyUnknown(value: unknown): string {
 }
 
 function seedSnapshot(): NotionState {
-  return cloneState(seedState as NotionState);
+  // The Delivery Wiki slice (Milestones ↔ Files) extends the JSON seed at the
+  // same precedence level — stored user state still overlays both.
+  return applyWikiSeed(cloneState(seedState as NotionState));
 }
 
 function createId(prefix: string): string {
