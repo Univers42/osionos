@@ -93,6 +93,9 @@ const CanvasCellViewComponent: React.FC<CanvasCellViewProps> = ({
   const handlePointerDownCapture = useCallback((event: React.PointerEvent<HTMLElement>) => {
     if (preview || event.button !== 0) return;
     if (isInteractivePointerTarget(event.target)) return;
+    // Focus the cell shell (not an editor) so arrow-key nudges reach the
+    // stage's keydown handler.
+    event.currentTarget.focus({ preventScroll: true });
     onSelectCell(cell.id, event.shiftKey);
   }, [cell.id, onSelectCell, preview]);
 
@@ -105,6 +108,7 @@ const CanvasCellViewComponent: React.FC<CanvasCellViewProps> = ({
     <section
       aria-label={cell.visuals.label || "Layout cell"}
       className="osionos-layout-cell group/cell"
+      tabIndex={-1}
       data-layout-cell-id={cell.id}
       data-layout-cell-selected={selected ? "true" : undefined}
       data-layout-sizing={sizing}
