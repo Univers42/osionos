@@ -29,6 +29,7 @@ import { getLiveDatabaseAdapter, isLiveDatabaseId } from '../model/liveDatabaseA
 import { getObjectDatabaseAdapter, hasObjectDatabaseRemoteAdapter } from '../model/objectDatabaseAdapter';
 import { isWorkspaceDatabaseId, isWorkspaceViewId } from '../model/workspaceDatabaseConstants';
 import { WorkspaceDatabaseBlock } from './WorkspaceDatabaseBlock';
+import './databaseBlockEmbed.css';
 
 // Async boundary: the full osionos page (and its editor tree) loads only when
 // a database row is opened — keeping the database view chunk free of the

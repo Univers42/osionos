@@ -136,6 +136,10 @@
 
   --osio-border-default: #767676;
   --osio-border-strong: #4F5B66;
+  /* Hairlines for dense data grids (database embeds): --osio-border-default is
+     tuned for control outlines and is far too heavy repeated per table row. */
+  --osio-db-line: color-mix(in srgb, var(--osio-border-default) 32%, transparent);
+  --osio-db-line-soft: color-mix(in srgb, var(--osio-border-default) 18%, transparent);
   --osio-accent: #0B63CE;
   --osio-accent-hover: #084A9A;
   --osio-accent-fg: #FFFFFF;
@@ -194,6 +198,8 @@
 
   --osio-border-default: #8B949E;
   --osio-border-strong: #C4CBD4;
+  --osio-db-line: color-mix(in srgb, var(--osio-border-default) 45%, transparent);
+  --osio-db-line-soft: color-mix(in srgb, var(--osio-border-default) 26%, transparent);
   --osio-accent: #7AB8FF;
   --osio-accent-hover: #A7D0FF;
   --osio-accent-fg: #0B1220;
