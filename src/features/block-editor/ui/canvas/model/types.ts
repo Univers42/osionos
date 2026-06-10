@@ -116,17 +116,22 @@ export type CanvasCellPatch = Partial<Omit<CanvasCell, "id">>;
 export type CanvasAction =
   | { type: "hydrate"; state: CanvasState }
   | { type: "select"; ids: string[] }
+  | { type: "toggleSelect"; id: string }
   | { type: "clearSelection" }
   | { type: "setTool"; tool: CanvasTool }
   | { type: "setViewport"; viewport: Partial<CanvasViewport> }
   | { type: "setSnapToGrid"; enabled: boolean }
   | { type: "setNoOverlap"; enabled: boolean }
+  | { type: "updateLayoutConfig"; patch: Partial<CanvasGridConfig> }
   | { type: "addCell"; cell: CanvasCell }
   | { type: "updateCellFrame"; id: string; frame: CanvasFrame }
+  | { type: "updateCellFrames"; frames: Record<string, CanvasFrame>; resolveCollisions?: boolean }
   | { type: "updateCell"; id: string; patch: CanvasCellPatch }
   | { type: "removeCell"; id: string }
+  | { type: "removeCells"; ids: string[] }
   | { type: "duplicateCell"; id: string; newId: string; frame?: CanvasFrame }
   | { type: "setCellZ"; id: string; z: number }
+  | { type: "setCellsZ"; zs: Record<string, number> }
   | { type: "undo" }
   | { type: "redo" };
 
