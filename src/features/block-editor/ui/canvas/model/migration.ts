@@ -38,7 +38,7 @@ export function gridConfigFromLegacy(config: Partial<LayoutConfig> | undefined):
     columns: Math.max(1, Math.round(finiteNumber(config?.columns, 12))),
     rows: config?.rows === undefined ? undefined : Math.max(1, Math.round(finiteNumber(config.rows, 1))),
     columnWidth: CANVAS_DEFAULT_COLUMN_WIDTH,
-    rowHeight: Math.max(1, finiteNumber(config?.rowHeight, 96)),
+    rowHeight: Math.max(1, finiteNumber(config?.rowHeight, 120)),
     columnGap: finiteNumber(config?.columnGap, gap),
     rowGap: finiteNumber(config?.rowGap, gap),
     snapToGrid: config?.snapToGrid ?? true,

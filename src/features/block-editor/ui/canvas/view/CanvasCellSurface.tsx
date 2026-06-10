@@ -31,8 +31,10 @@ interface CanvasCellSurfaceProps {
  * Every cell's nested editor mounts lazily through the stage's shared
  * IntersectionObserver (legacy deferred database cells only); the placeholder
  * keeps the deferred-database data attributes for styling and tests.
+ * Memoized so cell-shell re-renders (selection, config changes) never
+ * re-render the nested editor subtree — its props are all identity-stable.
  */
-export const CanvasCellSurface: React.FC<CanvasCellSurfaceProps> = ({
+const CanvasCellSurfaceComponent: React.FC<CanvasCellSurfaceProps> = ({
   pageId,
   layoutBlockId,
   cellId,
@@ -79,3 +81,6 @@ export const CanvasCellSurface: React.FC<CanvasCellSurfaceProps> = ({
     </div>
   );
 };
+
+export const CanvasCellSurface = React.memo(CanvasCellSurfaceComponent);
+CanvasCellSurface.displayName = "CanvasCellSurface";
