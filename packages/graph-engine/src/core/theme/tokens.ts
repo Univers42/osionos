@@ -6,6 +6,7 @@
  * on the main thread (DOM access) and handed to the renderer.
  */
 
+import type { SpriteMode } from "../render/nodeShape";
 import {
   AURORA_BANDS,
   AURORA_BG_BOTTOM,
@@ -15,6 +16,8 @@ import {
 } from "./palette";
 
 export interface SceneTheme {
+  /** "light" (paper) or "dark" (aurora) — derived from the bg luminance. */
+  mode: SpriteMode;
   /** Aurora background ramp + drifting band colors. */
   bgTop: string;
   bgBottom: string;
@@ -30,8 +33,13 @@ export interface SceneTheme {
   noteRing: string;
   /** Neon tint used for node/link glow. */
   glow: string;
-  /** Dark "moat" painted under each node sprite for legibility on the aurora. */
+  /** "Moat" painted under each node sprite for legibility on the backdrop. */
   nodeBacking: string;
+  /** Close-zoom card materials. */
+  cardBg: string;
+  cardBorder: string;
+  cardTitle: string;
+  cardMuted: string;
   /** Opacity applied to dimmed (out-of-focus) elements. */
   dimAlpha: number;
 }
@@ -39,6 +47,7 @@ export interface SceneTheme {
 type Rgb = [number, number, number];
 
 export const DARK_THEME: SceneTheme = {
+  mode: "dark",
   bgTop: AURORA_BG_TOP,
   bgBottom: AURORA_BG_BOTTOM,
   bands: [...AURORA_BANDS],
@@ -53,6 +62,10 @@ export const DARK_THEME: SceneTheme = {
   noteRing: NOTE_COLOR,
   glow: "rgba(124, 92, 246, 0.9)",
   nodeBacking: NODE_BACKING,
+  cardBg: "rgba(12, 9, 32, 0.82)",
+  cardBorder: "rgba(255, 255, 255, 0.14)",
+  cardTitle: "#e7e9f5",
+  cardMuted: "rgba(231, 233, 245, 0.62)",
   dimAlpha: 0.12,
 };
 
@@ -64,32 +77,47 @@ export function resolveSceneTheme(root: HTMLElement): SceneTheme {
     const value = styles.getPropertyValue(token).trim();
     return value || fallback;
   };
-  const fg = normalizeRgb(scratch, read("--osio-fg-default", DARK_THEME.label));
+  const ink = normalizeRgb(
+    scratch,
+    read("--osio-graph-ink", read("--osio-fg-default", DARK_THEME.label)),
+  );
   const border = normalizeRgb(scratch, read("--osio-border-strong", "#94a3b8"));
   const accent = normalizeRgb(scratch, read("--osio-accent", "#a5b4fc"));
   const note = normalizeRgb(scratch, NOTE_COLOR);
-  const haloBg = normalizeRgb(scratch, read("--osio-graph-bg-1", AURORA_BG_BOTTOM));
+  const bgBottom = read("--osio-graph-bg-1", AURORA_BG_BOTTOM);
+  const bgRgb = normalizeRgb(scratch, bgBottom);
+  const mode: SpriteMode = luminance(bgRgb) > 0.5 ? "light" : "dark";
   const bands = [1, 2, 3, 4].map((i, idx) =>
     read(`--osio-graph-aurora-${i}`, AURORA_BANDS[idx]),
   );
 
   return {
+    mode,
     bgTop: read("--osio-graph-bg-0", AURORA_BG_TOP),
-    bgBottom: read("--osio-graph-bg-1", AURORA_BG_BOTTOM),
+    bgBottom,
     bands,
-    edge: rgba(border, 0.32),
+    edge: rgba(border, mode === "light" ? 0.38 : 0.32),
     edgeTag: rgba(border, 0.18),
     edgeNote: rgba(note, 0.55),
     edgeHierarchy: rgba(note, 0.9),
-    label: rgb(fg),
-    labelHalo: rgba(haloBg, 0.85),
+    label: rgb(ink),
+    labelHalo: read("--osio-graph-halo", rgba(bgRgb, 0.85)),
     selectRing: rgb(accent),
     hoverRing: rgba(accent, 0.65),
     noteRing: rgb(note),
     glow: rgba(accent, 0.9),
     nodeBacking: read("--osio-graph-node-backing", NODE_BACKING),
+    cardBg: read("--osio-graph-card-bg", DARK_THEME.cardBg),
+    cardBorder: read("--osio-graph-card-border", DARK_THEME.cardBorder),
+    cardTitle: rgb(ink),
+    cardMuted: rgba(ink, 0.62),
     dimAlpha: 0.12,
   };
+}
+
+/** Relative luminance (0..1) of an sRGB color — picks light vs dark materials. */
+function luminance([r, g, b]: Rgb): number {
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 }
 
 function rgb([r, g, b]: Rgb): string {

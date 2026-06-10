@@ -28,8 +28,12 @@ import { deriveGraph } from "@/features/second-brain/model/deriveGraph";
 import { deriveTagConfig } from "@/features/second-brain/model/deriveTagConfig";
 import { isBaasGraphEnabled } from "@/features/second-brain/baas/baasGraphClient";
 import { useBaasGraph } from "./useBaasGraph";
+import { buildSyntheticModel, graphBenchCount } from "./syntheticGraph";
 
 const EMPTY = emptyModel();
+// Bench hook: `?graphBench=N` renders a deterministic synthetic model so FPS
+// probes and visual tests don't depend on workspace contents.
+const BENCH_COUNT = graphBenchCount();
 
 export interface GraphData {
   model: GraphModel;
@@ -50,10 +54,12 @@ export interface GraphData {
 export function useGraphModel(): GraphData {
   const state = useKnownDatabaseStateStore((store) => store.state);
   const updatePageProperty = useKnownDatabaseStateStore((store) => store.updatePageProperty);
-  const baasMode = isBaasGraphEnabled();
+  const baasMode = isBaasGraphEnabled() && BENCH_COUNT === 0;
   const viewerId = useUserStore((store) => store.activeUserId) || null;
   const localModel = useMemo(
-    () => deriveGraph(state, { source: GRAPH_SOURCE, tagConfig: deriveTagConfig(state) }),
+    () => (BENCH_COUNT > 0
+      ? buildSyntheticModel(BENCH_COUNT)
+      : deriveGraph(state, { source: GRAPH_SOURCE, tagConfig: deriveTagConfig(state) })),
     [state],
   );
   const baas = useBaasGraph(baasMode, viewerId);

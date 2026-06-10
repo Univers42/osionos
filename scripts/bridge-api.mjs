@@ -18,6 +18,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
+import { createChatHandler } from './bridge-chat.mjs';
+import { createFeedHandler } from './bridge-feed.mjs';
+import { handlePermsRoute } from './bridge-perms.mjs';
+import { createProfileHandler } from './bridge-profile.mjs';
+import { createRtcTokenHandler } from './bridge-rtc.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -74,7 +79,7 @@ const TRANSLATION_FETCH_TIMEOUT_MS = 6_000;
 const BAAS_FETCH_TIMEOUT_MS = 2_500;
 const MAX_CLAUDE_TOOL_RESULT_TEXT = 120_000;
 const PAGE_VISIBILITY_VALUES = new Set(['private', 'shared', 'public']);
-const PAGE_SURFACE_VALUES = new Set(['page', 'agent', 'home', 'folder']);
+const PAGE_SURFACE_VALUES = new Set(['page', 'agent', 'home', 'folder', 'wiki']);
 const TRANSLATABLE_BLOCK_TYPES = new Set([
 	'paragraph',
 	'heading_1',
@@ -1533,6 +1538,13 @@ async function handleBridgeRequest(request, response, context) {
 		return;
 	}
 	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+	// Workstream modules — each returns false when the path is not theirs:
+	// perms proxy (WS-C), LiveKit tokens (WS-D), chat/profile/feed (WS-B).
+	if (await handlePermsRoute(request, response, url, context.fetchImpl)) return;
+	if (await context.social.rtc(url, request, response)) return;
+	if (await context.social.chat(url, request, response, context.config)) return;
+	if (await context.social.profile(url, request, response, context.config)) return;
+	if (await context.social.feed(url, request, response, context.config)) return;
 	if (request.method === 'GET' && await handleWorkspaceGet(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'GET' && await handlePagesGet(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'GET' && await handleBridgeGet(url, response, context.config, context.fetchImpl)) return;
@@ -1556,10 +1568,19 @@ export function createBridgeServer(options = {}) {
 	const handoffStore = options.handoffStore ?? new Map();
 	const replayStore = options.replayStore ?? new Map();
 	const fetchImpl = options.fetchImpl ?? fetch;
+	// Standalone workstream handlers, created once. rtc keeps the sibling
+	// contract (closes over the base config); chat/profile/feed additionally
+	// accept the per-request (per-origin) config at dispatch time.
+	const social = options.social ?? {
+		rtc: createRtcTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		chat: createChatHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+	};
 	return createServer(async (request, response) => {
 		let responseConfig = requestOriginConfig(config, request);
 		try {
-			await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl });
+			await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl, social });
 		} catch (error) {
 			if (!response.headersSent) errorJson(response, error, responseConfig);
 		}

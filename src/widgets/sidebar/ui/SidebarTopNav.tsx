@@ -10,8 +10,12 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { Search, Home, Mic, Inbox, MessageCircle } from 'lucide-react';
+
+const LazyPeopleSearchBar = lazy(() =>
+  import('@/widgets/people-search/PeopleSearchBar').then((m) => ({ default: m.PeopleSearchBar })),
+);
 
 interface SidebarTopNavProps {
   isHomeActive: boolean;
@@ -21,6 +25,7 @@ interface SidebarTopNavProps {
 /** Horizontal top-level navigation items: Home, Chat, Meetings, Inbox, Search. */
 
 export const SidebarTopNav: React.FC<SidebarTopNavProps> = ({ isHomeActive, onOpenHome }) => {
+  const [peopleSearchOpen, setPeopleSearchOpen] = useState(false);
   const tabs = [
     { id: 'home', label: 'Home', icon: <Home size={16} />, active: isHomeActive, onClick: () => onOpenHome?.() },
     { id: 'chat', label: 'Chat', icon: <MessageCircle size={16} />, active: false, onClick: () => undefined },
@@ -29,7 +34,7 @@ export const SidebarTopNav: React.FC<SidebarTopNavProps> = ({ isHomeActive, onOp
   ];
 
   return (
-    <div className="mx-2 flex items-center gap-0.5 pb-2 cursor-pointer min-w-0">
+    <div className="relative mx-2 flex items-center gap-0.5 pb-2 cursor-pointer min-w-0">
       <div role="tablist" aria-label="Sidebar navigation" className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
         {tabs.map((tab) => (
           <button
@@ -54,13 +59,18 @@ export const SidebarTopNav: React.FC<SidebarTopNavProps> = ({ isHomeActive, onOp
       </div>
       <button
         type="button"
-        aria-label="Search"
-        title="Search"
+        aria-label="Search people"
+        title="Search people"
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-        onClick={() => undefined}
+        onClick={() => setPeopleSearchOpen((open) => !open)}
       >
         <Search size={18} />
       </button>
+      {peopleSearchOpen && (
+        <Suspense fallback={null}>
+          <LazyPeopleSearchBar onClose={() => setPeopleSearchOpen(false)} />
+        </Suspense>
+      )}
     </div>
   );
 };

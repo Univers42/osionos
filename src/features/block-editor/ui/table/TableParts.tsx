@@ -97,7 +97,12 @@ const EditableTableCell = React.memo(function EditableTableCell({ cellId, initia
     const node = cellRef.current;
     if (node && document.activeElement !== node && node.textContent !== initialValue) node.textContent = initialValue;
   }, [cellId, initialValue]);
+  // Event-time read of the uncontrolled contentEditable (onBlur/keydown —
+  // never during render); the analyzer cannot prove call sites.
   const commitFromNode = useCallback((flush = false) => onCommit(cellRef.current?.textContent ?? "", flush), [onCommit]);
+  // onInput/onBlur call commitFromNode — an event-time contentEditable read
+  // (never during render); the analyzer anchors its diagnostic here.
+  // eslint-disable-next-line react-hooks/refs
   return React.createElement("div", {
     ref: cellRef,
     ...CELL_PROPS,

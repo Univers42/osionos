@@ -28,10 +28,17 @@ function resolveIcon(name: string) {
 /** Render `icon:<name>` — via lucide when the name exists there, else fall back to the legacy
  *  AssetRenderer catalog (so package names like "page"/"table" keep working). */
 const LucideGlyph: React.FC<{ name: string; size?: number; color?: string }> = ({ name, size = 20, color }) => {
-  if (!(name in IMPORTS)) return <AssetRenderer value={`icon:${name}`} size={size} />;
-  const Cmp = resolveIcon(name);
+  // Memoized BEFORE the conditional return (rules of hooks): resolveIcon is
+  // cache-stable per name, but the linter needs the render-stability spelled.
+  const known = name in IMPORTS;
+  // resolveIcon returns the MODULE-CACHED React.lazy per name (stable
+  // identity across renders) — no component is created during render.
+  const Cmp = React.useMemo(() => (known ? resolveIcon(name) : null), [known, name]);
+  if (!known || !Cmp) return <AssetRenderer value={`icon:${name}`} size={size} />;
   return (
     <Suspense fallback={<span style={{ display: "inline-block", width: size, height: size }} />}>
+      {/* eslint-disable-next-line react-hooks/static-components -- Cmp is the
+          module-cached React.lazy per name (stable identity across renders) */}
       <Cmp size={size} color={color} />
     </Suspense>
   );

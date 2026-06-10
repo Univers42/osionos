@@ -29,7 +29,9 @@ interface PageBodyProps {
  */
 export const PageBody: React.FC<PageBodyProps> = ({ pageId, locked = false }) => {
   const renderCountRef = useRef(0);
-  renderCountRef.current += 1;
+  // Count COMMITTED renders in a dep-less effect: writing a ref during
+  // render is illegal under react-hooks/refs (and invisible to React).
+  useEffect(() => { renderCountRef.current += 1; });
   const userId = useUserStore((state) => state.activeUserId) || 'anonymous';
   const rawMode = usePageConfigStore((state) => resolvePageConfig(state.configs[`${userId}:${pageId}`]).rawMode);
 

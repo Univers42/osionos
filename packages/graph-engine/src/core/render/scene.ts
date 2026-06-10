@@ -8,12 +8,15 @@
 
 import type { Camera, WorldBounds } from "../camera/transform";
 import type { GraphModel, NodeId } from "../types";
-import { type Controls, DEFAULT_CONTROLS, type VisualState } from "../state/controls";
+import { type Controls, DEFAULT_CONTROLS, type VisualState, tagColorMap } from "../state/controls";
 import type { SceneTheme } from "../theme/tokens";
 import { SceneState } from "./sceneState";
 import { SceneCamera } from "./sceneCamera";
 import { SceneSelection } from "./sceneSelection";
 import { NodeSpriteCache } from "./sprites";
+import { LabelCache } from "./labelCache";
+import { SceneFx } from "./sceneFx";
+import { clearCardTextCache } from "./cardText";
 import { hitTest } from "./cull";
 import { type RevealState, isRevealing, startReveal } from "./reveal";
 import { renderFrame } from "./renderFrame";
@@ -25,6 +28,8 @@ export class CanvasScene implements InteractionHost {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly state = new SceneState();
   private readonly sprites = new NodeSpriteCache();
+  private readonly labels = new LabelCache();
+  private readonly fx = new SceneFx();
   private readonly cam = new SceneCamera();
   private readonly sel = new SceneSelection();
   private readonly interaction: SceneInteraction;
@@ -51,13 +56,16 @@ export class CanvasScene implements InteractionHost {
     if (!ctx) throw new Error("[graph-engine] 2D canvas context unavailable");
     this.canvas = canvas;
     this.ctx = ctx;
-    this.sprites.setTheme(theme.nodeBacking);
+    this.sprites.setTheme({ backing: theme.nodeBacking, mode: theme.mode });
+    this.sprites.onInvalidate = () => this.requestDraw();
+    this.labels.setTheme(theme.label, theme.labelHalo, 1);
     this.interaction = new SceneInteraction(this, callbacks);
     this.requestDraw();
   }
 
   setSize(width: number, height: number, dpr: number): void {
     this.cam.setViewport(width, height, dpr);
+    this.labels.setTheme(this.theme.label, this.theme.labelHalo, this.cam.dpr);
     this.canvas.width = Math.round(width * this.cam.dpr);
     this.canvas.height = Math.round(height * this.cam.dpr);
     this.canvas.style.width = `${width}px`;
@@ -80,7 +88,13 @@ export class CanvasScene implements InteractionHost {
 
   setLabels(labels: string[]): void { this.state.setLabels(labels); this.requestDraw(); }
 
-  setTheme(theme: SceneTheme): void { this.theme = theme; this.sprites.setTheme(theme.nodeBacking); this.requestDraw(); }
+  setTheme(theme: SceneTheme): void {
+    this.theme = theme;
+    this.sprites.setTheme({ backing: theme.nodeBacking, mode: theme.mode });
+    this.labels.setTheme(theme.label, theme.labelHalo, this.cam.dpr);
+    clearCardTextCache();
+    this.requestDraw();
+  }
 
   /** Apply console filters + visual settings (physics is handled by the engine). */
   setControls(controls: Controls): void {
@@ -146,12 +160,14 @@ export class CanvasScene implements InteractionHost {
   setNodePosition(index: number, worldX: number, worldY: number): void {
     this.state.posX[index] = worldX;
     this.state.posY[index] = worldY;
+    this.state.grid.markStale();
     this.requestDraw();
   }
 
   setHover(index: number): void {
     if (index === this.hoverIndex) return;
     this.hoverIndex = index;
+    this.fx.setHover(index, this.state, performance.now());
     this.canvas.style.cursor = index >= 0 ? "pointer" : "default";
     this.requestDraw();
   }
@@ -169,7 +185,7 @@ export class CanvasScene implements InteractionHost {
   private frame(): void {
     this.rafId = null;
     const now = performance.now();
-    if (!this.dirty && !isRevealing(this.reveal, now)) return;
+    if (!this.dirty && !isRevealing(this.reveal, now) && !this.fx.animating(now, this.reducedMotion)) return;
     this.dirty = false;
     renderFrame({
       ctx: this.ctx,
@@ -181,19 +197,18 @@ export class CanvasScene implements InteractionHost {
       visual: this.visual,
       state: this.state,
       sprites: this.sprites,
+      labels: this.labels,
       reveal: this.reveal,
       time: now,
       focus: this.sel.focusIndices,
       hoverIndex: this.hoverIndex,
       selectedIndex: this.sel.selectedIndex,
+      hoverNeighbors: this.fx.neighbors,
+      hoverFade: this.fx.labelFade(now, this.reducedMotion),
       reducedMotion: this.reducedMotion,
     });
-    if (this.dirty || isRevealing(this.reveal, now)) {
+    if (this.dirty || isRevealing(this.reveal, now) || this.fx.animating(now, this.reducedMotion)) {
       this.rafId = requestAnimationFrame(() => this.frame());
     }
   }
-}
-
-function tagColorMap(record: Record<string, string> | undefined): Map<string, string> {
-  return new Map(Object.entries(record ?? {}));
 }

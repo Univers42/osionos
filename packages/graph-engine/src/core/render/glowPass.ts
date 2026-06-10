@@ -8,21 +8,17 @@
  */
 
 import type { DrawCtx } from "./drawTypes";
-import { nodeInView } from "./cull";
-import { MAX_RADIUS, MIN_RADIUS } from "./sceneState";
-
-const HUB_WEIGHT = 0.7;
-const HUB_RADIUS = MIN_RADIUS + HUB_WEIGHT * (MAX_RADIUS - MIN_RADIUS);
 
 export function drawGlow(d: DrawCtx, hoverIndex: number, selectedIndex: number): void {
-  const { ctx, state, view, visual, theme } = d;
+  const { ctx, state, visual, theme, cull } = d;
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
 
   if (!d.reducedMotion && visual.glow > 0.001) {
-    for (let i = 0; i < state.count; i += 1) {
-      if (state.visible[i] === 0 || state.radius[i] < HUB_RADIUS) continue;
-      if (!nodeInView(state, i, view, visual.nodeScale * 4)) continue;
+    // Ambient bloom is reserved for the hub set (≤32 gradients per frame).
+    for (let k = 0; k < cull.count; k += 1) {
+      const i = cull.list[k];
+      if (state.isHub[i] !== 1) continue;
       glowAt(d, i, state.fills[i], 0.12 * visual.glow, 2.4);
     }
   }

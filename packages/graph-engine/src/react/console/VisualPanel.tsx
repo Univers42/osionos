@@ -50,6 +50,28 @@ export function VisualPanel({ controls, update }: VisualPanelProps): ReactElemen
           </button>
         ))}
       </div>
+
+      <h4 className="osio-gc-h">Nodes</h4>
+      <div className="osio-gc-seg">
+        {[
+          { id: true, label: "Semantic zoom" },
+          { id: false, label: "Classic" },
+        ].map((opt) => (
+          <button
+            key={String(opt.id)}
+            type="button"
+            className={`osio-gc-seg__btn${v.semanticZoom === opt.id ? " is-active" : ""}`}
+            aria-pressed={v.semanticZoom === opt.id}
+            onClick={() =>
+              update((draft) => {
+                draft.visual.semanticZoom = opt.id;
+              })
+            }
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

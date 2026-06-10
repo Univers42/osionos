@@ -16,6 +16,7 @@ import { useUserStore, WorkspaceSwitcher } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { useUIStore } from "@/shared/config/uiStore";
 import { isPerfEnabled, recordRender } from "@/shared/lib/perf/measure";
+import { DmList } from "@/widgets/dm-list";
 import { SidebarTopNav } from "./SidebarTopNav";
 import { SidebarPageTree } from "./SidebarPageTree";
 import { SidebarFooter } from "./SidebarFooter";
@@ -35,7 +36,9 @@ export const Sidebar: React.FC<Props> = ({
   onOpenTrash,
 }) => {
   const renderCountRef = useRef(0);
-  renderCountRef.current += 1;
+  // Count COMMITTED renders in a dep-less effect: writing a ref during
+  // render is illegal under react-hooks/refs (and invisible to React).
+  useEffect(() => { renderCountRef.current += 1; });
   recordRender("Sidebar");
 
   useEffect(() => () => {
@@ -148,6 +151,7 @@ export const Sidebar: React.FC<Props> = ({
           jwt={jwt}
           onAddToWorkspace={handleAddToWorkspace}
         />
+        <DmList />
       </nav>
 
       <SidebarFooter

@@ -26,6 +26,11 @@ export function trashTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: TRASH_TAB_ID, workspaceId: "", kind: "trash", title: "Trash", icon: "icon:trash" };
 }
 
+/** A member profile tab — the "/people/:userId" route of tab-based navigation. */
+export function profileTab(userId: string, name?: string): WorkspaceTab {
+  return { tabId: genId("tab"), pageId: userId, workspaceId: "", kind: "profile", title: name ?? "Profile", icon: "icon:user" };
+}
+
 /** A single pane with just the Home tab — the default and the empty-tree reset. */
 export function freshLayout(): { root: PaneNode; activePaneId: string } {
   const tab = homeTab();

@@ -2,21 +2,24 @@
  * Columnar scene state: flat typed-array buffers (index order == model.nodes
  * order) that the imperative renderer reads every frame. Built once per graph,
  * mutated cheaply for positions/visibility. No drawing here — pure data so it is
- * unit-testable without a canvas.
+ * unit-testable without a canvas. Edge-side state lives in SceneEdges; its
+ * arrays are aliased onto this class so render passes keep flat field access.
  */
 
-import type { EdgeKind, GraphModel, NodeId, NodeKind } from "../types";
+import type { GraphModel, NodeId, NodeKind } from "../types";
 import type { WorldBounds } from "../camera/transform";
 import type { FilterState } from "../state/controls";
 import { nodeFill } from "../theme/colors";
 import { weightToRadius } from "../model/weights";
+import { glyphKey, iconGlyph } from "./nodeIcon";
 import { shapeOf, styleKey } from "./nodeShape";
-import { TIERS, strengthTier } from "./tiers";
+import { SceneEdges } from "./sceneEdges";
+import { SpatialGrid } from "./spatialGrid";
+
+export { bucketOf, type EdgeBucketId } from "./sceneEdges";
 
 export const MIN_RADIUS = 5;
 export const MAX_RADIUS = 22;
-/** relation=0, tag=1, note=2, hierarchy=3 */
-export type EdgeBucketId = 0 | 1 | 2 | 3;
 
 export class SceneState {
   count = 0;
@@ -29,21 +32,26 @@ export class SceneState {
   databaseId: (string | null)[] = [];
   source: string[] = [];
   hasNote = new Uint8Array(0);
-  /** Node indices grouped by `shape|color` so each sprite is blitted in one batch. */
+  /** Raw IconValue string per node (null = monogram fallback). */
+  icon: (string | null)[] = [];
+  /** Node indices grouped by `shape|color|glyph` so each sprite is blitted in one batch. */
   styleBuckets = new Map<string, number[]>();
 
-  edgeFrom = new Uint32Array(0);
-  edgeTo = new Uint32Array(0);
-  edgeBucket = new Uint8Array(0);
-  edgeStrength = new Float32Array(0);
-  edgeDirected = new Uint8Array(0);
-  /** Edge indices grouped by bucket×tier (length 4*TIERS) for batched strokes. */
-  edgeGroups: number[][] = [];
+  edges = new SceneEdges();
+  edgeFrom = this.edges.edgeFrom;
+  edgeTo = this.edges.edgeTo;
+  edgeBucket = this.edges.edgeBucket;
+  edgeStrength = this.edges.edgeStrength;
+  edgeDirected = this.edges.edgeDirected;
+  edgeGroups = this.edges.edgeGroups;
+  degree = this.edges.degree;
+  isHub = this.edges.isHub;
 
   posX = new Float32Array(0);
   posY = new Float32Array(0);
   visible = new Uint8Array(0);
   labelText: string[] = [];
+  grid = new SpatialGrid();
 
   private tagColors: Map<string, string> = new Map();
 
@@ -59,6 +67,7 @@ export class SceneState {
     this.databaseId = new Array<string | null>(count);
     this.source = new Array<string>(count);
     this.hasNote = new Uint8Array(count);
+    this.icon = new Array<string | null>(count);
     this.labelText = new Array<string>(count);
 
     for (let i = 0; i < count; i += 1) {
@@ -72,9 +81,11 @@ export class SceneState {
       this.databaseId[i] = node.databaseId;
       this.source[i] = node.source;
       this.hasNote[i] = node.hasNote ? 1 : 0;
+      this.icon[i] = node.icon ?? null;
     }
     this.recolor(this.tagColors);
-    this.buildEdges(model);
+    this.edges.build(model, this.idToIndex, count);
+    this.aliasEdges();
 
     if (this.posX.length !== count) {
       this.posX = new Float32Array(count);
@@ -82,6 +93,19 @@ export class SceneState {
     }
     if (this.visible.length !== count) this.visible = new Uint8Array(count).fill(1);
     else this.visible.fill(1);
+    this.grid.markStale();
+  }
+
+  /** Re-point the flat aliases at the freshly built edge buffers. */
+  private aliasEdges(): void {
+    this.edgeFrom = this.edges.edgeFrom;
+    this.edgeTo = this.edges.edgeTo;
+    this.edgeBucket = this.edges.edgeBucket;
+    this.edgeStrength = this.edges.edgeStrength;
+    this.edgeDirected = this.edges.edgeDirected;
+    this.edgeGroups = this.edges.edgeGroups;
+    this.degree = this.edges.degree;
+    this.isHub = this.edges.isHub;
   }
 
   /** Recompute fills + color batches (called when tag colors change). */
@@ -100,7 +124,8 @@ export class SceneState {
         tagColors,
       );
       this.fills[i] = color;
-      const key = styleKey(shapeOf(this.kind[i]), color);
+      const glyph = glyphKey(iconGlyph(this.icon[i] ?? null, this.label[i]));
+      const key = styleKey(shapeOf(this.kind[i]), color, glyph);
       const bucket = this.styleBuckets.get(key);
       if (bucket) bucket.push(i);
       else this.styleBuckets.set(key, [i]);
@@ -111,6 +136,7 @@ export class SceneState {
     if (x.length !== this.count) return false; // stale frame for an old graph
     this.posX = x;
     this.posY = y;
+    this.grid.markStale();
     return true;
   }
 
@@ -149,33 +175,4 @@ export class SceneState {
     }
     return any ? { minX, minY, maxX, maxY } : null;
   }
-
-  private buildEdges(model: GraphModel): void {
-    const edges = model.edges;
-    this.edgeFrom = new Uint32Array(edges.length);
-    this.edgeTo = new Uint32Array(edges.length);
-    this.edgeBucket = new Uint8Array(edges.length);
-    this.edgeStrength = new Float32Array(edges.length);
-    this.edgeDirected = new Uint8Array(edges.length);
-    this.edgeGroups = Array.from({ length: 4 * TIERS }, () => []);
-    for (let e = 0; e < edges.length; e += 1) {
-      const from = this.idToIndex.get(edges[e].source);
-      const to = this.idToIndex.get(edges[e].target);
-      if (from === undefined || to === undefined) continue;
-      const bucket = bucketOf(edges[e].kind);
-      this.edgeFrom[e] = from;
-      this.edgeTo[e] = to;
-      this.edgeBucket[e] = bucket;
-      this.edgeStrength[e] = edges[e].strength;
-      this.edgeDirected[e] = edges[e].directed ? 1 : 0;
-      this.edgeGroups[bucket * TIERS + strengthTier(edges[e].strength)].push(e);
-    }
-  }
-}
-
-export function bucketOf(kind: EdgeKind): EdgeBucketId {
-  if (kind === "tag") return 1;
-  if (kind === "note_of" || kind === "note_link") return 2;
-  if (kind === "hierarchy") return 3;
-  return 0;
 }

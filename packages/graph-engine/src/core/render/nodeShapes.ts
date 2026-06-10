@@ -1,35 +1,54 @@
 /**
- * Paint a single node silhouette into a sprite canvas — the "flat constellation"
- * look: a dark matte backing (so the node separates from the aurora at any hue), a
- * flat solid body, a whisper of top sheen and a crisp light rim. Shape encodes the
- * kind: `disc` = record, `ring` = hollow tag hub, `note` = orb with an inner ring.
- * No glow is baked here — emphasis glow is a separate dynamic pass (glowPass.ts).
+ * Paint a single node silhouette into a sprite canvas. Two material sets share
+ * one shape language (disc = record, ring = tag hub, note = ringed orb):
+ * - dark "flat constellation": dark matte backing, flat colored body, whisper
+ *   of top sheen and a crisp light rim — no baked glow (glowPass is dynamic);
+ * - light "paper": soft white moat with a baked drop shadow, white body with a
+ *   colored border + faint inner tint, no sheen — crisp ink-on-paper reading.
  */
 
-import type { NodeShape } from "./nodeShape";
+import type { NodeShape, SpriteStyle } from "./nodeShape";
 
 export const SPRITE = 128;
 /** Body radius as a fraction of the sprite half-size (rest is backing + rim room). */
 export const DISC_FRACTION = 0.6;
 
 /** Paint a node of `shape`/`color` centered in a SPRITE×SPRITE context. */
-export function paintNode(ctx: CanvasRenderingContext2D, shape: NodeShape, color: string, backing: string): void {
+export function paintNode(ctx: CanvasRenderingContext2D, shape: NodeShape, color: string, style: SpriteStyle): void {
   const half = SPRITE / 2;
   const r = half * DISC_FRACTION;
-  paintBacking(ctx, half, r, backing);
-  paintBody(ctx, shape, half, r, color);
-  if (shape !== "ring") paintSheenRim(ctx, half, r);
+  paintBacking(ctx, half, r, style);
+  paintBody(ctx, shape, half, r, color, style);
+  if (shape !== "ring" && style.mode === "dark") paintSheenRim(ctx, half, r);
 }
 
-/** Dark "moat" just larger than the body — the key legibility win. */
-function paintBacking(ctx: CanvasRenderingContext2D, half: number, r: number, backing: string): void {
-  ctx.fillStyle = backing;
+/** The "moat" just larger than the body — the key legibility win on any backdrop. */
+function paintBacking(ctx: CanvasRenderingContext2D, half: number, r: number, style: SpriteStyle): void {
+  if (style.mode === "light") {
+    ctx.save();
+    ctx.shadowColor = "rgba(15, 23, 42, 0.18)";
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetY = 2;
+    ctx.fillStyle = style.backing;
+    disc(ctx, half, half, r * 1.12);
+    ctx.restore();
+    return;
+  }
+  ctx.fillStyle = style.backing;
   disc(ctx, half, half, r * 1.12);
 }
 
-function paintBody(ctx: CanvasRenderingContext2D, shape: NodeShape, half: number, r: number, color: string): void {
+function paintBody(
+  ctx: CanvasRenderingContext2D,
+  shape: NodeShape,
+  half: number,
+  r: number,
+  color: string,
+  style: SpriteStyle,
+): void {
+  const light = style.mode === "light";
   if (shape === "ring") {
-    // Hollow hub: a thick colored ring around the dark backing center.
+    // Hollow hub: a thick colored ring around the backing center.
     ctx.lineWidth = r * 0.42;
     ctx.strokeStyle = color;
     ctx.beginPath();
@@ -37,12 +56,27 @@ function paintBody(ctx: CanvasRenderingContext2D, shape: NodeShape, half: number
     ctx.stroke();
     return;
   }
-  ctx.fillStyle = color;
-  disc(ctx, half, half, r);
+  if (light) {
+    // Paper body: white fill, colored border, faint inner tint of the color.
+    ctx.fillStyle = "#ffffff";
+    disc(ctx, half, half, r);
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = color;
+    disc(ctx, half, half, r);
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = r * 0.18;
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+    ctx.arc(half, half, r - ctx.lineWidth * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = color;
+    disc(ctx, half, half, r);
+  }
   if (shape === "note") {
-    // Inner light ring marks a note orb (distinct from a plain record disc).
+    // Inner ring marks a note orb (distinct from a plain record disc).
     ctx.lineWidth = r * 0.14;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
+    ctx.strokeStyle = light ? color : "rgba(255, 255, 255, 0.72)";
     ctx.beginPath();
     ctx.arc(half, half, r * 0.52, 0, Math.PI * 2);
     ctx.stroke();

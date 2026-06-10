@@ -147,6 +147,7 @@ function toGraphNode(wire: BaasGraphNode, noteResources: ReadonlySet<string>): G
     weight: 0.2,
     version: 0,
     hasNote: typeof wire.note === "string" && wire.note.length > 0,
+    icon: typeof wire.data.icon === "string" && wire.data.icon ? wire.data.icon : undefined,
     fields: wire.data,
   };
 }

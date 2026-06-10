@@ -256,15 +256,35 @@
   --color-text-success: var(--osio-success);
   --color-backdrop: var(--osio-overlay);
 
-  /* @osionos/graph-engine — aurora-glass backdrop (intentionally dark in both
-     themes; the graph is a luminous "night sky" surface). Override per-theme if
-     a light graph backdrop is ever wanted. */
+  /* @osionos/graph-engine — the graph follows the app theme. Light gets a
+     "paper" variant (soft pastel aurora on near-white, ink labels, white node
+     moats); dark keeps the luminous aurora. The engine derives light/dark
+     node materials from the resolved background luminance. */
+  --osio-graph-bg-0: #f8f7ff;
+  --osio-graph-bg-1: #edeefb;
+  --osio-graph-aurora-1: #c7d2fe;
+  --osio-graph-aurora-2: #ddd6fe;
+  --osio-graph-aurora-3: #bfdbfe;
+  --osio-graph-aurora-4: #f5d0fe;
+  --osio-graph-node-backing: rgba(255, 255, 255, 0.92);
+  --osio-graph-ink: #1f2933;
+  --osio-graph-halo: rgba(255, 255, 255, 0.9);
+  --osio-graph-card-bg: rgba(255, 255, 255, 0.92);
+  --osio-graph-card-border: rgba(31, 41, 51, 0.16);
+}
+
+[data-theme="dark"] {
   --osio-graph-bg-0: #0b0a1f;
   --osio-graph-bg-1: #160c30;
   --osio-graph-aurora-1: #4338ca;
   --osio-graph-aurora-2: #7c3aed;
   --osio-graph-aurora-3: #2563eb;
   --osio-graph-aurora-4: #a21caf;
+  --osio-graph-node-backing: rgba(3, 2, 12, 0.66);
+  --osio-graph-ink: #e7e9f5;
+  --osio-graph-halo: rgba(11, 10, 31, 0.85);
+  --osio-graph-card-bg: rgba(12, 9, 32, 0.82);
+  --osio-graph-card-border: rgba(255, 255, 255, 0.14);
 }
 
 html,

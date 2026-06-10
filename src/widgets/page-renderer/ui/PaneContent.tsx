@@ -26,6 +26,7 @@ import {
   LazyChannelMessagesView,
   LazyDatabaseBlock,
   LazyOsionosPage,
+  LazyProfileView,
   LazyTrashView,
 } from "./lazyViews";
 
@@ -102,6 +103,18 @@ const PaneContentImpl: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab
         <Suspense fallback={<LoadingPane />}>
           <div className="h-full overflow-auto bg-[var(--osio-bg-page)]">
             <LazyDatabaseBlock databaseId={tab.databaseId ?? tab.pageId} mode="full" />
+          </div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "profile") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
+            <LazyProfileView userId={tab.pageId} />
           </div>
         </Suspense>
       </ErrorBoundary>

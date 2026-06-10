@@ -180,20 +180,19 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     const startY = e.clientY;
     const startHeightPx = codeBodyRef.current?.offsetHeight ?? 150;
     let latestLines = Math.max(CODE_MIN_LINES, Math.round((startHeightPx - CODE_LINE_HEIGHT) / CODE_LINE_HEIGHT));
-    let move: (ev: PointerEvent) => void;
-    let up: () => void;
-    let cancel: () => void;
-    move = (ev: PointerEvent) => {
+    // const + mutual closure capture: `up`/`cancel` reference each other but
+    // only CALL at event time, well after all three initializers ran.
+    const move = (ev: PointerEvent) => {
       const newPx = startHeightPx + ev.clientY - startY;
       latestLines = Math.max(CODE_MIN_LINES, Math.round((newPx - CODE_LINE_HEIGHT) / CODE_LINE_HEIGHT));
       setDragHeightLines(latestLines);
     };
-    up = () => {
+    const up = () => {
       stopCodeDrag(move, up, cancel);
       activeDragRef.current = null;
       commitBlockUpdate(block.id, { heightLines: latestLines });
     };
-    cancel = () => {
+    const cancel = () => {
       stopCodeDrag(move, up, cancel);
       activeDragRef.current = null;
       setDragHeightLines(null);
@@ -221,9 +220,14 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   // mount/unmount sequences occurred before the drag completed.
   }, [codeView, block.heightLines, block.lineNumbers]);
 
-  useEffect(() => {
+  // Render-adjust (not an effect): once the committed heightLines arrives,
+  // drop the optimistic drag value in the SAME render pass — a sync setState
+  // inside an effect would force an extra cascading render.
+  const [seenHeightLines, setSeenHeightLines] = useState(block.heightLines);
+  if (seenHeightLines !== block.heightLines) {
+    setSeenHeightLines(block.heightLines);
     setDragHeightLines(null);
-  }, [block.heightLines]);
+  }
 
   useEffect(() => {
     return () => {

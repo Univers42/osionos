@@ -55,8 +55,8 @@ export interface PageEntry {
   content?: Block[];
   /** Editable properties shown below the page title. */
   properties?: PagePropertyEntry[];
-  /** Surface classification (agents, home). "folder" = a container that groups children, acts as a graph hub, and never opens on click (a file may also act as a folder). */
-  surface?: "page" | "agent" | "home" | "folder";
+  /** Surface classification (agents, home). "folder" = a container that groups children, acts as a graph hub, and never opens on click (a file may also act as a folder). "wiki" = a governed knowledge root: groups children like a folder but OPENS onto its own index content; articles inside carry governance properties (owner, status, verified, domain). */
+  surface?: "page" | "agent" | "home" | "folder" | "wiki";
   /** Local version for generated home dashboard content. */
   homeDashboardVersion?: number;
 }

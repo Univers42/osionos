@@ -25,6 +25,7 @@ export type SettingsTab =
   | "public_pages"
   | "library"
   | "teamspaces"
+  | "permissions"
   | "billing"
   | "plans";
 
@@ -73,6 +74,9 @@ export const SETTINGS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   { tab: "public_pages", anchor: "public-pages", label: "Public pages", keywords: ["sites", "forms", "domains", "public", "live"] },
   { tab: "library", anchor: "library", label: "Emoji and library", keywords: ["emoji", "assets", "photos", "uploads", "library"] },
   { tab: "teamspaces", anchor: "teamspaces", label: "Teamspaces", keywords: ["teamspace", "owner", "access", "security"] },
+  { tab: "permissions", anchor: "access-matrix", label: "Access matrix", keywords: ["permissions", "abac", "roles", "policies", "chmod", "matrix"], description: "Role × resource permission matrix." },
+  { tab: "permissions", anchor: "policy-conditions", label: "Conditions and field masks", keywords: ["mask", "redact", "hide", "clearance", "department", "conditions"] },
+  { tab: "permissions", anchor: "view-as", label: "View as", keywords: ["view as", "simulate", "decide", "allow", "deny"] },
   { tab: "billing", anchor: "billing", label: "Billing", keywords: ["plan", "payment", "invoice", "vat", "gst"] },
   { tab: "plans", anchor: "plans", label: "Explore plans", keywords: ["free", "plus", "business", "enterprise", "upgrade"] },
 ];

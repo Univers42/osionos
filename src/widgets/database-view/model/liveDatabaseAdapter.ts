@@ -24,6 +24,14 @@ import {
   isLiveDatabaseId,
   parseLiveDatabaseId,
 } from "@/shared/notion-database-sys/src/store/live/liveTypes";
+// Side effects: register the preset packs (composable — first non-null per
+// table wins) BEFORE the first adapter loads state: agency investigation
+// (board/map/timeline/feed/gallery/dashboard), pg-commerce (pipeline board,
+// fulfillment timeline, revenue charts/dashboards) and mysql-ops +
+// mongo-activity (calendars, feeds, workload charts, ratings).
+import "./agencyViewPresets";
+import "./commerceViewPresets";
+import "./opsActivityViewPresets";
 
 export { isLiveDatabaseId };
 

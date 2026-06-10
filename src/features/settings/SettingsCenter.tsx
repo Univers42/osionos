@@ -50,6 +50,8 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 
 import { useUserStore, type StaticPersona } from '@/features/auth';
+import { PermissionsPanel } from '@/features/settings/permissions';
+import { ImageAvatarUpload } from '@/features/settings/profile/ImageAvatarUpload';
 import { TRANSLATION_LANGUAGES, fontSampleClass, usePageActions, type PageEntry } from '@/entities/page';
 import { WorkspaceThemeControls } from '@/features/theme/WorkspaceThemePanel';
 import { importPageFile } from '@/services/page-actions';
@@ -141,6 +143,7 @@ const tabGroups: Array<{ label: string; tabs: TabItem[] }> = [
     label: 'Access & billing',
     tabs: [
       { id: 'teamspaces', label: 'Teamspaces', icon: <Shield size={16} /> },
+      { id: 'permissions', label: 'Permissions', icon: <KeyRound size={16} /> },
       { id: 'billing', label: 'Billing', icon: <CreditCard size={16} /> },
       { id: 'plans', label: 'Explore plans', icon: <CalendarDays size={16} /> },
     ],
@@ -162,6 +165,7 @@ const prompts: Record<SettingsTab, { title: string; subtitle: string }> = {
   public_pages: { title: 'Public pages', subtitle: 'Manage public content from your workspace' },
   library: { title: 'Emoji & Library', subtitle: 'Emoji + photo things that we upload' },
   teamspaces: { title: 'Teamspaces', subtitle: 'Manage teamspaces in this workspace' },
+  permissions: { title: 'Permissions', subtitle: 'Role × resource access matrix, field masks, and live decision testing' },
   billing: { title: 'Billing', subtitle: 'Manage billing information and view your upcoming invoice' },
   plans: { title: 'Explore plans', subtitle: 'Compare all osionos plans' },
 };
@@ -611,6 +615,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
               {activeTab === 'public_pages' && <PublicPagesPanel />}
               {activeTab === 'library' && <LibraryPanel />}
               {activeTab === 'teamspaces' && <TeamspacesPanel workspaceName={activeWorkspace?.name} />}
+              {activeTab === 'permissions' && <PermissionsPanel />}
               {activeTab === 'billing' && <BillingPanel workspaceId={activeWorkspace?._id} />}
               {activeTab === 'plans' && <PlansPanel workspaceId={activeWorkspace?._id} />}
             </div>
@@ -721,6 +726,7 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
               {nameSaved && <Check size={15} className="absolute right-2 top-2.5 text-[var(--osio-success)]" />}
             </span>
           </label>
+          <ImageAvatarUpload onUploaded={(dataUrl) => updateAccount({ profile: { ...account?.profile, avatar: dataUrl } })} />
         </div>
         <p className="text-sm text-[var(--osio-fg-muted)]"><span className="text-[var(--osio-accent)]">Create a custom self-portrait</span> with osionos Faces</p>
       </Section>

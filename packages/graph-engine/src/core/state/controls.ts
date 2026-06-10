@@ -30,6 +30,8 @@ export interface VisualState {
   /** Glow intensity 0..1.5. */
   glow: number;
   background: BackgroundStyle;
+  /** Semantic zoom (dots → icons → cards); false = classic dots at all zooms. */
+  semanticZoom: boolean;
 }
 
 export interface SearchState {
@@ -46,7 +48,7 @@ export interface Controls {
 export const DEFAULT_CONTROLS: Controls = {
   filter: { hiddenDatabases: [], hiddenKinds: [], hiddenTags: [], tagColors: {} },
   physics: { ...DEFAULT_LAYOUT_PARAMS },
-  visual: { nodeScale: 1, linkScale: 1, labelDensity: 0.5, glow: 1, background: "aurora-calm" },
+  visual: { nodeScale: 1, linkScale: 1, labelDensity: 0.5, glow: 1, background: "aurora-calm", semanticZoom: true },
   search: { query: "" },
 };
 
@@ -63,4 +65,9 @@ export function cloneControls(c: Controls): Controls {
     visual: { ...c.visual },
     search: { ...c.search },
   };
+}
+
+/** Console tag-color record → the Map the scene state colors from. */
+export function tagColorMap(record: Record<string, string> | undefined): Map<string, string> {
+  return new Map(Object.entries(record ?? {}));
 }
