@@ -49,24 +49,13 @@ export interface FrameInput {
   reducedMotion: boolean;
 }
 
-// TEMP instrumentation (removed before commit): per-pass timings on demand.
-const PROFILE = typeof globalThis !== "undefined" && "___graphProfile" in globalThis;
-const mark = (tag: string, t0: number): void => {
-  if (!PROFILE) return;
-  const bag = ((globalThis as Record<string, unknown>).___graphTimes ??= {}) as Record<string, number>;
-  bag[tag] = (bag[tag] ?? 0) + (performance.now() - t0);
-  bag.frames = tag === "labels" ? (bag.frames ?? 0) + 1 : (bag.frames ?? 0);
-};
-
 export function renderFrame(f: FrameInput): void {
   const { ctx, camera } = f;
   ctx.setTransform(f.dpr, 0, 0, f.dpr, 0, 0);
   ctx.clearRect(0, 0, f.width, f.height);
 
-  let t = performance.now();
   const view = visibleWorldRect(camera, f.width, f.height);
   const cull = frameCull(f.state, view, f.visual.nodeScale);
-  mark("cull", t);
   const mix = lodMix(camera.scale, f.visual.semanticZoom);
   const base: DrawCtx = {
     ctx,
@@ -99,31 +88,19 @@ export function renderFrame(f: FrameInput): void {
     drawNodes(base, f.sprites, true);
     if (mix.card > 0.001) drawCards(base, mix.card, f.hoverIndex, f.selectedIndex, true);
   } else {
-    let t2 = performance.now();
     drawLinks(base);
-    mark("links", t2);
     drawEdgeFlow(base, f.selectedIndex, false);
     if (f.hoverIndex !== f.selectedIndex) drawEdgeFlow(base, f.hoverIndex, true);
-    t2 = performance.now();
     drawGlow(base, f.hoverIndex, f.selectedIndex);
-    mark("glow", t2);
-    t2 = performance.now();
     drawNodes(base, f.sprites);
-    mark("nodes", t2);
-    t2 = performance.now();
     if (mix.card > 0.001) drawCards(base, mix.card, f.hoverIndex, f.selectedIndex);
-    mark("cards", t2);
   }
   if (mix.card <= 0.6) drawHubArcs(base);
   // Raise the hovered + selected node above any overlap, then ring them on top.
   drawNodeSprite(base, f.sprites, f.selectedIndex);
   if (f.hoverIndex !== f.selectedIndex) drawNodeSprite(base, f.sprites, f.hoverIndex);
-  t = performance.now();
   drawRings(base, f.hoverIndex, f.selectedIndex);
-  mark("rings", t);
   ctx.restore();
 
-  t = performance.now();
   drawLabels(base, f.labels, f.focus, f.hoverIndex, f.selectedIndex, f.hoverNeighbors, f.hoverFade);
-  mark("labels", t);
 }

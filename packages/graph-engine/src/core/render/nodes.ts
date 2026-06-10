@@ -10,24 +10,40 @@
 
 import type { DrawCtx } from "./drawTypes";
 import { lodMix } from "./lod";
-import { nodeReveal } from "./reveal";
+import { isRevealing, nodeReveal } from "./reveal";
 import { baseKeyOf, shapeOf, styleKey } from "./nodeShape";
 import { DISC_FRACTION, type NodeSpriteCache } from "./sprites";
 import { glyphKey, iconGlyph } from "./nodeIcon";
+
+/** Below this on-screen radius a node is a featureless dot: skip the sprite
+ *  blit (software rasterizers choke on 10k drawImages) and batch-fill plain
+ *  discs — one path per color bucket. Visually identical at that size. */
+const DOT_MAX_SCREEN_RADIUS = 3.2;
 
 export function drawNodes(d: DrawCtx, sprites: NodeSpriteCache, focusOnly = false): void {
   const { ctx, state, visual, time, reveal, cull, camera } = d;
   const mix = lodMix(camera.scale, visual.semanticZoom);
   if (mix.sprite <= 0.001) return; // full card stage — no sprites at all
+  const revealing = isRevealing(reveal, time);
   for (const [key, indices] of state.styleBuckets) {
     const base = mix.icon < 0.999 ? sprites.get(baseKeyOf(key)) : null;
     const iconed = mix.icon > 0.001 ? sprites.get(key) : null;
+    let dotPath = false;
     for (const i of indices) {
       if (cull.mask[i] === 0) continue;
       if (focusOnly && !(d.focus?.has(i) ?? false)) continue;
-      const rv = nodeReveal(reveal, i, time);
+      const rv = revealing ? nodeReveal(reveal, i, time) : 1;
       if (rv <= 0.001) continue;
       const r = state.radius[i] * visual.nodeScale * (0.45 + 0.55 * rv);
+      if (!revealing && r * camera.scale < DOT_MAX_SCREEN_RADIUS) {
+        if (!dotPath) {
+          ctx.beginPath();
+          dotPath = true;
+        }
+        ctx.moveTo(state.posX[i] + r, state.posY[i]);
+        ctx.arc(state.posX[i], state.posY[i], r, 0, Math.PI * 2);
+        continue;
+      }
       const half = r / DISC_FRACTION;
       const alpha = rv * d.alpha * mix.sprite;
       if (base) {
@@ -38,6 +54,12 @@ export function drawNodes(d: DrawCtx, sprites: NodeSpriteCache, focusOnly = fals
         ctx.globalAlpha = alpha * mix.icon;
         ctx.drawImage(iconed, state.posX[i] - half, state.posY[i] - half, half * 2, half * 2);
       }
+    }
+    if (dotPath) {
+      // One fill covers every tiny node of this bucket (same color by key).
+      ctx.globalAlpha = d.alpha * mix.sprite;
+      ctx.fillStyle = state.fills[indices[0]];
+      ctx.fill();
     }
   }
   ctx.globalAlpha = 1;
