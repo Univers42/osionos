@@ -97,10 +97,15 @@ export class AuroraBackground {
     ctx.fillRect(0, 0, this.width, this.height);
 
     if (this.style !== "flat") {
+      const light = this.theme.mode === "light";
       const drift = this.style === "aurora-calm" ? 0.45 : 1;
       // Calmer than before (was 0.2): the data should lead, not the bands.
-      const intensity = this.style === "aurora-calm" ? 0.1 : 0.14;
-      ctx.globalCompositeOperation = "screen";
+      // Light "paper" mode: `screen` is a no-op on a near-white ramp, so the
+      // pastel bands composite with `multiply` at a stronger alpha instead.
+      const intensity = light
+        ? (this.style === "aurora-calm" ? 0.32 : 0.45)
+        : (this.style === "aurora-calm" ? 0.1 : 0.14);
+      ctx.globalCompositeOperation = light ? "multiply" : "screen";
       BANDS.forEach((band, i) => {
         const t = this.reducedMotion ? 0 : now * band.speed * drift;
         const cx = (band.hx + Math.sin(t + band.phase) * 0.06) * this.width;
@@ -122,7 +127,7 @@ export class AuroraBackground {
     const vr = Math.max(this.width, this.height) * 0.75;
     const vignette = ctx.createRadialGradient(vx, vy, vr * 0.35, vx, vy, vr);
     vignette.addColorStop(0, "transparent");
-    vignette.addColorStop(1, "rgba(0, 0, 0, 0.4)");
+    vignette.addColorStop(1, this.theme.mode === "light" ? "rgba(30, 27, 75, 0.1)" : "rgba(0, 0, 0, 0.4)");
     ctx.globalCompositeOperation = "source-over";
     ctx.globalAlpha = 1;
     ctx.fillStyle = vignette;

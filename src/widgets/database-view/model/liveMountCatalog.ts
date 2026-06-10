@@ -13,14 +13,21 @@
 /**
  * Discovery of the registered live mounts: `GET {VITE_BAAS_URL}/admin/v1/
  * databases` (Kong → adapter-registry; the Go handler returns an array of
- * TenantDatabase `{id, tenant_id, engine, name, created_at, …}`). Parsing is
- * defensive — only `{id|dbId, name?, engine?}` is consumed. When the registry
- * route is unavailable, the `VITE_BAAS_LIVE_MOUNTS` env JSON
+ * TenantDatabase `{id, tenant_id, engine, name, created_at, …}`). The
+ * registry REQUIRES a tenant header (it 401s on api-key headers alone), so
+ * `VITE_BAAS_TENANT_ID` is sent as `X-Baas-Tenant-Id` and — because the
+ * route returns every tenant's mounts — the response is scoped back to that
+ * tenant. Parsing is defensive — only `{id|dbId, name?, engine?}` is
+ * consumed. When the registry route is unavailable (or no tenant id is
+ * configured), the `VITE_BAAS_LIVE_MOUNTS` env JSON
  * (`[{"dbId":"…","name":"…","engine":"postgresql"}]`) is the fallback; every
  * failure degrades silently to []. Cached 60s.
  */
 
 import { BAAS_BASE_URL, baasConfigured, baasHeaders } from "@/features/second-brain/baas/baasFetch";
+
+const TENANT_ID = (((import.meta.env ?? {}) as Record<string, string | undefined>)
+  .VITE_BAAS_TENANT_ID ?? "").trim();
 
 /** One registered mount, ready to be combined with its tables into
  *  `baas:<dbId>:<table>` database ids. */
@@ -39,6 +46,11 @@ function parseMounts(payload: unknown): LiveMountInfo[] {
   for (const entry of payload) {
     if (!entry || typeof entry !== "object") continue;
     const record = entry as Record<string, unknown>;
+    // The registry returns EVERY tenant's mounts — keep only ours when both
+    // sides carry a tenant id (env fallback entries usually carry none).
+    if (TENANT_ID && typeof record.tenant_id === "string" && record.tenant_id !== TENANT_ID) {
+      continue;
+    }
     const dbId = typeof record.id === "string" && record.id
       ? record.id
       : typeof record.dbId === "string" ? record.dbId : "";
@@ -53,9 +65,10 @@ function parseMounts(payload: unknown): LiveMountInfo[] {
 }
 
 async function fetchRegistryMounts(): Promise<LiveMountInfo[]> {
-  if (!baasConfigured()) return [];
+  if (!baasConfigured() || !TENANT_ID) return []; // registry 401s without a tenant header
   try {
-    const response = await fetch(`${BAAS_BASE_URL}/admin/v1/databases`, { headers: baasHeaders() });
+    const headers = { ...baasHeaders(), "X-Baas-Tenant-Id": TENANT_ID };
+    const response = await fetch(`${BAAS_BASE_URL}/admin/v1/databases`, { headers });
     if (!response.ok) return [];
     return parseMounts(await response.json());
   } catch {

@@ -92,7 +92,10 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
           mode={resolvedMode}
           renderPage={renderPage}
           className={mode === 'full' ? 'h-full' : undefined}
-          chrome="single-view"
+          // Full pages get the full chrome — the view tabs are how the curated
+          // preset views (boards/timelines/dashboards/calendars) are reached.
+          // Inline embeds stay single-view (no room for a tab row).
+          chrome={mode === 'full' ? 'full' : 'single-view'}
         />
       </div>
     );

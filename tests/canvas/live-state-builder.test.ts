@@ -132,6 +132,33 @@ test("views: default table view per database + board on the enum column", () => 
   assert.equal(state.views["baas:db-1:customers#board"], undefined, "no enum → no board");
 });
 
+test("mongo `_id` pk reads the wire-aliased `id` field", () => {
+  // normalize_doc on the data plane renames `_id` → `id` in every row, while
+  // the schema's primary_key still says `_id` — the builder must alias or all
+  // mongo pages collapse onto the empty pk.
+  const schema: LiveSchemaResponse = {
+    dbId: "db-1",
+    engine: "mongodb",
+    capabilities: null,
+    tables: [{
+      name: "events",
+      primary_key: ["_id"],
+      columns: [
+        col({ name: "_id", normalized_type: "text", nullable: false }),
+        col({ name: "summary", normalized_type: "text" }),
+      ],
+    } as LiveSchemaResponse["tables"][number]],
+  };
+  const state = buildLiveState(
+    schema,
+    { dbId: "db-1", table: "events" },
+    { events: [{ id: "evt-000001", summary: "page_view /pricing" }] },
+  );
+  const page = state.pages["baas:db-1:events:evt-000001"];
+  assert.ok(page, "pk comes from the aliased id field");
+  assert.equal(page.properties._id, "evt-000001", "the _id property cell is aliased too");
+});
+
 test("composite pk rows join with ':' and parse back as one pk", () => {
   const schema: LiveSchemaResponse = {
     dbId: "db-1",

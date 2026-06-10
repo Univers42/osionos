@@ -43,7 +43,9 @@ export const HomeDatabaseMode: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (baasConfigured()) void reload();
+    // Microtask: reload() sets "loading" synchronously, and a sync setState
+    // inside an effect cascades a render before paint (react-hooks rule).
+    if (baasConfigured()) queueMicrotask(() => void reload());
   }, [reload]);
 
   const activeDb = useMemo(() => catalog.find((mount) => mount.dbId === dbId) ?? catalog[0], [catalog, dbId]);

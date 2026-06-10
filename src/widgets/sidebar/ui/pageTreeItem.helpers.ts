@@ -32,6 +32,11 @@ export function isFolderEntry(page: Pick<PageEntry, "surface">): boolean {
   return page.surface === "folder";
 }
 
+/** A wiki is a governed knowledge root: groups children like a folder but opens onto its own index content. */
+export function isWikiEntry(page: Pick<PageEntry, "surface">): boolean {
+  return page.surface === "wiki";
+}
+
 /** Narrow projection of a page used for a sidebar tree row (kept stable for useShallow). */
 export function selectPageTreeEntry(state: PageStoreState, pageId: string): PageEntry | null {
   const index = state.pagesIndex[pageId];

@@ -33,7 +33,13 @@ import { reconcileBlocks } from "../model/reconcileBlocks";
 function RawPreviewPaneImpl({ source }: Readonly<{ source: string }>) {
   const previousBlocksRef = useRef<Block[]>([]);
   const blocks = useMemo(() => {
+    // Deliberate previous-value cache: reconcileBlocks is pure given
+    // (source, previous) and re-running with the same source is idempotent,
+    // so the render-time ref access is safe — the id-reuse across renders is
+    // the entire point (stable keys, minimal re-renders).
+    // eslint-disable-next-line react-hooks/refs
     const reconciled = reconcileBlocks(parseMarkdownToBlocks(source), previousBlocksRef.current);
+    // eslint-disable-next-line react-hooks/refs
     previousBlocksRef.current = reconciled;
     return reconciled;
   }, [source]);

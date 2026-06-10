@@ -39,6 +39,8 @@ export interface GraphNode {
   version: number;
   /** True if a note overlay exists for this record. */
   hasNote: boolean;
+  /** Page icon as a raw IconValue string ("🚀" | "emoji:…" | "icon:…" | "img:…"). */
+  icon?: string;
   /** Lazily-hydrated property snapshot for the inspector; NOT used for layout. */
   fields?: Record<string, unknown>;
 }

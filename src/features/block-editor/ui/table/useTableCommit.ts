@@ -63,6 +63,9 @@ export function useTableCommit(block: Block, pageId: string) {
     if (commitTimerRef.current !== null) globalThis.clearTimeout(commitTimerRef.current);
     commitTimerRef.current = globalThis.setTimeout(flushCellCommit, CELL_COMMIT_DELAY_MS);
   }, [flushCellCommit]);
+  // The memo only BUILDS event-handler closures around the ref-touching
+  // scheduler — no ref is dereferenced while the memo body runs.
+  // eslint-disable-next-line react-hooks/refs
   const cellCommitHandlers = useMemo(() => createCellCommitHandlers(data.length, columnCount, scheduleCellCommit), [columnCount, data.length, scheduleCellCommit]);
 
   const commitStructure = useCallback((nextData: string[][], nextConfig: TableBlockConfig) => {

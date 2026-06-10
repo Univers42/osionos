@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import { escapeHtml, loadHighlighterFor, normalizeLanguage, type Highlighter } from "./highlighter";
 
@@ -29,18 +29,17 @@ export const CodeSyntaxHighlight: React.FC<CodeSyntaxHighlightProps> = ({
   codeClassName,
   style,
 }) => {
-  const hljsRef = useRef<Highlighter | null>(null);
-  const [ready, setReady] = useState(0);
+  // State (not a ref): the memo below reads it during render, and render-time
+  // ref reads are invisible to React — state makes the post-load re-highlight
+  // an ordinary update (no version counter needed).
+  const [hljs, setHljs] = useState<Highlighter | null>(null);
   const normalized = normalizeLanguage(language);
 
   useEffect(() => {
     if (!normalized) return;
     let active = true;
     loadHighlighterFor(normalized).then((instance) => {
-      hljsRef.current = instance;
-      // The hljs singleton ref is stable, so bump a version to re-highlight
-      // once the language grammar has registered.
-      if (active) setReady((value) => value + 1);
+      if (active) setHljs(instance);
     });
     return () => {
       active = false;
@@ -48,7 +47,6 @@ export const CodeSyntaxHighlight: React.FC<CodeSyntaxHighlightProps> = ({
   }, [normalized]);
 
   const highlighted = useMemo(() => {
-    const hljs = hljsRef.current;
     if (!normalized || !hljs?.getLanguage(normalized)) return escapeHtml(code);
 
     try {
@@ -56,8 +54,7 @@ export const CodeSyntaxHighlight: React.FC<CodeSyntaxHighlightProps> = ({
     } catch {
       return escapeHtml(code);
     }
-    // `ready` bumps when the grammar finishes loading -> recompute the highlight.
-  }, [ready, code, normalized]);
+  }, [hljs, code, normalized]);
 
   return (
     <pre className={className} style={style}>

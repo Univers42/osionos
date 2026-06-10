@@ -1,59 +1,49 @@
 /**
  * Label pass, drawn in SCREEN space (after the world transform is restored) so
- * text stays crisp at any zoom. Level-of-detail: accent labels (selected / hovered
- * / focused) always show; the rest appear past a zoom threshold and within a
- * budget — both governed by the console's label-density slider.
+ * text stays crisp at any zoom. Level-of-detail: accent labels (selected /
+ * hovered / focused / hubs) always show; the rest appear past a zoom threshold
+ * and within a budget — both governed by the console's label-density slider.
+ * Labels blit from the pre-baked LabelCache (the old per-frame shadowBlur
+ * fillText was the dominant frame cost at 10k nodes), and non-accent labels
+ * hand off to the cards once the card stage is mostly in.
  */
 
 import { lerp } from "../math";
 import { worldToScreen } from "../camera/transform";
 import type { DrawCtx } from "./drawTypes";
-import { nodeInView } from "./cull";
+import type { LabelCache } from "./labelCache";
+import { lodMix } from "./lod";
 
 export function drawLabels(
   d: DrawCtx,
+  cache: LabelCache,
   focus: ReadonlySet<number> | null,
   hoverIndex: number,
   selectedIndex: number,
+  hoverNeighbors: ReadonlySet<number> | null = null,
+  hoverFade = 1,
 ): void {
-  const { ctx, state, view, camera, theme, visual } = d;
+  const { ctx, state, camera, visual, cull } = d;
+  cache.beginFrame();
+  const mix = lodMix(camera.scale, visual.semanticZoom);
   const minScale = lerp(2, 0.75, visual.labelDensity);
-  const showAll = camera.scale >= minScale;
+  const showAll = camera.scale >= minScale && mix.card <= 0.6;
   let budget = Math.round(60 + visual.labelDensity * 420);
 
-  ctx.textBaseline = "middle";
-
-  for (let i = 0; i < state.count; i += 1) {
-    if (!nodeInView(state, i, view, visual.nodeScale * 2.2)) continue;
-    const accent = i === selectedIndex || i === hoverIndex || (focus?.has(i) ?? false);
+  for (let k = 0; k < cull.count; k += 1) {
+    const i = cull.list[k];
+    const neighbor = hoverIndex >= 0 && (hoverNeighbors?.has(i) ?? false);
+    const accent = i === selectedIndex || i === hoverIndex || (focus?.has(i) ?? false)
+      || state.isHub[i] === 1 || neighbor;
     if (!accent) {
       if (!showAll || budget <= 0) continue;
       budget -= 1;
+    } else if (mix.card > 0.6 && i !== selectedIndex && i !== hoverIndex) {
+      continue; // cards carry their own titles at close zoom
     }
-    drawLabel(ctx, theme.label, theme.labelHalo, state.labelText[i] ?? state.ids[i], i, d, accent);
+    const screen = worldToScreen(camera, state.posX[i], state.posY[i]);
+    const x = screen.x + state.radius[i] * visual.nodeScale * camera.scale + 6;
+    const alpha = neighbor && i !== selectedIndex ? d.alpha * hoverFade : d.alpha;
+    cache.draw(ctx, state.labelText[i] ?? state.ids[i], accent, x, screen.y, alpha);
   }
-}
-
-function drawLabel(
-  ctx: CanvasRenderingContext2D,
-  color: string,
-  halo: string,
-  text: string,
-  index: number,
-  d: DrawCtx,
-  accent: boolean,
-): void {
-  const { state, camera, visual } = d;
-  const screen = worldToScreen(camera, state.posX[index], state.posY[index]);
-  const x = screen.x + state.radius[index] * visual.nodeScale * camera.scale + 6;
-  // Soft shadow halo (no opaque "sticker" box); accent labels read a touch bolder.
-  ctx.font = `${accent ? "600 " : ""}12px ui-sans-serif, system-ui, sans-serif`;
-  ctx.save();
-  ctx.shadowColor = halo;
-  ctx.shadowBlur = 5;
-  ctx.shadowOffsetY = 1;
-  ctx.fillStyle = color;
-  ctx.fillText(text, x, screen.y);
-  ctx.fillText(text, x, screen.y); // second pass deepens the halo for contrast
-  ctx.restore();
 }

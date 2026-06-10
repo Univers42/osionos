@@ -8,6 +8,7 @@ import type { Camera } from "../camera/transform";
 import type { WorldBounds } from "../camera/transform";
 import type { SceneTheme } from "../theme/tokens";
 import type { VisualState } from "../state/controls";
+import type { FrameCull } from "./cull";
 import type { RevealState } from "./reveal";
 import type { SceneState } from "./sceneState";
 
@@ -27,6 +28,8 @@ export interface DrawCtx {
   focus: ReadonlySet<number> | null;
   /** When true, decorative effects (ambient hub glow) are suppressed. */
   reducedMotion: boolean;
+  /** Frame-level visibility (one grid sweep, shared by every pass). */
+  cull: FrameCull;
 }
 
 export const TAG_EDGE_MIN_SCALE = 0.45;

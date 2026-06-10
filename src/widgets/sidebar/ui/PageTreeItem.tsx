@@ -10,13 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Folder, FolderOpen } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { BookOpen, ChevronRight, Folder, FolderOpen } from "lucide-react";
 import { IconValueView } from "@/shared/ui/atoms/IconValueView";
 import { useShallow } from "zustand/react/shallow";
 import { usePageStore, type PageEntry } from "@/store/usePageStore";
 import { canReadPage, usePageAccessContext } from "@/shared/lib/auth/pageAccess";
-import { isFolderEntry, selectChildPageIds, selectPageTreeEntry } from "./pageTreeItem.helpers";
+import { isFolderEntry, isWikiEntry, selectChildPageIds, selectPageTreeEntry } from "./pageTreeItem.helpers";
 import { SidebarRenameInput } from "./SidebarRenameInput";
 import { PageTreeRowActions } from "./PageTreeRowActions";
 import { usePageRowDnd } from "./usePageRowDnd";
@@ -52,11 +52,18 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
   const collapseToken = useSidebarTreeDnd((s) => s.collapseToken);
 
   const children = useMemo(() => childPageIds, [childPageIds]);
-  useEffect(() => { setExpanded(false); }, [collapseToken]);
+  // Render-adjust: collapse in the SAME pass the broadcast token changes —
+  // a sync setState inside an effect cascades an extra render per node.
+  const [seenCollapseToken, setSeenCollapseToken] = useState(collapseToken);
+  if (seenCollapseToken !== collapseToken) {
+    setSeenCollapseToken(collapseToken);
+    setExpanded(false);
+  }
 
   const isFolder = page ? isFolderEntry(page) : false;
+  const isWiki = page ? isWikiEntry(page) : false;
   const hasChildren = children.length > 0;
-  const canExpand = hasChildren || isFolder;
+  const canExpand = hasChildren || isFolder || isWiki;
   const { isDragging, indicator, dragHandlers, dropHandlers } = usePageRowDnd({
     pageId,
     parentPageId: page?.parentPageId,
@@ -97,6 +104,7 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
         ? <FolderOpen size={14} className="shrink-0 text-[var(--osio-accent)]" />
         : <Folder size={14} className="shrink-0 text-[var(--osio-fg-muted)]" />;
     }
+    if (isWiki) return <BookOpen size={14} className="shrink-0 text-[var(--osio-accent)]" />;
     return pageEntry.icon
       ? <IconValueView value={pageEntry.icon} size={14} className="shrink-0" />
       : <IconValueView value={fallbackIcon} size={13} className="opacity-40 shrink-0" />;

@@ -84,6 +84,7 @@ function createRecordNode(page: Page, database: DatabaseSchema, source: string):
     weight: 0,
     version: versionFromTimestamp(page.updatedAt),
     hasNote: false,
+    icon: page.icon || undefined,
   };
 }
 

@@ -48,6 +48,10 @@ interface Props {
 export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, commentsOpen, onToggleComments, onCloseComments }) => {
   const updatePageTitle = usePageStore((s) => s.updatePageTitle);
   const actions = usePageHeaderActions(pageId, locked);
+  // Destructured: `coverPickerOpen` is plain state and `coverPickerRef` is
+  // only PASSED as a JSX ref — reading them through the hook's bag makes the
+  // react-hooks/refs analyzer treat both as render-time ref reads.
+  const { coverPickerOpen, coverPickerRef } = actions;
   const properties = usePageProperties(pageId, locked);
   const commentCount = useRealtimeMessagesStore((s) => (s.messagesByThread[`page:${pageId}:comments`] ?? EMPTY_MESSAGES).length);
 
@@ -93,8 +97,8 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
           </button>
         </div>
 
-        {!hasCover && actions.coverPickerOpen ? (
-          <div ref={actions.coverPickerRef} className="absolute z-[var(--osio-z-popover)] mt-1">
+        {!hasCover && coverPickerOpen ? (
+          <div ref={coverPickerRef} className="absolute z-[var(--osio-z-popover)] mt-1">
             <CoverAssetPicker onSelect={actions.selectCover} />
           </div>
         ) : null}

@@ -45,6 +45,8 @@ export interface GraphNode {
   version: number;
   /** True if a note overlay exists for this record (doc 06). */
   hasNote: boolean;
+  /** Page icon as a raw IconValue string ("🚀" | "emoji:…" | "icon:…" | "img:…"). */
+  icon?: string;
   /** Lazily-hydrated property snapshot for the inspector; NOT used for layout. */
   fields?: Record<string, unknown>;
 }
@@ -129,7 +131,8 @@ export function nodesEqual(a: GraphNode, b: GraphNode): boolean {
     a.group === b.group &&
     a.weight === b.weight &&
     a.version === b.version &&
-    a.hasNote === b.hasNote
+    a.hasNote === b.hasNote &&
+    a.icon === b.icon
   );
 }
 

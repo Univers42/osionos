@@ -21,6 +21,7 @@ import { createPortal } from "react-dom";
 import {
   MoreHorizontal,
   Archive,
+  BookOpen,
   Copy,
   ArrowRight,
   Trash2,
@@ -103,6 +104,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
   const duplicatePage = usePageStore((s) => s.duplicatePage);
   const patchPage = usePageStore((s) => s.patchPage);
   const isFolder = currentPage?.surface === "folder";
+  const isWiki = currentPage?.surface === "wiki";
 
   // Memoize counts and descendants to avoid tree traversal on every render
   const { descendantIds, subPageCount } = useMemo(() => {
@@ -174,6 +176,14 @@ export const PageOptionsMenu: React.FC<Props> = ({
     // A folder is a normal page flagged surface:"folder" (it groups children and never opens).
     // Converting back to a page clears the flag; existing children/content are preserved.
     patchPage(pageId, { surface: isFolder ? undefined : "folder" });
+  };
+
+  const handleConvertWikiClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsMenuOpen(false);
+    // A wiki is a governed knowledge root (surface:"wiki"): it groups children like a
+    // folder but opens onto its own index content. Converting back clears the flag.
+    patchPage(pageId, { surface: isWiki ? undefined : "wiki" });
   };
 
   const handleDuplicateClick = async (e: React.MouseEvent) => {
@@ -321,6 +331,19 @@ export const PageOptionsMenu: React.FC<Props> = ({
                 <Folder size={14} className="shrink-0" />
               )}
               <span>{isFolder ? "Convert to page" : "Convert to folder"}</span>
+            </button>
+
+            <button
+              type="button"
+              className={styles.menuItem}
+              onClick={handleConvertWikiClick}
+            >
+              {isWiki ? (
+                <FileText size={14} className="shrink-0" />
+              ) : (
+                <BookOpen size={14} className="shrink-0" />
+              )}
+              <span>{isWiki ? "Convert to page" : "Convert to wiki"}</span>
             </button>
 
             <button

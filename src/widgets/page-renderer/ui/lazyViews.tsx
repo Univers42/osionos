@@ -45,6 +45,10 @@ export const LazyTrashView = lazy(() =>
   import("@/pages/trash-view/ui/TrashView").then((m) => ({ default: m.TrashView })),
 );
 
+export const LazyProfileView = lazy(() =>
+  import("@/widgets/profile-page/ProfileView").then((m) => ({ default: m.ProfileView })),
+);
+
 export const LazyGraphEngineExplorer = lazy(() =>
   import("@/widgets/graph-explorer/GraphEngineExplorer").then((m) => ({ default: m.GraphEngineExplorer })),
 );
