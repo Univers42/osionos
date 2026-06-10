@@ -29,16 +29,51 @@ import {
 } from "@/shared/notion-database-sys/src/store/live/liveViewPresets";
 import { presetView } from "./livePresetView";
 
+/** Conditional-color rules shared by the orders views (token ids from the
+ *  conditionalColor lib; live enum option id === raw value). */
+const ORDER_STATUS_COLORS = [
+  { id: "cc-delivered", propertyId: "status", operator: "equals" as const, value: "delivered", color: "green" },
+  { id: "cc-cancelled", propertyId: "status", operator: "equals" as const, value: "cancelled", color: "red" },
+  { id: "cc-pending", propertyId: "status", operator: "equals" as const, value: "pending", color: "yellow" },
+];
+
 function ordersViews(database: DatabaseSchema, _ref: LiveMountRef): ViewConfig[] {
   return [
     presetView(database, "commerce", "pipeline", "Pipeline", "board", {
       grouping: { propertyId: "status" },
+      settings: { conditionalColors: ORDER_STATUS_COLORS },
     }),
     presetView(database, "commerce", "fulfillment", "Fulfillment", "timeline", {
       settings: { showTimelineBy: "placed_at", timelineEndBy: "shipped_at", separateStartEndDates: true },
     }),
     presetView(database, "commerce", "revenue", "Revenue by Status", "chart", {
-      settings: { chartType: "vertical_bar", xAxisProperty: "status", yAxisProperty: "total", yAxisAggregation: "sum", showDataLabels: true },
+      settings: { chartType: "vertical_bar", xAxisProperty: "status", yAxisProperty: "total", yAxisAggregation: "sum", showDataLabels: true, conditionalColors: ORDER_STATUS_COLORS },
+    }),
+    presetView(database, "commerce", "funnel", "Status Funnel", "chart", {
+      settings: { chartType: "funnel", xAxisProperty: "status" },
+    }),
+    presetView(database, "commerce", "mix", "Status × Ship Heatmap", "chart", {
+      settings: { chartType: "heatmap", xAxisProperty: "status", yAxisGroupBy: "ship_method" },
+    }),
+    presetView(database, "commerce", "gauge", "Revenue Gauge", "chart", {
+      settings: { chartType: "progress_gauge", xAxisProperty: "status", yAxisProperty: "total", yAxisAggregation: "sum", yAxisTitle: "Revenue" },
+    }),
+    presetView(database, "commerce", "waterfall", "Revenue Waterfall", "chart", {
+      settings: { chartType: "waterfall", xAxisProperty: "status", yAxisProperty: "total", yAxisAggregation: "sum" },
+    }),
+    presetView(database, "commerce", "hub", "Analytics Hub", "dashboard", {
+      settings: {
+        dashboardWidgets: [
+          { id: "hub-rev", viewId: `${database.id}#commerce-revenue`, title: "Revenue by status" },
+          { id: "hub-funnel", viewId: `${database.id}#commerce-funnel`, title: "Order funnel" },
+          { id: "hub-gauge", viewId: `${database.id}#commerce-gauge`, hideTitle: true },
+          { id: "hub-mix", viewId: `${database.id}#commerce-mix`, title: "Status × ship method" },
+        ],
+        dashboardRows: [
+          { id: "hub-r1", widgetIds: ["hub-rev", "hub-funnel"], widths: [0.55, 0.45], height: 340 },
+          { id: "hub-r2", widgetIds: ["hub-gauge", "hub-mix"], widths: [0.35, 0.65], height: 320 },
+        ],
+      },
     }),
     presetView(database, "commerce", "stats", "Store Stats", "dashboard", {
       settings: { widgets: [
@@ -82,6 +117,12 @@ function tableViews(database: DatabaseSchema, ref: LiveMountRef): ViewConfig[] {
         }),
         presetView(database, "commerce", "pricing", "Average Price", "chart", {
           settings: { chartType: "horizontal_bar", xAxisProperty: "category", yAxisProperty: "price", yAxisAggregation: "average" },
+        }),
+        presetView(database, "commerce", "treemap", "Category Treemap", "chart", {
+          settings: { chartType: "treemap", xAxisProperty: "category", yAxisProperty: "price", yAxisAggregation: "sum" },
+        }),
+        presetView(database, "commerce", "sunburst", "Category Sunburst", "chart", {
+          settings: { chartType: "sunburst", xAxisProperty: "category" },
         }),
       ];
     case "inventory":
