@@ -10,25 +10,29 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, type RefObject } from "react";
 import { useStore } from "zustand";
 
 import type { SurfaceBlockEditorProps } from "../../BlockEditorSurface";
-import { createInteractionStore } from "../controller/interactionStore";
+import type { CanvasInteractionStore } from "../controller/interactionStore";
 import { createLazyMounter } from "../controller/lazyMount";
-import { useCanvasCellOps } from "../controller/useCanvasCellOps";
+import type { CanvasCellOps } from "../controller/useCanvasCellOps";
 import { useCanvasKeyboard } from "../controller/useCanvasKeyboard";
 import { useCanvasMarquee } from "../controller/useCanvasMarquee";
-import { useCanvasScale } from "../controller/useCanvasScale";
 import { useHugHeights } from "../controller/useHugHeights";
 import { resolveHugDisplacements } from "../model/collision";
 import { getCellsOrderedByZ } from "../model/selectors";
 import type { CanvasStoreApi } from "../store/canvasStore";
 import { CanvasCellView } from "./CanvasCellView";
+import { CanvasEmptyState } from "./CanvasEmptyState";
 import { CanvasGuidesLayer } from "./CanvasGuidesLayer";
 
 export interface CanvasStageProps {
   store: CanvasStoreApi;
+  interaction: CanvasInteractionStore;
+  cellOps: CanvasCellOps;
+  stageRef: RefObject<HTMLDivElement | null>;
+  scaleRef: RefObject<number>;
   pageId: string;
   layoutBlockId: string;
   renderBlockEditor: (props: SurfaceBlockEditorProps) => React.ReactNode;
@@ -37,16 +41,12 @@ export interface CanvasStageProps {
 const STAGE_MIN_HEIGHT = 200;
 const STAGE_BOTTOM_PADDING = 48;
 
-export function CanvasStage({ store, pageId, layoutBlockId, renderBlockEditor }: CanvasStageProps) {
+export function CanvasStage({ store, interaction, cellOps, stageRef, scaleRef, pageId, layoutBlockId, renderBlockEditor }: CanvasStageProps) {
   const cells = useStore(store, (state) => state.cells);
   const selectedIds = useStore(store, (state) => state.selectedIds);
   const layoutConfig = useStore(store, (state) => state.layoutConfig);
   const dispatch = useStore(store, (state) => state.dispatch);
-  const stageRef = useRef<HTMLDivElement | null>(null);
-  const scaleRef = useCanvasScale(stageRef, layoutConfig);
   const { heights, measureCell } = useHugHeights();
-  const interaction = useMemo(() => createInteractionStore(), []);
-  const cellOps = useCanvasCellOps(store, interaction, scaleRef, stageRef);
   const startMarquee = useCanvasMarquee(store, interaction, scaleRef, stageRef);
   const handleKeyDown = useCanvasKeyboard(store);
   const lazyMounter = useMemo(() => createLazyMounter(), []);
@@ -100,6 +100,9 @@ export function CanvasStage({ store, pageId, layoutBlockId, renderBlockEditor }:
       onKeyDown={handleKeyDown}
     >
       <CanvasGuidesLayer interaction={interaction} />
+      {orderedCells.length === 0 ? (
+        <CanvasEmptyState onAdd={cellOps.addCell} onTemplate={cellOps.applyTemplate} />
+      ) : null}
       {orderedCells.map((cell) => (
         <CanvasCellView
           key={cell.id}

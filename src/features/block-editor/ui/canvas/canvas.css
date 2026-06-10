@@ -144,6 +144,22 @@
   user-select: none;
 }
 
+.osio-canvas-v2-template-menu {
+  min-width: 220px;
+}
+
+.osio-canvas-v2-template-menu button {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.osio-canvas-v2-template-menu small {
+  color: var(--osio-fg-subtle);
+  font-size: 11px;
+}
+
 .osio-canvas-v2-marquee {
   position: absolute;
   z-index: var(--osio-z-raised);
