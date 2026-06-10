@@ -138,6 +138,12 @@
   min-height: calc(var(--osionos-layout-cell-min-height, 96px) + var(--osio-cell-dh, 0px));
 }
 
+/* Hug-width cells grow to their content but never past the authored frame. */
+.osio-canvas-v2-root .osionos-layout-cell[data-layout-sizing="auto-width"] {
+  width: max-content;
+  max-width: calc(var(--osio-canvas-sx, 1) * (var(--osio-cell-w, 0px) + var(--osio-cell-dw, 0px)));
+}
+
 /* Nested editors must not swallow pointer events mid-gesture. */
 .osio-canvas-v2-root [data-layout-interacting="true"] .osionos-layout-cell-editor {
   pointer-events: none;

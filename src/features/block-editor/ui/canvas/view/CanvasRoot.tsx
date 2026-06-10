@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 
 import type { Block } from "@/entities/block";
@@ -59,6 +59,21 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
   const interaction = useMemo(() => createInteractionStore(), []);
   const cellOps = useCanvasCellOps(store, interaction, scaleRef, stageRef);
 
+  const rootRef = useRef<HTMLElement | null>(null);
+  // Selection-scoped outside-click dismiss: the listener exists only while a
+  // cell is selected (the legacy editor kept a document listener per layout
+  // block alive permanently).
+  useEffect(() => {
+    if (!inspectedCellId) return undefined;
+    const dismissOnOutsidePress = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target || rootRef.current?.contains(target)) return;
+      store.getState().dispatch({ type: "clearSelection" });
+    };
+    document.addEventListener("pointerdown", dismissOnOutsidePress, true);
+    return () => document.removeEventListener("pointerdown", dismissOnOutsidePress, true);
+  }, [inspectedCellId, store]);
+
   const layoutMode = block.layoutMode === "full_page" ? "full_page" : "inline";
   const modeClass = layoutMode === "full_page" ? "osionos-layout-block--full-page" : "osionos-layout-block--inline";
   const setLayoutMode = useCallback((mode: "inline" | "full_page") => {
@@ -81,6 +96,7 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
 
   return (
     <section
+      ref={rootRef}
       className={`osionos-layout-block ${modeClass} osio-canvas-v2-root`}
       data-layout-mode={layoutMode}
     >
