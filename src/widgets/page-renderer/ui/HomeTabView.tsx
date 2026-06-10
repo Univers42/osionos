@@ -78,9 +78,13 @@ function renderHomeVariantContent(variant: HomeVariant, homeDashboardPage: PageE
   if (variant === "database") {
     // The Database surface is the notion-database-sys (ObjectDatabase) over the live
     // workspace pages — Files as a real Notion table with the full view chrome.
+    // ?view=<id> deep-links a specific view ("Copy link to view").
+    const linkedView = globalThis.window === undefined
+      ? null
+      : new URLSearchParams(globalThis.location.search).get("view");
     return (
       <div className="h-full min-h-0 overflow-hidden p-3">
-        <LazyWorkspaceDatabaseBlock databaseId={WS_FILES_DB_ID} initialViewId={WS_FILES_TABLE_VIEW} mode="full" chrome="full" />
+        <LazyWorkspaceDatabaseBlock databaseId={WS_FILES_DB_ID} initialViewId={linkedView ?? WS_FILES_TABLE_VIEW} mode="full" chrome="full" />
       </div>
     );
   }
