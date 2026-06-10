@@ -17,6 +17,8 @@ import type { SurfaceBlockEditorProps } from "../../BlockEditorSurface";
 import { createInteractionStore } from "../controller/interactionStore";
 import { createLazyMounter } from "../controller/lazyMount";
 import { useCanvasCellOps } from "../controller/useCanvasCellOps";
+import { useCanvasKeyboard } from "../controller/useCanvasKeyboard";
+import { useCanvasMarquee } from "../controller/useCanvasMarquee";
 import { useCanvasScale } from "../controller/useCanvasScale";
 import { useHugHeights } from "../controller/useHugHeights";
 import { resolveHugDisplacements } from "../model/collision";
@@ -45,6 +47,8 @@ export function CanvasStage({ store, pageId, layoutBlockId, renderBlockEditor }:
   const { heights, measureCell } = useHugHeights();
   const interaction = useMemo(() => createInteractionStore(), []);
   const cellOps = useCanvasCellOps(store, interaction, scaleRef, stageRef);
+  const startMarquee = useCanvasMarquee(store, interaction, scaleRef, stageRef);
+  const handleKeyDown = useCanvasKeyboard(store);
   const lazyMounter = useMemo(() => createLazyMounter(), []);
   useEffect(() => () => lazyMounter.disconnect(), [lazyMounter]);
 
@@ -72,8 +76,12 @@ export function CanvasStage({ store, pageId, layoutBlockId, renderBlockEditor }:
   const handleBackgroundPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement | null;
     if (target?.closest("[data-layout-cell-id], .osionos-layout-empty-state")) return;
-    dispatch({ type: "clearSelection" });
-  }, [dispatch]);
+    if (layoutConfig.preview) {
+      dispatch({ type: "clearSelection" });
+      return;
+    }
+    startMarquee(event);
+  }, [dispatch, layoutConfig.preview, startMarquee]);
 
   return (
     <div
@@ -82,12 +90,14 @@ export function CanvasStage({ store, pageId, layoutBlockId, renderBlockEditor }:
       data-layout-guides={shouldShowGuides ? "true" : undefined}
       data-canvas-active={selectedIds.length > 0 ? "true" : undefined}
       className="osionos-layout-grid osio-canvas-v2-stage"
+      tabIndex={-1}
       style={{
         height: `${contentHeight}px`,
         "--osionos-layout-dot-size": "16px",
         "--osionos-layout-row-size": `${layoutConfig.rowHeight + layoutConfig.rowGap}px`,
       } as React.CSSProperties}
       onPointerDownCapture={handleBackgroundPointerDown}
+      onKeyDown={handleKeyDown}
     >
       <CanvasGuidesLayer interaction={interaction} />
       {orderedCells.map((cell) => (
