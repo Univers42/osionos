@@ -111,8 +111,26 @@ try {
   await sidebarButton('Events').click();
   await page.getByText(/page_view|checkout|add_to_cart/i).first().waitFor({ timeout: 30_000 });
 
+  log('opening the seeded Analytics → Revenue Hub (notion-model dashboard on live rows)');
+  await sidebarButton('Analytics').waitFor({ timeout: 15_000 }).catch(() => {
+    throw new Error('the "Analytics" page tree is missing — run `make seed-live-demo` (analytics-dashboards.py)');
+  });
+  await sidebarButton('Analytics').click();
+  await sidebarButton('Revenue Hub').click();
+  // The hub opens directly on the dashboard preset (block.viewId): widget
+  // frames render, the widget counter is visible.
+  await page.getByText(/\d+\/12 widgets/).first().waitFor({ timeout: 45_000 });
+  const widgetFrames = await page.getByText(/Revenue by status|Order funnel|Status × ship method/).count();
+  if (widgetFrames < 2) throw new Error(`expected the hub's widgets, saw ${widgetFrames} titles`);
+  log(`Revenue Hub renders ${widgetFrames} curated widgets over 25k live orders`);
+
+  log('opening Analytics → Order Funnel (lazy ECharts family on live data)');
+  await sidebarButton('Order Funnel').click();
+  await page.locator('[data-engine="echarts"] svg').first().waitFor({ timeout: 45_000 });
+  log('ECharts funnel rendered from the live aggregate');
+
   await page.screenshot({ path: '/app/test-results/live-database-verification.png', fullPage: true }).catch(() => {});
-  log('OK — live database mode verified end-to-end as dylan@gmail.com (pg + mysql + mongo)');
+  log('OK — live database mode verified end-to-end as dylan@gmail.com (pg + mysql + mongo + analytics dashboards)');
 } catch (error) {
   failed = true;
   const message = error instanceof Error ? error.message : String(error);

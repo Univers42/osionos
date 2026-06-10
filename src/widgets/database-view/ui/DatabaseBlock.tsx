@@ -26,6 +26,10 @@ import { derivePageState } from '@/store/pageStore.helpers';
 import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseViewCatalog';
 import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
 import { getLiveDatabaseAdapter, isLiveDatabaseId } from '../model/liveDatabaseAdapter';
+// Side effect: registers the account-wide data-source catalog with NDS (the
+// Source picker). Lives here (not only the barrel) because lazyViews imports
+// this file directly, bypassing index.ts.
+import '../model/dataSourceProvider';
 import { getObjectDatabaseAdapter, hasObjectDatabaseRemoteAdapter } from '../model/objectDatabaseAdapter';
 import { isWorkspaceDatabaseId, isWorkspaceViewId } from '../model/workspaceDatabaseConstants';
 import { WorkspaceDatabaseBlock } from './WorkspaceDatabaseBlock';

@@ -22,6 +22,9 @@ import {
   WS_FILES_GALLERY_VIEW,
   WS_FOLDERS_TABLE_VIEW,
 } from "../model/workspaceDatabaseConstants";
+// Side effect: registers the data-source catalog (Source picker) — lazyViews
+// imports this file directly, bypassing the barrel's registration.
+import "../model/dataSourceProvider";
 
 interface WorkspaceDatabaseBlockProps {
   databaseId: string;
