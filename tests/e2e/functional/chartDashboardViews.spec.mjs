@@ -40,7 +40,7 @@ test.describe("chart-and-dashboard-views", () => {
     // Open settings: clicking the active "Chart" tab opens its menu.
     await page.getByRole("button", { name: "Chart", exact: true }).first().click();
     await page.getByText("Edit view", { exact: true }).click();
-    await expect(page.getByText("Chart type")).toBeVisible();
+    await expect(page.getByText("Chart type", { exact: true })).toBeVisible();
 
     // X axis: "What to show" → pick the Theme select property.
     await page.getByText("What to show").first().click();
