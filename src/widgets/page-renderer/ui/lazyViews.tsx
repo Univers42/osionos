@@ -56,3 +56,7 @@ export const LazyGraphEngineExplorer = lazy(() =>
 export const LazyHomeWorkspaceMode = lazy(() =>
   import("@/widgets/home-variants/ui/HomeWorkspaceMode").then((m) => ({ default: m.HomeWorkspaceMode })),
 );
+
+// The BaaS console is its own self-contained lazy boundary (Suspense lives
+// inside the feature), re-exported here so PaneContent imports it like the rest.
+export { LazyBaasConsoleView } from "@/features/baas-console";

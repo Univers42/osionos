@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 /** A single open document inside a pane (an "onglet"). */
-export type TabKind = "page" | "database" | "channel" | "folder" | "home" | "trash" | "profile";
+export type TabKind = "page" | "database" | "channel" | "folder" | "home" | "trash" | "profile" | "console";
 
 export interface WorkspaceTab {
   tabId: string;

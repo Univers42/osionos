@@ -27,6 +27,7 @@ interface Props {
   onOpenHome?: () => void;
   onOpenSettings?: () => void;
   onOpenTrash?: () => void;
+  onOpenConsole?: () => void;
 }
 
 /** Renders the osionos-style sidebar with navigation, page tree, and user switching. */
@@ -34,6 +35,7 @@ export const Sidebar: React.FC<Props> = ({
   onOpenHome,
   onOpenSettings,
   onOpenTrash,
+  onOpenConsole,
 }) => {
   const renderCountRef = useRef(0);
   // Count COMMITTED renders in a dep-less effect: writing a ref during
@@ -157,6 +159,7 @@ export const Sidebar: React.FC<Props> = ({
       <SidebarFooter
         onOpenSettings={onOpenSettings}
         onOpenTrash={onOpenTrash}
+        onOpenConsole={onOpenConsole}
         showInviteCTA={showInviteCTA}
         onDismissInvite={() => setShowInviteCTA(false)}
       />

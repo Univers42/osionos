@@ -23,6 +23,7 @@ import { FolderTabView } from "./FolderTabView";
 import { PageBlocksRenderer } from "./PageBlocksRenderer";
 import {
   LazyAgentConversationPage,
+  LazyBaasConsoleView,
   LazyChannelMessagesView,
   LazyDatabaseBlock,
   LazyOsionosPage,
@@ -115,6 +116,18 @@ const PaneContentImpl: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab
         <Suspense fallback={<LoadingPane />}>
           <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
             <LazyProfileView userId={tab.pageId} />
+          </div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "console") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
+            <LazyBaasConsoleView />
           </div>
         </Suspense>
       </ErrorBoundary>
