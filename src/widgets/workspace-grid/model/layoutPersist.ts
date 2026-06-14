@@ -12,9 +12,10 @@
 
 import { genId, type LayoutNode, type PaneNode, type WorkspaceTab } from "./layoutTree";
 
-/** Synthetic page ids for the always-available Home / Trash tabs. */
+/** Synthetic page ids for the always-available Home / Trash / Console tabs. */
 export const HOME_TAB_ID = "__home__";
 export const TRASH_TAB_ID = "__trash__";
+export const CONSOLE_TAB_ID = "__baas_console__";
 
 const STORAGE_KEY = "osionos.workspace.layout.v1";
 
@@ -24,6 +25,11 @@ export function homeTab(): WorkspaceTab {
 
 export function trashTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: TRASH_TAB_ID, workspaceId: "", kind: "trash", title: "Trash", icon: "icon:trash" };
+}
+
+/** The BaaS console tab — manage the tenant's own mini-baas project. */
+export function consoleTab(): WorkspaceTab {
+  return { tabId: genId("tab"), pageId: CONSOLE_TAB_ID, workspaceId: "", kind: "console", title: "BaaS Console", icon: "icon:database" };
 }
 
 /** A member profile tab — the "/people/:userId" route of tab-based navigation. */

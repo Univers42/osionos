@@ -21,7 +21,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, loadActivePage, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
 import { Sidebar } from "@/widgets/sidebar";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
-import { homeTab, trashTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { homeTab, trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
 import { LazyCanvasDebugRoute, LazyMainContent } from "./lazyAppRegions";
 import { applyTheme, readStoredThemeMode } from "@/shared/config/theme";
@@ -250,6 +250,7 @@ const App: React.FC = () => {
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHome={() => useWorkspaceLayout.getState().openTab(homeTab())}
         onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
+        onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
       />
 
       {/* Floating trigger for when sidebar is closed */}

@@ -15,6 +15,7 @@ import {
   Settings,
   LayoutGrid,
   Archive,
+  Database,
   UserPlus,
   X,
 } from "lucide-react";
@@ -24,14 +25,20 @@ import { SidebarNavItem } from "./SidebarNavItem";
 interface SidebarFooterProps {
   onOpenSettings?: () => void;
   onOpenTrash?: () => void;
+  onOpenConsole?: () => void;
   showInviteCTA: boolean;
   onDismissInvite: () => void;
 }
+
+// Parity gate: the BaaS console nav item only exists when a project is
+// configured, so a stock build (no VITE_BAAS_URL) renders byte-identical.
+const BAAS_ENABLED = Boolean((import.meta.env ?? {}).VITE_BAAS_URL);
 
 /** Bottom section: Settings / Marketplace / archived files + optional Invite CTA. */
 export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   onOpenSettings,
   onOpenTrash,
+  onOpenConsole,
   showInviteCTA,
   onDismissInvite,
 }) => {
@@ -63,6 +70,13 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
           label="Archived files"
           onClick={() => onOpenTrash?.()}
         />
+        {BAAS_ENABLED && (
+          <SidebarNavItem
+            icon={<Database size={16} />}
+            label="BaaS Console"
+            onClick={() => onOpenConsole?.()}
+          />
+        )}
       </div>
 
       {showInviteCTA && (
