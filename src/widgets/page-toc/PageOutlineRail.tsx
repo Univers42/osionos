@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/24 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/24 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -44,7 +44,10 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
   // Collect headings from the scroll container; re-scan on DOM mutations.
   useEffect(() => {
     const scroller = rootRef.current?.closest(".osionos-page");
-    const body = scroller?.querySelector(".osionos-page-body");
+    // Focused editor panes wrap content in .osionos-page-body; the cheap
+    // read-only split-preview pane has no such wrapper, so fall back to the
+    // scroller itself — both still scope the heading scan to this one pane.
+    const body = scroller?.querySelector(".osionos-page-body") ?? scroller;
     if (!scroller || !body) return;
 
     const scan = () => {
@@ -66,7 +69,7 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
   // Scroll-spy: highlight the heading currently in view.
   useEffect(() => {
     const scroller = rootRef.current?.closest(".osionos-page");
-    const body = scroller?.querySelector(".osionos-page-body");
+    const body = scroller?.querySelector(".osionos-page-body") ?? scroller;
     if (!scroller || !body || headings.length === 0) return;
     const els = Array.from(body.querySelectorAll(HEADING_SELECTOR));
     if (els.length === 0) return;
@@ -107,35 +110,52 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false);
       }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") setOpen(false);
+      }}
     >
-      <div className={styles.ticks} aria-hidden="true">
-        {headings.map((h) => (
-          <span
-            key={h.id}
-            className={styles.tick}
-            data-level={h.level}
-            data-active={h.id === activeId || undefined}
-          />
-        ))}
-      </div>
-
-      <nav className={styles.panel} aria-label="On this page">
-        <ul className={styles.list}>
+      <div className={styles.railInner}>
+        {/* The collapsed minimap is the keyboard entry point: a focusable
+            disclosure button. Tab lands here → the wrapper onFocus opens the
+            panel → the heading buttons become reachable. The tick spans are
+            decorative (the button's aria-label names the control). */}
+        <button
+          type="button"
+          className={styles.ticks}
+          aria-label="On this page"
+          aria-expanded={open}
+          aria-haspopup="true"
+          onClick={() => setOpen((value) => !value)}
+        >
           {headings.map((h) => (
-            <li key={h.id}>
-              <button
-                type="button"
-                className={styles.link}
-                data-level={h.level}
-                data-active={h.id === activeId || undefined}
-                onClick={() => scrollTo(h.id)}
-              >
-                {h.text}
-              </button>
-            </li>
+            <span
+              key={h.id}
+              className={styles.tick}
+              data-level={h.level}
+              data-active={h.id === activeId || undefined}
+              aria-hidden="true"
+            />
           ))}
-        </ul>
-      </nav>
+        </button>
+
+        <nav className={styles.panel} aria-label="On this page">
+          <ul className={styles.list}>
+            {headings.map((h) => (
+              <li key={h.id}>
+                <button
+                  type="button"
+                  className={styles.link}
+                  data-level={h.level}
+                  data-active={h.id === activeId || undefined}
+                  onClick={() => scrollTo(h.id)}
+                >
+                  {h.text}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </div>
     </div>
   );
 };
