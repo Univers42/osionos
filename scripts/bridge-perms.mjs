@@ -92,9 +92,20 @@ const CONFIG = {
 	rulesFile: process.env.PERMS_RULES_FILE || resolve(APP_ROOT, '.perms-rules.json'),
 };
 
+/** CORS origin for browser callers (the app runs cross-origin on :3001). */
+const ALLOWED_ORIGIN = process.env.OSIONOS_ALLOWED_ORIGIN || 'https://localhost:3001';
+
+function corsHeaders() {
+	return {
+		'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+		'Access-Control-Allow-Credentials': 'true',
+		Vary: 'Origin',
+	};
+}
+
 function sendJson(response, status, body) {
 	const payload = JSON.stringify(body);
-	response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+	response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...corsHeaders() });
 	response.end(payload);
 	return true;
 }
@@ -140,7 +151,7 @@ async function proxyEngine(response, fetchImpl, method, path, body) {
 		return sendJson(response, 502, { error: 'perms_upstream_unreachable', message: String(error?.message || error) });
 	}
 	const text = await upstream.text();
-	response.writeHead(upstream.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+	response.writeHead(upstream.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...corsHeaders() });
 	response.end(text || '{}');
 	return true;
 }

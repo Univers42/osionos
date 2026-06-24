@@ -314,17 +314,18 @@ export function verifyBridgeRequest({ headers, payload, secret, now = Date.now()
 	return normalizedPayload;
 }
 
-export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID() }) {
+export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [] }) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const iat = Math.floor(now / 1000);
 	const exp = iat + config.sessionTtlSeconds;
+	const memberRoles = Object.fromEntries(memberWorkspaces.map((entry) => [entry._id, safeText(entry.role, 16) || 'member']));
 	const tokenPayload = {
 		iss: 'osionos-bridge',
 		aud: 'osionos-app',
 		sub: payload.subject,
 		provider: payload.provider,
-		workspace_ids: [workspace._id],
-		roles: { [workspace._id]: 'owner' },
+		workspace_ids: [workspace._id, ...memberWorkspaces.map((entry) => entry._id)],
+		roles: { ...memberRoles, [workspace._id]: 'owner' },
 		jti,
 		iat,
 		exp,
@@ -538,28 +539,52 @@ function memberHasPermission(member, permission) {
 
 /**
  * Page-level authorization (defence in depth on top of requireWorkspaceAccess). A page
- * may be mutated only by its OWNER, a workspace owner/admin, or an explicit collaborator
- * with editor/owner role. Today bridge sessions only ever hold their own single-owner
- * private workspace, so owner_id === access.userId always and this is a pass-through; it
- * future-proofs multi-user workspaces. Future work (shared workspaces): when real
- * multi-member shared/team workspaces land, align this with the client's canEditPage rule
- * (any member of a shared workspace may edit any page in it) so client and server agree.
+ * may be mutated by its OWNER, a workspace owner/admin, a workspace member holding the
+ * 'update' permission (org/teamspace editors — parity with the client's canEditPage rule
+ * now that sessions carry shared workspaces), or an explicit page collaborator with
+ * editor/owner role. Read-only members (viewer role) are already rejected by the
+ * requireWorkspaceAccess permission gate before this runs.
  */
 function requirePageOwnership(existing, access) {
 	if (existing.owner_id == null) return; // legacy / unowned page — the workspace gate suffices
 	if (existing.owner_id === access.userId) return; // the page owner
 	if (access.role === 'owner' || access.role === 'admin') return; // workspace owner/admin
+	if (Array.isArray(access.permissions) && access.permissions.includes('update')) return; // shared-workspace editor
 	const collaborators = Array.isArray(existing.collaborators) ? existing.collaborators : [];
 	const role = collaborators.find((entry) => entry && entry.userId === access.userId)?.role;
 	if (role === 'editor' || role === 'owner') return; // explicit page collaborator
 	throw Object.assign(new Error('You do not have permission to modify this page.'), { status: 403 });
 }
 
+/** osionos_workspace_members row for (user, workspace) — org/teamspace membership. */
+async function workspaceMemberRow(userId, workspaceId, config, fetchImpl) {
+	const query = postgrestQuery({
+		workspace_id: `eq.${workspaceId}`,
+		user_id: `eq.${userId}`,
+		select: 'role,permissions',
+		limit: '1',
+	});
+	const rows = await baasRest(config, fetchImpl, `osionos_workspace_members?${query}`);
+	return Array.isArray(rows) ? rows[0] ?? null : null;
+}
+
 export async function requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl = fetch) {
 	const normalizedWorkspaceId = requireUuid(workspaceId, 'workspaceId');
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	if (!authContext.workspaceIds.includes(normalizedWorkspaceId)) {
-		throw Object.assign(new Error('App session is not scoped to this workspace.'), { status: 403 });
+		// Org/teamspace membership lives in osionos_workspace_members — the app
+		// token only carries the user's PRIVATE workspace. Consult the members
+		// table (like /api/chat does) before rejecting; deny on any miss.
+		const member = await workspaceMemberRow(authContext.userId, normalizedWorkspaceId, config, fetchImpl).catch(() => null);
+		if (!member || !memberHasPermission(member, normalizePermission(permission))) {
+			throw Object.assign(new Error('App session is not scoped to this workspace.'), { status: 403 });
+		}
+		return {
+			...authContext,
+			workspaceId: normalizedWorkspaceId,
+			role: safeText(member.role, 16),
+			permissions: Array.isArray(member.permissions) ? member.permissions.filter((item) => typeof item === 'string') : [],
+		};
 	}
 	const workspaces = await listSessionWorkspaces(authContext, config, fetchImpl);
 	const workspace = workspaces.find((item) => item._id === normalizedWorkspaceId || item.id === normalizedWorkspaceId);
@@ -720,7 +745,7 @@ export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) 
 	};
 }
 
-export function createUserSession(payload, config, persisted = null, now = Date.now()) {
+export function createUserSession(payload, config, persisted = null, now = Date.now(), memberWorkspaces = []) {
 	const userId = payload.subject;
 	const fallbackWorkspaceId = uuidFromHash(`osionos-workspace:${payload.provider}:${payload.subject}`);
 	const workspaceName = persisted?.workspaceName ?? `${payload.name}'s osionos`;
@@ -738,7 +763,10 @@ export function createUserSession(payload, config, persisted = null, now = Date.
 			memberCount: 1,
 		},
 	};
-	const { token, expiresAt } = signAppSessionToken({ payload, workspace, config, now });
+	// Org/teamspace workspaces (osionos_workspace_members) ride along so the
+	// app can hydrate + switch to them; owned ones stay private, rest shared.
+	const extras = memberWorkspaces.filter((entry) => entry?._id && entry._id !== workspace._id);
+	const { token, expiresAt } = signAppSessionToken({ payload, workspace, config, now, memberWorkspaces: extras });
 	return {
 		expiresAt,
 		persona: {
@@ -749,16 +777,46 @@ export function createUserSession(payload, config, persisted = null, now = Date.
 			emoji: '◈',
 			roleBadge: 'Owner',
 			persistInSessions: true,
-			workspaceIds: [workspace._id],
+			workspaceIds: [workspace._id, ...extras.map((entry) => entry._id)],
 		},
 		session: {
 			userId,
 			accessToken: token,
 			refreshToken: '',
-			privateWorkspaces: [workspace],
-			sharedWorkspaces: [],
+			privateWorkspaces: [workspace, ...extras.filter((entry) => entry.ownerId === userId)],
+			sharedWorkspaces: extras.filter((entry) => entry.ownerId !== userId),
 		},
 	};
+}
+
+/**
+ * Org/teamspace workspaces for session enrichment — RPC-backed ONLY (no
+ * fallback synthesis: a workspace appears here iff an osionos_workspace_members
+ * row exists). Best-effort: any failure yields [] and the handoff proceeds.
+ */
+async function memberWorkspaceEntries(userId, excludeIds, config, fetchImpl) {
+	try {
+		const ids = (await memberWorkspaceIds(userId, config, fetchImpl)).filter((id) => !excludeIds.includes(id));
+		if (ids.length === 0) return [];
+		const rows = await baasRest(config, fetchImpl, 'rpc/osionos_bridge_list_workspaces', {
+			method: 'POST',
+			body: { p_user_id: userId, p_workspace_ids: ids },
+		});
+		return (Array.isArray(rows) ? rows : []).map((row) => workspaceRowToEntry({
+			id: row.workspace_id,
+			owner_id: row.owner_id,
+			name: row.workspace_name,
+			slug: row.workspace_slug,
+			settings: row.workspace_settings,
+			created_at: row.created_at,
+			updated_at: row.updated_at,
+		}, {
+			role: row.workspace_role,
+			permissions: row.permissions,
+		}));
+	} catch {
+		return [];
+	}
 }
 
 export async function createBridgeHandoff({ payload, config, handoffStore, now = Date.now(), fetchImpl = fetch }) {
@@ -770,7 +828,9 @@ export async function createBridgeHandoff({ payload, config, handoffStore, now =
 		if (config.requireBaas) throw error;
 		console.warn(`[osionos-bridge] BaaS persistence skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
 	}
-	const bridgeSession = createUserSession(payload, config, persisted, now);
+	const privateWorkspaceId = persisted?.workspaceId ?? uuidFromHash(`osionos-workspace:${payload.provider}:${payload.subject}`);
+	const memberWorkspaces = await memberWorkspaceEntries(payload.subject, [privateWorkspaceId], config, fetchImpl);
+	const bridgeSession = createUserSession(payload, config, persisted, now, memberWorkspaces);
 	const token = randomToken();
 	const expiresAt = now + config.handoffTtlMs;
 	handoffStore.set(token, { ...bridgeSession, expiresAt });
@@ -1247,10 +1307,27 @@ async function handlePagesGet(url, request, response, config, fetchImpl) {
 	return handlePageRead(url, request, response, config, fetchImpl);
 }
 
+/** Workspace ids where the user has a members row (best-effort: [] on failure). */
+async function memberWorkspaceIds(userId, config, fetchImpl) {
+	try {
+		const query = postgrestQuery({ user_id: `eq.${userId}`, select: 'workspace_id' });
+		const rows = await baasRest(config, fetchImpl, `osionos_workspace_members?${query}`);
+		return (Array.isArray(rows) ? rows : [])
+			.map((row) => String(row.workspace_id))
+			.filter((id) => UUID_REGEX.test(id));
+	} catch {
+		return [];
+	}
+}
+
 async function handleWorkspaceGet(url, request, response, config, fetchImpl) {
 	if (url.pathname === '/api/workspaces') {
 		const authContext = verifyAppSessionToken(bearerToken(request), config);
-		json(response, 200, await listSessionWorkspaces(authContext, config, fetchImpl), config);
+		// Surface org/teamspace workspaces (osionos_workspace_members) alongside
+		// the token's private workspace so the app sidebar can hydrate them.
+		const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
+		const workspaceIds = [...new Set([...authContext.workspaceIds, ...memberIds])];
+		json(response, 200, await listSessionWorkspaces({ ...authContext, workspaceIds }, config, fetchImpl), config);
 		return true;
 	}
 	const match = /^\/api\/workspaces\/([^/]+)$/.exec(url.pathname);
@@ -1541,7 +1618,7 @@ async function handleBridgeRequest(request, response, context) {
 	// Workstream modules — each returns false when the path is not theirs:
 	// perms proxy (WS-C), LiveKit tokens (WS-D), chat/profile/feed (WS-B).
 	if (await handlePermsRoute(request, response, url, context.fetchImpl)) return;
-	if (await context.social.rtc(url, request, response)) return;
+	if (await context.social.rtc(url, request, response, context.config)) return;
 	if (await context.social.chat(url, request, response, context.config)) return;
 	if (await context.social.profile(url, request, response, context.config)) return;
 	if (await context.social.feed(url, request, response, context.config)) return;

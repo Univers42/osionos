@@ -24,7 +24,9 @@ import { useUserStore } from "@/features/auth";
 import { initRealtimeMessagesBridge } from "@/services/realtime-messages";
 import { useChannelActions } from "../model/useChannelActions";
 import { useChannelHistory } from "../model/useChannelHistory";
+import { useChannelInfo } from "../model/useChannelInfo";
 import { useChannelLive } from "../model/useChannelLive";
+import { CallPanel } from "./CallPanel";
 import { MessageRow } from "./MessageRow";
 
 interface ChannelMessagesViewProps {
@@ -46,10 +48,13 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
   title,
 }) => {
   const [draft, setDraft] = useState("");
+  const [inCall, setInCall] = useState(false);
   const activeUserId = useUserStore((s) => s.activeUserId) || "anonymous";
   const persona = useUserStore((s) => s.activePersona());
   const endRef = useRef<HTMLDivElement>(null);
 
+  const channel = useChannelInfo(channelId);
+  const isCallChannel = channel?.kind === "voice" || channel?.kind === "video";
   const history = useChannelHistory(channelId);
   const liveWorkspaceId = history.workspaceId || workspaceId;
   useChannelLive(history.mode === "bridge" ? liveWorkspaceId : "", channelId, history.setMessages);
@@ -77,15 +82,32 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
     <div className="flex h-full flex-col bg-[var(--osio-bg-page)] text-[var(--osio-fg-default)]">
       <header className="flex min-h-14 items-center gap-3 border-b border-[var(--osio-border-default)] px-5">
         <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-muted)]">
-          {channelIcon()}
+          {channelIcon(channel?.kind)}
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="truncate text-base font-semibold">{channelName}</h1>
           <p className="truncate text-xs text-[var(--osio-fg-muted)]">
             {history.mode === "bridge" ? "Connected" : "Local"} · {history.messages.length} messages
           </p>
         </div>
+        {isCallChannel && !inCall && (
+          <button
+            type="button"
+            onClick={() => setInCall(true)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90"
+          >
+            <Video size={14} /> Join call
+          </button>
+        )}
       </header>
+
+      {inCall && (
+        <CallPanel
+          channelId={channelId}
+          workspaceId={liveWorkspaceId || channel?.workspaceId}
+          onLeave={() => setInCall(false)}
+        />
+      )}
 
       <div className="flex-1 overflow-y-auto px-4 py-5">
         <div className="mx-auto max-w-4xl">

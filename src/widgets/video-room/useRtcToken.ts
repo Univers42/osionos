@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api, getActiveJwt } from "@/shared/api/client";
+import { ApiError, api, getActivePageJwt } from "@/shared/api/client";
 
 export interface RtcGrant {
   token: string;
@@ -63,7 +63,9 @@ export function useRtcToken(request: RtcTokenRequest): RtcTokenState {
       .post<RtcGrant & { ok: boolean }>(
         "/api/rtc/token",
         { channelId, room, workspaceId, displayName },
-        getActiveJwt() ?? undefined,
+        // The bridge session lives in the PAGE JWT (like every /api/chat
+        // call); plain getActiveJwt() is empty in bridge-session mode.
+        getActivePageJwt() ?? undefined,
       )
       .then((response) => {
         if (active) setResult({ key: requestKey, grant: response, error: null });

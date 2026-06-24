@@ -43,6 +43,7 @@ import { useClickOutside, useEscapeKey, useToastStore } from '@/shared/ui';
 import { usePageStore } from '@/store/usePageStore';
 
 import { PageBreadcrumbs } from './PageBreadcrumbs';
+import { PageShareButton } from './PageShareButton';
 
 interface PageHeaderBarProps {
   pageId: string;
@@ -179,6 +180,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
 
         <div className="flex shrink-0 items-center gap-3 pl-4">
           <span className="hidden whitespace-nowrap text-sm text-[var(--osio-fg-subtle)] sm:inline">{actions.editedLabel}</span>
+          <PageShareButton pageId={pageId} workspaceId={workspaceId} />
           <div className="relative">
             <button
               ref={triggerRef}

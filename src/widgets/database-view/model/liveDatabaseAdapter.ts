@@ -32,6 +32,7 @@ import {
 import "./agencyViewPresets";
 import "./commerceViewPresets";
 import "./opsActivityViewPresets";
+import "./gourmandViewPresets";
 
 export { isLiveDatabaseId };
 
