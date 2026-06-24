@@ -8,11 +8,13 @@
 			name="description"
 			content="osionos is a fast, Notion-style workspace with a real-time block editor, rich Markdown engine, databases, and collaborative pages."
 		/>
-		<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-		<meta name="theme-color" content="#111317" media="(prefers-color-scheme: dark)" />
+		<meta name="theme-color" content="#FAF9F5" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#1B1A17" media="(prefers-color-scheme: dark)" />
 		<meta name="color-scheme" content="light dark" />
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 		<link rel="apple-touch-icon" href="/favicon.svg" />
+		<link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+		<link rel="preload" href="/fonts/newsreader-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
 	</head>
 	<body>
 		<!-- Static boot skeleton: paints at HTML-parse time (before the React/
@@ -26,10 +28,10 @@
 			</div>
 		</div>
 		<style>
-			#app-boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#ffffff}
-			.app-boot__spinner{width:32px;height:32px;border:3px solid #e5e7eb;border-top-color:#6b7280;border-radius:50%;animation:app-boot-spin .8s linear infinite}
+			#app-boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#FAF9F5}
+			.app-boot__spinner{width:32px;height:32px;border:3px solid #E5E1D8;border-top-color:#CC785C;border-radius:50%;animation:app-boot-spin .8s linear infinite}
 			@keyframes app-boot-spin{to{transform:rotate(360deg)}}
-			@media (prefers-color-scheme: dark){#app-boot{background:#111317}.app-boot__spinner{border-color:#2a2d31;border-top-color:#9aa0a6}}
+			@media (prefers-color-scheme: dark){#app-boot{background:#1B1A17}.app-boot__spinner{border-color:#34302B;border-top-color:#E0937A}}
 			@media (prefers-reduced-motion: reduce){.app-boot__spinner{animation-duration:1.6s}}
 		</style>
 		<script type="module" src="/src/app/main.tsx"></script>

@@ -5,6 +5,7 @@ import { test } from "@playwright/test";
 
 const SURFACES = [
   { name: "home", path: "/" },
+  { name: "styleguide", path: "/__styleguide" },
 ];
 
 for (const theme of ["light", "dark"]) {

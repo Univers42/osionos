@@ -33,6 +33,12 @@ const CanvasDebugRouteImpl = lazy(() =>
   })),
 );
 
+const StyleGuideRouteImpl = lazy(() =>
+  import("@/app/__styleguide__/StyleGuideRoute").then((module) => ({
+    default: module.StyleGuideRoute,
+  })),
+);
+
 // Warm the page-renderer SHELL (grid + panes) in parallel with the entry bundle
 // so it is ready by the time auth resolves -- removes the lazy-load waterfall
 // from LCP without putting the editor back on the critical path. Deep path so we
@@ -78,4 +84,8 @@ export function LazyMainContent() {
 
 export function LazyCanvasDebugRoute() {
   return <Suspense fallback={contentFallback}>{<CanvasDebugRouteImpl />}</Suspense>;
+}
+
+export function LazyStyleGuideRoute() {
+  return <Suspense fallback={contentFallback}>{<StyleGuideRouteImpl />}</Suspense>;
 }

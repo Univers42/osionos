@@ -11,8 +11,10 @@
 /* ************************************************************************** */
 
 export * from "./Dropdown";
+export * from "./Menu";
 export * from "./MiniTabs";
 export * from "./Modal";
+export * from "./Popover";
 export * from "./ToastViewport";
 export * from "./Toggle";
 export * from "./useSettingsSearchIndex";

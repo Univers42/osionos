@@ -23,7 +23,7 @@ import { Sidebar } from "@/widgets/sidebar";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { homeTab, trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
-import { LazyCanvasDebugRoute, LazyMainContent } from "./lazyAppRegions";
+import { LazyCanvasDebugRoute, LazyMainContent, LazyStyleGuideRoute } from "./lazyAppRegions";
 import { applyTheme, readStoredThemeMode } from "@/shared/config/theme";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
 import {
@@ -115,6 +115,11 @@ function isDevCanvasDebugRoute() {
   return globalThis.window.location.pathname === "/__canvas-debug" || globalThis.window.location.hash.includes("__canvas-debug");
 }
 
+function isDevStyleGuideRoute() {
+  if (!import.meta.env.DEV || globalThis.window === undefined) return false;
+  return globalThis.window.location.pathname === "/__styleguide";
+}
+
 /**
  * Root of the Playground app.
  *
@@ -202,6 +207,10 @@ const App: React.FC = () => {
 
   if (isDevCanvasDebugRoute()) {
     return <LazyCanvasDebugRoute />;
+  }
+
+  if (isDevStyleGuideRoute()) {
+    return <LazyStyleGuideRoute />;
   }
 
   if (!ready) {
