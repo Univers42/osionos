@@ -422,12 +422,12 @@ const SettingRow: React.FC<{
 );
 
 const DataTable: React.FC<{ headers: string[]; rows: React.ReactNode[][]; className?: string }> = ({ headers, rows, className = '' }) => (
-  <div className={`overflow-x-auto rounded-lg border border-[var(--osio-border-default)] ${className}`}>
+  <div className={`overflow-x-auto rounded-lg border border-[var(--osio-db-line)] ${className}`}>
     <table className="w-full min-w-[560px] table-fixed text-sm">
       <thead className="bg-[var(--osio-bg-subtle)] text-left text-xs font-medium text-[var(--osio-fg-muted)]">
-        <tr>{headers.map((header) => <th key={header} className="px-3 py-2">{header}</th>)}</tr>
+        <tr>{headers.map((header) => <th key={header} className="border-b border-[var(--osio-db-line)] px-3 py-2">{header}</th>)}</tr>
       </thead>
-      <tbody className="divide-y divide-[var(--osio-border-default)]">
+      <tbody className="divide-y divide-[var(--osio-db-line-soft)]">
         {rows.map((row) => {
           const firstCell = row[0];
           const rowKey = React.isValidElement(firstCell) && firstCell.key ? String(firstCell.key) : row.map(String).join('|');
@@ -458,7 +458,7 @@ const Avatar: React.FC<{ value?: string; label?: string; size?: number }> = ({ v
 );
 
 const FeatureCard: React.FC<{ icon?: React.ReactNode; title: string; description: string; action?: React.ReactNode }> = ({ icon, title, description, action }) => (
-  <div className="rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4">
+  <div className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4">
     <div className="flex items-start gap-3">
       {icon && <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--osio-bg-subtle)] text-[var(--osio-accent)]">{icon}</span>}
       <div className="min-w-0 flex-1">
@@ -551,7 +551,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
             </div>
             <div className="sticky bottom-0 border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
               <Button className="w-full" onClick={() => { recordSettingsAction('cta_click_ai', { source: 'settings_footer' }); setActiveTab('ai'); }}>
-                <Sparkles size={15} /> Get osionos AI
+                <Sparkles size={16} /> Get osionos AI
               </Button>
             </div>
           </div>
@@ -573,7 +573,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
                 <p className="text-base leading-6 text-[var(--osio-fg-default)]">{current.subtitle}</p>
                 <div className="relative max-w-lg pt-2">
                   <label className="flex h-9 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 text-sm text-[var(--osio-fg-muted)] focus-within:border-[var(--osio-accent)]">
-                    <Search size={15} />
+                    <Search size={16} />
                     <input
                       value={settingsQuery}
                       onChange={(event) => setSettingsQuery(event.target.value)}
@@ -583,7 +583,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
                     />
                   </label>
                   {settingsResults.length > 0 ? (
-                    <div className="absolute left-0 right-0 top-full z-[var(--osio-z-popover)] mt-2 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-xl">
+                    <div className="absolute left-0 right-0 top-full z-[var(--osio-z-popover)] mt-2 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-[var(--osio-shadow-menu)]">
                       {settingsResults.map((entry) => (
                         <button
                           key={`${entry.tab}-${entry.anchor}`}
@@ -718,11 +718,11 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
             <span>Preferred name</span>
             <span className="relative mt-1 block">
               <input
-                className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 pr-8 text-sm text-[var(--osio-fg-default)] outline-none"
+                className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 pr-8 text-sm text-[var(--osio-fg-default)] outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]"
                 value={preferredNameDraft}
                 onChange={(event) => setPreferredNameDraft(event.target.value)}
               />
-              {nameSaved && <Check size={15} className="absolute right-2 top-2.5 text-[var(--osio-success)]" />}
+              {nameSaved && <Check size={16} className="absolute right-2 top-2.5 text-[var(--osio-success)]" />}
             </span>
           </label>
           <ImageAvatarUpload onUploaded={(dataUrl) => updateAccount({ profile: { ...account?.profile, avatar: dataUrl } })} />
@@ -745,7 +745,7 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
         <Button tone="ghost" className="mt-2"><FileDown size={14} /> Load more devices</Button>
       </Section>
       <Section title="User ID">
-        <SettingRow title="User ID" description={persona?.id ?? 'b0181a89-4ad8-476c-9657-352d6eadf49e'} action={<Button tone="ghost" aria-label="Copy user ID" onClick={() => { runAsync(navigator.clipboard.writeText(persona?.id ?? userId).then(() => toast({ kind: 'success', title: 'User ID copied' }))); }}><Copy size={15} /></Button>} />
+        <SettingRow title="User ID" description={persona?.id ?? 'b0181a89-4ad8-476c-9657-352d6eadf49e'} action={<Button tone="ghost" aria-label="Copy user ID" onClick={() => { runAsync(navigator.clipboard.writeText(persona?.id ?? userId).then(() => toast({ kind: 'success', title: 'User ID copied' }))); }}><Copy size={16} /></Button>} />
       </Section>
 
       {modal?.name === 'email-manager' && <EmailManagerModal userId={userId} fallbackEmail={persona?.email} onClose={() => setModal(null)} />}
@@ -784,7 +784,7 @@ const EmailManagerModal: React.FC<{ userId: string; fallbackEmail?: string; onCl
       <div className="space-y-4">
         <DataTable headers={['Email', 'Role', 'Status', '']} rows={rows} />
         <div className="flex gap-2">
-          <input className="min-w-0 flex-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} placeholder="name@example.com" />
+          <input className="min-w-0 flex-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} placeholder="name@example.com" />
           <Button tone="primary" onClick={() => { if (emailDraft.includes('@')) { runAsync(addEmail(emailDraft, userId)); setEmailDraft(''); } }}>Add email</Button>
         </div>
       </div>
@@ -802,9 +802,9 @@ const PasswordModal: React.FC<{ hasPassword: boolean; onSaved: () => void; onClo
   return (
     <Modal open onClose={onClose} title={hasPassword ? 'Update password' : 'Add password'} size="sm">
       <div className="space-y-3">
-        {hasPassword && <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Current password" />}
-        <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={nextPassword} onChange={(event) => setNextPassword(event.target.value)} placeholder="New password" />
-        <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm password" />
+        {hasPassword && <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Current password" />}
+        <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={nextPassword} onChange={(event) => setNextPassword(event.target.value)} placeholder="New password" />
+        <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm password" />
         <div className="grid grid-cols-4 gap-1">{[0, 1, 2, 3].map((index) => <span key={index} className={`h-1 rounded ${index < strength ? 'bg-[var(--osio-accent)]' : 'bg-[var(--osio-bg-muted)]'}`} />)}</div>
         <div className="flex justify-end gap-2">
           <Button onClick={onClose}>Cancel</Button>
@@ -828,7 +828,7 @@ const TwoFactorModal: React.FC<{ enabled: boolean; onEnabled: (enabled: boolean)
   return (
     <Modal open onClose={onClose} title="Two-step verification" size="sm">
       <div className="space-y-4">
-        {enabled ? <p className="text-sm text-[var(--osio-fg-muted)]">Two-step verification is enabled.</p> : <>{qrDataUrl && <img alt="Two-step verification QR code" className="h-40 w-40 rounded-md border border-[var(--osio-border-default)]" src={qrDataUrl} />}<input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={code} onChange={(event) => setCode(event.target.value.replaceAll(/\D/g, '').slice(0, 6))} placeholder="6-digit code" /></>}
+        {enabled ? <p className="text-sm text-[var(--osio-fg-muted)]">Two-step verification is enabled.</p> : <>{qrDataUrl && <img alt="Two-step verification QR code" className="h-40 w-40 rounded-md border border-[var(--osio-border-default)]" src={qrDataUrl} />}<input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={code} onChange={(event) => setCode(event.target.value.replaceAll(/\D/g, '').slice(0, 6))} placeholder="6-digit code" /></>}
         {recoveryCodes.length > 0 && <div className="grid grid-cols-2 gap-2 rounded-md bg-[var(--osio-bg-subtle)] p-3 text-xs font-mono">{recoveryCodes.map((item) => <span key={item}>{item}</span>)}</div>}
         <div className="flex justify-end gap-2">
           {enabled && <Button tone="danger" onClick={() => { runAsync(postAccountAction('/api/account/2fa/disable', {}).then(() => { onEnabled(false); toast({ kind: 'success', title: 'Two-step verification disabled' }); onClose(); })); }}>Disable</Button>}
@@ -843,7 +843,7 @@ const PasskeyManagerModal: React.FC<{ passkeys: Array<{ _id: string; nickname?: 
   <Modal open onClose={onClose} title="Passkeys" size="md">
     <div className="space-y-4">
       <DataTable headers={['Name', 'Created', '']} rows={passkeys.map((passkey) => [
-        <input key={`${passkey._id}-name`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none" defaultValue={passkey.nickname ?? 'Passkey'} onBlur={(event) => onRename(passkey._id, event.target.value)} />,
+        <input key={`${passkey._id}-name`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={passkey.nickname ?? 'Passkey'} onBlur={(event) => onRename(passkey._id, event.target.value)} />,
         new Date(passkey.createdAt).toLocaleDateString(),
         <Button key={`${passkey._id}-remove`} tone="danger" onClick={() => onRemove(passkey._id)}>Remove</Button>,
       ])} />
@@ -875,7 +875,7 @@ const TypedConfirmModal: React.FC<{ title: string; message: string; confirmText:
     <Modal open onClose={onClose} title={title} size="sm">
       <div className="space-y-4">
         <p className="text-sm text-[var(--osio-fg-muted)]">{message}</p>
-        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={confirmText} />
+        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={confirmText} />
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone={danger ? 'danger' : 'primary'} disabled={draft !== confirmText} onClick={onConfirm}>{actionLabel}</Button></div>
       </div>
     </Modal>
@@ -908,7 +908,7 @@ const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }) 
           description="Choose a theme for osionos on this device"
           action={<SelectButton value={preferences?.theme ?? 'system'} options={[{ value: 'system', label: 'Use system setting' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]} onChange={(value) => { const theme = value as 'light' | 'dark' | 'system'; applyTheme(theme); update({ theme }); }}>Use system setting</SelectButton>}
         />
-        <div className="mt-4 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
+        <div className="mt-4 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
           <WorkspaceThemeControls compact />
         </div>
       </Section>
@@ -1034,7 +1034,7 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
   return (
     <>
       <Section title="Workspace settings">
-        <SettingRow stack title="Workspace name" description="Your workspace name can be up to 65 characters" action={<input className="w-full max-w-[400px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={workspaceNameDraft} maxLength={65} onChange={(event) => setWorkspaceNameDraft(event.target.value)} />} />
+        <SettingRow stack title="Workspace name" description="Your workspace name can be up to 65 characters" action={<input className="w-full max-w-[400px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={workspaceNameDraft} maxLength={65} onChange={(event) => setWorkspaceNameDraft(event.target.value)} />} />
         <SettingRow stack title="Icon" description="Upload an image or pick an emoji. This icon will appear in your sidebar and notifications." action={<div className="relative"><button type="button" className="flex h-[72px] w-[72px] items-center justify-center rounded-md border border-[var(--osio-border-default)] text-5xl" onClick={() => setIconPickerOpen((open) => !open)}><IconValueView value={settings.icon ?? '🌏'} size={44} /></button>{iconPickerOpen && <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2"><EmojiPicker current={settings.icon ?? '🌏'} onSelect={(value) => { update(resolvedUserId, workspaceId, { icon: value }); renameWorkspace(workspaceId, settings.name, value); setIconPickerOpen(false); }} onRemove={() => { update(resolvedUserId, workspaceId, { icon: undefined }); setIconPickerOpen(false); }} onClose={() => setIconPickerOpen(false)} /></div>}</div>} />
         <SettingRow title="Custom landing page" description={<>When a new member joins this workspace, a copy of this page will be added to their <b>Private</b> pages</>} action={<Button onClick={() => setModal({ name: 'page-selector' })}>{settings.landingPageId ? 'Change page' : 'Select page'}</Button>} />
       </Section>
@@ -1055,7 +1055,7 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
         <Button tone="ghost" className="-ml-2" onClick={() => { runAsync(reset(resolvedUserId, workspaceId, workspaceName)); }}>Reset to defaults</Button>
       </Section>
       <Section title="Workspace ID">
-        <SettingRow title="Workspace ID" description={workspaceId} action={<Button tone="ghost" aria-label="Copy workspace ID" onClick={() => { runAsync(navigator.clipboard.writeText(workspaceId).then(() => toast({ kind: 'success', title: 'Workspace ID copied' }))); }}><Copy size={15} /></Button>} />
+        <SettingRow title="Workspace ID" description={workspaceId} action={<Button tone="ghost" aria-label="Copy workspace ID" onClick={() => { runAsync(navigator.clipboard.writeText(workspaceId).then(() => toast({ kind: 'success', title: 'Workspace ID copied' }))); }}><Copy size={16} /></Button>} />
       </Section>
       {modal?.name === 'page-selector' && <PageSelectorModal pages={pages} selectedId={settings.landingPageId ?? null} onSelect={(pageId) => { update(resolvedUserId, workspaceId, { landingPageId: pageId }); setModal(null); }} onClose={() => setModal(null)} />}
       {modal?.name === 'delete-workspace' && <TypedConfirmModal title="Delete workspace" message={`Type ${settings.name} to permanently delete this workspace.`} confirmText={settings.name} danger actionLabel="Delete workspace" onConfirm={() => runAsync(handleDeleteWorkspace())} onClose={() => setModal(null)} />}
@@ -1306,8 +1306,8 @@ const PeoplePanel: React.FC<{
         <MiniTabs active={activePeopleTab} onChange={setActivePeopleTab} tabs={[{ label: 'Guests', count: invites.length }, { label: 'Members', count: members.length || membersCount }, { label: 'Groups' }, { label: 'Contacts' }]} />
         <div className="flex flex-wrap gap-2">
           <Button tone="ghost" onClick={() => setSearchOpen((open) => !open)}><Search size={16} /></Button>
-          {searchOpen && <input value={peopleQuery} onChange={(event) => setPeopleQuery(event.target.value)} placeholder="Search people" className="h-8 w-[220px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm outline-none" />}
-          <Button tone="primary" onClick={() => setModal({ name: 'invite-members' })}><UserPlus size={15} /> Add members</Button>
+          {searchOpen && <input value={peopleQuery} onChange={(event) => setPeopleQuery(event.target.value)} placeholder="Search people" className="h-8 w-[220px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" />}
+          <Button tone="primary" onClick={() => setModal({ name: 'invite-members' })}><UserPlus size={16} /> Add members</Button>
         </div>
       </div>
       <DataTable headers={['User', 'Access', '']} rows={rows} />
@@ -1326,7 +1326,7 @@ const InviteMembersModal: React.FC<{ onInvite: (email: string, role: InviteRole)
   return (
     <Modal open onClose={onClose} title="Invite members" size="sm">
       <div className="space-y-3">
-        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} placeholder="name@example.com" />
+        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} placeholder="name@example.com" />
         <SelectButton value={role} options={[{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }, { value: 'guest', label: 'Guest' }]} onChange={(value) => setRole(value as InviteRole)}>Member</SelectButton>
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => { if (emailDraft.includes('@')) runAsync(onInvite(emailDraft.trim().toLowerCase(), role).then(() => onClose())); }}>Invite</Button></div>
       </div>
@@ -1424,13 +1424,13 @@ const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string }> = ({
     <>
       <MiniTabs active={activeImportTab} onChange={setActiveImportTab} tabs={[{ label: 'Discover' }, { label: 'Completed', count: completedRows.length }]} />
       <Section title="Import your content">
-        <button type="button" className="w-full rounded-xl border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center" onClick={() => fileInputRef.current?.click()} onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
+        <button type="button" className="w-full rounded-lg border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center" onClick={() => fileInputRef.current?.click()} onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
           <Upload className="mx-auto text-[var(--osio-accent)]" size={28} />
           <h4 className="mt-3 font-medium text-[var(--osio-fg-default)]">Import your content to osionos</h4>
           <p className="mt-2 text-sm text-[var(--osio-fg-muted)]">ZIP, CSV, PDF, text, markdown, HTML, images, audio, and video files.</p>
           <p className="mt-1 text-xs text-[var(--osio-fg-subtle)]">ZIP files can be a maximum of 5GB</p>
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleLibraryImport} />
-          <span className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-1.5 text-sm font-medium text-[var(--osio-fg-default)]"><Upload size={15} /> Choose files</span>
+          <span className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-1.5 text-sm font-medium text-[var(--osio-fg-default)]"><Upload size={16} /> Choose files</span>
         </button>
       </Section>
       <Section title="File-based imports"><div className="grid gap-3 sm:grid-cols-2">{files.map((file) => <FeatureCard key={file} icon={<FileText size={16} />} title={file} description={`Import ${file.toLowerCase()} content from files`} action={<Button onClick={() => setModal({ name: 'typed-import', payload: { kind: file } })}>Open</Button>} />)}</div></Section>
@@ -1479,7 +1479,7 @@ const PageSettingsPanel = () => {
   const actions = usePageActions(activePage?.id ?? '', activePage?.workspaceId ?? '');
 
   if (!activePage) {
-    return <div className="rounded-xl border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center text-sm text-[var(--osio-fg-muted)]">Open a page to see its settings.</div>;
+    return <div className="rounded-lg border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center text-sm text-[var(--osio-fg-muted)]">Open a page to see its settings.</div>;
   }
 
   function handleImport(event: React.ChangeEvent<HTMLInputElement>) {
@@ -1492,15 +1492,15 @@ const PageSettingsPanel = () => {
     <>
       <Section title="Style"><div className="grid gap-2 sm:grid-cols-3">{(['default', 'serif', 'mono'] as const).map((font) => <Button key={font} className={`justify-start ${actions.config.font === font ? 'border-[var(--osio-accent)]' : ''}`} onClick={() => runMaybeAsync(actions.setFont(font))}><span className={`text-base ${fontSampleClass(font)}`}>Ag</span>{font[0].toUpperCase() + font.slice(1)}</Button>)}</div></Section>
       <Section title="Actions">
-        <SettingRow title={<span className="inline-flex items-center gap-2"><Copy size={15} />Copy link</span>} description="Ctrl+Alt+L" action={<Button onClick={() => runMaybeAsync(actions.copyLink())}>Copy</Button>} />
-        <SettingRow title={<span className="inline-flex items-center gap-2"><FileText size={15} />Copy page contents</span>} action={<Button onClick={() => runMaybeAsync(actions.copyContents())}>Copy</Button>} />
-        <SettingRow title={<span className="inline-flex items-center gap-2"><Copy size={15} />Duplicate</span>} description="Ctrl+D" action={<Button onClick={() => runMaybeAsync(actions.duplicate())}>Duplicate</Button>} />
-        <SettingRow title={<span className="inline-flex items-center gap-2"><Trash2 size={15} />Move to Trash</span>} action={<Button tone="danger" onClick={() => runMaybeAsync(actions.moveToTrash())}>Move</Button>} />
-        <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={15} />Present</span>} description="Beta · Ctrl+Alt+P" action={<Switch checked={actions.config.presentationMode} onChange={() => runMaybeAsync(actions.present())} />} />
-        <SettingRow title={<span className="inline-flex items-center gap-2"><Sparkles size={15} />Use with AI</span>} description="Share this page context with osionos AI." action={<Button onClick={() => recordSettingsAction('page_use_with_ai', { pageId: activePage.id })}>Use</Button>} />
-        <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={15} />Translate</span>} action={<div className="flex gap-2"><SelectButton value={actions.translateLocale} options={TRANSLATION_LANGUAGES.map((language) => ({ value: language.locale, label: language.label }))} onChange={actions.setTranslateLocale}>Language</SelectButton><Button onClick={() => runMaybeAsync(actions.translate())}>Translate</Button></div>} />
-        <SettingRow title={<span className="inline-flex items-center gap-2"><Import size={15} />Import</span>} action={<><input ref={importInputRef} type="file" accept=".json,.md,.markdown,.txt" className="hidden" onChange={handleImport} /><Button onClick={() => importInputRef.current?.click()}>Import</Button></>} />
-        <SettingRow title={<span className="inline-flex items-center gap-2"><FileDown size={15} />Export</span>} action={<Button onClick={() => runMaybeAsync(actions.exportPage())}>Export</Button>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Copy size={16} />Copy link</span>} description="Ctrl+Alt+L" action={<Button onClick={() => runMaybeAsync(actions.copyLink())}>Copy</Button>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><FileText size={16} />Copy page contents</span>} action={<Button onClick={() => runMaybeAsync(actions.copyContents())}>Copy</Button>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Copy size={16} />Duplicate</span>} description="Ctrl+D" action={<Button onClick={() => runMaybeAsync(actions.duplicate())}>Duplicate</Button>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Trash2 size={16} />Move to Trash</span>} action={<Button tone="danger" onClick={() => runMaybeAsync(actions.moveToTrash())}>Move</Button>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={16} />Present</span>} description="Beta · Ctrl+Alt+P" action={<Switch checked={actions.config.presentationMode} onChange={() => runMaybeAsync(actions.present())} />} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Sparkles size={16} />Use with AI</span>} description="Share this page context with osionos AI." action={<Button onClick={() => recordSettingsAction('page_use_with_ai', { pageId: activePage.id })}>Use</Button>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={16} />Translate</span>} action={<div className="flex gap-2"><SelectButton value={actions.translateLocale} options={TRANSLATION_LANGUAGES.map((language) => ({ value: language.locale, label: language.label }))} onChange={actions.setTranslateLocale}>Language</SelectButton><Button onClick={() => runMaybeAsync(actions.translate())}>Translate</Button></div>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Import size={16} />Import</span>} action={<><input ref={importInputRef} type="file" accept=".json,.md,.markdown,.txt" className="hidden" onChange={handleImport} /><Button onClick={() => importInputRef.current?.click()}>Import</Button></>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><FileDown size={16} />Export</span>} action={<Button onClick={() => runMaybeAsync(actions.exportPage())}>Export</Button>} />
       </Section>
       <Section title="Page switches"><SettingRow title="Small text" action={<Switch checked={actions.config.smallText} onChange={() => runMaybeAsync(actions.toggleSmallText())} />} /><SettingRow title="Full width" action={<Switch checked={actions.config.fullWidth} onChange={() => runMaybeAsync(actions.toggleFullWidth())} />} /><SettingRow title="Lock page" action={<Switch checked={actions.config.locked} onChange={() => runMaybeAsync(actions.toggleLock())} />} /></Section>
       <Section title="History & connections">
@@ -1586,7 +1586,7 @@ const PublicPagesPanel = () => {
   }
 
   const domainRows = domains.map((domain) => [
-    <input key={`${domain._id}-domain`} className="w-full rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none" defaultValue={domain.domain} onBlur={(event) => update(userId, workspaceId, { publicDomains: domains.map((item) => item._id === domain._id ? { ...item, domain: event.target.value, updatedAt: new Date().toISOString() } : item) })} />,
+    <input key={`${domain._id}-domain`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={domain.domain} onBlur={(event) => update(userId, workspaceId, { publicDomains: domains.map((item) => item._id === domain._id ? { ...item, domain: event.target.value, updatedAt: new Date().toISOString() } : item) })} />,
     domain.homepage,
     <span key={`${domain._id}-status`} className="text-[var(--osio-accent)]">{domain.status}</span>,
   ]);
@@ -1637,7 +1637,7 @@ const LibraryPanel = () => {
     </div>,
     asset.kind,
     formatBytes(asset.size),
-    <Button key={`${asset.id}-remove`} tone="ghost" className="px-2" onClick={() => removeAsset(activeUserId, asset.id)}><Trash2 size={15} /></Button>,
+    <Button key={`${asset.id}-remove`} tone="ghost" className="px-2" onClick={() => removeAsset(activeUserId, asset.id)}><Trash2 size={16} /></Button>,
   ]);
 
   return (
@@ -1647,13 +1647,13 @@ const LibraryPanel = () => {
           <MiniTabs active="All" tabs={[{ label: 'All', count: assets.length }, { label: 'Images', count: imageAssets.length }, { label: 'Files' }]} />
           <div>
             <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleLibraryUpload} />
-            <Button onClick={() => fileInputRef.current?.click()}><Upload size={15} /> Add import</Button>
+            <Button onClick={() => fileInputRef.current?.click()}><Upload size={16} /> Add import</Button>
           </div>
         </div>
         {assets.length > 0 ? (
           <DataTable className="mt-4" headers={['Asset', 'Type', 'Size', '']} rows={rows} />
         ) : (
-          <div className="mt-4 rounded-xl border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-6 py-8 text-center text-sm text-[var(--osio-fg-muted)]">
+          <div className="mt-4 rounded-lg border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-6 py-8 text-center text-sm text-[var(--osio-fg-muted)]">
             No imported assets yet.
           </div>
         )}
@@ -1662,7 +1662,7 @@ const LibraryPanel = () => {
         {imageAssets.length > 0 ? (
           <div className="grid gap-3 sm:grid-cols-3">
             {imageAssets.map((asset) => (
-              <div key={asset.id} className="overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
+              <div key={asset.id} className="overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
                 <img src={asset.source} alt="" className="h-28 w-full object-cover" />
                 <div className="px-3 py-2 text-xs font-medium text-[var(--osio-fg-default)]">{asset.name}</div>
               </div>
@@ -1691,7 +1691,7 @@ const TeamspacesPanel: React.FC<{ workspaceName?: string }> = ({ workspaceName =
   const [limitOwners, setLimitOwners] = useState(false);
   const activeTeamspaces = teamspaces.filter((teamspace) => !teamspace.archivedAt);
   const rows = activeTeamspaces.map((teamspace) => [
-    <input key={`${teamspace._id}-name`} className="w-full rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none" defaultValue={teamspace.name} onBlur={(event) => updateTeamspace(workspaceId, teamspace._id, { name: event.target.value })} />,
+    <input key={`${teamspace._id}-name`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={teamspace.name} onBlur={(event) => updateTeamspace(workspaceId, teamspace._id, { name: event.target.value })} />,
     teamspace.owners.join(', ') || activeUserId,
     <SelectButton key={`${teamspace._id}-access`} value={teamspace.access} options={[{ value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }, { value: 'private', label: 'Private' }]} onChange={(value) => updateTeamspace(workspaceId, teamspace._id, { access: value as 'open' | 'closed' | 'private' })}>{teamspace.access}</SelectButton>,
     <Button key={`${teamspace._id}-archive`} tone="danger" onClick={() => archiveTeamspace(workspaceId, teamspace._id)}>Archive</Button>,
@@ -1716,7 +1716,7 @@ const NewTeamspaceModal: React.FC<{ onCreate: (name: string) => void; onClose: (
   return (
     <Modal open onClose={onClose} title="New teamspace" size="sm">
       <div className="space-y-4">
-        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={name} onChange={(event) => setName(event.target.value)} />
+        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={name} onChange={(event) => setName(event.target.value)} />
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => onCreate(name.trim() || 'New teamspace')}>Create</Button></div>
       </div>
     </Modal>
@@ -1789,7 +1789,7 @@ const BillingEditModal: React.FC<{ label: string; onSave: (value: string) => voi
   return (
     <Modal open onClose={onClose} title={label} size="sm">
       <div className="space-y-4">
-        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none" value={value} onChange={(event) => setValue(event.target.value)} placeholder={label} />
+        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={value} onChange={(event) => setValue(event.target.value)} placeholder={label} />
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => onSave(value)}>Save</Button></div>
       </div>
     </Modal>
@@ -1818,7 +1818,7 @@ const PlansPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId = 'local-w
     <>
       <FeatureCard title="Your current plan" description={`${billing.plan} · For students & educators`} action={<Check size={18} className="text-[var(--osio-accent)]" />} />
       <FeatureCard icon={<Sparkles size={16} />} title="osionos AI" description="Upgrade to search everywhere, automate meeting notes & more" action={<Button tone="primary" onClick={() => setUpgradePlan('AI')}>Upgrade</Button>} />
-      <Section title="Compare all plans"><div className="grid gap-3 md:grid-cols-2">{plans.map(([name, description]) => <div key={name} className="rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4"><div className="flex items-center justify-between"><h4 className="font-semibold text-[var(--osio-fg-default)]">{name}</h4>{name !== 'Free' && <span className="text-xs text-[var(--osio-fg-muted)]">billed monthly</span>}</div><p className="mt-3 text-sm leading-5 text-[var(--osio-fg-muted)]">{description}</p><Button className="mt-4 w-full" onClick={() => setUpgradePlan(name)}>Upgrade</Button></div>)}</div></Section>
+      <Section title="Compare all plans"><div className="grid gap-3 md:grid-cols-2">{plans.map(([name, description]) => <div key={name} className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4"><div className="flex items-center justify-between"><h4 className="font-semibold text-[var(--osio-fg-default)]">{name}</h4>{name !== 'Free' && <span className="text-xs text-[var(--osio-fg-muted)]">billed monthly</span>}</div><p className="mt-3 text-sm leading-5 text-[var(--osio-fg-muted)]">{description}</p><Button className="mt-4 w-full" onClick={() => setUpgradePlan(name)}>Upgrade</Button></div>)}</div></Section>
       <Section title="FAQ"><SettingRow title="Plans, Billing & Payment" action={<ChevronDown size={16} />} /><SettingRow title="Message support" action={<ChevronDown size={16} />} /></Section>
       {upgradePlan && <UpgradePlanModal plan={upgradePlan} onConfirm={() => { update(workspaceId, { plan: upgradePlan }); useToastStore.getState().push({ kind: 'success', title: 'accountUpgraded' }); setUpgradePlan(null); }} onClose={() => setUpgradePlan(null)} />}
     </>

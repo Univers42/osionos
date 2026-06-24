@@ -42,7 +42,7 @@ export const IconTab: React.FC<{ query: string; color?: string; onPick: (name: s
           type="button"
           title={name}
           onClick={() => onPick(name)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--osio-fg-default)] transition hover:bg-[var(--osio-bg-hover)]"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--osio-fg-default)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
         >
           <LucideGlyph name={name} size={20} color={color} />
         </button>

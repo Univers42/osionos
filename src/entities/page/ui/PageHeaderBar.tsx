@@ -192,7 +192,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
               <MoreHorizontal size={18} />
             </button>
             {configOpen && (
-              <div ref={menuRef} className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 max-h-[80vh] w-72 overflow-y-auto rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-2 shadow-xl">
+              <div ref={menuRef} className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 max-h-[80vh] w-72 overflow-y-auto rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-2 shadow-[var(--osio-shadow-menu)]">
                 <div className="px-3 pb-2">
                   <div className="flex h-8 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2">
                     <Search size={14} className="text-[var(--osio-fg-muted)]" />

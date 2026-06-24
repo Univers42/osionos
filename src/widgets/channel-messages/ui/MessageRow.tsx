@@ -89,7 +89,7 @@ export const MessageRow: React.FC<MessageRowProps> = ({ message, isAuthor, canIn
         )}
       </div>
       {canInteract && (
-        <div className="absolute -top-2 right-2 hidden items-center gap-0.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-0.5 shadow-sm group-hover:flex">
+        <div className="absolute -top-2 right-2 hidden items-center gap-0.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-0.5 shadow-osio-menu group-hover:flex">
           <button type="button" aria-label="Add reaction" onClick={() => setPickerOpen((open) => !open)} className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"><SmilePlus size={14} /></button>
           {isAuthor && (
             <>
@@ -98,7 +98,7 @@ export const MessageRow: React.FC<MessageRowProps> = ({ message, isAuthor, canIn
             </>
           )}
           {pickerOpen && (
-            <div className="absolute right-0 top-7 z-10 flex gap-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1 shadow-md">
+            <div className="absolute right-0 top-7 z-10 flex gap-1 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1 shadow-[var(--osio-shadow-menu)]">
               {QUICK_EMOJI.map((emoji) => (
                 <button
                   key={emoji}

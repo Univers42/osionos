@@ -14,26 +14,26 @@
   right: 0;
   top: calc(100% + 5px);
   width: 200px;
-  background-color: var(--osio-bg-surface);
+  background-color: var(--osio-bg-elevated);
   border: 1px solid var(--osio-border-default);
-  border-radius: 8px;
-  box-shadow: 0 0 0 1px rgba(15, 15, 15, 0.05), 0 3px 6px rgba(15, 15, 15, 0.1), 0 9px 24px rgba(15, 15, 15, 0.2);
+  border-radius: var(--osio-radius-lg);
+  box-shadow: var(--osio-shadow-menu);
   z-index: var(--osio-z-popover);
-  padding: 6px;
+  padding: 4px;
   animation: scaleIn 0.1s ease-out;
 }
 
 .menuItem {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 4px 8px;
+  padding: 8px 12px;
   font-size: 14px;
-  border-radius: 4px;
+  border-radius: var(--osio-radius-sm);
   color: var(--osio-fg-default);
-  background-color: var(--osio-bg-surface);
-  transition: background-color 0.1s ease;
+  background-color: transparent;
+  transition: background-color 0.12s ease;
   cursor: pointer;
   border: none;
 }

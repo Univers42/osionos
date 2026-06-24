@@ -109,11 +109,11 @@ const RecentPageActions: React.FC<RecentPageActionsProps> = ({
       />
       <button
         type="button"
-        className="p-1 rounded hover:bg-[var(--osio-bg-subtle)]"
+        className="p-1 rounded-md text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
         onClick={(e) => onAddChild(e, recent)}
         title="Add child page"
       >
-        <Plus size={13} />
+        <Plus size={14} />
       </button>
     </div>
   );
@@ -404,24 +404,24 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
           onClick={() => openChannel(channel)}
           rightElement={
             <div className="mr-1 flex items-center gap-0.5">
-              <span className="hidden rounded bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-[10px] text-[var(--osio-fg-subtle)] group-hover:inline sm:inline">
+              <span className="hidden rounded-md bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-[10px] text-[var(--osio-fg-subtle)] group-hover:inline sm:inline">
                 {channelTypeLabel(channel.type)}
               </span>
               <button
                 type="button"
-                className="flex h-6 w-6 items-center justify-center rounded text-[var(--osio-fg-subtle)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--osio-fg-subtle)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
                 title="Toggle channel visibility"
                 onClick={(event) => handleToggleChannelVisibility(event, channel)}
               >
-                {channel.visibility === "members" ? <Lock size={12} /> : <Hash size={12} />}
+                {channel.visibility === "members" ? <Lock size={14} /> : <Hash size={14} />}
               </button>
               <button
                 type="button"
-                className="flex h-6 w-6 items-center justify-center rounded text-[var(--osio-fg-subtle)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--osio-fg-subtle)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
                 title="Create thread"
                 onClick={(event) => handleCreateThread(event, channel)}
               >
-                <GitBranch size={12} />
+                <GitBranch size={14} />
               </button>
             </div>
           }
@@ -442,10 +442,10 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
           <button
             type="button"
             title={`Create ${category.label.toLowerCase()}`}
-            className="flex h-5 w-5 items-center justify-center rounded hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
+            className="flex h-5 w-5 items-center justify-center rounded-md transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
             onClick={() => createChannel(category.createType, category.createName)}
           >
-            <Plus size={12} />
+            <Plus size={14} />
           </button>
         </div>
         {categoryChannels.map(renderChannel)}

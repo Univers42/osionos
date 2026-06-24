@@ -175,7 +175,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     <div
       ref={ref}
       data-testid="slash-command-menu"
-      className="fixed z-[var(--osio-z-popover)] flex max-h-[26rem] overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl"
+      className="fixed z-[var(--osio-z-popover)] flex max-h-[26rem] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] shadow-[var(--osio-shadow-menu)]"
       style={menuStyle}
     >
       <div className="flex w-64 min-w-0 flex-col">
@@ -207,9 +207,9 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                       type="button"
                       data-testid="slash-command-entry"
                       data-command-label={item.label}
-                      className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${
+                      className={`mx-1 flex items-center gap-2.5 rounded-md px-3 py-1.5 text-left transition-colors duration-[120ms] [width:calc(100%-0.5rem)] ${
                         isActive || isPickerSelected
-                          ? "bg-[var(--osio-bg-hover)]"
+                          ? "bg-[var(--osio-bg-muted)]"
                           : "hover:bg-[var(--osio-bg-hover)]"
                       }`}
                       onMouseEnter={() => setActiveIdx(idx)}
@@ -248,7 +248,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
             </div>
             <button
               type="button"
-              className="rounded-md px-2 py-1 text-xs font-medium text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]"
+              className="rounded-md px-2 py-1 text-xs font-medium text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
               onClick={() => setActiveMediaKind(null)}
             >
               Close

@@ -226,7 +226,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
         className="fixed inset-0 cursor-default bg-transparent"
         onClick={onClose}
       />
-      <aside className="relative z-[var(--osio-z-modal)] h-full w-full max-w-5xl overflow-auto border-l border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl">
+      <aside className="relative z-[var(--osio-z-modal)] h-full w-full max-w-5xl overflow-auto border-l border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-modal)]">
         <div className="sticky top-0 flex items-center justify-between border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-6 py-3">
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">
             {database?.name ?? 'Database page'} · osionos page

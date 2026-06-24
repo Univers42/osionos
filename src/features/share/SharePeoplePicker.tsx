@@ -48,21 +48,21 @@ export const SharePeoplePicker: React.FC<SharePeoplePickerProps> = ({ people, ex
         />
       </label>
       {query.trim() && (
-        <div className="overflow-hidden rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-lg">
+        <div className="overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] shadow-[var(--osio-shadow-menu)]">
           {matches.length === 0 && <p className="px-3 py-2 text-xs text-[var(--osio-fg-muted)]">No people match.</p>}
           {matches.map((person) => (
             <button
               key={person.id}
               type="button"
               disabled={disabled}
-              className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-[var(--osio-bg-hover)]"
+              className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => { onPick(person); setQuery(''); }}
             >
               <span className="min-w-0">
                 <span className="block truncate font-medium text-[var(--osio-fg-default)]">{person.name}</span>
                 <span className="block truncate text-xs text-[var(--osio-fg-muted)]">{person.email}</span>
               </span>
-              <span className="shrink-0 rounded bg-[var(--osio-bg-subtle)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--osio-fg-muted)]">
+              <span className="shrink-0 rounded-full bg-[var(--osio-bg-subtle)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--osio-fg-muted)]">
                 {person.role}
               </span>
             </button>

@@ -12,6 +12,7 @@
 
 import React, { useState } from 'react';
 import { KeyRound, Trash2 } from 'lucide-react';
+import { Badge } from '@/shared/ui';
 import type { ApiKey } from '../model/tenantConsoleTypes';
 import { useTenantConsoleStore } from '../model/useTenantConsoleStore';
 import { ConsoleSection, ConsoleRow, ConsoleButton, ConsoleEmpty } from './consolePrimitives';
@@ -37,7 +38,7 @@ function KeyRowItem({ apiKey, onRevoke }: { apiKey: ApiKey; onRevoke: (id: strin
       <span style={{ ...CELL, ...MUTED }}>{fmtDate(apiKey.created_at)}</span>
       <span style={{ ...CELL, ...MUTED }}>{fmtDate(apiKey.last_used_at)}</span>
       {revoked ? (
-        <span style={{ ...MUTED, fontStyle: 'italic' }}>revoked</span>
+        <Badge tone="danger">revoked</Badge>
       ) : (
         <ConsoleButton tone="danger" onClick={() => onRevoke(apiKey.id)}>
           <Trash2 size={14} aria-hidden /> Revoke
@@ -61,7 +62,7 @@ export function ApiKeysSection() {
       icon={<KeyRound size={16} aria-hidden />}
       action={<ConsoleButton onClick={() => setOpen(true)}>Create key</ConsoleButton>}
     >
-      {error ? <p style={{ color: 'var(--osio-fg-danger, #d33)' }}>{error}</p> : null}
+      {error ? <p style={{ color: 'var(--osio-danger)' }}>{error}</p> : null}
       {keys.length === 0 ? (
         <ConsoleEmpty>{loading ? 'Loading keys…' : 'No API keys yet. Create one to get started.'}</ConsoleEmpty>
       ) : (

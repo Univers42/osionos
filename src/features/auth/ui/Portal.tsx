@@ -38,7 +38,7 @@ export function Portal() {
       onClick={() => setMode(value)}
       className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
         mode === value
-          ? "bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-sm"
+          ? "bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-osio-sm"
           : "text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]"
       }`}
     >
@@ -48,7 +48,7 @@ export function Portal() {
 
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-[var(--osio-bg-page)] px-6 text-[var(--osio-fg-default)]">
-      <section className="w-full max-w-sm rounded-2xl border border-[var(--osio-border)] bg-[var(--osio-bg-panel)] p-7 shadow-xl">
+      <section className="w-full max-w-sm rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-panel)] p-7 shadow-[var(--osio-shadow-modal)]">
         <div className="flex flex-col items-center gap-3 text-center">
           <OsionosMark />
           <div>
@@ -71,7 +71,7 @@ export function Portal() {
               <input
                 type="text" value={name} onChange={(e) => setName(e.target.value)}
                 autoComplete="nickname" placeholder="Your name"
-                className="rounded-md border border-[var(--osio-border)] bg-[var(--osio-bg-surface)] px-3 py-2 outline-none focus:border-[var(--osio-accent)]"
+                className="rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus:border-[var(--osio-accent)]"
               />
             </label>
           )}
@@ -80,7 +80,7 @@ export function Portal() {
             <input
               type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
               autoComplete="email" placeholder="you@example.com"
-              className="rounded-md border border-[var(--osio-border)] bg-[var(--osio-bg-surface)] px-3 py-2 outline-none focus:border-[var(--osio-accent)]"
+              className="rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus:border-[var(--osio-accent)]"
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
@@ -88,7 +88,7 @@ export function Portal() {
             <input
               type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
               autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder="••••••••"
-              className="rounded-md border border-[var(--osio-border)] bg-[var(--osio-bg-surface)] px-3 py-2 outline-none focus:border-[var(--osio-accent)]"
+              className="rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus:border-[var(--osio-accent)]"
             />
             {mode === "signup" && (
               <span className="text-xs text-[var(--osio-fg-muted)]">
@@ -103,7 +103,7 @@ export function Portal() {
           </label>
 
           {error && error !== "portal-required" && (
-            <p role="alert" className="rounded-md bg-[color-mix(in_srgb,#ff3b30_12%,transparent)] px-3 py-2 text-sm text-[#c9190b]">
+            <p role="alert" className="rounded-md bg-[color-mix(in_srgb,var(--osio-danger)_12%,transparent)] px-3 py-2 text-sm text-[var(--osio-danger)]">
               {error}
             </p>
           )}

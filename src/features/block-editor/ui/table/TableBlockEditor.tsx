@@ -183,7 +183,7 @@ export const TableBlockEditor: React.FC<TableBlockEditorProps> = ({ block, pageI
 
   return (
     <div ref={rootRef} className="group/table relative my-2" data-can-delete-table={Boolean(onDeleteTable)} style={style}>
-      <div className="overflow-x-auto overflow-y-visible rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
+      <div className="overflow-x-auto overflow-y-visible rounded-lg border border-[var(--osio-db-line)] bg-[var(--osio-bg-surface)]">
         <table ref={tableRef} role="grid" tabIndex={0} data-table-grid aria-label="Editable table — arrow keys navigate cells" onKeyDown={handleGridKeyDown} onFocus={handleGridFocus} aria-rowcount={data.length} aria-colcount={columnCount} aria-activedescendant={activeCellId ? `tcell-${activeCellId.replace(":", "-")}` : undefined} aria-keyshortcuts="Tab Shift+Tab ArrowUp ArrowDown ArrowLeft ArrowRight Enter Escape Ctrl+Shift+ArrowUp Ctrl+Shift+ArrowDown Ctrl+Shift+ArrowLeft Ctrl+Shift+ArrowRight Ctrl+Shift+Backspace Ctrl+Delete" className={`${tableClassName} focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40`} style={{ tableLayout: config.layoutMode === "fixed" ? "fixed" : "auto" }}>
           <colgroup>{columnStyles.map((columnStyle, columnIndex) => <col key={getColumnKey(columnIndex)} style={columnStyle} />)}</colgroup>
           <tbody>{data.map((row, rowIndex) => (

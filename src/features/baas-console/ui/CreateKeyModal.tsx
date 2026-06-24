@@ -13,12 +13,13 @@
 import React, { useState } from 'react';
 import { Copy } from 'lucide-react';
 import { Modal } from '@/shared/ui/primitives/Modal';
+import { Input } from '@/shared/ui';
 import { useTenantConsoleStore } from '../model/useTenantConsoleStore';
 import { ConsoleButton } from './consolePrimitives';
 
 const ALL_SCOPES = ['read', 'write', 'admin'] as const;
-const INPUT_STYLE = {
-  width: '100%', padding: '8px 10px', borderRadius: 8,
+const CODE_STYLE = {
+  width: '100%', padding: '8px 10px', borderRadius: 12,
   border: '1px solid var(--osio-border-default)', background: 'var(--osio-bg-surface)',
   color: 'var(--osio-fg-default)',
 };
@@ -31,10 +32,10 @@ function IssuedKeyView({ secret, onDone }: { secret: string; onDone: () => void 
   }
   return (
     <div style={{ padding: 20, display: 'grid', gap: 12 }}>
-      <strong style={{ color: 'var(--osio-fg-warning, #b8860b)' }}>
+      <strong style={{ color: 'var(--osio-warning)' }}>
         Copy this key now — it won&apos;t be shown again.
       </strong>
-      <code style={{ ...INPUT_STYLE, wordBreak: 'break-all', userSelect: 'all' }}>{secret}</code>
+      <code style={{ ...CODE_STYLE, wordBreak: 'break-all', userSelect: 'all' }}>{secret}</code>
       <div style={{ display: 'flex', gap: 8 }}>
         <ConsoleButton onClick={copy}><Copy size={14} aria-hidden /> {copied ? 'Copied' : 'Copy'}</ConsoleButton>
         <ConsoleButton onClick={onDone}>Done</ConsoleButton>
@@ -66,7 +67,7 @@ function CreateKeyForm({ onCancel }: { onCancel: () => void }) {
       <h3 style={{ margin: 0 }}>Create API key</h3>
       <label style={{ display: 'grid', gap: 6 }}>
         <span>Name</span>
-        <input style={INPUT_STYLE} value={name} onChange={(e) => setName(e.target.value)}
+        <Input value={name} onChange={(e) => setName(e.target.value)}
           placeholder="e.g. production server" required />
       </label>
       <fieldset style={{ border: 0, padding: 0, margin: 0, display: 'flex', gap: 16 }}>
@@ -77,7 +78,7 @@ function CreateKeyForm({ onCancel }: { onCancel: () => void }) {
           </label>
         ))}
       </fieldset>
-      {error ? <p style={{ color: 'var(--osio-fg-danger, #d33)' }}>{error}</p> : null}
+      {error ? <p style={{ color: 'var(--osio-danger)' }}>{error}</p> : null}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <ConsoleButton onClick={onCancel}>Cancel</ConsoleButton>
         <ConsoleButton type="submit" disabled={busy || !name.trim()}>

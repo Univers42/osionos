@@ -34,7 +34,7 @@ export const EmojiTab: React.FC<{ query: string; bg?: string; onPick: (emoji: st
           type="button"
           title={it.label ?? it.id}
           onClick={() => onPick(it.value)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-xl leading-none transition hover:bg-[var(--osio-bg-hover)]"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-xl leading-none transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
           style={bg ? { background: bg, borderRadius: 8 } : undefined}
         >
           {it.value}

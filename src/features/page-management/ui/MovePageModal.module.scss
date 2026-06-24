@@ -30,8 +30,8 @@
   flex-direction: column;
   background-color: var(--osio-bg-surface);
   border: 1px solid var(--osio-border-default);
-  border-radius: 0.5rem;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  border-radius: var(--osio-radius-lg);
+  box-shadow: var(--osio-shadow-modal);
   overflow: hidden;
   animation: modal-enter 0.2s ease-out;
 }
@@ -75,9 +75,9 @@
 
 .closeButton {
   padding: var(--osio-space-1);
-  border-radius: var(--osio-space-1);
+  border-radius: var(--osio-radius-sm);
   color: var(--osio-fg-subtle);
-  transition: colors 0.2s;
+  transition: background-color 0.12s ease, color 0.12s ease;
 
   &:hover {
     background-color: var(--osio-bg-hover);

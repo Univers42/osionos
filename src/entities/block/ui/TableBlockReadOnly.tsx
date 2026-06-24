@@ -78,7 +78,7 @@ export const TableBlockReadOnly: React.FC<TableBlockReadOnlyProps> = ({ block })
   });
 
   return (
-    <div className="osio-scrollbar-hidden my-2 overflow-x-auto overflow-y-visible rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
+    <div className="osio-scrollbar-hidden my-2 overflow-x-auto overflow-y-visible rounded-lg border border-[var(--osio-db-line)] bg-[var(--osio-bg-surface)]">
       <table className={tableClassName} style={{ tableLayout: config.layoutMode === "fixed" ? "fixed" : "auto" }}>
         <colgroup>
           {columnStyles.map((columnStyle, columnIndex) => (
@@ -133,7 +133,7 @@ function getCellClassName(
     "text-[var(--osio-fg-default)] align-top",
     getTableAlignmentClassName(alignment),
     config.wrap === false ? "truncate whitespace-nowrap" : "whitespace-normal break-words",
-    config.showBorders === false ? "" : "border-b border-r border-[var(--osio-border-default)] last:border-r-0",
+    config.showBorders === false ? "" : "border-b border-r border-[var(--osio-db-line)] last:border-r-0",
     config.headerColumn && columnIndex === 0 ? "font-medium bg-[var(--osio-bg-subtle)]" : "",
     config.headerRow !== false && rowIndex === 0 ? "font-medium" : "",
   ].filter(Boolean).join(" ");

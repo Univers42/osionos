@@ -127,7 +127,7 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
         {canExpand ? (
           <button
             type="button"
-            className="flex items-center justify-center w-5 h-5 shrink-0 rounded hover:bg-[var(--osio-bg-hover)]"
+            className="flex items-center justify-center w-5 h-5 shrink-0 rounded-md transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
             onClick={(e) => { e.stopPropagation(); setExpanded((o) => !o); }}
           >
             <ChevronRight size={12} className={["transition-transform duration-150", expanded ? "rotate-90" : ""].join(" ")} />
@@ -154,7 +154,7 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
             className={[
               "flex min-w-0 flex-1 items-center gap-0.5 h-full rounded-md text-sm text-left transition-colors duration-100 pr-20",
               isActive
-                ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
+                ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-strong)]"
                 : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
             ].join(" ")}
           >

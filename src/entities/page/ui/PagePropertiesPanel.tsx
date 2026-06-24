@@ -70,7 +70,7 @@ export const PagePropertiesPanel: React.FC<Props> = ({
             <Plus size={14} /> Add a property
           </button>
           {adding ? (
-            <div className="absolute z-20 mt-1 max-h-72 w-56 overflow-auto rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-lg">
+            <div className="absolute z-20 mt-1 max-h-72 w-56 overflow-auto rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-[var(--osio-shadow-menu)]">
               {ADD_PROPERTY_CHOICES.map((choice) => (
                 <button key={`${choice.type}:${choice.label}`} type="button" onClick={() => addOfType(choice.type, choice.label)}
                   className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-[var(--osio-bg-hover)]">

@@ -21,6 +21,7 @@ import { initRealtimeMessagesBridge } from "@/services/realtime-messages";
 import { PageHeaderBar } from "@/entities/page";
 import { PageBody } from "./PageBody";
 import { PageHeader } from "./PageHeader";
+import { PageOutlineRail } from "@/widgets/page-toc/PageOutlineRail";
 
 import "./notionPage.css";
 
@@ -120,6 +121,8 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
       />
 
       <PageBody pageId={pageId} locked={pageConfig.locked} />
+
+      {!hasFullPageLayout && <PageOutlineRail pageId={pageId} />}
     </div>
   );
 };

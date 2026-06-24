@@ -60,7 +60,7 @@ export const PageRelationField: React.FC<Props> = ({ workspaceId, excludePageId,
             <Plus size={12} /> Relate
           </button>
           {picking ? (
-            <div className="absolute z-20 mt-1 max-h-56 w-56 overflow-auto rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-lg">
+            <div className="absolute z-20 mt-1 max-h-56 w-56 overflow-auto rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-[var(--osio-shadow-menu)]">
               {candidates.length === 0 ? (
                 <p className="px-2 py-1 text-xs text-[var(--osio-fg-subtle)]">No other pages</p>
               ) : (

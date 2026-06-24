@@ -12,9 +12,18 @@
 
 import React from 'react';
 
+import { Badge, type BadgeTone } from '@/shared/ui';
 import { useTenantConsoleStore } from '../model/useTenantConsoleStore';
 import type { Entitlements } from '../model/tenantConsoleTypes';
 import { ConsoleSection, ConsoleRow, ConsoleEmpty } from './consolePrimitives';
+
+/** Map a tenant status string to a Badge tone (active → success, else default). */
+function statusTone(status: string): BadgeTone {
+  const normalized = status.toLowerCase();
+  if (normalized === 'active') return 'success';
+  if (normalized === 'suspended' || normalized === 'disabled') return 'danger';
+  return 'default';
+}
 
 /** The enabled capability keys, rendered as a compact comma list. */
 function enabledCapabilities(entitlements: Entitlements): string {
@@ -60,8 +69,8 @@ export function TenantAccountSection() {
       <ConsoleRow label="Name" value={tenant.name} />
       <ConsoleRow label="Slug (id)" value={tenant.slug || tenant.id} />
       <ConsoleRow label="UUID" value={tenant.uuid} />
-      <ConsoleRow label="Status" value={tenant.status} />
-      <ConsoleRow label="Plan" value={tenant.plan} />
+      <ConsoleRow label="Status" value={<Badge tone={statusTone(tenant.status)}>{tenant.status}</Badge>} />
+      <ConsoleRow label="Plan" value={<Badge tone="accent">{tenant.plan}</Badge>} />
       <ConsoleRow label="Package" value={entitlements.package} />
       <ConsoleRow
         label="Engines"

@@ -12,7 +12,7 @@
 
 import React, { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { Dropdown } from '@/shared/ui';
+import { Dropdown, SectionHeader } from '@/shared/ui';
 import { usePolicyMatrix } from './usePolicyMatrix';
 import { MatrixGrid } from './MatrixGrid';
 import { ConditionEditor } from './ConditionEditor';
@@ -20,9 +20,8 @@ import { FieldMaskEditor } from './FieldMaskEditor';
 import { ViewAsTester } from './ViewAsTester';
 
 const SectionTitle: React.FC<{ title: string; anchor: string; children?: React.ReactNode }> = ({ title, anchor, children }) => (
-  <div className="flex items-center justify-between border-b border-[var(--osio-border-default)] pb-3" data-settings-anchor={anchor}>
-    <h3 className="text-base font-medium text-[var(--osio-fg-default)]">{title}</h3>
-    {children}
+  <div className="border-b border-[var(--osio-border-default)] pb-3" data-settings-anchor={anchor}>
+    <SectionHeader title={title} action={children} />
   </div>
 );
 
@@ -44,7 +43,7 @@ export const PermissionsPanel: React.FC = () => {
             onClick={() => { void matrix.refresh(); }}
             className="inline-flex items-center gap-1.5 rounded-md border border-[var(--osio-border-default)] px-2.5 py-1 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
           >
-            <RefreshCw size={12} /> Refresh
+            <RefreshCw size={14} /> Refresh
           </button>
         </SectionTitle>
         <p className="text-sm text-[var(--osio-fg-muted)]">

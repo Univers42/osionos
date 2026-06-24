@@ -31,17 +31,17 @@ export const MatrixGrid: React.FC<MatrixGridProps> = ({ roles, resources, saving
   });
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-[var(--osio-border-default)]">
+    <div className="overflow-x-auto rounded-lg border border-[var(--osio-db-line)]">
       <table className="w-full min-w-[640px] text-sm">
         <thead className="bg-[var(--osio-bg-subtle)] text-left text-xs font-medium text-[var(--osio-fg-muted)]">
           <tr>
-            <th className="sticky left-0 bg-[var(--osio-bg-subtle)] px-3 py-2">Role</th>
+            <th className="sticky left-0 border-b border-[var(--osio-db-line)] bg-[var(--osio-bg-subtle)] px-3 py-2">Role</th>
             {resources.map((resource) => (
-              <th key={resource} className="px-1 py-2 text-center font-mono text-[11px]">{resource}</th>
+              <th key={resource} className="border-b border-[var(--osio-db-line)] px-1 py-2 text-center font-mono text-[11px]">{resource}</th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-[var(--osio-border-default)]">
+        <tbody className="divide-y divide-[var(--osio-db-line-soft)]">
           {orderedRoles.map((role) => (
             <tr key={role.id} className="hover:bg-[var(--osio-bg-hover)]/40">
               <td className="sticky left-0 max-w-[180px] bg-[var(--osio-bg-surface)] px-3 py-1">

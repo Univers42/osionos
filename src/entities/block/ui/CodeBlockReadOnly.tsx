@@ -45,7 +45,7 @@ export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
   return (
     <div
       data-code-theme={block.codeTheme ?? "dark"}
-      className="osio-code-card my-3 overflow-hidden rounded-xl border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-code-shadow)] ring-1 ring-inset ring-[var(--osio-code-ring)]"
+      className="osio-code-card my-3 overflow-hidden rounded-[var(--osio-radius-lg)] border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-code-shadow)] ring-1 ring-inset ring-[var(--osio-code-ring)]"
     >
       <div className="flex items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
         <span aria-hidden className="flex shrink-0 items-center gap-1.5">

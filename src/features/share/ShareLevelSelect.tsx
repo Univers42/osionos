@@ -33,7 +33,7 @@ interface ShareLevelSelectProps {
 
 /** The five-level access dropdown used on every share row. */
 export const ShareLevelSelect: React.FC<ShareLevelSelectProps> = ({ value, disabled = false, onChange }) => (
-  <div className={disabled ? 'pointer-events-none opacity-50' : ''}>
+  <div className={disabled ? 'pointer-events-none cursor-not-allowed opacity-60' : ''}>
     <Dropdown
       value={value}
       options={OPTIONS}

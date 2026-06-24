@@ -530,7 +530,7 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex min-h-16 items-center justify-between gap-3 border-b border-[var(--osio-border-default)] px-5">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--osio-accent-soft)] text-[var(--osio-accent)]">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--osio-accent-subtle)] text-[var(--osio-accent)]">
               <Bot size={18} aria-hidden="true" />
             </span>
             <div className="min-w-0">
@@ -579,7 +579,7 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
           </div>
           <div className="mx-auto mt-2 flex max-w-4xl flex-wrap gap-1.5">
             {TOOL_OPTIONS.map((tool) => (
-              <button key={tool.value} type="button" aria-pressed={settings.allowedTools.includes(tool.value)} data-agent-tool-toggle={tool.value} onClick={() => toggleTool(tool.value)} className="h-7 rounded-md border border-[var(--osio-border-default)] px-2 text-xs text-[var(--osio-fg-muted)] aria-pressed:border-[var(--osio-accent)] aria-pressed:bg-[var(--osio-accent-soft)] aria-pressed:text-[var(--osio-accent)] hover:bg-[var(--osio-bg-hover)]">
+              <button key={tool.value} type="button" aria-pressed={settings.allowedTools.includes(tool.value)} data-agent-tool-toggle={tool.value} onClick={() => toggleTool(tool.value)} className="h-7 rounded-md border border-[var(--osio-border-default)] px-2 text-xs text-[var(--osio-fg-muted)] transition-colors aria-pressed:border-[var(--osio-accent)] aria-pressed:bg-[var(--osio-accent-subtle)] aria-pressed:text-[var(--osio-accent-text)] hover:bg-[var(--osio-bg-hover)]">
                 {tool.label}
               </button>
             ))}

@@ -37,7 +37,7 @@ export const TabStrip: React.FC<{ pane: PaneNode }> = ({ pane }) => {
 
   return (
     <div
-      className="flex items-stretch h-8 shrink-0 bg-[var(--osio-bg-muted)] border-b border-[var(--osio-border)]"
+      className="flex items-stretch h-8 shrink-0 bg-[var(--osio-bg-muted)] border-b border-[var(--osio-border-default)]"
       onMouseDown={() => setActivePane(pane.id)}
       onDragOver={tabDragActive ? (e) => e.preventDefault() : undefined}
       onDrop={tabDragActive ? onStripDrop : undefined}
