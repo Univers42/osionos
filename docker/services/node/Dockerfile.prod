@@ -18,6 +18,8 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 
 COPY index.html tsconfig.json vite.config.ts eslint.config.js ./
 COPY src ./src
+COPY packages ./packages
+COPY public ./public
 COPY config ./config
 
 ARG VITE_API_URL=""
@@ -34,7 +36,10 @@ ENV VITE_BAAS_ANON_KEY=$VITE_BAAS_ANON_KEY
 # Build, then strip source maps from the shipped image (they tripled its size
 # and leak source) and precompress static assets so nginx's gzip_static
 # serves them with zero CPU per request.
-RUN pnpm run build \
+# Invoke vite directly (not `pnpm run build`, which shells out to
+# bash scripts/docker-run.sh — bash is absent in node:alpine). Type-checking
+# is the CI `quality` job's responsibility; the image only needs the bundle.
+RUN pnpm exec vite build \
  && find build -name '*.map' -delete \
  && find build -type f \( -name '*.js' -o -name '*.css' -o -name '*.svg' \
       -o -name '*.json' -o -name '*.wasm' \) -size +1k -print0 \
