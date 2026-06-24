@@ -43,9 +43,15 @@ if (root) {
           prefers-reduced-motion preference for every motion component (WCAG
           2.3.3). `reducedMotion="user"` is the recommended default. */}
       <MotionConfig reducedMotion="user">
-        <Profiler id="App" onRender={recordReactCommit}>
+        {/* Profiler only in dev: it wraps the whole tree and fires onRender on
+            every commit — pure overhead (TBT) in production builds. */}
+        {import.meta.env.DEV ? (
+          <Profiler id="App" onRender={recordReactCommit}>
+            <App />
+          </Profiler>
+        ) : (
           <App />
-        </Profiler>
+        )}
       </MotionConfig>
     </StrictMode>,
   );

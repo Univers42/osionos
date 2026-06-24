@@ -11,7 +11,10 @@
 /* ************************************************************************** */
 
 @import "tailwindcss";
-@import "highlight.js/styles/github.css";
+/* highlight.js base theme intentionally NOT imported eagerly (perf P2): the
+   .hljs-* rules further down fully recolor every token via --osio-syntax-*, so
+   the upstream github.css was redundant and only bloated the render-blocking
+   entry CSS. Keep code-block colors driven by tokens below. */
 
 /*
  * osionos design tokens
@@ -43,14 +46,35 @@
   --color-osio-accent: var(--osio-accent);
   --color-osio-accent-hover: var(--osio-accent-hover);
   --color-osio-accent-fg: var(--osio-accent-fg);
+  --color-osio-accent-text: var(--osio-accent-text);
+  --color-osio-accent-subtle: var(--osio-accent-subtle);
   --color-osio-danger: var(--osio-danger);
   --color-osio-danger-hover: var(--osio-danger-hover);
   --color-osio-danger-fg: var(--osio-danger-fg);
   --color-osio-success: var(--osio-success);
   --color-osio-success-hover: var(--osio-success-hover);
   --color-osio-success-fg: var(--osio-success-fg);
+  --color-osio-warning: var(--osio-warning);
+  --color-osio-warning-fg: var(--osio-warning-fg);
 
   --spacing: var(--osio-space-1);
+
+  /* Radius scale → rounded-xs/sm/md/lg utilities resolve to tokens */
+  --radius-xs: var(--osio-radius-xs);
+  --radius-sm: var(--osio-radius-sm);
+  --radius-md: var(--osio-radius);
+  --radius-lg: var(--osio-radius-lg);
+  --radius-full: var(--osio-radius-full);
+
+  /* Token-backed font families */
+  --font-sans: var(--osio-font-family-sans);
+  --font-serif: var(--osio-font-family-serif);
+  --font-mono: var(--osio-font-family-mono);
+
+  /* Elevation utilities (shadow-menu / shadow-modal) */
+  --shadow-osio-sm: var(--osio-shadow-sm);
+  --shadow-osio-menu: var(--osio-shadow-menu);
+  --shadow-osio-modal: var(--osio-shadow-modal);
 
   --text-xs: var(--osio-font-size-xs);
   --text-xs--line-height: var(--osio-line-height-tight);
@@ -82,8 +106,13 @@
   --osio-space-11: 44px;
   --osio-space-12: 48px;
 
-  --osio-font-family-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
-  --osio-font-family-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  /* Editorial pairing: Inter (UI/body) + Newsreader (serif headings) + JetBrains
+     Mono (code). Web faces load via @font-face (self-hosted, see fonts.css); the
+     system stacks below are metric-matched fallbacks so missing faces degrade
+     gracefully with no layout shift. */
+  --osio-font-family-sans: "InterVariable", "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+  --osio-font-family-serif: "Newsreader", Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --osio-font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
   --osio-font-size-xs: 12px;
   --osio-font-size-sm: 13px;
   --osio-font-size-base: 14px;
@@ -116,130 +145,173 @@
   --osio-cell-max-content-width: 960px;
   --osio-cell-padding-inline: clamp(12px, 2vw, 24px);
   --osio-cell-padding-block: clamp(10px, 1.6vw, 20px);
-  --osio-motion-standard: 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --osio-motion-standard: 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --osio-motion-fast: 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --osio-motion-slow: 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --osio-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Radius scale — editorial: cards/code/callouts 10-12px, controls 6-8px */
+  --osio-radius-xs: 4px;
+  --osio-radius-sm: 6px;
+  --osio-radius: 8px;
+  --osio-radius-lg: 12px;
+  --osio-radius-full: 9999px;
+  --osio-border-width: 1px;
+
+  /* Comfortable reading-column width for the editorial page surface */
+  --osio-page-max-width: 740px;
 }
 
 :root,
 [data-theme="light"] {
-  --osio-bg-page: #FFFFFF;
+  /* Warm editorial (Claude-docs) — cream canvas + white sheet. */
+  --osio-bg-page: #FAF9F5;
   --osio-bg-surface: #FFFFFF;
-  --osio-bg-subtle: #F8F7F4;
-  --osio-bg-muted: #EFEDE8;
+  --osio-bg-subtle: #F5F3EC;
+  --osio-bg-muted: #EFEDE4;
   --osio-bg-elevated: #FFFFFF;
-  --osio-bg-hover: #EDEBE6;
+  --osio-bg-hover: #F0EEE6;
+  --osio-bg-panel: #FFFFFF;
 
-  --osio-fg-default: #1F2933;
-  --osio-fg-muted: #4F5B66;
-  --osio-fg-subtle: #5F6B76;
-  --osio-fg-strong: #0B1220;
+  --osio-fg-default: #1A1A18;
+  --osio-fg-muted: #6B6862;
+  --osio-fg-subtle: #6F6B63;
+  --osio-fg-strong: #0F0F0E;
   --osio-fg-inverse: #FFFFFF;
 
-  --osio-border-default: #767676;
-  --osio-border-strong: #4F5B66;
-  /* Hairlines for dense data grids (database embeds): --osio-border-default is
-     tuned for control outlines and is far too heavy repeated per table row. */
-  --osio-db-line: color-mix(in srgb, var(--osio-border-default) 32%, transparent);
-  --osio-db-line-soft: color-mix(in srgb, var(--osio-border-default) 18%, transparent);
-  --osio-accent: #0B63CE;
-  --osio-accent-hover: #084A9A;
+  --osio-border-default: #EBE8E0;
+  --osio-border-strong: #DAD6CB;
+  --osio-border: #EBE8E0;
+  /* Hairlines for dense data grids (derive from the stronger border so light
+     hairlines remain visible per table row). */
+  --osio-db-line: color-mix(in srgb, var(--osio-border-strong) 70%, transparent);
+  --osio-db-line-soft: color-mix(in srgb, var(--osio-border-strong) 42%, transparent);
+
+  /* Terracotta accent. --osio-accent drives fills/active/focus/icons (3:1+ ok);
+     small accent text/links MUST use --osio-accent-text for AA (#CC785C as text
+     on white is only ~3.4:1). */
+  --osio-accent: #CC785C;
+  --osio-accent-hover: #BD6A4D;
   --osio-accent-fg: #FFFFFF;
+  --osio-accent-text: #B5532E;
+  --osio-accent-subtle: #F7ECE5;
+
   --osio-danger: #B42318;
   --osio-danger-hover: #8E1C13;
   --osio-danger-fg: #FFFFFF;
-  --osio-success: #1F6B3A;
-  --osio-success-hover: #15522A;
+  --osio-success: #287D3C;
+  --osio-success-hover: #1F6330;
   --osio-success-fg: #FFFFFF;
-  --osio-overlay: rgba(11, 18, 32, 0.45);
+  --osio-warning: #B45309;
+  --osio-warning-fg: #FFFFFF;
+  --osio-overlay: rgba(26, 26, 24, 0.42);
 
-  --osio-block-tint-gray-fg: #4F5B66;
-  --osio-block-tint-gray-bg: #EFEDE8;
-  --osio-block-tint-brown-fg: #7A3E12;
-  --osio-block-tint-brown-bg: #F3DFD0;
-  --osio-block-tint-orange-fg: #8A3B12;
-  --osio-block-tint-orange-bg: #F7D9C4;
-  --osio-block-tint-yellow-fg: #6F5200;
-  --osio-block-tint-yellow-bg: #F3E7B3;
-  --osio-block-tint-green-fg: #1F6B3A;
-  --osio-block-tint-green-bg: #D6E9D8;
-  --osio-block-tint-blue-fg: #0B63CE;
-  --osio-block-tint-blue-bg: #D8E7FA;
-  --osio-block-tint-purple-fg: #6741A5;
-  --osio-block-tint-purple-bg: #E4DDF4;
-  --osio-block-tint-pink-fg: #9D2F68;
-  --osio-block-tint-pink-bg: #F2D8E7;
+  /* Soft warm elevation — only floating layers cast a shadow. */
+  --osio-shadow-sm: 0 1px 2px rgba(40, 33, 24, 0.05);
+  --osio-shadow-menu: 0 4px 14px rgba(40, 33, 24, 0.08), 0 1px 3px rgba(40, 33, 24, 0.05);
+  --osio-shadow-modal: 0 16px 40px rgba(40, 33, 24, 0.12), 0 2px 8px rgba(40, 33, 24, 0.07);
+
+  --osio-block-tint-gray-fg: #6B6862;
+  --osio-block-tint-gray-bg: #F0EEE6;
+  --osio-block-tint-brown-fg: #7A4A2B;
+  --osio-block-tint-brown-bg: #F1E7DD;
+  --osio-block-tint-orange-fg: #B45309;
+  --osio-block-tint-orange-bg: #FAEAD9;
+  --osio-block-tint-yellow-fg: #8A6A00;
+  --osio-block-tint-yellow-bg: #F7EFCF;
+  --osio-block-tint-green-fg: #287D3C;
+  --osio-block-tint-green-bg: #E5EFDF;
+  --osio-block-tint-blue-fg: #1F6FB2;
+  --osio-block-tint-blue-bg: #E4EEF3;
+  --osio-block-tint-purple-fg: #7156A5;
+  --osio-block-tint-purple-bg: #ECE7F3;
+  --osio-block-tint-pink-fg: #A84A78;
+  --osio-block-tint-pink-bg: #F4E6EC;
   --osio-block-tint-red-fg: #B42318;
-  --osio-block-tint-red-bg: #F5D8D5;
+  --osio-block-tint-red-bg: #F6E5E1;
 
-  --osio-syntax-keyword: #A626A4;
-  --osio-syntax-string: #0B6B49;
-  --osio-syntax-number: #0B63CE;
-  --osio-syntax-comment: #5F6B76;
-  --osio-syntax-function: #8250DF;
-  --osio-syntax-type: #953800;
-  --osio-syntax-property: #0550AE;
-  --osio-syntax-tag: #116329;
-  --osio-syntax-attr: #6F42C1;
-  --osio-syntax-literal: #0A3069;
+  --osio-syntax-keyword: #B5532E;
+  --osio-syntax-string: #287D3C;
+  --osio-syntax-number: #1F6FB2;
+  --osio-syntax-comment: #8C877D;
+  --osio-syntax-function: #7156A5;
+  --osio-syntax-type: #9A5418;
+  --osio-syntax-property: #1F6FB2;
+  --osio-syntax-tag: #287D3C;
+  --osio-syntax-attr: #7156A5;
+  --osio-syntax-literal: #6B4A2E;
 }
 
 [data-theme="dark"] {
-  --osio-bg-page: #111317;
-  --osio-bg-surface: #1A1D21;
-  --osio-bg-subtle: #22262B;
-  --osio-bg-muted: #2B3036;
-  --osio-bg-elevated: #22262B;
-  --osio-bg-hover: #30363D;
+  /* Warm charcoal parity. */
+  --osio-bg-page: #1B1A17;
+  --osio-bg-surface: #242120;
+  --osio-bg-subtle: #201E1B;
+  --osio-bg-muted: #2A2723;
+  --osio-bg-elevated: #2A2723;
+  --osio-bg-hover: #2F2B27;
+  --osio-bg-panel: #242120;
 
-  --osio-fg-default: #F3F4F6;
-  --osio-fg-muted: #C4CBD4;
-  --osio-fg-subtle: #AAB4C0;
-  --osio-fg-strong: #FFFFFF;
-  --osio-fg-inverse: #111317;
+  --osio-fg-default: #EDEAE3;
+  --osio-fg-muted: #A8A399;
+  --osio-fg-subtle: #8C877D;
+  --osio-fg-strong: #FBF8F2;
+  --osio-fg-inverse: #1B1A17;
 
-  --osio-border-default: #8B949E;
-  --osio-border-strong: #C4CBD4;
-  --osio-db-line: color-mix(in srgb, var(--osio-border-default) 45%, transparent);
-  --osio-db-line-soft: color-mix(in srgb, var(--osio-border-default) 26%, transparent);
-  --osio-accent: #7AB8FF;
-  --osio-accent-hover: #A7D0FF;
-  --osio-accent-fg: #0B1220;
-  --osio-danger: #FFB4AB;
-  --osio-danger-hover: #FFDAD6;
-  --osio-danger-fg: #0B1220;
-  --osio-success: #9BD9AE;
-  --osio-success-hover: #C1E8CC;
-  --osio-success-fg: #0B1220;
-  --osio-overlay: rgba(0, 0, 0, 0.72);
+  --osio-border-default: #353029;
+  --osio-border-strong: #463F36;
+  --osio-border: #353029;
+  --osio-db-line: color-mix(in srgb, var(--osio-border-strong) 80%, transparent);
+  --osio-db-line-soft: color-mix(in srgb, var(--osio-border-strong) 50%, transparent);
+  /* On dark, the lighter terracotta clears AA as text too. */
+  --osio-accent: #E0937A;
+  --osio-accent-hover: #E8A78F;
+  --osio-accent-fg: #1B1A17;
+  --osio-accent-text: #E8A78F;
+  --osio-accent-subtle: #33241E;
+  --osio-danger: #F2998C;
+  --osio-danger-hover: #F7B6AD;
+  --osio-danger-fg: #1B1A17;
+  --osio-success: #6FC27F;
+  --osio-success-hover: #93D49F;
+  --osio-success-fg: #1B1A17;
+  --osio-warning: #E0A958;
+  --osio-warning-fg: #1B1A17;
+  --osio-overlay: rgba(0, 0, 0, 0.6);
 
-  --osio-block-tint-gray-fg: #D1D5DB;
-  --osio-block-tint-gray-bg: #2B3036;
-  --osio-block-tint-brown-fg: #F5CBA7;
-  --osio-block-tint-brown-bg: #3A2619;
-  --osio-block-tint-orange-fg: #FFC49A;
-  --osio-block-tint-orange-bg: #3D2416;
-  --osio-block-tint-yellow-fg: #F1D36B;
-  --osio-block-tint-yellow-bg: #382F14;
-  --osio-block-tint-green-fg: #9BD9AE;
-  --osio-block-tint-green-bg: #1F3325;
-  --osio-block-tint-blue-fg: #A7D0FF;
-  --osio-block-tint-blue-bg: #1B2E45;
-  --osio-block-tint-purple-fg: #D4BFFF;
-  --osio-block-tint-purple-bg: #2E2544;
-  --osio-block-tint-pink-fg: #F4B8D3;
-  --osio-block-tint-pink-bg: #3C2030;
-  --osio-block-tint-red-fg: #FFB4AB;
-  --osio-block-tint-red-bg: #3E211E;
+  --osio-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --osio-shadow-menu: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --osio-shadow-modal: 0 18px 44px rgba(0, 0, 0, 0.6);
 
-  --osio-syntax-keyword: #D2A8FF;
-  --osio-syntax-string: #A5D6FF;
-  --osio-syntax-number: #79C0FF;
-  --osio-syntax-comment: #AAB4C0;
-  --osio-syntax-function: #D2A8FF;
-  --osio-syntax-type: #FFA657;
-  --osio-syntax-property: #79C0FF;
-  --osio-syntax-tag: #7EE787;
-  --osio-syntax-attr: #D2A8FF;
-  --osio-syntax-literal: #79C0FF;
+  --osio-block-tint-gray-fg: #B7B2A8;
+  --osio-block-tint-gray-bg: #2A2723;
+  --osio-block-tint-brown-fg: #D9B89C;
+  --osio-block-tint-brown-bg: #2C2118;
+  --osio-block-tint-orange-fg: #E0A958;
+  --osio-block-tint-orange-bg: #2E2114;
+  --osio-block-tint-yellow-fg: #DBC56A;
+  --osio-block-tint-yellow-bg: #2A2613;
+  --osio-block-tint-green-fg: #6FC27F;
+  --osio-block-tint-green-bg: #1B2A1E;
+  --osio-block-tint-blue-fg: #8FC2DE;
+  --osio-block-tint-blue-bg: #18242C;
+  --osio-block-tint-purple-fg: #C3AEE6;
+  --osio-block-tint-purple-bg: #241D33;
+  --osio-block-tint-pink-fg: #E5A8C2;
+  --osio-block-tint-pink-bg: #2C1B24;
+  --osio-block-tint-red-fg: #F2998C;
+  --osio-block-tint-red-bg: #2E1A17;
+
+  --osio-syntax-keyword: #E8A78F;
+  --osio-syntax-string: #9BD9AE;
+  --osio-syntax-number: #8FC2DE;
+  --osio-syntax-comment: #8C877D;
+  --osio-syntax-function: #C3AEE6;
+  --osio-syntax-type: #E0A958;
+  --osio-syntax-property: #8FC2DE;
+  --osio-syntax-tag: #9BD9AE;
+  --osio-syntax-attr: #C3AEE6;
+  --osio-syntax-literal: #8FC2DE;
 }
 
 :root,
@@ -261,6 +333,9 @@
   --color-text-danger: var(--osio-danger);
   --color-text-success: var(--osio-success);
   --color-backdrop: var(--osio-overlay);
+
+  /* Fix latent undefined token referenced by notionPage.css/components. */
+  --osio-shadow: var(--osio-shadow-menu);
 
   /* @osionos/graph-engine — the graph follows the app theme. Light gets a
      "paper" variant (soft pastel aurora on near-white, ink labels, white node
@@ -341,9 +416,9 @@ body {
   pointer-events: none;
 }
 
-/* Selection */
+/* Selection — warm accent tint */
 ::selection {
-  background: rgba(35, 131, 226, 0.28);
+  background: color-mix(in srgb, var(--osio-accent) 26%, transparent);
 }
 
 .hljs {
@@ -481,7 +556,7 @@ body {
 
 /* Link and Mention Unification */
 .editor-link {
-  color: var(--osio-accent) !important;
+  color: var(--osio-accent-text) !important;
   text-decoration: underline !important;
   text-underline-offset: 0.14em !important;
   cursor: pointer !important;
@@ -493,7 +568,7 @@ body {
 }
 
 .editor-mention {
-  color: var(--osio-accent) !important;
+  color: var(--osio-accent-text) !important;
   text-decoration: none !important;
   background-color: var(--osio-bg-muted) !important;
   font-weight: 500 !important;
