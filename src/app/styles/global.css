@@ -16,6 +16,39 @@
    the upstream github.css was redundant and only bloated the render-blocking
    entry CSS. Keep code-block colors driven by tokens below. */
 
+/* Self-hosted variable web faces (woff2). font-display:swap so text paints with
+   the metric-matched fallbacks below, then swaps without blocking FCP. */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-latin-wght-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Newsreader";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("/fonts/newsreader-latin-wght-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2");
+}
+/* Metric-matched Inter fallback (over Arial) to kill swap CLS. */
+@font-face {
+  font-family: "Inter Fallback";
+  src: local("Arial");
+  ascent-override: 90%;
+  descent-override: 22.43%;
+  line-gap-override: 0%;
+  size-adjust: 107.12%;
+}
+
 /*
  * osionos design tokens
  *
@@ -110,9 +143,9 @@
      Mono (code). Web faces load via @font-face (self-hosted, see fonts.css); the
      system stacks below are metric-matched fallbacks so missing faces degrade
      gracefully with no layout shift. */
-  --osio-font-family-sans: "InterVariable", "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+  --osio-font-family-sans: "Inter Variable", "Inter Fallback", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   --osio-font-family-serif: "Newsreader", Georgia, "Iowan Old Style", "Times New Roman", serif;
-  --osio-font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+  --osio-font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Consolas, Menlo, monospace;
   --osio-font-size-xs: 12px;
   --osio-font-size-sm: 13px;
   --osio-font-size-base: 14px;
@@ -381,6 +414,19 @@ body {
 
 #root {
   height: 100%;
+}
+
+/* Global accent focus ring for every interactive element. */
+:where(a, button, [role="button"], input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--osio-accent);
+  outline-offset: 2px;
+  border-radius: var(--osio-radius-sm);
+}
+
+/* Editorial serif headings. */
+:where(h1, h2, h3, h4) {
+  font-family: var(--osio-font-family-serif);
+  letter-spacing: -0.01em;
 }
 
 /* Scrollbar styling */

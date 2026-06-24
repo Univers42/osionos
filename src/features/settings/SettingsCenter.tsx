@@ -10,7 +10,6 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-/* eslint-disable react/prop-types */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 // jszip / i18next / pdf-lib / qrcode are click-path only (export, language
 // change, invoice PDF, 2FA QR): they are imported dynamically at their call
