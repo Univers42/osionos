@@ -15,11 +15,16 @@ import { createRoot } from "react-dom/client";
 import { MotionConfig } from "motion/react";
 import App from "./App.tsx";
 import { recordReactCommit } from '@/shared/lib/perf/measure';
-import '@notion-db/object-database/theme.css';
-import 'leaflet/dist/leaflet.css';
+// Database (object-database) theme + leaflet styles ship with the lazy
+// DatabaseBlock chunk (perf: off the render-blocking entry CSS), not here.
 import './styles/_graphical-chart.scss';
 import './styles/global.css';
-import '@/shared/lib/perf/loadTest';
+
+// The load-test/perf harness is a dev-only tool — keep its store/perf code out
+// of the production entry bundle (cuts initial JS parse / TBT on mobile).
+if (import.meta.env.DEV) {
+  void import('@/shared/lib/perf/loadTest');
+}
 
 // Self-recover from stale lazy chunks after a redeploy: when a dynamic import
 // 404s (its hashed file was replaced), Vite fires `vite:preloadError`. Reload

@@ -13,6 +13,11 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { ObjectDatabase, type ObjectDatabaseProps } from '@notion-db/object-database';
+// Database engine styles ride with THIS lazy chunk, not the eager entry CSS
+// (perf): the object-database theme + leaflet (map view) only matter once a
+// database actually renders.
+import '@notion-db/object-database/theme.css';
+import 'leaflet/dist/leaflet.css';
 
 import type { Block } from '@/entities/block';
 import type { PageEntry, PagePropertyEntry } from '@/entities/page';
