@@ -39,7 +39,7 @@ export const PICKER_COLORS: ReadonlyArray<{ name: string; value: string }> = [
 ];
 
 const RAINBOW = "conic-gradient(from 210deg, #f43f5e, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #f43f5e)";
-const DOT = "h-6 w-6 rounded-full ring-1 ring-inset ring-black/10 transition hover:scale-110";
+const DOT = "h-6 w-6 rounded-full ring-1 ring-inset ring-[var(--osio-border-default)] transition-[box-shadow] duration-[120ms]";
 const SELECTED = "ring-2 ring-[var(--osio-accent)] ring-offset-2 ring-offset-[var(--osio-bg-surface)]";
 
 export const ColorSwatches: React.FC<{ value?: string; onChange: (color?: string) => void }> = ({ value, onChange }) => {

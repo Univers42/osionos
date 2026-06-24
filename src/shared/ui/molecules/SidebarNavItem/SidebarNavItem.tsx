@@ -43,7 +43,7 @@ export const SidebarNavItem: React.FC<SidebarNavItemProps> = ({
       : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]";
 
   const countBadge = count !== undefined && count > 0 ? (
-    <span className="flex h-4 min-w-[16px] items-center justify-center rounded bg-[var(--osio-danger)] px-[3px] text-xs font-semibold text-[var(--osio-danger-fg)]">
+    <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[var(--osio-danger)] px-[3px] text-xs font-semibold text-[var(--osio-danger-fg)]">
       {count}
     </span>
   ) : null;

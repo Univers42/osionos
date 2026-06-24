@@ -276,10 +276,10 @@ export const PageOptionsMenu: React.FC<Props> = ({
         size="xs"
         tone="muted"
         className={[
-          "rounded transition-colors",
+          "rounded-md transition-colors duration-[120ms]",
           isMenuOpen
             ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
-            : "hover:bg-[var(--osio-bg-subtle)]",
+            : "hover:bg-[var(--osio-bg-hover)]",
         ].join(" ")}
         onClick={(e) => {
           e.stopPropagation();

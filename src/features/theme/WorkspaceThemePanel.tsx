@@ -95,7 +95,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
     <div className={compact ? 'space-y-3' : 'space-y-3 overflow-y-auto p-4'}>
       <button
         type="button"
-        className={`w-full rounded-md border p-3 text-left transition ${
+        className={`w-full rounded-md border p-3 text-left transition-colors duration-[120ms] ${
           usingNativeAppTheme
             ? 'border-[var(--osio-accent)] bg-[var(--osio-bg-subtle)]'
             : 'border-[var(--osio-border-default)] hover:bg-[var(--osio-bg-hover)]'
@@ -115,7 +115,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
             <button
               type="button"
               key={preset.themeName}
-              className={`rounded-md border p-3 text-left transition ${
+              className={`rounded-md border p-3 text-left transition-colors duration-[120ms] ${
                 selected
                   ? 'border-[var(--osio-accent)] bg-[var(--osio-bg-subtle)]'
                   : 'border-[var(--osio-border-default)] hover:bg-[var(--osio-bg-hover)]'
@@ -144,7 +144,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
           <span className="text-sm font-medium text-[var(--osio-fg-default)]">JSON theme config</span>
           <button
             type="button"
-            className="rounded-md px-2 py-1 text-xs text-[var(--osio-accent)] hover:bg-[var(--osio-bg-hover)]"
+            className="rounded-md px-2 py-1 text-xs text-[var(--osio-accent-text)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
             onClick={() => runThemeAction(copyThemeJson())}
           >
             Copy current

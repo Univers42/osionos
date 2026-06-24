@@ -73,7 +73,7 @@ export const PaneSplitter: React.FC<Props> = ({ direction, onResizeStart, onResi
       aria-orientation={direction === "row" ? "vertical" : "horizontal"}
       onPointerDown={onPointerDown}
       className={[
-        "shrink-0 z-20 bg-[var(--osio-border)]/40 hover:bg-[var(--osio-accent)]/60 transition-colors",
+        "shrink-0 z-20 bg-[var(--osio-border-default)] hover:bg-[var(--osio-accent)]/60 transition-colors duration-[120ms]",
         direction === "row" ? "w-1.5 cursor-col-resize" : "h-1.5 cursor-row-resize",
         dragActive ? "pointer-events-none" : "",
       ].join(" ")}

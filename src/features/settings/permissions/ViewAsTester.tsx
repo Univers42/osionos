@@ -76,9 +76,9 @@ export const ViewAsTester: React.FC<ViewAsTesterProps> = ({ people, resources })
           type="button"
           disabled={pending}
           onClick={() => { void run(); }}
-          className="inline-flex items-center gap-1.5 rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-medium text-[var(--osio-accent-fg)] transition-colors duration-[120ms] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <Eye size={13} /> {pending ? 'Asking…' : 'Test access'}
+          <Eye size={14} /> {pending ? 'Asking…' : 'Test access'}
         </button>
       </div>
       {error && <p className="text-xs text-[var(--osio-danger)]">{error}</p>}

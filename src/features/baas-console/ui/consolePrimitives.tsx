@@ -69,13 +69,13 @@ export const ConsoleSection: React.FC<SectionProps> = ({ title, description, ico
 export const ConsoleRow: React.FC<RowProps> = ({ label, value, action, children }) => {
   if (children != null) {
     return (
-      <div className="flex items-center gap-3 py-2 border-b border-[var(--osio-border-default)] last:border-b-0 text-sm text-[var(--osio-fg-default)]">
+      <div className="flex items-center gap-3 py-2 border-b border-[var(--osio-db-line-soft)] last:border-b-0 text-sm text-[var(--osio-fg-default)]">
         {children}
       </div>
     );
   }
   return (
-    <div className="flex items-center justify-between gap-3 py-2 border-b border-[var(--osio-border-default)] last:border-b-0">
+    <div className="flex items-center justify-between gap-3 py-2 border-b border-[var(--osio-db-line-soft)] last:border-b-0">
       <span className="text-sm text-[var(--osio-fg-muted)] shrink-0">{label}</span>
       <span className="flex items-center gap-2 text-sm text-[var(--osio-fg-default)] min-w-0">
         {value != null && <span className="truncate">{value}</span>}
@@ -86,10 +86,10 @@ export const ConsoleRow: React.FC<RowProps> = ({ label, value, action, children 
 };
 
 const TONE_CLASS: Record<Tone, string> = {
-  default: "bg-[var(--osio-bg-hover)] text-[var(--osio-fg-default)] hover:opacity-90",
-  primary: "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] hover:opacity-90",
-  danger: "bg-[var(--osio-danger)] text-white hover:opacity-90",
-  ghost: "bg-transparent text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]",
+  default: "border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]",
+  primary: "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] hover:bg-[var(--osio-accent-hover)]",
+  danger: "bg-[var(--osio-danger)] text-[var(--osio-accent-fg)] hover:opacity-90",
+  ghost: "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
 };
 
 /** A console action button with a small set of semantic tones. */
@@ -98,7 +98,7 @@ export const ConsoleButton: React.FC<ButtonProps> = ({ onClick, tone = "default"
     type={type}
     onClick={onClick}
     disabled={disabled}
-    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${TONE_CLASS[tone]}`}
+    className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-[120ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:opacity-60 disabled:cursor-not-allowed ${TONE_CLASS[tone]}`}
   >
     {children}
   </button>

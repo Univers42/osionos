@@ -55,7 +55,7 @@ export const IconPicker: React.FC<Props> = ({ current, onSelect, onRemove, onClo
     <div
       ref={panelRef}
       data-testid="emoji-picker"
-      className="absolute left-0 top-[calc(100%+8px)] z-[1000] flex w-[340px] flex-col overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[0_18px_48px_rgba(15,23,42,0.18)]"
+      className="absolute left-0 top-[calc(100%+8px)] z-[1000] flex w-[340px] flex-col overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] shadow-[var(--osio-shadow-menu)]"
     >
       <div className="flex gap-1 border-b border-[var(--osio-border-default)] p-1.5">
         {TABS.map((t) => (
@@ -63,8 +63,8 @@ export const IconPicker: React.FC<Props> = ({ current, onSelect, onRemove, onClo
             key={t.id}
             type="button"
             onClick={() => { setTab(t.id); setQuery(""); }}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition ${
-              tab === t.id ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors duration-[120ms] ${
+              tab === t.id ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-strong)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
             }`}
           >
             {t.icon}
@@ -103,7 +103,7 @@ export const IconPicker: React.FC<Props> = ({ current, onSelect, onRemove, onClo
           type="button"
           data-testid="emoji-picker-remove"
           onClick={() => { onRemove(); onClose(); }}
-          className="rounded-md px-2.5 py-1.5 text-xs font-medium text-[var(--osio-fg-muted)] transition hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-danger)]"
+          className="rounded-md px-2.5 py-1.5 text-xs font-medium text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-danger)]"
         >
           Remove icon
         </button>

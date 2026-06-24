@@ -77,9 +77,9 @@ export const BaasConsolePanel: React.FC = () => {
             key={item.id}
             type="button"
             onClick={() => setActive(item.id)}
-            className={`px-2 py-1.5 rounded-md text-left text-sm transition-colors ${
+            className={`px-2 py-1.5 rounded-md text-left text-sm transition-colors duration-[120ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] ${
               active === item.id
-                ? "bg-[var(--osio-bg-hover)] text-[var(--osio-fg-default)] font-medium"
+                ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-strong)] font-medium"
                 : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
             }`}
           >

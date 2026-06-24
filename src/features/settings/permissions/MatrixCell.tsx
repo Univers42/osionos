@@ -38,12 +38,12 @@ export const MatrixCell: React.FC<MatrixCellProps> = ({ cell, roleName, resource
     title={`${roleName} × ${resource}: ${cell.level}${cell.masked ? ' (masked)' : ''} — click to cycle`}
     aria-label={`${roleName} on ${resource}: ${cell.level}. Click to cycle access.`}
     onClick={onCycle}
-    className={`relative flex h-8 w-full min-w-[52px] items-center justify-center rounded border border-transparent font-mono text-xs transition hover:border-[var(--osio-border-default)] hover:bg-[var(--osio-bg-hover)] disabled:opacity-50 ${LEVEL_CLASSES[cell.level]}`}
+    className={`relative flex h-8 w-full min-w-[52px] items-center justify-center rounded-md border border-transparent font-mono text-xs transition-colors duration-[120ms] hover:border-[var(--osio-db-line)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] disabled:cursor-not-allowed disabled:opacity-60 ${LEVEL_CLASSES[cell.level]}`}
   >
     {LEVEL_GLYPHS[cell.level]}
     {(cell.masked || cell.conditioned) && (
       <span className="absolute right-0.5 top-0.5 flex gap-0.5">
-        {cell.masked && <span className="rounded bg-[var(--osio-accent-soft,rgba(99,102,241,0.15))] px-0.5 text-[8px] leading-3 text-[var(--osio-accent)]">M</span>}
+        {cell.masked && <span className="rounded bg-[var(--osio-accent-subtle)] px-0.5 text-[8px] leading-3 text-[var(--osio-accent-text)]">M</span>}
         {cell.conditioned && <span className="rounded bg-[var(--osio-bg-subtle)] px-0.5 text-[8px] leading-3 text-[var(--osio-fg-muted)]">C</span>}
       </span>
     )}

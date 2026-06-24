@@ -56,7 +56,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       style={{ pointerEvents: "none" }}
     >
       <div
-        className="w-full max-w-[400px] animate-in overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-xl fade-in zoom-in duration-200"
+        className="w-full max-w-[400px] animate-in overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-modal)] fade-in zoom-in duration-200"
         style={{ pointerEvents: "auto" }}
       >
         <div className="flex items-center justify-between border-b border-[var(--osio-border-default)] px-4 py-3">
@@ -67,7 +67,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded p-1 text-[var(--osio-fg-subtle)] transition-colors hover:bg-[var(--osio-bg-hover)]"
+            className="rounded-md p-1 text-[var(--osio-fg-subtle)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
             aria-label="Close confirmation"
           >
             <X size={16} />
@@ -80,14 +80,14 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded border border-[var(--osio-border-default)] px-3 py-1.5 text-xs font-medium text-[var(--osio-fg-default)] transition-colors hover:bg-[var(--osio-bg-hover)]"
+            className="rounded-md border border-[var(--osio-border-default)] px-3 py-1.5 text-xs font-medium text-[var(--osio-fg-default)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
           >
             {cancelLabel}
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className={cx("rounded px-3 py-1.5 text-xs font-medium shadow-sm transition-colors", ACTION_CLASS[actionTone])}
+            className={cx("rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-[120ms]", ACTION_CLASS[actionTone])}
           >
             {confirmLabel}
           </button>

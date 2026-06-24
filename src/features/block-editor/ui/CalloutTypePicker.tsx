@@ -45,7 +45,7 @@ export const CalloutTypePicker: React.FC<Props> = ({ current, onSelect, onClose 
     <div
       role="menu"
       aria-label="Callout type"
-      className="absolute left-0 top-full z-50 mt-1 w-52 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-panel)] p-1 shadow-lg"
+      className="absolute left-0 top-full z-50 mt-1 w-52 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-panel)] p-1 shadow-[var(--osio-shadow-menu)]"
     >
       {CALLOUT_TYPES.map((type) => (
         <button

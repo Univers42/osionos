@@ -39,7 +39,7 @@ export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
     <div
       role="note"
       aria-label={`${type.label} callout`}
-      className="flex items-start gap-3 my-0.5 rounded-lg border p-3"
+      className="flex items-start gap-3 my-0.5 rounded-lg border-l-[3px] py-3 pl-4 pr-4"
       style={calloutSurface(type)}
     >
       {hasChildren ? (

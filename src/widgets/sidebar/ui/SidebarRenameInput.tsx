@@ -52,7 +52,7 @@ export const SidebarRenameInput: React.FC<Props> = ({ initialValue, onCommit, on
       onClick={(event) => event.stopPropagation()}
       onKeyDown={handleKeyDown}
       onBlur={() => onCommit(value.trim())}
-      className="flex min-w-0 flex-1 h-6 rounded-md border border-[var(--osio-accent)] bg-[var(--osio-bg-default)] px-1.5 text-sm text-[var(--osio-fg-default)] outline-none"
+      className="flex min-w-0 flex-1 h-6 rounded-md border border-[var(--osio-accent)] bg-[var(--osio-bg-surface)] px-1.5 text-sm text-[var(--osio-fg-default)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]"
     />
   );
 };

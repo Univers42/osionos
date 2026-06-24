@@ -33,7 +33,7 @@ function controlClass(active: boolean): string {
   const base = "inline-flex h-10 w-10 items-center justify-center rounded-full transition-colors";
   return active
     ? `${base} bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]`
-    : `${base} bg-red-500/15 text-red-400 hover:bg-red-500/25`;
+    : `${base} bg-[color-mix(in_srgb,var(--osio-danger)_15%,transparent)] text-[var(--osio-danger)] hover:bg-[color-mix(in_srgb,var(--osio-danger)_25%,transparent)]`;
 }
 
 export const RoomControls: React.FC<RoomControlsProps> = ({
@@ -76,7 +76,7 @@ export const RoomControls: React.FC<RoomControlsProps> = ({
     <button
       type="button"
       onClick={onLeave}
-      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-500"
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[var(--osio-danger)] px-4 text-sm font-semibold text-[var(--osio-danger-fg)] transition-colors hover:bg-[var(--osio-danger-hover)]"
       aria-label="Leave call"
     >
       <PhoneOff size={18} />

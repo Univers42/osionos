@@ -76,11 +76,11 @@ export function calloutDisplayIcon(color?: string | null): string {
   return /^[a-z]+$/i.test(raw) ? resolveCalloutType(raw).icon : raw;
 }
 
-/** Tint for the callout surface + border (NOT the body text). */
+/** Tint for the callout surface + 3px left accent rail (admonition pattern; NOT the body text). */
 export function calloutSurface(type: CalloutType): CSSProperties {
   return {
     backgroundColor: `var(--osio-block-tint-${type.tone}-bg)`,
-    borderColor: `var(--osio-block-tint-${type.tone}-fg)`,
+    borderLeftColor: `var(--osio-block-tint-${type.tone}-fg)`,
   };
 }
 

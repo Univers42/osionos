@@ -190,11 +190,10 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
 
   return (
     <div
-      className="flex flex-col overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
+      className="flex flex-col overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] shadow-[var(--osio-shadow-menu)]"
       style={{
         width,
         height,
-        boxShadow: '0 18px 48px rgba(15, 23, 42, 0.16)',
       }}
     >
       <div className="border-b border-[var(--osio-border-default)] px-2 py-2">
@@ -206,10 +205,10 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
                 key={option.id}
                 type="button"
                 className={[
-                  'h-8 rounded-md border px-3 text-xs font-medium transition-colors',
+                  'h-8 rounded-md border px-3 text-xs font-medium transition-colors duration-[120ms]',
                   isActive
-                    ? 'border-[var(--osio-accent)] bg-[color-mix(in_srgb,var(--osio-accent)_12%,transparent)] text-[var(--osio-accent)]'
-                    : 'border-transparent text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]',
+                    ? 'border-[var(--osio-accent)] bg-[var(--osio-accent-subtle)] text-[var(--osio-accent-text)]'
+                    : 'border-transparent text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]',
                 ].join(' ')}
                 onClick={() => setActiveSource(option.id)}
               >
@@ -230,10 +229,10 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
                   aria-label={category.label}
                   title={category.label}
                   className={[
-                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors',
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors duration-[120ms]',
                     isActive
-                      ? 'border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]'
-                      : 'border-transparent text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]',
+                      ? 'border-[var(--osio-border-default)] bg-[var(--osio-bg-muted)] text-[var(--osio-fg-strong)]'
+                      : 'border-transparent text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]',
                   ].join(' ')}
                   onClick={() => setActiveEmojiCategory(category.id)}
                 >

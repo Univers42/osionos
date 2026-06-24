@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useState } from 'react';
+import { Input } from '@/shared/ui';
 import type { EnginePolicyRow } from '@/features/share';
 
 interface ConditionEditorProps {
@@ -40,22 +41,20 @@ export const ConditionEditor: React.FC<ConditionEditorProps> = ({ policy, saving
     return next;
   }
 
-  const inputClass = 'w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1.5 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]';
-
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-3 gap-2">
         <label className="text-xs text-[var(--osio-fg-muted)]">
           Clearance (min)
-          <input className={`mt-1 ${inputClass}`} value={clearance} placeholder="e.g. 3" onChange={(event) => setClearance(event.target.value)} />
+          <Input className="mt-1" value={clearance} placeholder="e.g. 3" onChange={(event) => setClearance(event.target.value)} />
         </label>
         <label className="text-xs text-[var(--osio-fg-muted)]">
           Department
-          <input className={`mt-1 ${inputClass}`} value={department} placeholder="e.g. operations" onChange={(event) => setDepartment(event.target.value)} />
+          <Input className="mt-1" value={department} placeholder="e.g. operations" onChange={(event) => setDepartment(event.target.value)} />
         </label>
         <label className="text-xs text-[var(--osio-fg-muted)]">
           Time window
-          <input className={`mt-1 ${inputClass}`} value={timeWindow} placeholder="e.g. 08:00-20:00" onChange={(event) => setTimeWindow(event.target.value)} />
+          <Input className="mt-1" value={timeWindow} placeholder="e.g. 08:00-20:00" onChange={(event) => setTimeWindow(event.target.value)} />
         </label>
       </div>
       <div className="flex items-center justify-between">
@@ -64,7 +63,7 @@ export const ConditionEditor: React.FC<ConditionEditorProps> = ({ policy, saving
           type="button"
           disabled={saving}
           onClick={() => onSave(buildConditions())}
-          className="shrink-0 rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90 disabled:opacity-50"
+          className="shrink-0 rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-medium text-[var(--osio-accent-fg)] transition-colors duration-[120ms] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Save conditions
         </button>

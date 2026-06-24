@@ -12,6 +12,7 @@
 
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import { Input } from '@/shared/ui';
 import type { EnginePolicyRow } from '@/features/share';
 
 interface FieldMaskEditorProps {
@@ -53,8 +54,7 @@ export const FieldMaskEditor: React.FC<FieldMaskEditorProps> = ({ policy, saving
     onSave(conditions);
   }
 
-  const chipClass = 'inline-flex items-center gap-1 rounded bg-[var(--osio-bg-subtle)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--osio-fg-default)]';
-  const inputClass = 'rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-xs text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]';
+  const chipClass = 'inline-flex items-center gap-1 rounded-md bg-[var(--osio-bg-subtle)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--osio-fg-default)]';
 
   return (
     <div className="space-y-2 text-sm">
@@ -66,7 +66,7 @@ export const FieldMaskEditor: React.FC<FieldMaskEditorProps> = ({ policy, saving
             <button type="button" aria-label={`Stop hiding ${field}`} disabled={saving} onClick={() => persist(hide.filter((f) => f !== field), redact)}><X size={10} /></button>
           </span>
         ))}
-        <input className={`${inputClass} w-28`} value={hideDraft} placeholder="field name" onChange={(event) => setHideDraft(event.target.value)}
+        <Input className="w-28" value={hideDraft} placeholder="field name" onChange={(event) => setHideDraft(event.target.value)}
           onKeyDown={(event) => { if (event.key === 'Enter' && hideDraft.trim()) { persist([...hide, hideDraft.trim()], redact); setHideDraft(''); } }} />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -77,12 +77,12 @@ export const FieldMaskEditor: React.FC<FieldMaskEditorProps> = ({ policy, saving
             <button type="button" aria-label={`Stop redacting ${field}`} disabled={saving} onClick={() => { const next = { ...redact }; delete next[field]; persist(hide, next); }}><X size={10} /></button>
           </span>
         ))}
-        <input className={`${inputClass} w-24`} value={redactField} placeholder="field" onChange={(event) => setRedactField(event.target.value)} />
-        <input className={`${inputClass} w-16`} value={redactValue} placeholder="***" onChange={(event) => setRedactValue(event.target.value)} />
+        <Input className="w-24" value={redactField} placeholder="field" onChange={(event) => setRedactField(event.target.value)} />
+        <Input className="w-16" value={redactValue} placeholder="***" onChange={(event) => setRedactValue(event.target.value)} />
         <button
           type="button"
           disabled={saving || !redactField.trim()}
-          className="rounded-md border border-[var(--osio-border-default)] px-2 py-1 text-xs hover:bg-[var(--osio-bg-hover)] disabled:opacity-50"
+          className="rounded-md border border-[var(--osio-border-default)] px-2 py-1.5 text-xs transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           onClick={() => { persist(hide, { ...redact, [redactField.trim()]: redactValue || '***' }); setRedactField(''); }}
         >
           Add

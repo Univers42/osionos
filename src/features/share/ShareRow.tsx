@@ -45,7 +45,7 @@ function initialsBadge(name: string): React.ReactNode {
 export const ShareRow: React.FC<ShareRowProps> = ({ entry, busy = false, onLevel, onRemove }) => {
   const identity = rowIdentity(entry);
   return (
-    <div className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-[var(--osio-bg-hover)]">
+    <div className="flex items-center gap-3 rounded-md px-2 py-1.5 transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-muted)]">
         {identity.icon}
       </span>
@@ -57,7 +57,7 @@ export const ShareRow: React.FC<ShareRowProps> = ({ entry, busy = false, onLevel
       <button
         type="button"
         aria-label={`Remove access for ${identity.title}`}
-        className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-danger)]"
+        className="rounded-md p-1 text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-danger)] disabled:cursor-not-allowed disabled:opacity-60"
         onClick={onRemove}
         disabled={busy}
       >

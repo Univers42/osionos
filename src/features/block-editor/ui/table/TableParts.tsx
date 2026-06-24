@@ -51,7 +51,7 @@ export const TableDataRow = React.memo(function TableDataRow({ row, rowIndex, co
     const isHeader = (config.headerRow !== false && rowIndex === 0) || (config.headerColumn === true && columnIndex === 0);
     const cellId = `${rowIndex}:${columnIndex}`;
     return (
-      <td key={getCellKey(rowIndex, columnIndex)} id={`tcell-${rowIndex}-${columnIndex}`} role="gridcell" aria-selected={selectedCell === cellId ? "true" : undefined} aria-rowindex={rowIndex + 1} aria-colindex={columnIndex + 1} data-table-cell={cellId} className={`${getCellFrameClassName(config, alignment, rowIndex, columnIndex)}${selectedCell === cellId ? " z-[var(--osio-z-raised)] outline outline-2 -outline-offset-1 outline-[var(--osio-accent)]" : ""}`} style={textStyle}>
+      <td key={getCellKey(rowIndex, columnIndex)} id={`tcell-${rowIndex}-${columnIndex}`} role="gridcell" aria-selected={selectedCell === cellId ? "true" : undefined} aria-rowindex={rowIndex + 1} aria-colindex={columnIndex + 1} data-table-cell={cellId} className={`${getCellFrameClassName(config, alignment, rowIndex, columnIndex)}${selectedCell === cellId ? " z-[var(--osio-z-raised)] bg-[var(--osio-bg-muted)] outline outline-2 -outline-offset-1 outline-[var(--osio-accent)]" : ""}`} style={textStyle}>
         <EditableTableCell cellId={cellId} initialValue={row[columnIndex] ?? ""} rowIndex={rowIndex} columnIndex={columnIndex} alignment={alignment} onCommit={commitHandlers[columnIndex]} isHeader={isHeader} onKeyDown={onCellKeyDown} onFocus={onCellFocus} />
         {rowIndex === 0 ? <ColumnResizeDivider columnIndex={columnIndex} onPointerDown={onColumnResize} /> : null}
         {columnIndex === 0 ? <RowResizeDivider rowIndex={rowIndex} onPointerDown={onRowResize} /> : null}
@@ -72,7 +72,7 @@ function RowDragHandle({ rowIndex, onPointerDown, onMenuKey }: Readonly<{ rowInd
       aria-label={`Row ${rowIndex + 1} options — drag to reorder`}
       onPointerDown={(event) => onPointerDown(event, rowIndex)}
       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); onMenuKey(rowIndex, rect.right + 4, rect.top); } }}
-      className="absolute left-0 top-1/2 z-[var(--osio-z-raised)] flex h-5 w-4 -translate-y-1/2 cursor-grab touch-none items-center justify-center rounded bg-[var(--osio-bg-surface)]/90 text-[var(--osio-fg-muted)] opacity-0 shadow-sm transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)] focus-visible:opacity-100 group-hover/table:opacity-50 group-hover/row:opacity-100 active:cursor-grabbing"
+      className="absolute left-0 top-1/2 z-[var(--osio-z-raised)] flex h-5 w-4 -translate-y-1/2 cursor-grab touch-none items-center justify-center rounded-md bg-[var(--osio-bg-surface)]/90 text-[var(--osio-fg-muted)] opacity-0 shadow-[var(--osio-shadow-sm)] transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:opacity-100 group-hover/table:opacity-50 group-hover/row:opacity-100 active:cursor-grabbing"
     >
       <GripVertical size={14} />
     </button>
@@ -145,7 +145,7 @@ function getRowClassName(rowIndex: number, config: TableBlockConfig): string {
 }
 
 function getCellFrameClassName(config: TableBlockConfig, alignment: TableBlockTextAlign, rowIndex: number, columnIndex: number): string {
-  return ["relative text-[var(--osio-fg-default)] align-top focus-within:bg-[var(--osio-bg-hover)]", getTablePaddingClassName(config.cellPadding), getTableAlignmentClassName(alignment), config.wrap === false ? "whitespace-nowrap" : "whitespace-normal break-words", config.showBorders === false ? "" : "border-b border-r border-[var(--osio-border-default)] last:border-r-0", config.headerColumn && columnIndex === 0 ? "font-medium bg-[var(--osio-bg-subtle)]" : "", config.headerRow !== false && rowIndex === 0 ? "font-medium" : ""].filter(Boolean).join(" ");
+  return ["relative text-[var(--osio-fg-default)] align-top focus-within:bg-[var(--osio-bg-hover)]", getTablePaddingClassName(config.cellPadding), getTableAlignmentClassName(alignment), config.wrap === false ? "whitespace-nowrap" : "whitespace-normal break-words", config.showBorders === false ? "" : "border-b border-r border-[var(--osio-db-line)] last:border-r-0", config.headerColumn && columnIndex === 0 ? "font-medium bg-[var(--osio-bg-subtle)]" : "", config.headerRow !== false && rowIndex === 0 ? "font-medium" : ""].filter(Boolean).join(" ");
 }
 
 function areCellsEqual(previous: Readonly<EditableTableCellProps>, next: Readonly<EditableTableCellProps>): boolean {

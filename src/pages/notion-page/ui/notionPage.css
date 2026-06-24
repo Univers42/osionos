@@ -106,7 +106,7 @@
 .osionos-page-properties,
 .osionos-page-body {
   box-sizing: border-box;
-  max-width: var(--page-content-max-width, 900px);
+  max-width: var(--page-content-max-width, var(--osio-page-max-width, 900px));
   width: 100%;
   min-width: 0;
   margin-left: auto;
@@ -154,7 +154,7 @@
 
 .osionos-layout-shell {
   position: relative;
-  border-radius: 10px;
+  border-radius: var(--osio-radius-lg);
   background: var(--osio-bg-page);
 }
 
@@ -167,10 +167,10 @@
   height: 44px;
   transform: translateX(-14px);
   border: 1px solid var(--osio-border-default);
-  border-radius: 8px;
+  border-radius: var(--osio-radius);
   background: var(--osio-bg-surface);
   color: var(--osio-fg-muted);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--osio-shadow-sm);
 }
 
 .osionos-layout-settings-panel {
@@ -189,7 +189,7 @@
   border-right: 0;
   border-radius: 0;
   background: var(--osio-bg-surface);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--osio-shadow-menu);
   font-size: var(--osio-font-size-xs);
   animation: osionos-layout-panel-slide-in 140ms ease-out;
 }
@@ -211,7 +211,7 @@
   border-right: 0;
   border-radius: 0;
   background: var(--osio-bg-surface);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.16);
+  box-shadow: var(--osio-shadow-modal);
   font-size: var(--osio-font-size-xs);
   animation: osionos-layout-panel-slide-in 140ms ease-out;
 }
@@ -232,10 +232,10 @@
   align-items: center;
   justify-content: center;
   border: 1px solid var(--osio-border-default);
-  border-radius: 7px;
+  border-radius: var(--osio-radius);
   background: var(--osio-bg-surface);
   color: var(--osio-fg-muted);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--osio-shadow-sm);
 }
 
 .osionos-layout-panel-close-tab:hover {
@@ -267,7 +267,7 @@
 }
 
 .osionos-layout-inspector-header button {
-  border-radius: 6px;
+  border-radius: var(--osio-radius-sm);
   padding: 2px 7px;
   color: var(--osio-fg-muted);
 }
@@ -286,7 +286,7 @@
   align-items: center;
   gap: 6px;
   border: 1px solid var(--osio-border-default);
-  border-radius: 7px;
+  border-radius: var(--osio-radius);
   background: var(--osio-bg-surface);
   padding: 5px 9px;
   color: var(--osio-fg-muted);
@@ -324,7 +324,7 @@
 .osionos-layout-number-input input {
   width: 64px;
   border: 1px solid var(--osio-border-default);
-  border-radius: 6px;
+  border-radius: var(--osio-radius-sm);
   background: transparent;
   padding: 4px 6px;
   color: var(--osio-fg-default);
@@ -334,13 +334,13 @@
   display: grid;
   grid-auto-flow: column;
   gap: 2px;
-  border-radius: 7px;
+  border-radius: var(--osio-radius);
   background: var(--osio-bg-subtle);
   padding: 2px;
 }
 
 .osionos-layout-segmented button {
-  border-radius: 5px;
+  border-radius: var(--osio-radius-sm);
   padding: 4px 6px;
   color: var(--osio-fg-muted);
 }
@@ -348,7 +348,7 @@
 .osionos-layout-segmented button[data-active="true"] {
   background: var(--osio-bg-surface);
   color: var(--osio-fg-default);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--osio-shadow-sm);
 }
 
 .osionos-layout-grid {
@@ -357,7 +357,7 @@
   display: grid;
   align-items: start;
   min-height: 360px;
-  border-radius: 10px;
+  border-radius: var(--osio-radius-lg);
   background-color: var(--osio-bg-page);
   padding: 40px 8px 8px 40px;
   overflow: visible;
@@ -372,7 +372,7 @@
   inset: 40px 8px 8px 40px;
   z-index: 0;
   pointer-events: none;
-  border-radius: 8px;
+  border-radius: var(--osio-radius);
   background-image: radial-gradient(circle, var(--osionos-layout-dot-color) 0 1px, transparent 1.25px);
   background-position: 0 0;
   background-size: var(--osionos-layout-dot-size) var(--osionos-layout-dot-size);
@@ -448,9 +448,9 @@ body[data-pane-resizing] .osionos-layout-cell {
   min-height: var(--osionos-layout-cell-min-height, var(--osio-cell-min-row-height));
   overflow: visible;
   border: 1px solid color-mix(in srgb, var(--osio-border-default) 78%, transparent);
-  border-radius: 8px;
+  border-radius: var(--osio-radius);
   background: var(--osio-bg-surface);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--osio-shadow-sm);
   outline: 2px solid transparent;
   outline-offset: -2px;
   transform: translate3d(var(--osionos-layout-cell-offset-x, 0), var(--osionos-layout-cell-offset-y, 0), 0);
@@ -536,7 +536,7 @@ body[data-pane-resizing] .osionos-layout-cell {
   inset: 6px;
   pointer-events: none;
   border: 1px dashed color-mix(in srgb, var(--osio-accent) 80%, transparent);
-  border-radius: 6px;
+  border-radius: var(--osio-radius-sm);
   background: color-mix(in srgb, var(--osio-accent) 8%, transparent);
 }
 
@@ -610,7 +610,7 @@ body[data-pane-resizing] .osionos-layout-cell {
 
 .osionos-layout-cell-deferred {
   min-height: max(220px, calc(var(--osionos-layout-cell-min-height, 320px) - 48px));
-  border-radius: 6px;
+  border-radius: var(--osio-radius-sm);
   background: color-mix(in srgb, var(--osio-bg-subtle) 68%, transparent);
 }
 
@@ -720,7 +720,7 @@ body[data-pane-resizing] .osionos-layout-cell {
 .osionos-layout-swatch {
   min-height: 26px;
   border: 1px solid var(--osio-border-default);
-  border-radius: 7px;
+  border-radius: var(--osio-radius);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--osio-bg-page) 60%, transparent);
 }
 
@@ -742,7 +742,7 @@ body[data-pane-resizing] .osionos-layout-cell {
   width: 24px;
   height: 24px;
   border: 1px dashed color-mix(in srgb, var(--osio-accent) 70%, transparent);
-  border-radius: 6px;
+  border-radius: var(--osio-radius-sm);
   background: color-mix(in srgb, var(--osio-bg-surface) 92%, transparent);
   color: var(--osio-accent);
   cursor: grab;
@@ -763,7 +763,7 @@ body[data-pane-resizing] .osionos-layout-cell {
 
 .osionos-layout-size-badge {
   white-space: nowrap;
-  border-radius: 999px;
+  border-radius: var(--osio-radius-full);
   background: var(--osio-bg-subtle);
   padding: 2px 6px;
 }
@@ -775,16 +775,16 @@ body[data-pane-resizing] .osionos-layout-cell {
   z-index: var(--osio-z-popover);
   min-width: 128px;
   border: 1px solid var(--osio-border-default);
-  border-radius: 8px;
+  border-radius: var(--osio-radius);
   background: var(--osio-bg-surface);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--osio-shadow-menu);
   padding: 4px;
 }
 
 .osionos-layout-cell-menu button {
   display: block;
   width: 100%;
-  border-radius: 6px;
+  border-radius: var(--osio-radius-sm);
   padding: 6px 8px;
   text-align: left;
 }
@@ -920,7 +920,7 @@ body[data-pane-resizing] .osionos-layout-cell {
   top: 0;
   bottom: 0;
   width: 2px;
-  border-radius: 999px;
+  border-radius: var(--osio-radius-full);
   background: var(--osio-accent);
 }
 
@@ -948,7 +948,7 @@ body[data-pane-resizing] .osionos-layout-cell {
   right: 0;
   top: 5px;
   height: 2px;
-  border-radius: 999px;
+  border-radius: var(--osio-radius-full);
   background: var(--osio-accent);
 }
 
@@ -958,7 +958,7 @@ body[data-pane-resizing] .osionos-layout-cell {
 .osionos-layout-resize-handle--bottom-right {
   width: 18px;
   height: 18px;
-  border-radius: 6px;
+  border-radius: var(--osio-radius-sm);
   background: var(--osio-bg-surface);
   box-shadow: inset 0 0 0 1px var(--osio-border-default);
   cursor: nwse-resize;
@@ -994,13 +994,13 @@ body[data-pane-resizing] .osionos-layout-cell {
   align-content: center;
   gap: 12px;
   border: 1px dashed var(--osio-border-default);
-  border-radius: 10px;
+  border-radius: var(--osio-radius-lg);
   background: var(--osio-bg-surface);
   text-align: center;
 }
 
 .osionos-layout-empty-state button {
-  border-radius: 7px;
+  border-radius: var(--osio-radius);
   background: var(--osio-bg-subtle);
   padding: 6px 10px;
   color: var(--osio-fg-default);
@@ -1031,7 +1031,7 @@ body[data-pane-resizing] .osionos-layout-cell {
     width: auto;
     max-height: min(70vh, 560px);
     border-right: 1px solid var(--osio-border-default);
-    border-radius: 8px;
+    border-radius: var(--osio-radius);
     padding-top: 48px;
   }
 
@@ -1044,7 +1044,7 @@ body[data-pane-resizing] .osionos-layout-cell {
     width: auto;
     max-height: min(70vh, 560px);
     border-right: 1px solid var(--osio-border-default);
-    border-radius: 8px;
+    border-radius: var(--osio-radius);
   }
 
   .osionos-layout-grid {
@@ -1116,21 +1116,21 @@ body[data-pane-resizing] .osionos-layout-cell {
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: var(--osio-radius-xs);
   border: none;
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.9);
+  background: color-mix(in srgb, var(--osio-bg-surface) 90%, transparent);
   color: var(--osio-fg-default);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.05),
-    0 1px 2px rgba(0, 0, 0, 0.1);
+    0 0 0 1px var(--osio-border-default),
+    var(--osio-shadow-sm);
   transition: background 120ms ease;
 }
 
 .osionos-page-cover-btn:hover {
-  background: rgba(255, 255, 255, 1);
+  background: var(--osio-bg-surface);
 }
 
 /* ── Header area (icon + toolbar + title) ─────────────────────────── */
@@ -1168,7 +1168,7 @@ body[data-pane-resizing] .osionos-layout-cell {
   background: transparent;
   padding: 2px 6px;
   margin: 0;
-  border-radius: 4px;
+  border-radius: var(--osio-radius-xs);
   font-size: 12px;
   line-height: 1.25;
   color: var(--osio-fg-muted);
@@ -1222,7 +1222,7 @@ button.osionos-page-breadcrumb:hover {
   line-height: 1;
   cursor: pointer;
   transition: background 120ms ease;
-  border-radius: 8px;
+  border-radius: var(--osio-radius);
   user-select: none;
 }
 
@@ -1258,7 +1258,7 @@ button.osionos-page-breadcrumb:hover {
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--osio-radius-xs);
   border: none;
   font-size: 12px;
   color: var(--osio-fg-muted);
@@ -1333,7 +1333,7 @@ button.osionos-page-breadcrumb:hover {
 .osionos-page-property-relations span,
 .osionos-page-property-relations em {
   border: 1px solid var(--osio-border-default);
-  border-radius: 999px;
+  border-radius: var(--osio-radius-full);
   background: var(--osio-bg-subtle);
   padding: 2px 8px;
   color: var(--osio-fg-muted);
@@ -1375,10 +1375,8 @@ button.osionos-page-breadcrumb:hover {
   max-height: 380px;
   background: var(--osio-bg-surface);
   border: 1px solid var(--osio-border-default);
-  border-radius: 8px;
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.04),
-    0 4px 16px rgba(0, 0, 0, 0.12);
+  border-radius: var(--osio-radius);
+  box-shadow: var(--osio-shadow-menu);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1421,7 +1419,7 @@ button.osionos-page-breadcrumb:hover {
 .osionos-emoji-picker-search {
   margin: 8px;
   padding: 6px 10px;
-  border-radius: 4px;
+  border-radius: var(--osio-radius-xs);
   border: 1px solid var(--osio-border-default);
   background: var(--osio-bg-subtle);
   color: var(--osio-fg-default);
@@ -1450,7 +1448,7 @@ button.osionos-page-breadcrumb:hover {
   width: 36px;
   height: 36px;
   font-size: 22px;
-  border-radius: 4px;
+  border-radius: var(--osio-radius-xs);
   border: none;
   background: transparent;
   cursor: pointer;
@@ -1477,7 +1475,7 @@ button.osionos-page-breadcrumb:hover {
   justify-content: center;
   width: 48px;
   height: 48px;
-  border-radius: 6px;
+  border-radius: var(--osio-radius-sm);
   border: none;
   background: transparent;
   cursor: pointer;
@@ -1511,7 +1509,7 @@ button.osionos-page-breadcrumb:hover {
 
 .osionos-emoji-picker-remove-btn {
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: var(--osio-radius-xs);
   border: none;
   background: transparent;
   cursor: pointer;

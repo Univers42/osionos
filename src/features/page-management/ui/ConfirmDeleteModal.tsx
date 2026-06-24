@@ -60,7 +60,7 @@ export const ConfirmDeleteModal: React.FC<Props> = ({
       onCancel={onCancel}
     >
       {!isDelete && subPageCount > 0 ? (
-        <div className="mb-2 rounded border border-[var(--osio-danger)]/20 bg-[var(--osio-danger)]/10 p-3">
+        <div className="mb-2 rounded-lg border border-[var(--osio-danger)]/20 bg-[var(--osio-danger)]/10 p-3">
           <p className="text-sm font-medium leading-relaxed text-[var(--osio-danger)]">
             This page contains {subPageCount} sub-page
             {subPageCount > 1 ? "s" : ""}. Archiving it will also archive all

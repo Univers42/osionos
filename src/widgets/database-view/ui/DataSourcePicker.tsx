@@ -43,7 +43,7 @@ export const DataSourcePicker: React.FC<DataSourcePickerProps> = ({ current, onP
   const needle = query.trim().toLowerCase();
   return (
     <div
-      className="w-72 max-h-96 overflow-auto rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-lg p-2 text-sm"
+      className="w-72 max-h-96 overflow-auto rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-menu)] p-2 text-sm"
       role="dialog"
       aria-label="Select data source"
     >
@@ -54,7 +54,7 @@ export const DataSourcePicker: React.FC<DataSourcePickerProps> = ({ current, onP
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => { if (event.key === "Escape") onClose(); }}
           placeholder="Search mounts and tables…"
-          className="flex-1 rounded border border-[var(--osio-border-default)] bg-transparent px-2 py-1 outline-none"
+          className="flex-1 rounded border border-[var(--osio-border-default)] bg-transparent px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus:border-[var(--osio-accent)]"
           aria-label="Search data sources"
         />
         <button type="button" onClick={onClose} aria-label="Close" className="px-1 text-[var(--osio-fg-subtle)]">✕</button>

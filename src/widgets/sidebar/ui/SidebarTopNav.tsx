@@ -47,7 +47,7 @@ export const SidebarTopNav: React.FC<SidebarTopNavProps> = ({ isHomeActive, onOp
             className={[
               'flex h-8 min-w-0 shrink items-center justify-center overflow-hidden rounded-md px-2 text-sm font-medium transition-colors',
               tab.active
-                ? 'bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]'
+                ? 'bg-[var(--osio-bg-muted)] text-[var(--osio-fg-strong)]'
                 : 'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]',
             ].join(' ')}
             title={tab.label}

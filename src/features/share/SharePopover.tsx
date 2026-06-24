@@ -45,14 +45,14 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
       ref={rootRef}
       role="dialog"
       aria-label="Share"
-      className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 w-[380px] rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-3 shadow-xl"
+      className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 w-[380px] rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] p-3 shadow-[var(--osio-shadow-menu)]"
     >
       <div className="mb-2 flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-[var(--osio-fg-default)]">Share</h3>
           <p className="text-xs text-[var(--osio-fg-muted)]">{resource.liveResourceName ? `live database · ${resource.liveResourceName}` : resource.resourceType}</p>
         </div>
-        <button type="button" aria-label="Close share dialog" className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]" onClick={onClose}>
+        <button type="button" aria-label="Close share dialog" className="rounded-md p-1 text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]" onClick={onClose}>
           <X size={14} />
         </button>
       </div>

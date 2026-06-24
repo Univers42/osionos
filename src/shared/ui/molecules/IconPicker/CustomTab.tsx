@@ -14,7 +14,7 @@ import React, { useState } from "react";
 import { Upload } from "lucide-react";
 
 const FIELD = "w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-page)] px-2 py-1.5 text-sm text-[var(--osio-fg-default)] placeholder:text-[var(--osio-fg-subtle)]";
-const BTN = "rounded-md bg-[var(--osio-accent)] px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-40";
+const BTN = "rounded-md bg-[var(--osio-accent)] px-2.5 py-1.5 text-xs font-medium text-[var(--osio-accent-fg)] transition-colors duration-[120ms] hover:bg-[var(--osio-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60";
 
 /** "Any SVG you like": paste raw <svg> markup, paste an image/SVG URL, or upload a file. */
 export const CustomTab: React.FC<{ onPick: (ref: string) => void }> = ({ onPick }) => {

@@ -51,7 +51,7 @@ export function UsageSection() {
 
   return (
     <ConsoleSection title="Usage" icon={<Activity size={16} aria-hidden />}>
-      {error ? <p style={{ color: 'var(--osio-fg-danger, #d33)' }}>{error}</p> : null}
+      {error ? <p style={{ color: 'var(--osio-danger)' }}>{error}</p> : null}
       {usage ? (
         <p style={{ ...MUTED, margin: '0 0 8px' }}>
           {fmtWindow(usage.window.from)} → {fmtWindow(usage.window.to)}

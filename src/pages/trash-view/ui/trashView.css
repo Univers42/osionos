@@ -83,8 +83,8 @@
   gap: 0.5rem;
   padding: 0.5rem;
   border-radius: 0.375rem;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: color-mix(in srgb, var(--osio-danger) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--osio-danger) 20%, transparent);
   color: var(--osio-danger);
   margin-top: 0.5rem;
 }
@@ -105,14 +105,17 @@
   background: var(--osio-bg-surface);
   color: var(--osio-fg-default);
   cursor: pointer;
-  transition: all 150ms ease;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
   white-space: nowrap;
 }
 
 .trash-btn-restore:hover {
   background: var(--osio-bg-subtle);
   border-color: var(--osio-border-strong);
-  color: var(--osio-accent);
+  color: var(--osio-accent-text);
 }
 
 .trash-btn-delete:hover {
@@ -122,14 +125,14 @@
 }
 
 .trash-btn-confirm-delete {
-  background: rgb(220, 38, 38);
-  border-color: rgb(220, 38, 38);
-  color: white;
+  background: var(--osio-danger);
+  border-color: var(--osio-danger);
+  color: var(--osio-danger-fg);
 }
 
 .trash-btn-confirm-delete:hover {
-  background: rgb(185, 28, 28);
-  border-color: rgb(185, 28, 28);
+  background: var(--osio-danger-hover);
+  border-color: var(--osio-danger-hover);
 }
 
 .trash-btn-cancel {

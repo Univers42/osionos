@@ -107,9 +107,9 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
                 e.stopPropagation();
                 onDismissInvite();
               }}
-              className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
+              className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-md text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
             >
-              <X size={12} />
+              <X size={14} />
             </button>
           </div>
         </div>

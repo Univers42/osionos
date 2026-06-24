@@ -1052,7 +1052,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 			data-draggable-block-id={block.id}
 			data-selected={isSelected ? "true" : undefined}
 			data-block-type={block.type}
-			className={`group/block relative rounded-md transition-colors transition-opacity hover:bg-[var(--osio-bg-subtle)] focus-within:bg-[var(--osio-bg-subtle)] ${pt} ${isDragged ? "opacity-40" : ""} ${isSelected ? "bg-[var(--osio-accent)]/10 ring-1 ring-[var(--osio-accent)]/35" : ""}`}
+			className={`group/block relative rounded-md transition-colors transition-opacity hover:bg-[var(--osio-bg-hover)] focus-within:bg-[var(--osio-bg-hover)] ${pt} ${isDragged ? "opacity-40" : ""} ${isSelected ? "bg-[var(--osio-accent-subtle)] ring-1 ring-[var(--osio-accent)]" : ""}`}
 			onContextMenu={(e) => onContextMenu(e, block.id)}
 			onDragOver={handleDragOver}
 			onDragLeave={handleDragLeave}
@@ -1065,7 +1065,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 				onClick={(e) => onContextMenu(e, block.id)}
 				onDragStart={handleDragStart}
 				onDragEnd={handleDragEnd}
-				className={`absolute -left-7 ${handleTop} cursor-grab rounded p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-muted)] osio-drag-handle active:cursor-grabbing`}
+				className={`absolute -left-7 ${handleTop} cursor-grab rounded-md p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)] osio-drag-handle active:cursor-grabbing`}
 				aria-label="Drag to reorder block"
 				title="Drag to reorder"
 			>
