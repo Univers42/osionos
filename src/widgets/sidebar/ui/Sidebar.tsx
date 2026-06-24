@@ -16,6 +16,7 @@ import { useUserStore, WorkspaceSwitcher } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { useUIStore } from "@/shared/config/uiStore";
 import { isPerfEnabled, recordRender } from "@/shared/lib/perf/measure";
+import { ChannelList } from "@/widgets/channel-list";
 import { DmList } from "@/widgets/dm-list";
 import { SidebarTopNav } from "./SidebarTopNav";
 import { SidebarPageTree } from "./SidebarPageTree";
@@ -153,6 +154,7 @@ export const Sidebar: React.FC<Props> = ({
           jwt={jwt}
           onAddToWorkspace={handleAddToWorkspace}
         />
+        <ChannelList />
         <DmList />
       </nav>
 

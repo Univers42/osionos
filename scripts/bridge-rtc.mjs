@@ -205,7 +205,9 @@ function bearerTokenFromRequest(request) {
  * defaults to authorizeRtcJoin (override point for tests / chat workstream).
  */
 export function createRtcTokenHandler({ config, verifySession, rtc = rtcConfigFromEnv(), fetchImpl = fetch, authorize = authorizeRtcJoin }) {
-	return async function handleRtcTokenPost(url, request, response) {
+	// `requestConfig` carries the per-request (per-origin) CORS config like the
+	// chat/profile/feed handlers; service credentials still come from `config`.
+	return async function handleRtcTokenPost(url, request, response, requestConfig = config) {
 		if (url.pathname !== '/api/rtc/token' || request.method !== 'POST') return false;
 		try {
 			const session = verifySession(bearerTokenFromRequest(request), config);
@@ -239,9 +241,9 @@ export function createRtcTokenHandler({ config, verifySession, rtc = rtcConfigFr
 				workspaceId: membership.workspaceId,
 				role: membership.role,
 				expiresAt,
-			}, config);
+			}, requestConfig);
 		} catch (error) {
-			sendJson(response, error?.status ?? 500, { ok: false, message: error instanceof Error ? error.message : 'RTC token request failed.' }, config);
+			sendJson(response, error?.status ?? 500, { ok: false, message: error instanceof Error ? error.message : 'RTC token request failed.' }, requestConfig);
 		}
 		return true;
 	};

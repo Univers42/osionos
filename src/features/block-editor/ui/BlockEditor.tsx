@@ -22,6 +22,7 @@ import { EquationView } from "@/shared/ui/EquationView";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
 import { DatabaseBlock } from "@/widgets/database-view/ui/DatabaseBlock";
+import { DataSourceButton } from "@/widgets/database-view/ui/DataSourceButton";
 import {
   getBlockPlaceholder,
   calloutAccent,
@@ -920,7 +921,12 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           }}
           tabIndex={-1}
           aria-label="Database block"
+          className="relative group/dbblock"
         >
+          <DataSourceButton
+            databaseId={block.databaseId}
+            onChange={(databaseId) => commitBlockUpdate(block.id, { databaseId })}
+          />
           <div className="osio-block-scroll-x">
             <DatabaseBlock
               databaseId={block.databaseId}
@@ -948,8 +954,12 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           }}
           tabIndex={-1}
           aria-label="Full-page database block"
-          className="my-3 min-h-[520px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
+          className="relative group/dbblock my-3 min-h-[520px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
         >
+          <DataSourceButton
+            databaseId={block.databaseId}
+            onChange={(databaseId) => commitBlockUpdate(block.id, { databaseId })}
+          />
           <div className="osio-block-scroll-x h-full">
             <DatabaseBlock
               databaseId={block.databaseId}
