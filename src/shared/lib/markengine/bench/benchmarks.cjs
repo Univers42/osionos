@@ -391,7 +391,11 @@ function loadBaseline(path = join(__dirname, "baseline.json")) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
-function compareToBaseline(current, baseline, allowedRegression = 0.1) {
+function compareToBaseline(
+  current,
+  baseline,
+  allowedRegression = Number(process.env.MARKENGINE_BENCH_ALLOWED_REGRESSION ?? 0.1),
+) {
   const baselineByName = new Map(
     baseline.benchmarks.map((benchmark) => [benchmark.name, benchmark]),
   );
