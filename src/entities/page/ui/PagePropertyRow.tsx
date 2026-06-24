@@ -30,7 +30,7 @@ interface Props {
 
 /** One row of the Notion-style page-properties table: [type icon · name] [value] [remove]. */
 export const PagePropertyRow: React.FC<Props> = ({ property, workspaceId, pageId, editable, onChangeValue, onRemove }) => (
-  <div role="row" className="group flex items-start gap-1">
+  <div className="group flex items-start gap-1">
     <div className="flex h-8 w-40 shrink-0 items-center gap-1.5 rounded px-1.5 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]">
       <PropIcon type={notionIconType(property.type)} className="h-4 w-4 shrink-0" />
       <span className="truncate">{property.label}</span>

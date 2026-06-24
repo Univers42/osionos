@@ -29,7 +29,7 @@ interface Props {
 }
 
 /**
- * Notion-style "Page properties" table (role="table"): a typed row per property with an icon,
+ * Notion-style "Page properties" group (role="group"): a typed row per property with an icon,
  * a name, and an editable value, plus an "Add a property" menu of notion-database-sys types.
  */
 export const PagePropertiesPanel: React.FC<Props> = ({
@@ -51,7 +51,7 @@ export const PagePropertiesPanel: React.FC<Props> = ({
   if (properties.length === 0 && !editable) return null;
 
   return (
-    <div role="table" aria-label="Page properties" className="osionos-page-properties mt-1 flex flex-col gap-0.5">
+    <div role="group" aria-label="Page properties" className="osionos-page-properties mt-1 flex flex-col gap-0.5">
       {properties.map((property) => (
         <PagePropertyRow
           key={property.key}
