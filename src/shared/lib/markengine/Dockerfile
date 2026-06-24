@@ -11,10 +11,11 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --include=dev --ignore-scripts
 
 FROM deps AS build
-COPY tsconfig.json vite.config.ts markdown.ts ./
-COPY src ./src
-COPY markdown ./markdown
-COPY playground/public ./playground/public
+# Copy the whole source tree (.dockerignore drops node_modules/dist/.git/tests).
+# The previous cherry-picked COPY omitted the root-level engine modules
+# (renderCore.ts and the inline*.ts/shortcuts*.ts siblings of src/), so
+# `npm run build:engine` failed with TS2307 "Cannot find module '../renderCore'".
+COPY . .
 RUN npm run build
 
 FROM deps AS prod
