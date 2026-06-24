@@ -39,7 +39,7 @@ import { defineScenario } from "../core/scenario.mjs";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const AUTH_ENVIRONMENT_FULL_MARKDOWN = readFileSync(
-  resolve(currentDir, "../../../../../../docs/auth-environment.md"),
+  resolve(currentDir, "../../canvas/fixtures/auth-environment.md"),
   "utf8",
 );
 
@@ -74,7 +74,7 @@ const AUTH_ENVIRONMENT_OPENING_MARKDOWN = [
   "The public site key is safe for browser code. The Turnstile secret must only be read by the auth gateway or production backend. Generate the ignored file with Dockerized Node from the repository root:",
   "",
   "```sh",
-  "docker run --rm -v \"$PWD\":/workspace -w /workspace node:22-alpine node apps/baas/scripts/bootstrap-env.mjs",
+  "docker run --rm -v \"$PWD\":/workspace -w /workspace node:22-alpine node apps/grobase/scripts/env/bootstrap-env.mjs",
   "```",
   "",
   "## Local runtime",
