@@ -20,8 +20,8 @@ interface Props {
   workspaceId: string;
   title: string;
   isActive: boolean;
-  onNewFolder: (e: React.MouseEvent) => void;
-  onNewFile: (e: React.MouseEvent) => void;
+  onNewFolder: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onNewFile: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 /** Hover-revealed row actions: options menu, new folder, new file. */

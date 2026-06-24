@@ -5,7 +5,7 @@
  * flows out through `onSelect`. Pair with `<GraphConsole>` for the control panels.
  */
 
-import type { ReactElement } from "react";
+import type { ReactElement, RefObject } from "react";
 import type { GraphEngine } from "../core/engine";
 import type { Controls } from "../core/state/controls";
 import type { GraphModel, NodeId } from "../core/types";
@@ -40,10 +40,10 @@ export function GraphView(props: GraphViewProps): ReactElement {
   });
 
   return (
-    <div ref={containerRef} className={props.className ? `osio-graph ${props.className}` : "osio-graph"}>
-      <canvas ref={bgRef} className="osio-graph__bg" aria-hidden="true" />
+    <div ref={containerRef as RefObject<HTMLDivElement>} className={props.className ? `osio-graph ${props.className}` : "osio-graph"}>
+      <canvas ref={bgRef as RefObject<HTMLCanvasElement>} className="osio-graph__bg" aria-hidden="true" />
       <canvas
-        ref={fgRef}
+        ref={fgRef as RefObject<HTMLCanvasElement>}
         className="osio-graph__fg"
         tabIndex={0}
         role="img"

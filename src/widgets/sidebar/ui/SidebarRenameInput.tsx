@@ -48,7 +48,7 @@ export const SidebarRenameInput: React.FC<Props> = ({ initialValue, onCommit, on
       value={value}
       aria-label="Rename"
       autoComplete="off"
-      onChange={(event) => setValue(event.target.value)}
+      onChange={(event) => setValue(event.currentTarget.value)}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={handleKeyDown}
       onBlur={() => onCommit(value.trim())}

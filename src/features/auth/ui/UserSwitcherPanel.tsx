@@ -96,7 +96,7 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
             <span>Nom</span>
             <input
               value={name}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => setName(event.currentTarget.value)}
               className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus:border-[var(--osio-accent)]"
               placeholder="Nom affiché"
             />
@@ -108,7 +108,7 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
           <input
             type="email"
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => setEmail(event.currentTarget.value)}
             className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus:border-[var(--osio-accent)]"
             placeholder="name@example.com"
             required
@@ -120,7 +120,7 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
           <input
             type="password"
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) => setPassword(event.currentTarget.value)}
             className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus:border-[var(--osio-accent)]"
             required
           />
@@ -130,7 +130,7 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
           <input
             type="checkbox"
             checked={persistInSessions}
-            onChange={(event) => setPersistInSessions(event.target.checked)}
+            onChange={(event) => setPersistInSessions(event.currentTarget.checked)}
             className="mt-0.5"
           />
           <span>Garder cet utilisateur enregistré dans les sessions actives.</span>

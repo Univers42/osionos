@@ -195,8 +195,8 @@ export const CoverAssetPicker: React.FC<CoverAssetPickerProps> = ({
   }
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
     if (!file) return;
 
     const source = await readFileAsDataUrl(file);
@@ -297,7 +297,7 @@ export const CoverAssetPicker: React.FC<CoverAssetPickerProps> = ({
               {unsplashLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
               <input
                 value={unsplashQuery}
-                onChange={(event) => setUnsplashQuery(event.target.value)}
+                onChange={(event) => setUnsplashQuery(event.currentTarget.value)}
                 placeholder="Search Unsplash"
                 className="min-w-0 flex-1 bg-transparent text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
               />
@@ -326,7 +326,7 @@ export const CoverAssetPicker: React.FC<CoverAssetPickerProps> = ({
               <Link size={15} className="text-[var(--osio-fg-muted)]" />
               <input
                 value={urlDraft}
-                onChange={(event) => setUrlDraft(event.target.value)}
+                onChange={(event) => setUrlDraft(event.currentTarget.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();

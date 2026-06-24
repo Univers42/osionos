@@ -79,7 +79,7 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
   const paddingLeft = `calc(var(--osio-space-2) + ${depth} * var(--osio-space-4))`;
   const fallbackIcon = pageEntry.databaseId ? "icon:table" : "icon:page";
 
-  function handleRowClick(e: React.MouseEvent) {
+  function handleRowClick(e: React.MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
     if (isFolder) { setExpanded((o) => !o); return; }
     openPage({
@@ -89,7 +89,7 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
     });
   }
 
-  async function createChild(asFolder: boolean, e: React.MouseEvent) {
+  async function createChild(asFolder: boolean, e: React.MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
     const title = asFolder ? "New folder" : "Untitled";
     const child = await addPage(workspaceId, title, jwt, pageEntry._id, asFolder ? { surface: "folder" } : undefined);
@@ -149,7 +149,7 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
             type="button"
             {...dragHandlers}
             onClick={handleRowClick}
-            onDoubleClick={(e) => { e.stopPropagation(); setRenaming(true); }}
+            onDblClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); setRenaming(true); }}
             title="Double-click to rename · drag to move"
             className={[
               "flex min-w-0 flex-1 items-center gap-0.5 h-full rounded-md text-sm text-left transition-colors duration-100 pr-20",

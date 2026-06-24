@@ -1827,7 +1827,7 @@ const LayoutNumberControl: React.FC<{
   <label className="osionos-layout-control-row">
     <span>{label}</span>
     <span className="osionos-layout-number-input">
-      <input type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <input type="number" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
       {suffix ? <span>{suffix}</span> : null}
     </span>
   </label>
@@ -1836,7 +1836,7 @@ const LayoutNumberControl: React.FC<{
 const LayoutToggle: React.FC<{ label: string; checked: boolean; onChange: (checked: boolean) => void }> = ({ label, checked, onChange }) => (
   <label className="osionos-layout-control-row">
     <span>{label}</span>
-    <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+    <input type="checkbox" checked={checked} onChange={(event) => onChange(event.currentTarget.checked)} />
   </label>
 );
 
@@ -2003,7 +2003,7 @@ const LayoutCellHandleBar: React.FC<{
       </button>
       <input
         value={labelDraft}
-        onChange={(event) => setLabelDraft(event.target.value)}
+        onChange={(event) => setLabelDraft(event.currentTarget.value)}
         onBlur={() => onRename(labelDraft.trim())}
         onKeyDown={(event) => {
           if (event.key === "Enter") {

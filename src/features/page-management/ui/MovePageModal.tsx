@@ -238,7 +238,7 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
   };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
+    setSearchTerm(e.currentTarget.value);
     setActiveIndex(0);
   };
 

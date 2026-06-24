@@ -51,6 +51,9 @@ export default [
       // runtime-era prop-types rule is redundant noise (and can't read
       // forwardRef<T, Props> generics, producing false positives).
       "react/prop-types": "off",
+      // The runtime is preact/compat, which dispatches the DOM dblclick event
+      // via `onDblClick` (React names it onDoubleClick). Allow the preact prop.
+      "react/no-unknown-property": ["error", { ignore: ["onDblClick"] }],
       "@typescript-eslint/no-explicit-any": "warn", // Evitar 'any' según GEMINI.md
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": [

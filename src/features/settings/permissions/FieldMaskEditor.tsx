@@ -66,7 +66,7 @@ export const FieldMaskEditor: React.FC<FieldMaskEditorProps> = ({ policy, saving
             <button type="button" aria-label={`Stop hiding ${field}`} disabled={saving} onClick={() => persist(hide.filter((f) => f !== field), redact)}><X size={10} /></button>
           </span>
         ))}
-        <Input className="w-28" value={hideDraft} placeholder="field name" onChange={(event) => setHideDraft(event.target.value)}
+        <Input className="w-28" value={hideDraft} placeholder="field name" onChange={(event) => setHideDraft(event.currentTarget.value)}
           onKeyDown={(event) => { if (event.key === 'Enter' && hideDraft.trim()) { persist([...hide, hideDraft.trim()], redact); setHideDraft(''); } }} />
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -77,8 +77,8 @@ export const FieldMaskEditor: React.FC<FieldMaskEditorProps> = ({ policy, saving
             <button type="button" aria-label={`Stop redacting ${field}`} disabled={saving} onClick={() => { const next = { ...redact }; delete next[field]; persist(hide, next); }}><X size={10} /></button>
           </span>
         ))}
-        <Input className="w-24" value={redactField} placeholder="field" onChange={(event) => setRedactField(event.target.value)} />
-        <Input className="w-16" value={redactValue} placeholder="***" onChange={(event) => setRedactValue(event.target.value)} />
+        <Input className="w-24" value={redactField} placeholder="field" onChange={(event) => setRedactField(event.currentTarget.value)} />
+        <Input className="w-16" value={redactValue} placeholder="***" onChange={(event) => setRedactValue(event.currentTarget.value)} />
         <button
           type="button"
           disabled={saving || !redactField.trim()}

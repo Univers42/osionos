@@ -147,7 +147,7 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
               value={mediaWidth}
               aria-label={`${label} width`}
               className="h-1.5 w-24 accent-[var(--osio-accent)]"
-              onChange={(event) => handleWidthChange(Number(event.target.value))}
+              onChange={(event) => handleWidthChange(Number(event.currentTarget.value))}
             />
             <span className="w-9 tabular-nums">{mediaWidth}%</span>
           </div>

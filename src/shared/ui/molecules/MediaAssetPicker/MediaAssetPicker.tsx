@@ -100,7 +100,7 @@ export const MediaAssetPicker: React.FC<MediaAssetPickerProps> = ({
             {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
             <input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => setQuery(event.currentTarget.value)}
               placeholder="Search Unsplash"
               className="min-w-0 flex-1 bg-transparent text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
             />

@@ -509,7 +509,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
   const memberRows = useMemo(
     () => members.slice(0, 20).map((member, index) => [
       <div key={member.id || member.email} className="flex items-center gap-3">
-        <input type="checkbox" className="h-3.5 w-3.5" onChange={(event) => recordSettingsAction('fallback_member_select', { id: member.id, selected: event.target.checked })} />
+        <input type="checkbox" className="h-3.5 w-3.5" onChange={(event) => recordSettingsAction('fallback_member_select', { id: member.id, selected: event.currentTarget.checked })} />
         <Avatar value={member.emoji} label={member.name} />
         <div className="min-w-0">
           <div className="truncate font-medium">{member.name}</div>
@@ -576,7 +576,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
                     <Search size={16} />
                     <input
                       value={settingsQuery}
-                      onChange={(event) => setSettingsQuery(event.target.value)}
+                      onChange={(event) => setSettingsQuery(event.currentTarget.value)}
                       onKeyDown={handleSearchKeyDown}
                       placeholder="Search actions..."
                       className="min-w-0 flex-1 bg-transparent text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
@@ -720,7 +720,7 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
               <input
                 className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 pr-8 text-sm text-[var(--osio-fg-default)] outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]"
                 value={preferredNameDraft}
-                onChange={(event) => setPreferredNameDraft(event.target.value)}
+                onChange={(event) => setPreferredNameDraft(event.currentTarget.value)}
               />
               {nameSaved && <Check size={16} className="absolute right-2 top-2.5 text-[var(--osio-success)]" />}
             </span>
@@ -784,7 +784,7 @@ const EmailManagerModal: React.FC<{ userId: string; fallbackEmail?: string; onCl
       <div className="space-y-4">
         <DataTable headers={['Email', 'Role', 'Status', '']} rows={rows} />
         <div className="flex gap-2">
-          <input className="min-w-0 flex-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} placeholder="name@example.com" />
+          <input className="min-w-0 flex-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={emailDraft} onChange={(event) => setEmailDraft(event.currentTarget.value)} placeholder="name@example.com" />
           <Button tone="primary" onClick={() => { if (emailDraft.includes('@')) { runAsync(addEmail(emailDraft, userId)); setEmailDraft(''); } }}>Add email</Button>
         </div>
       </div>
@@ -802,9 +802,9 @@ const PasswordModal: React.FC<{ hasPassword: boolean; onSaved: () => void; onClo
   return (
     <Modal open onClose={onClose} title={hasPassword ? 'Update password' : 'Add password'} size="sm">
       <div className="space-y-3">
-        {hasPassword && <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Current password" />}
-        <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={nextPassword} onChange={(event) => setNextPassword(event.target.value)} placeholder="New password" />
-        <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm password" />
+        {hasPassword && <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={currentPassword} onChange={(event) => setCurrentPassword(event.currentTarget.value)} placeholder="Current password" />}
+        <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={nextPassword} onChange={(event) => setNextPassword(event.currentTarget.value)} placeholder="New password" />
+        <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={confirmPassword} onChange={(event) => setConfirmPassword(event.currentTarget.value)} placeholder="Confirm password" />
         <div className="grid grid-cols-4 gap-1">{[0, 1, 2, 3].map((index) => <span key={index} className={`h-1 rounded ${index < strength ? 'bg-[var(--osio-accent)]' : 'bg-[var(--osio-bg-muted)]'}`} />)}</div>
         <div className="flex justify-end gap-2">
           <Button onClick={onClose}>Cancel</Button>
@@ -828,7 +828,7 @@ const TwoFactorModal: React.FC<{ enabled: boolean; onEnabled: (enabled: boolean)
   return (
     <Modal open onClose={onClose} title="Two-step verification" size="sm">
       <div className="space-y-4">
-        {enabled ? <p className="text-sm text-[var(--osio-fg-muted)]">Two-step verification is enabled.</p> : <>{qrDataUrl && <img alt="Two-step verification QR code" className="h-40 w-40 rounded-md border border-[var(--osio-border-default)]" src={qrDataUrl} />}<input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={code} onChange={(event) => setCode(event.target.value.replaceAll(/\D/g, '').slice(0, 6))} placeholder="6-digit code" /></>}
+        {enabled ? <p className="text-sm text-[var(--osio-fg-muted)]">Two-step verification is enabled.</p> : <>{qrDataUrl && <img alt="Two-step verification QR code" className="h-40 w-40 rounded-md border border-[var(--osio-border-default)]" src={qrDataUrl} />}<input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={code} onChange={(event) => setCode(event.currentTarget.value.replaceAll(/\D/g, '').slice(0, 6))} placeholder="6-digit code" /></>}
         {recoveryCodes.length > 0 && <div className="grid grid-cols-2 gap-2 rounded-md bg-[var(--osio-bg-subtle)] p-3 text-xs font-mono">{recoveryCodes.map((item) => <span key={item}>{item}</span>)}</div>}
         <div className="flex justify-end gap-2">
           {enabled && <Button tone="danger" onClick={() => { runAsync(postAccountAction('/api/account/2fa/disable', {}).then(() => { onEnabled(false); toast({ kind: 'success', title: 'Two-step verification disabled' }); onClose(); })); }}>Disable</Button>}
@@ -843,7 +843,7 @@ const PasskeyManagerModal: React.FC<{ passkeys: Array<{ _id: string; nickname?: 
   <Modal open onClose={onClose} title="Passkeys" size="md">
     <div className="space-y-4">
       <DataTable headers={['Name', 'Created', '']} rows={passkeys.map((passkey) => [
-        <input key={`${passkey._id}-name`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={passkey.nickname ?? 'Passkey'} onBlur={(event) => onRename(passkey._id, event.target.value)} />,
+        <input key={`${passkey._id}-name`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={passkey.nickname ?? 'Passkey'} onBlur={(event) => onRename(passkey._id, event.currentTarget.value)} />,
         new Date(passkey.createdAt).toLocaleDateString(),
         <Button key={`${passkey._id}-remove`} tone="danger" onClick={() => onRemove(passkey._id)}>Remove</Button>,
       ])} />
@@ -875,7 +875,7 @@ const TypedConfirmModal: React.FC<{ title: string; message: string; confirmText:
     <Modal open onClose={onClose} title={title} size="sm">
       <div className="space-y-4">
         <p className="text-sm text-[var(--osio-fg-muted)]">{message}</p>
-        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder={confirmText} />
+        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={draft} onChange={(event) => setDraft(event.currentTarget.value)} placeholder={confirmText} />
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone={danger ? 'danger' : 'primary'} disabled={draft !== confirmText} onClick={onConfirm}>{actionLabel}</Button></div>
       </div>
     </Modal>
@@ -1034,7 +1034,7 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
   return (
     <>
       <Section title="Workspace settings">
-        <SettingRow stack title="Workspace name" description="Your workspace name can be up to 65 characters" action={<input className="w-full max-w-[400px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={workspaceNameDraft} maxLength={65} onChange={(event) => setWorkspaceNameDraft(event.target.value)} />} />
+        <SettingRow stack title="Workspace name" description="Your workspace name can be up to 65 characters" action={<input className="w-full max-w-[400px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={workspaceNameDraft} maxLength={65} onChange={(event) => setWorkspaceNameDraft(event.currentTarget.value)} />} />
         <SettingRow stack title="Icon" description="Upload an image or pick an emoji. This icon will appear in your sidebar and notifications." action={<div className="relative"><button type="button" className="flex h-[72px] w-[72px] items-center justify-center rounded-md border border-[var(--osio-border-default)] text-5xl" onClick={() => setIconPickerOpen((open) => !open)}><IconValueView value={settings.icon ?? '🌏'} size={44} /></button>{iconPickerOpen && <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2"><EmojiPicker current={settings.icon ?? '🌏'} onSelect={(value) => { update(resolvedUserId, workspaceId, { icon: value }); renameWorkspace(workspaceId, settings.name, value); setIconPickerOpen(false); }} onRemove={() => { update(resolvedUserId, workspaceId, { icon: undefined }); setIconPickerOpen(false); }} onClose={() => setIconPickerOpen(false)} /></div>}</div>} />
         <SettingRow title="Custom landing page" description={<>When a new member joins this workspace, a copy of this page will be added to their <b>Private</b> pages</>} action={<Button onClick={() => setModal({ name: 'page-selector' })}>{settings.landingPageId ? 'Change page' : 'Select page'}</Button>} />
       </Section>
@@ -1288,7 +1288,7 @@ const PeoplePanel: React.FC<{
     const persona = personas.find((candidate) => candidate.id === member.userId);
     return [
       <div key={member.userId} className="flex items-center gap-3">
-        <input type="checkbox" className="h-3.5 w-3.5" onChange={(event) => recordSettingsAction('people_member_select', { userId: member.userId, selected: event.target.checked })} />
+        <input type="checkbox" className="h-3.5 w-3.5" onChange={(event) => recordSettingsAction('people_member_select', { userId: member.userId, selected: event.currentTarget.checked })} />
         <Avatar value={persona?.emoji} label={persona?.name ?? member.userId} />
         <div className="min-w-0">
           <div className="truncate font-medium">{persona?.name ?? member.userId}</div>
@@ -1306,7 +1306,7 @@ const PeoplePanel: React.FC<{
         <MiniTabs active={activePeopleTab} onChange={setActivePeopleTab} tabs={[{ label: 'Guests', count: invites.length }, { label: 'Members', count: members.length || membersCount }, { label: 'Groups' }, { label: 'Contacts' }]} />
         <div className="flex flex-wrap gap-2">
           <Button tone="ghost" onClick={() => setSearchOpen((open) => !open)}><Search size={16} /></Button>
-          {searchOpen && <input value={peopleQuery} onChange={(event) => setPeopleQuery(event.target.value)} placeholder="Search people" className="h-8 w-[220px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" />}
+          {searchOpen && <input value={peopleQuery} onChange={(event) => setPeopleQuery(event.currentTarget.value)} placeholder="Search people" className="h-8 w-[220px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" />}
           <Button tone="primary" onClick={() => setModal({ name: 'invite-members' })}><UserPlus size={16} /> Add members</Button>
         </div>
       </div>
@@ -1326,7 +1326,7 @@ const InviteMembersModal: React.FC<{ onInvite: (email: string, role: InviteRole)
   return (
     <Modal open onClose={onClose} title="Invite members" size="sm">
       <div className="space-y-3">
-        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} placeholder="name@example.com" />
+        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={emailDraft} onChange={(event) => setEmailDraft(event.currentTarget.value)} placeholder="name@example.com" />
         <SelectButton value={role} options={[{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }, { value: 'guest', label: 'Guest' }]} onChange={(value) => setRole(value as InviteRole)}>Member</SelectButton>
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => { if (emailDraft.includes('@')) runAsync(onInvite(emailDraft.trim().toLowerCase(), role).then(() => onClose())); }}>Invite</Button></div>
       </div>
@@ -1390,8 +1390,8 @@ const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string }> = ({
   }
 
   async function handleLibraryImport(event: React.ChangeEvent<HTMLInputElement>) {
-    const imports = Array.from(event.target.files ?? []);
-    event.target.value = '';
+    const imports = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = '';
     await importFiles(imports);
   }
 
@@ -1483,8 +1483,8 @@ const PageSettingsPanel = () => {
   }
 
   function handleImport(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
     if (file) runMaybeAsync(actions.importFile(file));
   }
 
@@ -1586,7 +1586,7 @@ const PublicPagesPanel = () => {
   }
 
   const domainRows = domains.map((domain) => [
-    <input key={`${domain._id}-domain`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={domain.domain} onBlur={(event) => update(userId, workspaceId, { publicDomains: domains.map((item) => item._id === domain._id ? { ...item, domain: event.target.value, updatedAt: new Date().toISOString() } : item) })} />,
+    <input key={`${domain._id}-domain`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={domain.domain} onBlur={(event) => update(userId, workspaceId, { publicDomains: domains.map((item) => item._id === domain._id ? { ...item, domain: event.currentTarget.value, updatedAt: new Date().toISOString() } : item) })} />,
     domain.homepage,
     <span key={`${domain._id}-status`} className="text-[var(--osio-accent)]">{domain.status}</span>,
   ]);
@@ -1608,8 +1608,8 @@ const LibraryPanel = () => {
   const imageAssets = assets.filter((asset) => asset.kind === 'cover' || asset.kind === 'image').slice(0, 9);
 
   async function handleLibraryUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const uploads = Array.from(event.target.files ?? []);
-    event.target.value = '';
+    const uploads = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = '';
     for (const file of uploads) {
       const source = await readFileAsDataUrl(file);
       addAsset(activeUserId, {
@@ -1691,7 +1691,7 @@ const TeamspacesPanel: React.FC<{ workspaceName?: string }> = ({ workspaceName =
   const [limitOwners, setLimitOwners] = useState(false);
   const activeTeamspaces = teamspaces.filter((teamspace) => !teamspace.archivedAt);
   const rows = activeTeamspaces.map((teamspace) => [
-    <input key={`${teamspace._id}-name`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={teamspace.name} onBlur={(event) => updateTeamspace(workspaceId, teamspace._id, { name: event.target.value })} />,
+    <input key={`${teamspace._id}-name`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={teamspace.name} onBlur={(event) => updateTeamspace(workspaceId, teamspace._id, { name: event.currentTarget.value })} />,
     teamspace.owners.join(', ') || activeUserId,
     <SelectButton key={`${teamspace._id}-access`} value={teamspace.access} options={[{ value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }, { value: 'private', label: 'Private' }]} onChange={(value) => updateTeamspace(workspaceId, teamspace._id, { access: value as 'open' | 'closed' | 'private' })}>{teamspace.access}</SelectButton>,
     <Button key={`${teamspace._id}-archive`} tone="danger" onClick={() => archiveTeamspace(workspaceId, teamspace._id)}>Archive</Button>,
@@ -1716,7 +1716,7 @@ const NewTeamspaceModal: React.FC<{ onCreate: (name: string) => void; onClose: (
   return (
     <Modal open onClose={onClose} title="New teamspace" size="sm">
       <div className="space-y-4">
-        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={name} onChange={(event) => setName(event.target.value)} />
+        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={name} onChange={(event) => setName(event.currentTarget.value)} />
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => onCreate(name.trim() || 'New teamspace')}>Create</Button></div>
       </div>
     </Modal>
@@ -1789,7 +1789,7 @@ const BillingEditModal: React.FC<{ label: string; onSave: (value: string) => voi
   return (
     <Modal open onClose={onClose} title={label} size="sm">
       <div className="space-y-4">
-        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={value} onChange={(event) => setValue(event.target.value)} placeholder={label} />
+        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={value} onChange={(event) => setValue(event.currentTarget.value)} placeholder={label} />
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => onSave(value)}>Save</Button></div>
       </div>
     </Modal>

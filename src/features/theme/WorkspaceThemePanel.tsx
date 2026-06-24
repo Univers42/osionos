@@ -154,7 +154,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
           className="h-32 w-full resize-none rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2 font-mono text-xs text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
           placeholder='{"themeName":"Custom","tokens":{"ink":"#...","muted":"#...","surface":"#...","surfaceSecondary":"#...","surfaceHover":"#...","accent":"#...","line":"#..."}}'
           value={themeJson}
-          onChange={(event) => setThemeJson(event.target.value)}
+          onChange={(event) => setThemeJson(event.currentTarget.value)}
         />
         <button
           type="button"

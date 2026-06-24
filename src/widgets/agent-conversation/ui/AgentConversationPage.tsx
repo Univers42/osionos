@@ -554,26 +554,26 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
         <section className="border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-5 py-3" aria-label="Claude agent parameters">
           <div className="mx-auto flex max-w-4xl flex-wrap items-center gap-2 text-xs">
             <span className="inline-flex items-center gap-1 font-medium text-[var(--osio-fg-muted)]"><SlidersHorizontal size={14} aria-hidden="true" /> Parameters</span>
-            <select aria-label="Claude agent" value={settings.agent} onChange={(event) => patchSettings({ agent: event.target.value as AgentRunSettings["agent"] })} className="h-8 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 outline-none">
+            <select aria-label="Claude agent" value={settings.agent} onChange={(event) => patchSettings({ agent: event.currentTarget.value as AgentRunSettings["agent"] })} className="h-8 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 outline-none">
               <option value="default">Default agent</option>
               <option value="general-purpose">General purpose</option>
               <option value="Explore">Explore</option>
               <option value="Plan">Plan</option>
             </select>
-            <select aria-label="Claude model" value={settings.model} onChange={(event) => patchSettings({ model: event.target.value as AgentRunSettings["model"] })} className="h-8 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 outline-none">
+            <select aria-label="Claude model" value={settings.model} onChange={(event) => patchSettings({ model: event.currentTarget.value as AgentRunSettings["model"] })} className="h-8 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 outline-none">
               <option value="default">Default model</option>
               <option value="sonnet">Sonnet</option>
               <option value="opus">Opus</option>
               <option value="haiku">Haiku</option>
             </select>
-            <select aria-label="Claude effort" value={settings.effort} onChange={(event) => patchSettings({ effort: event.target.value as AgentRunSettings["effort"] })} className="h-8 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 outline-none">
+            <select aria-label="Claude effort" value={settings.effort} onChange={(event) => patchSettings({ effort: event.currentTarget.value as AgentRunSettings["effort"] })} className="h-8 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 outline-none">
               <option value="low">Low effort</option>
               <option value="medium">Medium effort</option>
               <option value="high">High effort</option>
               <option value="xhigh">Extra high effort</option>
             </select>
             <label className="inline-flex h-8 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2">
-              <input type="checkbox" checked={settings.mirrorCreatedPages} onChange={(event) => patchSettings({ mirrorCreatedPages: event.target.checked })} />{" "}
+              <input type="checkbox" checked={settings.mirrorCreatedPages} onChange={(event) => patchSettings({ mirrorCreatedPages: event.currentTarget.checked })} />{" "}
               Mirror pages
             </label>
           </div>
@@ -622,7 +622,7 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
             <span className="mb-2 ml-1 hidden text-[var(--osio-fg-subtle)] sm:inline-flex"><TerminalSquare size={16} aria-hidden="true" /></span>
             <textarea
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => setDraft(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                   event.preventDefault();

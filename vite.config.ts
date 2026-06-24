@@ -40,8 +40,16 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_BAAS_URL': JSON.stringify(env.VITE_BAAS_URL ?? ''),
     },
     resolve: {
-      dedupe: ['react', 'react-dom'],
+      dedupe: ['preact', 'preact/compat', 'preact/hooks'],
       alias: [
+        // react -> preact/compat (framework runtime ~174KB -> ~10KB) for mobile
+        // TBT/LCP. Order matters: most-specific first.
+        { find: /^react\/jsx-runtime$/, replacement: 'preact/jsx-runtime' },
+        { find: /^react\/jsx-dev-runtime$/, replacement: 'preact/jsx-dev-runtime' },
+        { find: /^react-dom\/client$/, replacement: 'preact/compat/client' },
+        { find: /^react-dom\/test-utils$/, replacement: 'preact/test-utils' },
+        { find: /^react-dom$/, replacement: 'preact/compat' },
+        { find: /^react$/, replacement: 'preact/compat' },
         {
           find: /^@notion-db\/object-database$/,
           replacement: path.resolve(root, 'src/shared/notion-database-sys/src/component/index.ts'),

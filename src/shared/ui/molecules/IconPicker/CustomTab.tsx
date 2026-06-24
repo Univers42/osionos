@@ -22,7 +22,7 @@ export const CustomTab: React.FC<{ onPick: (ref: string) => void }> = ({ onPick 
   const [url, setUrl] = useState("");
 
   const onFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const file = event.currentTarget.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => onPick(String(reader.result));
@@ -39,7 +39,7 @@ export const CustomTab: React.FC<{ onPick: (ref: string) => void }> = ({ onPick 
       <div className="space-y-1.5">
         <span className="text-xs font-medium text-[var(--osio-fg-muted)]">Paste an image / SVG URL</span>
         <div className="flex gap-2">
-          <input className={FIELD} placeholder="https://… or data:…" value={url} onChange={(e) => setUrl(e.target.value)} />
+          <input className={FIELD} placeholder="https://… or data:…" value={url} onChange={(e) => setUrl(e.currentTarget.value)} />
           <button type="button" className={BTN} disabled={!url.trim()} onClick={() => onPick(url.trim())}>Use</button>
         </div>
       </div>
@@ -50,7 +50,7 @@ export const CustomTab: React.FC<{ onPick: (ref: string) => void }> = ({ onPick 
           className={`${FIELD} h-20 resize-none font-mono text-xs`}
           placeholder="<svg viewBox='0 0 24 24'>…</svg>"
           value={markup}
-          onChange={(e) => setMarkup(e.target.value)}
+          onChange={(e) => setMarkup(e.currentTarget.value)}
         />
         <button
           type="button"

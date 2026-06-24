@@ -25,6 +25,7 @@ interface DroppedItem {
 
 /** Read the drag payload: a moved pane-tab, else a sidebar page (skip folders). */
 function readDrop(event: React.DragEvent<HTMLElement>): DroppedItem | null {
+  if (!event.dataTransfer) return null;
   const tabRaw = event.dataTransfer.getData(TAB_DND_MIME);
   if (tabRaw) {
     try {
@@ -48,6 +49,7 @@ export function usePaneDnd(paneId: string) {
   function onDragOver(event: React.DragEvent<HTMLElement>) {
     if (!dragActive) return;
     event.preventDefault();
+    if (!event.dataTransfer) return;
     event.dataTransfer.dropEffect = "move";
     setZone(computeDropZone(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect()));
   }

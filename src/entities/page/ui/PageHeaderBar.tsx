@@ -162,8 +162,8 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
   useEscapeKey(closeConfig, configOpen);
 
   function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = '';
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
     if (file) runPageAction(actions.importFile(file), showActionError);
   }
 
@@ -196,7 +196,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                 <div className="px-3 pb-2">
                   <div className="flex h-8 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2">
                     <Search size={14} className="text-[var(--osio-fg-muted)]" />
-                    <input value={actionQuery} onChange={(event) => setActionQuery(event.target.value)} placeholder="Search actions..." className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+                    <input value={actionQuery} onChange={(event) => setActionQuery(event.currentTarget.value)} placeholder="Search actions..." className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
                   </div>
                 </div>
 
@@ -232,7 +232,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                       <div className="flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--osio-bg-hover)]">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--osio-fg-muted)]"><Languages size={16} /></span>
                         <span className="min-w-0 flex-1 truncate">Translate</span>
-                        <select value={actions.translateLocale} className="max-w-28 rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-1.5 py-1 text-xs text-[var(--osio-fg-default)] outline-none" onChange={(event) => actions.setTranslateLocale(event.target.value)}>
+                        <select value={actions.translateLocale} className="max-w-28 rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-1.5 py-1 text-xs text-[var(--osio-fg-default)] outline-none" onChange={(event) => actions.setTranslateLocale(event.currentTarget.value)}>
                           {TRANSLATION_LANGUAGES.map((language) => <option key={language.locale} value={language.locale}>{language.label}</option>)}
                         </select>
                         <button type="button" className="rounded bg-[var(--osio-accent)] px-2 py-1 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90" onClick={() => runPageAction(actions.translate(actions.translateLocale), showActionError)}>Apply</button>

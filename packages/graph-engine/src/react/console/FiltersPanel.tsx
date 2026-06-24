@@ -76,7 +76,7 @@ export function FiltersPanel({ controls, legend, update }: FiltersPanelProps): R
             value={controls.filter.tagColors[tag.label] ?? TAG_FALLBACK}
             onChange={(e) =>
               update((draft) => {
-                draft.filter.tagColors[tag.label] = e.target.value;
+                draft.filter.tagColors[tag.label] = e.currentTarget.value;
               })
             }
           />

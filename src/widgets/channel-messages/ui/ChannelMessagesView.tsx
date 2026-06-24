@@ -148,7 +148,7 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
         <div className="mx-auto flex max-w-4xl items-end gap-2 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2 focus-within:border-[var(--osio-accent)]">
           <textarea
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => setDraft(event.currentTarget.value)}
             onKeyDown={(event) => {
               if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                 event.preventDefault();

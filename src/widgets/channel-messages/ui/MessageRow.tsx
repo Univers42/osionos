@@ -64,7 +64,7 @@ export const MessageRow: React.FC<MessageRowProps> = ({ message, isAuthor, canIn
           >
             <input
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => setDraft(event.currentTarget.value)}
               onKeyDown={(event) => { if (event.key === 'Escape') setEditing(false); }}
               className="flex-1 rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none focus:border-[var(--osio-accent)]"
             />

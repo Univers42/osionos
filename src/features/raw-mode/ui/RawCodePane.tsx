@@ -37,7 +37,7 @@ function RawCodePaneImpl({ initialSource, onChange, showLineNumbers }: Readonly<
   const [lineCount, setLineCount] = useState(() => countLines(initialSource));
 
   const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const next = event.target.value;
+    const next = event.currentTarget.value;
     onChange(next);
     const lines = countLines(next);
     setLineCount((previous) => (previous === lines ? previous : lines));

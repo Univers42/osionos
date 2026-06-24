@@ -36,7 +36,7 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
         type="checkbox"
         aria-label={property.label}
         checked={Boolean(property.value)}
-        onChange={(event) => onChange(event.target.checked)}
+        onChange={(event) => onChange(event.currentTarget.checked)}
         className="h-4 w-4 accent-[var(--osio-accent)]"
       />
     );
@@ -47,7 +47,7 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
       <select
         aria-label={property.label}
         value={stringValue(property.value)}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => onChange(event.currentTarget.value)}
         className={INPUT_CLASS}
       >
         <option value="">—</option>
@@ -62,7 +62,7 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
         aria-label={property.label}
         value={asStringArray(property.value).join(", ")}
         placeholder="Comma, separated, tags"
-        onChange={(event) => onChange(event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean))}
+        onChange={(event) => onChange(event.currentTarget.value.split(",").map((tag) => tag.trim()).filter(Boolean))}
         className={INPUT_CLASS}
       />
     );
@@ -77,8 +77,8 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
       autoComplete="off"
       onChange={(event) =>
         onChange(property.type === "number"
-          ? (event.target.value === "" ? null : Number(event.target.value))
-          : event.target.value)
+          ? (event.currentTarget.value === "" ? null : Number(event.currentTarget.value))
+          : event.currentTarget.value)
       }
       className={INPUT_CLASS}
     />

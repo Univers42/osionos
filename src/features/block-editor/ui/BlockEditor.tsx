@@ -322,7 +322,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 <input
                   autoFocus
                   value={langQuery}
-                  onChange={(e) => setLangQuery(e.target.value)}
+                  onChange={(e) => setLangQuery(e.currentTarget.value)}
                   placeholder="Search language…"
                   aria-label="Search code language"
                   name="code-language-search"
@@ -353,7 +353,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         </div>
         <input
           value={block.fileName ?? ""}
-          onChange={(event) => commitBlockUpdate(block.id, { fileName: event.target.value })}
+          onChange={(event) => commitBlockUpdate(block.id, { fileName: event.currentTarget.value })}
           placeholder="Untitled"
           aria-label="Code file name"
           name="code-file-name"
@@ -684,7 +684,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 <textarea
                   ref={textareaRef}
                   value={block.content}
-                  onChange={(e) => onChange(e.target.value)}
+                  onChange={(e) => onChange(e.currentTarget.value)}
                   onKeyDown={handleCodeTextareaKeyDown}
                   placeholder={getBlockPlaceholder(block, "Code…")}
                   aria-label="Code editor"
@@ -834,7 +834,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             <textarea
               ref={equationTextareaRef}
               value={block.content}
-              onChange={(e) => onChange(e.target.value)}
+              onChange={(e) => onChange(e.currentTarget.value)}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
               onFocus={() => setIsEquationEditing(true)}

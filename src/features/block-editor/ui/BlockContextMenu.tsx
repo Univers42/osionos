@@ -180,7 +180,7 @@ const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
           <span>Name</span>
           <input
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => setName(event.currentTarget.value)}
             className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
           />
         </label>
@@ -190,7 +190,7 @@ const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
             <input
               type="color"
               value={textColor}
-              onChange={(event) => setTextColor(event.target.value)}
+              onChange={(event) => setTextColor(event.currentTarget.value)}
               className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-transparent"
             />
           </label>
@@ -199,7 +199,7 @@ const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
             <input
               type="color"
               value={backgroundColor}
-              onChange={(event) => setBackgroundColor(event.target.value)}
+              onChange={(event) => setBackgroundColor(event.currentTarget.value)}
               className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-transparent"
             />
           </label>
@@ -430,7 +430,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
         <div className="px-2 pb-2">
           <input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => setQuery(event.currentTarget.value)}
             placeholder="Search actions…"
             className="h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)] focus:border-[var(--osio-accent)]"
           />

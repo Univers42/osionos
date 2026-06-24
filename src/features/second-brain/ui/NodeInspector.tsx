@@ -113,7 +113,7 @@ const EditableField: React.FC<{ label: string; value: string; onCommit: (value: 
     <input
       key={value}
       defaultValue={value}
-      onBlur={(event) => { if (event.target.value !== value) onCommit(event.target.value); }}
+      onBlur={(event) => { if (event.currentTarget.value !== value) onCommit(event.currentTarget.value); }}
       onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
       className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-[var(--osio-fg-default)] outline-none hover:border-[var(--osio-border-default)] focus:border-[var(--osio-accent)]"
     />

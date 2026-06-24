@@ -71,7 +71,7 @@ export const CanvasCellChrome: React.FC<CanvasCellChromeProps> = ({
       <input
         value={labelDraft ?? label}
         onFocus={() => setLabelDraft(label)}
-        onChange={(event) => setLabelDraft(event.target.value)}
+        onChange={(event) => setLabelDraft(event.currentTarget.value)}
         onBlur={() => {
           if (labelDraft !== null && labelDraft.trim() !== label) onRename(labelDraft.trim());
           setLabelDraft(null);

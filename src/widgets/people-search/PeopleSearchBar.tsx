@@ -62,7 +62,7 @@ export const PeopleSearchBar: React.FC<PeopleSearchBarProps> = ({ onClose }) => 
         <input
           autoFocus
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => setQuery(event.currentTarget.value)}
           onKeyDown={(event) => { if (event.key === 'Escape') onClose(); }}
           placeholder="Search people…"
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--osio-fg-subtle)]"

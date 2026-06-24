@@ -85,7 +85,7 @@ export const ColorSwatches: React.FC<{ value?: string; onChange: (color?: string
           style={{ background: isCustom ? value : RAINBOW }}
         >
           {isCustom ? null : <Pipette size={11} className="text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)]" />}
-          <input type="color" value={isCustom ? value : "#3b82f6"} onChange={(e) => onChange(e.target.value)} className="sr-only" />
+          <input type="color" value={isCustom ? value : "#3b82f6"} onChange={(e) => onChange(e.currentTarget.value)} className="sr-only" />
         </label>
       </div>
     </div>

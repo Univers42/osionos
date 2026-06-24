@@ -42,7 +42,7 @@ export const SharePeoplePicker: React.FC<SharePeoplePickerProps> = ({ people, ex
         <input
           value={query}
           disabled={disabled}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => setQuery(event.currentTarget.value)}
           placeholder="Add people by name, email or role…"
           className="min-w-0 flex-1 bg-transparent text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
         />

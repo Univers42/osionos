@@ -73,7 +73,7 @@ export const PageComments: React.FC<Props> = ({ pageId, open, onClose }) => {
       <form className="flex items-end gap-2" onSubmit={handleSubmit}>
         <textarea
           value={commentDraft}
-          onChange={(event) => setCommentDraft(event.target.value)}
+          onChange={(event) => setCommentDraft(event.currentTarget.value)}
           rows={2}
           placeholder="Write a comment…"
           className="min-h-10 flex-1 resize-none rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm outline-none focus:border-[var(--osio-accent)]"

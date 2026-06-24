@@ -51,7 +51,7 @@ export const DataSourcePicker: React.FC<DataSourcePickerProps> = ({ current, onP
         <input
           autoFocus
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => setQuery(event.currentTarget.value)}
           onKeyDown={(event) => { if (event.key === "Escape") onClose(); }}
           placeholder="Search mounts and tables…"
           className="flex-1 rounded border border-[var(--osio-border-default)] bg-transparent px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus:border-[var(--osio-accent)]"

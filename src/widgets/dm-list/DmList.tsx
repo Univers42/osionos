@@ -74,7 +74,7 @@ export const DmList: React.FC = () => {
           <input
             autoFocus
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => setQuery(event.currentTarget.value)}
             onKeyDown={(event) => { if (event.key === 'Escape') setPickerOpen(false); }}
             placeholder="Search people…"
             className="w-full rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none focus:border-[var(--osio-accent)]"

@@ -1316,7 +1316,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                     onChange={(e) =>
                       setLinkPicker((current) =>
                         current
-                          ? { ...current, query: e.target.value }
+                          ? { ...current, query: e.currentTarget.value }
                           : current,
                       )
                     }
@@ -1356,7 +1356,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                     onChange={(e) =>
                       setLinkPicker((current) =>
                         current
-                          ? { ...current, query: e.target.value }
+                          ? { ...current, query: e.currentTarget.value }
                           : current,
                       )
                     }

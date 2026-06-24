@@ -57,6 +57,7 @@ export function usePageRowDnd({ pageId, parentPageId, workspaceId, canExpand, ex
 
   function handleDragOver(e: React.DragEvent<HTMLElement>) {
     if (isInvalidTarget) return;
+    if (!e.dataTransfer) return;
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
@@ -89,6 +90,7 @@ export function usePageRowDnd({ pageId, parentPageId, workspaceId, canExpand, ex
       draggable: true as const,
       onDragStart: (e: React.DragEvent<HTMLElement>) => {
         e.stopPropagation();
+        if (!e.dataTransfer) return;
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setData("text/plain", pageId);
         beginDrag(pageId);

@@ -57,7 +57,7 @@ const PagePropertyValue: React.FC<{
         type="checkbox"
         aria-label={property.key}
         checked={Boolean(property.value)}
-        onChange={(event) => onChangeProperty(property.key, event.target.checked)}
+        onChange={(event) => onChangeProperty(property.key, event.currentTarget.checked)}
         className="h-4 w-4 accent-[var(--osio-accent)]"
       />
     );
@@ -69,7 +69,7 @@ const PagePropertyValue: React.FC<{
         aria-label={property.key}
         name={property.key}
         value={stringValue(property.value)}
-        onChange={(event) => onChangeProperty(property.key, event.target.value)}
+        onChange={(event) => onChangeProperty(property.key, event.currentTarget.value)}
         className="w-full bg-transparent outline-none text-sm text-[var(--osio-fg-default)]"
       >
         {property.options.map((option) => <option key={option} value={option}>{option}</option>)}
@@ -93,7 +93,7 @@ const PagePropertyValue: React.FC<{
       autoComplete="off"
       type={propertyInputType(property.type)}
       value={stringValue(property.value)}
-      onChange={(event) => onChangeProperty(property.key, property.type === 'number' ? Number(event.target.value) : event.target.value)}
+      onChange={(event) => onChangeProperty(property.key, property.type === 'number' ? Number(event.currentTarget.value) : event.currentTarget.value)}
       className="w-full bg-transparent outline-none text-sm text-[var(--osio-fg-default)]"
     />
   );

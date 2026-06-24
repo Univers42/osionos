@@ -52,7 +52,7 @@ export function Slider(props: SliderProps): ReactElement {
         max={props.max}
         step={props.step}
         value={props.value}
-        onChange={(e) => props.onChange(Number(e.target.value))}
+        onChange={(e) => props.onChange(Number(e.currentTarget.value))}
       />
     </label>
   );
@@ -71,7 +71,7 @@ export interface ToggleProps {
 export function Toggle(props: ToggleProps): ReactElement {
   return (
     <label className="osio-gc-toggle">
-      <input type="checkbox" checked={props.checked} onChange={(e) => props.onChange(e.target.checked)} />
+      <input type="checkbox" checked={props.checked} onChange={(e) => props.onChange(e.currentTarget.checked)} />
       {props.glyph ?? (props.color !== undefined && <ColorDot color={props.color} />)}
       <span className="osio-gc-toggle__label">{props.label}</span>
       {props.count !== undefined && <span className="osio-gc-count">{props.count}</span>}

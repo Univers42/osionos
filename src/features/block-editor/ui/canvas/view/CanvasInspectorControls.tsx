@@ -29,7 +29,7 @@ export const CanvasNumberControl: React.FC<{
         max={max}
         value={value}
         onChange={(event) => {
-          const next = Number(event.target.value);
+          const next = Number(event.currentTarget.value);
           if (Number.isFinite(next)) onChange(Math.max(min, Math.min(max, Math.round(next))));
         }}
       />
@@ -45,7 +45,7 @@ export const CanvasToggle: React.FC<{
 }> = ({ label, checked, onChange }) => (
   <label className="osionos-layout-control-row">
     <span>{label}</span>
-    <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+    <input type="checkbox" checked={checked} onChange={(event) => onChange(event.currentTarget.checked)} />
   </label>
 );
 

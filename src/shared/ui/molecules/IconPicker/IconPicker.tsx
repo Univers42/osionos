@@ -79,7 +79,7 @@ export const IconPicker: React.FC<Props> = ({ current, onSelect, onRemove, onClo
           <input
             autoFocus
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => setQuery(e.currentTarget.value)}
             placeholder={`Search ${tab}…`}
             className="w-full bg-transparent text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
           />

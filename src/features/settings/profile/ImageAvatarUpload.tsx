@@ -71,7 +71,7 @@ export const ImageAvatarUpload: React.FC<ImageAvatarUploadProps> = ({ onUploaded
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"
         className="hidden"
-        onChange={(event) => { void handleFile(event.target.files?.[0]); event.target.value = ''; }}
+        onChange={(event) => { void handleFile(event.currentTarget.files?.[0]); event.currentTarget.value = ''; }}
       />
       <button
         type="button"

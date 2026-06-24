@@ -477,7 +477,10 @@ const ToggleBlockReadOnly: React.FC<{ block: Block; bulletDepth: number; numbere
           <InlineMarkdown content={block.content} />
         </button>
       </div>
-      {expanded && renderNestedChildren(block, bulletDepth, numberedDepth)}
+      {/* Local `expanded` state owns visibility here, so clear the block's own
+          `collapsed` flag (renderNestedChildren bails on it) — otherwise an
+          initially-collapsed toggle can never reveal its children on expand. */}
+      {expanded && renderNestedChildren({ ...block, collapsed: false }, bulletDepth, numberedDepth)}
       {expanded && !block.children?.length && (
         <div className="ml-6 mt-0.5 pl-3 border-l-2 border-[var(--osio-border-default)]">
           <span className="text-xs text-[var(--osio-fg-subtle)] py-1 italic">

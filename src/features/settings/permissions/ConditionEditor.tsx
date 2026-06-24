@@ -46,15 +46,15 @@ export const ConditionEditor: React.FC<ConditionEditorProps> = ({ policy, saving
       <div className="grid grid-cols-3 gap-2">
         <label className="text-xs text-[var(--osio-fg-muted)]">
           Clearance (min)
-          <Input className="mt-1" value={clearance} placeholder="e.g. 3" onChange={(event) => setClearance(event.target.value)} />
+          <Input className="mt-1" value={clearance} placeholder="e.g. 3" onChange={(event) => setClearance(event.currentTarget.value)} />
         </label>
         <label className="text-xs text-[var(--osio-fg-muted)]">
           Department
-          <Input className="mt-1" value={department} placeholder="e.g. operations" onChange={(event) => setDepartment(event.target.value)} />
+          <Input className="mt-1" value={department} placeholder="e.g. operations" onChange={(event) => setDepartment(event.currentTarget.value)} />
         </label>
         <label className="text-xs text-[var(--osio-fg-muted)]">
           Time window
-          <Input className="mt-1" value={timeWindow} placeholder="e.g. 08:00-20:00" onChange={(event) => setTimeWindow(event.target.value)} />
+          <Input className="mt-1" value={timeWindow} placeholder="e.g. 08:00-20:00" onChange={(event) => setTimeWindow(event.currentTarget.value)} />
         </label>
       </div>
       <div className="flex items-center justify-between">

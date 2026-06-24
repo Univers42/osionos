@@ -25,6 +25,7 @@ export const TabStrip: React.FC<{ pane: PaneNode }> = ({ pane }) => {
   const tabDragActive = useSidebarTreeDnd((s) => s.dragKind === "tab");
 
   function onStripDrop(event: React.DragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer) return;
     const raw = event.dataTransfer.getData(TAB_DND_MIME);
     if (!raw) return;
     event.preventDefault();

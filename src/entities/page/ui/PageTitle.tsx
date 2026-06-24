@@ -36,7 +36,7 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (readOnly) return;
-    onChangeTitle(e.target.value);
+    onChangeTitle(e.currentTarget.value);
   }, [onChangeTitle, readOnly]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {

@@ -10,11 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { Profiler, StrictMode } from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { MotionConfig } from "motion/react";
 import App from "./App.tsx";
-import { recordReactCommit } from '@/shared/lib/perf/measure';
 // Database (object-database) theme + leaflet styles ship with the lazy
 // DatabaseBlock chunk (perf: off the render-blocking entry CSS), not here.
 import './styles/_graphical-chart.scss';
@@ -42,22 +40,13 @@ globalThis.addEventListener("vite:preloadError", () => {
 
 const root = document.getElementById("root");
 if (root) {
+  // Note: framer-motion (motion/react) was removed for the preact/compat
+  // migration — it is structurally incompatible with Preact (reads React fiber
+  // internals). The app animates via CSS only, and prefers-reduced-motion is
+  // honoured in CSS (@media), so MotionConfig had nothing to configure.
   createRoot(root).render(
     <StrictMode>
-      {/* react-doctor/require-reduced-motion: honour user's OS-level
-          prefers-reduced-motion preference for every motion component (WCAG
-          2.3.3). `reducedMotion="user"` is the recommended default. */}
-      <MotionConfig reducedMotion="user">
-        {/* Profiler only in dev: it wraps the whole tree and fires onRender on
-            every commit — pure overhead (TBT) in production builds. */}
-        {import.meta.env.DEV ? (
-          <Profiler id="App" onRender={recordReactCommit}>
-            <App />
-          </Profiler>
-        ) : (
-          <App />
-        )}
-      </MotionConfig>
+      <App />
     </StrictMode>,
   );
 }

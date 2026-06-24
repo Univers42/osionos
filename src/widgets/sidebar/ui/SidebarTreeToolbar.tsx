@@ -23,7 +23,7 @@ interface Props {
 
 /** Section-header toolbar replacing the "⋯": add file, add folder, collapse, refresh. */
 export const SidebarTreeToolbar: React.FC<Props> = ({ onAddFile, onAddFolder, onCollapseAll, onRefresh }) => {
-  const run = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
+  const run = (fn: () => void) => (e: React.MouseEvent<HTMLElement>) => { e.stopPropagation(); fn(); };
   return (
     <>
       <IconButton size="xs" title="Add file" onClick={run(onAddFile)}><FilePlus size={14} /></IconButton>

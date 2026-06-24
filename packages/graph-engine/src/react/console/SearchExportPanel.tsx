@@ -33,7 +33,7 @@ export function SearchExportPanel({ controls, update, engine, onSelect }: Search
         placeholder="Search nodes…"
         aria-label="Search nodes"
         value={controls.search.query}
-        onChange={(e) => onSearch(e.target.value)}
+        onChange={(e) => onSearch(e.currentTarget.value)}
       />
       <div className="osio-gc-row">
         <button type="button" className="osio-gc-btn" onClick={() => engine?.fit()}>

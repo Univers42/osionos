@@ -34,6 +34,7 @@ export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onCl
     <div
       draggable
       onDragStart={(e) => {
+        if (!e.dataTransfer) return;
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setData(TAB_DND_MIME, JSON.stringify({ paneId, tabId: tab.tabId, tab }));
         beginTabDrag();

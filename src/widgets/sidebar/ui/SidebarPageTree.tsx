@@ -82,7 +82,7 @@ interface RecentPageActionsProps {
   recent: ActivePage;
   active: boolean;
   onRedirectHome: () => void;
-  onAddChild: (e: React.MouseEvent, recent: ActivePage) => void;
+  onAddChild: (e: React.MouseEvent<HTMLButtonElement>, recent: ActivePage) => void;
 }
 
 const RecentPageActions: React.FC<RecentPageActionsProps> = ({
@@ -124,7 +124,7 @@ interface RecentSidebarItemProps {
   activePageId: string | null | undefined;
   onOpenPage: (page: ActivePage) => void;
   onRedirectHome: () => void;
-  onAddChild: (e: React.MouseEvent, recent: ActivePage) => void;
+  onAddChild: (e: React.MouseEvent<HTMLButtonElement>, recent: ActivePage) => void;
 }
 
 const RecentSidebarItem: React.FC<RecentSidebarItemProps> = ({
@@ -306,7 +306,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   }
 
   const handleAddChildToRecent = async (
-    e: React.MouseEvent,
+    e: React.MouseEvent<HTMLButtonElement>,
     recent: ActivePage,
   ) => {
     e.stopPropagation();
@@ -363,7 +363,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
     });
   }
 
-  function handleToggleChannelVisibility(event: React.MouseEvent, channel: WorkspaceChannel) {
+  function handleToggleChannelVisibility(event: React.MouseEvent<HTMLButtonElement>, channel: WorkspaceChannel) {
     event.stopPropagation();
     if (!activeWorkspaceId) return;
     const isWorkspaceVisible = channel.visibility === "workspace";
@@ -373,7 +373,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
     }));
   }
 
-  function handleCreateThread(event: React.MouseEvent, channel: WorkspaceChannel) {
+  function handleCreateThread(event: React.MouseEvent<HTMLButtonElement>, channel: WorkspaceChannel) {
     event.stopPropagation();
     if (activeWorkspaceId) {
       runWorkspaceAction(addThread(safeActiveUserId, activeWorkspaceId, channel.id, `${channel.name}-thread`));
