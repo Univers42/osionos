@@ -39,7 +39,9 @@ import { defineScenario } from "../core/scenario.mjs";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const AUTH_ENVIRONMENT_FULL_MARKDOWN = readFileSync(
-  resolve(currentDir, "../../../../../../docs/auth-environment.md"),
+  // Use the vendored fixture (the old ../../../../../../docs path assumed the
+  // monorepo layout and breaks in the standalone osionos CI checkout).
+  resolve(currentDir, "../../canvas/fixtures/auth-environment.md"),
   "utf8",
 );
 
