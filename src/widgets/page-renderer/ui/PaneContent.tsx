@@ -21,6 +21,7 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import { HomeTabView } from "./HomeTabView";
 import { FolderTabView } from "./FolderTabView";
 import { PageBlocksRenderer } from "./PageBlocksRenderer";
+import { PageOutlineRail } from "@/widgets/page-toc/PageOutlineRail";
 import {
   LazyAgentConversationPage,
   LazyBaasConsoleView,
@@ -64,6 +65,10 @@ const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab, pa
     // pane → activePaneId flips → this swaps to the live editor.
     return (
       <div className="osionos-page h-full overflow-auto bg-[var(--osio-bg-page)]">
+        {/* Per-pane TOC rail, same as the focused editor — so a split shows a
+            rail on EVERY visible page, each hugging its own pane's right edge.
+            Sticky first child + zero-size: no layout/scroll impact. */}
+        <PageOutlineRail pageId={tab.pageId} />
         <div className="mx-auto w-full max-w-3xl px-12 py-10">
           {(page.icon || page.title) ? (
             <h1 className="mb-4 text-3xl font-bold text-[var(--osio-fg-default)]">

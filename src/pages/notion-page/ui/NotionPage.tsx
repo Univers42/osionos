@@ -104,6 +104,8 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
       ].filter(Boolean).join(" ")}
       style={pageStyle}
     >
+      {!hasFullPageLayout && <PageOutlineRail pageId={pageId} />}
+
       <PageHeaderBar
         key={pageId}
         pageId={pageId}
@@ -121,8 +123,6 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
       />
 
       <PageBody pageId={pageId} locked={pageConfig.locked} />
-
-      {!hasFullPageLayout && <PageOutlineRail pageId={pageId} />}
     </div>
   );
 };

@@ -183,7 +183,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "heading_1":
       return (
         <>
-          <h1 className="text-2xl font-bold text-[var(--osio-fg-default)] mt-6 mb-1 leading-tight" style={surface}>
+          <h1 data-block-type="heading_1" data-block-id={block.id} className="text-2xl font-bold text-[var(--osio-fg-default)] mt-6 mb-1 leading-tight" style={surface}>
             <InlineMarkdown content={block.content} />
           </h1>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -193,7 +193,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "heading_2":
       return (
         <>
-          <h2 className="text-xl font-semibold text-[var(--osio-fg-default)] mt-5 mb-1 leading-tight" style={surface}>
+          <h2 data-block-type="heading_2" data-block-id={block.id} className="text-xl font-semibold text-[var(--osio-fg-default)] mt-5 mb-1 leading-tight" style={surface}>
             <InlineMarkdown content={block.content} />
           </h2>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -203,7 +203,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "heading_3":
       return (
         <>
-          <h3 className="text-lg font-semibold text-[var(--osio-fg-default)] mt-4 mb-0.5 leading-snug" style={surface}>
+          <h3 data-block-type="heading_3" data-block-id={block.id} className="text-lg font-semibold text-[var(--osio-fg-default)] mt-4 mb-0.5 leading-snug" style={surface}>
             <InlineMarkdown content={block.content} />
           </h3>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
