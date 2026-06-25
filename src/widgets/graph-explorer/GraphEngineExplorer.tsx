@@ -17,7 +17,7 @@
  * owns data + BaaS status. Selecting a node focuses its neighborhood in-canvas.
  */
 
-import { type ReactElement, useMemo, useState } from "react";
+import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type GraphEngine,
   type GraphModel as EngineGraphModel,
@@ -30,7 +30,9 @@ import {
   useControls,
 } from "@osionos/graph-engine";
 import "@osionos/graph-engine/styles/graph.css";
+import { usePageStore } from "@/store/usePageStore";
 import { type GraphData, useGraphModel } from "./useGraphModel";
+import { NodeHoverPreview } from "./NodeHoverPreview";
 
 export function GraphEngineExplorer(): ReactElement {
   const data = useGraphModel();
@@ -39,6 +41,48 @@ export function GraphEngineExplorer(): ReactElement {
   const { controls, update, reset } = useControls("osionos-graph-engine");
   const [engine, setEngine] = useState<GraphEngine | null>(null);
   const [selectedId, setSelectedId] = useState<NodeId | null>(null);
+  const [hoveredId, setHoveredId] = useState<NodeId | null>(null);
+  const [modHeld, setModHeld] = useState(false);
+  const [cursor, setCursor] = useState({ x: 0, y: 0 });
+  const modRef = useRef(false);
+  const cursorRef = useRef({ x: 0, y: 0 });
+
+  // Ctrl/⌘ held → preview-on-hover + click-to-open mode; released → preview stops.
+  useEffect(() => {
+    const sync = (e: KeyboardEvent) => {
+      const down = e.ctrlKey || e.metaKey;
+      modRef.current = down;
+      setModHeld(down);
+      if (down) setCursor(cursorRef.current); // snap to cursor even without a move
+    };
+    const clear = () => { modRef.current = false; setModHeld(false); };
+    window.addEventListener("keydown", sync);
+    window.addEventListener("keyup", sync);
+    window.addEventListener("blur", clear);
+    return () => {
+      window.removeEventListener("keydown", sync);
+      window.removeEventListener("keyup", sync);
+      window.removeEventListener("blur", clear);
+    };
+  }, []);
+
+  const openNode = useCallback((id: NodeId) => {
+    const page = usePageStore.getState().pageById(String(id));
+    if (!page) return;
+    usePageStore.getState().openPage({
+      id: page._id,
+      workspaceId: page.workspaceId,
+      kind: page.databaseId ? "database" : "page",
+      title: page.title,
+      icon: page.icon,
+    });
+  }, []);
+
+  // Ctrl/⌘ + click opens the note; a plain click selects + focuses its neighborhood.
+  const handleSelect = useCallback((id: NodeId | null) => {
+    if (id !== null && modRef.current) { openNode(id); return; }
+    setSelectedId(id);
+  }, [openNode]);
 
   const legend = useMemo(() => deriveLegend(engineModel), [engineModel]);
   const focusIds = useMemo(
@@ -47,13 +91,20 @@ export function GraphEngineExplorer(): ReactElement {
   );
 
   return (
-    <div className="relative h-full min-h-0 w-full">
+    <div
+      className="relative h-full min-h-0 w-full"
+      onMouseMove={(e) => {
+        cursorRef.current = { x: e.clientX, y: e.clientY };
+        if (modRef.current) setCursor(cursorRef.current);
+      }}
+    >
       <GraphView
         model={engineModel}
         controls={controls}
         selectedId={selectedId}
         focusIds={focusIds}
-        onSelect={setSelectedId}
+        onSelect={handleSelect}
+        onHover={setHoveredId}
         onExpand={data.expand}
         onReady={setEngine}
       />
@@ -70,6 +121,9 @@ export function GraphEngineExplorer(): ReactElement {
         <Minimap engine={engine} />
       </div>
       {model.stats.nodes === 0 ? <EmptyState data={data} /> : null}
+      {modHeld && hoveredId !== null && (
+        <NodeHoverPreview pageId={String(hoveredId)} x={cursor.x} y={cursor.y} />
+      )}
     </div>
   );
 }
