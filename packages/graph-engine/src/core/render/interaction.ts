@@ -36,6 +36,7 @@ export class SceneInteraction {
   private dragIndex = -1;
   private pointerStart = { x: 0, y: 0 };
   private pointerMoved = false;
+  private lastHover = -1;
 
   private readonly onWheel = (e: WheelEvent): void => this.wheel(e);
   private readonly onDown = (e: PointerEvent): void => this.down(e);
@@ -98,7 +99,12 @@ export class SceneInteraction {
       this.host.setCamera(panBy(this.host.getCamera(), event.movementX, event.movementY));
       return;
     }
-    this.host.setHover(this.host.hitTestLocal(point.x, point.y));
+    const hovered = this.host.hitTestLocal(point.x, point.y);
+    this.host.setHover(hovered);
+    if (hovered !== this.lastHover) {
+      this.lastHover = hovered;
+      this.callbacks.onHover(hovered >= 0 ? this.host.idAt(hovered) : null);
+    }
   }
 
   private up(event: PointerEvent): void {
