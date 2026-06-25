@@ -18,13 +18,23 @@ const MAX_SPRITES = 384;
 
 export class NodeSpriteCache {
   private readonly cache = new Map<string, HTMLCanvasElement>();
-  private style: SpriteStyle = { backing: "rgba(3, 2, 12, 0.66)", mode: "dark" };
+  private style: SpriteStyle = {
+    backing: "rgba(20, 18, 14, 0.72)",
+    mode: "dark",
+    rim: "rgba(255, 244, 228, 0.16)",
+    shadow: "rgba(0, 0, 0, 0.45)",
+  };
   /** Wired by the scene: schedules a repaint when an async glyph image lands. */
   onInvalidate: (() => void) | null = null;
 
   /** Theme-derived sprite materials; any change rebakes everything. */
   setTheme(style: SpriteStyle): void {
-    if (style.backing !== this.style.backing || style.mode !== this.style.mode) {
+    if (
+      style.backing !== this.style.backing ||
+      style.mode !== this.style.mode ||
+      style.rim !== this.style.rim ||
+      style.shadow !== this.style.shadow
+    ) {
       this.style = style;
       this.cache.clear();
     }

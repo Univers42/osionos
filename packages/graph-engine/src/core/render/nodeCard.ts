@@ -14,7 +14,7 @@ import { ellipsize } from "./cardText";
 
 const CARD_W = 96;
 const CARD_H = 32;
-const RADIUS = 7;
+const RADIUS = 8;
 const CHIP = 22;
 const MAX_CARDS = 80;
 
@@ -52,8 +52,15 @@ function drawCard(d: DrawCtx, i: number, alpha: number, hovered: boolean, select
   const y = state.posY[i] - CARD_H / 2;
   ctx.globalAlpha = alpha;
   roundRect(ctx, x, y, CARD_W, CARD_H, RADIUS);
+  // Soft warm drop shadow under the card (baked into this fill only — capped at
+  // MAX_CARDS and only at close zoom, so it never touches the hot sprite loop).
+  ctx.save();
+  ctx.shadowColor = theme.cardShadow;
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 2;
   ctx.fillStyle = theme.cardBg;
   ctx.fill();
+  ctx.restore();
   ctx.lineWidth = selected || hovered ? 1.6 : 1;
   ctx.strokeStyle = selected ? theme.selectRing : hovered ? theme.hoverRing : theme.cardBorder;
   ctx.stroke();
@@ -61,17 +68,17 @@ function drawCard(d: DrawCtx, i: number, alpha: number, hovered: boolean, select
 
   const textX = x + 5 + CHIP + 5;
   const textW = CARD_W - 5 - CHIP - 5 - 16;
-  ctx.font = "600 9.5px ui-sans-serif, system-ui, sans-serif";
+  ctx.font = '600 9.5px "Newsreader", Georgia, serif';
   ctx.fillStyle = theme.cardTitle;
   ctx.fillText(ellipsize(ctx, state.labelText[i] ?? state.ids[i], textW), textX, y + 11);
-  ctx.font = "8px ui-sans-serif, system-ui, sans-serif";
+  ctx.font = '8px "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif';
   ctx.fillStyle = theme.cardMuted;
   const secondary = state.databaseId[i] ?? state.source[i];
   ctx.fillText(ellipsize(ctx, secondary, textW), textX, y + 22.5);
 
   // Link-count pill at the right edge, stroked in the node color.
   const degree = String(state.degree[i]);
-  ctx.font = "8.5px ui-sans-serif, system-ui, sans-serif";
+  ctx.font = '8.5px "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif';
   ctx.textAlign = "right";
   ctx.fillStyle = state.fills[i];
   ctx.fillText(degree, x + CARD_W - 6, y + 11);
@@ -110,10 +117,10 @@ function cardChip(ctx: CanvasRenderingContext2D, d: DrawCtx, i: number, x: numbe
     }
   }
   if (glyph.kind === "emoji") {
-    ctx.font = "13px ui-sans-serif, system-ui, sans-serif";
+    ctx.font = '13px "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif';
     ctx.fillText(glyph.ref, x + CHIP / 2, y + CHIP / 2 + 0.5);
   } else {
-    ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
+    ctx.font = '600 12px "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif';
     ctx.fillStyle = state.fills[i];
     ctx.fillText(glyph.kind === "monogram" ? glyph.ref : "•", x + CHIP / 2, y + CHIP / 2 + 0.5);
   }

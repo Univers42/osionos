@@ -46,7 +46,7 @@ for (const file of [
 	resolve(APP_ROOT, '../../../.env.local'),
 	resolve(APP_ROOT, '../../opposite-osiris/.env.local'),
 	resolve(APP_ROOT, '../../opposite-osiris/.env'),
-	resolve(APP_ROOT, '../../../apps/baas/.env.local'),
+	resolve(APP_ROOT, '../../../apps/grobase/.env.local'),
 ]) {
 	const envText = readOptionalEnvFile(file);
 	if (!envText) continue;
@@ -1253,6 +1253,44 @@ async function handlePageList(url, request, response, config, fetchImpl) {
 	return true;
 }
 
+const PAGE_SEARCH_MAX = 25;
+
+/** Rank a page row against a lowercased query: title-prefix > title-substring > content hit. */
+function rankPageRow(row, query) {
+	const title = String(row.title || 'Untitled').toLowerCase();
+	const titleIndex = title.indexOf(query);
+	if (titleIndex === 0) return 3;
+	if (titleIndex > 0) return 2;
+	try {
+		if (JSON.stringify(row.content ?? '').toLowerCase().includes(query)) return 1;
+	} catch { /* unserialisable content — fall back to title-only */ }
+	return -1;
+}
+
+/**
+ * GET /api/pages/search?workspaceId=&q=&limit= — server-side search across ALL pages
+ * in the workspace (not just the client-loaded subset), so deeply nested notes are
+ * found by title or content. Owner/ACL-scoped via requireWorkspaceAccess. This is the
+ * stable contract the grobase vector backend (cosine /search) will later serve unchanged.
+ */
+async function handlePageSearch(url, request, response, config, fetchImpl) {
+	const workspaceId = requireUuid(url.searchParams.get('workspaceId'), 'workspaceId');
+	await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
+	const query = (url.searchParams.get('q') || '').trim().toLowerCase();
+	const limit = Math.min(Math.max(Number.parseInt(url.searchParams.get('limit') || '12', 10) || 12, 1), PAGE_SEARCH_MAX);
+	if (!query) { json(response, 200, [], config); return true; }
+	const rows = await listPageRows(workspaceId, config, fetchImpl, {});
+	const ranked = rows
+		.filter((row) => !row.archived_at)
+		.map((row) => ({ row, rank: rankPageRow(row, query) }))
+		.filter((entry) => entry.rank >= 0)
+		.sort((a, b) => b.rank - a.rank || String(b.row.updated_at || '').localeCompare(String(a.row.updated_at || '')))
+		.slice(0, limit)
+		.map((entry) => entry.row);
+	json(response, 200, pageRowsToEntries(ranked), config);
+	return true;
+}
+
 async function handlePageRead(url, request, response, config, fetchImpl) {
 	const pageId = pageIdFromPath(url.pathname);
 	if (!pageId) return false;
@@ -1299,6 +1337,9 @@ async function handleGraphPages(request, response, config, fetchImpl) {
 async function handlePagesGet(url, request, response, config, fetchImpl) {
 	if (url.pathname === '/api/graph/pages') {
 		return handleGraphPages(request, response, config, fetchImpl);
+	}
+	if (url.pathname === '/api/pages/search') {
+		return handlePageSearch(url, request, response, config, fetchImpl);
 	}
 	if (url.pathname === '/api/pages' || url.pathname === '/api/pages/all') {
 		return handlePageList(url, request, response, config, fetchImpl);

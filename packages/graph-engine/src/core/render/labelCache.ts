@@ -6,7 +6,7 @@
  * pixel ratio, and frames just drawImage. LRU-capped above the label budget.
  */
 
-const FONT = "12px ui-sans-serif, system-ui, sans-serif";
+const FONT = '12px "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif';
 const PAD = 8;
 const HEIGHT = 20;
 const MAX_LABELS = 700;

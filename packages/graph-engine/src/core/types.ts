@@ -7,7 +7,7 @@
  * rebuilds (stable layout) and across backends. Pixels/positions live in the
  * layout & render layers, never here — this module is pure data + O(1) indexes.
  *
- * Aligned with apps/baas/wiki/graph-contract.md. The host app builds a GraphModel
+ * Aligned with apps/grobase/wiki/integrations/graph-contract.md. The host app builds a GraphModel
  * (from BaaS or NotionState) and hands it in; the engine never fetches anything.
  */
 

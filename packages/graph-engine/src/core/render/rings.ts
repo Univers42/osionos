@@ -32,7 +32,7 @@ export function drawRings(d: DrawCtx, hoverIndex: number, selectedIndex: number)
   }
 
   drawAccentRing(d, hoverIndex, theme.hoverRing, 2.4, 5);
-  drawAccentRing(d, selectedIndex, theme.selectRing, 3.4, 5.5);
+  drawAccentRing(d, selectedIndex, theme.selectRing, 3.6, 5.5);
   if (selectedIndex >= 0) {
     // Faint secondary halo gives the selection a calm, deliberate emphasis.
     ctx.save();

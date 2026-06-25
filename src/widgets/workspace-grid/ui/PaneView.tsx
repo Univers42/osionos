@@ -74,7 +74,19 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
       ].join(" ")}
     >
       <TabStrip pane={pane} />
-      <div className="relative flex-1 min-h-0 overflow-hidden">
+      <div
+        className="relative flex-1 min-h-0 overflow-hidden"
+        // Every pane is editable now, so focusing into a pane's BODY (not just its
+        // tab) promotes it to the active pane — keeps the legacy single active-page
+        // mirror (header/graph/recents/session-restore) pointed at the pane you're
+        // typing in. Use onFocusCapture (fires AFTER the browser has focused the
+        // contenteditable and placed the caret) — NOT a mousedown-capture handler,
+        // which would run setActivePane/mirrorActiveTab synchronously BEFORE focus
+        // lands and (online) kick off a content fetch mid-click, forcing a
+        // "select-first" round and risking a caret reset on the first keystroke.
+        // No-op when already active; getState() avoids a subscription.
+        onFocusCapture={isActive ? undefined : () => useWorkspaceLayout.getState().setActivePane(pane.id)}
+      >
         {activeTab ? (
           mounted ? (
             <PaneContent tab={activeTab} paneId={pane.id} />

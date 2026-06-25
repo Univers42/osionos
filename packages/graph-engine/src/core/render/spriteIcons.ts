@@ -35,9 +35,9 @@ export function loadGlyphImage(url: string, onReady: () => void): HTMLImageEleme
 
 /** Ink color for monogram letters over the node body. */
 function monogramInk(color: string, mode: SpriteMode): string {
-  // Dark theme: white letter over the colored disc. Light theme ("paper"
-  // nodes are white with a colored border): the letter takes the node color.
-  return mode === "dark" ? "rgba(255, 255, 255, 0.95)" : color;
+  // Dark theme: warm-white letter over the colored stone. Light theme ("paper"
+  // nodes are white with a colored band): the letter takes the node color.
+  return mode === "dark" ? "rgba(255, 244, 228, 0.95)" : color;
 }
 
 /** Paint `glyph` centered in a SPRITE×SPRITE node sprite context. */
@@ -69,7 +69,7 @@ export function paintGlyph(
     return;
   }
   if (glyph.kind === "emoji") {
-    ctx.font = `${Math.round(r * 1.35)}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.font = `${Math.round(r * 1.35)}px "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif`;
     // A subtle vertical nudge optically centers most emoji glyphs.
     ctx.fillText(glyph.ref, half, half + r * 0.06);
     return;
@@ -85,7 +85,7 @@ function paintLetter(
   half: number,
   r: number,
 ): void {
-  ctx.font = `600 ${Math.round(r * 1.3)}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.font = `600 ${Math.round(r * 1.3)}px "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif`;
   ctx.fillStyle = monogramInk(color, mode);
   ctx.fillText(letter, half, half + r * 0.04);
 }

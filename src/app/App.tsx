@@ -35,6 +35,7 @@ import {
 } from "@/shared/config/workspaceConfigStore";
 import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
 import { ToastViewport } from "@/shared/ui";
+import { TopBar } from "@/widgets/top-bar";
 
 type UserSessions = Record<string, UserSession>;
 
@@ -252,23 +253,28 @@ const App: React.FC = () => {
   return (
     <div
       data-testid="app-shell"
-      className="relative flex h-screen w-screen overflow-hidden bg-[var(--osio-bg-page)]"
+      className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-page)]"
     >
-      {/* Left sidebar */}
-      <Sidebar
-        onOpenSettings={() => setSettingsOpen(true)}
-        onOpenHome={() => useWorkspaceLayout.getState().openTab(homeTab())}
-        onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
-        onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
-      />
+      {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
+      <TopBar onOpenSettings={() => setSettingsOpen(true)} />
 
-      {/* Floating trigger for when sidebar is closed */}
-      <SidebarTrigger />
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {/* Left sidebar */}
+        <Sidebar
+          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenHome={() => useWorkspaceLayout.getState().openTab(homeTab())}
+          onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
+          onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
+        />
 
-      {/* Content area */}
-      <main className="flex-1 flex min-w-0 overflow-hidden relative">
-        <LazyMainContent />
-      </main>
+        {/* Floating trigger for when sidebar is closed */}
+        <SidebarTrigger />
+
+        {/* Content area */}
+        <main className="flex-1 flex min-w-0 overflow-hidden relative">
+          <LazyMainContent />
+        </main>
+      </div>
 
       <WorkspaceThemePanel />
       {settingsOpen && <LazySettingsCenter initialTab="general" onClose={() => setSettingsOpen(false)} />}

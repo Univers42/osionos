@@ -11,7 +11,6 @@
 /* ************************************************************************** */
 
 .osio-canvas-v2-debug-shell {
-  --osio-canvas-bg: #1E1E1E;
   --osio-canvas-panel: var(--osio-bg-surface);
   --osio-canvas-panel-border: var(--osio-border-default);
   --osio-canvas-cell-bg: var(--osio-bg-elevated);
@@ -59,7 +58,7 @@
 .osio-canvas-v2-stage {
   position: relative;
   min-width: 100%;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.18) 1px, transparent 1px);
+  background-image: radial-gradient(circle, var(--osio-canvas-dot) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 

@@ -1,6 +1,6 @@
 # BaaS `/graph` endpoint — the live contract (cross-team)
 
-> **Canonical source of truth:** `apps/baas/mini-baas-infra` → **`apps/baas/wiki/graph-contract.md`**.
+> **Canonical source of truth:** `apps/grobase/infra` → **`apps/grobase/wiki/integrations/graph-contract.md`**.
 > Maintained on the **BaaS side**; this file is the osionos-facing summary. If a
 > type below changes, edit the canonical contract first and ping the BaaS side.
 > (Aligns with doc 01 `model/graphModel.ts` and doc 02's ACID reality check.)

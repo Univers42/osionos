@@ -28,7 +28,7 @@ interface ToggleBlockEditorProps {
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
-  onRequestSlashMenu?: (position: { x: number; y: number }) => void;
+  onRequestSlashMenu?: (position: { x: number; y: number; top: number }) => void;
 }
 
 /* ── Component ──────────────────────────────────────────────────────── */

@@ -1,6 +1,6 @@
 # Working with real BaaS data — pointer + the Mongo mount you asked for
 
-> **Canonical, thorough guide (BaaS side):** `apps/baas/wiki/osionos-real-data-guide.md`.
+> **Canonical, thorough guide (BaaS side):** `apps/grobase/wiki/guides/osionos-real-data-guide.md`.
 > This file is the osionos-facing summary + the new credentials.
 
 ## The MongoDB mount is provisioned ✅ (this was the BaaS-only blocker)

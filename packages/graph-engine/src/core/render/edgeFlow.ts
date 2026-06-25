@@ -19,7 +19,7 @@ export function drawEdgeFlow(d: DrawCtx, index: number, animate: boolean): void 
   const { nodeEdgeOffsets, nodeEdgeList, edgeFrom, edgeTo } = state.edges;
   const s = camera.scale;
   ctx.save();
-  ctx.strokeStyle = theme.glow;
+  ctx.strokeStyle = theme.focusThread;
   ctx.lineWidth = 1.1 / s;
   ctx.lineCap = "round";
   if (animate && !d.reducedMotion) ctx.setLineDash([DASH_ON / s, DASH_OFF / s]);
@@ -33,7 +33,7 @@ export function drawEdgeFlow(d: DrawCtx, index: number, animate: boolean): void 
       const sign = from === index ? -1 : 1;
       ctx.lineDashOffset = sign * ((time * DRIFT_PER_MS) / s);
     }
-    ctx.globalAlpha = 0.7 * d.alpha;
+    ctx.globalAlpha = 0.6 * d.alpha;
     ctx.beginPath();
     ctx.moveTo(state.posX[from], state.posY[from]);
     ctx.lineTo(state.posX[to], state.posY[to]);

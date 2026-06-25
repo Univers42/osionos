@@ -59,7 +59,7 @@ const teamWiki: SeedPage = {
     bullet('playground/ — A standalone Vite app for UI development and testing'),
     code('osionos-database-sys/\n├── src/           # Main project\n│   ├── components/  # React components\n│   ├── store/       # Zustand stores\n│   ├── types/       # TypeScript types\n│   └── lib/         # Engine, formula, markdown, syntax\n├── playground/    # Playground app\n│   └── src/\n│       ├── components/sidebar/  # osionos sidebar\n│       ├── store/               # Page & user stores\n│       └── data/                # Seed data\n└── packages/api/  # Fastify backend', 'plaintext'),
     h2('Useful commands'),
-    code('# Generate runtime files\ndocker run --rm -v "$PWD":/workspace -w /workspace node:22-alpine node apps/baas/scripts/bootstrap-env.mjs\ndocker run --rm -v "$PWD":/workspace -w /workspace node:22-alpine node apps/baas/scripts/ensure-osionos-runtime-secrets.mjs\n\n# Start everything\ndocker compose up -d --build\n\n# Check services\ndocker compose ps', 'bash'),
+    code('# Generate runtime files\ndocker run --rm -v "$PWD":/workspace -w /workspace node:22-alpine node apps/grobase/scripts/env/bootstrap-env.mjs\ndocker run --rm -v "$PWD":/workspace -w /workspace node:22-alpine node apps/grobase/scripts/env/ensure-osionos-runtime-secrets.mjs\n\n# Start everything\ndocker compose up -d --build\n\n# Check services\ndocker compose ps', 'bash'),
   ],
 };
 

@@ -14,15 +14,20 @@ import React from 'react';
 import type { Block } from '@/entities/block';
 import { continuesSameType } from '@/entities/block';
 
+/**
+ * Caret anchor for popovers, in VIEWPORT coordinates (the popovers portal to
+ * <body>, so they position against the viewport): `x` = caret/line-start left,
+ * `y` = caret bottom (below-anchor), `top` = caret top (above-anchor for the flip).
+ */
 export interface SlashMenuState {
   blockId: string;
-  position: { x: number; y: number };
+  position: { x: number; y: number; top: number };
   filter: string;
 }
 
 export interface PageSelectorMenuState {
   blockId: string;
-  position: { x: number; y: number };
+  position: { x: number; y: number; top: number };
   filter: string;
 }
 
@@ -42,7 +47,7 @@ export function getAdjacentRenderedBlockId(
   return orderedBlocks[idx + offset]?.dataset.blockId ?? null;
 }
 
-function caretRect(range: Range): DOMRect | null {
+export function caretRect(range: Range): DOMRect | null {
   const rects = range.getClientRects();
   if (rects.length > 0) return rects[0];
   const rect = range.getBoundingClientRect();
