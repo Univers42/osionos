@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { Suspense, useEffect, useState } from "react";
-import { ChevronDown, LayoutDashboard, Network, Database, Images } from "lucide-react";
+import { ChevronDown, LayoutDashboard, Network, Database, Images, Home } from "lucide-react";
 
 import { getHomeDashboardPageId } from "@/widgets/database-view/model/databaseViewCatalog.meta";
 import { WS_FILES_DB_ID, WS_FILES_TABLE_VIEW } from "@/widgets/database-view/model/workspaceDatabaseConstants";
@@ -105,8 +105,17 @@ const HomeVariantMenu: React.FC<{ variant: HomeVariant; onVariantChange: (v: Hom
   const activeLabel = HOME_MENU_ITEMS.find((item) => item.id === variant)?.label ?? "Dashboard";
   return (
     <div className="osionos-home-variant-menu" data-open={open ? "true" : undefined}>
-      <button type="button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-        <span>Home</span>
+      {/* Icon-only: the house glyph IS the label. aria-label/title carry the
+          meaning for screen readers + hover, so no redundant visible "Home". */}
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Home"
+        title="Home"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <Home size={16} aria-hidden="true" />
         <ChevronDown size={15} aria-hidden="true" />
       </button>
       <div className="osionos-home-variant-dropdown" role="menu">
