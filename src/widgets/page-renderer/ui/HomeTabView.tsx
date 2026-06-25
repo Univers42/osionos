@@ -44,7 +44,7 @@ export const HomeTabView: React.FC = () => {
     firstWsId ? s.pages[firstWsId]?.find((page) => page._id === homeDashboardPageId && !page.archivedAt) : undefined
   ));
 
-  // The Home surface picker now lives in the global top bar (HomeVariantControl);
+  // The Home surface picker now unfolds from the Home tab itself (TabButton);
   // here we just render the chosen surface.
   const variant = useHomeVariantStore((s) => s.variant);
 
