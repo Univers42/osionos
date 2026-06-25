@@ -51,7 +51,7 @@
  *   PERMS_PEOPLE_ENV      roster file path             (default <repo>/tools/seeds/.agency-people.env)
  *   PERMS_RULES_FILE      AccessRule JSON store path   (default <app>/.perms-rules.json)
  *
- * Dev convenience: apps/baas/mini-baas-infra/.agency-tenant.env and .env are
+ * Dev convenience: apps/grobase/.agency-tenant.env and apps/grobase/.env are
  * sourced (without overriding already-set vars) so a stock `make agency-all`
  * checkout needs zero configuration.
  */
@@ -67,8 +67,8 @@ const REPO_ROOT = resolve(APP_ROOT, '../../..');
 const JSON_BODY_LIMIT = 64 * 1024;
 
 for (const file of [
-	resolve(REPO_ROOT, 'apps/baas/mini-baas-infra/.agency-tenant.env'),
-	resolve(REPO_ROOT, 'apps/baas/mini-baas-infra/.env'),
+	resolve(REPO_ROOT, 'apps/grobase/.agency-tenant.env'),
+	resolve(REPO_ROOT, 'apps/grobase/.env'),
 ]) {
 	if (!existsSync(file)) continue;
 	let text = '';

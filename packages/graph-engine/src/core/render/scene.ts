@@ -56,7 +56,12 @@ export class CanvasScene implements InteractionHost {
     if (!ctx) throw new Error("[graph-engine] 2D canvas context unavailable");
     this.canvas = canvas;
     this.ctx = ctx;
-    this.sprites.setTheme({ backing: theme.nodeBacking, mode: theme.mode });
+    this.sprites.setTheme({
+      backing: theme.nodeBacking,
+      mode: theme.mode,
+      rim: theme.nodeRim,
+      shadow: theme.nodeShadow,
+    });
     this.sprites.onInvalidate = () => this.requestDraw();
     this.labels.setTheme(theme.label, theme.labelHalo, 1);
     this.interaction = new SceneInteraction(this, callbacks);
@@ -90,7 +95,12 @@ export class CanvasScene implements InteractionHost {
 
   setTheme(theme: SceneTheme): void {
     this.theme = theme;
-    this.sprites.setTheme({ backing: theme.nodeBacking, mode: theme.mode });
+    this.sprites.setTheme({
+      backing: theme.nodeBacking,
+      mode: theme.mode,
+      rim: theme.nodeRim,
+      shadow: theme.nodeShadow,
+    });
     this.labels.setTheme(theme.label, theme.labelHalo, this.cam.dpr);
     clearCardTextCache();
     this.requestDraw();

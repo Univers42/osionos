@@ -11,6 +11,9 @@ import type { DrawCtx } from "./drawTypes";
 
 export function drawGlow(d: DrawCtx, hoverIndex: number, selectedIndex: number): void {
   const { ctx, state, visual, theme, cull } = d;
+  // Light "paper": additive bloom washes out on cream — emphasis is carried by the
+  // baked node shadow, the terracotta rings, and the dim-others pass instead.
+  if (theme.mode === "light") return;
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
 
@@ -19,12 +22,14 @@ export function drawGlow(d: DrawCtx, hoverIndex: number, selectedIndex: number):
     for (let k = 0; k < cull.count; k += 1) {
       const i = cull.list[k];
       if (state.isHub[i] !== 1) continue;
-      glowAt(d, i, state.fills[i], 0.12 * visual.glow, 2.4);
+      glowAt(d, i, state.fills[i], 0.1 * visual.glow, 2.4);
     }
   }
 
-  if (hoverIndex >= 0 && hoverIndex !== selectedIndex) glowAt(d, hoverIndex, theme.hoverRing, 0.45, 2.6);
-  if (selectedIndex >= 0) glowAt(d, selectedIndex, theme.selectRing, 0.8, 3.1);
+  // Warm-dark: keep the bloom but recolor to the terracotta select/hover and trim
+  // strength so it reads as a calm ember, not neon.
+  if (hoverIndex >= 0 && hoverIndex !== selectedIndex) glowAt(d, hoverIndex, theme.hoverRing, 0.35, 2.6);
+  if (selectedIndex >= 0) glowAt(d, selectedIndex, theme.selectRing, 0.55, 3.1);
 
   ctx.globalAlpha = 1;
   ctx.restore();

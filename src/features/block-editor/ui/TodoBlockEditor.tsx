@@ -25,7 +25,7 @@ export const TodoBlockEditor: React.FC<{
   onUpdateBlock?: (blockId: string, updates: Partial<Block>) => void;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
-  onRequestSlashMenu?: (position: { x: number; y: number }) => void;
+  onRequestSlashMenu?: (position: { x: number; y: number; top: number }) => void;
 }> = ({ block, pageId, style, onUpdateBlock, onChange, onKeyDown, onRequestSlashMenu }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
   const page = usePageStore((s) => s.activePage);

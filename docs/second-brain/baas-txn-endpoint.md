@@ -1,6 +1,6 @@
 # BaaS `/txn` endpoint — atomic writes (unblocks Phase 3)
 
-> **Canonical source of truth:** `apps/baas/mini-baas-infra` → **`apps/baas/wiki/txn-contract.md`**.
+> **Canonical source of truth:** `apps/grobase/infra` → **`apps/grobase/wiki/architecture/contracts/txn-contract.md`**.
 > Maintained on the **BaaS side**; this file is the osionos-facing summary. It's
 > the write counterpart to `baas-graph-endpoint.md` and aligns with doc 02 (ACID).
 

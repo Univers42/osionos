@@ -41,6 +41,7 @@ import { createTableBlockFromData } from "@/entities/block/model/tableBlocks";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
 import type { Block, LayoutCell } from "@/entities/block";
 import {
+  caretRect,
   handleArrowUp,
   handleArrowDown,
   handleEnterKey,
@@ -738,15 +739,34 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     clearHistory();
   }, [sourceKey, clearHistory]);
 
-  /** Get the bounding rect of the caret. */
-  const getCaretRect = useCallback((): { x: number; y: number } => {
+  /**
+   * Anchor (viewport coords) for the slash / page-selector popovers.
+   * X is the editable block's LEFT edge — a Notion-style line-start anchor that
+   * is stable as you type the filter. We deliberately do NOT use the caret's own
+   * X: on an empty line the `::before` placeholder corrupts `getClientRects()`,
+   * throwing the caret X ~130px to the right (the menu then looked "drifted").
+   * Y (top/bottom) comes from the caret rect so the menu hugs the caret's visual
+   * line and can flip cleanly above it; `caretRect` prefers getClientRects() and
+   * falls back to the block element on a truly empty line.
+   */
+  const getCaretRect = useCallback((): { x: number; y: number; top: number } => {
     const sel = globalThis.getSelection();
     if (sel && sel.rangeCount > 0) {
       const range = sel.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      if (rect.x !== 0 || rect.y !== 0) return { x: rect.x, y: rect.bottom };
+      const node = range.startContainer;
+      const el = node.nodeType === 1 ? (node as Element) : node.parentElement;
+      const editable =
+        el?.closest<HTMLElement>('[contenteditable="true"]') ??
+        el?.closest<HTMLElement>("[data-block-id]");
+      const left = editable ? editable.getBoundingClientRect().left : 100;
+      const caret = caretRect(range);
+      if (caret) return { x: left, y: caret.bottom, top: caret.top };
+      if (editable) {
+        const b = editable.getBoundingClientRect();
+        return { x: left, y: b.bottom, top: b.top };
+      }
     }
-    return { x: 100, y: 300 };
+    return { x: 100, y: 300, top: 282 };
   }, []);
 
   /** Persist block content edits in the page store. */

@@ -94,7 +94,7 @@ interface BlockEditorProps {
   onDeleteCodeBlock?: () => void;
   onUpdateBlock?: (blockId: string, updates: Partial<Block>) => void;
   onBeforeStructuralEdit?: () => void;
-  onRequestSlashMenu?: (position: { x: number; y: number }) => void;
+  onRequestSlashMenu?: (position: { x: number; y: number; top: number }) => void;
   renderChildren?: () => React.ReactNode;
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
 }

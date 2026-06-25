@@ -1,38 +1,36 @@
 /**
- * Color palette for the graph.
+ * Color palette for the graph — the "Warm Constellation".
  *
- * `record` nodes are colored by their database via a generated, stable palette
- * (golden-angle hue rotation) so ANY backend table is first-class. Notes/tags use
- * reserved hues. The aurora-glass background gets its own deep indigo→violet ramp
- * and a set of drifting band hues; these are fallbacks — `tokens.ts` prefers live
- * `--osio-graph-*` custom properties when present.
+ * `record` nodes are colored by their database from ONE curated warm family
+ * (`categorical.ts`) so ANY backend table is first-class yet the whole graph
+ * stays on osionos's editorial brand instead of a rainbow. Notes/tags use
+ * reserved warm hues. The background ramp + field tints are fallbacks — `tokens.ts`
+ * prefers live `--osio-graph-*` custom properties when present.
  */
 
 import { hashString } from "../math";
+import { pickCategorical } from "./categorical";
 
-/** One reserved hue for note nodes, distinct from every database color. */
-export const NOTE_COLOR = "oklch(0.8 0.16 75)"; // warm amber
+/** One reserved hue for note nodes — warm amber, distinct from every database color. */
+export const NOTE_COLOR = "oklch(0.7 0.13 65)";
 
-/** Neutral, desaturated color for structural tag-hub nodes (legible as a ring). */
-export const TAG_COLOR = "oklch(0.76 0.045 255)";
+/** Neutral, desaturated warm taupe for structural tag-hub nodes (legible as a ring). */
+export const TAG_COLOR = "oklch(0.66 0.03 70)";
 
-/** Dark "moat" painted under every node so it separates from the aurora at any hue. */
-export const NODE_BACKING = "rgba(3, 2, 12, 0.66)";
+/** Warm "moat" painted under every node so it separates from the field at any hue. */
+export const NODE_BACKING = "rgba(20, 18, 14, 0.72)";
 
-/** Aurora background ramp (top → bottom) — deep indigo into violet-black. */
-export const AURORA_BG_TOP = "#0b0a1f";
-export const AURORA_BG_BOTTOM = "#160c30";
+/** Background ramp (top → bottom) — warm charcoal "ember" fallback. */
+export const AURORA_BG_TOP = "#1b1a17";
+export const AURORA_BG_BOTTOM = "#15140f";
 
-/** Drifting aurora band colors (indigo / violet / electric blue / orchid). */
-export const AURORA_BANDS = ["#4338ca", "#7c3aed", "#2563eb", "#a21caf"] as const;
+/** Warm field/ember band fallbacks (the live design uses a single soft bloom). */
+export const AURORA_BANDS = ["#e0937a", "#d9b89c", "#cc785c", "#b45309"] as const;
 
 /**
- * Deterministic per-database color via golden-angle hue rotation — distinct,
- * repeatable, and unbounded in the number of databases it supports.
+ * Deterministic per-database color from the curated warm family — distinct,
+ * repeatable, and bounded so the sprite cache stays small (8 hues × shapes × glyphs).
  */
 export function databaseColor(databaseId: string): string {
-  const hue = (hashString(databaseId) * 137.508) % 360;
-  // Brighter L + a touch more chroma than before so flat cores read clearly on
-  // the deep indigo→violet aurora (the old 0.66/0.15 melted into blue/violet bg).
-  return `oklch(0.72 0.17 ${hue.toFixed(1)})`;
+  return pickCategorical(hashString(databaseId));
 }

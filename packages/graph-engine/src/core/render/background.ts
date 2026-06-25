@@ -1,29 +1,15 @@
 /**
- * Aurora-glass background on its own canvas + slow rAF loop, decoupled from the
- * graph's dirty-driven draw loop (so the graph still idles for free while the
- * aurora drifts). A deep indigo→violet vertical ramp with a few large, slowly
- * moving radial "bands" composited additively. Reduced-motion / "flat" → painted
- * once, no loop.
+ * "Warm Constellation" background on its own canvas + slow rAF loop, decoupled
+ * from the graph's dirty-driven draw loop (so the graph still idles for free while
+ * the field gently breathes). A warm vertical ramp (cream→parchment / charcoal→
+ * warm-black) under a baked paper-grain tile, with ONE soft warm center bloom and
+ * a warm vignette. Reduced-motion / "flat" → painted once, no loop. All bakes
+ * (grain) happen only on setSize / setTheme — never per frame.
  */
 
 import type { SceneTheme } from "../theme/tokens";
 import type { BackgroundStyle } from "../state/controls";
-
-interface BandSpec {
-  hx: number;
-  hy: number;
-  rx: number;
-  ry: number;
-  speed: number;
-  phase: number;
-}
-
-const BANDS: BandSpec[] = [
-  { hx: 0.28, hy: 0.22, rx: 0.18, ry: 0.12, speed: 0.00006, phase: 0 },
-  { hx: 0.72, hy: 0.32, rx: 0.16, ry: 0.16, speed: 0.00009, phase: 2.1 },
-  { hx: 0.5, hy: 0.78, rx: 0.2, ry: 0.14, speed: 0.00007, phase: 4.2 },
-  { hx: 0.82, hy: 0.7, rx: 0.14, ry: 0.1, speed: 0.00011, phase: 1.2 },
-];
+import { bakeGrainTile } from "./grain";
 
 export class AuroraBackground {
   private readonly ctx: CanvasRenderingContext2D | null;
@@ -32,6 +18,7 @@ export class AuroraBackground {
   private dpr = 1;
   private raf: number | null = null;
   private style: BackgroundStyle = "aurora";
+  private grain: CanvasPattern | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -39,6 +26,7 @@ export class AuroraBackground {
     private reducedMotion: boolean,
   ) {
     this.ctx = canvas.getContext("2d");
+    this.refreshGrain();
   }
 
   setSize(width: number, height: number, dpr: number): void {
@@ -54,6 +42,7 @@ export class AuroraBackground {
 
   setTheme(theme: SceneTheme): void {
     this.theme = theme;
+    this.refreshGrain();
     this.draw(performance.now());
   }
 
@@ -84,6 +73,12 @@ export class AuroraBackground {
     this.stop();
   }
 
+  /** Bake the paper-grain tile once (on construct + every theme change). */
+  private refreshGrain(): void {
+    const tile = bakeGrainTile(this.theme.grain);
+    this.grain = tile && this.ctx ? this.ctx.createPattern(tile, "repeat") : null;
+  }
+
   private draw(now: number): void {
     const ctx = this.ctx;
     if (!ctx) return;
@@ -96,28 +91,28 @@ export class AuroraBackground {
     ctx.fillStyle = ramp;
     ctx.fillRect(0, 0, this.width, this.height);
 
+    // Paper grain — a tiled, baked speck pattern (no per-frame cost beyond one fill).
+    if (this.grain) {
+      ctx.fillStyle = this.grain;
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
+
     if (this.style !== "flat") {
+      // ONE soft warm bloom — light = `multiply` (no-op `screen` on cream), warm-dark
+      // = `screen` ember. Gently drifts so the field breathes; the data still leads.
       const light = this.theme.mode === "light";
       const drift = this.style === "aurora-calm" ? 0.45 : 1;
-      // Calmer than before (was 0.2): the data should lead, not the bands.
-      // Light "paper" mode: `screen` is a no-op on a near-white ramp, so the
-      // pastel bands composite with `multiply` at a stronger alpha instead.
-      const intensity = light
-        ? (this.style === "aurora-calm" ? 0.32 : 0.45)
-        : (this.style === "aurora-calm" ? 0.1 : 0.14);
+      const t = this.reducedMotion ? 0 : now * 0.00004 * drift;
+      const cx = (0.5 + Math.sin(t) * 0.04) * this.width;
+      const cy = (0.46 + Math.cos(t * 0.8) * 0.04) * this.height;
+      const r = Math.max(this.width, this.height) * 0.6;
+      const bloom = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      bloom.addColorStop(0, this.theme.field);
+      bloom.addColorStop(1, "transparent");
       ctx.globalCompositeOperation = light ? "multiply" : "screen";
-      BANDS.forEach((band, i) => {
-        const t = this.reducedMotion ? 0 : now * band.speed * drift;
-        const cx = (band.hx + Math.sin(t + band.phase) * 0.06) * this.width;
-        const cy = (band.hy + Math.cos(t * 0.8 + band.phase) * 0.05) * this.height;
-        const r = Math.max(this.width, this.height) * (band.rx + band.ry);
-        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-        grad.addColorStop(0, this.theme.bands[i % this.theme.bands.length]);
-        grad.addColorStop(1, "transparent");
-        ctx.globalAlpha = intensity;
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, this.width, this.height);
-      });
+      ctx.globalAlpha = this.style === "aurora-calm" ? 0.7 : 1;
+      ctx.fillStyle = bloom;
+      ctx.fillRect(0, 0, this.width, this.height);
     }
 
     // Vignette: darken the edges so the graph centers the eye and the console
@@ -127,7 +122,7 @@ export class AuroraBackground {
     const vr = Math.max(this.width, this.height) * 0.75;
     const vignette = ctx.createRadialGradient(vx, vy, vr * 0.35, vx, vy, vr);
     vignette.addColorStop(0, "transparent");
-    vignette.addColorStop(1, this.theme.mode === "light" ? "rgba(30, 27, 75, 0.1)" : "rgba(0, 0, 0, 0.4)");
+    vignette.addColorStop(1, this.theme.vignette);
     ctx.globalCompositeOperation = "source-over";
     ctx.globalAlpha = 1;
     ctx.fillStyle = vignette;

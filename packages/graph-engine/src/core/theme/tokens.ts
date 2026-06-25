@@ -16,12 +16,18 @@ import {
 } from "./palette";
 
 export interface SceneTheme {
-  /** "light" (paper) or "dark" (aurora) — derived from the bg luminance. */
+  /** "light" (cream paper) or "dark" (warm ember) — derived from the bg luminance. */
   mode: SpriteMode;
-  /** Aurora background ramp + drifting band colors. */
+  /** Background ramp + (warm) field band colors. */
   bgTop: string;
   bgBottom: string;
   bands: string[];
+  /** Soft warm center bloom over the ramp. */
+  field: string;
+  /** Warm tonal edge darkening. */
+  vignette: string;
+  /** Baked paper-grain speck color. */
+  grain: string;
   edge: string;
   edgeTag: string;
   edgeNote: string;
@@ -31,13 +37,19 @@ export interface SceneTheme {
   selectRing: string;
   hoverRing: string;
   noteRing: string;
-  /** Neon tint used for node/link glow. */
+  /** Warm thread drawn along a focused node's edges (a "thread of attention"). */
+  focusThread: string;
+  /** Tint used for node/link glow (dark only — light skips additive bloom). */
   glow: string;
   /** "Moat" painted under each node sprite for legibility on the backdrop. */
   nodeBacking: string;
+  /** Hairline rim + soft drop shadow baked into the node sprite. */
+  nodeRim: string;
+  nodeShadow: string;
   /** Close-zoom card materials. */
   cardBg: string;
   cardBorder: string;
+  cardShadow: string;
   cardTitle: string;
   cardMuted: string;
   /** Opacity applied to dimmed (out-of-focus) elements. */
@@ -51,21 +63,28 @@ export const DARK_THEME: SceneTheme = {
   bgTop: AURORA_BG_TOP,
   bgBottom: AURORA_BG_BOTTOM,
   bands: [...AURORA_BANDS],
-  edge: "rgba(148, 163, 184, 0.32)",
-  edgeTag: "rgba(148, 163, 184, 0.18)",
-  edgeNote: "rgba(245, 191, 96, 0.55)",
-  edgeHierarchy: "rgba(245, 191, 96, 0.9)",
-  label: "#e7e9f5",
-  labelHalo: "rgba(11, 10, 31, 0.85)",
-  selectRing: "#a5b4fc",
-  hoverRing: "rgba(165, 180, 252, 0.65)",
+  field: "rgba(224, 147, 122, 0.1)",
+  vignette: "rgba(0, 0, 0, 0.4)",
+  grain: "rgba(255, 240, 210, 0.025)",
+  edge: "rgba(168, 163, 153, 0.26)",
+  edgeTag: "rgba(217, 184, 156, 0.16)",
+  edgeNote: "rgba(224, 147, 122, 0.55)",
+  edgeHierarchy: "rgba(217, 184, 156, 0.78)",
+  label: "#edeae3",
+  labelHalo: "rgba(21, 20, 15, 0.85)",
+  selectRing: "#e0937a",
+  hoverRing: "rgba(224, 147, 122, 0.55)",
   noteRing: NOTE_COLOR,
-  glow: "rgba(124, 92, 246, 0.9)",
+  focusThread: "rgba(224, 147, 122, 0.85)",
+  glow: "rgba(224, 147, 122, 0.9)",
   nodeBacking: NODE_BACKING,
-  cardBg: "rgba(12, 9, 32, 0.82)",
-  cardBorder: "rgba(255, 255, 255, 0.14)",
-  cardTitle: "#e7e9f5",
-  cardMuted: "rgba(231, 233, 245, 0.62)",
+  nodeRim: "rgba(255, 244, 228, 0.16)",
+  nodeShadow: "rgba(0, 0, 0, 0.45)",
+  cardBg: "#242120",
+  cardBorder: "#353029",
+  cardShadow: "rgba(0, 0, 0, 0.55)",
+  cardTitle: "#edeae3",
+  cardMuted: "#a8a399",
   dimAlpha: 0.12,
 };
 
@@ -81,9 +100,8 @@ export function resolveSceneTheme(root: HTMLElement): SceneTheme {
     scratch,
     read("--osio-graph-ink", read("--osio-fg-default", DARK_THEME.label)),
   );
-  const border = normalizeRgb(scratch, read("--osio-border-strong", "#94a3b8"));
-  const accent = normalizeRgb(scratch, read("--osio-accent", "#a5b4fc"));
-  const note = normalizeRgb(scratch, NOTE_COLOR);
+  const note = normalizeRgb(scratch, read("--osio-graph-note", NOTE_COLOR));
+  const sel = normalizeRgb(scratch, read("--osio-graph-select", "#cc785c"));
   const bgBottom = read("--osio-graph-bg-1", AURORA_BG_BOTTOM);
   const bgRgb = normalizeRgb(scratch, bgBottom);
   const mode: SpriteMode = luminance(bgRgb) > 0.5 ? "light" : "dark";
@@ -96,21 +114,28 @@ export function resolveSceneTheme(root: HTMLElement): SceneTheme {
     bgTop: read("--osio-graph-bg-0", AURORA_BG_TOP),
     bgBottom,
     bands,
-    edge: rgba(border, mode === "light" ? 0.38 : 0.32),
-    edgeTag: rgba(border, 0.18),
-    edgeNote: rgba(note, 0.55),
-    edgeHierarchy: rgba(note, 0.9),
+    field: read("--osio-graph-field-warm", DARK_THEME.field),
+    vignette: read("--osio-graph-vignette", DARK_THEME.vignette),
+    grain: read("--osio-graph-grain", DARK_THEME.grain),
+    edge: read("--osio-graph-edge", DARK_THEME.edge),
+    edgeTag: read("--osio-graph-edge-tag", DARK_THEME.edgeTag),
+    edgeNote: read("--osio-graph-edge-note", DARK_THEME.edgeNote),
+    edgeHierarchy: read("--osio-graph-edge-hier", DARK_THEME.edgeHierarchy),
     label: rgb(ink),
     labelHalo: read("--osio-graph-halo", rgba(bgRgb, 0.85)),
-    selectRing: rgb(accent),
-    hoverRing: rgba(accent, 0.65),
-    noteRing: rgb(note),
-    glow: rgba(accent, 0.9),
+    selectRing: read("--osio-graph-select", rgb(sel)),
+    hoverRing: read("--osio-graph-hover", rgba(sel, 0.55)),
+    noteRing: read("--osio-graph-note", rgb(note)),
+    focusThread: read("--osio-graph-focus-thread", rgba(sel, 0.85)),
+    glow: rgba(sel, 0.9),
     nodeBacking: read("--osio-graph-node-backing", NODE_BACKING),
+    nodeRim: read("--osio-graph-node-rim", DARK_THEME.nodeRim),
+    nodeShadow: read("--osio-graph-node-shadow", DARK_THEME.nodeShadow),
     cardBg: read("--osio-graph-card-bg", DARK_THEME.cardBg),
     cardBorder: read("--osio-graph-card-border", DARK_THEME.cardBorder),
+    cardShadow: read("--osio-graph-card-shadow", DARK_THEME.cardShadow),
     cardTitle: rgb(ink),
-    cardMuted: rgba(ink, 0.62),
+    cardMuted: read("--osio-graph-ink-muted", rgba(ink, 0.62)),
     dimAlpha: 0.12,
   };
 }

@@ -12,7 +12,7 @@
 
 /**
  * Wire types for the BaaS `/query/v1/graph` contract — a faithful mirror of
- * `docs/second-brain/baas-graph-endpoint.md` (canonical: apps/baas/wiki/graph-contract.md).
+ * `docs/second-brain/baas-graph-endpoint.md` (canonical: apps/grobase/wiki/integrations/graph-contract.md).
  * The wire uses `from`/`to`; `mapGraphResponse` is the boundary that maps them to
  * our internal `source`/`target`. Keep these in sync with the canonical contract.
  */

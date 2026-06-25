@@ -57,7 +57,7 @@ interface EditableContentProps {
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
-  onRequestSlashMenu?: (position: { x: number; y: number }) => void;
+  onRequestSlashMenu?: (position: { x: number; y: number; top: number }) => void;
   onFocus?: React.FocusEventHandler<HTMLDivElement>;
   onBlur?: React.FocusEventHandler<HTMLDivElement>;
 }
@@ -757,7 +757,18 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       canonicalSourceRef.current = nextContent;
       const nextHtml = getRenderedInlineHtml(nextContent, renderMathAsSource);
       if (root.innerHTML !== nextHtml) {
+        // Overwriting innerHTML collapses the contenteditable selection to offset 0.
+        // While this block is focused (the user is actively typing), a reactive
+        // content re-render here would otherwise drift the caret to the start — so
+        // save the caret before the rewrite and restore it after, the same pattern
+        // handleInput already uses for its normalization rewrite.
+        const savedOffsets = isFocused.current
+          ? getInlineEditorSelectionOffsets(root)
+          : null;
         root.innerHTML = nextHtml;
+        if (savedOffsets) {
+          setInlineEditorSelectionOffsets(root, savedOffsets);
+        }
       }
     },
     [getRenderedInlineHtml],
@@ -1117,6 +1128,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     onRequestSlashMenu({
       x: effectiveSelection.rect.left,
       y: effectiveSelection.rect.bottom,
+      top: effectiveSelection.rect.top,
     });
     setSelectionSnapshot(null);
     lastSelectionSnapshotRef.current = null;

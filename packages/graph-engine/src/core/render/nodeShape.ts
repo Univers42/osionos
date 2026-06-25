@@ -17,6 +17,10 @@ export type SpriteMode = "light" | "dark";
 export interface SpriteStyle {
   backing: string;
   mode: SpriteMode;
+  /** Hairline rim stroke baked around the node body. */
+  rim: string;
+  /** Soft warm drop shadow baked under the node body. */
+  shadow: string;
 }
 
 /** Pick a node's silhouette from its kind. Records/databases → disc. */

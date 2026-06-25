@@ -17,11 +17,8 @@ import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
 import { tabToActivePage } from "@/widgets/workspace-grid/model/layoutSync";
-import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { HomeTabView } from "./HomeTabView";
 import { FolderTabView } from "./FolderTabView";
-import { PageBlocksRenderer } from "./PageBlocksRenderer";
-import { PageOutlineRail } from "@/widgets/page-toc/PageOutlineRail";
 import {
   LazyAgentConversationPage,
   LazyBaasConsoleView,
@@ -39,17 +36,16 @@ const LoadingPane: React.FC = () => (
 );
 
 /** A page tab: lazily fetch its content, then render agent or osionos view.
- *  Only the FOCUSED pane mounts the heavy editable editor; the other open panes
- *  render the cheap, already-virtualized read-only view (identical visuals, no
- *  edit machinery). Focusing a pane swaps it to the editor. This turns "8 live
- *  editors" — the dominant cost with many panes open — into "1 editor + N cheap
- *  views" (VSCode-style: inactive splits are lightweight). */
-const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab, paneId }) => {
+ *  EVERY pane mounts its own live, editable editor so several files can be edited
+ *  side by side. The editor is fully keyed by pageId and, because we pass
+ *  activePageRef, the pane does NOT subscribe to the global activePage
+ *  (NotionPage), so panes stay isolated: typing in one persists to that pane's
+ *  page and does not re-render the others. Background panes stay cheap via
+ *  PaneView's serial idle-mount + `contain: layout paint` isolation. */
+const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab }) => {
   const page = usePageStore((s) => s.pageById(tab.pageId));
   const fetchPageContent = usePageStore((s) => s.fetchPageContent);
   const jwt = useUserStore((s) => s.activePageJwt() ?? "");
-  // No paneId → single-pane (non-grid) context: always the live editor.
-  const isFocusedPane = useWorkspaceLayout((s) => !paneId || s.activePaneId === paneId);
 
   useEffect(() => {
     if (!page && jwt) fetchPageContent(tab.pageId, jwt);
@@ -58,27 +54,6 @@ const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab, pa
   if (!page) return <LoadingPane />;
   if (page.surface === "agent") {
     return <div className="h-full overflow-hidden"><LazyAgentConversationPage pageId={tab.pageId} /></div>;
-  }
-  if (!isFocusedPane) {
-    // Cheap read-only preview for an unfocused split. `.osionos-page` is the scroll
-    // container PageBlocksRenderer virtualizes against. Click anywhere focuses the
-    // pane → activePaneId flips → this swaps to the live editor.
-    return (
-      <div className="osionos-page h-full overflow-auto bg-[var(--osio-bg-page)]">
-        {/* Per-pane TOC rail, same as the focused editor — so a split shows a
-            rail on EVERY visible page, each hugging its own pane's right edge.
-            Sticky first child + zero-size: no layout/scroll impact. */}
-        <PageOutlineRail pageId={tab.pageId} />
-        <div className="mx-auto w-full max-w-3xl px-12 py-10">
-          {(page.icon || page.title) ? (
-            <h1 className="mb-4 text-3xl font-bold text-[var(--osio-fg-default)]">
-              {page.icon ? <span className="mr-2">{page.icon}</span> : null}{page.title}
-            </h1>
-          ) : null}
-          <PageBlocksRenderer blocks={page.content ?? []} />
-        </div>
-      </div>
-    );
   }
   return (
     <div className="h-full overflow-hidden">

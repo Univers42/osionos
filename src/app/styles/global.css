@@ -170,6 +170,12 @@
   --osio-z-toast: 60;
   --osio-z-max: 100;
 
+  /* Global top bar (VSCode-style chrome). Height is theme-independent; bg/border
+     reference theme-aware tokens so they resolve per [data-theme] with no dupes. */
+  --osio-topbar-h: 40px;
+  --osio-topbar-bg: var(--osio-bg-subtle);
+  --osio-topbar-border: var(--osio-border-default);
+
   --sidebar-width: 260px;
 
   --osio-cell-min-content-width: 280px;
@@ -228,6 +234,11 @@
   --osio-accent-fg: #FFFFFF;
   --osio-accent-text: #B5532E;
   --osio-accent-subtle: #F7ECE5;
+
+  /* Update / sync action — deliberately blue, distinct from the terracotta accent. */
+  --osio-update: #2563EB;
+  --osio-update-hover: #1D4ED8;
+  --osio-update-fg: #FFFFFF;
 
   --osio-danger: #B42318;
   --osio-danger-hover: #8E1C13;
@@ -302,6 +313,11 @@
   --osio-accent-fg: #1B1A17;
   --osio-accent-text: #E8A78F;
   --osio-accent-subtle: #33241E;
+
+  /* Update / sync action — blue in dark mode too. */
+  --osio-update: #3B82F6;
+  --osio-update-hover: #60A5FA;
+  --osio-update-fg: #0B1220;
   --osio-danger: #F2998C;
   --osio-danger-hover: #F7B6AD;
   --osio-danger-fg: #1B1A17;
@@ -370,35 +386,64 @@
   /* Fix latent undefined token referenced by notionPage.css/components. */
   --osio-shadow: var(--osio-shadow-menu);
 
-  /* @osionos/graph-engine — the graph follows the app theme. Light gets a
-     "paper" variant (soft pastel aurora on near-white, ink labels, white node
-     moats); dark keeps the luminous aurora. The engine derives light/dark
-     node materials from the resolved background luminance. */
-  --osio-graph-bg-0: #f8f7ff;
-  --osio-graph-bg-1: #edeefb;
-  --osio-graph-aurora-1: #c7d2fe;
-  --osio-graph-aurora-2: #ddd6fe;
-  --osio-graph-aurora-3: #bfdbfe;
-  --osio-graph-aurora-4: #f5d0fe;
-  --osio-graph-node-backing: rgba(255, 255, 255, 0.92);
-  --osio-graph-ink: #1f2933;
-  --osio-graph-halo: rgba(255, 255, 255, 0.9);
-  --osio-graph-card-bg: rgba(255, 255, 255, 0.92);
-  --osio-graph-card-border: rgba(31, 41, 51, 0.16);
+  /* @osionos/graph-engine — "Warm Constellation": the graph is an extension of
+     the editorial brand. Light = cream/parchment "warm map of ideas" (paper
+     grain, ink labels, white "seed" node sheets, terracotta accents); dark =
+     warm-charcoal "ember". The engine derives light/dark node materials from the
+     resolved background luminance. */
+  --osio-graph-bg-0: #faf9f5; /* cream, matches --osio-bg-page */
+  --osio-graph-bg-1: #f3f0e7; /* parchment — luminance > .5 → "light" mode */
+  --osio-graph-grain: rgba(120, 96, 64, 0.05); /* warm paper grain (baked once) */
+  --osio-graph-vignette: rgba(120, 96, 64, 0.07); /* warm tonal edge */
+  --osio-graph-field-warm: rgba(204, 120, 92, 0.05); /* faint terracotta center bloom */
+  --osio-graph-node-backing: #ffffff; /* white "sheet" moat under each node */
+  --osio-graph-node-rim: rgba(40, 33, 24, 0.12); /* warm ink stone edge */
+  --osio-graph-node-shadow: rgba(40, 33, 24, 0.22); /* soft warm drop shadow (baked) — deeper for far-zoom separation on cream */
+  --osio-graph-ink: #1a1a18;
+  --osio-graph-ink-muted: #6b6862;
+  --osio-graph-halo: rgba(250, 249, 245, 0.92); /* cream halo lifts ink labels */
+  --osio-graph-card-bg: #ffffff;
+  --osio-graph-card-border: #ebe8e0;
+  --osio-graph-card-shadow: rgba(40, 33, 24, 0.08);
+  --osio-graph-edge: rgba(74, 66, 53, 0.28); /* relation: warm taupe ink */
+  --osio-graph-edge-tag: rgba(122, 74, 43, 0.16); /* tag: faint brown */
+  --osio-graph-edge-note: rgba(204, 120, 92, 0.5); /* note: terracotta */
+  --osio-graph-edge-hier: rgba(122, 74, 43, 0.62); /* hierarchy: structural brown */
+  --osio-graph-select: #cc785c; /* terracotta accent (--osio-accent) */
+  --osio-graph-hover: rgba(204, 120, 92, 0.55);
+  --osio-graph-note: #b45309; /* warm orange (note hue) */
+  --osio-graph-focus-thread: rgba(204, 120, 92, 0.85); /* focus edge thread */
+
+  /* Canvas V2 debug shell (dev surface) — fixed dark stage, theme-independent.
+     Values live here in the single token file; canvas.css only references them. */
+  --osio-canvas-bg: #1e1e1e;
+  --osio-canvas-dot: rgba(255, 255, 255, 0.18); /* dot-grid overlay on the stage */
 }
 
 [data-theme="dark"] {
-  --osio-graph-bg-0: #0b0a1f;
-  --osio-graph-bg-1: #160c30;
-  --osio-graph-aurora-1: #4338ca;
-  --osio-graph-aurora-2: #7c3aed;
-  --osio-graph-aurora-3: #2563eb;
-  --osio-graph-aurora-4: #a21caf;
-  --osio-graph-node-backing: rgba(3, 2, 12, 0.66);
-  --osio-graph-ink: #e7e9f5;
-  --osio-graph-halo: rgba(11, 10, 31, 0.85);
-  --osio-graph-card-bg: rgba(12, 9, 32, 0.82);
-  --osio-graph-card-border: rgba(255, 255, 255, 0.14);
+  /* "ember" — warm charcoal, the dark face of the Warm Constellation. */
+  --osio-graph-bg-0: #1b1a17; /* warm charcoal */
+  --osio-graph-bg-1: #15140f; /* warm-black — luminance < .5 → "dark" mode */
+  --osio-graph-grain: rgba(255, 240, 210, 0.025); /* faint warm specks */
+  --osio-graph-vignette: rgba(0, 0, 0, 0.4);
+  --osio-graph-field-warm: rgba(224, 147, 122, 0.1); /* ember bloom */
+  --osio-graph-node-backing: rgba(20, 18, 14, 0.72); /* matte stone backing */
+  --osio-graph-node-rim: rgba(255, 244, 228, 0.16); /* warm sheen rim */
+  --osio-graph-node-shadow: rgba(0, 0, 0, 0.45);
+  --osio-graph-ink: #edeae3;
+  --osio-graph-ink-muted: #a8a399;
+  --osio-graph-halo: rgba(21, 20, 15, 0.85);
+  --osio-graph-card-bg: #242120;
+  --osio-graph-card-border: #353029;
+  --osio-graph-card-shadow: rgba(0, 0, 0, 0.55);
+  --osio-graph-edge: rgba(168, 163, 153, 0.26);
+  --osio-graph-edge-tag: rgba(217, 184, 156, 0.16);
+  --osio-graph-edge-note: rgba(224, 147, 122, 0.55);
+  --osio-graph-edge-hier: rgba(217, 184, 156, 0.78);
+  --osio-graph-select: #e0937a; /* warm terracotta-glow accent */
+  --osio-graph-hover: rgba(224, 147, 122, 0.55);
+  --osio-graph-note: #e0a958; /* warm amber */
+  --osio-graph-focus-thread: rgba(224, 147, 122, 0.85);
 }
 
 html,
@@ -416,8 +461,11 @@ body {
   height: 100%;
 }
 
-/* Global accent focus ring for every interactive element. */
-:where(a, button, [role="button"], input, select, textarea, [tabindex]):focus-visible {
+/* Global accent focus ring for every interactive element — EXCEPT contenteditable
+   text-editing surfaces (block lines, table cells). While writing, the blinking
+   caret is the focus indicator; the chunky accent box read as an unwanted "focus
+   mode". Multi-select feedback is a separate ring on the block wrapper, untouched. */
+:where(a, button, [role="button"], input, select, textarea, [tabindex]):not([contenteditable=""], [contenteditable="true"], [role="textbox"]):focus-visible {
   outline: 2px solid var(--osio-accent);
   outline-offset: 2px;
   border-radius: var(--osio-radius-sm);

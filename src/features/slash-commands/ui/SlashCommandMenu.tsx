@@ -17,6 +17,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 import type { MediaBlockType } from "@/entities/block";
 import { MediaAssetPicker } from "@/shared/ui/molecules/MediaAssetPicker";
@@ -37,6 +38,7 @@ import type {
 type SelectableSlashCommand = Exclude<SlashCommand, SlashMediaPickerCommand>;
 
 const MENU_MARGIN = 8;
+const MENU_GAP = 6;
 const COMMAND_MENU_WIDTH = 256;
 const MEDIA_MENU_WIDTH = 296;
 const COMMAND_MENU_MAX_HEIGHT = 416;
@@ -46,7 +48,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 interface SlashCommandMenuProps {
-  position: { x: number; y: number };
+  position: { x: number; y: number; top: number };
   filter: string;
   onSelect: (
     item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand,
@@ -139,14 +141,38 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     activeEl?.scrollIntoView({ block: "nearest" });
   }, [effectiveActiveIdx]);
 
+  // The caret anchor is captured when the menu opens; on page scroll/resize it
+  // goes stale, so close instead of floating in the wrong place (Notion does the
+  // same). Scrolling inside the menu's own list (capture-phase) is ignored.
+  useEffect(() => {
+    const onScroll = (event: Event) => {
+      if (ref.current && event.target instanceof Node && ref.current.contains(event.target)) {
+        return;
+      }
+      onClose();
+    };
+    globalThis.addEventListener("scroll", onScroll, true);
+    globalThis.addEventListener("resize", onClose);
+    return () => {
+      globalThis.removeEventListener("scroll", onScroll, true);
+      globalThis.removeEventListener("resize", onClose);
+    };
+  }, [onClose]);
+
   const menuStyle = useMemo<React.CSSProperties>(() => {
     const viewportWidth = typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1024;
     const viewportHeight = typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 768;
     const width = COMMAND_MENU_WIDTH + (activeMediaKind ? MEDIA_MENU_WIDTH : 0);
     const maxHeight = Math.min(COMMAND_MENU_MAX_HEIGHT, viewportHeight - MENU_MARGIN * 2);
-    const belowTop = position.y + 4;
-    const aboveTop = position.y - maxHeight - 8;
-    const top = belowTop + maxHeight > viewportHeight - MENU_MARGIN && aboveTop >= MENU_MARGIN
+
+    // Prefer just below the caret line; flip ABOVE only when it can't fit below
+    // and there is room above. The above-anchor uses the caret TOP (not bottom),
+    // so a flipped menu sits cleanly above the line being typed instead of
+    // covering it.
+    const belowTop = position.y + MENU_GAP;
+    const aboveTop = position.top - MENU_GAP - maxHeight;
+    const overflowsBelow = belowTop + maxHeight > viewportHeight - MENU_MARGIN;
+    const top = overflowsBelow && aboveTop >= MENU_MARGIN
       ? aboveTop
       : clamp(belowTop, MENU_MARGIN, viewportHeight - maxHeight - MENU_MARGIN);
 
@@ -155,7 +181,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       left: clamp(position.x, MENU_MARGIN, viewportWidth - width - MENU_MARGIN),
       maxHeight,
     };
-  }, [activeMediaKind, position.x, position.y]);
+  }, [activeMediaKind, position.x, position.y, position.top]);
 
   if (filtered.length === 0 && !activeMediaKind) {
     return null;
@@ -171,7 +197,15 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 
   let commandIndex = -1;
 
-  return (
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  // Portal to <body> so `position: fixed` resolves against the viewport. The
+  // editor page sets `container-type: size` (for the TOC rail), which makes it a
+  // containing block for fixed descendants — rendered inline, the menu would
+  // anchor to the page box, not the viewport, and drift off the caret.
+  return createPortal(
     <div
       ref={ref}
       data-testid="slash-command-menu"
@@ -264,6 +298,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 };

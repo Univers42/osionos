@@ -15,7 +15,7 @@
  * NOT import the SDK — osionos rolls its own fetch — so these types are the
  * single source of truth for the console feature. Shapes follow the shared
  * coder contract; the authoritative JSON lives in the SDK
- * (apps/baas/sdk/src/{domains/account,types}.ts).
+ * (apps/grobase/sdks/js/src/{domains,types}.ts).
  */
 
 /** The calling tenant, as returned by the self-service surface. */

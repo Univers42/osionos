@@ -1,27 +1,28 @@
 #!/usr/bin/env bash
-# check-style-tokens.sh — guard that the app-authored style surfaces stay
-# token-driven (no raw hex/rgb color literals). Colour VALUES live only in the
-# token-definition file (src/app/styles/global.css); everything else must
-# reference var(--osio-*). Dependency-free (no stylelint) to respect the repo's
-# locked-down supply chain. Run: bash scripts/check-style-tokens.sh
+# check-style-tokens.sh — guard that app-authored style surfaces stay
+# token-driven (no raw hex/rgb colour literals). Colour VALUES live only in the
+# token-definition files under src/app/styles/** (notably global.css); every
+# other CSS/SCSS surface must reference var(--osio-*). Dependency-free (no
+# stylelint) to respect the repo's locked-down supply chain. Wired into
+# `npm run test:quality`. Run standalone: bash scripts/check-style-tokens.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Files that must be 100% token-driven (component/feature CSS we restyled).
-FILES=(
-  src/pages/notion-page/ui/notionPage.css
-  src/widgets/page-renderer/ui/homeVariants.css
-  src/pages/trash-view/ui/trashView.css
-  src/widgets/page-toc/PageOutlineRail.module.css
-  src/features/page-management/ui/PageOptionsMenu.module.css
-  src/features/page-management/ui/PageOptionsMenu.module.scss
-  src/features/page-management/ui/MovePageModal.module.css
-  src/features/page-management/ui/MovePageModal.module.scss
+# Scan ALL app-authored CSS/SCSS, EXCLUDING:
+#   - src/app/styles/**   token-definition files (global.css holds the canonical
+#                         hex/rgba values, incl. the graph-engine/canvas blocks)
+#   - vendored trees      notion-database-sys & lib/markengine (own quality gates)
+mapfile -d '' FILES < <(
+  find src \
+    \( -path 'src/app/styles' \
+       -o -path 'src/shared/notion-database-sys' \
+       -o -path 'src/shared/lib/markengine' \) -prune \
+    -o -type f \( -name '*.css' -o -name '*.scss' \) -print0
 )
 
-# Raw colour literals: #rgb/#rrggbb or rgb()/rgba(). color-mix(... var(--osio)) is
-# fine (it references tokens). We flag a bare #hex or an rgb()/rgba() with numeric
-# channels (not referencing a token).
+# Raw colour literals: #rgb/#rrggbb or rgb()/rgba(). color-mix(... var(--osio))
+# is fine (it references tokens). We flag a bare #hex or an rgb()/rgba() with
+# numeric channels (i.e. not referencing a token).
 fail=0
 for f in "${FILES[@]}"; do
   [ -f "$f" ] || continue
@@ -34,6 +35,6 @@ for f in "${FILES[@]}"; do
 done
 
 if [ "$fail" -eq 0 ]; then
-  echo "✓ style-token check passed: all guarded CSS surfaces are token-driven."
+  echo "✓ style-token check passed: all app CSS/SCSS surfaces are token-driven."
 fi
 exit "$fail"

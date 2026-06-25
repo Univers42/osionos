@@ -1,14 +1,16 @@
 /**
  * Visual panel: node-size & link-thickness scaling, label density (LOD), glow
- * intensity, and the aurora-background style switcher.
+ * intensity, and the warm-field background style switcher.
  */
 
 import type { ReactElement } from "react";
 import type { BackgroundStyle, Controls } from "../../core/state/controls";
 import { Slider } from "./widgets";
 
+// Labels follow the "Warm Constellation" field; the union VALUES stay
+// `aurora`/`aurora-calm`/`flat` so saved localStorage controls keep working.
 const BACKGROUNDS: { id: BackgroundStyle; label: string }[] = [
-  { id: "aurora", label: "Aurora" },
+  { id: "aurora", label: "Warm field" },
   { id: "aurora-calm", label: "Calm" },
   { id: "flat", label: "Flat" },
 ];

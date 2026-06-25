@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus } from "lucide-react";
 
@@ -82,7 +83,7 @@ export interface SurfaceBlockEditorProps {
 	onDeleteCodeBlock?: () => void;
 	onUpdateBlock?: (blockId: string, updates: Partial<Block>) => void;
 	onBeforeStructuralEdit?: () => void;
-	onRequestSlashMenu?: (position: { x: number; y: number }) => void;
+	onRequestSlashMenu?: (position: { x: number; y: number; top: number }) => void;
 	renderChildren?: () => React.ReactNode;
 	focusBlock: (blockId: string, cursorEnd?: boolean) => void;
 }
@@ -486,7 +487,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		});
 	}, []);
 
-	const handleRequestSlashMenu = useCallback((blockId: string, position: { x: number; y: number }) => {
+	const handleRequestSlashMenu = useCallback((blockId: string, position: { x: number; y: number; top: number }) => {
 		setSlashMenu({ blockId, position, filter: "" });
 	}, [setSlashMenu]);
 
@@ -650,12 +651,15 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 
 			<BlockContextMenu menu={contextMenu} sections={contextMenuSections} onClose={closeContextMenu} />
 
-			{selectionRect ? (
-				<div
-					className="pointer-events-none fixed z-[var(--osio-z-max)] rounded-sm border border-[var(--osio-accent)] bg-[var(--osio-accent)]/10"
-					style={{ left: selectionRect.left, top: selectionRect.top, width: selectionRect.width, height: selectionRect.height }}
-				/>
-			) : null}
+			{selectionRect && typeof document !== "undefined"
+				? createPortal(
+						<div
+							className="pointer-events-none fixed z-[var(--osio-z-max)] rounded-sm border border-[var(--osio-accent)] bg-[var(--osio-accent)]/10"
+							style={{ left: selectionRect.left, top: selectionRect.top, width: selectionRect.width, height: selectionRect.height }}
+						/>,
+						document.body,
+					)
+				: null}
 		</div>
 	);
 };
@@ -688,7 +692,7 @@ interface BlockTreeProps {
 	focusBlock: (blockId: string, cursorEnd?: boolean) => void;
 	onBeforeStructuralEdit: () => void;
 	onContextMenu: (e: React.MouseEvent, blockId: string) => void;
-	onRequestSlashMenu: (blockId: string, position: { x: number; y: number }) => void;
+	onRequestSlashMenu: (blockId: string, position: { x: number; y: number; top: number }) => void;
 	renderBlockEditor: (props: SurfaceBlockEditorProps) => React.ReactNode;
 }
 
@@ -1104,7 +1108,7 @@ interface EditableBlockProps {
 	registerRef: (blockId: string, el: HTMLElement | null) => void;
 	focusBlock: (blockId: string, cursorEnd?: boolean) => void;
 	onBeforeStructuralEdit: () => void;
-	onRequestSlashMenu: (blockId: string, position: { x: number; y: number }) => void;
+	onRequestSlashMenu: (blockId: string, position: { x: number; y: number; top: number }) => void;
 	moveBlock: (pageId: string, blockId: string, targetIndex: number, parentBlockId?: string | null) => void;
 	moveBlockAcrossTree: (pageId: string, blockId: string, targetParentBlockId: string | null, targetIndex: number) => void;
 	updateContent: (blocks: Block[]) => void;

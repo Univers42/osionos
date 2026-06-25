@@ -39,7 +39,7 @@ run_inside_container() {
     mcp-claude) exec node scripts/osionos-mcp-server.mjs "$@" ;;
     lighthouse) exec node scripts/lighthouse.mjs "$@" ;;
     bench-layout) exec node scripts/layout-bench.mjs "$@" ;;
-    quality) pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit && pnpm exec tsc --noEmit && exec pnpm exec eslint src/ packages/ --max-warnings=0 "$@" ;;
+    quality) pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ --max-warnings=0 "$@" && exec bash scripts/check-style-tokens.sh ;;
     *) echo "Unknown docker-run command: ${COMMAND}" >&2; exit 2 ;;
   esac
 }

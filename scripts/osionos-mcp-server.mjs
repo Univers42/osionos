@@ -28,7 +28,7 @@ const ENV_FILES = [
   resolve(APP_ROOT, '../../../.env.local'),
   resolve(APP_ROOT, '../../opposite-osiris/.env.local'),
   resolve(APP_ROOT, '../../opposite-osiris/.env'),
-  resolve(APP_ROOT, '../../../apps/baas/.env.local'),
+  resolve(APP_ROOT, '../../../apps/grobase/.env.local'),
 ];
 
 for (const file of ENV_FILES) {
