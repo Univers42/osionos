@@ -10,8 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { Suspense, useEffect, useState } from "react";
-import { ChevronDown, LayoutDashboard, Network, Database, Images, Home } from "lucide-react";
+import React, { Suspense } from "react";
+
+import { useHomeVariantStore, type HomeVariant } from "@/widgets/home-variants/model/homeVariantStore";
 
 import { getHomeDashboardPageId } from "@/widgets/database-view/model/databaseViewCatalog.meta";
 import { WS_FILES_DB_ID, WS_FILES_TABLE_VIEW } from "@/widgets/database-view/model/workspaceDatabaseConstants";
@@ -26,9 +27,6 @@ import {
 } from "./lazyViews";
 
 import "./homeVariants.css";
-
-const HOME_VARIANT_STORAGE_KEY = "osionos.home.variant";
-type HomeVariant = "dashboard" | "graph" | "database" | "workspace";
 
 const LoadingPane: React.FC = () => (
   <div className="flex-1 flex items-center justify-center h-full">
@@ -46,21 +44,13 @@ export const HomeTabView: React.FC = () => {
     firstWsId ? s.pages[firstWsId]?.find((page) => page._id === homeDashboardPageId && !page.archivedAt) : undefined
   ));
 
-  const [variant, setVariant] = useState<HomeVariant>(() => {
-    if (globalThis.window === undefined) return "dashboard";
-    // Deep-link override (?home=graph|database|workspace|dashboard) wins over the
-    // persisted choice, so a Home surface can be opened/linked directly.
-    const linked = new URLSearchParams(globalThis.location.search).get("home");
-    if (linked === "graph" || linked === "database" || linked === "workspace" || linked === "dashboard") return linked;
-    const stored = globalThis.localStorage.getItem(HOME_VARIANT_STORAGE_KEY);
-    return stored === "graph" || stored === "database" ? stored : "dashboard";
-  });
-  useEffect(() => { globalThis.localStorage.setItem(HOME_VARIANT_STORAGE_KEY, variant); }, [variant]);
+  // The Home surface picker now lives in the global top bar (HomeVariantControl);
+  // here we just render the chosen surface.
+  const variant = useHomeVariantStore((s) => s.variant);
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden bg-[var(--osio-bg-page)]">
       <div className="osionos-home-shell flex-1 min-h-0">
-        <HomeVariantMenu variant={variant} onVariantChange={setVariant} />
         {/* flex-1 box so canvas variants (graph) get a real height instead of a
             fragile height:100% chain that collapses to the inspector's height. */}
         <div className="relative flex-1 min-h-0 w-full">
@@ -92,47 +82,3 @@ function renderHomeVariantContent(variant: HomeVariant, homeDashboardPage: PageE
   if (homeDashboardPage) return <LazyOsionosPage pageId={homeDashboardPage._id} />;
   return <LoadingPane />;
 }
-
-const HOME_MENU_ITEMS: Array<{ id: HomeVariant; label: string; icon: React.ReactNode }> = [
-  { id: "dashboard", label: "Dashboard", icon: <LayoutDashboard size={16} aria-hidden="true" /> },
-  { id: "graph", label: "Second Brain", icon: <Network size={16} aria-hidden="true" /> },
-  { id: "database", label: "Database", icon: <Database size={16} aria-hidden="true" /> },
-  { id: "workspace", label: "Gallery", icon: <Images size={16} aria-hidden="true" /> },
-];
-
-const HomeVariantMenu: React.FC<{ variant: HomeVariant; onVariantChange: (v: HomeVariant) => void }> = ({ variant, onVariantChange }) => {
-  const [open, setOpen] = useState(false);
-  const activeLabel = HOME_MENU_ITEMS.find((item) => item.id === variant)?.label ?? "Dashboard";
-  return (
-    <div className="osionos-home-variant-menu" data-open={open ? "true" : undefined}>
-      {/* Icon-only: the house glyph IS the label. aria-label/title carry the
-          meaning for screen readers + hover, so no redundant visible "Home". */}
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="Home"
-        title="Home"
-        onClick={() => setOpen((current) => !current)}
-      >
-        <Home size={16} aria-hidden="true" />
-        <ChevronDown size={15} aria-hidden="true" />
-      </button>
-      <div className="osionos-home-variant-dropdown" role="menu">
-        {HOME_MENU_ITEMS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="menuitem"
-            data-active={variant === item.id ? "true" : undefined}
-            onClick={() => { onVariantChange(item.id); setOpen(false); }}
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </div>
-      <span className="osionos-home-variant-current">{activeLabel}</span>
-    </div>
-  );
-};
