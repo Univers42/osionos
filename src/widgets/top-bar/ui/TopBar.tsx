@@ -20,7 +20,6 @@ import { TopBarMenu } from "./TopBarMenu";
 import { TopBarSearch } from "./TopBarSearch";
 import { UpdateButton } from "./UpdateButton";
 import { WindowControls } from "./WindowControls";
-import { HomeVariantControl } from "@/widgets/home-variants/ui/HomeVariantControl";
 
 interface TopBarProps {
   onOpenSettings: () => void;
@@ -54,8 +53,6 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
       </span>
 
       <TopBarMenu groups={menus} />
-
-      <HomeVariantControl />
 
       <div className="flex min-w-0 flex-1 justify-center px-3">
         <TopBarSearch commands={commands} />
