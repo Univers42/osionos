@@ -100,7 +100,7 @@ export function mintLivekitToken({ apiKey, apiSecret, identity, name, room, gran
 		nbf: issuedAt - NBF_SKEW_SECONDS,
 		iat: issuedAt,
 		exp: issuedAt + ttl,
-		video: grants ?? { room: String(room ?? ''), roomJoin: true, canPublish: true, canSubscribe: true },
+		video: grants ?? { room: String(room ?? ''), roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: true },
 	};
 	const signingInput = `${base64urlJson({ alg: 'HS256', typ: 'JWT' })}.${base64urlJson(payload)}`;
 	const signature = createHmac('sha256', apiSecret).update(signingInput).digest('base64url');

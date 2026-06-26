@@ -59,6 +59,13 @@ export class BaasError extends Error {
 }
 
 export async function baasPost<T>(path: string, body: unknown): Promise<T> {
+  // Without a configured base URL, a bare `${path}` resolves against the app
+  // origin (e.g. https://localhost:3001) and hits nginx — which 405s every
+  // `/query/v1/*` POST and floods the console. The BaaS query API is optional
+  // (pages stay the source of truth), so refuse to fire instead of firing a
+  // doomed relative request: callers already treat a thrown BaasError as a
+  // non-fatal "no live data" signal.
+  if (!BAAS_BASE_URL) throw new BaasError(0, "BaaS query API not configured (VITE_BAAS_URL unset)");
   const response = await fetch(`${BAAS_BASE_URL}${path}`, {
     method: "POST",
     headers: baasHeaders(),

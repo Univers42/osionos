@@ -24,12 +24,14 @@ interface ParticipantTileProps {
   isLocal: boolean;
   /** Bumped by useRoomConnection whenever tracks change → re-attach media. */
   tracksVersion: number;
+  raised?: boolean;
 }
 
 export const ParticipantTile: React.FC<ParticipantTileProps> = ({
   participant,
   isLocal,
   tracksVersion,
+  raised,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -59,7 +61,7 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({
   }, [audioTrack, isLocal, tracksVersion]);
 
   return (
-    <figure className="relative flex aspect-video min-h-0 items-center justify-center overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-muted)]">
+    <figure className={`relative flex aspect-video min-h-0 items-center justify-center overflow-hidden rounded-lg border bg-[var(--osio-bg-muted)] ${participant.isSpeaking ? 'border-[var(--osio-accent)] ring-2 ring-[var(--osio-accent)]' : 'border-[var(--osio-border-default)]'}`}>
       {videoTrack ? (
         <video
           ref={videoRef}
@@ -74,6 +76,7 @@ export const ParticipantTile: React.FC<ParticipantTileProps> = ({
         </span>
       )}
       {!isLocal && <audio ref={audioRef} autoPlay />}
+      {raised && <span className="absolute right-2 top-2 rounded-md bg-black/60 px-1.5 py-0.5 text-sm" aria-label="Hand raised">✋</span>}
       <figcaption className="absolute bottom-2 left-2 flex max-w-[85%] items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-xs font-medium text-white">
         <span className="truncate">
           {label}

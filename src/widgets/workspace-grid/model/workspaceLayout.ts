@@ -27,6 +27,10 @@ interface LayoutState {
   /** openPage handoff: reflect the legacy active page as a tab (no mirror-back). */
   syncFromActivePage: (page: ActivePage) => void;
   openTab: (tab: WorkspaceTab, paneId?: string) => void;
+  /** Insert a tab at a specific index in a pane (file→tab-strip drop). */
+  openTabAt: (tab: WorkspaceTab, paneId: string, index: number) => void;
+  /** Swap the tab at `tabId` for `tab` in place (file→tab "replace" drop). */
+  replaceTabWith: (paneId: string, tabId: string, tab: WorkspaceTab) => void;
   closeTab: (paneId: string, tabId: string) => void;
   setActiveTab: (paneId: string, tabId: string) => void;
   setActivePane: (paneId: string) => void;
@@ -36,6 +40,11 @@ interface LayoutState {
   splitActivePane: (paneId: string, direction: "row" | "column") => void;
   closePane: (paneId: string) => void;
   resize: (splitId: string, sizes: number[]) => void;
+  /** Drop all open tabs/splits back to a single fresh home pane (used on account switch). */
+  reset: () => void;
+  /** Load the given user's OWN persisted layout (per-user keyed in layoutPersist) — called
+   *  on auth resolve / account switch so a different account never inherits open tabs. */
+  restoreForUser: (userId: string) => void;
 }
 
 export const useWorkspaceLayout = create<LayoutState>((set, get) => {
@@ -53,6 +62,17 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
 
   return {
     ...loadLayout(),
+    reset: () => {
+      const fresh = freshLayout();
+      set(fresh);
+      saveLayout(fresh);
+    },
+
+    restoreForUser: (userId) => {
+      // Read the per-user slot; loadLayout returns a fresh single-Home layout when this
+      // account has none, so a freshly-logged-in user never inherits another's tabs.
+      set(loadLayout(userId));
+    },
 
     syncFromActivePage: (page) => {
       const state = get();
@@ -70,6 +90,47 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
       const target = paneId && findPane(state.root, paneId) ? paneId : state.activePaneId;
       const root = updatePane(state.root, target, (p) => ({ ...p, tabs: [...p.tabs, tab], activeTabId: tab.tabId }));
       commit(root, target, tab);
+    },
+
+    openTabAt: (tab, paneId, index) => {
+      // A drop is an explicit PLACEMENT gesture: if the page is already open we
+      // MOVE/reorder it to the drop slot (not silently refocus it elsewhere).
+      const state = get();
+      const target = findPane(state.root, paneId) ? paneId : state.activePaneId;
+      const existing = findOpenTab(state.root, tab.pageId);
+      if (existing) return get().moveTab(existing.paneId, existing.tab.tabId, target, index);
+      const root = updatePane(state.root, target, (p) => {
+        const tabs = [...p.tabs];
+        tabs.splice(Math.max(0, Math.min(index, tabs.length)), 0, tab);
+        return { ...p, tabs, activeTabId: tab.tabId };
+      });
+      commit(root, target, tab);
+    },
+
+    replaceTabWith: (paneId, tabId, tab) => {
+      // Swap the hovered tab for the dragged page in place. If that page is
+      // already open in a *different* tab, drop the stale duplicate first so the
+      // page lands exactly where the user aimed (explicit placement gesture).
+      const state = get();
+      const pane = findPane(state.root, paneId);
+      if (!pane) return;
+      const existing = findOpenTab(state.root, tab.pageId);
+      let working = state.root;
+      if (existing && existing.tab.tabId !== tabId) {
+        working = updatePane(working, existing.paneId, (p) => {
+          const tabs = p.tabs.filter((t) => t.tabId !== existing.tab.tabId);
+          return { ...p, tabs, activeTabId: p.activeTabId === existing.tab.tabId ? (tabs[0]?.tabId ?? null) : p.activeTabId };
+        });
+      }
+      const liveTarget = findPane(working, paneId);
+      const index = liveTarget ? liveTarget.tabs.findIndex((t) => t.tabId === tabId) : -1;
+      if (index === -1) return;
+      const root = updatePane(working, paneId, (p) => {
+        const tabs = [...p.tabs];
+        tabs[index] = tab;
+        return { ...p, tabs, activeTabId: tab.tabId };
+      });
+      commit(root, paneId, tab);
     },
 
     closeTab: (paneId, tabId) => {

@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 /** A single open document inside a pane (an "onglet"). */
-export type TabKind = "page" | "database" | "channel" | "folder" | "home" | "trash" | "profile" | "console";
+export type TabKind = "page" | "database" | "channel" | "folder" | "home" | "trash" | "profile" | "console" | "messages" | "group" | "collab" | "community" | "embed" | "admin" | "chat";
 
 export interface WorkspaceTab {
   tabId: string;
@@ -21,6 +21,10 @@ export interface WorkspaceTab {
   title?: string;
   icon?: string;
   databaseId?: string | null;
+  /** Optional view id for `kind: "database"` tabs — opens a specific curated view. */
+  viewId?: string;
+  /** Source URL for `kind: "embed"` tabs (Mail/Calendar iframe apps). */
+  url?: string;
 }
 
 /** Leaf of the layout tree: a tab-group (one visible tab at a time). */

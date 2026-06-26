@@ -11,6 +11,8 @@
 /* ************************************************************************** */
 
 import React, {
+  Suspense,
+  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -21,7 +23,7 @@ import { Check, Code, Copy, Eye, Hash, Moon, Sun } from "lucide-react";
 import { EquationView } from "@/shared/ui/EquationView";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
-import { DatabaseBlock } from "@/widgets/database-view/ui/DatabaseBlock";
+import { PlaceholderBlock } from "./PlaceholderBlock";
 import { DataSourceButton } from "@/widgets/database-view/ui/DataSourceButton";
 import {
   getBlockPlaceholder,
@@ -47,6 +49,24 @@ import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
 import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
+
+// Heavy cross-engine graph: lazy-boundaried (canvas already defer-mounts the
+// cell that holds it, so the worker only spins up once the cell is in view).
+const GraphViewBlock = lazy(() =>
+  import("@/widgets/graph-explorer/GraphEngineExplorer").then((m) => ({ default: m.GraphEngineExplorer })),
+);
+
+// The Home "view launcher" (home_views block) — lazy, same boundary discipline.
+const HomeViewsBlock = lazy(() =>
+  import("@/widgets/database-view/ui/HomeViewsBlock").then((m) => ({ default: m.HomeViewsBlock })),
+);
+
+// Database blocks are rare in an edited document. Lazy-boundary them (same
+// discipline as ReadOnlyBlock) so the editor chunk does NOT statically pull the
+// database stack + its ~458KB seed JSON onto the warm path.
+const DatabaseBlock = lazy(() =>
+  import("@/widgets/database-view/ui/DatabaseBlock").then((m) => ({ default: m.DatabaseBlock })),
+);
 
 const LANGUAGES = [
   "plaintext", "mermaid",
@@ -519,6 +539,20 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         />
       );
 
+    case "placeholder":
+      return (
+        <PlaceholderBlock
+          block={block}
+          pageId={pageId}
+          style={editableStyle}
+          onChange={onChange}
+          onKeyDown={onKeyDown}
+          onPaste={onPaste}
+          onRequestSlashMenu={onRequestSlashMenu}
+          onUpdatePlaceholderText={(text) => commitBlockUpdate(block.id, { placeholderText: text })}
+        />
+      );
+
     case "bulleted_list": {
       const bulletStyle = getBulletMarker(bulletDepth);
       return (
@@ -928,11 +962,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             onChange={(databaseId) => commitBlockUpdate(block.id, { databaseId })}
           />
           <div className="osio-block-scroll-x">
-            <DatabaseBlock
-              databaseId={block.databaseId}
-              initialViewId={block.viewId}
-              mode="inline"
-            />
+            <Suspense fallback={null}>
+              <DatabaseBlock
+                databaseId={block.databaseId}
+                initialViewId={block.viewId}
+                mode="inline"
+              />
+            </Suspense>
           </div>
         </div>
       );
@@ -961,12 +997,36 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             onChange={(databaseId) => commitBlockUpdate(block.id, { databaseId })}
           />
           <div className="osio-block-scroll-x h-full">
-            <DatabaseBlock
-              databaseId={block.databaseId}
-              initialViewId={block.viewId}
-              mode="full"
-            />
+            <Suspense fallback={null}>
+              <DatabaseBlock
+                databaseId={block.databaseId}
+                initialViewId={block.viewId}
+                mode="full"
+              />
+            </Suspense>
           </div>
+        </div>
+      );
+
+    case "graph_view":
+      return (
+        <div
+          tabIndex={-1}
+          aria-label="Graph block"
+          className="relative my-3 h-full min-h-[336px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
+        >
+          <Suspense fallback={null}>
+            <GraphViewBlock />
+          </Suspense>
+        </div>
+      );
+
+    case "home_views":
+      return (
+        <div tabIndex={-1} aria-label="Home views launcher" className="relative">
+          <Suspense fallback={null}>
+            <HomeViewsBlock />
+          </Suspense>
         </div>
       );
 

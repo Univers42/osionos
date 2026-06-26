@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // jszip / i18next / pdf-lib / qrcode are click-path only (export, language
 // change, invoice PDF, 2FA QR): they are imported dynamically at their call
 // sites so the settings chunk stays lean (~280KB of deps off its parse path).
@@ -50,6 +50,10 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { useUserStore, type StaticPersona } from '@/features/auth';
 import { PermissionsPanel } from '@/features/settings/permissions';
+import { LazySocialSettings } from '@/features/settings/social/LazySocialSettings';
+import { PeopleDatabasePanel } from '@/features/settings/people/PeopleDatabasePanel';
+import { usePeopleCounts } from '@/features/settings/people/usePeopleCounts';
+import type { PeopleSourceKey } from '@/features/settings/people/peopleModel';
 import { ImageAvatarUpload } from '@/features/settings/profile/ImageAvatarUpload';
 import { TRANSLATION_LANGUAGES, fontSampleClass, usePageActions, type PageEntry } from '@/entities/page';
 import { WorkspaceThemeControls } from '@/features/theme/WorkspaceThemePanel';
@@ -83,9 +87,7 @@ import {
   type ImportHistoryEntry,
   type McpAllowedTool,
   type PublicDomain,
-  type WorkspaceInvite,
   type WorkspaceMember,
-  type WorkspaceMemberRole,
   type WorkspaceSettings,
 } from '@/store/settings';
 import { defaultBillingState, defaultWorkspaceSettings } from '@/store/settings/defaults';
@@ -117,6 +119,7 @@ const tabGroups: Array<{ label: string; tabs: TabItem[] }> = [
       { id: 'preferences', label: 'Preferences', icon: <SlidersHorizontal size={16} /> },
       { id: 'notifications', label: 'Notifications', icon: <Bell size={16} /> },
       { id: 'connections', label: 'Connections', icon: <LayoutGrid size={16} /> },
+      { id: 'contacts', label: 'Contacts', icon: <UserPlus size={16} /> },
       { id: 'mail_calendar', label: 'Mail & Calendar', icon: <Mail size={16} /> },
     ],
   },
@@ -154,6 +157,7 @@ const prompts: Record<SettingsTab, { title: string; subtitle: string }> = {
   preferences: { title: 'Preferences', subtitle: 'Choose how you want osionos to look and behave' },
   notifications: { title: 'Notifications', subtitle: 'Decide when and how you want to be notified' },
   connections: { title: 'Connections', subtitle: 'Manage and explore connections' },
+  contacts: { title: 'Contacts', subtitle: 'Manage your network, connection requests, blocked users and reports' },
   mail_calendar: { title: 'Mail & Calendar', subtitle: 'Manage emails and calendars connected to your osionos account' },
   general: { title: 'General', subtitle: 'Manage your workspace name, domains, and more' },
   people: { title: 'People', subtitle: 'Manage people in your workspace and their roles' },
@@ -174,7 +178,6 @@ const EMPTY_ASSETS: AccountAsset[] = [];
 const EMPTY_BILLING_INVOICES: BillingInvoice[] = [];
 const EMPTY_IMPORT_HISTORY: ImportHistoryEntry[] = [];
 const EMPTY_PAGES: PageEntry[] = [];
-const EMPTY_WORKSPACE_INVITES: WorkspaceInvite[] = [];
 const EMPTY_WORKSPACE_MEMBERS: WorkspaceMember[] = [];
 
 const CONNECTION_PROVIDERS = [
@@ -289,11 +292,6 @@ function safeSlug(value: string): string {
 function timezoneOptions(): string[] {
   const supportedValuesOf = Intl.supportedValuesOf as ((key: 'timeZone') => string[]) | undefined;
   return supportedValuesOf ? supportedValuesOf('timeZone') : FALLBACK_TIMEZONES;
-}
-
-function applyTheme(theme: 'light' | 'dark' | 'system') {
-  document.documentElement.dataset.osionosTheme = theme;
-  recordSettingsAction('theme_apply', { theme });
 }
 
 function changeLanguage(language: string) {
@@ -604,6 +602,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
               {activeTab === 'preferences' && <PreferencesPanel activeUserId={activeUserId} />}
               {activeTab === 'notifications' && <NotificationsPanel activeUserId={activeUserId} />}
               {activeTab === 'connections' && <ConnectionsPanel activeUserId={activeUserId} personaEmail={persona?.email} />}
+              {activeTab === 'contacts' && <LazySocialSettings />}
               {activeTab === 'mail_calendar' && <MailCalendarPanel activeUserId={activeUserId} personaEmail={persona?.email} />}
               {activeTab === 'general' && <GeneralPanel userId={activeUserId} workspaceName={activeWorkspace?.name} workspaceId={activeWorkspace?._id} membersCount={members.length} />}
               {activeTab === 'people' && <PeoplePanel workspaceId={activeWorkspace?._id} activeUserId={activeUserId} personas={members} fallbackRows={memberRows} membersCount={members.length} />}
@@ -903,12 +902,10 @@ const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }) 
   return (
     <>
       <Section title="Appearance">
-        <SettingRow
-          title="Theme"
-          description="Choose a theme for osionos on this device"
-          action={<SelectButton value={preferences?.theme ?? 'system'} options={[{ value: 'system', label: 'Use system setting' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]} onChange={(value) => { const theme = value as 'light' | 'dark' | 'system'; applyTheme(theme); update({ theme }); }}>Use system setting</SelectButton>}
-        />
-        <div className="mt-4 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
+        <p className="mb-3 text-sm text-[var(--osio-fg-muted)]">
+          Choose a color theme and light/dark mode for osionos on this device.
+        </p>
+        <div className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
           <WorkspaceThemeControls compact />
         </div>
       </Section>
@@ -1239,7 +1236,14 @@ const ProviderPickerModal: React.FC<{ title: string; providers: string[]; onSele
   </Modal>
 );
 
-type InviteRole = Exclude<WorkspaceMemberRole, 'owner'>;
+type PeopleTab = { label: string; source: PeopleSourceKey };
+
+const PEOPLE_TABS: PeopleTab[] = [
+  { label: 'Contacts', source: 'contacts' },
+  { label: 'Members', source: 'members' },
+  { label: 'Groups', source: 'groups' },
+  { label: 'Guests', source: 'guests' },
+];
 
 const PeoplePanel: React.FC<{
   workspaceId?: string;
@@ -1247,110 +1251,46 @@ const PeoplePanel: React.FC<{
   personas: StaticPersona[];
   fallbackRows: React.ReactNode[][];
   membersCount: number;
-}> = ({ workspaceId = 'local-workspace', activeUserId, personas, fallbackRows, membersCount }) => {
-  const [activePeopleTab, setActivePeopleTab] = useState('Members');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [peopleQuery, setPeopleQuery] = useState('');
-  const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
-  const members = useWorkspaceMembersStore((state) => state.data[workspaceId] ?? EMPTY_WORKSPACE_MEMBERS);
+}> = ({ workspaceId = 'local-workspace', activeUserId, personas }) => {
+  const [activeLabel, setActiveLabel] = useState('Contacts');
+  const [showDirectory, setShowDirectory] = useState(false);
+  const [recount, setRecount] = useState(0);
   const hydrateMembers = useWorkspaceMembersStore((state) => state.hydrate);
-  const changeRole = useWorkspaceMembersStore((state) => state.changeRole);
-  const removeMember = useWorkspaceMembersStore((state) => state.remove);
-  const invites = useWorkspaceInvitesStore((state) => state.data[workspaceId] ?? EMPTY_WORKSPACE_INVITES);
   const hydrateInvites = useWorkspaceInvitesStore((state) => state.hydrate);
-  const createInvite = useWorkspaceInvitesStore((state) => state.invite);
-  const revokeInvite = useWorkspaceInvitesStore((state) => state.revoke);
   const seedUserIds = useMemo(() => personas.map((persona) => persona.id).filter(Boolean), [personas]);
-  const roleOptions = useMemo(() => [
-    { value: 'owner', label: 'Owner' },
-    { value: 'admin', label: 'Admin' },
-    { value: 'member', label: 'Member' },
-    { value: 'guest', label: 'Guest' },
-  ], []);
 
   useEffect(() => {
     runAsync(hydrateMembers(workspaceId, activeUserId || 'anonymous', seedUserIds));
     runAsync(hydrateInvites(workspaceId));
   }, [activeUserId, hydrateInvites, hydrateMembers, seedUserIds, workspaceId]);
 
-  const selectedMemberId = typeof modal?.payload?.userId === 'string' ? modal.payload.userId : null;
-  const selectedMember = members.find((member) => member.userId === selectedMemberId);
-  const visibleMembers = members.filter((member) => {
-    const persona = personas.find((candidate) => candidate.id === member.userId);
-    const haystack = `${persona?.name ?? ''} ${persona?.email ?? ''} ${member.userId}`.toLowerCase();
-    const matchesQuery = !peopleQuery.trim() || haystack.includes(peopleQuery.trim().toLowerCase());
-    let matchesTab = true;
-    if (activePeopleTab === 'Members') matchesTab = member.role !== 'guest';
-    if (activePeopleTab === 'Guests') matchesTab = member.role === 'guest';
-    return matchesQuery && matchesTab;
-  });
-  const rows = visibleMembers.length ? visibleMembers.map((member) => {
-    const persona = personas.find((candidate) => candidate.id === member.userId);
-    return [
-      <div key={member.userId} className="flex items-center gap-3">
-        <input type="checkbox" className="h-3.5 w-3.5" onChange={(event) => recordSettingsAction('people_member_select', { userId: member.userId, selected: event.target.checked })} />
-        <Avatar value={persona?.emoji} label={persona?.name ?? member.userId} />
-        <div className="min-w-0">
-          <div className="truncate font-medium">{persona?.name ?? member.userId}</div>
-          <div className="truncate text-xs text-[var(--osio-fg-muted)]">{persona?.email ?? member.joinedAt}</div>
-        </div>
-      </div>,
-      <SelectButton key={`${member.userId}-role`} value={member.role} options={roleOptions} onChange={(value) => { if (value === 'owner') setModal({ name: 'member-actions', payload: { userId: member.userId, transferOwner: true } }); else runAsync(changeRole(workspaceId, member.userId, value as WorkspaceMemberRole)); }}>{member.role}</SelectButton>,
-      <Button key={`${member.userId}-menu`} tone="ghost" className="px-2" onClick={() => setModal({ name: 'member-actions', payload: { userId: member.userId } })}><MoreHorizontal size={16} /></Button>,
-    ];
-  }) : fallbackRows;
+  const counts = usePeopleCounts(workspaceId, recount);
+  const bump = useCallback(() => setRecount((value) => value + 1), []);
+  const peopleCtx = useMemo(
+    () => ({ workspaceId, activeUserId: activeUserId || 'anonymous', personas }),
+    [workspaceId, activeUserId, personas],
+  );
+  const countByLabel: Record<string, number | undefined> = {
+    Contacts: counts.contacts, Members: counts.members, Groups: counts.groups, Guests: counts.guests,
+  };
+  const activeSource = PEOPLE_TABS.find((tab) => tab.label === activeLabel)?.source ?? 'contacts';
 
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <MiniTabs active={activePeopleTab} onChange={setActivePeopleTab} tabs={[{ label: 'Guests', count: invites.length }, { label: 'Members', count: members.length || membersCount }, { label: 'Groups' }, { label: 'Contacts' }]} />
-        <div className="flex flex-wrap gap-2">
-          <Button tone="ghost" onClick={() => setSearchOpen((open) => !open)}><Search size={16} /></Button>
-          {searchOpen && <input value={peopleQuery} onChange={(event) => setPeopleQuery(event.target.value)} placeholder="Search people" className="h-8 w-[220px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" />}
-          <Button tone="primary" onClick={() => setModal({ name: 'invite-members' })}><UserPlus size={16} /> Add members</Button>
-        </div>
+        <MiniTabs
+          active={activeLabel}
+          onChange={(value) => { setShowDirectory(false); setActiveLabel(value); }}
+          tabs={PEOPLE_TABS.map((tab) => ({ label: tab.label, count: countByLabel[tab.label] }))}
+        />
+        <Button tone={showDirectory ? 'default' : 'primary'} onClick={() => setShowDirectory((open) => !open)}>
+          <UserPlus size={16} /> {showDirectory ? 'Done' : 'Add members'}
+        </Button>
       </div>
-      <DataTable headers={['User', 'Access', '']} rows={rows} />
-      {invites.length > 0 && <DataTable className="mt-4" headers={['Pending invite', 'Role', '']} rows={invites.map((invite) => [invite.email, invite.role, <Button key={`${invite._id}-revoke`} tone="ghost" onClick={() => { runAsync(revokeInvite(workspaceId, invite._id)); }}>Revoke</Button>])} />}
-      <Button tone="ghost" onClick={() => setModal({ name: 'people-directory' })}>View People Directory</Button>
-      {modal?.name === 'invite-members' && <InviteMembersModal onInvite={(email, role) => createInvite(workspaceId, { email, role, invitedBy: activeUserId || 'anonymous' })} onClose={() => setModal(null)} />}
-      {modal?.name === 'people-directory' && <PeopleDirectoryModal personas={personas} onClose={() => setModal(null)} />}
-      {modal?.name === 'member-actions' && selectedMember && <MemberActionsModal onRole={(role) => { runAsync(changeRole(workspaceId, selectedMember.userId, role)); setModal(null); }} onRemove={() => { runAsync(removeMember(workspaceId, selectedMember.userId)); setModal(null); }} onClose={() => setModal(null)} transferOwner={modal.payload?.transferOwner === true} />}
+      <PeopleDatabasePanel key={showDirectory ? 'directory' : activeSource} source={showDirectory ? 'directory' : activeSource} ctx={peopleCtx} onCountsChange={bump} />
     </>
   );
 };
-
-const InviteMembersModal: React.FC<{ onInvite: (email: string, role: InviteRole) => Promise<WorkspaceInvite | null>; onClose: () => void }> = ({ onInvite, onClose }) => {
-  const [emailDraft, setEmailDraft] = useState('');
-  const [role, setRole] = useState<InviteRole>('member');
-  return (
-    <Modal open onClose={onClose} title="Invite members" size="sm">
-      <div className="space-y-3">
-        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} placeholder="name@example.com" />
-        <SelectButton value={role} options={[{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }, { value: 'guest', label: 'Guest' }]} onChange={(value) => setRole(value as InviteRole)}>Member</SelectButton>
-        <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => { if (emailDraft.includes('@')) runAsync(onInvite(emailDraft.trim().toLowerCase(), role).then(() => onClose())); }}>Invite</Button></div>
-      </div>
-    </Modal>
-  );
-};
-
-const PeopleDirectoryModal: React.FC<{ personas: StaticPersona[]; onClose: () => void }> = ({ personas, onClose }) => (
-  <Modal open onClose={onClose} title="People directory" size="md">
-    <DataTable headers={['Person', 'Email']} rows={personas.map((persona) => [<span key={persona.id} className="inline-flex items-center gap-2"><Avatar value={persona.emoji} label={persona.name} />{persona.name}</span>, persona.email])} />
-  </Modal>
-);
-
-const MemberActionsModal: React.FC<{ transferOwner?: boolean; onRole: (role: WorkspaceMemberRole) => void; onRemove: () => void; onClose: () => void }> = ({ transferOwner, onRole, onRemove, onClose }) => (
-  <Modal open onClose={onClose} title={transferOwner ? 'Transfer ownership' : 'Member actions'} size="sm">
-    <div className="grid gap-2">
-      {transferOwner && <p className="text-sm text-[var(--osio-fg-muted)]">Confirm owner transfer before changing this role.</p>}
-      <Button onClick={() => recordSettingsAction('invite_resend')}>Resend invite</Button>
-      <Button onClick={() => onRole('owner')}>Transfer ownership</Button>
-      <Button onClick={() => recordSettingsAction('member_view_profile')}>View profile</Button>
-      <Button tone="danger" onClick={onRemove}>Remove</Button>
-    </div>
-  </Modal>
-);
 
 const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string }> = ({ workspaceId = 'local-workspace', activeUserId }) => {
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);

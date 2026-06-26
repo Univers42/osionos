@@ -23,7 +23,7 @@ export interface PaletteResult {
   title: string;
   subtitle?: string;
   accelerator?: string;
-  kind: "page" | "command";
+  kind: "page" | "command" | "person";
   run: () => void;
 }
 

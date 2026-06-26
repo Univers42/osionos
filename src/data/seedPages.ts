@@ -24,6 +24,9 @@ import {
 import {
   designSystem, sprintReview, alexTasksDatabase, quickNotes, readingList, samTasksDatabase,
 } from './seedUserPages';
+import {
+  studentDashboard, todoList, classNotes, gradeCalculator, clubHomepage, resume,
+} from './templates';
 
 /** Mock workspace ID for the shared team workspace. */
 export const SHARED_WORKSPACE_ID = 'mock-ws-shared-team';
@@ -139,6 +142,13 @@ export const SEED_PAGES: SeedPage[] = [
   samTasksDatabase,
   // Shared
   teamWiki,
+  // Admin-designed templates (isTemplate=true)
+  studentDashboard,
+  todoList,
+  classNotes,
+  gradeCalculator,
+  clubHomepage,
+  resume,
 ];
 
 /** Returns seed pages matching the given workspace ID. */

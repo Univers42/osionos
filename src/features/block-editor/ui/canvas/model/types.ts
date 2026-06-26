@@ -59,6 +59,8 @@ export interface CanvasCell {
   content?: string;
   blockType?: Block["type"];
   wrap?: boolean;
+  /** Named section key — preserved across migrate/unmigrate for per-section grants. */
+  section?: string;
 }
 
 export interface CanvasGridConfig {

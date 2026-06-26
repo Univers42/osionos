@@ -19,7 +19,10 @@
  */
 
 import type { DataSourceDescriptor } from "@/shared/notion-database-sys/src/store/sources/dataSourceRegistry";
-import { KNOWN_DATABASE_VIEWS } from "./databaseViewCatalog";
+// .meta (pure view metadata) — NOT databaseViewCatalog, whose getDashboardMetrics
+// path statically bundles the ~458KB seed JSON. allDataSources only needs the
+// view registry to enumerate the demo databases.
+import { KNOWN_DATABASE_VIEWS } from "./databaseViewCatalog.meta";
 import { listLiveSources } from "./liveMountTables";
 import { WS_FILES_DB_ID, WS_FOLDERS_DB_ID } from "./workspaceDatabaseConstants";
 

@@ -18,12 +18,15 @@
  * is absent or there are no channels.
  */
 
-import React from 'react';
-import { Hash, Video } from 'lucide-react';
+import React, { useState } from 'react';
+import { Hash, Plus, Video } from 'lucide-react';
 
 import type { ChatChannel } from '@/shared/chat/channelApi';
 import { genId } from '@/widgets/workspace-grid/model/layoutTree';
 import { useWorkspaceLayout } from '@/widgets/workspace-grid/model/workspaceLayout';
+import { useUnreadStore } from '@/store/chat/useUnreadStore';
+import { UnreadBadge } from '@/shared/chat/UnreadBadge';
+import { CreateChannelModal } from './CreateChannelModal';
 import { useWorkspaceChannels } from './useWorkspaceChannels';
 
 function isCallChannel(channel: ChatChannel): boolean {
@@ -42,15 +45,27 @@ function openChannelTab(channel: ChatChannel) {
 }
 
 export const ChannelList: React.FC = () => {
-  const { channels, available } = useWorkspaceChannels();
+  const { channels, available, reload } = useWorkspaceChannels();
+  const counts = useUnreadStore((s) => s.counts);
+  const [createOpen, setCreateOpen] = useState(false);
 
-  if (!available || channels.length === 0) return null;
+  if (!available) return null;
 
   return (
     <section className="px-2 py-1" data-channel-list>
       <div className="flex items-center justify-between px-1">
         <h2 className="text-xs font-semibold uppercase text-[var(--osio-fg-subtle)]">Channels</h2>
+        <button
+          type="button"
+          aria-label="Create channel"
+          title="Create channel"
+          onClick={() => setCreateOpen(true)}
+          className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+        >
+          <Plus size={14} />
+        </button>
       </div>
+      <CreateChannelModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={reload} />
       <ul className="mt-1 space-y-0.5">
         {channels.map((channel) => (
           <li key={channel.id}>
@@ -63,9 +78,13 @@ export const ChannelList: React.FC = () => {
                 ? <Video size={14} className="shrink-0" aria-label="Voice or video channel" />
                 : <Hash size={14} className="shrink-0" />}
               <span className="truncate">{channel.name}</span>
+              <UnreadBadge count={counts[channel.id] ?? 0} />
             </button>
           </li>
         ))}
+        {channels.length === 0 && (
+          <li className="px-2 py-1 text-xs text-[var(--osio-fg-subtle)]">No channels yet — use + to create one.</li>
+        )}
       </ul>
     </section>
   );

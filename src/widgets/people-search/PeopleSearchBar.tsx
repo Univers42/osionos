@@ -15,9 +15,10 @@
  * name, open the member's profile tab, or jump straight into a DM.
  */
 
-import React, { useState } from 'react';
-import { MessageCircle, Search, X } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { MessageCircle, MoreHorizontal, Search, X } from 'lucide-react';
 
+import { ContactContextMenu } from '@/features/connections/ContactContextMenu';
 import { openDm } from '@/shared/chat/channelApi';
 import { usePeopleSearch, type PersonHit } from '@/shared/people/usePeopleSearch';
 import { usePresenceHeartbeat } from '@/shared/people/usePresenceHeartbeat';
@@ -50,6 +51,58 @@ function startDm(person: PersonHit, onClose: () => void) {
     .catch(() => undefined);
 }
 
+const PersonRow: React.FC<{ person: PersonHit; onClose: () => void }> = ({ person, onClose }) => {
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  return (
+    <li className="flex items-center gap-2 px-2 py-1">
+      <button
+        type="button"
+        onClick={() => openProfile(person, onClose)}
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-[var(--osio-bg-hover)]"
+      >
+        <span className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--osio-accent)] text-xs font-semibold text-[var(--osio-accent-fg)]">
+          {person.avatar ? <img src={person.avatar} alt="" className="h-full w-full object-cover" /> : person.name.slice(0, 1).toUpperCase()}
+        </span>
+        <span
+          title={person.online ? 'Online' : 'Offline'}
+          className={`h-2 w-2 shrink-0 rounded-full ${person.online ? 'bg-green-500' : 'bg-[var(--osio-fg-subtle)]'}`}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm">{person.name}</span>
+          {person.wsRole && <span className="block truncate text-xs text-[var(--osio-fg-muted)]">{person.wsRole}</span>}
+        </span>
+      </button>
+      <button
+        type="button"
+        aria-label={`Message ${person.name}`}
+        title={`Message ${person.name}`}
+        onClick={() => startDm(person, onClose)}
+        className="rounded p-1.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+      >
+        <MessageCircle size={14} />
+      </button>
+      <button
+        ref={moreRef}
+        type="button"
+        aria-label={`More actions for ${person.name}`}
+        onClick={() => setMenuOpen((value) => !value)}
+        className="rounded p-1.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+      >
+        <MoreHorizontal size={14} />
+      </button>
+      <ContactContextMenu
+        userId={person.id}
+        name={person.name}
+        anchorRef={moreRef}
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+      />
+    </li>
+  );
+};
+
 export const PeopleSearchBar: React.FC<PeopleSearchBarProps> = ({ onClose }) => {
   const [query, setQuery] = useState('');
   const { people, loading } = usePeopleSearch(query);
@@ -73,34 +126,7 @@ export const PeopleSearchBar: React.FC<PeopleSearchBarProps> = ({ onClose }) => 
       </div>
       <ul className="max-h-72 overflow-y-auto py-1">
         {people.map((person) => (
-          <li key={person.id} className="flex items-center gap-2 px-2 py-1">
-            <button
-              type="button"
-              onClick={() => openProfile(person, onClose)}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-[var(--osio-bg-hover)]"
-            >
-              <span className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--osio-accent)] text-xs font-semibold text-[var(--osio-accent-fg)]">
-                {person.avatar ? <img src={person.avatar} alt="" className="h-full w-full object-cover" /> : person.name.slice(0, 1).toUpperCase()}
-              </span>
-              <span
-                title={person.online ? 'Online' : 'Offline'}
-                className={`h-2 w-2 shrink-0 rounded-full ${person.online ? 'bg-green-500' : 'bg-[var(--osio-fg-subtle)]'}`}
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm">{person.name}</span>
-                {person.wsRole && <span className="block truncate text-xs text-[var(--osio-fg-muted)]">{person.wsRole}</span>}
-              </span>
-            </button>
-            <button
-              type="button"
-              aria-label={`Message ${person.name}`}
-              title={`Message ${person.name}`}
-              onClick={() => startDm(person, onClose)}
-              className="rounded p-1.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-            >
-              <MessageCircle size={14} />
-            </button>
-          </li>
+          <PersonRow key={person.id} person={person} onClose={onClose} />
         ))}
         {!loading && people.length === 0 && (
           <li className="px-3 py-3 text-sm text-[var(--osio-fg-muted)]">No people found.</li>

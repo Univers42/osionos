@@ -602,6 +602,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 			{slashMenu ? (
 				<SlashCommandMenu
 					key={`${slashMenu.blockId}:${slashMenu.filter}`}
+					pageId={pageId}
 					position={slashMenu.position}
 					filter={slashMenu.filter}
 					onSelect={(item) => {

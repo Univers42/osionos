@@ -19,7 +19,7 @@ import React, {
 } from "react";
 import { Grid3X3, Plus, SlidersHorizontal, X } from "lucide-react";
 
-import { createViewShowcaseCells } from "@/widgets/database-view/model/databaseViewCatalog";
+import { createViewShowcaseCells } from "@/widgets/database-view/model/databaseViewShowcase";
 import type { Block } from "@/entities/block";
 import { isCanvasV2Enabled } from "@/shared/config/featureFlags";
 import { usePageStore } from "@/store/usePageStore";
@@ -271,6 +271,7 @@ function layoutCellHasHeavyBlocks(blocks: Block[] | undefined): boolean {
   return Boolean(blocks?.some((nestedBlock) => (
     nestedBlock.type === "database_inline" ||
     nestedBlock.type === "database_full_page" ||
+    nestedBlock.type === "graph_view" ||
     layoutCellHasHeavyBlocks(nestedBlock.children)
   )));
 }

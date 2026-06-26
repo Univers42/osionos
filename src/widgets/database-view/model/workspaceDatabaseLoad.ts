@@ -20,7 +20,7 @@ import { FILE, FOLD } from "./workspaceDatabaseConstants";
 
 function partitionEntries(entries: PageEntry[]) {
   const byId = new Map<string, PageEntry>();
-  for (const entry of entries) if (!entry.archivedAt) byId.set(entry._id, entry);
+  for (const entry of entries) if (!entry.archivedAt && !entry.isTemplate) byId.set(entry._id, entry);
   const folders: PageEntry[] = [];
   const files: PageEntry[] = [];
   for (const entry of byId.values()) {

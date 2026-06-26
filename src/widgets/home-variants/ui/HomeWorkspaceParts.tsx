@@ -13,7 +13,13 @@
 import React from "react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
-import { ensureWorkspaceGalleryPage, useWorkspaceNav } from "@/widgets/database-view";
+// Deep paths, NOT the `@/widgets/database-view` barrel: this file is reached
+// WARM (FilesPanel → FolderRail) and the barrel statically pulls DatabaseBlock +
+// WorkspaceDatabaseBlock (→ the editor) + dataSourceProvider (→ the ~458KB seed
+// JSON) onto the entry chunk. workspaceNav is zustand-only; workspaceDatabasePage
+// only touches the page/user stores — both already-warm, editor/JSON-free.
+import { useWorkspaceNav } from "@/widgets/database-view/model/workspaceNav";
+import { ensureWorkspaceGalleryPage } from "@/widgets/database-view/model/workspaceDatabasePage";
 
 const RAIL_BTN =
   "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] data-[active=true]:bg-[var(--osio-bg-active)] data-[active=true]:font-medium";

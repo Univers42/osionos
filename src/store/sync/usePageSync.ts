@@ -27,6 +27,8 @@
 
 import { useEffect, useRef } from "react";
 import { usePageStore } from "@/store/usePageStore";
+import { derivePageState } from "@/store/pageStore.helpers";
+import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useUserStore } from "@/features/auth";
 import { API_BASE } from "@/shared/api/client";
 import { canEditPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
@@ -46,12 +48,23 @@ export function usePageSync(): void {
   // The outbox must not publish before HYDRATE seeds the ledger, otherwise every page just
   // pulled from the server looks "unsynced" and gets re-PATCHed — a needless write storm.
   const hydratedRef = useRef(false);
+  const prevUserRef = useRef("");
 
   // HYDRATE from the BaaS (source of truth) once the signed-in user is known. Reactive on
-  // activeUserId because auth resolves AFTER mount; merging never clobbers, so it is safe
-  // to re-run on user switch.
+  // activeUserId; on a real account SWITCH (not the first resolve) drop the previous
+  // account's page tree + open tabs first, so the new account loads clean instead of
+  // bleeding the old account's pages (the page cache is workspace-keyed, the layout global).
   useEffect(() => {
-    if (!API_BASE || !activeUserId) return;
+    if (!activeUserId) return;
+    // Load THIS account's own tab layout (per-user keyed in layoutPersist) so neither a
+    // fresh page load (prevUserRef is empty after a reload — the case that bled the
+    // previous user's open tabs into a new account) nor an in-session switch inherits the
+    // wrong tabs. Runs regardless of API_BASE so the offline/desktop edition still restores.
+    const switched = prevUserRef.current !== "" && prevUserRef.current !== activeUserId;
+    if (switched) usePageStore.setState({ ...derivePageState({}, {}), activePage: null });
+    prevUserRef.current = activeUserId;
+    useWorkspaceLayout.getState().restoreForUser(activeUserId);
+    if (!API_BASE) { hydratedRef.current = true; return; }
     hydratePagesFromBaas().catch(() => undefined).finally(() => { hydratedRef.current = true; });
   }, [activeUserId]);
 

@@ -12,9 +12,14 @@
 
 import React from "react";
 import ReactDOM from "react-dom";
-import { ObjectDatabase, type ObjectDatabaseProps } from "@notion-db/object-database";
+import {
+  ObjectDatabase,
+  type ObjectDatabaseProps,
+  type ObjectDatabaseTemplatesController,
+} from "@notion-db/object-database";
 
 import { usePageStore } from "@/store/usePageStore";
+import { useUserStore } from "@/features/auth";
 import { OsionosPage } from "@/pages/notion-page/ui/NotionPage";
 import { getWorkspaceDatabaseAdapter } from "../model/workspaceDatabaseState";
 import {
@@ -34,8 +39,10 @@ interface WorkspaceDatabaseBlockProps {
   chrome?: "full" | "single-view";
 }
 
-/** A record peek that opens the EXISTING osionos page (records are real pages). */
-const WorkspaceRecordPeek: React.FC<{ pageId: string; onClose: () => void }> = ({ pageId, onClose }) => {
+/** A record peek that opens the EXISTING osionos page (records are real pages).
+ *  Exported so the Home live carousels (Recents/Templates) reuse the same
+ *  "card → open the real page" seam through DatabaseBlock. */
+export const WorkspaceRecordPeek: React.FC<{ pageId: string; onClose: () => void }> = ({ pageId, onClose }) => {
   const osionosPage = usePageStore((state) => state.pageById(pageId));
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-[var(--osio-z-modal)] flex justify-end bg-[var(--osio-overlay)]">
@@ -67,6 +74,39 @@ const WorkspaceRecordPeek: React.FC<{ pageId: string; onClose: () => void }> = (
   );
 };
 
+/** Build the templates controller over the live page store (templates are real osionos_pages). */
+function useWorkspaceTemplatesController(): ObjectDatabaseTemplatesController | undefined {
+  const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
+  const wsPages = usePageStore((s) => (workspaceId ? s.pages[workspaceId] ?? [] : []));
+  const list = React.useMemo(
+    () =>
+      wsPages
+        .filter((p) => p.isTemplate && !p.archivedAt)
+        .map((p) => ({ id: p._id, title: p.title, icon: p.icon, isDefault: p.isDefaultTemplate ?? false })),
+    [wsPages],
+  );
+  return React.useMemo<ObjectDatabaseTemplatesController | undefined>(() => {
+    if (!workspaceId) return undefined;
+    const store = () => usePageStore.getState();
+    const jwt = () => useUserStore.getState().activePageJwt() ?? "";
+    return {
+      list,
+      onCreateFrom: (id) => void store().createPageFromTemplate(id, workspaceId, jwt()),
+      onOpen: (id) => {
+        const page = store().pageById(id);
+        store().openPage({ id, workspaceId, kind: "page", title: page?.title, icon: page?.icon });
+      },
+      onNew: () => void store().addTemplate(workspaceId, jwt()),
+      onSetDefault: (id) => store().setDefaultTemplate(id, workspaceId),
+      onDuplicate: (id) =>
+        void store().duplicatePage(id, workspaceId).then((newId) => {
+          if (newId) store().patchPage(newId, { isDefaultTemplate: false });
+        }),
+      onDelete: (id) => void store().archivePage(id, workspaceId, jwt()),
+    };
+  }, [list, workspaceId]);
+}
+
 /** Renders a workspace database (Folders / Files) backed by the live page store. */
 export const WorkspaceDatabaseBlock: React.FC<WorkspaceDatabaseBlockProps> = ({
   databaseId,
@@ -75,6 +115,7 @@ export const WorkspaceDatabaseBlock: React.FC<WorkspaceDatabaseBlockProps> = ({
   chrome = "single-view",
 }) => {
   const adapter = React.useMemo(() => getWorkspaceDatabaseAdapter(), []);
+  const templates = useWorkspaceTemplatesController();
   const view = initialViewId
     ?? (databaseId === WS_FILES_DB_ID ? WS_FILES_GALLERY_VIEW : WS_FOLDERS_TABLE_VIEW);
   const renderPage = React.useCallback<NonNullable<ObjectDatabaseProps["renderPage"]>>(
@@ -96,6 +137,7 @@ export const WorkspaceDatabaseBlock: React.FC<WorkspaceDatabaseBlockProps> = ({
         initialView={view}
         mode={mode === "full" ? "page" : "inline"}
         renderPage={renderPage}
+        templates={templates}
         className={mode === "full" ? "h-full" : undefined}
         chrome={chrome}
       />

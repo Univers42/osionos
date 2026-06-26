@@ -18,7 +18,7 @@
  * status (loading/offline/error/totals/retry/expand) the chrome needs.
  */
 
-import { type Dispatch, type SetStateAction, useMemo } from "react";
+import { type Dispatch, type SetStateAction, useCallback, useMemo, useState } from "react";
 import type { NotionState } from "@notion-db/object-database";
 import { useKnownDatabaseStateStore } from "@/widgets/database-view/model/knownDatabaseState";
 import { useUserStore } from "@/features/auth";
@@ -26,7 +26,7 @@ import { GRAPH_SOURCE } from "@/features/second-brain/featureFlag";
 import { type GraphModel, type NodeId, emptyModel } from "@/features/second-brain/model/graphModel";
 import { deriveGraph } from "@/features/second-brain/model/deriveGraph";
 import { deriveTagConfig } from "@/features/second-brain/model/deriveTagConfig";
-import { isBaasGraphEnabled } from "@/features/second-brain/baas/baasGraphClient";
+import type { GraphScope } from "@/features/second-brain/baas/pageGraphSource";
 import { useBaasGraph } from "./useBaasGraph";
 import { buildSyntheticModel, graphBenchCount } from "./syntheticGraph";
 
@@ -35,6 +35,20 @@ const EMPTY = emptyModel();
 // probes and visual tests don't depend on workspace contents.
 const BENCH_COUNT = graphBenchCount();
 
+// The graph scope is remembered across reloads (it used to reset to "workspace"
+// every load, stranding users on a near-empty default workspace) and defaults to
+// "all-data" — the whole multi-engine graph the session can see.
+const GRAPH_SCOPE_KEY = "osionos:graph-scope";
+const GRAPH_SCOPES: readonly GraphScope[] = ["workspace", "all", "all-data"];
+function loadGraphScope(): GraphScope {
+  try {
+    const stored = localStorage.getItem(GRAPH_SCOPE_KEY) as GraphScope | null;
+    return stored && GRAPH_SCOPES.includes(stored) ? stored : "all-data";
+  } catch {
+    return "all-data";
+  }
+}
+
 export interface GraphData {
   model: GraphModel;
   baasMode: boolean;
@@ -42,6 +56,9 @@ export interface GraphData {
   state: NotionState;
   updatePageProperty: (recordId: string, propertyId: string, value: unknown) => void;
   viewerId: string | null;
+  /** "workspace" = active workspace only (default); "all" = every workspace the user owns. */
+  scope: GraphScope;
+  setScope: (scope: GraphScope) => void;
   guarantee: string | null;
   loading: boolean;
   loadError: string | null;
@@ -54,15 +71,24 @@ export interface GraphData {
 export function useGraphModel(): GraphData {
   const state = useKnownDatabaseStateStore((store) => store.state);
   const updatePageProperty = useKnownDatabaseStateStore((store) => store.updatePageProperty);
-  const baasMode = isBaasGraphEnabled() && BENCH_COUNT === 0;
   const viewerId = useUserStore((store) => store.activeUserId) || null;
+  const activeWorkspaceId = useUserStore((store) => store.activeWorkspace()?._id ?? null);
+  const [scope, setScopeState] = useState<GraphScope>(loadGraphScope);
+  const setScope = useCallback((next: GraphScope) => {
+    try { localStorage.setItem(GRAPH_SCOPE_KEY, next); } catch { /* private mode */ }
+    setScopeState(next);
+  }, []);
+  // Use the canonical bridge note-graph whenever there's a logged-in workspace —
+  // it does NOT depend on the (often-unset) edges DB config. "all-data" scope spans
+  // every workspace; the local synthetic path is kept only for the ?graphBench probe.
+  const baasMode = BENCH_COUNT === 0 && Boolean(viewerId) && Boolean(activeWorkspaceId);
   const localModel = useMemo(
     () => (BENCH_COUNT > 0
       ? buildSyntheticModel(BENCH_COUNT)
       : deriveGraph(state, { source: GRAPH_SOURCE, tagConfig: deriveTagConfig(state) })),
     [state],
   );
-  const baas = useBaasGraph(baasMode, viewerId);
+  const baas = useBaasGraph(baasMode, viewerId, scope === "workspace" ? activeWorkspaceId : null, scope);
   const model = baasMode ? baas.model ?? EMPTY : localModel;
 
   return {
@@ -72,6 +98,8 @@ export function useGraphModel(): GraphData {
     state,
     updatePageProperty,
     viewerId,
+    scope,
+    setScope,
     guarantee: baas.guarantee,
     loading: baasMode ? baas.loading : false,
     loadError: baasMode ? baas.loadError : null,

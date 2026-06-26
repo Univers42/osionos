@@ -58,8 +58,20 @@ export function selectPageTreeEntry(state: PageStoreState, pageId: string): Page
 }
 
 /** Ids of the direct, non-archived children of a parent page (folder or file). */
+/** Manual sibling order; null/undefined (e.g. brand-new pages) sort to the end. */
+export function pageOrder(page: Pick<PageEntry, "sortOrder">): number {
+  return typeof page.sortOrder === "number" ? page.sortOrder : Number.MAX_SAFE_INTEGER;
+}
+
+/** Comparator for sibling rows — manual sort_order. */
+export function byPageOrder(a: Pick<PageEntry, "sortOrder">, b: Pick<PageEntry, "sortOrder">): number {
+  return pageOrder(a) - pageOrder(b);
+}
+
 export function selectChildPageIds(pages: readonly PageEntry[], parentPageId: string): string[] {
   return pages
     .filter((page) => page.parentPageId === parentPageId && !page.archivedAt)
+    .slice()
+    .sort(byPageOrder)
     .map((page) => page._id);
 }

@@ -52,13 +52,13 @@ export const CanvasInspector: React.FC<{ store: CanvasStoreApi; cellId: string; 
   };
 
   return (
-    <aside className="osionos-layout-cell-inspector" aria-label="Cell inspector">
+    <div className="osionos-layout-cell-inspector osio-canvas-advanced" aria-label="Cell options">
       <div className="osionos-layout-inspector-header">
         <div>
-          <p>Cell inspector</p>
+          <p>Cell options</p>
           <span>{cell.visuals.label || "Untitled cell"}</span>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close cell inspector"><X size={14} aria-hidden /></button>
+        <button type="button" onClick={onClose} aria-label="Close cell options"><X size={14} aria-hidden /></button>
       </div>
 
       <CanvasSegmented
@@ -135,6 +135,6 @@ export const CanvasInspector: React.FC<{ store: CanvasStoreApi; cellId: string; 
           ))}
         </div>
       </div>
-    </aside>
+    </div>
   );
 };

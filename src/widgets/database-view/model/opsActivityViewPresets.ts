@@ -98,6 +98,12 @@ function tableViews(database: DatabaseSchema, ref: LiveMountRef): ViewConfig[] {
           sorts: [{ id: "a-reviewed", propertyId: "reviewed_at", direction: "desc" }],
           settings: { showAuthorByline: false },
         }),
+        // Server-truth ordinal sparkline over a NUMERIC scalar axis (rating).
+        // NOT a date axis — there is no server date_trunc, so a time-trend line
+        // would silently aggregate only the 200 loaded rows.
+        presetView(database, "activity", "trend", "Rating Trend", "chart", {
+          settings: { chartType: "smooth_line", xAxisProperty: "rating", xAxisSort: "ascending" },
+        }),
         presetView(database, "activity", "ratings", "Ratings", "dashboard", {
           settings: { widgets: [
             { id: "a-count", type: "stat", title: "Reviews", aggregation: "count", width: 1, height: 1 },

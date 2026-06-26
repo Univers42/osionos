@@ -31,12 +31,22 @@ function pageToPatchBody(page: PageEntry): Record<string, unknown> {
   const body: Record<string, unknown> = {
     title: page.title,
     parentPageId: page.parentPageId ?? null,
+    sortOrder: page.sortOrder ?? null,
     workspaceId: page.workspaceId,
     visibility: page.visibility ?? "private",
     icon: page.icon ?? null,
     cover: page.cover ?? null,
     properties: page.properties ?? [],
   };
+  // Only template pages carry these columns; omit them for ordinary pages so a
+  // backend whose schema predates the template migration still accepts the write.
+  // (A template page sends all three — including `false`/`null` — so clearing the
+  // default or recurrence persists.)
+  if (page.isTemplate || page.isDefaultTemplate || page.recurrence) {
+    body.isTemplate = page.isTemplate ?? false;
+    body.isDefaultTemplate = page.isDefaultTemplate ?? false;
+    body.recurrence = page.recurrence ?? null;
+  }
   if (page.content !== undefined) body.content = page.content;
   return body;
 }

@@ -23,7 +23,7 @@ import {
 import { createDefaultTableBlock } from "@/entities/block/model/tableBlocks";
 import type { SlashMenuState } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
 import { focusEditableBlock } from "@/features/block-editor/model/blockDomFocus";
-import { createViewShowcaseLayoutContent } from "@/widgets/database-view/model/databaseViewCatalog";
+import { createViewShowcaseLayoutContent } from "@/widgets/database-view/model/databaseViewShowcase";
 
 interface UseSlashSelectOptions {
   pageId: string;

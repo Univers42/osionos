@@ -26,10 +26,13 @@
 const MOUNT = 'osionos';
 const RESOURCE = 'osionos_pages';
 
-/** Graph-visible row: not archived, not a database page, not an app-only surface
- *  (home/agent). Content pages (page/null) AND folders are included. */
+/** Graph-visible row: not archived, a content page/folder OR a record-note (a record
+ *  the user opened as a note — `database_id` = `baas:<dbId>:<table>`). Plain database
+ *  pages (other `database_id`) and app-only surfaces are excluded. Record-notes are
+ *  kept so a note nested under an opened record keeps its hierarchy edge. */
 function isGraphPageRow(row) {
-	if (!row || row.archived_at || row.database_id) return false;
+	if (!row || row.archived_at) return false;
+	if (row.database_id && !String(row.database_id).startsWith('baas:')) return false;
 	const s = row.surface;
 	return s == null || s === 'page' || s === 'folder';
 }
@@ -70,6 +73,7 @@ function pageNode(row) {
 		data: {
 			id: String(row.id),
 			title: typeof row.title === 'string' && row.title ? row.title : 'Untitled',
+			icon: row.icon ?? null,   // so the graph node shows the page's emoji/icon, not a letter
 			kind: folder ? 'folder' : 'page',
 			surface: row.surface ?? null,
 			visibility: row.visibility || 'private',

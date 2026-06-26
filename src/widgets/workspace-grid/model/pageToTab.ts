@@ -17,7 +17,10 @@ import { genId, type TabKind, type WorkspaceTab } from "./layoutTree";
 export function pageEntryToTab(
   page: Pick<PageEntry, "_id" | "workspaceId" | "title" | "icon" | "surface" | "databaseId">,
 ): WorkspaceTab {
-  const kind: TabKind = page.surface === "folder" ? "folder" : page.databaseId ? "database" : "page";
+  // surface 'app' (a marketplace record) opens as a detail page, NOT the database grid —
+  // must be branched before the databaseId rule since app records also carry a databaseId.
+  const kind: TabKind =
+    page.surface === "folder" ? "folder" : page.surface === "app" ? "page" : page.databaseId ? "database" : "page";
   return {
     tabId: genId("tab"),
     pageId: page._id,

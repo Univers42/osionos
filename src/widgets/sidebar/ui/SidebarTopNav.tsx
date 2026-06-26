@@ -11,7 +11,11 @@
 /* ************************************************************************** */
 
 import React, { Suspense, lazy, useState } from 'react';
-import { Search, Home, Mic, Inbox, MessageCircle } from 'lucide-react';
+import { Search, Home, Compass, Inbox, MessageCircle, Shield } from 'lucide-react';
+
+import { adminTab, collabTab, messagesTab } from '@/widgets/workspace-grid/model/layoutPersist';
+import { useWorkspaceLayout } from '@/widgets/workspace-grid/model/workspaceLayout';
+import { useIsAdmin } from '@/features/auth';
 
 const LazyPeopleSearchBar = lazy(() =>
   import('@/widgets/people-search/PeopleSearchBar').then((m) => ({ default: m.PeopleSearchBar })),
@@ -22,15 +26,19 @@ interface SidebarTopNavProps {
   onOpenHome?: () => void;
 }
 
-/** Horizontal top-level navigation items: Home, Chat, Meetings, Inbox, Search. */
+/** Horizontal top-level navigation items: Home, Messages, Discover, Inbox, Search. */
 
 export const SidebarTopNav: React.FC<SidebarTopNavProps> = ({ isHomeActive, onOpenHome }) => {
   const [peopleSearchOpen, setPeopleSearchOpen] = useState(false);
+  const openTab = useWorkspaceLayout.getState().openTab;
+  const isAdmin = useIsAdmin();
   const tabs = [
     { id: 'home', label: 'Home', icon: <Home size={16} />, active: isHomeActive, onClick: () => onOpenHome?.() },
-    { id: 'chat', label: 'Chat', icon: <MessageCircle size={16} />, active: false, onClick: () => undefined },
-    { id: 'meetings', label: 'Meetings', icon: <Mic size={16} />, active: false, onClick: () => undefined },
+    { id: 'messages', label: 'Messages', icon: <MessageCircle size={16} />, active: false, onClick: () => openTab(messagesTab()) },
+    { id: 'discover', label: 'Discover', icon: <Compass size={16} />, active: false, onClick: () => openTab(collabTab()) },
     { id: 'inbox', label: 'Inbox', icon: <Inbox size={16} />, active: false, onClick: () => undefined },
+    // Admin entry — only rendered for account administrators (server re-gates).
+    ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: <Shield size={16} />, active: false, onClick: () => openTab(adminTab()) }] : []),
   ];
 
   return (

@@ -27,3 +27,8 @@ export function feedTopic(workspaceId: string): string {
 export function presenceTopic(workspaceId: string): string {
   return `presence:${workspaceId}`;
 }
+
+/** Per-user notification inbox topic, keyed by the unguessable notify_token. */
+export function userTopic(notifyToken: string): string {
+  return `user:${notifyToken}`;
+}

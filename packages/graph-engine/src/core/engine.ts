@@ -71,6 +71,7 @@ export class GraphEngine {
         height: this.height,
         params: this.controls.physics,
         onPositions: (x, y) => this.scene.setPositions(x, y),
+        onSettled: () => this.scene.markLayoutSettled(),
       });
     }
     this.layout.rebuild(model);
@@ -78,10 +79,14 @@ export class GraphEngine {
   }
 
   setControls(controls: Controls): void {
+    const physicsChanged =
+      JSON.stringify(this.controls.physics) !== JSON.stringify(controls.physics);
     this.controls = controls;
     this.scene.setControls(controls);
     this.background.setStyle(controls.visual.background);
-    this.layout?.setParams(controls.physics);
+    // Only reheat the layout when physics actually change — toggling a database
+    // filter or a visual option must NOT re-run the whole simulation.
+    if (physicsChanged) this.layout?.setParams(controls.physics);
   }
 
   setTheme(): void {

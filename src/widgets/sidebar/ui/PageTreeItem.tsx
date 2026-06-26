@@ -19,6 +19,12 @@ import { canReadPage, usePageAccessContext } from "@/shared/lib/auth/pageAccess"
 import { isFolderEntry, isWikiEntry, selectChildPageIds, selectPageTreeEntry } from "./pageTreeItem.helpers";
 import { SidebarRenameInput } from "./SidebarRenameInput";
 import { PageTreeRowActions } from "./PageTreeRowActions";
+import { ConfirmDeleteModal } from "@/features/page-management";
+import { PageContextMenu } from "@/features/page-management/context-menu/PageContextMenu";
+import { usePageContextClipboard } from "@/features/page-management/context-menu/clipboardStore";
+import type { MenuActionCtx } from "@/features/page-management/context-menu/types";
+import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { useToastStore } from "@/shared/ui/primitives";
 import { usePageRowDnd } from "./usePageRowDnd";
 import { useSidebarTreeDnd } from "../model/sidebarTreeDnd";
 
@@ -42,10 +48,13 @@ interface Props {
 export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth = 0, activeId }) => {
   const [expanded, setExpanded] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const openPage = usePageStore((s) => s.openPage);
   const addPage = usePageStore((s) => s.addPage);
   const updatePageTitle = usePageStore((s) => s.updatePageTitle);
+  const archivePage = usePageStore((s) => s.archivePage);
   const page = usePageStore(useShallow((s) => selectPageTreeEntry(s, pageId)));
   const childPageIds = usePageStore(useShallow((s) => selectChildPageIds(s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES, pageId)));
   const accessContext = usePageAccessContext();
@@ -98,6 +107,38 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
     if (!asFolder) openPage({ id: child._id, workspaceId, kind: "page", title: child.title });
   }
 
+  // Quick-delete: with the row focused (after a click), Del archives the page —
+  // confirmed once, then skippable via the modal's "Don't ask again".
+  function doArchivePage() {
+    setConfirmDelete(false);
+    void archivePage(pageEntry._id, workspaceId, jwt ?? "");
+  }
+  function requestDelete() {
+    if (globalThis.localStorage?.getItem("osionos.delete-skip-confirm") === "1") {
+      doArchivePage();
+    } else {
+      setConfirmDelete(true);
+    }
+  }
+
+  // Build the action context once per open. onRename/onDelete reuse the row's
+  // existing inline-rename + archive-confirm flows (no duplicate logic).
+  function buildMenuCtx(): MenuActionCtx {
+    return {
+      page: pageEntry,
+      isFolder,
+      workspaceId,
+      jwt: jwt ?? "",
+      store: usePageStore,
+      layout: useWorkspaceLayout,
+      clipboard: usePageContextClipboard,
+      toast: useToastStore.getState().push,
+      onRename: () => setRenaming(true),
+      onDelete: () => requestDelete(),
+      workspacePages: () => usePageStore.getState().pages[workspaceId] ?? [],
+    };
+  }
+
   function renderRowIcon() {
     if (isFolder) {
       return expanded
@@ -119,6 +160,7 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
           indicator === "inside" ? "bg-[var(--osio-accent)]/10 ring-1 ring-inset ring-[var(--osio-accent)]/40" : "",
         ].join(" ")}
         style={{ paddingLeft, paddingRight: "var(--osio-space-1)" }}
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY }); }}
         {...dropHandlers}
       >
         {indicator === "before" && <span className="pointer-events-none absolute inset-x-1 -top-px h-0.5 rounded bg-[var(--osio-accent)]" />}
@@ -150,7 +192,10 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
             {...dragHandlers}
             onClick={handleRowClick}
             onDoubleClick={(e) => { e.stopPropagation(); setRenaming(true); }}
-            title="Double-click to rename · drag to move"
+            onKeyDown={(e) => {
+              if (e.key === "Delete") { e.preventDefault(); e.stopPropagation(); requestDelete(); }
+            }}
+            title="Double-click to rename · drag to move · Del to delete"
             className={[
               "flex min-w-0 flex-1 items-center gap-0.5 h-full rounded-md text-sm text-left transition-colors duration-100 pr-20",
               isActive
@@ -177,6 +222,29 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
         children.map((childId) => (
           <PageTreeItem key={childId} pageId={childId} workspaceId={workspaceId} jwt={jwt} depth={depth + 1} activeId={activeId} />
         ))}
+
+      {contextMenu ? (
+        <PageContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          ctx={buildMenuCtx()}
+          onClose={() => setContextMenu(null)}
+        />
+      ) : null}
+
+      {confirmDelete ? (
+        <ConfirmDeleteModal
+          variant="archive"
+          pageTitle={pageEntry.title || "Untitled"}
+          subPageCount={children.length}
+          showRemember
+          onConfirm={(remember) => {
+            if (remember) globalThis.localStorage?.setItem("osionos.delete-skip-confirm", "1");
+            doArchivePage();
+          }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      ) : null}
     </>
   );
 };

@@ -15,6 +15,7 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import {
   loadRecents,
   saveRecents,
+  addRecent,
   saveActivePage,
   loadPagesCache,
   derivePageState,
@@ -45,6 +46,11 @@ import {
   createPermanentlyDeletePage,
   createDuplicatePage,
   createMovePage,
+  createReorderSibling,
+  createAddTemplate,
+  createSetDefaultTemplate,
+  createCreatePageFromTemplate,
+  createPatchTemplateRecurrence,
 } from "./pageStore.actions";
 import {
   debouncePersistContent,
@@ -145,7 +151,12 @@ export const usePageStore = create<PageStore>((set, get) => ({
   addPage: createAddPage(set, get),
   addDatabasePage: createAddDatabasePage(set, get),
   duplicatePage: createDuplicatePage(set, get),
+  addTemplate: createAddTemplate(set, get),
+  setDefaultTemplate: createSetDefaultTemplate(set, get),
+  createPageFromTemplate: createCreatePageFromTemplate(set, get),
+  patchTemplateRecurrence: createPatchTemplateRecurrence(set, get),
   movePage: createMovePage(set, get),
+  reorderSibling: createReorderSibling(set),
   archivePage: createArchivePage(set, get),
   deletePage: createDeletePage(set, get),
   restorePage: createRestorePage(set, get),
@@ -163,10 +174,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
     }
 
     set((s) => {
-      const recents = [
-        page,
-        ...s.recents.filter((r) => r.id !== page.id),
-      ].slice(0, 10);
+      const recents = addRecent(s.recents, page);
       saveRecents(recents);
 
       const newPath = buildNavigationPath(s.navigationPath, page);
@@ -425,6 +433,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       (p) =>
         !p.parentPageId &&
         !p.archivedAt &&
+        !p.isTemplate &&
         canReadPage(p, getCurrentPageAccessContext()),
     ),
 
@@ -433,6 +442,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       (p) =>
         p.parentPageId === parentId &&
         !p.archivedAt &&
+        !p.isTemplate &&
         canReadPage(p, getCurrentPageAccessContext()),
     ),
 
@@ -440,6 +450,24 @@ export const usePageStore = create<PageStore>((set, get) => ({
     (get().pages[workspaceId] ?? []).filter(
       (p) => p.archivedAt && canReadPage(p, getCurrentPageAccessContext()),
     ),
+
+  templatePages: (workspaceId) =>
+    (get().pages[workspaceId] ?? []).filter(
+      (p) =>
+        p.isTemplate &&
+        !p.archivedAt &&
+        canReadPage(p, getCurrentPageAccessContext()),
+    ),
+
+  defaultTemplate: (workspaceId) =>
+    get()
+      .templatePages(workspaceId)
+      .find((p) => p.isDefaultTemplate),
+
+  templatePageBySurface: (workspaceId, surface) =>
+    get()
+      .templatePages(workspaceId)
+      .find((p) => p.templateSurface === surface),
 
   pageById: (pageId) => {
     const state = get();

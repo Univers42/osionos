@@ -23,7 +23,7 @@ import { type GraphModel, type NodeId, emptyModel } from "@/features/second-brai
 import { mapGraphResponse } from "@/features/second-brain/baas/mapGraphResponse";
 import { accumulateGraph } from "@/features/second-brain/baas/accumulateGraph";
 import { configuredResources, edgesMount, fetchGraphFocus } from "@/features/second-brain/baas/baasGraphClient";
-import { PAGE_GRAPH_RESOURCE, fetchCombinedOverview } from "@/features/second-brain/baas/pageGraphSource";
+import { type GraphScope, PAGE_GRAPH_RESOURCE, fetchCombinedOverview } from "@/features/second-brain/baas/pageGraphSource";
 import { aggregateCount } from "@/features/second-brain/baas/baasAggregate";
 import { parseNodeId } from "@/features/second-brain/baas/buildRecordTxn";
 import { BaasError } from "@/features/second-brain/baas/baasFetch";
@@ -45,7 +45,12 @@ export interface BaasGraphState {
   expand: (id: NodeId) => void;
 }
 
-export function useBaasGraph(enabled: boolean, viewerId: string | null): BaasGraphState {
+export function useBaasGraph(
+  enabled: boolean,
+  viewerId: string | null,
+  workspaceId: string | null,
+  scope: GraphScope,
+): BaasGraphState {
   const noteResources = useMemo(() => new Set([PAGE_GRAPH_RESOURCE]), []);
   const [model, setModel] = useState<GraphModel | null>(null);
   const [guarantee, setGuarantee] = useState<string | null>(null);
@@ -81,7 +86,7 @@ export function useBaasGraph(enabled: boolean, viewerId: string | null): BaasGra
     void (async () => {
       for (let attempt = 0; attempt < 4 && active; attempt += 1) {
         try {
-          const response = await fetchCombinedOverview();
+          const response = await fetchCombinedOverview(workspaceId, scope);
           if (!active) return;
           saveGraphSnapshot(response);
           apply(response, false);
@@ -96,7 +101,7 @@ export function useBaasGraph(enabled: boolean, viewerId: string | null): BaasGra
     return () => {
       active = false;
     };
-  }, [enabled, noteResources, viewerId, reloadKey]);
+  }, [enabled, noteResources, viewerId, workspaceId, scope, reloadKey]);
 
   // While offline, poll for the server's return so the graph self-heals.
   useEffect(() => {

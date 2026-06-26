@@ -49,6 +49,17 @@ function ordersViews(database: DatabaseSchema, _ref: LiveMountRef): ViewConfig[]
     presetView(database, "commerce", "revenue", "Revenue by Status", "chart", {
       settings: { chartType: "vertical_bar", xAxisProperty: "status", yAxisProperty: "total", yAxisAggregation: "sum", showDataLabels: true, conditionalColors: ORDER_STATUS_COLORS },
     }),
+    // KPI tiles: chartType "number" renders result.total from op=aggregate over
+    // the WHOLE table (true grand total) — SUM/COUNT are additive across the x
+    // groups so the figure is correct on the 25k-order mount, unlike the
+    // client-side dashboard stat tiles. NEVER use average/min/max here (those
+    // would sum per-group aggregates → avg-of-avgs). Derive AOV from two tiles.
+    presetView(database, "commerce", "kpi-revenue", "Total Revenue", "chart", {
+      settings: { chartType: "number", xAxisProperty: "status", yAxisProperty: "total", yAxisAggregation: "sum" },
+    }),
+    presetView(database, "commerce", "kpi-orders", "Orders", "chart", {
+      settings: { chartType: "number", xAxisProperty: "status" },
+    }),
     presetView(database, "commerce", "funnel", "Status Funnel", "chart", {
       settings: { chartType: "funnel", xAxisProperty: "status" },
     }),
@@ -97,6 +108,10 @@ function tableViews(database: DatabaseSchema, ref: LiveMountRef): ViewConfig[] {
         presetView(database, "commerce", "regions", "By Region", "board", {
           grouping: { propertyId: "region" },
         }),
+        // Server-truth leaderboard: sorted-desc bar over a scalar group + count.
+        presetView(database, "commerce", "topcities", "Top Cities", "chart", {
+          settings: { chartType: "horizontal_bar", xAxisProperty: "city", xAxisSort: "descending", showDataLabels: true },
+        }),
         presetView(database, "commerce", "crm", "Customer Stats", "dashboard", {
           settings: { widgets: [
             { id: "c-count", type: "stat", title: "Customers", aggregation: "count", width: 1, height: 1 },
@@ -117,6 +132,10 @@ function tableViews(database: DatabaseSchema, ref: LiveMountRef): ViewConfig[] {
         }),
         presetView(database, "commerce", "pricing", "Average Price", "chart", {
           settings: { chartType: "horizontal_bar", xAxisProperty: "category", yAxisProperty: "price", yAxisAggregation: "average" },
+        }),
+        // Server-truth leaderboard: top categories by summed catalog value.
+        presetView(database, "commerce", "leaderboard", "Top Categories by Value", "chart", {
+          settings: { chartType: "horizontal_bar", xAxisProperty: "category", yAxisProperty: "price", yAxisAggregation: "sum", xAxisSort: "descending", showDataLabels: true },
         }),
         presetView(database, "commerce", "treemap", "Category Treemap", "chart", {
           settings: { chartType: "treemap", xAxisProperty: "category", yAxisProperty: "price", yAxisAggregation: "sum" },

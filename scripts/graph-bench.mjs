@@ -19,12 +19,14 @@
 // stages: idle, pan drag, and a zoom sweep. Report-only — judge the numbers
 // against the previous run (target: pan/zoom >= 30 FPS avg at 10k nodes).
 
-import { chromium } from "playwright";
+import { chromium, firefox } from "playwright";
 
 function parseArgs(argv) {
   const base = (argv.find((a) => /^https?:\/\//.test(a)) ?? process.env.LH_URL ?? "http://127.0.0.1:4173").replace(/\/$/, "");
   const nodes = Number(argv.find((a) => a.startsWith("--nodes="))?.slice(8) ?? 10_000);
-  return { base, nodes };
+  const browser = argv.find((a) => a.startsWith("--browser="))?.slice(10) ?? "chromium";
+  const dpr = Number(argv.find((a) => a.startsWith("--dpr="))?.slice(6) ?? 1);
+  return { base, nodes, browser, dpr };
 }
 
 const SAMPLER = () => {
@@ -58,6 +60,7 @@ async function sampleStage(page, name, action) {
   await action();
   const deltas = await page.evaluate(() => {
     const s = globalThis.__frames;
+    if (!s) return [];
     s.running = false;
     return s.deltas;
   });
@@ -65,12 +68,16 @@ async function sampleStage(page, name, action) {
 }
 
 async function main() {
-  const { base, nodes } = parseArgs(process.argv.slice(2));
-  const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] });
-  const page = await (await browser.newContext({ viewport: { width: 1600, height: 900 } })).newPage();
+  const { base, nodes, browser: browserName, dpr } = parseArgs(process.argv.slice(2));
+  const launcher = browserName === "firefox" ? firefox : chromium;
+  const launchOpts = browserName === "firefox"
+    ? { headless: true }
+    : { headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"] };
+  const browser = await launcher.launch(launchOpts);
+  const page = await (await browser.newContext({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: dpr })).newPage();
   await page.addInitScript(() => localStorage.setItem("osionos.home.variant", "graph"));
 
-  console.error(`[graph-bench] ${base} nodes=${nodes}`);
+  console.error(`[graph-bench] ${browserName} dpr=${dpr} ${base} nodes=${nodes}`);
   await page.goto(`${base}/?home=graph&graphBench=${nodes}`, { waitUntil: "load", timeout: 60_000 });
   await page.waitForSelector("canvas.osio-graph__fg", { timeout: 30_000 });
   await page.waitForTimeout(6000); // worker layout settle
@@ -107,7 +114,7 @@ async function main() {
     for (let i = 0; i < 12; i += 1) { await page.mouse.wheel(0, -240); await page.waitForTimeout(55); }
   }));
 
-  console.log(JSON.stringify({ nodes, results }, null, 1));
+  console.log(JSON.stringify({ browser: browserName, nodes, results }, null, 1));
   await browser.close();
 }
 

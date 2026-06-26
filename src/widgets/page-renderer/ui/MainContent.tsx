@@ -25,7 +25,7 @@ import { derivePageState, savePagesCache } from "@/store/pageStore.helpers";
 import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 
-const HOME_DASHBOARD_VERSION = 8;
+const HOME_DASHBOARD_VERSION = 9;
 const HOME_DASHBOARD_FOCUS_VIEW_ID = "v-prod-table";
 
 function getHomeDashboardFocusViewId(page: PageEntry | undefined): string | undefined {
@@ -34,8 +34,10 @@ function getHomeDashboardFocusViewId(page: PageEntry | undefined): string | unde
 }
 
 function hasHomeDashboardCanvas(page: PageEntry | undefined): boolean {
+  // The redesigned Home is a single-column layout block of 6 cells (greeting +
+  // 5 NDS sections); anything below that floor is treated as stale → re-seed.
   const layoutBlock = page?.content?.find((block) => block.type === "layout");
-  return Boolean(layoutBlock?.layoutCells && layoutBlock.layoutCells.length >= 12);
+  return Boolean(layoutBlock?.layoutCells && layoutBlock.layoutCells.length >= 5);
 }
 
 function homeDashboardNeedsRefresh(page: PageEntry | undefined, focusViewId: string | undefined): boolean {
@@ -43,11 +45,11 @@ function homeDashboardNeedsRefresh(page: PageEntry | undefined, focusViewId: str
   return Boolean(focusViewId && getHomeDashboardFocusViewId(page) !== focusViewId);
 }
 
-type ShowcaseLayoutContentBuilder =
-  typeof import("@/widgets/database-view/model/databaseViewCatalog")["createViewShowcaseLayoutContent"];
+type HomeLayoutContentBuilder =
+  typeof import("@/widgets/database-view/model/databaseViewCatalog")["createHomeLayoutContent"];
 
-function createHomeDashboardPage(createContent: ShowcaseLayoutContentBuilder, workspaceId: string, ownerId: string | null, focusViewId = HOME_DASHBOARD_FOCUS_VIEW_ID): PageEntry {
-  const focusView = getKnownDatabaseView(focusViewId) ?? getKnownDatabaseView(HOME_DASHBOARD_FOCUS_VIEW_ID);
+function createHomeDashboardPage(createContent: HomeLayoutContentBuilder, workspaceId: string, ownerId: string | null, greetingName?: string): PageEntry {
+  const focusView = getKnownDatabaseView(HOME_DASHBOARD_FOCUS_VIEW_ID);
   return {
     _id: getHomeDashboardPageId(workspaceId),
     title: HOME_DASHBOARD_PAGE_TITLE,
@@ -73,7 +75,7 @@ function createHomeDashboardPage(createContent: ShowcaseLayoutContentBuilder, wo
       },
       { key: "focus_view", label: "Featured /view", type: "text", value: focusView?.id ?? "v-prod-table" },
     ],
-    content: createContent("full_page", focusView?.id, { idScope: getHomeDashboardPageId(workspaceId) }),
+    content: createContent(greetingName, { idScope: getHomeDashboardPageId(workspaceId) }),
     surface: "home",
     homeDashboardVersion: HOME_DASHBOARD_VERSION,
   };
@@ -98,13 +100,14 @@ export const MainContent: React.FC = () => {
     if (!firstWsId) return;
     if (!homeDashboardNeedsRefresh(homeDashboardPage, HOME_DASHBOARD_FOCUS_VIEW_ID)) return;
 
-    // The showcase builder drags in the seeded database state (~600KB JSON),
-    // so it is loaded on demand: only when the dashboard needs (re)seeding —
-    // the common path (dashboard already current) never downloads it.
+    // The home builder drags in the seeded database state (~600KB JSON), so it
+    // is loaded on demand: only when the dashboard needs (re)seeding — the
+    // common path (dashboard already current) never downloads it.
     let cancelled = false;
-    void import("@/widgets/database-view/model/databaseViewCatalog").then(({ createViewShowcaseLayoutContent }) => {
+    void import("@/widgets/database-view/model/databaseViewCatalog").then(({ createHomeLayoutContent }) => {
       if (cancelled) return;
-      const nextHomePage = createHomeDashboardPage(createViewShowcaseLayoutContent, firstWsId, activeUserId || null, HOME_DASHBOARD_FOCUS_VIEW_ID);
+      const greetingName = useUserStore.getState().activePersona()?.name;
+      const nextHomePage = createHomeDashboardPage(createHomeLayoutContent, firstWsId, activeUserId || null, greetingName);
       usePageStore.setState((state) => {
         const existingPages = state.pages[firstWsId] ?? [];
         const existingIndex = existingPages.findIndex((page) => page._id === nextHomePage._id && !page.archivedAt);

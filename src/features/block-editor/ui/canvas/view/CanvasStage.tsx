@@ -26,6 +26,7 @@ import type { CanvasStoreApi } from "../store/canvasStore";
 import { CanvasCellView } from "./CanvasCellView";
 import { CanvasEmptyState } from "./CanvasEmptyState";
 import { CanvasGuidesLayer } from "./CanvasGuidesLayer";
+import { CanvasSelectionToolbar } from "./CanvasSelectionToolbar";
 
 export interface CanvasStageProps {
   store: CanvasStoreApi;
@@ -75,7 +76,7 @@ export function CanvasStage({ store, interaction, cellOps, stageRef, scaleRef, p
 
   const handleBackgroundPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement | null;
-    if (target?.closest("[data-layout-cell-id], .osionos-layout-empty-state")) return;
+    if (target?.closest("[data-layout-cell-id], .osionos-layout-empty-state, .osio-canvas-toolbar")) return;
     if (layoutConfig.preview) {
       dispatch({ type: "clearSelection" });
       return;
@@ -126,6 +127,7 @@ export function CanvasStage({ store, interaction, cellOps, stageRef, scaleRef, p
           onDeleteCell={cellOps.deleteCell}
         />
       ))}
+      <CanvasSelectionToolbar store={store} interaction={interaction} stageRef={stageRef} />
     </div>
   );
 }

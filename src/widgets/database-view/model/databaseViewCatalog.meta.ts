@@ -27,7 +27,10 @@ export type KnownDatabaseId =
   | "db-products"
   | "db-projects"
   | "db-milestones"
-  | "db-wikifiles";
+  | "db-wikifiles"
+  | "db-events"
+  | "db-learn"
+  | "db-grades";
 
 export type KnownDatabaseViewType =
   | "table"
@@ -145,11 +148,27 @@ export const KNOWN_DATABASE_VIEWS: KnownDatabaseView[] = [
   view("v-wiki-files-pinned", "db-wikifiles", "Files", "Pinned", "list", "Pinned files only (checkbox filter)."),
   view("v-wiki-notes-venus", "db-wikifiles", "Files", "Notes — Venus", "table", "Only the NOTES related to the Venus milestone (relation + select filter)."),
   view("v-wiki-notes-mars", "db-wikifiles", "Files", "Notes — Mars", "table", "Only the NOTES related to the Mars milestone (relation + select filter)."),
+  // Home demo databases (databaseViewCatalog.ts applyHomeDemoSeed): Events + Learn.
+  view("v-events-upcoming", "db-events", "Events", "Upcoming", "list", "Upcoming events from today onward, sorted by date ascending."),
+  view("v-events-calendar", "db-events", "Events", "Calendar", "calendar", "Every event plotted on its date."),
+  view("v-learn-cards", "db-learn", "Learn", "Learn", "gallery", "Getting-started and tips cards in a horizontal carousel."),
+  // Grade calculator template (gradesSeed.ts applyGradesSeed): a self-computing weighted-total table.
+  view("v-grades-table", "db-grades", "Grades", "Table", "table", "Course components with weight, score, and a self-computing weighted total."),
 ];
 
 export function getKnownDatabaseView(viewId: string): KnownDatabaseView | undefined {
   return KNOWN_DATABASE_VIEWS.find((viewDefinition) => viewDefinition.id === viewId);
 }
+
+// Home demo database + view ids — seeded in databaseViewCatalog.ts
+// (applyHomeDemoSeed); exported here so the Home seed can embed them.
+export const EVENTS_DB_ID = "db-events";
+export const LEARN_DB_ID = "db-learn";
+export const EVENTS_UPCOMING_VIEW_ID = "v-events-upcoming";
+export const EVENTS_CALENDAR_VIEW_ID = "v-events-calendar";
+export const LEARN_CARDS_VIEW_ID = "v-learn-cards";
+export const GRADES_DB_ID = "db-grades";
+export const GRADES_TABLE_VIEW_ID = "v-grades-table";
 
 export const HOME_DASHBOARD_PAGE_TITLE = "Workspace command center";
 export const HOME_DASHBOARD_PAGE_ICON = "◈";

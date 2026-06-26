@@ -18,7 +18,6 @@ import {
   LIVE_PLACE_PROPERTY_ID,
   registerLiveTablePresets,
 } from "../../src/shared/notion-database-sys/src/store/live/liveViewPresets.ts";
-import { encodeLiveValue } from "../../src/shared/notion-database-sys/src/store/live/liveValueCodec.ts";
 import type { LiveSchemaResponse } from "../../src/shared/notion-database-sys/src/store/live/liveTypes.ts";
 
 const col = (overrides: Record<string, unknown>) => ({
@@ -84,8 +83,9 @@ test("table preset upgrades select columns, derives place, adds curated views", 
 
     const place = database.properties[LIVE_PLACE_PROPERTY_ID];
     assert.equal(place?.type, "place");
-    // The derived property is read-only on the wire (encode skips 'place').
-    assert.equal(encodeLiveValue({ lat: 1, lng: 2 }, place, undefined), undefined);
+    // The derived property is read-only on the wire — excluded from writes by the
+    // diff's `__`-prefix skip (place-typed real columns ARE written, this is not).
+    assert.ok(place?.id.startsWith("__"), "derived place id is __-prefixed (write-excluded)");
 
     const page = state.pages["baas:db-agency:locations:1"];
     assert.deepEqual(page.properties[LIVE_PLACE_PROPERTY_ID], { lat: 48.85, lng: 2.35, address: "1 Rue X" });
@@ -101,11 +101,14 @@ test("table preset upgrades select columns, derives place, adds curated views", 
   }
 });
 
-test("without a registered preset the plain mapping is untouched", () => {
+test("without a preset, a lat/lng table auto-derives place + a map view", () => {
   const state = buildLiveState(SCHEMA, { dbId: "db-agency", table: "locations" }, { locations: ROWS });
   const database = state.databases["baas:db-agency:locations"];
-  assert.equal(database.properties.kind.type, "text");
-  assert.equal(database.properties[LIVE_PLACE_PROPERTY_ID], undefined);
-  const views = Object.values(state.views).filter((view) => view.databaseId === database.id);
-  assert.deepEqual(views.map((view) => view.type), ["table"]); // no select → no board
+  assert.equal(database.properties.kind.type, "text"); // non-place column untouched
+  assert.equal(database.properties[LIVE_PLACE_PROPERTY_ID]?.type, "place"); // auto-detected from lat/lng
+  const viewTypes = Object.values(state.views)
+    .filter((view) => view.databaseId === database.id)
+    .map((view) => view.type)
+    .sort();
+  assert.deepEqual(viewTypes, ["map", "table"]); // table + auto map (no select → no board)
 });

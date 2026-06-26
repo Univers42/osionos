@@ -85,6 +85,14 @@ export function pageApiJwtFromSessionToken(token: string | null | undefined): st
   return token ?? '';
 }
 
+/** Account-level administrator flag, read from the bridge app-session token's
+ *  signed `is_admin` claim. Derived (not stored separately) so it can't drift
+ *  from the session; false for non-bridge or expired tokens. */
+export function isAdminFromSessionToken(token: string | null | undefined): boolean {
+  if (isBridgeAppTokenExpired(token)) return false;
+  return decodeBridgeAppTokenPayload(token)?.is_admin === true;
+}
+
 export function isBridgeSession(session: UserSession | null | undefined): boolean {
   if (!session) return false;
   if (isBridgeAppToken(session.accessToken)) return true;

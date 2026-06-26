@@ -33,6 +33,8 @@
 import {
 	UUID_REGEX,
 	bearerToken,
+	blockedViewerBy,
+	directoryFuzzyFilter,
 	httpError,
 	orgWorkspaceId,
 	readJsonBody,
@@ -57,7 +59,7 @@ async function identityRow(config, fetchImpl, userId) {
 	const rows = await rest(
 		config,
 		fetchImpl,
-		`osionos_bridge_identities?user_id=eq.${userId}&select=user_id,display_name,profile,last_seen_at&limit=1`,
+		`osionos_bridge_identities?user_id=eq.${userId}&select=user_id,display_name,username,profile,created_at,last_seen_at,directory_opt_out&limit=1`,
 	);
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
@@ -76,6 +78,7 @@ async function getProfile(deps, userId, response, config) {
 	if (!row) throw httpError('Profile not found.', 404);
 	const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
 	const { role, workspaceId } = await workspaceRole(config, deps.fetchImpl, userId, deps.env);
+	const fields = profile.fields && typeof profile.fields === 'object' && !Array.isArray(profile.fields) ? profile.fields : {};
 	return sendJson(response, 200, {
 		ok: true,
 		userId,
@@ -85,6 +88,14 @@ async function getProfile(deps, userId, response, config) {
 		workspaceId,
 		lastSeenAt: row.last_seen_at ?? null,
 		online: isOnline(row.last_seen_at),
+		// Widened fields the admin-authored profile template binds to.
+		username: typeof row.username === 'string' ? row.username : null,
+		headline: typeof profile.headline === 'string' ? profile.headline : null,
+		bio: typeof profile.bio === 'string' ? profile.bio : null,
+		location: typeof profile.location === 'string' ? profile.location : null,
+		joinedAt: row.created_at ?? null,
+		directoryOptOut: row.directory_opt_out === true,
+		customFields: fields,
 	}, config);
 }
 
@@ -115,31 +126,73 @@ async function heartbeat(deps, session, response, config) {
 	return sendJson(response, 200, { ok: true, lastSeenAt: now }, config);
 }
 
-async function searchPeople(deps, url, response, config) {
+async function searchPeople(deps, session, url, response, config) {
 	const query = safeText(url.searchParams.get('query') ?? url.searchParams.get('q'), 80);
+	const scope = safeText(url.searchParams.get('scope'), 16) || 'org';
 	const orgId = orgWorkspaceId(deps.env);
 	let memberRoleByUser = null;
-	if (orgId) {
+	if (scope !== 'global' && orgId) {
 		const memberRows = await rest(config, deps.fetchImpl, `osionos_workspace_members?workspace_id=eq.${orgId}&select=user_id,role`);
 		memberRoleByUser = new Map((Array.isArray(memberRows) ? memberRows : []).map((row) => [row.user_id, row.role]));
 	}
-	let path = 'osionos_bridge_identities?select=user_id,display_name,profile,last_seen_at&order=display_name.asc&limit=50';
-	if (query) path += `&display_name=ilike.${encodeURIComponent(`*${query}*`)}`;
+	// Authoritative people via the safe osionos_people_directory view (public.users).
+	let path = 'osionos_people_directory?select=user_id,display_name,username,profile,last_seen_at,directory_opt_out&order=display_name.asc&limit=200';
+	path += '&directory_opt_out=not.eq.true';
+	path += directoryFuzzyFilter(query); // fuzzy: name/username/headline ILIKE + stem + FTS
 	const rows = await rest(config, deps.fetchImpl, path);
+	const blockers = await blockedViewerBy(config, deps.fetchImpl, session.userId);
 	const people = [];
 	for (const row of Array.isArray(rows) ? rows : []) {
+		if (row.directory_opt_out === true) continue; // honour opt-out
 		if (memberRoleByUser && !memberRoleByUser.has(row.user_id)) continue; // org members only
+		if (blockers.has(row.user_id)) continue; // target blocked the viewer
 		const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
 		people.push({
 			id: row.user_id,
 			name: row.display_name ?? 'Member',
+			username: row.username ?? null,
 			avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
+			headline: typeof profile.headline === 'string' ? profile.headline : null,
 			wsRole: memberRoleByUser?.get(row.user_id) ?? null,
 			online: isOnline(row.last_seen_at),
 		});
 		if (people.length >= 20) break;
 	}
 	return sendJson(response, 200, { ok: true, people }, config);
+}
+
+async function patchMe(deps, session, request, response, config) {
+	const payload = await readJsonBody(request);
+	const row = await identityRow(config, deps.fetchImpl, session.userId);
+	if (!row) throw httpError('Profile not found.', 404);
+	const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
+	const update = { updated_at: new Date().toISOString() };
+	const nextProfile = { ...profile };
+	for (const [key, limit] of [['bio', 2000], ['headline', 200], ['location', 120]]) {
+		if (Object.hasOwn(payload, key)) nextProfile[key] = safeText(payload[key], limit) || null;
+	}
+	update.profile = nextProfile;
+	if (Object.hasOwn(payload, 'username')) update.username = safeText(payload.username, 48) || null;
+	if (Object.hasOwn(payload, 'directoryOptOut')) update.directory_opt_out = payload.directoryOptOut === true;
+	try {
+		await rest(config, deps.fetchImpl, `osionos_bridge_identities?user_id=eq.${session.userId}`, {
+			method: 'PATCH',
+			body: update,
+			prefer: 'return=minimal',
+		});
+	} catch (error) {
+		if (/with 409/.test(error?.message ?? '') || error?.status === 409) throw httpError('That username is already taken.', 409);
+		throw error;
+	}
+	return sendJson(response, 200, { ok: true, userId: session.userId, username: update.username ?? row.username ?? null }, config);
+}
+
+/** Env-gated embedding stub — real vector embedding is wired later. */
+async function embedDirectory(deps, session, response, config) {
+	if (!deps.env.OSIONOS_EMBEDDER_URL && !deps.env.OPENAI_API_KEY) {
+		return sendJson(response, 200, { ok: true, updated: false }, config);
+	}
+	return sendJson(response, 200, { ok: true, updated: false, note: 'embedder configured but not yet implemented' }, config);
 }
 
 /**
@@ -152,11 +205,14 @@ export function createProfileHandler({ config, verifySession, fetchImpl = fetch,
 	return async function handleProfileRoute(url, request, response, requestConfig = config) {
 		const pathname = url.pathname;
 		const isPeople = pathname === '/api/people';
-		if (!pathname.startsWith('/api/profile/') && !isPeople) return false;
+		const isEmbed = pathname === '/api/directory/embed';
+		if (!pathname.startsWith('/api/profile/') && !isPeople && !isEmbed) return false;
 		const method = (request.method || 'GET').toUpperCase();
 		try {
 			const session = verifySession(bearerToken(request), requestConfig);
-			if (isPeople && method === 'GET') return await searchPeople(deps, url, response, requestConfig);
+			if (isPeople && method === 'GET') return await searchPeople(deps, session, url, response, requestConfig);
+			if (isEmbed && method === 'POST') return await embedDirectory(deps, session, response, requestConfig);
+			if (pathname === '/api/profile/me' && method === 'PATCH') return await patchMe(deps, session, request, response, requestConfig);
 			if (pathname === '/api/profile/avatar' && method === 'POST') return await postAvatar(deps, session, request, response, requestConfig);
 			if (pathname === '/api/profile/heartbeat' && method === 'POST') return await heartbeat(deps, session, response, requestConfig);
 			const profileMatch = /^\/api\/profile\/([0-9a-f-]{36})$/i.exec(pathname);

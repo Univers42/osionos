@@ -45,6 +45,12 @@ export class CanvasScene implements InteractionHost {
 
   private rafId: number | null = null;
   private dirty = true;
+  /** While now < motionUntil the scene renders at reduced resolution (user pan / zoom / drag). */
+  private motionUntil = 0;
+  /** True while the worker streams layout positions; set per position message and
+   *  cleared on `settled`. Drives the reduced-resolution settle that ends crisp and
+   *  deterministically (on `settled`) — NOT re-armed every tick like user motion. */
+  private layoutStreaming = false;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -70,7 +76,9 @@ export class CanvasScene implements InteractionHost {
 
   setSize(width: number, height: number, dpr: number): void {
     this.cam.setViewport(width, height, dpr);
-    this.labels.setTheme(this.theme.label, this.theme.labelHalo, this.cam.dpr);
+    // Labels are always baked at the crisp resolution; the canvas backing may drop
+    // to interactiveDpr during motion, which only softens the (screen-space) blit.
+    this.labels.setTheme(this.theme.label, this.theme.labelHalo, this.cam.qualityDpr);
     this.canvas.width = Math.round(width * this.cam.dpr);
     this.canvas.height = Math.round(height * this.cam.dpr);
     this.canvas.style.width = `${width}px`;
@@ -84,12 +92,26 @@ export class CanvasScene implements InteractionHost {
     this.hoverIndex = -1;
     this.sel.recompute(this.state.idToIndex); // keep selection/focus stable across rebuilds
     const firstPopulate = !this.hasRevealed && model.nodes.length > 0;
-    this.reveal = startReveal(firstPopulate && !this.reducedMotion, model.nodes.length, performance.now());
+    // The staggered fly-in holds low-DPR for ~820ms and staggers per node — skip it
+    // for large graphs where it only adds churn to an already-heavy first settle.
+    const revealOk = firstPopulate && !this.reducedMotion && model.nodes.length <= 8000;
+    this.reveal = startReveal(revealOk, model.nodes.length, performance.now());
     if (firstPopulate) this.hasRevealed = true;
     this.requestDraw();
   }
 
-  setPositions(x: Float32Array, y: Float32Array): void { if (this.state.setPositions(x, y)) this.requestDraw(); }
+  setPositions(x: Float32Array, y: Float32Array): void {
+    if (this.state.setPositions(x, y)) {
+      this.layoutStreaming = true;
+      this.requestDraw();
+    }
+  }
+
+  /** The worker layout settled — stop streaming and render one final crisp frame. */
+  markLayoutSettled(): void {
+    this.layoutStreaming = false;
+    this.requestDraw();
+  }
 
   setLabels(labels: string[]): void { this.state.setLabels(labels); this.requestDraw(); }
 
@@ -101,7 +123,7 @@ export class CanvasScene implements InteractionHost {
       rim: theme.nodeRim,
       shadow: theme.nodeShadow,
     });
-    this.labels.setTheme(theme.label, theme.labelHalo, this.cam.dpr);
+    this.labels.setTheme(theme.label, theme.labelHalo, this.cam.qualityDpr);
     clearCardTextCache();
     this.requestDraw();
   }
@@ -127,9 +149,9 @@ export class CanvasScene implements InteractionHost {
 
   getCamera(): Camera { return this.cam.camera; }
 
-  setCamera(camera: Camera): void { this.cam.camera = camera; this.requestDraw(); }
+  setCamera(camera: Camera): void { this.cam.camera = camera; this.bumpMotion(); this.requestDraw(); }
 
-  zoomBy(factor: number): void { this.cam.zoomBy(factor); this.requestDraw(); }
+  zoomBy(factor: number): void { this.cam.zoomBy(factor); this.bumpMotion(); this.requestDraw(); }
 
   resetView(): void { this.cam.reset(); this.requestDraw(); }
 
@@ -171,6 +193,7 @@ export class CanvasScene implements InteractionHost {
     this.state.posX[index] = worldX;
     this.state.posY[index] = worldY;
     this.state.grid.markStale();
+    this.bumpMotion();
     this.requestDraw();
   }
 
@@ -187,6 +210,15 @@ export class CanvasScene implements InteractionHost {
     this.interaction.destroy();
   }
 
+  private bumpMotion(): void { this.motionUntil = performance.now() + 140; }
+
+  /** Swap the canvas backing-store resolution (quality ↔ interactive) without re-baking labels. */
+  private applyBacking(dpr: number): void {
+    this.cam.dpr = dpr;
+    this.canvas.width = Math.round(this.cam.width * dpr);
+    this.canvas.height = Math.round(this.cam.height * dpr);
+  }
+
   private requestDraw(): void {
     this.dirty = true;
     if (this.rafId == null) this.rafId = requestAnimationFrame(() => this.frame());
@@ -195,8 +227,14 @@ export class CanvasScene implements InteractionHost {
   private frame(): void {
     this.rafId = null;
     const now = performance.now();
-    if (!this.dirty && !isRevealing(this.reveal, now) && !this.fx.animating(now, this.reducedMotion)) return;
+    const animating = isRevealing(this.reveal, now) || this.fx.animating(now, this.reducedMotion);
+    // Low-res during pan/zoom (and the reveal fly-in) and while the layout streams;
+    // streaming ends crisp on `settled`, not via the 140ms timer. Hover-glow stays crisp.
+    const inMotion = isRevealing(this.reveal, now) || now < this.motionUntil || this.layoutStreaming;
+    if (!this.dirty && !animating && !inMotion && this.cam.dpr === this.cam.qualityDpr) return;
     this.dirty = false;
+    const wantDpr = inMotion ? this.cam.interactiveDpr : this.cam.qualityDpr;
+    if (this.cam.dpr !== wantDpr) this.applyBacking(wantDpr);
     renderFrame({
       ctx: this.ctx,
       width: this.cam.width,
@@ -216,8 +254,9 @@ export class CanvasScene implements InteractionHost {
       hoverNeighbors: this.fx.neighbors,
       hoverFade: this.fx.labelFade(now, this.reducedMotion),
       reducedMotion: this.reducedMotion,
+      lowQuality: inMotion,
     });
-    if (this.dirty || isRevealing(this.reveal, now) || this.fx.animating(now, this.reducedMotion)) {
+    if (this.dirty || animating || inMotion || this.cam.dpr !== this.cam.qualityDpr) {
       this.rafId = requestAnimationFrame(() => this.frame());
     }
   }

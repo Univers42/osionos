@@ -69,23 +69,25 @@ function makePublisher(schema: LiveSchemaResponse) {
   return { queue, publisher, events };
 }
 
-test("postgresql cells drain as ONE atomic /txn batch with idempotency keys", async () => {
+test("postgresql cells drain as single-op updates (no /txn batch)", async () => {
   const { queue, publisher } = makePublisher(PG_SCHEMA);
   queue.enqueueCell("orders", "1", { qty: 3 });
   queue.enqueueCell("orders", "2", { status: "paid" });
   const ids = queue.pending().map((entry) => entry.id);
-  const sent = mockFetch([{ status: 200, body: { guarantee: "atomic", mount: "db-1", results: [{ rowCount: 1 }, { rowCount: 1 }] } }]);
+  const ok = { status: 200, body: { rows: [], affected_rows: 1 } };
+  const sent = mockFetch([ok, ok]);
   await publisher.drain();
   publisher.stop();
-  assert.equal(sent.length, 1);
-  assert.match(sent[0].url, /\/query\/v1\/txn$/);
-  assert.equal(sent[0].body.mount, "db-1");
-  const operations = sent[0].body.operations as Record<string, unknown>[];
-  assert.equal(operations.length, 2);
-  assert.deepEqual(operations[0], {
-    op: "update", resource: "orders", filter: { id: 1 }, data: { qty: 3 }, idempotencyKey: ids[0],
-  });
-  assert.equal(operations[1].idempotencyKey, ids[1]);
+  assert.equal(sent.length, 2); // one single-op update per cell (the /txn batch is gone)
+  for (const request of sent) {
+    assert.match(request.url, /\/api\/databases\/db-1\/tables\/orders$/);
+    assert.equal(request.body.op, "update");
+    assert.equal(request.body.resource, undefined); // /txn-only field stripped for single-op
+  }
+  const dataByPk = Object.fromEntries(sent.map((r) => [JSON.stringify(r.body.filter), r.body.data]));
+  assert.deepEqual(dataByPk['{"id":1}'], { qty: 3 });
+  assert.deepEqual(dataByPk['{"id":2}'], { status: "paid" });
+  assert.deepEqual(new Set(sent.map((r) => r.body.idempotencyKey)), new Set(ids));
   assert.equal(queue.size(), 0); // both confirmed
 });
 
@@ -100,7 +102,7 @@ test("mongodb cells drain sequentially as single op=update calls", async () => {
   await publisher.drain();
   publisher.stop();
   assert.equal(sent.length, 2);
-  assert.match(sent[0].url, /\/query\/v1\/db-1\/tables\/orders$/);
+  assert.match(sent[0].url, /\/api\/databases\/db-1\/tables\/orders$/);
   assert.equal(sent[0].body.op, "update");
   assert.deepEqual(sent[0].body.filter, { _id: "a1" });
   assert.equal(queue.size(), 0);
@@ -148,6 +150,26 @@ test("5xx keeps the entry and backs off exponentially", async () => {
   assert.equal(queue.size(), 1);
   assert.equal(publisher.retryDelayMs, LIVE_BACKOFF_MIN_MS * 4);
   publisher.stop(); // clear the scheduled retry timer
+});
+
+test("cell give-up after max attempts resets ONLY its row, never whole-mount state-replaced", async () => {
+  const { queue, publisher, events } = makePublisher(PG_SCHEMA);
+  queue.enqueueCell("orders", "1", { qty: 3 });
+  // 8 transient txn failures burn the entry's attempts; the give-up then does a
+  // row-scoped authoritative refetch (op=get) instead of reloading the mount.
+  const responses: { status: number; body: unknown }[] = [];
+  for (let i = 0; i < 8; i++) responses.push({ status: 500, body: { message: "boom" } });
+  responses.push({ status: 200, body: { rows: [{ id: 1, name: "Server", qty: 7 }], affected_rows: 1 } });
+  const sent = mockFetch(responses);
+  for (let i = 0; i < 8; i++) await publisher.drain();
+  publisher.stop();
+  assert.equal(queue.size(), 0); // burned out + dropped
+  assert.equal(sent[sent.length - 1].body.op, "get"); // row-scoped refetch, not a mount reload
+  assert.deepEqual(sent[sent.length - 1].body.filter, { id: 1 });
+  const types = events.map((event) => event.type);
+  assert.ok(!types.includes("state-replaced"), "give-up must not whole-mount reload (would wipe other unsaved edits)");
+  assert.deepEqual(types, ["page-changed"]); // only the failed row snaps to server truth
+  assert.equal((events[0] as { changes: Record<string, unknown> }).changes.qty, 7);
 });
 
 test("insert uses the echoed row: temp page swaps to the real pk, no reload", async () => {
@@ -198,7 +220,7 @@ test("ddl success busts the schema cache and reloads state", async () => {
   const sent = mockFetch([{ status: 201, body: {} }]);
   await publisher.drain();
   publisher.stop();
-  assert.match(sent[0].url, /\/query\/v1\/db-1\/schema\/ddl$/);
+  assert.match(sent[0].url, /\/api\/databases\/db-1\/schema\/ddl$/);
   assert.equal(queue.size(), 0);
   assert.equal(busted, 1);
   assert.deepEqual(events.map((event) => event.type), ["state-replaced"]);

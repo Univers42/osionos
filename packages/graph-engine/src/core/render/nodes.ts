@@ -14,6 +14,7 @@ import { isRevealing, nodeReveal } from "./reveal";
 import { baseKeyOf, shapeOf, styleKey } from "./nodeShape";
 import { DISC_FRACTION, type NodeSpriteCache } from "./sprites";
 import { glyphKey, iconGlyph } from "./nodeIcon";
+import { NODE_BUDGET } from "./clusterBlobs";
 
 /** Below this on-screen radius a node is a featureless dot: skip the sprite
  *  blit (software rasterizers choke on 10k drawImages) and batch-fill plain
@@ -25,6 +26,11 @@ export function drawNodes(d: DrawCtx, sprites: NodeSpriteCache, focusOnly = fals
   const mix = lodMix(camera.scale, visual.semanticZoom);
   if (mix.sprite <= 0.001) return; // full card stage — no sprites at all
   const revealing = isRevealing(reveal, time);
+  // When more nodes are in view than we can draw smoothly, thin them by a spatial
+  // stride so the per-frame cost stays bounded (~NODE_BUDGET) at any density. Zoom
+  // in — fewer in view — and the stride drops to 1, resolving every record.
+  const stride = !focusOnly && cull.count > NODE_BUDGET ? Math.ceil(cull.count / NODE_BUDGET) : 1;
+  let seen = 0;
   for (const [key, indices] of state.styleBuckets) {
     const base = mix.icon < 0.999 ? sprites.get(baseKeyOf(key)) : null;
     const iconed = mix.icon > 0.001 ? sprites.get(key) : null;
@@ -32,10 +38,13 @@ export function drawNodes(d: DrawCtx, sprites: NodeSpriteCache, focusOnly = fals
     for (const i of indices) {
       if (cull.mask[i] === 0) continue;
       if (focusOnly && !(d.focus?.has(i) ?? false)) continue;
+      if (stride > 1 && seen++ % stride !== 0) continue;
       const rv = revealing ? nodeReveal(reveal, i, time) : 1;
       if (rv <= 0.001) continue;
       const r = state.radius[i] * visual.nodeScale * (0.45 + 0.55 * rv);
-      if (!revealing && r * camera.scale < DOT_MAX_SCREEN_RADIUS) {
+      // Dense (stride-sampled) views draw as cheap batched dots — sprite detail
+      // isn't legible at that density and the dot path is far faster everywhere.
+      if (stride > 1 || (!revealing && r * camera.scale < DOT_MAX_SCREEN_RADIUS)) {
         if (!dotPath) {
           ctx.beginPath();
           dotPath = true;
@@ -71,7 +80,7 @@ export function drawNodeSprite(d: DrawCtx, sprites: NodeSpriteCache, i: number):
   if (i < 0 || i >= state.count || state.visible[i] === 0) return;
   const mix = lodMix(camera.scale, visual.semanticZoom);
   if (mix.sprite <= 0.001) return; // the card pass raises its own accent cards
-  const glyph = mix.icon > 0.5 ? glyphKey(iconGlyph(state.icon[i] ?? null, state.label[i])) : "";
+  const glyph = mix.icon > 0.5 ? glyphKey(iconGlyph(state.icon[i] ?? null)) : "";
   const sprite = sprites.get(styleKey(shapeOf(state.kind[i]), state.fills[i], glyph));
   const half = (state.radius[i] * visual.nodeScale) / DISC_FRACTION;
   ctx.globalAlpha = d.alpha * mix.sprite;

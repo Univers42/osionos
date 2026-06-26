@@ -17,14 +17,18 @@ import { useUserStore } from "@/features/auth";
 import { isBridgeSession, isPortalMode, PRISMATICA_URL } from "@/features/auth/model/userStore.helpers";
 import { Portal } from "@/features/auth/ui/Portal";
 import { usePageSync } from "@/store/sync/usePageSync";
+import { useUnreadSync } from "@/store/chat/useUnreadSync";
+import { useNotifyLive } from "@/store/chat/useNotifyLive";
+import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
+import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
 import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, loadActivePage, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
-import { Sidebar } from "@/widgets/sidebar";
+import { ActivitySidebar } from "@/widgets/activity-rail";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
-import { homeTab, trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
 import { LazyCanvasDebugRoute, LazyMainContent, LazyStyleGuideRoute } from "./lazyAppRegions";
-import { applyTheme, readStoredThemeMode } from "@/shared/config/theme";
+import { applyStoredAppearance } from "@/shared/config/theme";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
 import {
   applyWorkspaceAppearance,
@@ -35,7 +39,9 @@ import {
 } from "@/shared/config/workspaceConfigStore";
 import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
 import { ToastViewport } from "@/shared/ui";
+import { ShareHost } from "@/features/share/ShareHost";
 import { TopBar } from "@/widgets/top-bar";
+import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
 
 type UserSessions = Record<string, UserSession>;
 
@@ -149,10 +155,19 @@ const App: React.FC = () => {
   // zustand + localStorage are the cache. The graph reads these canonical pages via the
   // bridge (GET /api/graph/pages), so no separate note-mirror sync is needed.
   usePageSync();
+  useUnreadSync(); // seed per-channel unread badges (mount + 60s + focus)
+  useNotifyLive(); // seed + live in-app notifications (toasts + store)
+
+  // App-wide presence: one heartbeat keeps last_seen_at fresh while osionos is open so
+  // peers render online (refcounted singleton — profile/search views reuse the same one).
+  usePresenceHeartbeat();
+
+  // Materialize recurring templates ("Duplicate every…") on a catch-up timer.
+  useTemplateRecurrence();
 
   // Run once on mount
   useEffect(() => {
-    applyTheme(readStoredThemeMode());
+    applyStoredAppearance();
 
     if (initialized) {
       return;
@@ -260,9 +275,8 @@ const App: React.FC = () => {
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {/* Left sidebar */}
-        <Sidebar
+        <ActivitySidebar
           onOpenSettings={() => setSettingsOpen(true)}
-          onOpenHome={() => useWorkspaceLayout.getState().openTab(homeTab())}
           onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
           onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
         />
@@ -279,6 +293,8 @@ const App: React.FC = () => {
       <WorkspaceThemePanel />
       {settingsOpen && <LazySettingsCenter initialTab="general" onClose={() => setSettingsOpen(false)} />}
       <ToastViewport />
+      <ShareHost />
+      <ContactDock />
     </div>
   );
 };

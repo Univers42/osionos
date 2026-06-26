@@ -18,11 +18,20 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
+import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
+import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordSubitemNoteBody } from './bridge-records.mjs';
+import { createAgentHandler } from './bridge-agent.mjs';
+import { createConnectorHandler } from './bridge-connector.mjs';
+import { createOAuthHandler } from './bridge-oauth.mjs';
 import { createChatHandler } from './bridge-chat.mjs';
+import { createNotifyHandler } from './bridge-notify.mjs';
+import { createCollabHandler } from './bridge-collab.mjs';
+import { createCommunityHandler } from './bridge-communities.mjs';
 import { createFeedHandler } from './bridge-feed.mjs';
 import { handlePermsRoute } from './bridge-perms.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
+import { createSocialHandler } from './bridge-social.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -72,14 +81,20 @@ const DEFAULT_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
 const DEFAULT_HANDOFF_TTL_MS = 90 * 1000;
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60;
 const DEFAULT_JSON_BODY_LIMIT_BYTES = 16_384;
-const PAGE_JSON_BODY_LIMIT_BYTES = 2 * 1024 * 1024;
+const PAGE_JSON_BODY_LIMIT_BYTES = 6 * 1024 * 1024;
 const DEFAULT_UNSPLASH_PER_PAGE = 12;
 const MAX_UNSPLASH_PER_PAGE = 24;
 const TRANSLATION_FETCH_TIMEOUT_MS = 6_000;
 const BAAS_FETCH_TIMEOUT_MS = 2_500;
+// The multi-engine graph overview pages tens of thousands of rows — needs headroom.
+const GRAPH_FETCH_TIMEOUT_MS = 20_000;
 const MAX_CLAUDE_TOOL_RESULT_TEXT = 120_000;
 const PAGE_VISIBILITY_VALUES = new Set(['private', 'shared', 'public']);
-const PAGE_SURFACE_VALUES = new Set(['page', 'agent', 'home', 'folder', 'wiki']);
+const PAGE_SURFACE_VALUES = new Set(['page', 'agent', 'home', 'folder', 'wiki', 'app']);
+// Shared, system-owned global marketplace (app records are surface 'app' under this database).
+const MARKETPLACE_WORKSPACE_ID = '5a4b1c2d-1111-4111-8111-000000000001';
+const MARKETPLACE_DATABASE_ID = '5a4b1c2d-2222-4222-8222-000000000002';
+const MARKETPLACE_SYSTEM_USER = '5a4b1c2d-0000-4000-8000-000000000000';
 const TRANSLATABLE_BLOCK_TYPES = new Set([
 	'paragraph',
 	'heading_1',
@@ -125,6 +140,17 @@ export function configFromEnv(env = process.env) {
 		sharedSecret: env.OSIONOS_BRIDGE_SHARED_SECRET ?? '',
 		appSessionSecret: env.OSIONOS_APP_SESSION_SECRET ?? '',
 		baasUrl: (env.OSIONOS_BAAS_URL ?? env.PUBLIC_BAAS_URL ?? 'http://localhost:8000').replace(/\/$/, ''),
+		// Query-router is internal-only (no Kong route for /query/v1 graph); the bridge
+		// reaches it by container DNS and authenticates with the tenant api-key, which
+		// owner-scopes reads to the seeded business data.
+		queryRouterUrl: (env.OSIONOS_QUERY_ROUTER_URL ?? 'http://mini-baas-query-router:4001').replace(/\/$/, ''),
+		baasApiKey: env.OSIONOS_BAAS_API_KEY ?? env.BAAS_API_KEY ?? env.VITE_BAAS_API_KEY ?? '',
+		// Adapter-registry lists the tenant's databases; it trusts X-Baas-Tenant-Id
+		// (no Kong route works from the browser — anon key 401s on /admin/v1). The
+		// tenant id is taken from env, or derived from the api-key via tenant-control.
+		adapterRegistryUrl: (env.OSIONOS_ADAPTER_REGISTRY_URL ?? 'http://mini-baas-adapter-registry-go:3021').replace(/\/$/, ''),
+		tenantControlUrl: (env.OSIONOS_TENANT_CONTROL_URL ?? 'http://mini-baas-tenant-control:3022').replace(/\/$/, ''),
+		baasTenantId: env.OSIONOS_BAAS_TENANT_ID ?? env.VITE_BAAS_TENANT_ID ?? env.BAAS_TENANT_ID ?? '',
 		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''),
 		publicApiKey: env.PUBLIC_BAAS_ANON_KEY ?? env.KONG_PUBLIC_API_KEY ?? '',
 		serviceKey: env.SERVICE_ROLE_KEY ?? env.KONG_SERVICE_API_KEY ?? env.BAAS_SERVICE_ROLE_KEY ?? '',
@@ -136,8 +162,16 @@ export function configFromEnv(env = process.env) {
 		sessionTtlSeconds: Number(env.OSIONOS_APP_SESSION_TTL_SECONDS ?? DEFAULT_SESSION_TTL_SECONDS),
 		emailHashSalt: env.OSIONOS_BRIDGE_EMAIL_HASH_SALT ?? env.OSIONOS_BRIDGE_SHARED_SECRET ?? 'osionos-local-email-hash',
 		unsplashAccessKey: env.UNSPLASH_ACCESS_KEY ?? env.OSIONOS_UNSPLASH_ACCESS_KEY ?? '',
+		// Account-level administrators. These emails are promoted to is_admin at
+		// login (sticky in the DB, so the flag survives later env changes).
+		adminEmails: (env.OSIONOS_ADMIN_EMAILS ?? 'dev.pro.photo@gmail.com')
+			.split(',').map((value) => value.trim().toLowerCase()).filter(Boolean),
 	};
 }
+
+/** The dedicated admin workspace (seeded by osionos-admin-migration.sql). Admins
+ *  are provisioned as members at login so its template pages ride the token. */
+export const ADMIN_WORKSPACE_ID = '0a4d1c2e-0000-4000-8000-000000000ad1';
 
 export function stableStringify(value) {
 	if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -239,6 +273,21 @@ function safeTimestampOrNull(value, fieldName) {
 	return new Date(timestamp).toISOString();
 }
 
+const PAGE_RECURRENCE_EVERY = new Set(['none', 'day', 'week', 'month']);
+
+/** Normalize a template recurrence config to a safe jsonb value, or null. */
+function safeRecurrence(value) {
+	if (value === null || value === undefined) return null;
+	if (typeof value !== 'object' || Array.isArray(value)) return null;
+	const every = PAGE_RECURRENCE_EVERY.has(value.every) ? value.every : 'none';
+	if (every === 'none') return { every: 'none' };
+	return {
+		every,
+		nextDueAt: safeTimestampOrNull(value.nextDueAt ?? null, 'recurrence.nextDueAt'),
+		lastRunAt: safeTimestampOrNull(value.lastRunAt ?? null, 'recurrence.lastRunAt'),
+	};
+}
+
 function normalizePermission(value) {
 	const permission = safeText(value, 16) || 'read';
 	return WORKSPACE_PERMISSIONS.has(permission) ? permission : 'read';
@@ -314,7 +363,7 @@ export function verifyBridgeRequest({ headers, payload, secret, now = Date.now()
 	return normalizedPayload;
 }
 
-export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [] }) {
+export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [], isAdmin = false }) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const iat = Math.floor(now / 1000);
 	const exp = iat + config.sessionTtlSeconds;
@@ -326,6 +375,7 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 		provider: payload.provider,
 		workspace_ids: [workspace._id, ...memberWorkspaces.map((entry) => entry._id)],
 		roles: { ...memberRoles, [workspace._id]: 'owner' },
+		is_admin: isAdmin === true,
 		jti,
 		iat,
 		exp,
@@ -376,6 +426,7 @@ export function verifyAppSessionToken(token, config, now = Date.now()) {
 		userId: String(payload.sub),
 		workspaceIds,
 		roles: payload.roles && typeof payload.roles === 'object' && !Array.isArray(payload.roles) ? payload.roles : {},
+		isAdmin: payload.is_admin === true,
 		raw: payload,
 	};
 }
@@ -421,6 +472,113 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
 	}
 }
 
+/**
+ * POST to the grobase query-router (internal-only, NOT via Kong) with the tenant
+ * api-key. Used by the data graph: the api-key resolves to the tenant + owner-scopes
+ * the read to the seeded business records. 503 if the key/url aren't configured.
+ */
+async function baasQueryPost(config, fetchImpl, path, body, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
+	if (!config.queryRouterUrl || !config.baasApiKey) {
+		throw Object.assign(new Error('osionos query-router access is not configured.'), { status: 503 });
+	}
+	const response = await fetchWithTimeout(fetchImpl, `${config.queryRouterUrl}${path}`, {
+		method: 'POST',
+		headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Baas-Api-Key': config.baasApiKey },
+		body: JSON.stringify(body),
+	}, timeoutMs);
+	const text = await response.text().catch(() => '');
+	if (!response.ok) {
+		const status = responseStatusForBaasFailure(response.status);
+		throw Object.assign(new Error(`query-router request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
+	}
+	if (!text) return null;
+	try {
+		return JSON.parse(text);
+	} catch {
+		return null;
+	}
+}
+
+/** GET from the query-router (internal-only) with the tenant api-key. Sibling of
+ *  baasQueryPost for read-only routes like /:dbId/schema. */
+async function baasQueryGet(config, fetchImpl, path, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
+	if (!config.queryRouterUrl || !config.baasApiKey) {
+		throw Object.assign(new Error('osionos query-router access is not configured.'), { status: 503 });
+	}
+	const response = await fetchWithTimeout(fetchImpl, `${config.queryRouterUrl}${path}`, {
+		method: 'GET',
+		headers: { Accept: 'application/json', 'X-Baas-Api-Key': config.baasApiKey },
+	}, timeoutMs);
+	const text = await response.text().catch(() => '');
+	if (!response.ok) {
+		const status = responseStatusForBaasFailure(response.status);
+		throw Object.assign(new Error(`query-router request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
+	}
+	if (!text) return null;
+	try {
+		return JSON.parse(text);
+	} catch {
+		return null;
+	}
+}
+
+/** POST to the query-router and return its RAW {status, body} verbatim. WRITES
+ *  (insert/update/delete/upsert/txn/ddl) must NOT be coerced — liveWriteClient
+ *  classifies each by status (200 ok / 409 conflict / 422 rejected / 5xx fail),
+ *  so the upstream status + body pass straight through. */
+async function baasQueryPassthrough(config, fetchImpl, path, body, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
+	if (!config.queryRouterUrl || !config.baasApiKey) {
+		return { status: 503, body: { ok: false, message: 'osionos query-router access is not configured.' } };
+	}
+	let response;
+	try {
+		response = await fetchWithTimeout(fetchImpl, `${config.queryRouterUrl}${path}`, {
+			method: 'POST',
+			headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Baas-Api-Key': config.baasApiKey },
+			body: JSON.stringify(body),
+		}, timeoutMs);
+	} catch (error) {
+		return { status: 502, body: { ok: false, message: error instanceof Error ? error.message : String(error) } };
+	}
+	const text = await response.text().catch(() => '');
+	let parsed = null;
+	if (text) {
+		try { parsed = JSON.parse(text); } catch { parsed = { raw: text.slice(0, 300) }; }
+	}
+	return { status: response.status, body: parsed };
+}
+
+/** GET the tenant's databases from the adapter-registry (internal-only). The
+ *  registry trusts the X-Baas-Tenant-Id header and RLS-scopes to that tenant. */
+async function baasRegistryGet(config, fetchImpl, path, tenantId, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
+	if (!config.adapterRegistryUrl || !tenantId) {
+		throw Object.assign(new Error('osionos adapter-registry tenant id is not configured (set OSIONOS_BAAS_TENANT_ID).'), { status: 503 });
+	}
+	const response = await fetchWithTimeout(fetchImpl, `${config.adapterRegistryUrl}${path}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'X-Baas-Tenant-Id': tenantId,
+			// The registry RLS maps auth.uid() from the user header, and the rows are
+			// owned by the grobase TENANT — so the user header must be the tenant id,
+			// NOT the osionos app-session user (who owns nothing here → empty list,
+			// which used to silently degrade the panel to the env mock mounts).
+			'X-Baas-User-Id': tenantId,
+		},
+	}, timeoutMs);
+	const text = await response.text().catch(() => '');
+	if (!response.ok) {
+		const status = responseStatusForBaasFailure(response.status);
+		throw Object.assign(new Error(`adapter-registry request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
+	}
+	if (!text) return [];
+	try {
+		return JSON.parse(text);
+	} catch {
+		return [];
+	}
+}
+
 function postgrestQuery(params) {
 	const searchParams = new URLSearchParams();
 	for (const [key, value] of Object.entries(params)) {
@@ -441,11 +599,16 @@ function pageRowToEntry(row) {
 		visibility: PAGE_VISIBILITY_VALUES.has(row.visibility) ? row.visibility : 'private',
 		collaborators: safeJsonArray(row.collaborators),
 		parentPageId: row.parent_page_id ?? null,
+		sortOrder: typeof row.sort_order === 'number' ? row.sort_order : null,
 		databaseId: row.database_id ?? null,
 		archivedAt: row.archived_at ?? null,
 		content: safeJsonArray(row.content),
 		properties: safeJsonArray(row.properties),
 		surface: PAGE_SURFACE_VALUES.has(row.surface) ? row.surface : undefined,
+		isTemplate: row.is_template === true,
+		isDefaultTemplate: row.is_default_template === true,
+		templateSurface: row.template_surface === 'profile' || row.template_surface === 'marketplace-app' ? row.template_surface : undefined,
+		recurrence: safeRecurrence(row.recurrence),
 	};
 }
 
@@ -496,9 +659,10 @@ function pageCreateRowFromPayload(payload, authContext) {
 	const databaseId = hasOwn(payload, 'databaseId') && payload.databaseId !== null ? safeText(payload.databaseId, 160) || null : null;
 	const visibility = PAGE_VISIBILITY_VALUES.has(payload.visibility) ? payload.visibility : 'private';
 	const surface = PAGE_SURFACE_VALUES.has(payload.surface) ? payload.surface : null;
-	return {
+	const row = {
 		workspace_id: workspaceId,
 		parent_page_id: parentPageId === undefined ? null : parentPageId,
+		sort_order: typeof payload.sortOrder === 'number' ? payload.sortOrder : null,
 		owner_id: authContext.userId,
 		title: safeText(payload.title, 200) || 'Untitled',
 		icon: hasOwn(payload, 'icon') ? (safeText(payload.icon, 80) || null) : null,
@@ -510,12 +674,24 @@ function pageCreateRowFromPayload(payload, authContext) {
 		properties: safeJsonArray(payload.properties),
 		content: safeJsonArray(payload.content),
 	};
+	// Only attach template columns for template creates, so a backend whose schema
+	// predates the template migration still accepts ordinary page inserts.
+	if (payload.isTemplate === true || payload.isDefaultTemplate === true || payload.recurrence || payload.templateSurface) {
+		row.is_template = payload.isTemplate === true;
+		row.is_default_template = payload.isDefaultTemplate === true;
+		row.recurrence = safeRecurrence(payload.recurrence);
+		if (payload.templateSurface === 'profile' || payload.templateSurface === 'marketplace-app') {
+			row.template_surface = payload.templateSurface;
+		}
+	}
+	return row;
 }
 
 function pageUpdateRowFromPayload(payload) {
 	const row = { updated_at: new Date().toISOString() };
 	assignPayloadValue(row, payload, 'workspaceId', 'workspace_id', (value) => requireUuid(value, 'workspaceId'));
 	assignPayloadValue(row, payload, 'parentPageId', 'parent_page_id', (value) => optionalUuid(value, 'parentPageId') ?? null);
+	assignPayloadValue(row, payload, 'sortOrder', 'sort_order', (value) => typeof value === 'number' ? value : null);
 	assignPayloadValue(row, payload, 'title', 'title', (value) => safeText(value, 200) || 'Untitled');
 	assignPayloadValue(row, payload, 'icon', 'icon', (value) => textOrNull(value, 80));
 	assignPayloadValue(row, payload, 'cover', 'cover', (value) => textOrNull(value, 1024));
@@ -526,6 +702,10 @@ function pageUpdateRowFromPayload(payload) {
 	assignPayloadValue(row, payload, 'properties', 'properties', (value) => safeJsonArray(value));
 	assignPayloadValue(row, payload, 'content', 'content', (value) => safeJsonArray(value));
 	assignPayloadValue(row, payload, 'archivedAt', 'archived_at', (value) => safeTimestampOrNull(value, 'archivedAt'));
+	assignPayloadValue(row, payload, 'isTemplate', 'is_template', (value) => value === true);
+	assignPayloadValue(row, payload, 'isDefaultTemplate', 'is_default_template', (value) => value === true);
+	assignPayloadValue(row, payload, 'templateSurface', 'template_surface', (value) => (value === 'profile' || value === 'marketplace-app') ? value : null);
+	assignPayloadValue(row, payload, 'recurrence', 'recurrence', (value) => safeRecurrence(value));
 	return row;
 }
 
@@ -546,7 +726,9 @@ function memberHasPermission(member, permission) {
  * requireWorkspaceAccess permission gate before this runs.
  */
 function requirePageOwnership(existing, access) {
-	if (existing.owner_id == null) return; // legacy / unowned page — the workspace gate suffices
+	const ownProps = Array.isArray(existing.properties) ? existing.properties : [];
+	const isPublished = ownProps.some((p) => p && p.key === 'published' && (p.value === true || p.value === 'true'));
+	if (!isPublished && existing.owner_id == null) return; // legacy / unowned page — the workspace gate suffices (NOT for published apps)
 	if (existing.owner_id === access.userId) return; // the page owner
 	if (access.role === 'owner' || access.role === 'admin') return; // workspace owner/admin
 	if (Array.isArray(access.permissions) && access.permissions.includes('update')) return; // shared-workspace editor
@@ -624,11 +806,26 @@ async function fetchPageConfigRow(pageId, userId, config, fetchImpl) {
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
+/**
+ * A page's OWNER may always access it, even when the workspace-membership gate
+ * would deny — e.g. a record-note that landed in a read-only seed workspace the
+ * user reaches via the MOUNT but not via that workspace's page role. Non-owners
+ * still go through requireWorkspaceAccess. `owner_id` is server-stamped, so this
+ * never widens cross-user access.
+ */
+async function ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl = fetch) {
+	const token = verifyAppSessionToken(bearerToken(request), config);
+	if (row && row.owner_id && row.owner_id === token.userId) {
+		return { ...token, workspaceId: row.workspace_id, role: 'owner', permissions: ['create', 'read', 'update', 'delete'] };
+	}
+	return requireWorkspaceAccess(request, row.workspace_id, permission, config, fetchImpl);
+}
+
 async function requirePageScopeAccess(request, pageId, payload, permission, config, fetchImpl = fetch) {
 	const normalizedPageId = requirePageReference(pageId);
 	const row = await fetchPageRowIfUuid(normalizedPageId, config, fetchImpl);
 	if (row) {
-		const authContext = await requireWorkspaceAccess(request, row.workspace_id, permission, config, fetchImpl);
+		const authContext = await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl);
 		return { pageId: normalizedPageId, workspaceId: row.workspace_id, authContext, row };
 	}
 
@@ -745,7 +942,7 @@ export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) 
 	};
 }
 
-export function createUserSession(payload, config, persisted = null, now = Date.now(), memberWorkspaces = []) {
+export function createUserSession(payload, config, persisted = null, now = Date.now(), memberWorkspaces = [], isAdmin = false) {
 	const userId = payload.subject;
 	const fallbackWorkspaceId = uuidFromHash(`osionos-workspace:${payload.provider}:${payload.subject}`);
 	const workspaceName = persisted?.workspaceName ?? `${payload.name}'s osionos`;
@@ -766,7 +963,7 @@ export function createUserSession(payload, config, persisted = null, now = Date.
 	// Org/teamspace workspaces (osionos_workspace_members) ride along so the
 	// app can hydrate + switch to them; owned ones stay private, rest shared.
 	const extras = memberWorkspaces.filter((entry) => entry?._id && entry._id !== workspace._id);
-	const { token, expiresAt } = signAppSessionToken({ payload, workspace, config, now, memberWorkspaces: extras });
+	const { token, expiresAt } = signAppSessionToken({ payload, workspace, config, now, memberWorkspaces: extras, isAdmin });
 	return {
 		expiresAt,
 		persona: {
@@ -819,6 +1016,45 @@ async function memberWorkspaceEntries(userId, excludeIds, config, fetchImpl) {
 	}
 }
 
+/**
+ * Resolve the account-level admin flag for a login. Promotes configured admin
+ * emails (sticky — only ever sets true) and reads the PERSISTED flag back, so
+ * admin status survives later removal of OSIONOS_ADMIN_EMAILS. Fail-safe: any
+ * error degrades to the env-only answer (never throws, never blocks login).
+ */
+async function resolveAdminFlag(payload, config, fetchImpl) {
+	const isAdminEmail = config.adminEmails.includes(String(payload.email ?? '').toLowerCase());
+	if (!config.serviceKey || !config.baasUrl) return isAdminEmail;
+	const hash = encodeURIComponent(emailHash(payload.email, config));
+	try {
+		if (isAdminEmail) {
+			await baasRest(config, fetchImpl, `osionos_bridge_identities?email_hash=eq.${hash}&is_admin=is.false`, {
+				method: 'PATCH', body: { is_admin: true }, prefer: 'return=minimal',
+			});
+		}
+		const rows = await baasRest(config, fetchImpl, `osionos_bridge_identities?email_hash=eq.${hash}&select=is_admin&limit=1`);
+		const row = Array.isArray(rows) ? rows[0] : null;
+		return row?.is_admin === true || isAdminEmail;
+	} catch {
+		return isAdminEmail;
+	}
+}
+
+/** Idempotently provision admin-workspace membership so its template pages ride
+ *  the session token (workspace_ids). Best-effort; the admin gate is the claim. */
+async function ensureAdminWorkspaceMembership(userId, config, fetchImpl) {
+	if (!config.serviceKey || !config.baasUrl) return;
+	try {
+		await baasRest(config, fetchImpl, 'osionos_workspace_members', {
+			method: 'POST',
+			body: { workspace_id: ADMIN_WORKSPACE_ID, user_id: userId, role: 'admin', permissions: ['read', 'update', 'admin'] },
+			prefer: 'resolution=merge-duplicates,return=minimal',
+		});
+	} catch {
+		/* best-effort */
+	}
+}
+
 export async function createBridgeHandoff({ payload, config, handoffStore, now = Date.now(), fetchImpl = fetch }) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	let persisted = null;
@@ -828,9 +1064,11 @@ export async function createBridgeHandoff({ payload, config, handoffStore, now =
 		if (config.requireBaas) throw error;
 		console.warn(`[osionos-bridge] BaaS persistence skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
 	}
+	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
+	if (isAdmin) await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
 	const privateWorkspaceId = persisted?.workspaceId ?? uuidFromHash(`osionos-workspace:${payload.provider}:${payload.subject}`);
 	const memberWorkspaces = await memberWorkspaceEntries(payload.subject, [privateWorkspaceId], config, fetchImpl);
-	const bridgeSession = createUserSession(payload, config, persisted, now, memberWorkspaces);
+	const bridgeSession = createUserSession(payload, config, persisted, now, memberWorkspaces, isAdmin);
 	const token = randomToken();
 	const expiresAt = now + config.handoffTtlMs;
 	handoffStore.set(token, { ...bridgeSession, expiresAt });
@@ -918,6 +1156,48 @@ export async function searchUnsplashPhotos({ query, perPage, orientation } = {},
 		results: Array.isArray(payload.results) ? payload.results : [],
 		total: Number.isFinite(payload.total) ? payload.total : undefined,
 	};
+}
+
+// Geocoding cache (per process): a place NAME → resolved coordinates. Definitive
+// results (a hit or a confirmed no-match) are cached; transient failures are not,
+// so they retry. Keyed by the lowercased query; cleared wholesale past a cap.
+const geocodeCache = new Map();
+
+/**
+ * Geocode any place in the world (city / country / region / address) to
+ * coordinates via OpenStreetMap Nominatim — so the Map view can plot a name the
+ * offline centroid tables don't carry. Returns `{lat, lng, label}` or `{}`.
+ */
+export async function geocodePlaceName(query, fetchImpl = fetch) {
+	const q = safeText(query, 200).trim();
+	if (!q) return {};
+	const key = q.toLowerCase();
+	if (geocodeCache.has(key)) return geocodeCache.get(key);
+	const url = new URL('https://nominatim.openstreetmap.org/search');
+	url.searchParams.set('format', 'jsonv2');
+	url.searchParams.set('limit', '1');
+	url.searchParams.set('q', q);
+	let result = {};
+	try {
+		const response = await fetchWithTimeout(fetchImpl, url.toString(), {
+			method: 'GET',
+			headers: { Accept: 'application/json', 'User-Agent': 'osionos-geocoder/1.0 (track-binocle self-host)' },
+		}, 8000);
+		if (response.ok) {
+			const data = await response.json().catch(() => null);
+			const hit = Array.isArray(data) && data[0] ? data[0] : null;
+			const lat = hit ? Number(hit.lat) : NaN;
+			const lng = hit ? Number(hit.lon) : NaN;
+			if (Number.isFinite(lat) && Number.isFinite(lng)) {
+				result = { lat, lng, label: typeof hit.display_name === 'string' ? hit.display_name : q };
+			}
+		}
+	} catch {
+		return {}; // network/timeout — uncached so the next request retries
+	}
+	if (geocodeCache.size > 5000) geocodeCache.clear();
+	geocodeCache.set(key, result);
+	return result;
 }
 
 function safeTranslationLocale(value) {
@@ -1296,7 +1576,7 @@ async function handlePageRead(url, request, response, config, fetchImpl) {
 	if (!pageId) return false;
 	const row = await fetchPageRow(pageId, config, fetchImpl);
 	if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
-	await requireWorkspaceAccess(request, row.workspace_id, 'read', config, fetchImpl);
+	await ownerOrWorkspaceAccess(request, row, 'read', config, fetchImpl);
 	json(response, 200, pageRowToEntry(row), config);
 	return true;
 }
@@ -1315,16 +1595,629 @@ async function handlePageConfigRead(url, request, response, config, fetchImpl) {
 	return true;
 }
 
+// ── Marketplace (shared global app catalogue) ───────────────────────────────
+// Cross-workspace reads of the system-owned marketplace use the bridge's service-role
+// key (which bypasses RLS), so any authenticated user can browse published apps without
+// being a member of the marketplace workspace.
+
+/** Tally how many users have each app installed — the real "downloads" number (no mocks). */
+async function marketplaceInstallCounts(config, fetchImpl) {
+	const rows = await baasRest(config, fetchImpl, `osionos_page_configurations?${postgrestQuery({ page_id: `eq.${MARKETPLACE_DATABASE_ID}`, select: 'config' })}`);
+	const counts = {};
+	for (const r of Array.isArray(rows) ? rows : []) {
+		const inst = r && r.config && r.config.installed;
+		if (inst && typeof inst === 'object') for (const id of Object.keys(inst)) counts[id] = (counts[id] || 0) + 1;
+	}
+	return counts;
+}
+
+/** Overwrite each entry's "downloads" property with its real install count. */
+function injectInstallCounts(entries, counts) {
+	for (const e of entries) {
+		const props = Array.isArray(e.properties) ? e.properties : (e.properties = []);
+		const idProp = props.find((p) => p.key === 'identifier');
+		const real = counts[idProp ? idProp.value : ''] || 0;
+		const dl = props.find((p) => p.key === 'downloads');
+		if (dl) dl.value = real;
+		else props.push({ key: 'downloads', label: 'Installs', type: 'number', value: real });
+	}
+	return entries;
+}
+
+/** List published marketplace apps (records under the marketplace database, visibility public). */
+async function handleMarketplaceList(request, response, config, fetchImpl) {
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	const base = { database_id: `eq.${MARKETPLACE_DATABASE_ID}`, archived_at: 'is.null' };
+	const published = await baasRest(config, fetchImpl, `osionos_pages?${postgrestQuery({ ...base, visibility: 'eq.public' })}`);
+	const mine = await baasRest(config, fetchImpl, `osionos_pages?${postgrestQuery({ ...base, owner_id: `eq.${authContext.userId}` })}`);
+	const byId = new Map();
+	for (const r of [...(Array.isArray(published) ? published : []), ...(Array.isArray(mine) ? mine : [])]) {
+		if (r && r.id) byId.set(r.id, r);
+	}
+	const rows = [...byId.values()].sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+	const counts = await marketplaceInstallCounts(config, fetchImpl);
+	json(response, 200, injectInstallCounts(pageRowsToEntries(rows), counts), config);
+	return true;
+}
+
+/** One marketplace app record + its child sub-pages (Details/Features/Changelog/…), with content. */
+async function handleMarketplaceApp(appId, request, response, config, fetchImpl) {
+	verifyAppSessionToken(bearerToken(request), config);
+	const id = requireUuid(appId, 'appId');
+	const appRow = await fetchPageRow(id, config, fetchImpl);
+	if (!appRow || appRow.workspace_id !== MARKETPLACE_WORKSPACE_ID) {
+		throw Object.assign(new Error('App not found.'), { status: 404 });
+	}
+	const childRows = await baasRest(config, fetchImpl, `osionos_pages?${postgrestQuery({
+		parent_page_id: `eq.${id}`,
+		archived_at: 'is.null',
+		order: 'created_at.asc',
+	})}`);
+	const counts = await marketplaceInstallCounts(config, fetchImpl);
+	json(response, 200, {
+		app: injectInstallCounts([pageRowToEntry(appRow)], counts)[0],
+		children: pageRowsToEntries(Array.isArray(childRows) ? childRows : []),
+	}, config);
+	return true;
+}
+
+/** Per-user installed-app set (stored in osionos_page_configurations keyed to the marketplace db). */
+async function handleMarketplaceInstalledRead(request, response, config, fetchImpl) {
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	const row = await fetchPageConfigRow(MARKETPLACE_DATABASE_ID, authContext.userId, config, fetchImpl);
+	const cfg = row?.config && typeof row.config === 'object' ? row.config : {};
+	json(response, 200, { installed: cfg.installed && typeof cfg.installed === 'object' ? cfg.installed : {} }, config);
+	return true;
+}
+
+/** Replace the caller's installed-app set. */
+async function handleMarketplaceInstalledWrite(request, response, config, fetchImpl) {
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const installed = safeJsonObject(payload.installed, 'installed');
+	await baasRest(config, fetchImpl, 'osionos_page_configurations?on_conflict=user_id,page_id', {
+		method: 'POST',
+		body: {
+			page_id: MARKETPLACE_DATABASE_ID,
+			workspace_id: MARKETPLACE_WORKSPACE_ID,
+			user_id: authContext.userId,
+			config: { installed },
+			updated_at: new Date().toISOString(),
+		},
+		prefer: 'resolution=merge-duplicates,return=minimal',
+	});
+	json(response, 200, { ok: true, installed }, config);
+	return true;
+}
+
+/** Publish an app record the caller owns into the marketplace (public + published-locked). */
+async function handleMarketplacePublish(request, response, config, fetchImpl) {
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const pageId = requireUuid(payload.pageId, 'pageId');
+	const row = await fetchPageRow(pageId, config, fetchImpl);
+	if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
+	if (row.owner_id && row.owner_id !== authContext.userId) {
+		throw Object.assign(new Error('Only the owner can publish this app.'), { status: 403 });
+	}
+	const props = (Array.isArray(row.properties) ? row.properties : []).filter((p) => p && p.key !== 'published' && p.key !== 'publishedAt');
+	props.push({ key: 'published', label: 'Published', type: 'checkbox', value: true });
+	props.push({ key: 'publishedAt', label: 'Published at', type: 'date', value: new Date().toISOString() });
+	const updated = await baasRest(config, fetchImpl, `osionos_pages?id=eq.${pageId}`, {
+		method: 'PATCH',
+		body: { properties: props, visibility: 'public', updated_at: new Date().toISOString() },
+		prefer: 'return=representation',
+	});
+	json(response, 200, pageRowToEntry(Array.isArray(updated) ? updated[0] : updated), config);
+	return true;
+}
+
+/** Default property set for a freshly created draft app. */
+function defaultAppProperties(identifier) {
+	return [
+		{ key: 'company', label: 'Company', type: 'text', value: '' },
+		{ key: 'verified', label: 'Verified', type: 'checkbox', value: false },
+		{ key: 'website', label: 'Website', type: 'url', value: '' },
+		{ key: 'shortDescription', label: 'Description', type: 'text', value: '' },
+		{ key: 'version', label: 'Version', type: 'text', value: '0.1.0' },
+		{ key: 'identifier', label: 'Identifier', type: 'text', value: identifier },
+		{ key: 'categories', label: 'Categories', type: 'multi_select', value: [] },
+		{ key: 'resources', label: 'Resources', type: 'multi_select', value: [] },
+		{ key: 'published', label: 'Published', type: 'checkbox', value: false },
+		{ key: 'launchKind', label: 'Launch', type: 'text', value: 'embed' },
+		{ key: 'launchUrl', label: 'Launch URL', type: 'url', value: '' },
+	];
+}
+
+const MARKETPLACE_SUBPAGES = [
+	['Details', 'icon:file-text'], ['Features', 'icon:sparkles'], ['Changelog', 'icon:history'],
+	['Installation', 'icon:download'], ['Categories', 'icon:tag'], ['Resources', 'icon:link'],
+];
+
+/** Create a new DRAFT app (owned by the caller, not yet public) + its standard child sub-pages. */
+async function handleMarketplaceCreate(request, response, config, fetchImpl) {
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const title = safeText(payload.title, 200) || 'New app';
+	const appId = randomUUID();
+	const identifier = `app.${appId.slice(0, 8)}`;
+	await baasRest(config, fetchImpl, 'osionos_pages', {
+		method: 'POST',
+		body: {
+			id: appId, workspace_id: MARKETPLACE_WORKSPACE_ID, parent_page_id: MARKETPLACE_DATABASE_ID,
+			owner_id: authContext.userId, database_id: MARKETPLACE_DATABASE_ID, title, icon: 'icon:box',
+			surface: 'app', visibility: 'private', collaborators: [], properties: defaultAppProperties(identifier), content: [],
+		},
+		prefer: 'return=minimal',
+	});
+	for (const [t, ic] of MARKETPLACE_SUBPAGES) {
+		await baasRest(config, fetchImpl, 'osionos_pages', {
+			method: 'POST',
+			body: {
+				id: randomUUID(), workspace_id: MARKETPLACE_WORKSPACE_ID, parent_page_id: appId, owner_id: authContext.userId,
+				title: t, icon: ic, surface: 'page', visibility: 'private', collaborators: [], properties: [], content: [],
+			},
+			prefer: 'return=minimal',
+		});
+	}
+	json(response, 201, pageRowToEntry(await fetchPageRow(appId, config, fetchImpl)), config);
+	return true;
+}
+
+/** Owner-only edit of a draft app's title / icon / properties. */
+async function handleMarketplaceUpdate(appId, request, response, config, fetchImpl) {
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	const id = requireUuid(appId, 'appId');
+	const row = await fetchPageRow(id, config, fetchImpl);
+	if (!row || row.workspace_id !== MARKETPLACE_WORKSPACE_ID) throw Object.assign(new Error('App not found.'), { status: 404 });
+	if (row.owner_id !== authContext.userId) throw Object.assign(new Error('Only the owner can edit this app.'), { status: 403 });
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const patch = { updated_at: new Date().toISOString() };
+	if (hasOwn(payload, 'title')) patch.title = safeText(payload.title, 200) || 'New app';
+	if (hasOwn(payload, 'icon')) patch.icon = safeText(payload.icon, 80) || null;
+	if (hasOwn(payload, 'properties')) patch.properties = safeJsonArray(payload.properties);
+	const updated = await baasRest(config, fetchImpl, `osionos_pages?id=eq.${id}`, { method: 'PATCH', body: patch, prefer: 'return=representation' });
+	json(response, 200, pageRowToEntry(Array.isArray(updated) ? updated[0] : updated), config);
+	return true;
+}
+
+async function handleMarketplacePatch(url, request, response, config, fetchImpl) {
+	const m = /^\/api\/marketplace\/apps\/([^/]+)$/.exec(url.pathname);
+	if (!m) return false;
+	return handleMarketplaceUpdate(decodeURIComponent(m[1]), request, response, config, fetchImpl);
+}
+
+/** Read the shared (per-database) header template a designer saved (stored under the system user). */
+async function handleMarketplaceTemplateRead(url, request, response, config, fetchImpl) {
+	verifyAppSessionToken(bearerToken(request), config);
+	const databaseId = requireUuid(url.searchParams.get('databaseId'), 'databaseId');
+	const row = await fetchPageConfigRow(databaseId, MARKETPLACE_SYSTEM_USER, config, fetchImpl);
+	const cfg = row?.config && typeof row.config === 'object' ? row.config : {};
+	json(response, 200, { template: cfg.headerTemplate ?? null }, config);
+	return true;
+}
+
+/** Save a shared (per-database) header template — any authenticated user, for v1 (gate to owner/admin later). */
+async function handleMarketplaceTemplateWrite(request, response, config, fetchImpl) {
+	verifyAppSessionToken(bearerToken(request), config);
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const databaseId = requireUuid(payload.databaseId, 'databaseId');
+	const template = safeJsonObject(payload.template, 'template');
+	const dbRow = await fetchPageRow(databaseId, config, fetchImpl);
+	await baasRest(config, fetchImpl, 'osionos_page_configurations?on_conflict=user_id,page_id', {
+		method: 'POST',
+		body: {
+			page_id: databaseId,
+			workspace_id: dbRow?.workspace_id || MARKETPLACE_WORKSPACE_ID,
+			user_id: MARKETPLACE_SYSTEM_USER,
+			config: { headerTemplate: template },
+			updated_at: new Date().toISOString(),
+		},
+		prefer: 'resolution=merge-duplicates,return=minimal',
+	});
+	json(response, 200, { ok: true }, config);
+	return true;
+}
+
+async function handleMarketplaceGet(url, request, response, config, fetchImpl) {
+	if (url.pathname === '/api/marketplace/apps') return handleMarketplaceList(request, response, config, fetchImpl);
+	if (url.pathname === '/api/marketplace/installed') return handleMarketplaceInstalledRead(request, response, config, fetchImpl);
+	if (url.pathname === '/api/marketplace/header-template') return handleMarketplaceTemplateRead(url, request, response, config, fetchImpl);
+	const m = /^\/api\/marketplace\/apps\/([^/]+)$/.exec(url.pathname);
+	if (m) return handleMarketplaceApp(decodeURIComponent(m[1]), request, response, config, fetchImpl);
+	return false;
+}
+
+async function handleMarketplacePost(url, request, response, config, fetchImpl) {
+	if (url.pathname === '/api/marketplace/apps') return handleMarketplaceCreate(request, response, config, fetchImpl);
+	if (url.pathname === '/api/marketplace/installed') return handleMarketplaceInstalledWrite(request, response, config, fetchImpl);
+	if (url.pathname === '/api/marketplace/publish') return handleMarketplacePublish(request, response, config, fetchImpl);
+	if (url.pathname === '/api/marketplace/header-template') return handleMarketplaceTemplateWrite(request, response, config, fetchImpl);
+	return false;
+}
+
 /**
  * Owner-scoped page graph from the CANONICAL osionos_pages (replaces the duplicate
  * Mongo og_notes as the graph's note source). Returns the viewer's own pages as a
  * BaaS graph (note nodes + parent + tag edges). Owner-scoping is authoritative here:
  * we only include rows the caller owns, so the graph never leaks another user's pages.
  */
-async function handleGraphPages(request, response, config, fetchImpl) {
-	const authContext = verifyAppSessionToken(bearerToken(request), config);
+/** osionos_workspace_databases rows for the given workspace ids ([] on failure). */
+async function listWorkspaceDatabases(workspaceIds, config, fetchImpl) {
+	if (workspaceIds.length === 0) return [];
+	try {
+		const query = postgrestQuery({
+			workspace_id: `in.(${workspaceIds.join(',')})`,
+			select: 'workspace_id,db_id,engine,tables,edges_table,label',
+		});
+		const rows = await baasRest(config, fetchImpl, `osionos_workspace_databases?${query}`);
+		return Array.isArray(rows) ? rows : [];
+	} catch {
+		return [];
+	}
+}
+
+/** Owner-scoped page graph across `workspaceIds` (the note half of the data graph). */
+async function ownerScopedPageGraph(workspaceIds, userId, config, fetchImpl) {
 	const rows = [];
-	for (const workspaceId of authContext.workspaceIds) {
+	for (const workspaceId of workspaceIds) {
+		const wsRows = await listPageRows(workspaceId, config, fetchImpl, {});
+		for (const row of wsRows) {
+			if (row.owner_id == null || row.owner_id === userId) rows.push(row);
+		}
+	}
+	return pagesToGraph(rows);
+}
+
+/** Record graph from the workspaces' authorized mounts (empty when none / on error). */
+async function workspaceRecordGraph(workspaceIds, config, fetchImpl) {
+	const wsdb = await listWorkspaceDatabases(workspaceIds, config, fetchImpl);
+	const request = overviewRequest(wsdb);
+	if (!request) return { nodes: [], edges: [] };
+	try {
+		return (await baasQueryPost(config, fetchImpl, '/graph/overview', request, GRAPH_FETCH_TIMEOUT_MS)) ?? { nodes: [], edges: [] };
+	} catch {
+		return { nodes: [], edges: [] };
+	}
+}
+
+/**
+ * GET /api/graph/data — the whole multi-engine ecosystem the viewer can access:
+ * note nodes ⊕ records from every database their workspaces are linked to (via
+ * osionos_workspace_databases). scope=workspace (default — the requested or token
+ * workspace) | account (every workspace the session is a member of). A workspace
+ * the session can't access contributes nothing.
+ */
+async function handleGraphData(url, request, response, config, fetchImpl) {
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	const scope = url.searchParams.get('scope') === 'account' ? 'account' : 'workspace';
+	const requested = url.searchParams.get('workspaceId');
+	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
+	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
+	const workspaceIds = scope === 'account'
+		? accessible
+		: requested
+			? (accessible.includes(requested) ? [requested] : [])
+			: authContext.workspaceIds;
+	const noteGraph = await ownerScopedPageGraph(workspaceIds, authContext.userId, config, fetchImpl);
+	const recordGraph = await workspaceRecordGraph(workspaceIds, config, fetchImpl);
+	json(response, 200, mergeGraphs(noteGraph, recordGraph), config);
+	return true;
+}
+
+// ── Record → note (workstream D) ────────────────────────────────────────────
+// A record in any engine the viewer's workspaces are linked to (via
+// osionos_workspace_databases) can be read or opened as a deterministic note.
+// Access is the SAME union handleGraphData uses: token.workspaceIds ∪ member
+// workspaces, then the dbId must appear in one of those workspaces' mounts.
+
+/**
+ * Resolve `{dbId}` to the wsdb mount the session may read, or 403. Returns the
+ * matching osionos_workspace_databases row (engine + linking workspace_id).
+ */
+async function resolveAccessibleMount(request, dbId, config, fetchImpl) {
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
+	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
+	const mounts = await listWorkspaceDatabases(accessible, config, fetchImpl);
+	const mount = mounts.find((row) => row && row.db_id === dbId);
+	if (!mount) throw Object.assign(new Error('Database is not linked to an accessible workspace.'), { status: 403 });
+	return { authContext, mount };
+}
+
+/**
+ * Set of db_ids the caller may see — every mount linked to a workspace the user
+ * owns or is a member of (the user→workspace→database M2M relation). Verifies the
+ * app session (401 on a missing/invalid token). Used to membership-scope the
+ * Databases navigator listing the same way `resolveAccessibleMount` scopes reads.
+ */
+async function accessibleMountIds(request, config, fetchImpl) {
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
+	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
+	const mounts = await listWorkspaceDatabases(accessible, config, fetchImpl);
+	return new Set(mounts.map((row) => row && row.db_id).filter(Boolean));
+}
+
+/** Fetch one record via the query-router (engine-aware pk column). */
+async function fetchRecordRow(dbId, table, pk, engine, config, fetchImpl) {
+	const pkColumn = pkColumnForEngine(engine);
+	// An all-digit pk binds to an integer key column (pg/mysql serial ids); a
+	// non-numeric pk (e.g. mongo `evt-000001`) stays a string. Sending "1234" as a
+	// string to an int column makes the data-plane 409 on the type mismatch.
+	const pkValue = /^\d+$/.test(pk) ? Number(pk) : pk;
+	const result = await baasQueryPost(config, fetchImpl, `/${dbId}/tables/${table}`, {
+		op: 'get',
+		filter: { [pkColumn]: pkValue },
+	});
+	if (Array.isArray(result)) return result[0] ?? null;
+	if (result && typeof result === 'object' && Array.isArray(result.rows)) return result.rows[0] ?? null;
+	if (result && typeof result === 'object' && result.row) return result.row;
+	return result ?? null;
+}
+
+/** GET /api/records/:dbId/:table/:pk — read one record + its deterministic note id. */
+async function handleRecordRead(match, request, response, config, fetchImpl) {
+	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
+	const table = safeText(decodeURIComponent(match[2]), 120);
+	const pk = safeText(decodeURIComponent(match[3]), 220);
+	if (!table || !pk) throw Object.assign(new Error('table and pk are required.'), { status: 422 });
+	const { mount } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const row = await fetchRecordRow(dbId, table, pk, mount.engine, config, fetchImpl);
+	if (!row) throw Object.assign(new Error('Record not found.'), { status: 404 });
+	json(response, 200, { dbId, table, pk, row, noteId: recordNoteId(dbId, table, pk) }, config);
+	return true;
+}
+
+/**
+ * Resolve-or-create the deterministic note that mirrors a record (idempotent).
+ * The shared seam behind /open and the sub-item routes: enforces the mount ACL,
+ * reads the row, upserts the record-note (recordNoteId), and returns the note id
+ * + the mount/auth context the caller needs to keep going.
+ */
+async function ensureRecordNote(dbId, table, pk, request, config, fetchImpl) {
+	const { authContext, mount } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const row = await fetchRecordRow(dbId, table, pk, mount.engine, config, fetchImpl);
+	if (!row) throw Object.assign(new Error('Record not found.'), { status: 404 });
+	const body = recordNotePageBody({
+		dbId, table, pk, row,
+		engine: mount.engine,
+		workspaceId: mount.workspace_id,
+		userId: authContext.userId,
+		now: new Date().toISOString(),
+	});
+	await baasRest(config, fetchImpl, 'osionos_pages?on_conflict=id', {
+		method: 'POST',
+		body,
+		prefer: 'resolution=merge-duplicates,return=minimal',
+	});
+	return { noteId: body.id, mount, authContext };
+}
+
+/** POST /api/records/:dbId/:table/:pk/open — resolve-or-create the linked note (idempotent). */
+async function handleRecordOpen(match, request, response, config, fetchImpl) {
+	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
+	const table = safeText(decodeURIComponent(match[2]), 120);
+	const pk = safeText(decodeURIComponent(match[3]), 220);
+	if (!table || !pk) throw Object.assign(new Error('table and pk are required.'), { status: 422 });
+	const { noteId } = await ensureRecordNote(dbId, table, pk, request, config, fetchImpl);
+	json(response, 200, pageRowToEntry(await fetchPageRow(noteId, config, fetchImpl)), config);
+	return true;
+}
+
+/**
+ * GET /api/records/:dbId/:table/:pk/subitems — the caller's hand-created
+ * sub-item notes nested under the record-note. Owner-scoped (private by default;
+ * the record-note model is owner-stamped). The parent note need not exist yet —
+ * an empty list is the natural answer.
+ * ponytail: owner-scoped (personal annotations) — drop owner_id for shared sub-items.
+ */
+async function handleRecordSubitemsList(match, request, response, config, fetchImpl) {
+	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
+	const table = safeText(decodeURIComponent(match[2]), 120);
+	const pk = safeText(decodeURIComponent(match[3]), 220);
+	if (!table || !pk) throw Object.assign(new Error('table and pk are required.'), { status: 422 });
+	const { authContext } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const parentNoteId = recordNoteId(dbId, table, pk);
+	const childRows = await baasRest(config, fetchImpl, `osionos_pages?${postgrestQuery({
+		parent_page_id: `eq.${parentNoteId}`,
+		owner_id: `eq.${authContext.userId}`,
+		archived_at: 'is.null',
+		order: 'created_at.asc',
+	})}`);
+	json(response, 200, {
+		dbId, table, pk, parentNoteId,
+		children: pageRowsToEntries(Array.isArray(childRows) ? childRows : []),
+	}, config);
+	return true;
+}
+
+/**
+ * POST /api/records/:dbId/:table/:pk/subitems — create a child note (ensures the
+ * record-note first). The sub-item is the CALLER'S own editable note, so it lands
+ * in a workspace the caller controls (body `workspaceId`, verified for create),
+ * NOT the mount's workspace — which may be a read-only seed where the standard
+ * page DELETE/PATCH ACL would later 403. It links cross-workspace to the shared
+ * record-note via parent_page_id.
+ */
+async function handleRecordSubitemCreate(match, request, response, config, fetchImpl) {
+	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
+	const table = safeText(decodeURIComponent(match[2]), 120);
+	const pk = safeText(decodeURIComponent(match[3]), 220);
+	if (!table || !pk) throw Object.assign(new Error('table and pk are required.'), { status: 422 });
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES).catch(() => ({}));
+	const safe = payload && typeof payload === 'object' ? payload : {};
+	const access = await requireWorkspaceAccess(request, safe.workspaceId, 'create', config, fetchImpl);
+	const { noteId } = await ensureRecordNote(dbId, table, pk, request, config, fetchImpl);
+	const body = recordSubitemNoteBody({
+		id: randomUUID(),
+		parentNoteId: noteId,
+		workspaceId: access.workspaceId,
+		userId: access.userId,
+		title: safeText(safe.title, 200),
+		icon: safeText(safe.icon, 80),
+		properties: safeJsonArray(safe.properties),
+		content: safeJsonArray(safe.content),
+		now: new Date().toISOString(),
+	});
+	const created = await baasRest(config, fetchImpl, 'osionos_pages', {
+		method: 'POST',
+		body,
+		prefer: 'return=representation',
+	});
+	json(response, 201, pageRowToEntry(Array.isArray(created) ? created[0] : created), config);
+	return true;
+}
+
+const RECORD_PATH = /^\/api\/records\/([^/]+)\/([^/]+)\/([^/]+?)(\/open|\/subitems)?$/;
+
+async function handleRecordsGet(url, request, response, config, fetchImpl) {
+	const match = RECORD_PATH.exec(url.pathname);
+	if (!match) return false;
+	if (match[4] === '/subitems') return handleRecordSubitemsList(match, request, response, config, fetchImpl);
+	if (match[4]) return false;
+	return handleRecordRead(match, request, response, config, fetchImpl);
+}
+
+async function handleRecordsPost(url, request, response, config, fetchImpl) {
+	const match = RECORD_PATH.exec(url.pathname);
+	if (!match || !match[4]) return false;
+	if (match[4] === '/subitems') return handleRecordSubitemCreate(match, request, response, config, fetchImpl);
+	return handleRecordOpen(match, request, response, config, fetchImpl);
+}
+
+// ── Live databases (Databases navigator) ────────────────────────────────────
+// The browser CANNOT reach /admin/v1/databases or /query/v1/:dbId/schema through
+// Kong (anon key → 401). The bridge proxies these server-side: list via the
+// adapter-registry (tenant-scoped), schema + rows via the query-router with the
+// tenant api-key. Gated by a valid app session.
+
+const DB_SCHEMA_PATH = /^\/api\/databases\/([^/]+)\/schema$/;
+const DB_ROWS_PATH = /^\/api\/databases\/([^/]+)\/tables\/([^/]+)$/;
+const DB_DDL_PATH = /^\/api\/databases\/([^/]+)\/schema\/ddl$/;
+// Full CRUD: reads (list/get/aggregate) + writes (insert/update/delete/upsert/
+// batch). The query-router enforces per-engine capability and owner-scopes every
+// write to the tenant; every route below ALSO enforces the per-user mount ACL
+// (resolveAccessibleMount / accessibleMountIds) so a caller can only reach a
+// database linked to a workspace they own or belong to — databases are personal
+// to a user unless invited via osionos_workspace_members.
+const DB_OPS = new Set(['list', 'get', 'aggregate', 'insert', 'update', 'delete', 'upsert', 'batch']);
+
+/** GET /api/databases?tenant= — databases linked to a workspace the caller belongs to. */
+async function handleDatabaseList(url, request, response, config, fetchImpl) {
+	// Membership scope: a caller only sees mounts linked to a workspace they own
+	// or are a member of — NOT every database the tenant owns. (Also verifies the
+	// app session.)
+	const allowed = await accessibleMountIds(request, config, fetchImpl);
+	// Tenant id: the bridge's own env wins (secure); else the client hint
+	// (`?tenant=`, from VITE_BAAS_TENANT_ID — single-tenant dev). The registry
+	// returns only db NAMES; schema/rows still require the bridge's tenant
+	// api-key, so a wrong hint can never read another tenant's data.
+	const tenantId = config.baasTenantId || (url.searchParams.get('tenant') ?? '').trim();
+	const rows = await baasRegistryGet(config, fetchImpl, '/databases', tenantId);
+	const databases = (Array.isArray(rows) ? rows : [])
+		.map((row) => ({
+			dbId: typeof row?.id === 'string' ? row.id : (typeof row?.dbId === 'string' ? row.dbId : ''),
+			name: typeof row?.name === 'string' && row.name ? row.name : String(row?.id ?? ''),
+			engine: typeof row?.engine === 'string' && row.engine ? row.engine : 'unknown',
+		}))
+		.filter((database) => database.dbId && allowed.has(database.dbId));
+	json(response, 200, { databases }, config);
+	return true;
+}
+
+/** GET /api/databases/:dbId/schema — engine-agnostic schema via the query-router. */
+async function handleDatabaseSchema(match, request, response, config, fetchImpl) {
+	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
+	await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	let schema;
+	try {
+		schema = await baasQueryGet(config, fetchImpl, `/${dbId}/schema`);
+	} catch (error) {
+		// Schemaless engines (dynamodb, …) reject introspection (422
+		// unsupported_capability). Surface that as an empty-but-OK schema so the
+		// database still LISTS — just without tables — instead of failing the
+		// whole mount. The frontend flags it via `capabilities.introspect`.
+		const message = error instanceof Error ? error.message : '';
+		if (/unsupported_capability|introspect/i.test(message)) {
+			json(response, 200, { dbId, tables: [], capabilities: { introspect: false } }, config);
+			return true;
+		}
+		throw error;
+	}
+	const base = schema && typeof schema === 'object' ? schema : { tables: [], engine: 'unknown' };
+	json(response, 200, { dbId, ...base }, config);
+	return true;
+}
+
+/** POST /api/databases/:dbId/tables/:table — CRUD (list/get/aggregate/insert/
+ *  update/delete/upsert/batch) via the query-router, status passed through. */
+async function handleDatabaseRows(match, request, response, config, fetchImpl) {
+	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
+	await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const table = safeText(decodeURIComponent(match[2]), 120);
+	if (!table) throw Object.assign(new Error('table is required.'), { status: 422 });
+	const payload = await readJson(request).catch(() => ({}));
+	const safe = payload && typeof payload === 'object' ? payload : {};
+	// Reads AND writes. An unknown op falls back to a safe list; the status is
+	// passed through so the write client can classify ok / conflict / rejected.
+	const op = typeof safe.op === 'string' && DB_OPS.has(safe.op) ? safe.op : 'list';
+	const { status, body } = await baasQueryPassthrough(config, fetchImpl, `/${dbId}/tables/${table}`, { ...safe, op });
+	json(response, status || 502, body ?? { rows: [], affected_rows: 0 }, config);
+	return true;
+}
+
+/** POST /api/databases/txn — atomic multi-op transaction (mount dbId in the body). */
+async function handleDatabaseTxn(request, response, config, fetchImpl) {
+	const payload = await readJson(request).catch(() => ({}));
+	const safe = payload && typeof payload === 'object' ? payload : {};
+	const dbId = requireUuid(typeof safe.mount === 'string' ? safe.mount : '', 'mount');
+	await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const { status, body } = await baasQueryPassthrough(config, fetchImpl, '/txn', safe);
+	json(response, status || 502, body ?? {}, config);
+	return true;
+}
+
+/** POST /api/databases/:dbId/schema/ddl — add/drop/alter a column (DDL). */
+async function handleDatabaseDdl(match, request, response, config, fetchImpl) {
+	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
+	await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const payload = await readJson(request).catch(() => ({}));
+	const safe = payload && typeof payload === 'object' ? payload : {};
+	const { status, body } = await baasQueryPassthrough(config, fetchImpl, `/${dbId}/schema/ddl`, safe);
+	json(response, status || 502, body ?? {}, config);
+	return true;
+}
+
+async function handleDatabasesGet(url, request, response, config, fetchImpl) {
+	if (url.pathname === '/api/databases') return handleDatabaseList(url, request, response, config, fetchImpl);
+	const schemaMatch = DB_SCHEMA_PATH.exec(url.pathname);
+	if (schemaMatch) return handleDatabaseSchema(schemaMatch, request, response, config, fetchImpl);
+	return false;
+}
+
+async function handleDatabasesPost(url, request, response, config, fetchImpl) {
+	if (url.pathname === '/api/databases/txn') return handleDatabaseTxn(request, response, config, fetchImpl);
+	const ddlMatch = DB_DDL_PATH.exec(url.pathname);
+	if (ddlMatch) return handleDatabaseDdl(ddlMatch, request, response, config, fetchImpl);
+	const rowsMatch = DB_ROWS_PATH.exec(url.pathname);
+	if (rowsMatch) return handleDatabaseRows(rowsMatch, request, response, config, fetchImpl);
+	return false;
+}
+
+async function handleGraphPages(url, request, response, config, fetchImpl) {
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	const requested = url.searchParams.get('workspaceId');
+	const scopeAll = url.searchParams.get('scope') === 'all';
+	// Default = the requested workspace only (workspace-scoped); `scope=all` = every
+	// workspace the session owns; a workspace the session can't access yields none.
+	const workspaceIds = scopeAll
+		? authContext.workspaceIds
+		: requested
+			? (authContext.workspaceIds.includes(requested) ? [requested] : [])
+			: authContext.workspaceIds;
+	const rows = [];
+	for (const workspaceId of workspaceIds) {
 		const wsRows = await listPageRows(workspaceId, config, fetchImpl, {});
 		for (const row of wsRows) {
 			if (row.owner_id == null || row.owner_id === authContext.userId) rows.push(row);
@@ -1335,8 +2228,14 @@ async function handleGraphPages(request, response, config, fetchImpl) {
 }
 
 async function handlePagesGet(url, request, response, config, fetchImpl) {
+	if (await handleMarketplaceGet(url, request, response, config, fetchImpl)) return true;
+	if (await handleDatabasesGet(url, request, response, config, fetchImpl)) return true;
+	if (url.pathname === '/api/graph/data') {
+		return handleGraphData(url, request, response, config, fetchImpl);
+	}
+	if (await handleRecordsGet(url, request, response, config, fetchImpl)) return true;
 	if (url.pathname === '/api/graph/pages') {
-		return handleGraphPages(request, response, config, fetchImpl);
+		return handleGraphPages(url, request, response, config, fetchImpl);
 	}
 	if (url.pathname === '/api/pages/search') {
 		return handlePageSearch(url, request, response, config, fetchImpl);
@@ -1428,7 +2327,13 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	if (!pageId) return false;
 	const existing = await fetchPageRow(pageId, config, fetchImpl);
 	if (!existing) throw Object.assign(new Error('Page not found.'), { status: 404 });
-	const access = await requireWorkspaceAccess(request, existing.workspace_id, 'update', config, fetchImpl);
+	// The page OWNER may update their own page even when the workspace gate would
+	// deny — e.g. a record-note that landed in a read-only seed workspace (ac3e…)
+	// reached via the live MOUNT, not via that workspace's page role. Matches the
+	// config/action handlers (requirePageScopeAccess → ownerOrWorkspaceAccess).
+	// requirePageOwnership still runs, so a non-owner gains nothing (owner_id is
+	// server-stamped — this never widens cross-user access).
+	const access = await ownerOrWorkspaceAccess(request, existing, 'update', config, fetchImpl);
 	requirePageOwnership(existing, access);
 
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
@@ -1519,7 +2424,7 @@ async function handlePageDelete(url, request, response, config, fetchImpl) {
 	if (!pageId) return false;
 	const row = await fetchPageRow(pageId, config, fetchImpl);
 	if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
-	const access = await requireWorkspaceAccess(request, row.workspace_id, 'delete', config, fetchImpl);
+	const access = await ownerOrWorkspaceAccess(request, row, 'delete', config, fetchImpl);
 	requirePageOwnership(row, access);
 	const refs = await listWorkspacePageRefs(row.workspace_id, config, fetchImpl);
 	const ids = [pageId, ...descendantPageIds(refs, pageId)];
@@ -1532,6 +2437,9 @@ async function handlePageDelete(url, request, response, config, fetchImpl) {
 }
 
 async function handlePagesPost(url, request, response, config, fetchImpl) {
+	if (await handleMarketplacePost(url, request, response, config, fetchImpl)) return true;
+	if (await handleDatabasesPost(url, request, response, config, fetchImpl)) return true;
+	if (await handleRecordsPost(url, request, response, config, fetchImpl)) return true;
 	if (url.pathname === '/api/pages') return handlePageCreate(request, response, config, fetchImpl);
 	if (url.pathname === '/api/auth/workspace/validate') return handleWorkspaceValidate(request, response, config, fetchImpl);
 	if (await handlePageActionCreate(url, request, response, config, fetchImpl)) return true;
@@ -1542,6 +2450,10 @@ async function handlePagesPost(url, request, response, config, fetchImpl) {
 async function handleBridgeGet(url, response, config, fetchImpl) {
 	if (url.pathname === '/api/auth/bridge/health') {
 		json(response, 200, { ok: true, service: 'osionos-bridge' }, config);
+		return true;
+	}
+	if (url.pathname === '/api/geocode') {
+		json(response, 200, await geocodePlaceName(url.searchParams.get('q') ?? '', fetchImpl), config);
 		return true;
 	}
 	if (url.pathname !== '/api/media/unsplash/search') return false;
@@ -1657,12 +2569,20 @@ async function handleBridgeRequest(request, response, context) {
 	}
 	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
 	// Workstream modules — each returns false when the path is not theirs:
-	// perms proxy (WS-C), LiveKit tokens (WS-D), chat/profile/feed (WS-B).
+	// in-chat AI agent (SSE), perms proxy (WS-C), LiveKit tokens (WS-D),
+	// chat/profile/feed (WS-B).
+	if (await context.social.agent(url, request, response, context.config)) return;
+	if (await context.social.connector(url, request, response, context.config)) return;
+		if (await context.social.oauth(url, request, response, context.config)) return;
 	if (await handlePermsRoute(request, response, url, context.fetchImpl)) return;
 	if (await context.social.rtc(url, request, response, context.config)) return;
 	if (await context.social.chat(url, request, response, context.config)) return;
+	if (await context.social.notify(url, request, response, context.config)) return;
+	if (await context.social.community(url, request, response, context.config)) return;
 	if (await context.social.profile(url, request, response, context.config)) return;
 	if (await context.social.feed(url, request, response, context.config)) return;
+	if (await context.social.social(url, request, response, context.config)) return;
+	if (await context.social.collab(url, request, response, context.config)) return;
 	if (request.method === 'GET' && await handleWorkspaceGet(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'GET' && await handlePagesGet(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'GET' && await handleBridgeGet(url, response, context.config, context.fetchImpl)) return;
@@ -1675,6 +2595,7 @@ async function handleBridgeRequest(request, response, context) {
 		context.replayStore,
 		context.fetchImpl,
 	)) return;
+	if (request.method === 'PATCH' && await handleMarketplacePatch(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'PATCH' && await handlePageConfigPatch(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'PATCH' && await handlePageUpdate(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'DELETE' && await handlePageDelete(url, request, response, context.config, context.fetchImpl)) return;
@@ -1690,10 +2611,17 @@ export function createBridgeServer(options = {}) {
 	// contract (closes over the base config); chat/profile/feed additionally
 	// accept the per-request (per-origin) config at dispatch time.
 	const social = options.social ?? {
+		agent: createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
 		rtc: createRtcTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		chat: createChatHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		notify: createNotifyHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		community: createCommunityHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 	};
 	return createServer(async (request, response) => {
 		let responseConfig = requestOriginConfig(config, request);

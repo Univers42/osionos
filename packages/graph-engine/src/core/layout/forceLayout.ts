@@ -11,11 +11,15 @@ import {
   type ForceCollide,
   type ForceLink,
   type ForceManyBody,
+  type ForceX,
+  type ForceY,
   forceCenter,
   forceCollide,
   forceLink,
   forceManyBody,
   forceSimulation,
+  forceX,
+  forceY,
   type Simulation,
   type SimulationLinkDatum,
   type SimulationNodeDatum,
@@ -44,11 +48,13 @@ export interface ForceLayoutInit {
   /** Optional seed positions (length `count`) to preserve layout across rebuilds. */
   seedX?: Float32Array | null;
   seedY?: Float32Array | null;
+  /** Per-node database/mount group id — drives per-database cluster forces. */
+  nodeGroups?: Uint8Array | null;
 }
 
 /** Alpha below which the layout is considered settled. */
 export const ALPHA_SETTLED = 0.012;
-const GOLDEN_ANGLE = 2.399963229728653;
+export const GOLDEN_ANGLE = 2.399963229728653;
 
 /** Deterministic golden-spiral seed positions around the viewport center. */
 export function seedPositions(count: number, width: number, height: number): {
@@ -67,6 +73,38 @@ export function seedPositions(count: number, width: number, height: number): {
   return { x, y };
 }
 
+/** Number of distinct groups in a node-group array (ids are dense 0..G-1). */
+export function groupCount(nodeGroups: Uint8Array | null | undefined): number {
+  if (!nodeGroups || nodeGroups.length === 0) return 0;
+  let max = 0;
+  for (let i = 0; i < nodeGroups.length; i += 1) if (nodeGroups[i] > max) max = nodeGroups[i];
+  return max + 1;
+}
+
+/** Deterministic per-database cluster centres on a ring around the viewport centre.
+ *  Shared by the seeder and the hold force so both agree on where a cluster lives;
+ *  the ring scales with node count so big graphs don't overlap. */
+export function clusterCenters(
+  count: number,
+  groups: number,
+  width: number,
+  height: number,
+): Array<{ x: number; y: number }> {
+  const cx = width / 2;
+  const cy = height / 2;
+  if (groups <= 1) return [{ x: cx, y: cy }];
+  // Each cluster settles to roughly `clusterR`; size the ring so adjacent
+  // centres on it clear ~2 radii, otherwise the islands overlap into one blob.
+  const clusterR = 14 * Math.sqrt(Math.max(1, count) / groups);
+  const ring = Math.max(180, (clusterR * 1.3) / Math.sin(Math.PI / groups));
+  const out: Array<{ x: number; y: number }> = new Array(groups);
+  for (let g = 0; g < groups; g += 1) {
+    const angle = -Math.PI / 2 + (g / groups) * Math.PI * 2;
+    out[g] = { x: cx + Math.cos(angle) * ring, y: cy + Math.sin(angle) * ring };
+  }
+  return out;
+}
+
 export class ForceLayout {
   private readonly sim: Simulation<SimNode, SimLink>;
   private readonly nodes: SimNode[];
@@ -74,11 +112,15 @@ export class ForceLayout {
   private readonly charge: ForceManyBody<SimNode>;
   private readonly center: ForceCenter<SimNode>;
   private readonly collide: ForceCollide<SimNode>;
+  private readonly groupX: ForceX<SimNode> | null;
+  private readonly groupY: ForceY<SimNode> | null;
 
   constructor(init: ForceLayoutInit) {
-    const { count, width, height, seedX, seedY } = init;
+    const { count, width, height, seedX, seedY, nodeGroups } = init;
     const cx = width / 2;
     const cy = height / 2;
+    const groups = groupCount(nodeGroups);
+    const centers = groups > 1 ? clusterCenters(count, groups, width, height) : null;
 
     this.nodes = new Array<SimNode>(count);
     const seeds = seedPositions(count, width, height);
@@ -91,6 +133,10 @@ export class ForceLayout {
     this.charge = forceManyBody<SimNode>();
     this.center = forceCenter<SimNode>(cx, cy);
     this.collide = forceCollide<SimNode>();
+    this.groupX =
+      centers && nodeGroups ? forceX<SimNode>((node) => centers[nodeGroups[node.index]]?.x ?? cx) : null;
+    this.groupY =
+      centers && nodeGroups ? forceY<SimNode>((node) => centers[nodeGroups[node.index]]?.y ?? cy) : null;
 
     this.sim = forceSimulation<SimNode, SimLink>(this.nodes)
       .force("link", this.link)
@@ -98,8 +144,10 @@ export class ForceLayout {
       .force("center", this.center)
       .force("collide", this.collide)
       .alpha(1)
-      .alphaDecay(0.045)
+      .alphaDecay(0.06)
       .stop();
+    if (this.groupX) this.sim.force("clusterX", this.groupX);
+    if (this.groupY) this.sim.force("clusterY", this.groupY);
     this.applyParams(init.params ?? DEFAULT_LAYOUT_PARAMS);
   }
 
@@ -158,5 +206,8 @@ export class ForceLayout {
     this.center.strength(p.centerStrength);
     this.collide.radius(p.collideRadius).iterations(1);
     this.sim.velocityDecay(p.velocityDecay);
+    const cluster = p.clusterStrength ?? 0;
+    this.groupX?.strength(cluster);
+    this.groupY?.strength(cluster);
   }
 }

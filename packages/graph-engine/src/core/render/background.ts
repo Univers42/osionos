@@ -11,6 +11,11 @@ import type { SceneTheme } from "../theme/tokens";
 import type { BackgroundStyle } from "../state/controls";
 import { bakeGrainTile } from "./grain";
 
+// The field drifts imperceptibly slowly (a full cycle is ~26 min), so redraw the
+// expensive full-screen fills at ~12fps, not 60 — they were saturating the main
+// thread and starving the graph's own loop (the dominant cost at high DPR).
+const BG_FRAME_MS = 80;
+
 export class AuroraBackground {
   private readonly ctx: CanvasRenderingContext2D | null;
   private width = 0;
@@ -32,7 +37,9 @@ export class AuroraBackground {
   setSize(width: number, height: number, dpr: number): void {
     this.width = width;
     this.height = height;
-    this.dpr = Math.min(dpr, 2);
+    // Soft field — render at 1x; low resolution is imperceptible (the grain hides any
+    // gradient banding) and a quarter of the pixel cost of a 2x retina backing.
+    this.dpr = Math.min(dpr, 1);
     this.canvas.width = Math.round(width * this.dpr);
     this.canvas.height = Math.round(height * this.dpr);
     this.canvas.style.width = `${width}px`;
@@ -55,8 +62,9 @@ export class AuroraBackground {
 
   start(): void {
     if (this.raf != null || this.reducedMotion || this.style === "flat") return;
+    let last = 0;
     const loop = (now: number): void => {
-      this.draw(now);
+      if (now - last >= BG_FRAME_MS) { last = now; this.draw(now); }
       this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);

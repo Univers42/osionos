@@ -58,6 +58,17 @@ export const FILE = {
   created: "ws-file-created",
 } as const;
 
+/**
+ * Home-surface live databases (read-only carousel galleries over existing
+ * osionos_pages). Distinct from the workspace Folders/Files tables above and
+ * intentionally NOT added to the WS_* id sets below — they route to their own
+ * recents/templates adapters, not getWorkspaceDatabaseAdapter.
+ */
+export const RECENTS_DB_ID = "home-recents";
+export const RECENTS_GALLERY_VIEW = "v-home-recents-gallery";
+export const TEMPLATES_DB_ID = "home-templates";
+export const TEMPLATES_GALLERY_VIEW = "v-home-templates-gallery";
+
 const WS_DATABASE_IDS = new Set<string>([WS_FOLDERS_DB_ID, WS_FILES_DB_ID]);
 const WS_VIEW_IDS = new Set<string>([
   WS_FOLDERS_TABLE_VIEW,
@@ -73,4 +84,17 @@ export function isWorkspaceDatabaseId(id?: string | null): boolean {
 /** True when a view id belongs to the live workspace databases. */
 export function isWorkspaceViewId(id?: string | null): boolean {
   return id != null && WS_VIEW_IDS.has(id);
+}
+
+const HOME_LIVE_DATABASE_IDS = new Set<string>([RECENTS_DB_ID, TEMPLATES_DB_ID]);
+const HOME_LIVE_VIEW_IDS = new Set<string>([RECENTS_GALLERY_VIEW, TEMPLATES_GALLERY_VIEW]);
+
+/** True when a database id is one of the Home live carousels (Recents/Templates). */
+export function isHomeLiveDatabaseId(id?: string | null): boolean {
+  return id != null && HOME_LIVE_DATABASE_IDS.has(id);
+}
+
+/** True when a view id is one of the Home live carousels (Recents/Templates). */
+export function isHomeLiveViewId(id?: string | null): boolean {
+  return id != null && HOME_LIVE_VIEW_IDS.has(id);
 }

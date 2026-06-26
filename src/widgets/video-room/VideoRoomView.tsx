@@ -25,6 +25,7 @@ import { useRtcToken } from "./useRtcToken";
 import { useRoomConnection } from "./useRoomConnection";
 import { ParticipantTile } from "./ParticipantTile";
 import { RoomControls } from "./RoomControls";
+import { useRaiseHand } from "./useRaiseHand";
 
 export interface VideoRoomViewProps {
   channelId: string;
@@ -57,6 +58,7 @@ export const VideoRoomView: React.FC<VideoRoomViewProps> = ({
   const connection = useRoomConnection(left ? null : grant);
   const live = connection.room;
   const local = live?.localParticipant;
+  const hands = useRaiseHand(live);
   const error = tokenError ?? connection.error;
   const connecting = loading
     || (!error && connection.connectionState !== ConnectionState.Connected);
@@ -109,6 +111,7 @@ export const VideoRoomView: React.FC<VideoRoomViewProps> = ({
                 participant={participant}
                 isLocal={participant.identity === grant?.identity}
                 tracksVersion={connection.tracksVersion}
+                raised={hands.raised.has(participant.identity)}
               />
             ))}
           </div>
@@ -122,6 +125,9 @@ export const VideoRoomView: React.FC<VideoRoomViewProps> = ({
         onToggleMic={() => void local?.setMicrophoneEnabled(!local.isMicrophoneEnabled)}
         onToggleCam={() => void local?.setCameraEnabled(!local.isCameraEnabled)}
         onToggleScreen={() => void local?.setScreenShareEnabled(!local.isScreenShareEnabled)}
+        handRaised={hands.myRaised}
+        onToggleHand={hands.toggle}
+        room={live}
         onLeave={leave}
       />
     </section>

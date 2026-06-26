@@ -24,6 +24,7 @@ import { api, getActivePageJwt } from '@/shared/api/client';
 export interface PersonHit {
   id: string;
   name: string;
+  username: string | null;
   avatar: string | null;
   wsRole: string | null;
   online: boolean;
@@ -38,7 +39,11 @@ export async function searchPeople(query: string): Promise<PersonHit[]> {
     `/api/people?query=${encodeURIComponent(query)}`,
     jwt,
   );
-  return Array.isArray(reply.people) ? reply.people : [];
+  // Case-insensitive sort so lowercase usernames (e.g. "higueraslp") aren't buried below
+  // every Capitalized name (Postgres default collation orders all A–Z before a–z).
+  return (Array.isArray(reply.people) ? reply.people : [])
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 }
 
 export function usePeopleSearch(query: string) {

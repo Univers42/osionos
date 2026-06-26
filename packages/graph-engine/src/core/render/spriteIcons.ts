@@ -33,59 +33,33 @@ export function loadGlyphImage(url: string, onReady: () => void): HTMLImageEleme
   return null;
 }
 
-/** Ink color for monogram letters over the node body. */
-function monogramInk(color: string, mode: SpriteMode): string {
-  // Dark theme: warm-white letter over the colored stone. Light theme ("paper"
-  // nodes are white with a colored band): the letter takes the node color.
-  return mode === "dark" ? "rgba(255, 244, 228, 0.95)" : color;
-}
-
-/** Paint `glyph` centered in a SPRITE×SPRITE node sprite context. */
+/** Paint `glyph` centered in a SPRITE×SPRITE node sprite context (blank for `none`). */
 export function paintGlyph(
   ctx: CanvasRenderingContext2D,
   glyph: Glyph,
-  color: string,
-  mode: SpriteMode,
+  _color: string,
+  _mode: SpriteMode,
   onInvalidate: () => void,
 ): void {
   const half = SPRITE / 2;
   const r = half * DISC_FRACTION;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
   if (glyph.kind === "image") {
     const img = loadGlyphImage(glyph.ref, onInvalidate);
-    if (img) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(half, half, r * 0.78, 0, Math.PI * 2);
-      ctx.clip();
-      const d = r * 1.56;
-      ctx.drawImage(img, half - d / 2, half - d / 2, d, d);
-      ctx.restore();
-      return;
-    }
-    // Placeholder monogram while the image loads (or after failure).
-    paintLetter(ctx, glyph.ref.slice(0, 1).toUpperCase() || "•", color, mode, half, r);
+    if (!img) return; // blank until the image decodes — no letter placeholder
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(half, half, r * 0.78, 0, Math.PI * 2);
+    ctx.clip();
+    const d = r * 1.56;
+    ctx.drawImage(img, half - d / 2, half - d / 2, d, d);
+    ctx.restore();
     return;
   }
   if (glyph.kind === "emoji") {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
     ctx.font = `${Math.round(r * 1.35)}px "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif`;
-    // A subtle vertical nudge optically centers most emoji glyphs.
     ctx.fillText(glyph.ref, half, half + r * 0.06);
-    return;
   }
-  paintLetter(ctx, glyph.ref, color, mode, half, r);
-}
-
-function paintLetter(
-  ctx: CanvasRenderingContext2D,
-  letter: string,
-  color: string,
-  mode: SpriteMode,
-  half: number,
-  r: number,
-): void {
-  ctx.font = `600 ${Math.round(r * 1.3)}px "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif`;
-  ctx.fillStyle = monogramInk(color, mode);
-  ctx.fillText(letter, half, half + r * 0.04);
+  // "none" → blank node body (no letter)
 }

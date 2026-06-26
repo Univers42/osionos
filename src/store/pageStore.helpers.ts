@@ -75,6 +75,26 @@ export function nextDuplicateTitle(title: string): string {
   return `${prefix}(${parsedDuplicateNumber + 1})`;
 }
 
+/**
+ * Deep-clone a template's content for instantiation. Every `placeholder` block's
+ * filled `content` is reset to "" so a page created from the template starts
+ * unfilled (the authored prompt in `placeholderText` is preserved). Recurses into
+ * `children` and layout-cell blocks.
+ */
+export function instantiateTemplateContent(content: Block[] | undefined): Block[] {
+  if (!content || content.length === 0) return [];
+  const clone = structuredClone(content) as Block[];
+  const reset = (blocks: Block[]): void => {
+    for (const block of blocks) {
+      if (block.type === "placeholder") block.content = "";
+      if (block.children) reset(block.children);
+      if (block.layoutCells) for (const cell of block.layoutCells) reset(cell.blocks);
+    }
+  };
+  reset(clone);
+  return clone;
+}
+
 export function loadRecents(): ActivePage[] {
   try {
     return JSON.parse(
@@ -91,6 +111,23 @@ export function saveRecents(recents: ActivePage[]) {
   } catch {
     // localStorage might be unavailable (e.g. private browsing quota)
   }
+}
+
+/** Prepend `page` to recents, deduped, capped PER WORKSPACE — opening pages in
+ *  one workspace never evicts another workspace's recents. The list stays flat
+ *  (each entry carries its workspaceId); the sidebar shows only the active
+ *  workspace's slice, so recents never cross workspaces. */
+export function addRecent(
+  recents: ActivePage[],
+  page: ActivePage,
+  perWorkspaceLimit = 10,
+): ActivePage[] {
+  const sameWorkspace = [
+    page,
+    ...recents.filter((r) => r.workspaceId === page.workspaceId && r.id !== page.id),
+  ].slice(0, perWorkspaceLimit);
+  const otherWorkspaces = recents.filter((r) => r.workspaceId !== page.workspaceId);
+  return [...sameWorkspace, ...otherWorkspaces];
 }
 
 export function loadActivePage(): ActivePage | null {
@@ -412,8 +449,16 @@ export function seedToEntry(sp: SeedPage): PageEntry {
     visibility: sp.visibility,
     collaborators: sp.collaborators,
     parentPageId: sp.parentPageId ?? null,
+    sortOrder: typeof sp.sortOrder === "number" ? sp.sortOrder : null,
     databaseId: sp.databaseId ?? null,
     archivedAt: sp.archivedAt ?? null,
+    isTemplate: sp.isTemplate ?? false,
+    isDefaultTemplate: sp.isDefaultTemplate ?? false,
+    // SeedPage carries these as open strings (e.g. "student-dashboard"); the
+    // PageEntry unions are narrower, so cast — the value round-trips verbatim.
+    templateSurface: sp.templateSurface as PageEntry["templateSurface"],
+    surface: sp.surface as PageEntry["surface"],
+    cover: sp.cover,
     content: sp.content,
   };
 }

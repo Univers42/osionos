@@ -32,10 +32,14 @@ import { CalloutBlockReadOnly } from "./CalloutBlockReadOnly";
 import { CodeBlockReadOnly } from "./CodeBlockReadOnly";
 import { MediaBlockReadOnly } from "./MediaBlockReadOnly";
 import { TableBlockReadOnly } from "./TableBlockReadOnly";
+import { LayoutBlockReadOnly } from "./LayoutBlockReadOnly";
+import { BoundFieldReadOnly } from "./BoundFieldReadOnly";
+import { DeferredMount } from "./DeferredMount";
 import { renderInlineToReact } from '@/shared/lib/markengine';
 import { timed } from '@/shared/lib/perf/measure';
 import { InternalPageLink } from "@/entities/page";
 import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
+import { usePageStore } from "@/store/usePageStore";
 
 // Async boundary: database blocks are rare in rendered pages. Loading the
 // database view lazily (deep path, not the barrel) keeps the read-only
@@ -43,6 +47,17 @@ import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors"
 // database/editor tree (same code-split discipline as lazyViews.tsx).
 const DatabaseBlock = lazy(() =>
   import("@/widgets/database-view/ui/DatabaseBlock").then((m) => ({ default: m.DatabaseBlock })),
+);
+
+// The cross-engine force graph is heavy; reuse the same lazy boundary the
+// page-renderer uses so it never lands on the warm read-only path.
+const GraphViewBlock = lazy(() =>
+  import("@/widgets/graph-explorer/GraphEngineExplorer").then((m) => ({ default: m.GraphEngineExplorer })),
+);
+
+// The Home "view launcher" (home_views block) — lazy, same discipline.
+const HomeViewsBlock = lazy(() =>
+  import("@/widgets/database-view/ui/HomeViewsBlock").then((m) => ({ default: m.HomeViewsBlock })),
 );
 
 const databaseLoadingFallback = (
@@ -163,6 +178,11 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
   // Per-block text/background colour set via the block colour menu; mirrors the
   // editable BlockEditor (getBlockSurfaceStyle), so read-only matches editing.
   const surface = getBlockSurfaceStyle(block);
+  // Admin template binding: a block bound to the record in context ($record, or
+  // the legacy $viewedUser alias) renders that field, regardless of its base type.
+  if (block.recordRef && block.fieldBind) {
+    return <BoundFieldReadOnly block={block} />;
+  }
   switch (block.type) {
     case "paragraph":
       return (
@@ -401,11 +421,14 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         </div>
       );
 
+    case "button":
+      return <ButtonBlockReadOnly block={block} />;
+
     case "table_block":
       return <TableBlockReadOnly block={block} />;
 
-    case "database_inline":
-      return (
+    case "database_inline": {
+      const databaseEmbed = (
         <Suspense fallback={databaseLoadingFallback}>
           <DatabaseBlock
             databaseId={block.databaseId}
@@ -414,6 +437,18 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
           />
         </Suspense>
       );
+      // Below-the-fold Home sections defer-mount (reserve height, no first-paint work).
+      return block.deferMount ? <DeferredMount>{databaseEmbed}</DeferredMount> : databaseEmbed;
+    }
+
+    case "home_views": {
+      const launcher = (
+        <Suspense fallback={databaseLoadingFallback}>
+          <HomeViewsBlock />
+        </Suspense>
+      );
+      return block.deferMount ? <DeferredMount minHeight={300}>{launcher}</DeferredMount> : launcher;
+    }
 
     case "database_full_page":
       return (
@@ -428,8 +463,20 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         </div>
       );
 
+    case "graph_view":
+      return (
+        <div className="my-3 h-full min-h-[336px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
+          <Suspense fallback={databaseLoadingFallback}>
+            <GraphViewBlock />
+          </Suspense>
+        </div>
+      );
+
     case "toggle":
       return <ToggleBlockReadOnly block={block} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />;
+
+    case "layout":
+      return <LayoutBlockReadOnly block={block} />;
 
     default:
       return (
@@ -485,6 +532,76 @@ const ToggleBlockReadOnly: React.FC<{ block: Block; bulletDepth: number; numbere
           </span>
         </div>
       )}
+    </div>
+  );
+};
+
+const BUTTON_BASE_CLASS =
+  "inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium no-underline transition-colors";
+
+function buttonVariantClass(variant: Block["buttonVariant"]): string {
+  return variant === "secondary"
+    ? "border border-[var(--osio-border-default)] text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]"
+    : "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] hover:opacity-90";
+}
+
+/** The page id behind an internal `page://<id>` button target, else null. */
+function buttonPageRef(href: string | undefined): string | null {
+  return href && href.startsWith("page://") ? href.slice("page://".length) : null;
+}
+
+/**
+ * Read-only CTA/link button. Presentational + safe — never renders raw user HTML.
+ * `page://<id>` opens the workspace page; a `/...` path is an anchor; anything
+ * else (or empty) renders a plain styled button with no navigation.
+ */
+const ButtonBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
+  const label = block.buttonLabel || block.content || "Button";
+  const href = block.buttonHref;
+  const className = `${BUTTON_BASE_CLASS} ${buttonVariantClass(block.buttonVariant)}`;
+  const pageId = buttonPageRef(href);
+  const openPage = usePageStore((s) => s.openPage);
+  const page = usePageStore((s) => (pageId ? s.pageById(pageId) : undefined));
+
+  if (pageId) {
+    return (
+      <div className="py-1">
+        <button
+          type="button"
+          className={className}
+          disabled={!page}
+          onClick={() => {
+            if (!page) return;
+            openPage({
+              id: page._id,
+              workspaceId: page.workspaceId,
+              kind: page.databaseId ? "database" : "page",
+              title: page.title,
+              icon: page.icon,
+            });
+          }}
+        >
+          {label}
+        </button>
+      </div>
+    );
+  }
+
+  if (href && href.startsWith("/")) {
+    return (
+      <div className="py-1">
+        <a href={href} className={className}>
+          {label}
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="py-1">
+      <button type="button" className={className}>
+        {label}
+      </button>
     </div>
   );
 };

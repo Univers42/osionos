@@ -102,7 +102,7 @@ function cardChip(ctx: CanvasRenderingContext2D, d: DrawCtx, i: number, x: numbe
   ctx.fillStyle = state.fills[i];
   ctx.fill();
   ctx.restore();
-  const glyph = iconGlyph(state.icon[i], state.label[i]);
+  const glyph = iconGlyph(state.icon[i]);
   ctx.textAlign = "center";
   if (glyph.kind === "image") {
     const img = loadGlyphImage(glyph.ref, () => undefined);
@@ -119,11 +119,8 @@ function cardChip(ctx: CanvasRenderingContext2D, d: DrawCtx, i: number, x: numbe
   if (glyph.kind === "emoji") {
     ctx.font = '13px "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif';
     ctx.fillText(glyph.ref, x + CHIP / 2, y + CHIP / 2 + 0.5);
-  } else {
-    ctx.font = '600 12px "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif';
-    ctx.fillStyle = state.fills[i];
-    ctx.fillText(glyph.kind === "monogram" ? glyph.ref : "•", x + CHIP / 2, y + CHIP / 2 + 0.5);
   }
+  // none / image-not-loaded → blank chip (no letter)
   ctx.textAlign = "left";
 }
 
