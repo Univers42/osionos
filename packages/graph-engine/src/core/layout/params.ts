@@ -20,6 +20,8 @@ export interface LayoutParams {
   centerStrength: number;
   /** Velocity damping (higher = settles faster, less springy). */
   velocityDecay: number;
+  /** Pull toward each node's database cluster centre (0 = no clustering). */
+  clusterStrength?: number;
 }
 
 export const DEFAULT_LAYOUT_PARAMS: LayoutParams = {
@@ -30,4 +32,5 @@ export const DEFAULT_LAYOUT_PARAMS: LayoutParams = {
   collideRadius: 16,
   centerStrength: 1,
   velocityDecay: 0.42,
+  clusterStrength: 0.09,
 };

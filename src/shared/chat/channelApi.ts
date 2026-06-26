@@ -17,9 +17,11 @@ import { api, API_BASE, getActivePageJwt } from '@/shared/api/client';
 export interface ChatChannel {
   id: string;
   workspaceId: string;
-  kind: 'text' | 'dm' | 'voice' | 'video';
+  kind: 'text' | 'dm' | 'voice' | 'video' | 'group';
   name: string;
   topic: string | null;
+  avatar?: string | null;
+  description?: string | null;
   createdBy: string | null;
   isPrivate: boolean;
   memberRole: string | null;

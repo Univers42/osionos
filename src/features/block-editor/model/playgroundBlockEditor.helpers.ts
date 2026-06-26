@@ -54,6 +54,21 @@ export function caretRect(range: Range): DOMRect | null {
   return rect.width || rect.height || rect.top ? rect : null;
 }
 
+// Best-effort editable element under the live caret. Only a FALLBACK for popover
+// anchoring when the caller has no blockId — anchoring popovers to a known
+// [data-block-id] is preferred (a stale/foreign selection drifts the anchor).
+export function resolveEditableFromSelection(): HTMLElement | null {
+  const sel = globalThis.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const node = sel.getRangeAt(0).startContainer;
+  const el = node.nodeType === 1 ? (node as Element) : node.parentElement;
+  return (
+    el?.closest<HTMLElement>('[contenteditable="true"]') ??
+    el?.closest<HTMLElement>("[data-block-id]") ??
+    null
+  );
+}
+
 function edgeRect(blockEl: Element, atStart: boolean): DOMRect | null {
   const probe = document.createRange();
   if (atStart) {

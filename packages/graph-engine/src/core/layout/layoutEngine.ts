@@ -10,6 +10,10 @@ import { ALPHA_SETTLED, ForceLayout, type LayoutLink } from "./forceLayout";
 import type { LayoutParams } from "./params";
 
 const TICK_MS = 16;
+// Hard cap on ticks per (re)heat — guarantees the layout goes static within a
+// bounded time even at tens of thousands of nodes, so it never churns forever.
+// The pre-seeded database clusters mean fewer ticks are needed to converge.
+const MAX_TICKS = 160;
 
 export interface LayoutInitMessage {
   t: "init";
@@ -20,6 +24,8 @@ export interface LayoutInitMessage {
   params: LayoutParams;
   seedX: Float32Array | null;
   seedY: Float32Array | null;
+  /** Per-node database/mount group id for visual clustering (optional). */
+  nodeGroups?: Uint8Array | null;
 }
 export interface LayoutPinMessage { t: "pin"; index: number; x: number; y: number }
 export interface LayoutUnpinMessage { t: "unpin"; index: number }
@@ -44,6 +50,7 @@ export type EmitFn = (message: LayoutOutbound, transfer?: Transferable[]) => voi
 export class LayoutEngine {
   private layout: ForceLayout | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private ticks = 0;
 
   constructor(private readonly emit: EmitFn) {}
 
@@ -89,6 +96,7 @@ export class LayoutEngine {
       params: message.params,
       seedX: message.seedX,
       seedY: message.seedY,
+      nodeGroups: message.nodeGroups,
     });
     if (message.count === 0) {
       this.emit({ t: "settled" });
@@ -99,6 +107,7 @@ export class LayoutEngine {
 
   private start(): void {
     if (this.timer != null || !this.layout) return;
+    this.ticks = 0;
     this.timer = setInterval(() => this.step(), TICK_MS);
   }
 
@@ -113,13 +122,14 @@ export class LayoutEngine {
     const layout = this.layout;
     if (!layout) return;
     layout.tick();
+    this.ticks += 1;
 
     const x = new Float32Array(layout.count);
     const y = new Float32Array(layout.count);
     layout.readPositions(x, y);
     this.emit({ t: "positions", x, y, alpha: layout.alpha() }, [x.buffer, y.buffer]);
 
-    if (layout.alpha() < ALPHA_SETTLED) {
+    if (layout.alpha() < ALPHA_SETTLED || this.ticks >= MAX_TICKS) {
       this.stop();
       this.emit({ t: "settled" });
     }

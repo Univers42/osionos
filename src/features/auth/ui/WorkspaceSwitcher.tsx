@@ -10,10 +10,16 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useRef, useState } from 'react';
+import React, { lazy, Suspense, useRef, useState } from 'react';
 import { ChevronDown, PanelLeftClose, PenSquare } from 'lucide-react';
 import { IconValueView } from "@/shared/ui/atoms/IconValueView";
-import { useUserStore , UserSwitcherPanel } from '@/features/auth';
+import { useUserStore } from '@/features/auth';
+
+// Lazy + deep path (NOT the auth barrel): the account-switcher popover (~37KB)
+// only mounts on click, so it must not be stapled to the warm entry chunk.
+const UserSwitcherPanel = lazy(() =>
+  import('@/features/auth/ui/UserSwitcherPanel').then((m) => ({ default: m.UserSwitcherPanel })),
+);
 import { usePageStore } from '@/store/usePageStore';
 import { useUIStore } from '@/shared/config/uiStore';
 import {
@@ -139,7 +145,11 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
         </div>
       </div>
 
-      {open && <UserSwitcherPanel onClose={() => setOpen(false)} anchorElement={anchorEl} />}
+      {open && (
+        <Suspense fallback={null}>
+          <UserSwitcherPanel onClose={() => setOpen(false)} anchorElement={anchorEl} />
+        </Suspense>
+      )}
     </div>
   );
 };

@@ -10,13 +10,14 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from "react";
+import React, { useState } from "react";
 import { ConfirmDialog } from "@/shared/ui/molecules/ConfirmDialog";
 
 type ConfirmActionVariant = "archive" | "delete";
 
 interface Props {
-  onConfirm: () => void;
+  /** `remember` is true when the user ticked "Don't ask again" (only when showRemember). */
+  onConfirm: (remember: boolean) => void;
   onCancel: () => void;
   variant?: ConfirmActionVariant;
   pageTitle?: string;
@@ -25,6 +26,8 @@ interface Props {
   description?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /** Show a "Don't ask again" checkbox (used by the Delete-key quick-delete flow). */
+  showRemember?: boolean;
 }
 
 export const ConfirmDeleteModal: React.FC<Props> = ({
@@ -37,7 +40,9 @@ export const ConfirmDeleteModal: React.FC<Props> = ({
   description,
   confirmLabel,
   cancelLabel = "Cancel",
+  showRemember = false,
 }) => {
+  const [remember, setRemember] = useState(false);
   const modalTitle =
     title ?? (variant === "delete" ? "¿Delete permanently?" : "Archive");
   const modalDescription =
@@ -56,7 +61,7 @@ export const ConfirmDeleteModal: React.FC<Props> = ({
       actionTone={isDelete ? "danger" : "primary"}
       confirmLabel={actionLabel}
       cancelLabel={cancelLabel}
-      onConfirm={onConfirm}
+      onConfirm={() => onConfirm(remember)}
       onCancel={onCancel}
     >
       {!isDelete && subPageCount > 0 ? (
@@ -83,6 +88,17 @@ export const ConfirmDeleteModal: React.FC<Props> = ({
         <p className="mt-2 text-sm leading-relaxed text-[var(--osio-fg-default)]">
           {description}
         </p>
+      ) : null}
+      {showRemember ? (
+        <label className="mt-3 flex items-center gap-2 text-sm text-[var(--osio-fg-muted)] cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.currentTarget.checked)}
+            className="accent-[var(--osio-accent)]"
+          />
+          Don&apos;t ask again
+        </label>
       ) : null}
     </ConfirmDialog>
   );

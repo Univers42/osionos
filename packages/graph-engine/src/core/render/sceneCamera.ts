@@ -14,11 +14,18 @@ export class SceneCamera {
   width = 0;
   height = 0;
   dpr = 1;
+  /** Crisp resolution when settled; reduced resolution used during motion. */
+  qualityDpr = 1;
+  interactiveDpr = 1;
 
   setViewport(width: number, height: number, dpr: number): void {
     this.width = width;
     this.height = height;
-    this.dpr = Math.min(dpr, 2);
+    this.qualityDpr = Math.min(dpr, 2);
+    // Render at ~half resolution during pan/zoom/layout so motion stays smooth on
+    // pixel-bound browsers (Firefox especially), then snap crisp the moment it settles.
+    this.interactiveDpr = Math.max(1, this.qualityDpr * 0.5);
+    this.dpr = this.qualityDpr;
   }
 
   zoomBy(factor: number): void {

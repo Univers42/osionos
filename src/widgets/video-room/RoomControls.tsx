@@ -17,7 +17,10 @@
  */
 
 import React from "react";
-import { Mic, MicOff, MonitorUp, PhoneOff, Video, VideoOff } from "lucide-react";
+import { Hand, Mic, MicOff, MonitorUp, PhoneOff, Video, VideoOff } from "lucide-react";
+import type { Room } from "livekit-client";
+
+import { DevicePicker } from "./DevicePicker";
 
 interface RoomControlsProps {
   micEnabled: boolean;
@@ -26,6 +29,9 @@ interface RoomControlsProps {
   onToggleMic: () => void;
   onToggleCam: () => void;
   onToggleScreen: () => void;
+  handRaised: boolean;
+  onToggleHand: () => void;
+  room: Room | null;
   onLeave: () => void;
 }
 
@@ -43,6 +49,9 @@ export const RoomControls: React.FC<RoomControlsProps> = ({
   onToggleMic,
   onToggleCam,
   onToggleScreen,
+  handRaised,
+  onToggleHand,
+  room,
   onLeave,
 }) => (
   <div className="flex items-center justify-center gap-3 border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-4 py-3">
@@ -73,6 +82,16 @@ export const RoomControls: React.FC<RoomControlsProps> = ({
     >
       <MonitorUp size={18} />
     </button>
+    <button
+      type="button"
+      onClick={onToggleHand}
+      className={controlClass(true) + (handRaised ? " ring-2 ring-[var(--osio-accent)]" : "")}
+      aria-label="Raise hand"
+      aria-pressed={handRaised}
+    >
+      <Hand size={18} />
+    </button>
+    <DevicePicker room={room} />
     <button
       type="button"
       onClick={onLeave}

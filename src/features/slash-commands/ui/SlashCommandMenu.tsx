@@ -24,7 +24,9 @@ import { MediaAssetPicker } from "@/shared/ui/molecules/MediaAssetPicker";
 import {
   filterSlashCommands,
   groupSlashCommands,
+  PLACEHOLDER_COMMAND_ID,
 } from "@/features/slash-commands/model/slashMenuCatalog";
+import { usePageStore } from "@/store/usePageStore";
 import type {
   SlashCreatePageCommand,
   SlashDatabaseViewCommand,
@@ -48,6 +50,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 interface SlashCommandMenuProps {
+  pageId?: string;
   position: { x: number; y: number; top: number };
   filter: string;
   onSelect: (
@@ -58,6 +61,7 @@ interface SlashCommandMenuProps {
 }
 
 export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
+  pageId,
   position,
   filter,
   onSelect,
@@ -70,7 +74,12 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     null,
   );
 
-  const filtered = useMemo(() => filterSlashCommands(filter), [filter]);
+  // `/placeholder` is template-only: hide it unless this editor's page is a template.
+  const isTemplatePage = usePageStore((s) => (pageId ? Boolean(s.pageById(pageId)?.isTemplate) : false));
+  const filtered = useMemo(
+    () => filterSlashCommands(filter).filter((c) => c.id !== PLACEHOLDER_COMMAND_ID || isTemplatePage),
+    [filter, isTemplatePage],
+  );
   const sections = useMemo(() => groupSlashCommands(filtered), [filtered]);
 
   const effectiveActiveIdx = Math.min(

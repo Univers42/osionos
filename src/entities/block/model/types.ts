@@ -40,9 +40,13 @@ export type BlockType =
   | 'column_list'
   | 'column'
   | 'divider'
+  | 'button'
   | 'table_block'
   | 'database_inline'
-  | 'database_full_page';
+  | 'database_full_page'
+  | 'graph_view'
+  | 'home_views'
+  | 'placeholder';
 
 export type LayoutMode = 'inline' | 'full_page';
 export type LayoutGuideVisibility = 'auto' | 'always' | 'never';
@@ -108,6 +112,8 @@ export interface LayoutCell {
   wrap?: boolean;
   padding?: LayoutCellPadding;
   fontSize?: LayoutCellFontSize;
+  /** Named section key (e.g. "header"/"about") — drives per-section template write-grants. */
+  section?: string;
 }
 
 /** A single content block in a page. */
@@ -131,11 +137,19 @@ export interface Block {
   collapsed?: boolean;		/** Whether a toggle is collapsed */
   asset?: string;           /** Serialized ui-collection asset value for media blocks */
   mediaWidth?: number;      /** Display width percentage for media blocks */
+  mediaShape?: 'rounded' | 'circle'; /** Image crop shape (circle = avatar; default rounded) */
   placeholderText?: string; /** Temporary placeholder hint for empty transformed blocks */
+  buttonLabel?: string;     /** Visible label for a 'button' block (falls back to content) */
+  buttonHref?: string;      /** Button target: internal page link `page://<id>`, a `/...` path, else presentational */
+  buttonVariant?: 'primary' | 'secondary'; /** Button style for a 'button' block (default: primary) */
   tableData?: string[][];	/** Table data (array of rows, each row is array of cell strings) */
   tableConfig?: TableBlockConfig; /** Presentation and sizing options for simple table blocks */
   databaseId?: string;		/** Database reference ID (for database_inline / database_full_page) */
   viewId?: string;			/** View ID for database blocks */
+  deferMount?: boolean;		/** Below-the-fold embeds (Home): mount only when near the viewport */
+  collectionRef?: 'members' | 'marketplace'; /** Admin collection a bound block reads */
+  recordRef?: '$record' | '$viewedUser'; /** Sentinel binding — the bound record in context ($viewedUser = legacy alias) */
+  fieldBind?: string;        /** Field key a bound block renders, e.g. "headline" or "custom:<key>" */
   layoutMode?: LayoutMode;
   layoutConfig?: Partial<LayoutConfig>;
   layoutCells?: LayoutCell[];

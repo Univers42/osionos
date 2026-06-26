@@ -31,6 +31,9 @@ import { usePageHeaderActions } from "./usePageHeaderActions";
 import { usePageProperties } from "./usePageProperties";
 import { patchActivePageMetadata } from "./notionPageMeta";
 import { PageComments } from "./PageComments";
+import { TemplateHeader } from "./TemplateHeader";
+import { TemplateEditBanner } from "./TemplateEditBanner";
+import { useResolvedHeaderTemplate } from "../model/useResolvedHeaderTemplate";
 
 const EMPTY_MESSAGES: RealtimeMessage[] = [];
 
@@ -53,6 +56,7 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
   // react-hooks/refs analyzer treat both as render-time ref reads.
   const { coverPickerOpen, coverPickerRef } = actions;
   const properties = usePageProperties(pageId, locked);
+  const headerTemplate = useResolvedHeaderTemplate(page);
   const commentCount = useRealtimeMessagesStore((s) => (s.messagesByThread[`page:${pageId}:comments`] ?? EMPTY_MESSAGES).length);
 
   const title = page?.title ?? activePage?.title ?? "";
@@ -67,8 +71,24 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
     patchActivePageMetadata(pageId, { title: newTitle });
   }
 
+  const templateBanner = page?.isTemplate ? <TemplateEditBanner page={page} /> : null;
+
+  if (headerTemplate && page) {
+    return (
+      <>
+        {templateBanner}
+        <div className={`osionos-page-header ${hasCover ? "osionos-page-header--with-cover" : "osionos-page-header--no-cover"}`}>
+          <PageComments pageId={pageId} open={commentsOpen} onClose={onCloseComments} />
+          <TemplateHeader template={headerTemplate} page={page} />
+          {page.workspaceId ? <PageConnections pageId={pageId} workspaceId={page.workspaceId} /> : null}
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
+      {templateBanner}
       {hasCover && (
         <PageCover cover={cover} onChangeCover={actions.changeCover} onRemoveCover={actions.removeCover} disabled={locked} />
       )}

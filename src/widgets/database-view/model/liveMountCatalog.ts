@@ -11,71 +11,41 @@
 /* ************************************************************************** */
 
 /**
- * Discovery of the registered live mounts: `GET {VITE_BAAS_URL}/admin/v1/
- * databases` (Kong → adapter-registry; the Go handler returns an array of
- * TenantDatabase `{id, tenant_id, engine, name, created_at, …}`). The
- * registry REQUIRES a tenant header (it 401s on api-key headers alone), so
- * `VITE_BAAS_TENANT_ID` is sent as `X-Baas-Tenant-Id` and — because the
- * route returns every tenant's mounts — the response is scoped back to that
- * tenant. Parsing is defensive — only `{id|dbId, name?, engine?}` is
- * consumed. When the registry route is unavailable (or no tenant id is
- * configured), the `VITE_BAAS_LIVE_MOUNTS` env JSON
- * (`[{"dbId":"…","name":"…","engine":"postgresql"}]`) is the fallback; every
- * failure degrades silently to []. Cached 60s.
+ * Discovery of the registered live mounts via the BRIDGE: `GET {VITE_API_URL}
+ * /api/databases` (bearer app-session JWT). The bridge proxies the tenant's
+ * adapter-registry server-side and returns `{databases:[{dbId,name,engine}]}`.
+ * The browser CANNOT hit Kong's `/admin/v1/databases` directly — the anon key
+ * 401s on that route (and a service key must never reach the browser).
+ *
+ * ONLINE (the bridge is configured — `API_BASE` set) the registry is the ONLY
+ * source of truth: a failure THROWS so the panel can show WHY, and we NEVER
+ * silently degrade to the partial `VITE_BAAS_LIVE_MOUNTS` mock set (that masked
+ * a broken registry as "3 databases"). The env mounts are used ONLY by the
+ * truly offline/desktop build (no bridge URL). Only non-empty results are
+ * cached (60s), so a transient failure never poisons the cache.
  */
 
-import { BAAS_BASE_URL, baasConfigured, baasHeaders } from "@/features/second-brain/baas/baasFetch";
+import { api, getActivePageJwt, API_BASE } from "@/shared/api/client";
+import { parseMounts, type LiveMountInfo } from "./liveMountParse";
+
+export type { LiveMountInfo } from "./liveMountParse";
 
 const TENANT_ID = (((import.meta.env ?? {}) as Record<string, string | undefined>)
   .VITE_BAAS_TENANT_ID ?? "").trim();
 
-/** One registered mount, ready to be combined with its tables into
- *  `baas:<dbId>:<table>` database ids. */
-export interface LiveMountInfo {
-  dbId: string;
-  name: string;
-  engine: string;
-}
-
 const CACHE_TTL_MS = 60_000;
 let mountsCache: { value: LiveMountInfo[]; expiresAt: number } | null = null;
 
-function parseMounts(payload: unknown): LiveMountInfo[] {
-  if (!Array.isArray(payload)) return [];
-  const mounts: LiveMountInfo[] = [];
-  for (const entry of payload) {
-    if (!entry || typeof entry !== "object") continue;
-    const record = entry as Record<string, unknown>;
-    // The registry returns EVERY tenant's mounts — keep only ours when both
-    // sides carry a tenant id (env fallback entries usually carry none).
-    if (TENANT_ID && typeof record.tenant_id === "string" && record.tenant_id !== TENANT_ID) {
-      continue;
-    }
-    const dbId = typeof record.id === "string" && record.id
-      ? record.id
-      : typeof record.dbId === "string" ? record.dbId : "";
-    if (!dbId) continue;
-    mounts.push({
-      dbId,
-      name: typeof record.name === "string" && record.name ? record.name : dbId,
-      engine: typeof record.engine === "string" && record.engine ? record.engine : "unknown",
-    });
-  }
-  return mounts;
-}
-
 async function fetchRegistryMounts(): Promise<LiveMountInfo[]> {
-  if (!baasConfigured() || !TENANT_ID) return []; // registry 401s without a tenant header
-  try {
-    const headers = { ...baasHeaders(), "X-Baas-Tenant-Id": TENANT_ID };
-    const response = await fetch(`${BAAS_BASE_URL}/admin/v1/databases`, { headers });
-    if (!response.ok) return [];
-    return parseMounts(await response.json());
-  } catch {
-    return [];
-  }
+  // No try/catch: a registry failure (401/503/network) MUST propagate so the
+  // panel surfaces it, instead of silently degrading to the mock env mounts.
+  // The bridge resolves the tenant server-side; ?tenant= is only a hint.
+  const qs = TENANT_ID ? `?tenant=${encodeURIComponent(TENANT_ID)}` : "";
+  const response = await api.get<{ databases?: unknown }>(`/api/databases${qs}`, getActivePageJwt() ?? undefined);
+  return parseMounts(response?.databases ?? []);
 }
 
+/** Offline/desktop edition only — no bridge to reach, so use the env JSON. */
 function envFallbackMounts(): LiveMountInfo[] {
   const raw = ((import.meta.env ?? {}) as Record<string, string | undefined>).VITE_BAAS_LIVE_MOUNTS;
   if (!raw) return [];
@@ -86,11 +56,14 @@ function envFallbackMounts(): LiveMountInfo[] {
   }
 }
 
-/** Registered mounts (registry first, env fallback, [] on failure; 60s cache). */
+/** Every registered database for the tenant. Online: registry via the bridge is
+ *  authoritative and throws on failure (no mock fallback). Offline: env mounts. */
 export async function listLiveMounts(): Promise<LiveMountInfo[]> {
   if (mountsCache && mountsCache.expiresAt > Date.now()) return mountsCache.value;
-  const registryMounts = await fetchRegistryMounts();
-  const value = registryMounts.length > 0 ? registryMounts : envFallbackMounts();
-  mountsCache = { value, expiresAt: Date.now() + CACHE_TTL_MS };
-  return value;
+  if (!API_BASE) return envFallbackMounts(); // truly offline (no bridge URL)
+  const registryMounts = await fetchRegistryMounts(); // throws on registry error
+  if (registryMounts.length > 0) {
+    mountsCache = { value: registryMounts, expiresAt: Date.now() + CACHE_TTL_MS };
+  }
+  return registryMounts;
 }

@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { api } from "@/shared/api/client";
+import { api, ApiError } from "@/shared/api/client";
 import { pageApiJwtFromSessionToken } from "@/features/auth/model/userStore.helpers";
 import {
   canDeletePage,
@@ -27,14 +27,16 @@ import {
   updatePageInState,
   isPersistedPageId,
   saveRecents,
+  addRecent,
   getAllDescendantIds,
   savePagesCache,
   derivePageState,
   mergeWorkspacePages,
   isValidMove,
   nextDuplicateTitle,
+  instantiateTemplateContent,
 } from "./pageStore.helpers";
-import type { AddPageOptions, PageEntry, PageStore, ActivePage } from "@/entities/page";
+import type { AddPageOptions, PageEntry, PageStore, ActivePage, PageRecurrence } from "@/entities/page";
 
 type SetFn = (
   partial: Partial<PageStore> | ((s: PageStore) => Partial<PageStore>),
@@ -77,9 +79,17 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
     const pageJwt = pageApiJwtFromSessionToken(jwt);
     if (!pageJwt) return;
     set({ seeded: true });
+    const verifiedWorkspaces = new Set<string>();
     for (const sp of SEED_PAGES) {
       const realWsId = workspaceMap[sp.workspaceId];
       if (!realWsId) continue;
+      // Idempotency: confirm emptiness against the SERVER, not just the client cache
+      // (which can be momentarily empty during init — that race spawned the duplicate
+      // "Getting Started" seeds). Fetch once per workspace, then re-check.
+      if (!verifiedWorkspaces.has(realWsId)) {
+        await get().fetchPages(realWsId, jwt);
+        verifiedWorkspaces.add(realWsId);
+      }
       if ((get().pages[realWsId] ?? []).length > 0) continue;
       try {
         const page = await api.post<PageEntry>(
@@ -93,6 +103,10 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
             ownerId: sp.ownerId ?? undefined,
             visibility: sp.visibility,
             collaborators: sp.collaborators,
+            isTemplate: sp.isTemplate,
+            isDefaultTemplate: sp.isDefaultTemplate,
+            templateSurface: sp.templateSurface,
+            surface: sp.surface,
           },
           pageJwt,
         );
@@ -165,6 +179,22 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
       }));
       savePagesCache(get().pages, page.workspaceId);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        // The page is gone server-side — a stale localStorage ghost the additive
+        // hydrate (hydratePages.mergeWorkspace) never prunes. Evict it from the
+        // store + cache so it stops being re-fetched in a loop and drops out of
+        // the sidebar/tree instead of flooding the console with 404s.
+        set((s) => {
+          const wsPages = s.pages[page.workspaceId] ?? [];
+          const pages = { ...s.pages, [page.workspaceId]: wsPages.filter((p) => p._id !== pageId) };
+          return {
+            ...derivePageState(pages, s.pageIdsByWorkspace),
+            activePage: s.activePage && s.activePage.id === pageId ? null : s.activePage,
+          };
+        });
+        savePagesCache(get().pages, page.workspaceId);
+        return;
+      }
       console.warn("[pageStore] fetchPageContent failed:", pageId, err);
     }
   };
@@ -203,12 +233,20 @@ export function createAddPage(set: SetFn, get: GetFn) {
             visibility: targetVisibility,
             collaborators: [],
             surface: options.surface,
+            isTemplate: options.isTemplate,
+            isDefaultTemplate: options.isDefaultTemplate,
+            templateSurface: options.templateSurface,
+            recurrence: options.recurrence,
           },
           apiJwt,
         );
         const pageWithTimestamp: PageEntry = {
           ...page,
           surface: page.surface ?? options.surface,
+          isTemplate: page.isTemplate ?? options.isTemplate ?? false,
+          isDefaultTemplate: page.isDefaultTemplate ?? options.isDefaultTemplate ?? false,
+          templateSurface: page.templateSurface ?? options.templateSurface,
+          recurrence: page.recurrence ?? options.recurrence ?? null,
           updatedAt: page.updatedAt ?? new Date().toISOString(),
         };
         set((s) => ({
@@ -237,6 +275,10 @@ export function createAddPage(set: SetFn, get: GetFn) {
       archivedAt: null,
       content: options.content ?? [],
       surface: options.surface,
+      isTemplate: options.isTemplate ?? false,
+      isDefaultTemplate: options.isDefaultTemplate ?? false,
+      templateSurface: options.templateSurface,
+      recurrence: options.recurrence ?? null,
     };
     set((s) => ({
       ...derivePageState({
@@ -440,10 +482,7 @@ export function createDuplicatePage(set: SetFn, get: GetFn) {
           icon: newRootPage.icon,
         };
 
-        const recents = [
-          newActivePage,
-          ...s.recents.filter((r) => r.id !== newRootId),
-        ].slice(0, 10);
+        const recents = addRecent(s.recents, newActivePage);
         saveRecents(recents);
 
         return {
@@ -457,6 +496,117 @@ export function createDuplicatePage(set: SetFn, get: GetFn) {
     });
 
     return newRootId;
+  };
+}
+
+export function createAddTemplate(_set: SetFn, get: GetFn) {
+  return async (
+    workspaceId: string,
+    jwt: string,
+    options: { title?: string; icon?: string } = {},
+  ): Promise<PageEntry | null> => {
+    const page = await get().addPage(
+      workspaceId,
+      options.title ?? "Untitled template",
+      jwt,
+      undefined,
+      { icon: options.icon, isTemplate: true },
+    );
+    if (page) {
+      get().openPage({ id: page._id, workspaceId, kind: "page", title: page.title, icon: page.icon });
+    }
+    return page;
+  };
+}
+
+export function createSetDefaultTemplate(_set: SetFn, get: GetFn) {
+  return (templateId: string, workspaceId: string) => {
+    for (const template of get().templatePages(workspaceId)) {
+      const shouldBeDefault = template._id === templateId;
+      if ((template.isDefaultTemplate ?? false) !== shouldBeDefault) {
+        get().patchPage(template._id, { isDefaultTemplate: shouldBeDefault });
+      }
+    }
+  };
+}
+
+export function createCreatePageFromTemplate(_set: SetFn, get: GetFn) {
+  return async (
+    templateId: string,
+    workspaceId: string,
+    jwt: string,
+    parentPageId?: string,
+    options?: { open?: boolean },
+  ): Promise<PageEntry | null> => {
+    // Template content is lazy-loaded; hydrate it before cloning (no-op offline).
+    await get().fetchPageContent(templateId, jwt);
+    const template = get().pageById(templateId);
+    if (!template?.isTemplate) return null;
+    const content = instantiateTemplateContent(template.content);
+    const page = await get().addPage(
+      workspaceId,
+      template.title || "Untitled",
+      jwt,
+      parentPageId,
+      { icon: template.icon, content },
+    );
+    if (page && options?.open !== false) {
+      get().openPage({ id: page._id, workspaceId, kind: "page", title: page.title, icon: page.icon });
+    }
+    return page;
+  };
+}
+
+export function createPatchTemplateRecurrence(_set: SetFn, get: GetFn) {
+  return (templateId: string, recurrence: PageRecurrence) => {
+    get().patchPage(templateId, { recurrence });
+  };
+}
+
+export function createReorderSibling(set: SetFn) {
+  return (
+    pageId: string,
+    targetSiblingId: string,
+    placeBefore: boolean,
+    workspaceId: string,
+  ) => {
+    if (pageId === targetSiblingId) return;
+    const orderOf = (p: PageEntry) =>
+      typeof p.sortOrder === "number" ? p.sortOrder : Number.MAX_SAFE_INTEGER;
+    set((s) => {
+      const list = s.pages[workspaceId];
+      if (!list) return s;
+      const moving = list.find((p) => p._id === pageId);
+      const target = list.find((p) => p._id === targetSiblingId);
+      if (!moving || !target) return s;
+      const newParent = target.parentPageId ?? null;
+      // Same-parent siblings (minus the moved page), in current order, to find
+      // the neighbour we land between and pick a fractional sort_order.
+      const siblings = list
+        .filter((p) => (p.parentPageId ?? null) === newParent && p._id !== pageId)
+        .sort((a, b) => orderOf(a) - orderOf(b));
+      const ti = siblings.findIndex((p) => p._id === targetSiblingId);
+      const tOrder = orderOf(target);
+      let order: number;
+      if (placeBefore) {
+        const prev = siblings[ti - 1];
+        order = prev ? (orderOf(prev) + tOrder) / 2 : tOrder - 1;
+      } else {
+        const next = siblings[ti + 1];
+        order = next ? (tOrder + orderOf(next)) / 2 : tOrder + 1;
+      }
+      // Bump updatedAt so the offline outbox syncs the new order to the BaaS.
+      const moved = {
+        ...moving,
+        parentPageId: newParent,
+        sortOrder: order,
+        updatedAt: new Date().toISOString(),
+      };
+      const nextList = list.map((p) => (p._id === pageId ? moved : p));
+      const nextPages = { ...s.pages, [workspaceId]: nextList };
+      savePagesCache(nextPages, workspaceId);
+      return derivePageState(nextPages, s.pageIdsByWorkspace);
+    });
   };
 }
 

@@ -10,9 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// Side effect: registers the account-wide data-source catalog with NDS so
-// the view-settings Source picker can list and rebind to any database.
-import './model/dataSourceProvider';
+// NOTE: the account-wide data-source provider is registered as a side effect of
+// DatabaseBlock.tsx / WorkspaceDatabaseBlock.tsx (which import
+// './model/dataSourceProvider' directly). It is intentionally NOT imported here:
+// a bare barrel side-effect would statically pull knownDatabaseState + the
+// ~458KB seed JSON onto every barrel consumer (incl. warm paths). A Source
+// picker is only reachable once a DB block has mounted, so the provider is
+// always registered by the time it is needed.
 
 export * from './ui/DatabaseBlock';
 export * from './ui/WorkspaceDatabaseBlock';

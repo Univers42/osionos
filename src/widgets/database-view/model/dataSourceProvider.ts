@@ -23,7 +23,9 @@ import {
   registerDataSourceProvider,
   type LoadedDataSource,
 } from "@/shared/notion-database-sys/src/store/sources/dataSourceRegistry";
+import { registerCrossMountCatalog } from "@/shared/notion-database-sys/src/store/live/liveCrossMount";
 import { listAllDataSources } from "./allDataSources";
+import { listLiveSources } from "./liveMountTables";
 import { getLiveDatabaseAdapter, isLiveDatabaseId } from "./liveDatabaseAdapter";
 import { getKnownDatabaseAdapter } from "./knownDatabaseState";
 import { getWorkspaceDatabaseAdapter } from "./workspaceDatabaseState";
@@ -59,3 +61,13 @@ registerDataSourceProvider({
   listSources: listAllDataSources,
   loadDatabase,
 });
+
+// All the user's live mounts + their tables, so the live adapter can resolve a
+// foreign key whose target table lives in ANOTHER mount (access-scoped by the
+// bridge, so this only exposes mounts the user may read).
+registerCrossMountCatalog(async () =>
+  (await listLiveSources()).map((source) => ({
+    dbId: source.mount.dbId,
+    tables: source.tables.map((table) => table.table),
+  })),
+);

@@ -13,9 +13,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { cx } from "@/shared/ui/shared/classNames";
+import { ConnectButton } from "@/features/connections/ConnectButton";
 import type { PaletteCommand } from "../model/commands";
 import { matchCommands, searchPages, searchPagesRemote, type PaletteResult } from "../model/search";
+import { searchPeoplePalette } from "../model/searchPeople";
 import { isCommandMode, usePalette } from "../model/usePalette";
+
+/** Pull the peer id back out of a `person:<id>` palette result id. */
+function personId(result: PaletteResult): string | null {
+  return result.kind === "person" ? result.id.slice("person:".length) : null;
+}
 
 interface TopBarSearchProps {
   commands: PaletteCommand[];
@@ -36,13 +43,20 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
     [command, query, commands],
   );
   const [remote, setRemote] = useState<{ q: string; rows: PaletteResult[] }>({ q: "", rows: [] });
-  const results = !command && remote.q === query && remote.rows.length ? remote.rows : instant;
+  const [people, setPeople] = useState<{ q: string; rows: PaletteResult[] }>({ q: "", rows: [] });
+  const pages = !command && remote.q === query && remote.rows.length ? remote.rows : instant;
+  // People (bridge directory) are merged after page/command matches, never in command mode.
+  const results = useMemo<PaletteResult[]>(() => {
+    const peopleRows = !command && people.q === query ? people.rows : [];
+    return [...pages, ...peopleRows];
+  }, [command, pages, people, query]);
 
   useEffect(() => {
     if (command || !query.trim()) return;
     const target = query;
     const timer = setTimeout(() => {
       searchPagesRemote(target).then((rows) => setRemote({ q: target, rows })).catch(() => undefined);
+      searchPeoplePalette(target).then((rows) => setPeople({ q: target, rows })).catch(() => undefined);
     }, 180);
     return () => clearTimeout(timer);
   }, [command, query]);
@@ -55,7 +69,14 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
   useEffect(() => {
     if (!open) return;
     function onPointerDown(event: PointerEvent): void {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Element | null;
+      if (containerRef.current?.contains(target as Node)) return;
+      // A click inside a portaled modal opened FROM a result (e.g. ConnectNoteModal,
+      // which renders to document.body — outside containerRef) is NOT an outside click.
+      // Without this guard the dropdown closes and unmounts the modal mid-interaction,
+      // so "Send request"/the textarea never register and the panel just vanishes.
+      if (target?.closest('[role="dialog"]')) return;
+      setOpen(false);
     }
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
@@ -106,16 +127,23 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
               {searching ? "Searching…" : `No ${command ? "commands" : "pages"} found`}
             </li>
           )}
-          {results.map((result, index) => (
-            <li key={result.id} role="option" aria-selected={index === active}>
+          {results.map((result, index) => {
+            const peerId = personId(result);
+            return (
+            <li
+              key={result.id}
+              role="option"
+              aria-selected={index === active}
+              onPointerEnter={() => setActive(index)}
+              className={cx(
+                "flex w-full items-center gap-2 pr-2",
+                index === active ? "bg-[var(--osio-bg-hover)]" : "hover:bg-[var(--osio-bg-hover)]",
+              )}
+            >
               <button
                 type="button"
-                onPointerEnter={() => setActive(index)}
                 onClick={() => activate(result)}
-                className={cx(
-                  "flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left text-sm text-[var(--osio-fg-default)]",
-                  index === active ? "bg-[var(--osio-bg-hover)]" : "hover:bg-[var(--osio-bg-hover)]",
-                )}
+                className="flex min-w-0 flex-1 items-center justify-between gap-4 px-3 py-1.5 text-left text-sm text-[var(--osio-fg-default)]"
               >
                 <span className="flex min-w-0 items-baseline gap-2">
                   <span className="truncate">{result.title}</span>
@@ -123,8 +151,10 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
                 </span>
                 {result.accelerator && <span className="shrink-0 font-mono text-xs text-[var(--osio-fg-subtle)]">{result.accelerator}</span>}
               </button>
+              {peerId && <ConnectButton userId={peerId} name={result.title} size="sm" />}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </div>

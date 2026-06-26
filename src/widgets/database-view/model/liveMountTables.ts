@@ -34,6 +34,9 @@ export interface LiveSourceMount {
   mount: LiveMountInfo;
   tables: LiveSourceTable[];
   error?: string;
+  /** false when the engine (dynamodb, …) can't introspect a schema — the db
+   *  still lists, just with no enumerable tables (not an error). */
+  introspectable?: boolean;
 }
 
 /** The full pickable catalog: mounts + tables, failures isolated per mount. */
@@ -42,12 +45,13 @@ export async function listLiveSources(): Promise<LiveSourceMount[]> {
   return Promise.all(mounts.map(async (mount) => {
     try {
       const schema = await getLiveSchema(mount.dbId);
+      const introspectable = (schema.capabilities as { introspect?: unknown } | null)?.introspect !== false;
       const tables = schema.tables.map((table) => ({
         id: formatLiveDatabaseId({ dbId: mount.dbId, table: table.name }),
         table: table.name,
         columnCount: table.columns.length,
       }));
-      return { mount, tables };
+      return { mount, tables, introspectable };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return { mount, tables: [], error: message };

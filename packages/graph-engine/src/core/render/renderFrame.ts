@@ -17,6 +17,7 @@ import type { LabelCache } from "./labelCache";
 import type { DrawCtx } from "./drawTypes";
 import { frameCull } from "./cull";
 import { lodMix } from "./lod";
+import { AGG_MAX_SCALE, AGG_MIN_NODES, drawClusterBlobs, drawClusterLabels } from "./clusterBlobs";
 import { drawLinks } from "./links";
 import { drawEdgeFlow } from "./edgeFlow";
 import { drawGlow } from "./glowPass";
@@ -47,6 +48,8 @@ export interface FrameInput {
   /** 0..1 fade progress for neighbor labels since the hover changed. */
   hoverFade: number;
   reducedMotion: boolean;
+  /** Motion frame (pan/zoom/layout): skip decorative passes + labels so it stays smooth. */
+  lowQuality: boolean;
 }
 
 export function renderFrame(f: FrameInput): void {
@@ -55,6 +58,22 @@ export function renderFrame(f: FrameInput): void {
   ctx.clearRect(0, 0, f.width, f.height);
 
   const view = visibleWorldRect(camera, f.width, f.height);
+
+  // Overview LOD: the far-survey view collapses to ~one disc per database
+  // (O(clusters), cached) and skips the O(n) frame-cull + per-node/edge passes.
+  // Closer in, individual nodes draw but are capped to a budget (see drawNodes).
+  if (!f.focus && camera.scale < AGG_MAX_SCALE && f.state.count > AGG_MIN_NODES) {
+    // Recompute aggregates only when the view is still; reuse during pan/settle.
+    const blobs = f.state.clusterAggregates(!f.lowQuality);
+    ctx.save();
+    ctx.translate(camera.x, camera.y);
+    ctx.scale(camera.scale, camera.scale);
+    drawClusterBlobs(ctx, blobs, camera);
+    ctx.restore();
+    drawClusterLabels(ctx, blobs, camera, f.theme);
+    return;
+  }
+
   const cull = frameCull(f.state, view, f.visual.nodeScale);
   const mix = lodMix(camera.scale, f.visual.semanticZoom);
   const base: DrawCtx = {
@@ -76,31 +95,36 @@ export function renderFrame(f: FrameInput): void {
   ctx.translate(camera.x, camera.y);
   ctx.scale(camera.scale, camera.scale);
 
+  const lq = f.lowQuality;
   if (f.focus) {
     const dim: DrawCtx = { ...base, alpha: f.theme.dimAlpha };
     drawLinks(dim);
     drawNodes(dim, f.sprites);
-    if (mix.card > 0.001) drawCards(dim, mix.card, f.hoverIndex, f.selectedIndex);
-    drawGlow(base, f.hoverIndex, f.selectedIndex);
+    if (!lq && mix.card > 0.001) drawCards(dim, mix.card, f.hoverIndex, f.selectedIndex);
+    if (!lq) drawGlow(base, f.hoverIndex, f.selectedIndex);
     drawLinks(base, true);
-    drawEdgeFlow(base, f.selectedIndex, false);
-    if (f.hoverIndex !== f.selectedIndex) drawEdgeFlow(base, f.hoverIndex, true);
+    if (!lq) {
+      drawEdgeFlow(base, f.selectedIndex, false);
+      if (f.hoverIndex !== f.selectedIndex) drawEdgeFlow(base, f.hoverIndex, true);
+    }
     drawNodes(base, f.sprites, true);
-    if (mix.card > 0.001) drawCards(base, mix.card, f.hoverIndex, f.selectedIndex, true);
+    if (!lq && mix.card > 0.001) drawCards(base, mix.card, f.hoverIndex, f.selectedIndex, true);
   } else {
     drawLinks(base);
-    drawEdgeFlow(base, f.selectedIndex, false);
-    if (f.hoverIndex !== f.selectedIndex) drawEdgeFlow(base, f.hoverIndex, true);
-    drawGlow(base, f.hoverIndex, f.selectedIndex);
+    if (!lq) {
+      drawEdgeFlow(base, f.selectedIndex, false);
+      if (f.hoverIndex !== f.selectedIndex) drawEdgeFlow(base, f.hoverIndex, true);
+      drawGlow(base, f.hoverIndex, f.selectedIndex);
+    }
     drawNodes(base, f.sprites);
-    if (mix.card > 0.001) drawCards(base, mix.card, f.hoverIndex, f.selectedIndex);
+    if (!lq && mix.card > 0.001) drawCards(base, mix.card, f.hoverIndex, f.selectedIndex);
   }
-  if (mix.card <= 0.6) drawHubArcs(base);
+  if (!lq && mix.card <= 0.6) drawHubArcs(base);
   // Raise the hovered + selected node above any overlap, then ring them on top.
   drawNodeSprite(base, f.sprites, f.selectedIndex);
   if (f.hoverIndex !== f.selectedIndex) drawNodeSprite(base, f.sprites, f.hoverIndex);
   drawRings(base, f.hoverIndex, f.selectedIndex);
   ctx.restore();
 
-  drawLabels(base, f.labels, f.focus, f.hoverIndex, f.selectedIndex, f.hoverNeighbors, f.hoverFade);
+  if (!lq) drawLabels(base, f.labels, f.focus, f.hoverIndex, f.selectedIndex, f.hoverNeighbors, f.hoverFade);
 }

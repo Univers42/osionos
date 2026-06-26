@@ -30,8 +30,11 @@ import {
   useControls,
 } from "@osionos/graph-engine";
 import "@osionos/graph-engine/styles/graph.css";
-import { usePageStore } from "@/store/usePageStore";
+import { pageEntryToTab } from "@/widgets/workspace-grid/model/pageToTab";
+import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { type GraphData, useGraphModel } from "./useGraphModel";
+import { loadPageById, pageIdFromNodeId } from "./nodePreview";
+import { isRecordNodeId, openRecordNode } from "./recordOpen";
 import { NodeHoverPreview } from "./NodeHoverPreview";
 
 export function GraphEngineExplorer(): ReactElement {
@@ -66,15 +69,22 @@ export function GraphEngineExplorer(): ReactElement {
     };
   }, []);
 
+  // A NodeId is composite. A NOTE node (osionos:osionos_pages:<id>) resolves to a
+  // real page id, loaded (store or bridge) and opened as a tab like search results.
+  // A RECORD node (<dbId>:<resource>:<pk>) is upserted into a deterministic note by
+  // the bridge first, then opened the same way. Tag/synthetic ids no-op.
   const openNode = useCallback((id: NodeId) => {
-    const page = usePageStore.getState().pageById(String(id));
-    if (!page) return;
-    usePageStore.getState().openPage({
-      id: page._id,
-      workspaceId: page.workspaceId,
-      kind: page.databaseId ? "database" : "page",
-      title: page.title,
-      icon: page.icon,
+    const nodeId = String(id);
+    if (isRecordNodeId(nodeId)) {
+      void openRecordNode(nodeId).then((page) => {
+        if (page) useWorkspaceLayout.getState().openTab(pageEntryToTab(page));
+      });
+      return;
+    }
+    const pageId = pageIdFromNodeId(nodeId);
+    if (!pageId) return;
+    void loadPageById(pageId).then((page) => {
+      if (page) useWorkspaceLayout.getState().openTab(pageEntryToTab(page));
     });
   }, []);
 
@@ -83,6 +93,19 @@ export function GraphEngineExplorer(): ReactElement {
     if (id !== null && modRef.current) { openNode(id); return; }
     setSelectedId(id);
   }, [openNode]);
+
+  // Debounce the Ctrl+hover preview so scrubbing across nodes doesn't fetch each one.
+  const [debouncedNode, setDebouncedNode] = useState<NodeId | null>(null);
+  useEffect(() => {
+    if (!modHeld || hoveredId === null) return;
+    const target = hoveredId;
+    const timer = setTimeout(() => setDebouncedNode(target), 220);
+    return () => clearTimeout(timer);
+  }, [modHeld, hoveredId]);
+
+  const previewPageId = modHeld && hoveredId !== null && hoveredId === debouncedNode
+    ? pageIdFromNodeId(String(hoveredId))
+    : null;
 
   const legend = useMemo(() => deriveLegend(engineModel), [engineModel]);
   const focusIds = useMemo(
@@ -115,14 +138,41 @@ export function GraphEngineExplorer(): ReactElement {
         legend={legend}
         engine={engine}
         onSelect={setSelectedId}
+        scopeControl={
+          <div className="flex items-center gap-1.5 px-3 py-2 text-xs">
+            <span className="mr-0.5 text-[var(--osio-fg-muted)]">Scope</span>
+            <button
+              type="button"
+              onClick={() => data.setScope("workspace")}
+              className={`rounded px-1.5 py-0.5 transition-colors ${data.scope === "workspace" ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"}`}
+            >
+              This workspace
+            </button>
+            <button
+              type="button"
+              onClick={() => data.setScope("all")}
+              className={`rounded px-1.5 py-0.5 transition-colors ${data.scope === "all" ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"}`}
+            >
+              All workspaces
+            </button>
+            <button
+              type="button"
+              onClick={() => data.setScope("all-data")}
+              title="Every database your workspaces are linked to — notes + records from all engines"
+              className={`rounded px-1.5 py-0.5 transition-colors ${data.scope === "all-data" ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"}`}
+            >
+              All data
+            </button>
+          </div>
+        }
       />
       <StatsBar data={data} />
       <div className="pointer-events-auto absolute bottom-3 right-3">
         <Minimap engine={engine} />
       </div>
       {model.stats.nodes === 0 ? <EmptyState data={data} /> : null}
-      {modHeld && hoveredId !== null && (
-        <NodeHoverPreview pageId={String(hoveredId)} x={cursor.x} y={cursor.y} />
+      {previewPageId && (
+        <NodeHoverPreview key={previewPageId} pageId={previewPageId} x={cursor.x} y={cursor.y} />
       )}
     </div>
   );

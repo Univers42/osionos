@@ -29,7 +29,7 @@ import { clampTriggerAlignedMenuPosition } from "../hooks/viewportPosition";
  * Surface chrome matches Menu (elevated bg, 1px border, rounded-lg, shadow-menu).
  */
 export interface PopoverProps {
-  anchorRef: React.RefObject<HTMLElement>;
+  anchorRef: React.RefObject<HTMLElement | null>;
   open: boolean;
   onClose: () => void;
   align?: "start" | "end";

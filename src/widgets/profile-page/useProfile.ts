@@ -24,6 +24,15 @@ export interface MemberProfile {
   workspaceId: string | null;
   lastSeenAt: string | null;
   online: boolean;
+  // Widened fields (admin-authored profile binding). Optional so existing
+  // callers keep compiling; the bridge fills them in GET /api/profile/:userId.
+  username?: string | null;
+  headline?: string | null;
+  bio?: string | null;
+  location?: string | null;
+  joinedAt?: string | null;
+  directoryOptOut?: boolean;
+  customFields?: Record<string, unknown> | null;
 }
 
 const REFRESH_MS = 60_000;

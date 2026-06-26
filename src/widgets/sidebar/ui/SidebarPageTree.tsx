@@ -10,18 +10,20 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useRef } from "react";
-import { Plus, FolderPlus, Mail, CalendarRange, Monitor, Hash, Lock, MessageSquare, Volume2, Video, GitBranch, Archive, Bot } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, FolderPlus, Hash, Lock, MessageSquare, Volume2, Video, GitBranch, Archive, Bot } from "lucide-react";
 import { IconValueView } from "@/shared/ui/atoms/IconValueView";
 import { useShallow } from "zustand/react/shallow";
 
 import type { ActivePage, PageEntry } from "@/entities/page";
 import { SidebarNavItem } from "./SidebarNavItem";
 import { SidebarSection } from "./SidebarSection";
+import { OsionosAppsSection } from "./OsionosAppsSection";
 import { PageTreeItem } from "./PageTreeItem";
 import { SidebarTreeToolbar } from "./SidebarTreeToolbar";
 import { useSidebarTreeDnd } from "../model/sidebarTreeDnd";
 import { PageOptionsMenu } from "@/features/page-management";
+import { byPageOrder } from "./pageTreeItem.helpers";
 import { usePageStore } from "@/store/usePageStore";
 import {
   canReadPage,
@@ -29,6 +31,9 @@ import {
 } from "@/shared/lib/auth/pageAccess";
 import { isPerfEnabled } from "@/shared/lib/perf/measure";
 import { useUserStore } from "@/features/auth";
+import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { chatTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { useChatStore } from "@/features/chat/model/useChatStore";
 import {
   resolveWorkspaceConfig,
   useWorkspaceConfigStore,
@@ -37,8 +42,6 @@ import {
   workspaceConfigKey,
 } from "@/shared/config/workspaceConfigStore";
 
-const OSIONOS_MAIL_URL = ((import.meta.env as Record<string, string>)['VITE_MAIL_APP_URL'] ?? 'http://localhost:3002').trim();
-const OSIONOS_CALENDAR_URL = ((import.meta.env as Record<string, string>)['VITE_CALENDAR_APP_URL'] ?? 'http://localhost:3003').trim();
 const EMPTY_PAGE_IDS: readonly string[] = [];
 const EMPTY_WORKSPACE_PAGES: readonly PageEntry[] = [];
 type PageStoreState = ReturnType<typeof usePageStore.getState>;
@@ -71,6 +74,8 @@ function selectRootPageIds(
       if (bucket === "owned-shared") return page.surface !== "agent" && page.surface !== "home" && page.visibility === "shared";
       return page.surface !== "home";
     })
+    .slice()
+    .sort(byPageOrder)
     .map((page) => page._id);
 }
 
@@ -185,17 +190,6 @@ function runWorkspaceAction(action: Promise<unknown>) {
   });
 }
 
-function openExternalApp(url: string) {
-  const destination = url.replace(/\/+$/, "");
-  if (!destination) return;
-  const opened = globalThis.open(destination, "_blank");
-  if (opened) {
-    opened.opener = null;
-    return;
-  }
-  globalThis.location.href = destination;
-}
-
 const CHANNEL_CATEGORIES: Array<{
   label: string;
   types: WorkspaceChannelType[];
@@ -218,6 +212,44 @@ function channelTypeLabel(type: WorkspaceChannelType): string {
   if (type === "thread") return "thread";
   return "text";
 }
+
+/** A drop target shown inside the Private/Shared sections during a page drag —
+ *  drop a file here to move it to that visibility (Alt/Ctrl = duplicate instead). */
+const SectionDropZone: React.FC<{ visibility: "private" | "shared"; workspaceId: string }> = ({ visibility, workspaceId }) => {
+  const active = useSidebarTreeDnd((s) => s.dragKind === "page");
+  const [over, setOver] = useState(false);
+  if (!active) return null;
+  return (
+    <div
+      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = e.dataTransfer.getData("text/plain") || useSidebarTreeDnd.getState().draggingId || "";
+        const page = id ? usePageStore.getState().pageById(id) : null;
+        useSidebarTreeDnd.getState().endDrag();
+        setOver(false);
+        if (!page) return;
+        if (e.altKey || e.ctrlKey || e.metaKey) {
+          void usePageStore.getState().duplicatePage(id, workspaceId).then((newId) => {
+            if (newId) usePageStore.getState().patchPage(newId, { visibility });
+          });
+        } else {
+          usePageStore.getState().patchPage(id, { visibility });
+        }
+      }}
+      className={[
+        "mx-1 mb-1 rounded-md border border-dashed px-2 py-1 text-center text-[10px] transition-colors",
+        over
+          ? "border-[var(--osio-accent)] bg-[var(--osio-accent-subtle)] text-[var(--osio-fg-default)]"
+          : "border-[var(--osio-border-default)] text-[var(--osio-fg-subtle)]",
+      ].join(" ")}
+    >
+      Drop to make {visibility === "private" ? "Private" : "Shared"} · Alt = duplicate
+    </div>
+  );
+};
 
 /** Scrollable page-tree area: Recents, Agents, Private, Shared, osionos apps. */
 export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
@@ -349,18 +381,9 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   }
 
   function createAgentPage() {
-    void createAndOpenPage(activeWorkspaceId, "New agent", {
-      icon: "icon:sparkles",
-      surface: "agent",
-      visibility: "private",
-      content: [
-        {
-          id: `block-${crypto.randomUUID()}`,
-          type: "paragraph",
-          content: "Describe this agent's job, tools, and boundaries.",
-        },
-      ],
-    });
+    // The assistant opens the multi-model Chat Shell on a fresh conversation.
+    useChatStore.getState().createConversation();
+    useWorkspaceLayout.getState().openTab(chatTab());
   }
 
   function handleToggleChannelVisibility(event: React.MouseEvent, channel: WorkspaceChannel) {
@@ -465,11 +488,13 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
     return CHANNEL_CATEGORIES.map(renderChannelCategory);
   }
 
+  const workspaceRecents = recents.filter((r) => r.workspaceId === activeWorkspaceId);
+
   return (
     <div className="flex flex-col gap-3">
       <SidebarSection label="Recents">
-        {recents.length > 0 ? (
-          recents
+        {workspaceRecents.length > 0 ? (
+          workspaceRecents
             .slice(0, 8)
             .map((r) => (
               <RecentSidebarItem
@@ -544,6 +569,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
               />
             }
           >
+            <SectionDropZone visibility="private" workspaceId={ws._id} />
             {pageIds.length === 0 && (
               <p className="px-2 py-1 text-xs text-[var(--osio-fg-subtle)] italic">
                 No pages yet
@@ -580,6 +606,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
           />
         }
       >
+        <SectionDropZone visibility="shared" workspaceId={activeWorkspaceId} />
         {ownedSharedPageIds.map((pageId) => (
           <PageTreeItem
             key={pageId}
@@ -616,25 +643,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         />
       </SidebarSection>
 
-      <SidebarSection label="osionos apps">
-        <SidebarNavItem
-          icon={<Mail size={16} />}
-          label="osionos Mail"
-          onClick={() => openExternalApp(OSIONOS_MAIL_URL)}
-        />
-        <SidebarNavItem
-          icon={<CalendarRange size={16} />}
-          label="osionos Calendar"
-          onClick={() => openExternalApp(OSIONOS_CALENDAR_URL)}
-        />
-        <SidebarNavItem
-          icon={<Monitor size={16} />}
-          label="osionos Desktop"
-          onClick={() => {
-            globalThis.location.href = "/";
-          }}
-        />
-      </SidebarSection>
+      <OsionosAppsSection />
     </div>
   );
 };

@@ -42,6 +42,7 @@ import { useDatabaseStore } from "@/store/useDatabaseStore";
 import type { Block, LayoutCell } from "@/entities/block";
 import {
   caretRect,
+  resolveEditableFromSelection,
   handleArrowUp,
   handleArrowDown,
   handleEnterKey,
@@ -748,26 +749,44 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
    * Y (top/bottom) comes from the caret rect so the menu hugs the caret's visual
    * line and can flip cleanly above it; `caretRect` prefers getClientRects() and
    * falls back to the block element on a truly empty line.
+   *
+   * Anchor to the KNOWN block: the caller already holds the blockId of the block
+   * that just received the "/" (or "[["), so we resolve the editable straight
+   * from the DOM (`[data-block-id="…"]`). Trusting the live `getSelection()`
+   * instead is what made the menu drift to the top-right — a stale/wrong range
+   * (e.g. the page-title contenteditable) supplied a foreign block's left/top.
+   * The live selection is only a fallback when no blockId is passed.
    */
-  const getCaretRect = useCallback((): { x: number; y: number; top: number } => {
-    const sel = globalThis.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      const range = sel.getRangeAt(0);
-      const node = range.startContainer;
-      const el = node.nodeType === 1 ? (node as Element) : node.parentElement;
+  const getCaretRect = useCallback(
+    (blockId?: string): { x: number; y: number; top: number } => {
+      const blockEl = blockId
+        ? document.querySelector<HTMLElement>(`[data-block-id="${blockId}"]`)
+        : null;
       const editable =
-        el?.closest<HTMLElement>('[contenteditable="true"]') ??
-        el?.closest<HTMLElement>("[data-block-id]");
+        blockEl?.querySelector<HTMLElement>('[contenteditable="true"]') ??
+        blockEl ??
+        resolveEditableFromSelection();
+
+      // Use the caret's own line for Y when the live selection is inside THIS
+      // block; otherwise (stale/foreign selection) fall back to the block rect so
+      // both X and Y stay anchored to the correct block.
+      const sel = globalThis.getSelection();
+      const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+      const selInBlock = range != null && editable != null
+        ? editable.contains(range.startContainer)
+        : false;
+
       const left = editable ? editable.getBoundingClientRect().left : 100;
-      const caret = caretRect(range);
-      if (caret) return { x: left, y: caret.bottom, top: caret.top };
+      const caret = selInBlock && range ? caretRect(range) : null;
+      if (caret && caret.height > 0) return { x: left, y: caret.bottom, top: caret.top };
       if (editable) {
         const b = editable.getBoundingClientRect();
         return { x: left, y: b.bottom, top: b.top };
       }
-    }
-    return { x: 100, y: 300, top: 282 };
-  }, []);
+      return { x: 100, y: 300, top: 282 };
+    },
+    [],
+  );
 
   /** Persist block content edits in the page store. */
   const persistBlockText = useCallback(
@@ -821,7 +840,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   const tryHandleSlashMenu = useCallback(
     (blockId: string, text: string): boolean => {
       if (text.endsWith("/") && !slashMenu) {
-        setSlashMenu({ blockId, position: getCaretRect(), filter: "" });
+        setSlashMenu({ blockId, position: getCaretRect(blockId), filter: "" });
         return true;
       }
 
@@ -846,7 +865,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   const tryHandlePageSelectorMenu = useCallback(
     (blockId: string, text: string): boolean => {
       if (text.endsWith("[[") && !pageSelector) {
-        setPageSelector({ blockId, position: getCaretRect(), filter: "" });
+        setPageSelector({ blockId, position: getCaretRect(blockId), filter: "" });
         return true;
       }
 

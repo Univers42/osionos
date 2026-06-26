@@ -11,20 +11,15 @@
 /* ************************************************************************** */
 
 /**
- * Member profile page — opens as a workspace-grid tab (kind "profile",
- * pageId = the member's user id; the "/people/:userId" route of this app's
- * tab-based navigation). Avatar, name, org role, presence dot, and a
- * "Message" action that opens (find-or-create) the DM channel as a tab.
+ * Built-in member profile — the fallback shell used when the admin-authored
+ * profile template is absent or disabled. Avatar, name, org role, presence dot,
+ * and the shared Message/Connect actions. Rendered as a child of ProfilePageView,
+ * which owns the presence heartbeat.
  */
 
 import React from 'react';
-import { MessageCircle } from 'lucide-react';
 
-import { useUserStore } from '@/features/auth';
-import { openDm } from '@/shared/chat/channelApi';
-import { usePresenceHeartbeat } from '@/shared/people/usePresenceHeartbeat';
-import { genId } from '@/widgets/workspace-grid/model/layoutTree';
-import { useWorkspaceLayout } from '@/widgets/workspace-grid/model/workspaceLayout';
+import { ProfileActions } from './profileChrome';
 import { useProfile } from './useProfile';
 
 interface ProfileViewProps {
@@ -33,23 +28,6 @@ interface ProfileViewProps {
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
   const { profile, error } = useProfile(userId);
-  const activeUserId = useUserStore((s) => s.activeUserId);
-  usePresenceHeartbeat();
-
-  const startDm = () => {
-    openDm(userId)
-      .then((channel) => {
-        useWorkspaceLayout.getState().openTab({
-          tabId: genId('tab'),
-          pageId: channel.id,
-          workspaceId: channel.workspaceId,
-          kind: 'channel',
-          title: channel.name,
-          icon: 'icon:message-circle',
-        });
-      })
-      .catch(() => undefined);
-  };
 
   if (error) {
     return (
@@ -90,17 +68,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
           </div>
         </div>
 
-        {userId !== activeUserId && (
-          <div className="mt-8">
-            <button
-              type="button"
-              onClick={startDm}
-              className="inline-flex items-center gap-2 rounded-md bg-[var(--osio-accent)] px-4 py-2 text-sm font-medium text-[var(--osio-accent-fg)] hover:opacity-90"
-            >
-              <MessageCircle size={16} /> Message
-            </button>
-          </div>
-        )}
+        <ProfileActions userId={userId} name={profile.name} />
       </div>
     </div>
   );

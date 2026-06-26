@@ -12,7 +12,7 @@
 
 import type { ActivePage, ActivePageKind } from "@/entities/page";
 import { getActivePageJwt } from "@/shared/api/client";
-import { saveRecents } from "@/store/pageStore.helpers";
+import { addRecent, saveRecents } from "@/store/pageStore.helpers";
 import { usePageStore } from "@/store/usePageStore";
 import type { WorkspaceTab } from "./layoutTree";
 
@@ -43,7 +43,7 @@ export function mirrorActiveTab(tab: WorkspaceTab | null): void {
     return;
   }
 
-  const recents = [activePage, ...store.recents.filter((entry) => entry.id !== activePage.id)].slice(0, 10);
+  const recents = addRecent(store.recents, activePage);
   saveRecents(recents);
   usePageStore.setState({ activePage, showTrash: false, recents, navigationPath: [activePage] });
 

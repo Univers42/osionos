@@ -58,6 +58,9 @@ export function pageStamp(page: PageEntry): string {
     page.icon ?? "",
     page.cover ?? "",
     hashJson(page.properties ?? []),
+    page.isTemplate ? "1" : "0",
+    page.isDefaultTemplate ? "1" : "0",
+    hashJson(page.recurrence ?? null),
     content,
   ].join("|");
 }

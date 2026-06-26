@@ -23,11 +23,22 @@ import {
   LazyAgentConversationPage,
   LazyBaasConsoleView,
   LazyChannelMessagesView,
+  LazyCollabBrowseView,
+  LazyCommunityList,
   LazyDatabaseBlock,
+  LazyEmbedAppView,
+  LazyMessagesView,
+  LazyAdminSpaceView,
+  LazyChatShell,
   LazyOsionosPage,
-  LazyProfileView,
+  LazyProfilePageView,
   LazyTrashView,
+  LazyWorkspaceDatabaseBlock,
 } from "./lazyViews";
+// Deep path, NOT the barrel: `@/widgets/database-view` has a side-effect
+// `import './model/dataSourceProvider'` that pulls knownDatabaseState (and its
+// ~458KB seed JSON) onto this warm pane path. The constants module is leaf-pure.
+import { WS_FILES_DB_ID, WS_FOLDERS_DB_ID } from "@/widgets/database-view/model/workspaceDatabaseConstants";
 
 const LoadingPane: React.FC = () => (
   <div className="flex-1 flex items-center justify-center h-full">
@@ -79,11 +90,20 @@ const PaneContentImpl: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab
   }
 
   if (tab.kind === "database") {
+    // The workspace database renders through WorkspaceDatabaseBlock (live page-store
+    // adapter + record peek + the templates "New" button); other databases use the
+    // raw block. This keeps the templates feature consistent with the ?home=database
+    // home variant.
+    const isWorkspaceDb = tab.databaseId === WS_FILES_DB_ID || tab.databaseId === WS_FOLDERS_DB_ID;
     return (
       <ErrorBoundary>
         <Suspense fallback={<LoadingPane />}>
           <div className="h-full overflow-auto bg-[var(--osio-bg-page)]">
-            <LazyDatabaseBlock databaseId={tab.databaseId ?? tab.pageId} mode="full" />
+            {isWorkspaceDb ? (
+              <LazyWorkspaceDatabaseBlock databaseId={tab.databaseId ?? WS_FILES_DB_ID} mode="full" chrome="full" />
+            ) : (
+              <LazyDatabaseBlock databaseId={tab.databaseId ?? tab.pageId} initialViewId={tab.viewId ?? undefined} mode="full" />
+            )}
           </div>
         </Suspense>
       </ErrorBoundary>
@@ -95,7 +115,7 @@ const PaneContentImpl: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab
       <ErrorBoundary>
         <Suspense fallback={<LoadingPane />}>
           <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
-            <LazyProfileView userId={tab.pageId} />
+            <LazyProfilePageView userId={tab.pageId} />
           </div>
         </Suspense>
       </ErrorBoundary>
@@ -114,12 +134,76 @@ const PaneContentImpl: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab
     );
   }
 
-  if (tab.kind === "channel") {
+  if (tab.kind === "admin") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
+            <LazyAdminSpaceView />
+          </div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "chat") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]"><LazyChatShell /></div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "messages") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]"><LazyMessagesView /></div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "collab") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-auto bg-[var(--osio-bg-page)]"><LazyCollabBrowseView /></div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "community") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]"><LazyCommunityList /></div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "channel" || tab.kind === "group") {
     return (
       <ErrorBoundary>
         <Suspense fallback={<LoadingPane />}>
           <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
             <LazyChannelMessagesView channelId={tab.pageId} workspaceId={tab.workspaceId} title={tab.title ?? ""} />
+          </div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "embed") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
+            <LazyEmbedAppView url={tab.url ?? ""} title={tab.title ?? ""} />
           </div>
         </Suspense>
       </ErrorBoundary>

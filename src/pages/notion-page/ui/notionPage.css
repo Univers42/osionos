@@ -358,12 +358,12 @@
   display: grid;
   align-items: start;
   min-height: 360px;
-  border-radius: var(--osio-radius-lg);
+  border-radius: 16px;
   background-color: var(--osio-bg-page);
   padding: 40px 8px 8px 40px;
   overflow: visible;
   --osionos-layout-dot-color: color-mix(in srgb, var(--osio-accent) 28%, transparent);
-  --osionos-layout-dot-size: 16px;
+  --osionos-layout-dot-size: 20px;
   --osionos-layout-row-size: 136px;
 }
 
@@ -382,12 +382,12 @@
 }
 
 .osionos-layout-grid[data-layout-guides="true"]::before {
-  opacity: 0.34;
+  opacity: 0.18;
 }
 
 .osionos-layout-grid[data-canvas-active="true"]::before,
 .osionos-layout-grid[data-layout-guides="true"]:hover::before {
-  opacity: 0.56;
+  opacity: 0.28;
 }
 
 .osionos-layout-grid[data-layout-interacting="true"] {
@@ -448,10 +448,10 @@ body[data-pane-resizing] .osionos-layout-cell {
   min-width: 0;
   min-height: var(--osionos-layout-cell-min-height, var(--osio-cell-min-row-height));
   overflow: visible;
-  border: 1px solid color-mix(in srgb, var(--osio-border-default) 78%, transparent);
-  border-radius: var(--osio-radius);
+  border: 1px solid var(--osio-border-soft);
+  border-radius: var(--osio-radius-card);
   background: var(--osio-bg-surface);
-  box-shadow: var(--osio-shadow-sm);
+  box-shadow: var(--osio-shadow-cell);
   outline: 2px solid transparent;
   outline-offset: -2px;
   transform: translate3d(var(--osionos-layout-cell-offset-x, 0), var(--osionos-layout-cell-offset-y, 0), 0);
@@ -461,7 +461,7 @@ body[data-pane-resizing] .osionos-layout-cell {
 
 .osionos-layout-cell[data-layout-cell-selected="true"] {
   outline-color: var(--osio-accent);
-  box-shadow: 0 10px 30px color-mix(in srgb, var(--osio-shadow) 12%, transparent);
+  box-shadow: var(--osio-shadow-cell-selected);
 }
 
 .osionos-layout-cell[data-layout-sizing="fixed"] {
@@ -554,8 +554,9 @@ body[data-pane-resizing] .osionos-layout-cell {
   display: flex;
   min-width: 0;
   min-height: 0;
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: visible;
+  overflow-wrap: anywhere;
   flex-direction: column;
   padding: calc(var(--osio-cell-padding-block) + 20px) var(--osio-cell-padding-inline) var(--osio-cell-padding-block);
 }

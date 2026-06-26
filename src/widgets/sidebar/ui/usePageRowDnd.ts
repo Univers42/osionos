@@ -33,8 +33,9 @@ interface RowDndArgs {
  * / `after` draw a same-depth blue line). Dropping re-parents via `movePage`,
  * so the dragged node's whole subtree follows it.
  */
-export function usePageRowDnd({ pageId, parentPageId, workspaceId, canExpand, expanded, onSpringOpen }: RowDndArgs) {
+export function usePageRowDnd({ pageId, workspaceId, canExpand, expanded, onSpringOpen }: RowDndArgs) {
   const movePage = usePageStore((s) => s.movePage);
+  const reorderSibling = usePageStore((s) => s.reorderSibling);
   const draggingId = useSidebarTreeDnd((s) => s.draggingId);
   const dropTargetId = useSidebarTreeDnd((s) => s.dropTargetId);
   const dropMode = useSidebarTreeDnd((s) => s.dropMode);
@@ -76,9 +77,15 @@ export function usePageRowDnd({ pageId, parentPageId, workspaceId, canExpand, ex
     e.preventDefault();
     e.stopPropagation();
     const mode = computeDropMode(e.clientY, e.currentTarget.getBoundingClientRect());
-    const targetParent = mode === "inside" ? pageId : (parentPageId ?? null);
     clearSpring();
-    movePage(draggingId!, targetParent, workspaceId);
+    if (mode === "inside") {
+      // Drop into this row (re-parent the whole subtree under it).
+      movePage(draggingId!, pageId, workspaceId);
+    } else {
+      // Drop before/after this row — reposition at the same level (or reparent
+      // into this row's parent and place there).
+      reorderSibling(draggingId!, pageId, mode === "before", workspaceId);
+    }
     endDrag();
   }
 

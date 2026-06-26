@@ -8,18 +8,25 @@
 import type { DrawCtx } from "./drawTypes";
 import { ARROW_MIN_SCALE, TAG_EDGE_MIN_SCALE } from "./drawTypes";
 import type { EdgeBucketId } from "./sceneState";
+import { NODE_BUDGET } from "./clusterBlobs";
 import { segmentInView } from "./cull";
 import { linkReveal } from "./reveal";
 import { TIERS, tierWidth } from "./tiers";
 import type { SceneTheme } from "../theme/tokens";
 
 const DRAW_ORDER: EdgeBucketId[] = [0, 2, 3, 1];
+// Skip the (tens of thousands of) edges when the view is far out OR dense (more
+// nodes in view than the draw budget) — a sub-pixel hairball whose per-frame
+// iteration is a major cost and which isn't legible at that density. Edges resolve
+// once you zoom into a region (< budget nodes). Hover-focus always draws (focusOnly).
+const EDGE_LOD_MIN_SCALE = 0.3;
 
 export function drawLinks(d: DrawCtx, focusOnly = false): void {
-  const { ctx, state, view, camera, theme, visual, time } = d;
+  const { ctx, state, view, camera, theme, visual, time, cull } = d;
   const scale = camera.scale;
   const alpha = linkReveal(d.reveal, time) * d.alpha;
   if (alpha <= 0.001) return;
+  if (!focusOnly && (scale < EDGE_LOD_MIN_SCALE || cull.count > NODE_BUDGET)) return;
   ctx.globalAlpha = alpha;
   ctx.lineCap = "round";
 

@@ -16,6 +16,7 @@ import { useUIStore } from "@/shared/config/uiStore";
 import { buildCommands } from "../model/commands";
 import { buildMenus } from "../model/menus";
 import { useTopBarHotkeys } from "../model/usePalette";
+import { SharedSpacePresenceBar } from "@/features/collab/ui/SharedSpacePresenceBar";
 import { TopBarMenu } from "./TopBarMenu";
 import { TopBarSearch } from "./TopBarSearch";
 import { UpdateButton } from "./UpdateButton";
@@ -58,6 +59,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
         <TopBarSearch commands={commands} />
       </div>
 
+      <SharedSpacePresenceBar />
       <UpdateButton />
       <WindowControls />
     </header>

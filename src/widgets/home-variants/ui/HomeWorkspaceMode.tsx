@@ -16,26 +16,22 @@ import {
   WS_FILES_DB_ID,
   WS_FILES_GALLERY_VIEW,
 } from "@/widgets/database-view";
-import { FolderRail } from "./HomeWorkspaceParts";
 
 /**
- * The "Gallery" home variant: a folder rail (left) drives a photo gallery of the
- * files it contains (right). Both the rail and the gallery read the live
- * osionos_pages records via the workspace database adapter — no copy.
+ * The "Gallery" home surface: a cover-card gallery of the workspace's notes,
+ * reading the live osionos_pages records via the workspace database adapter (no
+ * copy). The folder selector lives in the Explorer sidebar (FilesPanel's gallery
+ * mode → FolderRail) and scopes this gallery through the shared useWorkspaceNav
+ * store — so there is ONE sidebar, not a redundant second folder rail here.
  */
 export const HomeWorkspaceMode: React.FC = () => {
   return (
-    <div className="flex h-full min-h-0 w-full">
-      <aside className="w-64 shrink-0 overflow-auto border-r border-[var(--osio-border-default)] p-2">
-        <FolderRail />
-      </aside>
-      <section className="min-w-0 flex-1 overflow-auto p-3">
-        <WorkspaceDatabaseBlock
-          databaseId={WS_FILES_DB_ID}
-          initialViewId={WS_FILES_GALLERY_VIEW}
-          mode="full"
-        />
-      </section>
+    <div className="h-full min-h-0 w-full overflow-auto p-3">
+      <WorkspaceDatabaseBlock
+        databaseId={WS_FILES_DB_ID}
+        initialViewId={WS_FILES_GALLERY_VIEW}
+        mode="full"
+      />
     </div>
   );
 };

@@ -81,6 +81,7 @@ export function migrate(legacyCell: LayoutCell, gridConfig: CanvasGridConfig, in
     content: legacyCell.content,
     blockType: legacyCell.blockType,
     wrap: legacyCell.wrap,
+    section: legacyCell.section,
   };
 }
 
@@ -103,6 +104,7 @@ export function unmigrate(canvasCell: CanvasCell, gridConfig: CanvasGridConfig):
     wrap: canvasCell.wrap,
     padding: canvasCell.visuals.padding,
     fontSize: canvasCell.visuals.fontSize,
+    section: canvasCell.section,
   });
 }
 

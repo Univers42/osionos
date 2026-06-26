@@ -21,6 +21,15 @@ export { bucketOf, type EdgeBucketId } from "./sceneEdges";
 export const MIN_RADIUS = 5;
 export const MAX_RADIUS = 22;
 
+/** A database cluster collapsed to one drawable disc (camera-independent). */
+export interface ClusterBlob {
+  mx: number;
+  my: number;
+  spread: number;
+  fill: string;
+  n: number;
+}
+
 export class SceneState {
   count = 0;
   ids: NodeId[] = [];
@@ -54,6 +63,10 @@ export class SceneState {
   grid = new SpatialGrid();
 
   private tagColors: Map<string, string> = new Map();
+  /** Bumped on any change that affects cluster aggregates (positions, visibility,
+   *  fills, graph) so the overview-blob cache recomputes only when needed. */
+  private mutVersion = 0;
+  private clusterCache: { version: number; blobs: ClusterBlob[] } | null = null;
 
   setGraph(model: GraphModel, tagColors?: Map<string, string>): void {
     this.tagColors = tagColors ?? new Map();
@@ -94,6 +107,7 @@ export class SceneState {
     if (this.visible.length !== count) this.visible = new Uint8Array(count).fill(1);
     else this.visible.fill(1);
     this.grid.markStale();
+    this.mutVersion += 1;
   }
 
   /** Re-point the flat aliases at the freshly built edge buffers. */
@@ -124,12 +138,13 @@ export class SceneState {
         tagColors,
       );
       this.fills[i] = color;
-      const glyph = glyphKey(iconGlyph(this.icon[i] ?? null, this.label[i]));
+      const glyph = glyphKey(iconGlyph(this.icon[i] ?? null));
       const key = styleKey(shapeOf(this.kind[i]), color, glyph);
       const bucket = this.styleBuckets.get(key);
       if (bucket) bucket.push(i);
       else this.styleBuckets.set(key, [i]);
     }
+    this.mutVersion += 1;
   }
 
   setPositions(x: Float32Array, y: Float32Array): boolean {
@@ -137,7 +152,50 @@ export class SceneState {
     this.posX = x;
     this.posY = y;
     this.grid.markStale();
+    this.mutVersion += 1;
     return true;
+  }
+
+  /** Per-database cluster discs over the visible set, cached until positions /
+   *  visibility / colors change — so panning a settled overview is O(clusters),
+   *  not O(nodes). Grouped by `source` (the database), the layout's cluster key.
+   *  `allowRecompute=false` (during pan/settle motion) reuses the last result so
+   *  the overview never pays an O(n) re-aggregation per frame; it refreshes the
+   *  instant the view goes still. */
+  clusterAggregates(allowRecompute = true): ClusterBlob[] {
+    if (this.clusterCache && this.clusterCache.version === this.mutVersion) {
+      return this.clusterCache.blobs;
+    }
+    if (!allowRecompute && this.clusterCache) return this.clusterCache.blobs;
+    const agg = new Map<string, { sx: number; sy: number; sxx: number; syy: number; n: number; fill: string }>();
+    for (let i = 0; i < this.count; i += 1) {
+      if (this.visible[i] === 0) continue;
+      const key = this.source[i] || this.kind[i] || "·";
+      let b = agg.get(key);
+      if (!b) {
+        b = { sx: 0, sy: 0, sxx: 0, syy: 0, n: 0, fill: this.fills[i] };
+        agg.set(key, b);
+      }
+      const x = this.posX[i];
+      const y = this.posY[i];
+      b.sx += x;
+      b.sy += y;
+      b.sxx += x * x;
+      b.syy += y * y;
+      b.n += 1;
+    }
+    const blobs: ClusterBlob[] = [];
+    for (const b of agg.values()) {
+      if (b.n === 0) continue;
+      const mx = b.sx / b.n;
+      const my = b.sy / b.n;
+      const spread = Math.sqrt(
+        Math.max(0, b.sxx / b.n - mx * mx) + Math.max(0, b.syy / b.n - my * my),
+      );
+      blobs.push({ mx, my, spread, fill: b.fill, n: b.n });
+    }
+    this.clusterCache = { version: this.mutVersion, blobs };
+    return blobs;
   }
 
   setLabels(labels: string[]): void {
@@ -157,6 +215,7 @@ export class SceneState {
         (this.kind[i] === "tag" && tags.has(this.label[i]));
       this.visible[i] = hidden ? 0 : 1;
     }
+    this.mutVersion += 1;
   }
 
   worldBounds(): WorldBounds | null {

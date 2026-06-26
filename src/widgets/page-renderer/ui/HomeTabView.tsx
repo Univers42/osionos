@@ -22,8 +22,8 @@ import type { PageEntry } from "@/entities/page";
 import {
   LazyGraphEngineExplorer,
   LazyHomeWorkspaceMode,
-  LazyOsionosPage,
   LazyWorkspaceDatabaseBlock,
+  LazyOsionosPage,
 } from "./lazyViews";
 
 import "./homeVariants.css";

@@ -15,6 +15,7 @@ export type SettingsTab =
   | "preferences"
   | "notifications"
   | "connections"
+  | "contacts"
   | "mail_calendar"
   | "general"
   | "people"

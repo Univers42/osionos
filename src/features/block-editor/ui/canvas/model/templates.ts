@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { createViewShowcaseCells } from "@/widgets/database-view/model/databaseViewCatalog";
+import { createViewShowcaseCells } from "@/widgets/database-view/model/databaseViewShowcase";
 import type { Block, LayoutCell } from "@/entities/block";
 import { migrate } from "./migration";
 import type { CanvasCell, CanvasGridConfig } from "./types";

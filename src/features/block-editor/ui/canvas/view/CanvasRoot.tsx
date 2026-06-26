@@ -20,7 +20,6 @@ import { createInteractionStore } from "../controller/interactionStore";
 import { useCanvasCellOps } from "../controller/useCanvasCellOps";
 import { useCanvasScale } from "../controller/useCanvasScale";
 import { useCanvasStoreBridge, type CanvasPersistHandler } from "../store/canvasStore";
-import { CanvasInspector } from "./CanvasInspector";
 import { CanvasSettingsPanel } from "./CanvasSettingsPanel";
 import { CanvasStage } from "./CanvasStage";
 import { CanvasToolbar } from "./CanvasToolbar";
@@ -51,7 +50,7 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
   const store = useCanvasStoreBridge(block.id, block, persist);
 
   const layoutConfig = useStore(store, (state) => state.layoutConfig);
-  const inspectedCellId = useStore(store, (state) => (state.selectedIds.length === 1 ? state.selectedIds[0] : null));
+  const hasSelection = useStore(store, (state) => state.selectedIds.length > 0);
   const dispatch = useStore(store, (state) => state.dispatch);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -64,7 +63,7 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
   // cell is selected (the legacy editor kept a document listener per layout
   // block alive permanently).
   useEffect(() => {
-    if (!inspectedCellId) return undefined;
+    if (!hasSelection) return undefined;
     const dismissOnOutsidePress = (event: PointerEvent) => {
       const target = event.target as Node | null;
       if (!target || rootRef.current?.contains(target)) return;
@@ -72,7 +71,7 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
     };
     document.addEventListener("pointerdown", dismissOnOutsidePress, true);
     return () => document.removeEventListener("pointerdown", dismissOnOutsidePress, true);
-  }, [inspectedCellId, store]);
+  }, [hasSelection, store]);
 
   const layoutMode = block.layoutMode === "full_page" ? "full_page" : "inline";
   const modeClass = layoutMode === "full_page" ? "osionos-layout-block--full-page" : "osionos-layout-block--inline";
@@ -124,14 +123,6 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
             layoutMode={layoutMode}
             onSetLayoutMode={setLayoutMode}
             onClose={() => setSettingsOpen(false)}
-          />
-        ) : null}
-
-        {inspectedCellId && !settingsOpen && !layoutConfig.preview ? (
-          <CanvasInspector
-            store={store}
-            cellId={inspectedCellId}
-            onClose={() => dispatch({ type: "clearSelection" })}
           />
         ) : null}
 

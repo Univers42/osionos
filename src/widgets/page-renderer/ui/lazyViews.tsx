@@ -38,7 +38,23 @@ export const LazyWorkspaceDatabaseBlock = lazy(() =>
 );
 
 export const LazyChannelMessagesView = lazy(() =>
-  import("@/widgets/channel-messages/ui/ChannelMessagesView").then((m) => ({ default: m.ChannelMessagesView })),
+  import("@/widgets/channel-messages/ui/ChannelPane").then((m) => ({ default: m.ChannelPane })),
+);
+
+export const LazyMessagesView = lazy(() =>
+  import("@/widgets/messages-view/ui/MessagesView").then((m) => ({ default: m.MessagesView })),
+);
+
+export const LazyCollabBrowseView = lazy(() =>
+  import("@/widgets/collab-browse/ui/CollabBrowseView").then((m) => ({ default: m.CollabBrowseView })),
+);
+
+export const LazyCommunityList = lazy(() =>
+  import("@/features/communities/CommunityList").then((m) => ({ default: m.CommunityList })),
+);
+
+export const LazyEmbedAppView = lazy(() =>
+  import("@/widgets/embed-app/ui/EmbedAppView").then((m) => ({ default: m.EmbedAppView })),
 );
 
 export const LazyTrashView = lazy(() =>
@@ -47,6 +63,10 @@ export const LazyTrashView = lazy(() =>
 
 export const LazyProfileView = lazy(() =>
   import("@/widgets/profile-page/ProfileView").then((m) => ({ default: m.ProfileView })),
+);
+
+export const LazyProfilePageView = lazy(() =>
+  import("@/widgets/profile-page/ProfilePageView").then((m) => ({ default: m.ProfilePageView })),
 );
 
 export const LazyGraphEngineExplorer = lazy(() =>
@@ -60,3 +80,11 @@ export const LazyHomeWorkspaceMode = lazy(() =>
 // The BaaS console is its own self-contained lazy boundary (Suspense lives
 // inside the feature), re-exported here so PaneContent imports it like the rest.
 export { LazyBaasConsoleView } from "@/features/baas-console";
+
+export const LazyAdminSpaceView = lazy(() =>
+  import("@/widgets/admin-space").then((m) => ({ default: m.AdminSpaceView })),
+);
+
+export const LazyChatShell = lazy(() =>
+  import("@/widgets/chat-shell").then((m) => ({ default: m.ChatShell })),
+);

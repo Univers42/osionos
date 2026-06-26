@@ -24,6 +24,7 @@ import {
   editMessage,
   sendMessage,
   toggleReaction,
+  type Attachment,
   type ChatMessage,
 } from '@/shared/chat/messageApi';
 import type { ChannelMode } from './useChannelHistory';
@@ -39,11 +40,11 @@ interface ActionDeps {
 export function useChannelActions({ mode, channelId, userId, userName, setMessages }: ActionDeps) {
   const sendLocal = useRealtimeMessagesStore((s) => s.sendMessage);
 
-  const send = useCallback(async (body: string) => {
+  const send = useCallback(async (body: string, attachments?: Attachment[], replyTo?: string) => {
     const content = body.trim();
-    if (!content) return false;
+    if (!content && !(attachments && attachments.length)) return false;
     if (mode !== 'bridge') return Boolean(sendLocal(`channel:${channelId}`, userId, userName, content));
-    const message = await sendMessage(channelId, content);
+    const message = await sendMessage(channelId, content, attachments, replyTo);
     setMessages((messages) => messages.some((m) => m.id === message.id) ? messages : [...messages, message]);
     return true;
   }, [mode, channelId, userId, userName, sendLocal, setMessages]);

@@ -4,7 +4,7 @@
  * styles, CSP-safe). Binds everything to the shared Controls object.
  */
 
-import { type ReactElement, useState } from "react";
+import { type ReactElement, type ReactNode, useState } from "react";
 import type { GraphEngine } from "../../core/engine";
 import type { Controls } from "../../core/state/controls";
 import type { Legend } from "../../core/model/legend";
@@ -30,6 +30,8 @@ export interface GraphConsoleProps {
   engine: GraphEngine | null;
   onSelect?: (id: NodeId | null) => void;
   className?: string;
+  /** App-supplied control rendered at the top of the console (the graph scope toggle). */
+  scopeControl?: ReactNode;
 }
 
 export function GraphConsole(props: GraphConsoleProps): ReactElement {
@@ -57,6 +59,7 @@ export function GraphConsole(props: GraphConsoleProps): ReactElement {
 
       {open && (
         <>
+          {props.scopeControl && <div className="osio-gc-scope">{props.scopeControl}</div>}
           <nav className="osio-gc-tabs" role="tablist">
             {TABS.map((t) => (
               <button

@@ -34,6 +34,7 @@ export function blocksHaveHeavyContent(blocks: Block[] | undefined): boolean {
   return Boolean(blocks?.some((block) => (
     block.type === "database_inline" ||
     block.type === "database_full_page" ||
+    block.type === "graph_view" ||
     blocksHaveHeavyContent(block.children)
   )));
 }

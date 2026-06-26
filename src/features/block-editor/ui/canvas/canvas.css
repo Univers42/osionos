@@ -124,6 +124,12 @@
     calc(var(--osio-cell-y, 0px) + var(--osio-cell-dy, 0px)),
     0
   );
+  /* will-change is promoted ONLY during a gesture (see below) — keeping it always
+     on forced a compositor layer per cell, which is costly on dense dashboards. */
+}
+
+/* Promote moving layers only while the stage is interacting. */
+.osio-canvas-v2-stage[data-layout-interacting="true"] .osionos-layout-cell {
   will-change: transform;
 }
 
@@ -172,4 +178,141 @@
   border-radius: 2px;
   background: color-mix(in srgb, var(--osio-accent) 10%, transparent);
   pointer-events: none;
+}
+
+/* ---- In-place selection toolbar (replaces the side inspector) ------------- */
+/* A stage-child overlay anchored over the selection centre. Cheap on the GPU: */
+/* only transform/opacity/background transitions, and it never renders during  */
+/* an active gesture.                                                          */
+.osio-canvas-toolbar {
+  position: absolute;
+  z-index: var(--osio-z-popover);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: max-content;
+}
+.osio-canvas-toolbar[data-place="above"] { transform: translate(-50%, calc(-100% - 8px)); }
+.osio-canvas-toolbar[data-place="below"] { transform: translate(-50%, 8px); }
+
+.osio-canvas-tb-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--osio-border-default);
+  border-radius: var(--osio-radius-lg, 12px);
+  background: var(--osio-bg-elevated);
+  box-shadow: var(--osio-shadow-menu);
+}
+
+.osio-canvas-tb-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 4px;
+  margin-left: 2px;
+  border-left: 1px solid var(--osio-border-default);
+}
+
+.osio-canvas-tb-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--osio-radius-sm, 6px);
+  background: transparent;
+  color: var(--osio-fg-muted);
+  cursor: pointer;
+  transition: background-color 120ms ease-out, color 120ms ease-out, transform 120ms ease-out;
+}
+.osio-canvas-tb-btn:hover { background: var(--osio-bg-hover); color: var(--osio-fg-default); }
+.osio-canvas-tb-btn:active { transform: scale(0.94); }
+.osio-canvas-tb-btn[data-on="true"] { background: var(--osio-accent-subtle); color: var(--osio-accent-text); }
+.osio-canvas-tb-btn--danger:hover { background: color-mix(in srgb, var(--osio-danger) 12%, transparent); color: var(--osio-danger); }
+.osio-canvas-tb-btn:focus-visible { outline: 2px solid var(--osio-accent); outline-offset: 1px; }
+
+.osio-canvas-tb-pop {
+  align-self: center;
+  padding: 8px;
+  border: 1px solid var(--osio-border-default);
+  border-radius: var(--osio-radius-lg, 12px);
+  background: var(--osio-bg-elevated);
+  box-shadow: var(--osio-shadow-menu);
+}
+.osio-canvas-tb-pop--wide { width: 288px; max-height: 380px; overflow-y: auto; padding: 0; }
+
+.osio-canvas-fill-grid { display: flex; gap: 6px; }
+.osio-canvas-fill-swatch {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--osio-border-strong);
+  border-radius: var(--osio-radius-sm, 6px);
+  cursor: pointer;
+  transition: transform 120ms ease-out;
+}
+.osio-canvas-fill-swatch:hover { transform: scale(1.08); }
+.osio-canvas-fill-swatch[data-empty="true"] {
+  background-image: linear-gradient(45deg, var(--osio-border-default) 45%, transparent 47%, transparent 53%, var(--osio-border-default) 55%);
+}
+
+/* The reused cell-options panel, now floating inside the toolbar instead of a */
+/* fixed right sidebar (scoped to beat the legacy single-class positioning).   */
+.osio-canvas-tb-pop--wide .osio-canvas-advanced {
+  position: static;
+  inset: auto;
+  width: 100%;
+  max-height: 380px;
+  overflow-y: auto;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  padding: 10px 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .osio-canvas-tb-btn,
+  .osio-canvas-fill-swatch { transition: none; }
+  .osio-canvas-tb-btn:active { transform: none; }
+}
+
+/* ---- Cell micro-interaction --------------------------------------------- */
+/* Smooth programmatic moves (align / distribute / keyboard nudge / collision  */
+/* push-down / z-order) — transform animates ONLY when idle. During a drag or  */
+/* resize the stage carries data-layout-interacting="true", which disables the  */
+/* transition so the rAF cursor-tracking preview (--osio-cell-dx/dy) never lags.*/
+.osio-canvas-v2-root .osionos-layout-cell {
+  transition: transform var(--osio-motion-standard), outline-color var(--osio-motion-standard), box-shadow var(--osio-motion-standard);
+}
+.osio-canvas-v2-stage[data-layout-interacting="true"] .osionos-layout-cell {
+  transition: none;
+}
+/* Hover lift uses shadow ONLY (no transform) so the selection toolbar's */
+/* getBoundingClientRect anchor never shifts under the pointer.          */
+.osio-canvas-v2-root .osionos-layout-cell:hover:not([data-layout-cell-selected="true"]) {
+  box-shadow: var(--osio-shadow-menu);
+}
+
+/* Toolbar appears with a quick opacity fade (transform is owned by data-place, */
+/* so we animate opacity only to avoid fighting the anchor transform).         */
+.osio-canvas-toolbar { animation: osio-canvas-fade-in var(--osio-motion-fast) both; }
+@keyframes osio-canvas-fade-in { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .osio-canvas-v2-root .osionos-layout-cell { transition: outline-color var(--osio-motion-standard), box-shadow var(--osio-motion-standard); }
+  .osio-canvas-toolbar { animation: none; }
+}
+
+/* KPI / metric tile treatment for showcase dashboard cells (opt-in via the */
+/* cell label starting with "kpi:" handled in the seed; here it just centres */
+/* a big number + caption when a cell carries data-osio-kpi).               */
+.osio-canvas-v2-root .osionos-layout-cell[data-osio-kpi="true"] {
+  background: color-mix(in srgb, var(--osio-accent) 5%, var(--osio-bg-surface));
+}
+.osio-canvas-v2-root .osionos-layout-cell[data-osio-kpi="true"] .osionos-layout-cell-editor {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
 }

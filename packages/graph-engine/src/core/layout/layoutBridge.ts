@@ -7,7 +7,7 @@
  */
 
 import type { GraphModel, NodeId } from "../types";
-import { type LayoutLink, seedPositions } from "./forceLayout";
+import { type LayoutLink, clusterCenters, GOLDEN_ANGLE, seedPositions } from "./forceLayout";
 import { type LayoutInbound, LayoutEngine, type LayoutOutbound } from "./layoutEngine";
 import { type LayoutParams, DEFAULT_LAYOUT_PARAMS } from "./params";
 
@@ -50,12 +50,38 @@ export class LayoutController {
     this.idList = model.nodes.map((node) => node.id);
     this.idToIndex = new Map(this.idList.map((id, index) => [id, index]));
 
+    const nodeGroups = new Uint8Array(this.idList.length);
+    const sourceIndex = new Map<string, number>();
+    for (let i = 0; i < model.nodes.length; i += 1) {
+      const source = model.nodes[i].source;
+      if (source == null) continue;
+      let g = sourceIndex.get(source);
+      if (g === undefined) {
+        g = sourceIndex.size;
+        sourceIndex.set(source, g);
+      }
+      nodeGroups[i] = g & 0xff;
+    }
+    const groups = sourceIndex.size;
+    const centers =
+      groups > 1
+        ? clusterCenters(this.idList.length, groups, this.options.width, this.options.height)
+        : null;
+    const localCount = centers ? new Int32Array(groups) : null;
+
     const seeds = seedPositions(this.idList.length, this.options.width, this.options.height);
     for (let i = 0; i < this.idList.length; i += 1) {
       const previous = snapshot.get(this.idList[i]);
       if (previous) {
         seeds.x[i] = previous.x;
         seeds.y[i] = previous.y;
+      } else if (centers && localCount) {
+        const c = centers[nodeGroups[i]];
+        const li = localCount[nodeGroups[i]];
+        localCount[nodeGroups[i]] = li + 1;
+        const r = 8 * Math.sqrt(li + 1);
+        seeds.x[i] = c.x + Math.cos(li * GOLDEN_ANGLE) * r;
+        seeds.y[i] = c.y + Math.sin(li * GOLDEN_ANGLE) * r;
       }
     }
 
@@ -77,6 +103,7 @@ export class LayoutController {
       params: this.params,
       seedX: seeds.x,
       seedY: seeds.y,
+      nodeGroups,
     });
 
     this.lastX = seeds.x.slice();

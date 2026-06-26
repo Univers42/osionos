@@ -9,11 +9,11 @@
 
 import { hashString } from "../math";
 
-export type GlyphKind = "emoji" | "image" | "monogram";
+export type GlyphKind = "emoji" | "image" | "none";
 
 export interface Glyph {
   kind: GlyphKind;
-  /** Emoji character, image URL, or monogram letter. */
+  /** Emoji character or image URL; empty for `none` (node left blank). */
   ref: string;
 }
 
@@ -23,23 +23,7 @@ function bareRef(value: string): string {
   return (semi >= 0 ? value.slice(0, semi) : value).trim();
 }
 
-// One shared segmenter — constructing Intl.Segmenter per call costs ~1ms,
-// which at 10k nodes turned the recolor pass into a multi-second hang.
-const SEGMENTER = typeof Intl !== "undefined" && "Segmenter" in Intl
-  ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
-  : null;
-
-/** First grapheme of the label, uppercased (Intl.Segmenter when available). */
-function monogramOf(label: string): string {
-  const text = label.trim();
-  if (!text) return "•";
-  if (SEGMENTER) {
-    for (const part of SEGMENTER.segment(text)) return part.segment.toUpperCase();
-  }
-  return String.fromCodePoint(text.codePointAt(0) ?? 0x2022).toUpperCase();
-}
-
-export function iconGlyph(icon: string | null, label: string): Glyph {
+export function iconGlyph(icon: string | null): Glyph {
   const raw = (icon ?? "").trim();
   if (raw.startsWith("img:") || raw.startsWith("url:")) {
     const url = bareRef(raw.slice(4));
@@ -53,7 +37,9 @@ export function iconGlyph(icon: string | null, label: string): Glyph {
   if (raw && !raw.startsWith("icon:") && !/^[\w-]+$/.test(raw)) {
     return { kind: "emoji", ref: bareRef(raw) };
   }
-  return { kind: "monogram", ref: monogramOf(label) };
+  // No usable icon (empty, or a lucide "icon:name" the canvas can't render): leave
+  // the node blank instead of stamping a letter on it.
+  return { kind: "none", ref: "" };
 }
 
 /** Image URLs are hashed in cache keys; this registry maps key → URL back. */
@@ -63,7 +49,7 @@ const urlByKey = new Map<string, string>();
 /** Bounded cache-key segment for a glyph ("" never collides with real keys). */
 export function glyphKey(glyph: Glyph): string {
   if (glyph.kind === "emoji") return `e:${glyph.ref}`;
-  if (glyph.kind === "monogram") return `m:${glyph.ref}`;
+  if (glyph.kind === "none") return "n:";
   const key = `i:${hashString(glyph.ref).toString(36)}`;
   if (!urlByKey.has(key) && urlByKey.size >= URL_CAP) {
     const oldest = urlByKey.keys().next().value;
@@ -76,10 +62,10 @@ export function glyphKey(glyph: Glyph): string {
 /** Resolve a key segment back to its glyph (null for empty/unknown segments). */
 export function glyphFromKey(segment: string): Glyph | null {
   if (segment.startsWith("e:")) return { kind: "emoji", ref: segment.slice(2) };
-  if (segment.startsWith("m:")) return { kind: "monogram", ref: segment.slice(2) };
+  if (segment === "n:") return { kind: "none", ref: "" };
   if (segment.startsWith("i:")) {
     const url = urlByKey.get(segment);
-    return url ? { kind: "image", ref: url } : { kind: "monogram", ref: "•" };
+    return url ? { kind: "image", ref: url } : { kind: "none", ref: "" };
   }
   return null;
 }
