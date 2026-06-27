@@ -72,12 +72,17 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
   }
 
   if (block.type === "image") {
+    const circle = block.mediaShape === "circle";
     return (
       <div style={mediaWidthStyle(block)}>
         <img
           src={resolved.url}
           alt={label}
-          className="block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
+          className={
+            circle
+              ? "mx-auto block aspect-square w-full rounded-full border border-[var(--osio-border-soft)] object-cover shadow-[var(--osio-shadow-cell)]"
+              : "block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
+          }
         />
       </div>
     );

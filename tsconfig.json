@@ -30,13 +30,16 @@
       "@notion-db/contract-types": [
         "./src/shared/notion-database-sys/packages/contract-types/src/index.ts"
       ],
+      "@osionos/graph-engine": ["./packages/graph-engine/src/index.ts"],
+      "@osionos/graph-engine/*": ["./packages/graph-engine/src/*"],
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "packages"],
   "exclude": [
     "src/shared/notion-database-sys/packages",
     "src/shared/notion-database-sys/playground",
-    "src/shared/notion-database-sys/examples"
+    "src/shared/notion-database-sys/examples",
+    "src/shared/notion-database-sys/vendor"
   ]
 }

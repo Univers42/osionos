@@ -92,11 +92,52 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
     async function renderDiagram() {
       try {
         const mermaid = await ensureMermaidInitialized();
-        const { svg, bindFunctions } = await mermaid.render(renderId, source);
+
+        // Fonts must be ready before mermaid measures label text: measuring
+        // against an unloaded font yields 0/NaN widths, so dagre lays every node
+        // out at NaN coordinates -> a storm of "<g> transform: translate(undefined,
+        // NaN)" attribute errors. Awaiting fonts (idempotent) prevents that.
+        if (typeof document !== "undefined" && document.fonts) {
+          await document.fonts.ready;
+        }
+        // Let the browser flush layout so the target (and mermaid's measurement)
+        // run against real, non-zero box metrics — the other NaN source.
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        if (cancelled || renderTokenRef.current !== currentToken) return;
+
+        // Validate first: rendering an invalid/incomplete diagram (e.g. while it
+        // is still being typed) also makes mermaid's d3 layout emit the same NaN
+        // errors. parse() with suppressErrors returns false instead, so we skip.
+        const parsed = source.trim()
+          ? await mermaid.parse(source, { suppressErrors: true })
+          : false;
+
+        if (cancelled || renderTokenRef.current !== currentToken) return;
+
+        if (!parsed) {
+          target.innerHTML = "";
+          const pending = document.createElement("pre");
+          pending.className =
+            "text-xs leading-relaxed font-mono text-[var(--osio-fg-subtle)] whitespace-pre-wrap";
+          pending.textContent = source;
+          target.appendChild(pending);
+          return;
+        }
+
+        // Render *into* the attached, sized container (3rd arg) so mermaid
+        // measures text in a laid-out element rather than a detached temp node.
+        const { svg, bindFunctions } = await mermaid.render(renderId, source, target);
 
         if (cancelled || renderTokenRef.current !== currentToken) {
           cleanupMermaidOrphans(renderId);
           return;
+        }
+
+        // Defense in depth: if the layout still produced invalid coordinates,
+        // don't inject a broken SVG (which re-emits the browser attribute
+        // errors) — fall back to showing the source.
+        if (/translate\(\s*undefined|[\s(,]NaN/.test(svg)) {
+          throw new Error("mermaid layout produced NaN coordinates");
         }
 
         target.innerHTML = svg;
@@ -110,18 +151,39 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
         target.innerHTML = "";
         const fallback = document.createElement("pre");
         fallback.className =
-          "text-xs leading-relaxed font-mono text-[var(--osio-danger)] whitespace-pre-wrap";
+          "text-xs leading-relaxed font-mono text-[var(--osio-fg-subtle)] whitespace-pre-wrap";
         fallback.textContent = source;
         target.appendChild(fallback);
       }
     }
 
-    renderDiagram().catch((error: unknown) => {
-      console.error("[MermaidDiagram] Failed to render diagram", error);
-    });
+    // dagre lays nodes out at NaN coordinates when the container has no width
+    // yet (collapsed/off-screen/first paint), which spams "<g> transform:
+    // translate(undefined, NaN)". Only render once the box is actually sized,
+    // and re-check via a ResizeObserver if it starts at zero width.
+    let observer: ResizeObserver | null = null;
+    const renderWhenSized = () => {
+      if (cancelled || renderTokenRef.current !== currentToken) return;
+      if (!target.isConnected || target.offsetWidth === 0) return;
+      observer?.disconnect();
+      observer = null;
+      renderDiagram().catch((error: unknown) => {
+        console.error("[MermaidDiagram] Failed to render diagram", error);
+      });
+    };
+
+    if (target.offsetWidth > 0) {
+      renderWhenSized();
+    } else if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(renderWhenSized);
+      observer.observe(target);
+    } else {
+      renderWhenSized();
+    }
 
     return () => {
       cancelled = true;
+      observer?.disconnect();
       // Clean up on unmount or re-render to prevent orphaned nodes
       // persisting across page navigations.
       if (lastRenderIdRef.current) {

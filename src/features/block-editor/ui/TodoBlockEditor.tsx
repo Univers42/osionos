@@ -16,6 +16,7 @@ import { EditableContent } from "@/components/blocks/EditableContent";
 import { getBlockPlaceholder, type Block } from "@/entities/block";
 
 import { usePageStore } from "@/store/usePageStore";
+import { BlockListCollapse } from "./BlockListCollapse";
 
 export const TodoBlockEditor: React.FC<{
   block: Block;
@@ -24,7 +25,7 @@ export const TodoBlockEditor: React.FC<{
   onUpdateBlock?: (blockId: string, updates: Partial<Block>) => void;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
-  onRequestSlashMenu?: (position: { x: number; y: number }) => void;
+  onRequestSlashMenu?: (position: { x: number; y: number; top: number }) => void;
 }> = ({ block, pageId, style, onUpdateBlock, onChange, onKeyDown, onRequestSlashMenu }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
   const page = usePageStore((s) => s.activePage);
@@ -40,10 +41,22 @@ export const TodoBlockEditor: React.FC<{
   }, [page, block.id, block.checked, onUpdateBlock, updateBlock]);
 
   return (
-    <div className="flex items-start gap-2 pl-5">
+    <div className="group relative flex items-start gap-2 pl-5">
+      {block.children?.length ? (
+        <BlockListCollapse
+          collapsed={block.collapsed}
+          onToggle={() =>
+            (onUpdateBlock ?? ((id, u) => page && updateBlock(page.id, id, u)))(block.id, {
+              collapsed: !block.collapsed,
+            })
+          }
+        />
+      ) : null}
       <button
         type="button"
         data-testid="todo-checkbox"
+        aria-pressed={block.checked}
+        aria-label={block.checked ? "Mark to-do as not done" : "Mark to-do as done"}
         onClick={toggleChecked}
         className={[
           "shrink-0 mt-[3px] w-4 h-4 rounded border flex items-center justify-center cursor-pointer",

@@ -19,7 +19,7 @@ import { usePageStore } from '@/store/usePageStore';
 import {
   COLLECTION_ROLE_BADGES,
 } from '@/shared/lib/markengine/uiCollectionAssets';
-import { SettingsCenter } from '@/features/settings/SettingsCenter';
+import { LazySettingsCenter } from '@/features/settings/LazySettingsCenter';
 
 interface Props {
   onClose: () => void;
@@ -58,7 +58,7 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
     <div className="fixed inset-0 z-[var(--osio-z-modal)] flex items-center justify-center bg-[var(--osio-overlay)] px-4">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 shadow-2xl"
+        className="w-full max-w-sm rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 shadow-[var(--osio-shadow-modal)]"
       >
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -78,14 +78,14 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
           <button
             type="button"
             onClick={() => setMode('login')}
-            className={`rounded px-2 py-1 ${mode === 'login' ? 'bg-[var(--osio-bg-surface)] shadow-sm' : ''}`}
+            className={`rounded px-2 py-1 ${mode === 'login' ? 'bg-[var(--osio-bg-surface)] shadow-osio-sm' : ''}`}
           >
             Se connecter
           </button>
           <button
             type="button"
             onClick={() => setMode('signup')}
-            className={`rounded px-2 py-1 ${mode === 'signup' ? 'bg-[var(--osio-bg-surface)] shadow-sm' : ''}`}
+            className={`rounded px-2 py-1 ${mode === 'signup' ? 'bg-[var(--osio-bg-surface)] shadow-osio-sm' : ''}`}
           >
             Créer
           </button>
@@ -97,7 +97,7 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
+              className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus:border-[var(--osio-accent)]"
               placeholder="Nom affiché"
             />
           </label>
@@ -109,7 +109,7 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
+            className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus:border-[var(--osio-accent)]"
             placeholder="name@example.com"
             required
           />
@@ -121,7 +121,7 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
+            className="mt-1 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-2 text-sm text-[var(--osio-fg-default)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus:border-[var(--osio-accent)]"
             required
           />
         </label>
@@ -294,7 +294,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
         className={[
           'z-[var(--osio-z-popover)] w-[300px]',
           'bg-[var(--osio-bg-surface)] border border-[var(--osio-border-default)]',
-          'rounded-xl shadow-xl',
+          'rounded-lg shadow-[var(--osio-shadow-menu)]',
           'max-h-[calc(100vh-80px)] overflow-y-auto overflow-x-hidden',
         ].join(' ')}
       >
@@ -355,7 +355,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
         <button
           type="button"
           onClick={handleNewWorkspace}
-          className="flex h-8 w-full items-center gap-2 px-3 text-left text-sm text-[var(--osio-accent)] hover:bg-[var(--osio-bg-hover)]"
+          className="flex h-8 w-full items-center gap-2 px-3 text-left text-sm text-[var(--osio-accent-text)] transition-colors hover:bg-[var(--osio-bg-hover)]"
         >
           <Plus size={16} /> New workspace
         </button>
@@ -455,7 +455,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1 text-[var(--osio-fg-default)]">
               <span>Try the new sidebar</span>
-              <span className="rounded bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-xs text-[var(--osio-accent)]">New</span>
+              <span className="rounded bg-[var(--osio-accent-subtle)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">New</span>
             </span>
             <span className="block text-xs font-normal text-[var(--osio-fg-muted)]">
               Keep your pages, meetings, and AI within reach.
@@ -468,7 +468,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
       </footer>
       </div>
       {authOpen && <AuthDialog onClose={() => setAuthOpen(false)} />}
-      {settingsTab && <SettingsCenter initialTab={settingsTab === 'people' ? 'people' : 'general'} onClose={() => setSettingsTab(null)} />}
+      {settingsTab && <LazySettingsCenter initialTab={settingsTab === 'people' ? 'people' : 'general'} onClose={() => setSettingsTab(null)} />}
     </>
   );
 

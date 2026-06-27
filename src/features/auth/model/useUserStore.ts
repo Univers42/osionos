@@ -17,18 +17,21 @@ import {
   INITIAL_PERSONAS,
   ALLOW_OFFLINE_MODE,
   REQUIRE_BRIDGE_SESSION,
+  isPortalMode,
   type BridgeSessionImport,
   consumeBridgeSessionFromLocation,
   createOfflineWorkspace,
   fetchWorkspaces,
   apiJwtFromSessionToken,
   pageApiJwtFromSessionToken,
+  isAdminFromSessionToken,
   isBridgeSession,
   loginPersona,
   partition,
   seededWorkspaceSession,
   signupPersona,
 } from '@/features/auth/model/userStore.helpers';
+import { selectActivatedSessions } from '@/features/auth/model/sessionSelect';
 
 export type { StaticPersona, Workspace } from '@/entities/user';
 
@@ -39,6 +42,23 @@ const ACTIVE_ACCOUNTS_STORAGE_KEY = 'osionos:active-accounts';
 const WORKSPACES_STORAGE_KEY = 'osionos:user-workspaces';
 const ACTIVE_CONTEXT_STORAGE_KEY = 'osionos:user-context';
 const BRIDGE_SESSION_STORAGE_KEY = 'osionos:bridge-session';
+// Set in sessionStorage immediately BEFORE a website redirect when the user
+// deliberately chose "Add another account" — tells resolveInitialState to MERGE
+// the returning handoff into the existing accounts. Absent (the default for any
+// fresh sign-in) → the handoff REPLACES the account set, so a new login never
+// inherits a different person's session left in this browser.
+const ADDING_ACCOUNT_FLAG = 'osionos:adding-account';
+// Persisted bridge sessions age out after this window so a stale cross-account
+// record can't linger in the switcher indefinitely (the never-expiring bug).
+const BRIDGE_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Read+clear the deliberate "add account" intent (one-shot, survives the redirect). */
+function consumeAddingAccountIntent(): boolean {
+  if (typeof sessionStorage === 'undefined') return false;
+  const adding = sessionStorage.getItem(ADDING_ACCOUNT_FLAG) === '1';
+  if (adding) sessionStorage.removeItem(ADDING_ACCOUNT_FLAG);
+  return adding;
+}
 
 type PersistedUserContext = {
   activeUserId?: string;
@@ -97,26 +117,43 @@ function savePersistedPersonas(personas: typeof INITIAL_PERSONAS) {
   localStorage.setItem(ACTIVE_ACCOUNTS_STORAGE_KEY, JSON.stringify(persisted));
 }
 
-function readPersistedBridgeSession(): PersistedBridgeSession | null {
-  if (typeof localStorage === 'undefined') return null;
+// Bridge sessions are persisted as a MAP keyed by userId so MULTIPLE accounts
+// survive a hard refresh (accumulate-accounts). Reads migrate the legacy
+// single-record shape transparently.
+function readPersistedBridgeSessions(): Record<string, PersistedBridgeSession> {
+  if (typeof localStorage === 'undefined') return {};
   try {
     const raw = localStorage.getItem(BRIDGE_SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const record = JSON.parse(raw) as PersistedBridgeSession;
-    if (!record.session?.userId || !record.persona?.id) return null;
-    if (record.expiresAt && Date.parse(record.expiresAt) <= Date.now()) {
-      localStorage.removeItem(BRIDGE_SESSION_STORAGE_KEY);
-      return null;
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    const records: PersistedBridgeSession[] = Array.isArray(parsed)
+      ? parsed as PersistedBridgeSession[]
+      : parsed && typeof parsed === 'object' && (parsed as PersistedBridgeSession).session
+        ? [parsed as PersistedBridgeSession]                               // legacy single record
+        : parsed && typeof parsed === 'object'
+          ? Object.values(parsed as Record<string, PersistedBridgeSession>) // map
+          : [];
+    const out: Record<string, PersistedBridgeSession> = {};
+    for (const record of records) {
+      if (!record?.session?.userId || !record?.persona?.id) continue;
+      if (record.expiresAt && Date.parse(record.expiresAt) <= Date.now()) continue;
+      out[record.session.userId] = record;
     }
-    return record;
+    return out;
   } catch {
-    return null;
+    return {};
   }
 }
 
-function savePersistedBridgeSession(record: PersistedBridgeSession) {
+function savePersistedBridgeSessions(map: Record<string, PersistedBridgeSession>) {
   if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(BRIDGE_SESSION_STORAGE_KEY, JSON.stringify(record));
+  localStorage.setItem(BRIDGE_SESSION_STORAGE_KEY, JSON.stringify(map));
+}
+
+function savePersistedBridgeSession(record: PersistedBridgeSession) {
+  const map = readPersistedBridgeSessions();
+  map[record.session.userId] = record;
+  savePersistedBridgeSessions(map);
 }
 
 function clearPersistedBridgeSession(userId?: string) {
@@ -125,8 +162,11 @@ function clearPersistedBridgeSession(userId?: string) {
     localStorage.removeItem(BRIDGE_SESSION_STORAGE_KEY);
     return;
   }
-  const record = readPersistedBridgeSession();
-  if (record?.session.userId === userId) localStorage.removeItem(BRIDGE_SESSION_STORAGE_KEY);
+  const map = readPersistedBridgeSessions();
+  if (map[userId]) {
+    delete map[userId];
+    savePersistedBridgeSessions(map);
+  }
 }
 
 function uniquePersonas(personas: typeof INITIAL_PERSONAS) {
@@ -165,22 +205,43 @@ function createOfflineSessions(personas: typeof INITIAL_PERSONAS) {
   return { sessions, firstUserId };
 }
 
-function activateBridgeSession(record: PersistedBridgeSession) {
-  const storedPersona = { ...record.persona, persistInSessions: true };
-  const bridgeSession: UserSession = {
-    ...record.session,
-    privateWorkspaces: record.session.privateWorkspaces ?? [],
-    sharedWorkspaces: record.session.sharedWorkspaces ?? [],
-  };
-  const nextPersonas = [storedPersona];
-  const sessions: Record<string, UserSession> = { [bridgeSession.userId]: bridgeSession };
-  const workspaceId = bridgeSession.privateWorkspaces[0]?._id ?? bridgeSession.sharedWorkspaces[0]?._id ?? '';
-  const activeWorkspaceByUser = { [bridgeSession.userId]: workspaceId };
+function activateBridgeSessions(records: PersistedBridgeSession[], preferredActiveUserId?: string) {
+  const personas: typeof INITIAL_PERSONAS = [];
+  const sessions: Record<string, UserSession> = {};
+  const workspaceByUser: Record<string, string> = {};
+  const persistedMap: Record<string, PersistedBridgeSession> = {};
+  for (const record of records) {
+    const storedPersona = { ...record.persona, persistInSessions: true };
+    const bridgeSession: UserSession = {
+      ...record.session,
+      privateWorkspaces: record.session.privateWorkspaces ?? [],
+      sharedWorkspaces: record.session.sharedWorkspaces ?? [],
+    };
+    personas.push(storedPersona);
+    sessions[bridgeSession.userId] = bridgeSession;
+    workspaceByUser[bridgeSession.userId] = bridgeSession.privateWorkspaces[0]?._id ?? bridgeSession.sharedWorkspaces[0]?._id ?? '';
+    persistedMap[bridgeSession.userId] = {
+      ...record,
+      persona: storedPersona,
+      session: bridgeSession,
+      // Guarantee a real expiry so a stale cross-account record ages out of the
+      // switcher (readPersistedBridgeSessions drops expired records).
+      expiresAt: record.expiresAt || new Date(Date.now() + BRIDGE_SESSION_TTL_MS).toISOString(),
+    };
+  }
+  const nextPersonas = uniquePersonas(personas);
+  const storedContext = readPersistedContext();
+  const activeUserId = preferredActiveUserId && sessions[preferredActiveUserId]
+    ? preferredActiveUserId
+    : storedContext.activeUserId && sessions[storedContext.activeUserId]
+      ? storedContext.activeUserId
+      : (records[0]?.session.userId ?? '');
+  const activeWorkspaceByUser = { ...workspaceByUser, ...(storedContext.activeWorkspaceByUser ?? {}) };
   savePersistedPersonas(nextPersonas);
   savePersistedWorkspaces(sessions);
-  savePersistedBridgeSession({ ...record, persona: storedPersona, session: bridgeSession });
-  savePersistedContext({ activeUserId: bridgeSession.userId, activeWorkspaceByUser });
-  return { personas: nextPersonas, sessions, activeUserId: bridgeSession.userId, activeWorkspaceByUser };
+  savePersistedBridgeSessions(persistedMap);
+  savePersistedContext({ activeUserId, activeWorkspaceByUser });
+  return { personas: nextPersonas, sessions, activeUserId, activeWorkspaceByUser };
 }
 
 function bridgeSessionRequiredState() {
@@ -197,6 +258,18 @@ function bridgeSessionRequiredState() {
 
 function bridgeOnlyMode() {
   return REQUIRE_BRIDGE_SESSION && !ALLOW_OFFLINE_MODE;
+}
+
+function portalRequiredState() {
+  return {
+    personas: [] as typeof INITIAL_PERSONAS,
+    sessions: {} as Record<string, UserSession>,
+    activeUserId: '',
+    activeWorkspaceByUser: {} as Record<string, string>,
+    initialized: true,
+    loading: false,
+    error: null as string | null,
+  };
 }
 
 function initialPersonas() {
@@ -240,7 +313,7 @@ async function connectedOrOfflineState(personas: typeof INITIAL_PERSONAS) {
   let firstUserId = '';
   const firstLogin = await loginPersona(INITIAL_PERSONAS[0]);
 
-  if (firstLogin) {
+  if (firstLogin?.ok) {
     const { userId, accessToken, refreshToken } = firstLogin;
     personas[0] = { ...personas[0], id: userId };
     const workspaces = await fetchWorkspaces(accessToken);
@@ -251,7 +324,7 @@ async function connectedOrOfflineState(personas: typeof INITIAL_PERSONAS) {
     const remainingResults = await Promise.all(INITIAL_PERSONAS.slice(1).map(loginPersona));
     for (let i = 0; i < remainingResults.length; i++) {
       const loginResult = remainingResults[i];
-      if (!loginResult) continue;
+      if (!loginResult?.ok) continue;
       const personaIndex = i + 1;
       personas[personaIndex] = { ...personas[personaIndex], id: loginResult.userId };
       const parts = partition(await fetchWorkspaces(loginResult.accessToken), loginResult.userId);
@@ -265,8 +338,18 @@ async function connectedOrOfflineState(personas: typeof INITIAL_PERSONAS) {
 }
 
 async function resolveInitialState() {
-  const bridgeSession = await consumeBridgeSessionFromLocation().catch(() => null) ?? readPersistedBridgeSession();
-  if (bridgeSession) return { ...activateBridgeSession(bridgeSession), initialized: true, loading: false, error: null };
+  const fromUrl = await consumeBridgeSessionFromLocation().catch(() => null);
+  // A fresh handoff REPLACES the account set (fresh primary login never inherits
+  // a different person's session); the in-app "Add another account" intent flag
+  // opts into MERGE; a plain refresh restores every persisted account. See
+  // selectActivatedSessions for the full isolation rule.
+  const fromUserId = fromUrl?.session?.userId ?? null;
+  const adding = fromUserId ? consumeAddingAccountIntent() : false;
+  const records = selectActivatedSessions(fromUserId, fromUrl, readPersistedBridgeSessions(), adding);
+  if (records.length > 0) {
+    return { ...activateBridgeSessions(records, fromUserId ?? undefined), initialized: true, loading: false, error: null };
+  }
+  if (isPortalMode()) return portalRequiredState();
   if (bridgeOnlyMode()) return bridgeSessionRequiredState();
   const personas = initialPersonas();
   return connectedOrOfflineState(personas);
@@ -274,7 +357,7 @@ async function resolveInitialState() {
 
 /** Zustand store managing multi-user authentication and workspace access. */
 export const useUserStore = create<UserStore>((set, get) => ({
-  personas:     uniquePersonas([...INITIAL_PERSONAS.map(p => ({ ...p })), ...readPersistedPersonas()]),
+  personas:     isPortalMode() ? [] : uniquePersonas([...INITIAL_PERSONAS.map(p => ({ ...p })), ...readPersistedPersonas()]),
   sessions:     {},
   activeUserId: '',
   activeWorkspaceByUser: readPersistedContext().activeWorkspaceByUser ?? {},
@@ -290,7 +373,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
     try {
       set(await resolveInitialState());
     } catch {
-      set(bridgeOnlyMode() ? bridgeSessionRequiredState() : offlineState());
+      set(isPortalMode() ? portalRequiredState() : bridgeOnlyMode() ? bridgeSessionRequiredState() : offlineState());
     } finally {
       _initInProgress = false;
     }
@@ -326,10 +409,19 @@ export const useUserStore = create<UserStore>((set, get) => ({
     const loginResult = mode === 'signup'
       ? await signupPersona(persona)
       : await loginPersona(persona);
-    const userId = loginResult?.userId ?? `local-${crypto.randomUUID()}`;
+    // loginResult is null ONLY when no backend is configured (genuine offline). A reachable
+    // backend returns {ok:true} or {ok:false,message}; a real auth failure (wrong password,
+    // server error) MUST be rejected — never silently turned into a `local-*` mock account,
+    // which would "accept" any password and leave the old account visible.
+    if (loginResult && !loginResult.ok) {
+      set({ error: loginResult.message ?? 'Invalid email or password.', loading: false });
+      return false;
+    }
+    const ok = loginResult?.ok ? loginResult : null;
+    const userId = ok?.userId ?? `local-${crypto.randomUUID()}`;
     const storedPersona = { ...persona, id: userId };
-    const workspaces = loginResult ? await fetchWorkspaces(loginResult.accessToken) : [];
-    const parts = loginResult
+    const workspaces = ok ? await fetchWorkspaces(ok.accessToken) : [];
+    const parts = ok
       ? partition(workspaces, userId)
       : {
         privateWorkspaces: [createOfflineWorkspace(userId, `${displayName}'s workspace`)],
@@ -342,8 +434,8 @@ export const useUserStore = create<UserStore>((set, get) => ({
         ...state.sessions,
         [userId]: {
           userId,
-          accessToken: loginResult?.accessToken ?? '',
-          refreshToken: loginResult?.refreshToken ?? '',
+          accessToken: ok?.accessToken ?? '',
+          refreshToken: ok?.refreshToken ?? '',
           privateWorkspaces: parts.privateWorkspaces,
           sharedWorkspaces: parts.sharedWorkspaces,
         },
@@ -355,11 +447,22 @@ export const useUserStore = create<UserStore>((set, get) => ({
       savePersistedPersonas(personas);
       savePersistedWorkspaces(sessions);
       savePersistedContext({ activeUserId: userId, activeWorkspaceByUser });
+      // Persist a per-account bridge session so an added account survives a hard
+      // refresh (the accumulate-accounts fix). Honour the "keep me signed in" box.
+      if (ok && persistInSessions) {
+        savePersistedBridgeSession({
+          ok: true,
+          session: sessions[userId],
+          persona: { ...storedPersona, persistInSessions: true },
+          expiresAt: new Date(Date.now() + BRIDGE_SESSION_TTL_MS).toISOString(),
+        });
+      }
       return {
         personas,
         activeUserId: userId,
         activeWorkspaceByUser,
         sessions,
+        error: null,
       };
     });
 
@@ -495,9 +598,23 @@ export const useUserStore = create<UserStore>((set, get) => ({
     return true;
   },
 
-  importBridgeSession: (session, persona, expiresAt) => {
-    set(() => activateBridgeSession({ ok: true, session, persona, expiresAt }));
-  },
+  importBridgeSession: (session, persona, expiresAt) => set((state) => {
+    const record: PersistedBridgeSession = { ok: true, session, persona: { ...persona, persistInSessions: true }, expiresAt };
+    savePersistedBridgeSession(record);
+    const bridgeSession: UserSession = {
+      ...session,
+      privateWorkspaces: session.privateWorkspaces ?? [],
+      sharedWorkspaces: session.sharedWorkspaces ?? [],
+    };
+    const personas = uniquePersonas([...state.personas, record.persona]);
+    const sessions = { ...state.sessions, [session.userId]: bridgeSession };
+    const workspaceId = bridgeSession.privateWorkspaces[0]?._id ?? bridgeSession.sharedWorkspaces[0]?._id ?? '';
+    const activeWorkspaceByUser = { ...state.activeWorkspaceByUser, [session.userId]: state.activeWorkspaceByUser[session.userId] ?? workspaceId };
+    savePersistedPersonas(personas);
+    savePersistedWorkspaces(sessions);
+    savePersistedContext({ activeUserId: session.userId, activeWorkspaceByUser });
+    return { personas, sessions, activeUserId: session.userId, activeWorkspaceByUser, error: null };
+  }),
 
   activeSession: () => {
     const { sessions, activeUserId } = get();
@@ -520,6 +637,8 @@ export const useUserStore = create<UserStore>((set, get) => ({
   activeJwt: () => apiJwtFromSessionToken(get().activeSession()?.accessToken) || null,
 
   activePageJwt: () => pageApiJwtFromSessionToken(get().activeSession()?.accessToken) || null,
+
+  isAdmin: () => isAdminFromSessionToken(get().activeSession()?.accessToken),
 
   personaById: (id: string) => get().personas.find(p => p.id === id),
 }));

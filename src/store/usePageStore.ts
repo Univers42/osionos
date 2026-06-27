@@ -11,9 +11,12 @@
 /* ************************************************************************** */
 
 import { create } from "zustand";
+import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import {
   loadRecents,
   saveRecents,
+  addRecent,
+  saveActivePage,
   loadPagesCache,
   derivePageState,
   savePagesCache,
@@ -25,6 +28,7 @@ import {
   applyBlockDelete,
   applyBlockMove,
   applyBlockMoveAcrossTree,
+  pruneColumns,
   applyBlockIndent,
   applyBlockOutdent,
   applyBlockTypeChange,
@@ -42,6 +46,11 @@ import {
   createPermanentlyDeletePage,
   createDuplicatePage,
   createMovePage,
+  createReorderSibling,
+  createAddTemplate,
+  createSetDefaultTemplate,
+  createCreatePageFromTemplate,
+  createPatchTemplateRecurrence,
 } from "./pageStore.actions";
 import {
   debouncePersistContent,
@@ -86,7 +95,7 @@ function buildNavigationPath(
 function applyPageContentUpdate(blocks: NonNullable<PageEntry["content"]>) {
   return (page: PageEntry): PageEntry => ({
     ...page,
-    content: blocks,
+    content: pruneColumns(blocks),
   });
 }
 
@@ -142,7 +151,12 @@ export const usePageStore = create<PageStore>((set, get) => ({
   addPage: createAddPage(set, get),
   addDatabasePage: createAddDatabasePage(set, get),
   duplicatePage: createDuplicatePage(set, get),
+  addTemplate: createAddTemplate(set, get),
+  setDefaultTemplate: createSetDefaultTemplate(set, get),
+  createPageFromTemplate: createCreatePageFromTemplate(set, get),
+  patchTemplateRecurrence: createPatchTemplateRecurrence(set, get),
   movePage: createMovePage(set, get),
+  reorderSibling: createReorderSibling(set),
   archivePage: createArchivePage(set, get),
   deletePage: createDeletePage(set, get),
   restorePage: createRestorePage(set, get),
@@ -160,10 +174,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
     }
 
     set((s) => {
-      const recents = [
-        page,
-        ...s.recents.filter((r) => r.id !== page.id),
-      ].slice(0, 10);
+      const recents = addRecent(s.recents, page);
       saveRecents(recents);
 
       const newPath = buildNavigationPath(s.navigationPath, page);
@@ -179,6 +190,8 @@ export const usePageStore = create<PageStore>((set, get) => ({
     if (jwt && page.kind === "page") {
       get().fetchPageContent(page.id, jwt);
     }
+    // Reflect the opened page as a tab in the active pane (grid is the renderer).
+    useWorkspaceLayout.getState().syncFromActivePage(page);
   },
 
   clearWorkspace: (workspaceId) => {
@@ -420,6 +433,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       (p) =>
         !p.parentPageId &&
         !p.archivedAt &&
+        !p.isTemplate &&
         canReadPage(p, getCurrentPageAccessContext()),
     ),
 
@@ -428,6 +442,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       (p) =>
         p.parentPageId === parentId &&
         !p.archivedAt &&
+        !p.isTemplate &&
         canReadPage(p, getCurrentPageAccessContext()),
     ),
 
@@ -435,6 +450,24 @@ export const usePageStore = create<PageStore>((set, get) => ({
     (get().pages[workspaceId] ?? []).filter(
       (p) => p.archivedAt && canReadPage(p, getCurrentPageAccessContext()),
     ),
+
+  templatePages: (workspaceId) =>
+    (get().pages[workspaceId] ?? []).filter(
+      (p) =>
+        p.isTemplate &&
+        !p.archivedAt &&
+        canReadPage(p, getCurrentPageAccessContext()),
+    ),
+
+  defaultTemplate: (workspaceId) =>
+    get()
+      .templatePages(workspaceId)
+      .find((p) => p.isDefaultTemplate),
+
+  templatePageBySurface: (workspaceId, surface) =>
+    get()
+      .templatePages(workspaceId)
+      .find((p) => p.templateSurface === surface),
 
   pageById: (pageId) => {
     const state = get();
@@ -447,3 +480,10 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
 // Register store access for persistence layer (avoids circular imports)
 registerPageLookup((pageId) => usePageStore.getState().pageById(pageId));
+
+// Persist the open page so a refresh restores it instead of dropping to Home.
+usePageStore.subscribe((state, previous) => {
+  if (state.activePage?.id !== previous.activePage?.id) {
+    saveActivePage(state.activePage);
+  }
+});

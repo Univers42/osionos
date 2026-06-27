@@ -25,6 +25,7 @@ import {
   slashCommandEntry,
   slashMenu,
 } from "../../browser/core/app.mjs";
+import { isCanvasV2Run, readCellGrid, setupCanvasFlag } from "../../browser/core/layout.mjs";
 
 async function selectLayoutCommand(page, label) {
   const entry = slashCommandEntry(page, label).last();
@@ -117,6 +118,10 @@ async function syntheticPointerDragBy(page, locator, deltaX, deltaY) {
 }
 
 test.describe("layout editor", () => {
+  test.beforeEach(async ({ page }) => {
+    await setupCanvasFlag(page);
+  });
+
   test("home renders an editable cross-database dashboard", async ({ page, baseURL }) => {
     await page.goto(baseURL, { waitUntil: "domcontentloaded" });
 
@@ -168,6 +173,7 @@ test.describe("layout editor", () => {
   });
 
   test("dragging one cell handle onto another swaps their grid positions", async ({ page, baseURL }) => {
+    test.skip(isCanvasV2Run, "Canvas V2 replaces drop-swap with collision push-down (covered in layoutEditorV2.spec.mjs)");
     await createInlineLayout(page, baseURL);
     const emptyState = page.locator(".osionos-layout-empty-state").first();
     await emptyState.getByRole("button", { name: /Use dashboard/i }).click();
@@ -188,11 +194,11 @@ test.describe("layout editor", () => {
   test("cell resize handles change the grid span", async ({ page, baseURL }) => {
     await createInlineLayout(page, baseURL);
     const cell = await addLayoutCell(page);
-    const before = await cell.evaluate((node) => getComputedStyle(node).gridColumnEnd);
+    const before = (await readCellGrid(cell)).colStart;
 
     await pointerDragBy(page, cell.locator(".osionos-layout-resize-hit--left"), 180, 0);
 
-    await expect.poll(() => cell.evaluate((node) => getComputedStyle(node).gridColumnEnd)).not.toBe(before);
+    await expect.poll(async () => (await readCellGrid(cell)).colStart).not.toBe(before);
   });
 
   test("auto-layout cell shows live resize dimensions before drop", async ({ page, baseURL }) => {
@@ -218,6 +224,7 @@ test.describe("layout editor", () => {
   });
 
   test("layout grid keeps fixed row tracks for reliable collision math", async ({ page, baseURL }) => {
+    test.skip(isCanvasV2Run, "Canvas V2 positions cells absolutely — there are no CSS grid tracks");
     await createInlineLayout(page, baseURL);
     const cell = await addLayoutCell(page);
     await cell.click();
@@ -237,11 +244,11 @@ test.describe("layout editor", () => {
     const cell = await addLayoutCell(page);
 
     await pointerDragBy(page, cell.locator(".osionos-layout-cell-drag"), 0, 220);
-    const before = await cell.evaluate((node) => getComputedStyle(node).gridRowStart);
+    const before = (await readCellGrid(cell)).rowStart;
 
     await syntheticPointerDragBy(page, cell.locator(".osionos-layout-resize-hit--top"), 0, -140);
 
-    await expect.poll(() => cell.evaluate((node) => getComputedStyle(node).gridRowStart)).not.toBe(before);
+    await expect.poll(async () => (await readCellGrid(cell)).rowStart).not.toBe(before);
   });
 
   test("selected fixed cell frame clips overflowing content", async ({ page, baseURL }) => {
@@ -293,6 +300,7 @@ test.describe("layout editor", () => {
   });
 
   test("cell grab handle previews fluid pointer movement before drop", async ({ page, baseURL }) => {
+    test.skip(isCanvasV2Run, "Canvas V2 previews via --osio-cell-dx/dy gesture vars (covered in layoutEditorV2.spec.mjs)");
     await createInlineLayout(page, baseURL);
     const cell = await addLayoutCell(page);
     const handle = cell.locator(".osionos-layout-cell-drag");
@@ -315,22 +323,23 @@ test.describe("layout editor", () => {
   test("cell grab handle moves a cell to a new grid slot", async ({ page, baseURL }) => {
     await createInlineLayout(page, baseURL);
     const cell = await addLayoutCell(page);
-    const before = await cell.evaluate((node) => getComputedStyle(node).gridRowStart);
+    const before = (await readCellGrid(cell)).rowStart;
 
     await pointerDragBy(page, cell.locator(".osionos-layout-cell-drag"), 0, 220);
 
-    await expect.poll(() => cell.evaluate((node) => getComputedStyle(node).gridRowStart)).not.toBe(before);
-    const after = await cell.evaluate((node) => getComputedStyle(node).gridRowStart);
+    await expect.poll(async () => (await readCellGrid(cell)).rowStart).not.toBe(before);
+    const after = (await readCellGrid(cell)).rowStart;
     expect(Number.parseInt(after, 10)).toBeLessThanOrEqual(4);
 
     await page.keyboard.press("Control+Z");
-    await expect.poll(() => cell.evaluate((node) => getComputedStyle(node).gridRowStart)).toBe(before);
+    await expect.poll(async () => (await readCellGrid(cell)).rowStart).toBe(before);
 
     await page.keyboard.press("Control+Shift+Z");
-    await expect.poll(() => cell.evaluate((node) => getComputedStyle(node).gridRowStart)).toBe(after);
+    await expect.poll(async () => (await readCellGrid(cell)).rowStart).toBe(after);
   });
 
   test("cell grab handle does not relocate to a nearby slot when target is occupied", async ({ page, baseURL }) => {
+    test.skip(isCanvasV2Run, "Canvas V2 resolves collisions by pushing the occupant down (covered in layoutEditorV2.spec.mjs)");
     await createInlineLayout(page, baseURL);
     await page.locator(".osionos-layout-empty-state").first().getByRole("button", { name: /Use dashboard/i }).click();
     const cells = page.locator(".osionos-layout-cell");
@@ -356,7 +365,7 @@ test.describe("layout editor", () => {
 
     await syntheticPointerDragBy(page, cell.locator(".osionos-layout-cell-drag"), 0, 720);
 
-    await expect.poll(async () => Number.parseInt(await cell.evaluate((node) => getComputedStyle(node).gridRowStart), 10)).toBeGreaterThan(5);
+    await expect.poll(async () => Number.parseInt((await readCellGrid(cell)).rowStart, 10)).toBeGreaterThan(5);
   });
 
   test("cell inspector docks to the viewport edge and closes from the canvas", async ({ page, baseURL }) => {

@@ -19,12 +19,12 @@ import React, {
 } from "react";
 import { Grid3X3, Plus, SlidersHorizontal, X } from "lucide-react";
 
-import { createViewShowcaseCells } from "@/widgets/database-view/model/databaseViewCatalog";
+import { createViewShowcaseCells } from "@/widgets/database-view/model/databaseViewShowcase";
 import type { Block } from "@/entities/block";
 import { isCanvasV2Enabled } from "@/shared/config/featureFlags";
 import { usePageStore } from "@/store/usePageStore";
 import { BlockEditorSurface, type SurfaceBlockEditorProps } from "../BlockEditorSurface";
-import { useCanvasStoreBridge, type CanvasPersistHandler } from "./store/canvasStore";
+import { CanvasRoot } from "./view/CanvasRoot";
 
 type LayoutMode = "inline" | "full_page";
 type LayoutGuideVisibility = "auto" | "always" | "never";
@@ -271,6 +271,7 @@ function layoutCellHasHeavyBlocks(blocks: Block[] | undefined): boolean {
   return Boolean(blocks?.some((nestedBlock) => (
     nestedBlock.type === "database_inline" ||
     nestedBlock.type === "database_full_page" ||
+    nestedBlock.type === "graph_view" ||
     layoutCellHasHeavyBlocks(nestedBlock.children)
   )));
 }
@@ -757,17 +758,29 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
     undoStack: [],
     redoStack: [],
   });
+  // Measured auto-height footprints are PRESENTATION state: they depend on
+  // this instance's rendered width, so they are resolved at render time and
+  // NEVER persisted. Persisting them (the old auto-write effect) made two
+  // views of the same page at different widths overwrite each other's spans
+  // through the page store in an infinite loop (React #185 — the app crashed
+  // the moment a pane resize made their measurements diverge).
+  const resolvedCells = useMemo(
+    () => resolveMeasuredAutoHeightFootprints(cells, config, measuredCellHeightsRef.current),
+    // measurementVersion invalidates the memo when a cell crosses a row boundary
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cells, config, measurementVersion],
+  );
   const selectedCell = useMemo(
-    () => cells.find((cell) => cell.id === selectedCellId) ?? null,
-    [cells, selectedCellId],
+    () => resolvedCells.find((cell) => cell.id === selectedCellId) ?? null,
+    [resolvedCells, selectedCellId],
   );
   useEffect(() => {
-    cellsRef.current = cells;
-    const liveCellIds = new Set(cells.map((cell) => cell.id));
+    cellsRef.current = resolvedCells;
+    const liveCellIds = new Set(resolvedCells.map((cell) => cell.id));
     for (const cellId of measuredCellHeightsRef.current.keys()) {
       if (!liveCellIds.has(cellId)) measuredCellHeightsRef.current.delete(cellId);
     }
-  }, [cells]);
+  }, [resolvedCells]);
 
   const configRef = useRef(config);
   useEffect(() => {
@@ -808,14 +821,6 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
     },
     [block.id, onUpdateBlock, pageId, updateBlock],
   );
-
-  useEffect(() => {
-    if (interactionMode) return;
-    const nextCells = resolveMeasuredAutoHeightFootprints(cellsRef.current, config, measuredCellHeightsRef.current);
-    if (nextCells === cellsRef.current) return;
-    cellsRef.current = nextCells;
-    updateLayout({ layoutCells: nextCells });
-  }, [cells, config, interactionMode, measurementVersion, updateLayout]);
 
   const captureLayoutSnapshot = useCallback((): LayoutHistorySnapshot => ({
     layoutConfig: structuredClone(config),
@@ -1451,11 +1456,11 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
           >
             <LayoutAlignmentGuidesLayer guides={alignmentGuides} />
 
-            {cells.length === 0 ? (
+            {resolvedCells.length === 0 ? (
               <LayoutEmptyState onAdd={() => addCell()} onTemplate={applyTemplate} />
             ) : null}
 
-            {cells.map((cell) => (
+            {resolvedCells.map((cell) => (
               <LayoutCellView
                 key={cell.id}
                 cell={cell}
@@ -1501,18 +1506,8 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
   );
 };
 
-const LayoutBlockEditorV2Bridge: React.FC<LayoutBlockEditorProps> = (props) => {
-  const { block, onUpdateBlock } = props;
-  const persist = useCallback<CanvasPersistHandler>(
-    (layoutBlockId, patch) => onUpdateBlock?.(layoutBlockId, patch),
-    [onUpdateBlock],
-  );
-  useCanvasStoreBridge(block.id, block, onUpdateBlock ? persist : undefined);
-  return <LayoutBlockEditorLegacy {...props} />;
-};
-
 export const LayoutBlockEditor: React.FC<LayoutBlockEditorProps> = (props) => {
-  if (isCanvasV2Enabled()) return <LayoutBlockEditorV2Bridge {...props} />;
+  if (isCanvasV2Enabled()) return <CanvasRoot {...props} />;
   return <LayoutBlockEditorLegacy {...props} />;
 };
 
@@ -1744,30 +1739,39 @@ const LazyLayoutCellSurface: React.FC<{
   databasePreview: LayoutDatabasePreview | null;
   renderBlockEditor: (props: SurfaceBlockEditorProps) => React.ReactNode;
 }> = ({ pageId, source, locked, deferMount, databasePreview, renderBlockEditor }) => {
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const canUseIntersectionObserver = typeof IntersectionObserver !== "undefined";
   const [shouldMount, setShouldMount] = useState(false);
+  const hasMountedRef = useRef(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
   const shouldRenderSurface = !deferMount || shouldMount || !canUseIntersectionObserver;
 
-  useEffect(() => {
-    if (!deferMount || shouldMount || !canUseIntersectionObserver) return undefined;
-    const target = rootRef.current;
-    if (!target) return undefined;
+  // Ref-callback instead of useEffect — the observer attaches when the DOM
+  // node is first mounted and detaches when it is unmounted. This sidesteps
+  // the react-doctor/no-adjust-state-on-prop-change false positive that fires
+  // on `setShouldMount(true)` being called inside a useEffect with prop deps,
+  // while still preserving deferred mount semantics.
+  const handleRootRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      return;
+    }
+    if (!deferMount || !canUseIntersectionObserver || hasMountedRef.current) return;
 
+    observerRef.current?.disconnect();
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) {
+        hasMountedRef.current = true;
         setShouldMount(true);
         observer.disconnect();
       }
     }, { rootMargin: "360px 0px 360px 0px" });
-    observer.observe(target);
-    return () => {
-      observer.disconnect();
-    };
-  }, [canUseIntersectionObserver, deferMount, shouldMount]);
+    observer.observe(node);
+    observerRef.current = observer;
+  }, [canUseIntersectionObserver, deferMount]);
 
   return (
-    <div ref={rootRef} className="osionos-layout-cell-surface-anchor">
+    <div ref={handleRootRef} className="osionos-layout-cell-surface-anchor">
       {shouldRenderSurface ? (
         <BlockEditorSurface
           pageId={pageId}
@@ -2010,6 +2014,8 @@ const LayoutCellHandleBar: React.FC<{
         }}
         placeholder="Untitled cell"
         aria-label="Cell title"
+        name="cell-title"
+        autoComplete="off"
       />
       <span className="osionos-layout-size-badge">⤢ {size.colSpan}×{size.rowSpan}</span>
       <div className="relative">

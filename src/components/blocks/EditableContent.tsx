@@ -19,7 +19,7 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import katex from "katex";
+import { getLoadedKatex, loadKatex, onKatexReady, renderMathToHtml } from "@/shared/lib/math/katexRuntime";
 import {
   ColorPickerBoard,
   type ColorPickerPreset,
@@ -57,7 +57,7 @@ interface EditableContentProps {
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
-  onRequestSlashMenu?: (position: { x: number; y: number }) => void;
+  onRequestSlashMenu?: (position: { x: number; y: number; top: number }) => void;
   onFocus?: React.FocusEventHandler<HTMLDivElement>;
   onBlur?: React.FocusEventHandler<HTMLDivElement>;
 }
@@ -170,19 +170,14 @@ function handleAnchorMouseDown(
   return true;
 }
 
+const INLINE_MATH_PATTERN = /\$[^$\n]+\$|\\\(|\\\[/;
+
 function renderInlineMathToHtml(source: string): string {
-  try {
-    return katex.renderToString(source, {
-      displayMode: false,
-      throwOnError: false,
-      strict: "ignore",
-    });
-  } catch {
-    return katex.renderToString(String.raw`\text{Invalid equation}`, {
-      displayMode: false,
-      throwOnError: false,
-    });
-  }
+  const html = renderMathToHtml(source, false);
+  if (html !== null) return html;
+  // katex has not loaded yet: show the raw source (escaped) until it upgrades.
+  const escaped = source.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return `<span class="osio-inline-math-pending">${escaped}</span>`;
 }
 
 function renderInlineHtmlPreservingLineBreaks(
@@ -330,6 +325,7 @@ interface InlineSelectionToolbarProps {
   onFormatItalic: () => void;
   onFormatStrike: () => void;
   onFormatCode: () => void;
+  onFormatUnderline: () => void;
   onFormatTextColor: (color: InlineColorOption) => void;
   onFormatBackgroundColor: (color: InlineColorOption) => void;
   onOpenSlashMenu: () => void;
@@ -348,6 +344,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
   onFormatItalic,
   onFormatStrike,
   onFormatCode,
+  onFormatUnderline,
   onFormatTextColor,
   onFormatBackgroundColor,
   onOpenSlashMenu,
@@ -410,6 +407,15 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
           onClick={onFormatItalic}
         >
           I
+        </button>
+        <button
+          type="button"
+          title="Underline"
+          className={TOOLBAR_BUTTON_BASE}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onFormatUnderline}
+        >
+          U
         </button>
         <button
           type="button"
@@ -556,6 +562,12 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
               </span>
             </li>
             <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
+              <span>Underline</span>
+              <span className="text-[var(--osio-fg-muted)]">
+                Ctrl/Cmd + U
+              </span>
+            </li>
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
               <span>Inline code</span>
               <span className="text-[var(--osio-fg-muted)]">
                 Ctrl/Cmd + E
@@ -610,6 +622,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const [recentInlineColors, setRecentInlineColors] = useState<string[]>(() =>
     loadRecentInlineColors(),
   );
+  const [katexReady, setKatexReady] = useState(() => Boolean(getLoadedKatex()));
   const linkPickerRef = useRef<HTMLDivElement | null>(null);
   const canonicalSourceRef = useRef(content);
   const lastEmittedSourceRef = useRef(content);
@@ -648,7 +661,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   );
 
   const getRenderedInlineHtml = useCallback((nextContent: string, renderMathAsSource: boolean) => {
-    const cacheKey = `${renderMathAsSource ? "source" : "rendered"}:${nextContent}`;
+    const cacheKey = `${renderMathAsSource ? "source" : "rendered"}:${katexReady}:${nextContent}`;
     if (renderedContentCache.current.source === cacheKey) {
       return renderedContentCache.current.html;
     }
@@ -661,7 +674,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       html,
     };
     return html;
-  }, []);
+  }, [katexReady]);
 
   useEffect(() => {
     const root = ref.current;
@@ -744,7 +757,18 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       canonicalSourceRef.current = nextContent;
       const nextHtml = getRenderedInlineHtml(nextContent, renderMathAsSource);
       if (root.innerHTML !== nextHtml) {
+        // Overwriting innerHTML collapses the contenteditable selection to offset 0.
+        // While this block is focused (the user is actively typing), a reactive
+        // content re-render here would otherwise drift the caret to the start — so
+        // save the caret before the rewrite and restore it after, the same pattern
+        // handleInput already uses for its normalization rewrite.
+        const savedOffsets = isFocused.current
+          ? getInlineEditorSelectionOffsets(root)
+          : null;
         root.innerHTML = nextHtml;
+        if (savedOffsets) {
+          setInlineEditorSelectionOffsets(root, savedOffsets);
+        }
       }
     },
     [getRenderedInlineHtml],
@@ -762,6 +786,21 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
     renderContent(content);
   }, [content, renderContent]);
+
+  // Lazily pull in katex only when this block actually contains inline math,
+  // then flip katexReady so the cached HTML re-renders with typeset math.
+  useEffect(() => {
+    if (katexReady || !INLINE_MATH_PATTERN.test(content)) return;
+    const unsubscribe = onKatexReady(() => setKatexReady(true));
+    void loadKatex();
+    return unsubscribe;
+  }, [content, katexReady]);
+
+  // Once katex is ready, re-render the typeset (unfocused) view. While focused,
+  // math is shown as raw source, so no katex upgrade is needed.
+  useEffect(() => {
+    if (katexReady && !isFocused.current) renderContent(content);
+  }, [katexReady, content, renderContent]);
 
   useEffect(() => {
     if (selectionSnapshot) {
@@ -795,15 +834,23 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   useEffect(() => {
     const handleSelectionChange = () => updateSelectionSnapshot();
     document.addEventListener("selectionchange", handleSelectionChange);
-    window.addEventListener("resize", handleSelectionChange);
-    window.addEventListener("scroll", handleSelectionChange, true);
-
-    return () => {
-      document.removeEventListener("selectionchange", handleSelectionChange);
-      window.removeEventListener("resize", handleSelectionChange);
-      window.removeEventListener("scroll", handleSelectionChange, true);
-    };
+    return () => document.removeEventListener("selectionchange", handleSelectionChange);
   }, [updateSelectionSnapshot]);
+
+  // Reposition the floating toolbar on scroll/resize — but ONLY for the block
+  // that currently has a selection. Previously every block attached a
+  // capture-phase window scroll listener, so scrolling fired O(blocks) handlers
+  // per tick and stuttered. Now at most one block (the selected one) listens.
+  useEffect(() => {
+    if (!selectionSnapshot) return;
+    const reposition = () => updateSelectionSnapshot();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [selectionSnapshot, updateSelectionSnapshot]);
 
   const syncContentFromDom = useCallback(() => {
     if (!ref.current) {
@@ -927,7 +974,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   );
 
   const handleToggleInlineFormat = useCallback(
-    (format: "bold" | "italic" | "strikethrough") => {
+    (format: "bold" | "italic" | "strikethrough" | "underline") => {
       applyInlineFormattingCommand({
         type: "toggle_format",
         format,
@@ -990,6 +1037,12 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       if (key === "i") {
         event.preventDefault();
         handleToggleInlineFormat("italic");
+        return true;
+      }
+
+      if (key === "u") {
+        event.preventDefault();
+        handleToggleInlineFormat("underline");
         return true;
       }
 
@@ -1075,6 +1128,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     onRequestSlashMenu({
       x: effectiveSelection.rect.left,
       y: effectiveSelection.rect.bottom,
+      top: effectiveSelection.rect.top,
     });
     setSelectionSnapshot(null);
     lastSelectionSnapshotRef.current = null;
@@ -1139,6 +1193,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         ref={ref}
         role="textbox"
         aria-multiline="true"
+        aria-label={placeholder || "Editable text block"}
         tabIndex={0}
         contentEditable
         suppressContentEditableWarning
@@ -1199,6 +1254,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
               }}
               onFormatBold={() => handleToggleInlineFormat("bold")}
               onFormatItalic={() => handleToggleInlineFormat("italic")}
+              onFormatUnderline={() => handleToggleInlineFormat("underline")}
               onFormatStrike={() => handleToggleInlineFormat("strikethrough")}
               onFormatCode={handleToggleCode}
               onFormatTextColor={(color) => handleApplyColor("text", color)}

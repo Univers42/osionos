@@ -24,7 +24,19 @@ export interface PageCollaborator {
   role: PageCollaboratorRole;
 }
 
-export type PagePropertyType = "text" | "date" | "select" | "url" | "number" | "checkbox" | "relation";
+export type PagePropertyType = "text" | "date" | "select" | "url" | "number" | "checkbox" | "relation" | "email" | "phone" | "person" | "multi_select" | "status";
+
+/** How often a template auto-creates a new page (Notion "Duplicate every…"). */
+export type PageRecurrenceEvery = "none" | "day" | "week" | "month";
+
+/** Recurrence config persisted on a template page. The scheduler advances the markers. */
+export interface PageRecurrence {
+  every: PageRecurrenceEvery;
+  /** ISO timestamp of the next due materialization (set when `every !== 'none'`). */
+  nextDueAt?: string | null;
+  /** ISO timestamp of the last materialization (idempotency marker). */
+  lastRunAt?: string | null;
+}
 
 export interface PagePropertyEntry {
   key: string;
@@ -49,16 +61,27 @@ export interface PageEntry {
   visibility?: PageVisibility;
   collaborators?: PageCollaborator[];
   parentPageId?: string | null;
+  /** Manual sibling order (durable; persisted to osionos_pages.sort_order). Lower = earlier. */
+  sortOrder?: number | null;
   databaseId?: string | null;
   archivedAt?: string | null;
   /** Block content (only populated in offline/seed mode) */
   content?: Block[];
   /** Editable properties shown below the page title. */
   properties?: PagePropertyEntry[];
-  /** Local surface classification used for private app-only spaces such as agents and home. */
-  surface?: "page" | "agent" | "home";
+  /** Surface classification (agents, home). "folder" = a container that groups children, acts as a graph hub, and never opens on click (a file may also act as a folder). "wiki" = a governed knowledge root: groups children like a folder but OPENS onto its own index content; articles inside carry governance properties (owner, status, verified, domain). */
+  surface?: "page" | "agent" | "home" | "folder" | "wiki" | "app";
   /** Local version for generated home dashboard content. */
   homeDashboardVersion?: number;
+  /** True when this page is a database template (hidden from the normal tree/records). */
+  isTemplate?: boolean;
+  /** True when this template is the default used by the "New" button (one per workspace). */
+  isDefaultTemplate?: boolean;
+  /** Admin shell surface this template authors (profile / marketplace-app), so a
+   *  shell can resolve "the template for surface X" instead of a hard-coded id. */
+  templateSurface?: "profile" | "marketplace-app";
+  /** Recurrence config — only meaningful on a template page. */
+  recurrence?: PageRecurrence | null;
 }
 
 /** Discriminator for the type of page currently active. */
@@ -121,6 +144,27 @@ export interface PageStore {
     pageId: string,
     workspaceId: string,
   ) => Promise<string | null>;
+  /** Create a new template page (isTemplate=true) and open it for editing. */
+  addTemplate: (
+    workspaceId: string,
+    jwt: string,
+    options?: { title?: string; icon?: string },
+  ) => Promise<PageEntry | null>;
+  /** Mark one template as the workspace default, clearing any previous default. */
+  setDefaultTemplate: (templateId: string, workspaceId: string) => void;
+  /** Instantiate a new page from a template's content (placeholders reset); opens it unless options.open===false. */
+  createPageFromTemplate: (
+    templateId: string,
+    workspaceId: string,
+    jwt: string,
+    parentPageId?: string,
+    options?: { open?: boolean },
+  ) => Promise<PageEntry | null>;
+  /** Persist a template's recurrence config. */
+  patchTemplateRecurrence: (
+    templateId: string,
+    recurrence: PageRecurrence,
+  ) => void;
   archivePage: (
     pageId: string,
     workspaceId: string,
@@ -130,6 +174,15 @@ export interface PageStore {
     pageId: string,
     targetParentId: string | null,
     targetWorkspaceId: string,
+  ) => void;
+  /** Reposition a page directly before/after a sibling (same-level reorder, or
+   *  reparent-and-place when the sibling lives elsewhere). Order lives in the
+   *  page array and is cached to localStorage (the BaaS has no order column yet). */
+  reorderSibling: (
+    pageId: string,
+    targetSiblingId: string,
+    placeBefore: boolean,
+    workspaceId: string,
   ) => void;
   deletePage: (
     pageId: string,
@@ -187,6 +240,12 @@ export interface PageStore {
   rootPages: (workspaceId: string) => PageEntry[];
   childPages: (parentId: string, workspaceId: string) => PageEntry[];
   archivedPages: (workspaceId: string) => PageEntry[];
+  /** All template pages in a workspace (isTemplate, not archived, readable). */
+  templatePages: (workspaceId: string) => PageEntry[];
+  /** The workspace's default template, if one is set. */
+  defaultTemplate: (workspaceId: string) => PageEntry | undefined;
+  /** The template authoring a given admin shell surface, if one exists. */
+  templatePageBySurface: (workspaceId: string, surface: NonNullable<PageEntry["templateSurface"]>) => PageEntry | undefined;
   /** Get full page data including content (for rendering) */
   pageById: (pageId: string) => PageEntry | undefined;
 }
@@ -196,4 +255,8 @@ export interface AddPageOptions {
   icon?: string;
   content?: Block[];
   surface?: PageEntry["surface"];
+  isTemplate?: boolean;
+  isDefaultTemplate?: boolean;
+  templateSurface?: PageEntry["templateSurface"];
+  recurrence?: PageRecurrence | null;
 }

@@ -122,7 +122,10 @@ const BLOCK_CATEGORIES: Record<BlockType, BlockCategory> = {
     list: false,
     heading: false,
   },
- 
+
+  // Template-only fillable: a self-contained leaf (no indent/parent behavior).
+  placeholder: { ...LEAF_BASE },
+
   // ─── Headings ────────────────────────────────────────
   heading_1: { ...HEADING_BASE },
   heading_2: { ...HEADING_BASE },
@@ -193,9 +196,12 @@ const BLOCK_CATEGORIES: Record<BlockType, BlockCategory> = {
   equation: { ...LEAF_BASE, indentable: true, backspaceConvertsToParagraph: true },
   layout: { ...LEAF_BASE, indentable: true, backspaceConvertsToParagraph: true },
   divider: { ...LEAF_BASE },
+  button: { ...LEAF_BASE },
   table_block: { ...LEAF_BASE },
   database_inline: { ...LEAF_BASE },
   database_full_page: { ...LEAF_BASE },
+  graph_view: { ...LEAF_BASE },
+  home_views: { ...LEAF_BASE },
   image: { ...LEAF_BASE },
   video: { ...LEAF_BASE },
   audio: { ...LEAF_BASE },
@@ -247,4 +253,11 @@ export function isListBlock(type: BlockType): boolean {
 /** Is this a heading block (h1-h6)? */
 export function isHeadingBlock(type: BlockType): boolean {
   return BLOCK_CATEGORIES[type].heading;
+}
+
+/** Can this block carry a `headingLevel` that sizes its summary text like a
+ *  heading? The collapsible containers (toggle, quote, callout) all can, which
+ *  is what makes "toggle heading", "quote heading" and "callout heading" work. */
+export function acceptsHeadingLevel(type: BlockType): boolean {
+  return type === "toggle" || type === "quote" || type === "callout";
 }

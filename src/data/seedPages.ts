@@ -24,6 +24,9 @@ import {
 import {
   designSystem, sprintReview, alexTasksDatabase, quickNotes, readingList, samTasksDatabase,
 } from './seedUserPages';
+import {
+  studentDashboard, todoList, classNotes, gradeCalculator, clubHomepage, resume,
+} from './templates';
 
 /** Mock workspace ID for the shared team workspace. */
 export const SHARED_WORKSPACE_ID = 'mock-ws-shared-team';
@@ -59,7 +62,7 @@ const teamWiki: SeedPage = {
     bullet('playground/ — A standalone Vite app for UI development and testing'),
     code('osionos-database-sys/\n├── src/           # Main project\n│   ├── components/  # React components\n│   ├── store/       # Zustand stores\n│   ├── types/       # TypeScript types\n│   └── lib/         # Engine, formula, markdown, syntax\n├── playground/    # Playground app\n│   └── src/\n│       ├── components/sidebar/  # osionos sidebar\n│       ├── store/               # Page & user stores\n│       └── data/                # Seed data\n└── packages/api/  # Fastify backend', 'plaintext'),
     h2('Useful commands'),
-    code('# Generate runtime files\ndocker run --rm -v "$PWD":/workspace -w /workspace node:22-alpine node apps/baas/scripts/bootstrap-env.mjs\ndocker run --rm -v "$PWD":/workspace -w /workspace node:22-alpine node apps/baas/scripts/ensure-osionos-runtime-secrets.mjs\n\n# Start everything\ndocker compose up -d --build\n\n# Check services\ndocker compose ps', 'bash'),
+    code('# Generate runtime files\ndocker run --rm -v "$PWD":/workspace -w /workspace node:22-alpine node apps/grobase/scripts/env/bootstrap-env.mjs\ndocker run --rm -v "$PWD":/workspace -w /workspace node:22-alpine node apps/grobase/scripts/env/ensure-osionos-runtime-secrets.mjs\n\n# Start everything\ndocker compose up -d --build\n\n# Check services\ndocker compose ps', 'bash'),
   ],
 };
 
@@ -139,6 +142,13 @@ export const SEED_PAGES: SeedPage[] = [
   samTasksDatabase,
   // Shared
   teamWiki,
+  // Admin-designed templates (isTemplate=true)
+  studentDashboard,
+  todoList,
+  classNotes,
+  gradeCalculator,
+  clubHomepage,
+  resume,
 ];
 
 /** Returns seed pages matching the given workspace ID. */

@@ -31,7 +31,7 @@ export interface InlineTextSelection {
   end: number;
 }
 
-export type InlineFormatKind = "bold" | "italic" | "strikethrough" | "code";
+export type InlineFormatKind = "bold" | "italic" | "strikethrough" | "code" | "underline";
 export type InlineColorKind = "text" | "background";
 
 export type InlineFormattingCommand =
@@ -385,6 +385,8 @@ function createFormatWrapper(format: InlineFormatKind, children: InlineNode[]): 
       return { type: "strikethrough", children };
     case "code":
       return { type: "code_rich", children };
+    case "underline":
+      return { type: "underline", children };
   }
 }
 
@@ -418,6 +420,8 @@ function isWrapperMatchingFormat(node: InlineNode, format: InlineFormatKind) {
       return node.type === "strikethrough";
     case "code":
       return node.type === "code_rich";
+    case "underline":
+      return node.type === "underline";
   }
 }
 

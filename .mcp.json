@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "osionos": {
+      "type": "stdio",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "cd \"/home/dlesieur/Documents/ft_transcendence/apps/osionos/app\" && exec bash scripts/docker-run.sh mcp-claude"
+      ]
+    }
+  }
+}

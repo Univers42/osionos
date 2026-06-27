@@ -31,7 +31,7 @@ const SIZE_CLASS: Record<IconButtonSize, string> = {
 const TONE_CLASS: Record<IconButtonTone, string> = {
   default: "text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]",
   muted: "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
-  danger: "text-[var(--osio-danger)] hover:bg-[var(--osio-danger)]/10 hover:text-[var(--osio-danger-hover)]",
+  danger: "text-[var(--osio-danger)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-danger-hover)]",
 };
 
 export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
@@ -40,7 +40,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
       ref={ref}
       type={type}
       className={cx(
-        "inline-flex shrink-0 items-center justify-center rounded transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex shrink-0 items-center justify-center rounded-md transition-colors duration-[120ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:cursor-not-allowed disabled:opacity-60",
         SIZE_CLASS[size],
         TONE_CLASS[tone],
         className,

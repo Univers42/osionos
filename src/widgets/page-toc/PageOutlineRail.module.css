@@ -1,0 +1,199 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   PageOutlineRail.module.css                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/06/24 12:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+/* ════════════════════════════════════════════════════════════════════════
+   Per-pane, scroll-stable, right-edge, centered TOC rail.
+
+   The rail is a ZERO-SIZE sticky FIRST child of .osionos-page: it rides the
+   pane scroll, adds 0 to scrollHeight, and pins to the pane's top-right corner
+   at every scroll offset. The visible rail (.railInner) is absolutely placed at
+   top: 50cqh (half the VISIBLE pane height) so it stays centered as the pane
+   scrolls. The query container is .osionos-page (it carries container-type:
+   size — see notionPage.css). This makes the rail correct under workspace-grid
+   splits: each pane hugs its OWN right edge, and the narrow-hide measures the
+   PANE width, not the viewport.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Zero-size sticky anchor — MUST be the FIRST child of .osionos-page. */
+.rail {
+  position: sticky;
+  top: 0;
+  align-self: flex-end;            /* hug the pane's right edge (flex column)   */
+  height: 0;                       /* zero flow height → 0 scroll inflation     */
+  width: 0;                        /* zero flow width  → never widens scroll,
+                                      never clipped by overflow-x: hidden        */
+  z-index: var(--osio-z-raised, 20);
+  pointer-events: none;            /* children re-enable; the 0x0 box is inert  */
+}
+
+/* The visible rail: absolute, escapes the 0x0 anchor, contained by
+   .osionos-page (position: relative). top: 50cqh = half the VISIBLE pane
+   height; translateY(-50%) centers on that midline at EVERY scroll offset. */
+.railInner {
+  position: absolute;
+  inset-inline-end: 12px;          /* RTL-aware right inset                      */
+  top: 50cqh;                      /* needs container-type: size on .osionos-page */
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  pointer-events: auto;
+}
+
+/* Hide when the PANE (not the viewport) is too narrow. @container resolves
+   against .osionos-page's width because it is the query container. */
+@container (max-width: 1100px) {
+  .rail {
+    display: none;
+  }
+}
+
+/* ── Collapsed: vertical stack of tick lines ─────────────────────────── */
+
+.ticks {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  padding: 8px 6px;
+  /* It is a real <button> (keyboard disclosure) — strip the native chrome. */
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ticks:focus-visible {
+  outline: 2px solid var(--osio-accent);
+  outline-offset: 2px;
+  border-radius: var(--osio-radius-sm);
+}
+
+.rail[data-open] .ticks {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tick {
+  height: 2px;
+  border-radius: var(--osio-radius-full);
+  background: var(--osio-fg-subtle);
+  opacity: 0.55;
+  transition: background 120ms ease, opacity 120ms ease;
+}
+
+/* Length + thickness + opacity encode heading level. */
+.tick[data-level="1"] {
+  width: 22px;
+  height: 3px;
+  background: var(--osio-fg-default);
+  opacity: 1;
+}
+
+.tick[data-level="2"] {
+  width: 16px;
+  height: 2px;
+  background: var(--osio-fg-muted);
+  opacity: 0.8;
+}
+
+.tick[data-level="3"] {
+  width: 10px;
+}
+
+.tick[data-active] {
+  background: var(--osio-accent);
+  opacity: 1;
+}
+
+/* ── Expanded: compact heading panel ─────────────────────────────────── */
+
+.panel {
+  display: none;
+  min-width: 180px;
+  max-width: 260px;
+  max-height: 60cqh;               /* clamp to the PANE, not the viewport       */
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--osio-border-default);
+  border-radius: var(--osio-radius-lg);
+  background: var(--osio-bg-elevated);
+  box-shadow: var(--osio-shadow-menu);
+}
+
+.rail[data-open] .panel {
+  display: block;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link {
+  display: block;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--osio-radius-sm);
+  background: transparent;
+  color: var(--osio-fg-muted);
+  font-size: var(--osio-font-size-xs, 12px);
+  line-height: 1.4;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.link[data-level="2"] {
+  padding-left: 18px;
+}
+
+.link[data-level="3"] {
+  padding-left: 28px;
+  color: var(--osio-fg-subtle);
+}
+
+.link:hover {
+  background: var(--osio-bg-hover);
+  color: var(--osio-fg-strong);
+}
+
+.link[data-active] {
+  color: var(--osio-accent-text);
+  font-weight: 600;
+}
+
+.link:focus-visible {
+  /* outline (not box-shadow) so the ring is not clipped by the panel's
+     overflow-y: auto at the scrolled top/bottom edges. */
+  outline: 2px solid var(--osio-accent);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tick,
+  .link {
+    transition: none;
+  }
+}

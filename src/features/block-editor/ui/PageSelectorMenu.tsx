@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { FilePlus2, FileText, Database } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import {
@@ -18,8 +19,13 @@ import {
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
 
+const MENU_MARGIN = 8;
+const MENU_GAP = 6;
+const MENU_WIDTH = 288; // w-72
+const MENU_MAX_HEIGHT = 416; // max-h-[26rem]
+
 interface PageSelectorMenuProps {
-  position: { x: number; y: number };
+  position: { x: number; y: number; top: number };
   filter: string;
   onSelect: (pageId: string) => void;
   onCreate: (title: string) => void;
@@ -152,15 +158,40 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
     return () => document.removeEventListener("keydown", handler, true);
   }, [effectiveActiveIdx, selectorOptions, onSelect, onCreate, onClose]);
 
-  if (selectorOptions.length === 0) {
+  const menuStyle = useMemo<React.CSSProperties>(() => {
+    const vw = typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1024;
+    const vh = typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 768;
+    const maxHeight = Math.min(MENU_MAX_HEIGHT, vh - MENU_MARGIN * 2);
+    const clamp = (v: number, min: number, max: number) =>
+      Math.min(Math.max(v, min), Math.max(min, max));
+
+    // Below the caret by default; flip above (anchored to the caret top) when it
+    // would overflow the viewport bottom.
+    const belowTop = position.y + MENU_GAP;
+    const aboveTop = position.top - MENU_GAP - maxHeight;
+    const overflowsBelow = belowTop + maxHeight > vh - MENU_MARGIN;
+    const top = overflowsBelow && aboveTop >= MENU_MARGIN
+      ? aboveTop
+      : clamp(belowTop, MENU_MARGIN, vh - maxHeight - MENU_MARGIN);
+
+    return {
+      top,
+      left: clamp(position.x, MENU_MARGIN, vw - MENU_WIDTH - MENU_MARGIN),
+      maxHeight,
+    };
+  }, [position.x, position.y, position.top]);
+
+  if (selectorOptions.length === 0 || typeof document === "undefined") {
     return null;
   }
 
-  return (
+  // Portal to <body> so `position: fixed` resolves against the viewport, not the
+  // editor page's `container-type: size` containing block (which would drift it).
+  return createPortal(
     <div
       ref={ref}
-      className="fixed z-[var(--osio-z-popover)] flex max-h-[26rem] w-72 overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl"
-      style={{ top: position.y + 4, left: position.x }}
+      className="fixed z-[var(--osio-z-popover)] flex w-72 overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl"
+      style={menuStyle}
     >
       <div className="flex flex-1 flex-col">
         <div className="max-h-[26rem] overflow-y-auto py-1.5">
@@ -220,6 +251,7 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
           })}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };

@@ -6,94 +6,39 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 05:03:33 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/06/03 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import { API_BASE, api, getActivePageJwt } from '@/shared/api/client';
-import { isPersistedPageId } from './pageStore.helpers';
 import type { PageEntry } from '@/entities/page';
-import { canEditPage, getCurrentPageAccessContext } from '@/shared/lib/auth/pageAccess';
 
 export { getActivePageJwt } from '@/shared/api/client';
 
+/**
+ * Page persistence now flows through the BaaS OUTBOX (`src/store/sync/usePageSync`): it
+ * subscribes to the page store, writes each change through the bridge WITH retry, and only
+ * advances its ledger on confirm — so an offline edit is never lost (the previous
+ * fire-and-forget PATCH here silently dropped any write that failed).
+ *
+ * These functions remain as no-ops to preserve the existing call sites in `usePageStore`;
+ * the store mutation they follow is exactly what the outbox subscription detects and
+ * persists. Keeping the seam (rather than ripping out the calls) keeps this change small
+ * and reversible.
+ */
+
 type PageByIdFn = (pageId: string) => PageEntry | undefined;
-let _pageByIdFn: PageByIdFn | null = null;
 
-/** Register the store's pageById accessor (called once from usePageStore). */
-export function registerPageLookup(fn: PageByIdFn) {
-  _pageByIdFn = fn;
+/** Kept for compatibility with usePageStore; the outbox reads pages from the store. */
+export function registerPageLookup(_fn: PageByIdFn) {
+  // No-op: usePageSync reads pages directly from the store, so no lookup is needed here.
 }
 
-const _contentTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-export function debouncePersistContent(pageId: string) {
-  const existing = _contentTimers.get(pageId);
-  if (existing) clearTimeout(existing);
-
-  _contentTimers.set(pageId, setTimeout(() => {
-    _contentTimers.delete(pageId);
-    persistPageContent(pageId);
-  }, 400));
+/** No-op: block content is persisted by the outbox (see usePageSync). */
+export function debouncePersistContent(_pageId: string) {
+  // No-op: usePageSync's store subscription detects the edit and persists it with retry.
 }
 
-/** Flush all pending debounced saves immediately (used on page unload) */
-function flushPendingPersists() {
-  for (const [pageId, timer] of _contentTimers.entries()) {
-    clearTimeout(timer);
-    _contentTimers.delete(pageId);
-    if (!isPersistedPageId(pageId)) continue;
-    // Use registered lookup instead of direct store import (avoids circular dep)
-    const page = _pageByIdFn?.(pageId);
-    if (!page?.content) continue;
-    if (!canEditPage(page, getCurrentPageAccessContext())) continue;
-    const jwt = getActivePageJwt();
-    if (!jwt || !API_BASE) continue;
-    const url = `${API_BASE}/api/pages/${pageId}`;
-    // sendBeacon doesn't support custom headers — fall back to sync XHR
-    try {
-      const xhr = new XMLHttpRequest();
-      xhr.open('PATCH', url, false); // synchronous
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.setRequestHeader('Authorization', `Bearer ${jwt}`);
-      xhr.send(JSON.stringify({ content: page.content }));
-      console.log('[persist] flush: synced', pageId, 'status', xhr.status);
-    } catch (err) {
-      console.warn('[persist] flush failed for', pageId, err);
-    }
-  }
-}
-
-// Flush pending saves on page unload (refresh / tab close)
-if (globalThis.window !== undefined) {
-  globalThis.addEventListener('beforeunload', flushPendingPersists);
-}
-
-async function persistPageContent(pageId: string) {
-  if (!isPersistedPageId(pageId)) return;
-  const page = _pageByIdFn?.(pageId);
-  if (!page?.content) return;
-  if (!canEditPage(page, getCurrentPageAccessContext())) return;
-
-  const jwt = getActivePageJwt();
-  if (!jwt) return;
-
-  try {
-    await api.patch(`/api/pages/${pageId}`, { content: page.content }, jwt);
-  } catch (err) {
-    console.error('[persist] PATCH failed for', pageId, err);
-  }
-}
-
-export async function persistPageTitle(pageId: string, title: string) {
-  if (!isPersistedPageId(pageId)) return;
-  const page = _pageByIdFn?.(pageId);
-  if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
-  const jwt = getActivePageJwt();
-  if (!jwt) return;
-  try {
-    await api.patch(`/api/pages/${pageId}`, { title }, jwt);
-  } catch (err) {
-    console.error('[persist] title PATCH failed for', pageId, err);
-  }
+/** No-op: the page title is persisted by the outbox (see usePageSync). */
+export function persistPageTitle(_pageId: string, _title: string) {
+  // No-op: usePageSync's store subscription detects the title change and persists it.
 }

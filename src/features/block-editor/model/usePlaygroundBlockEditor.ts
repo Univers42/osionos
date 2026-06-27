@@ -31,6 +31,7 @@ import {
   isIndentable,
   isParentable,
   isHeadingBlock,
+  acceptsHeadingLevel,
   isListBlock,
   isEffectivelyEmpty,
   enterCreatesChild,
@@ -40,12 +41,15 @@ import { createTableBlockFromData } from "@/entities/block/model/tableBlocks";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
 import type { Block, LayoutCell } from "@/entities/block";
 import {
+  caretRect,
+  resolveEditableFromSelection,
   handleArrowUp,
   handleArrowDown,
   handleEnterKey,
   getAdjacentRenderedBlockId,
 } from "./playgroundBlockEditor.helpers";
 import { useBlockHistory } from "./useBlockHistory";
+import { getInlineMarkAtCaretEnd, placeCaretAfterInlineMark } from "./inlineMarkHelpers";
 import type {
   SlashMenuState,
   PageSelectorMenuState,
@@ -736,16 +740,53 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     clearHistory();
   }, [sourceKey, clearHistory]);
 
-  /** Get the bounding rect of the caret. */
-  const getCaretRect = useCallback((): { x: number; y: number } => {
-    const sel = globalThis.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      const range = sel.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      if (rect.x !== 0 || rect.y !== 0) return { x: rect.x, y: rect.bottom };
-    }
-    return { x: 100, y: 300 };
-  }, []);
+  /**
+   * Anchor (viewport coords) for the slash / page-selector popovers.
+   * X is the editable block's LEFT edge — a Notion-style line-start anchor that
+   * is stable as you type the filter. We deliberately do NOT use the caret's own
+   * X: on an empty line the `::before` placeholder corrupts `getClientRects()`,
+   * throwing the caret X ~130px to the right (the menu then looked "drifted").
+   * Y (top/bottom) comes from the caret rect so the menu hugs the caret's visual
+   * line and can flip cleanly above it; `caretRect` prefers getClientRects() and
+   * falls back to the block element on a truly empty line.
+   *
+   * Anchor to the KNOWN block: the caller already holds the blockId of the block
+   * that just received the "/" (or "[["), so we resolve the editable straight
+   * from the DOM (`[data-block-id="…"]`). Trusting the live `getSelection()`
+   * instead is what made the menu drift to the top-right — a stale/wrong range
+   * (e.g. the page-title contenteditable) supplied a foreign block's left/top.
+   * The live selection is only a fallback when no blockId is passed.
+   */
+  const getCaretRect = useCallback(
+    (blockId?: string): { x: number; y: number; top: number } => {
+      const blockEl = blockId
+        ? document.querySelector<HTMLElement>(`[data-block-id="${blockId}"]`)
+        : null;
+      const editable =
+        blockEl?.querySelector<HTMLElement>('[contenteditable="true"]') ??
+        blockEl ??
+        resolveEditableFromSelection();
+
+      // Use the caret's own line for Y when the live selection is inside THIS
+      // block; otherwise (stale/foreign selection) fall back to the block rect so
+      // both X and Y stay anchored to the correct block.
+      const sel = globalThis.getSelection();
+      const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+      const selInBlock = range != null && editable != null
+        ? editable.contains(range.startContainer)
+        : false;
+
+      const left = editable ? editable.getBoundingClientRect().left : 100;
+      const caret = selInBlock && range ? caretRect(range) : null;
+      if (caret && caret.height > 0) return { x: left, y: caret.bottom, top: caret.top };
+      if (editable) {
+        const b = editable.getBoundingClientRect();
+        return { x: left, y: b.bottom, top: b.top };
+      }
+      return { x: 100, y: 300, top: 282 };
+    },
+    [],
+  );
 
   /** Persist block content edits in the page store. */
   const persistBlockText = useCallback(
@@ -772,24 +813,15 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
   const tryHandleCodeOrTable = useCallback(
     (blockId: string, text: string): boolean => {
-      const trimmedText = text.trim();
-      const language = trimmedText.startsWith("```")
-        ? trimmedText.slice(3).trim().toLowerCase()
-        : "";
-      const isLanguageSafe = [...language].every(
-        (char) =>
-          (char >= "a" && char <= "z") ||
-          (char >= "0" && char <= "9") ||
-          char === "_" ||
-          char === "+" ||
-          char === "-",
-      );
-
-      if (trimmedText.startsWith("```") && isLanguageSafe) {
+      // Only convert once the fence LINE is finished (a trailing space), so the
+      // language can be fully typed first: "```" alone used to convert
+      // immediately to plaintext, swallowing "mermaid"/"ts"/etc. into content.
+      const fenceMatch = /^\s*```([a-z0-9_+-]*)\s$/.exec(text);
+      if (fenceMatch) {
         changeBlockType(pageId, blockId, "code");
         updateBlock(pageId, blockId, {
           content: "",
-          language: language || "plaintext",
+          language: fenceMatch[1].toLowerCase() || "plaintext",
         });
         repositionCursor(blockId, "");
         return true;
@@ -808,7 +840,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   const tryHandleSlashMenu = useCallback(
     (blockId: string, text: string): boolean => {
       if (text.endsWith("/") && !slashMenu) {
-        setSlashMenu({ blockId, position: getCaretRect(), filter: "" });
+        setSlashMenu({ blockId, position: getCaretRect(blockId), filter: "" });
         return true;
       }
 
@@ -833,7 +865,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   const tryHandlePageSelectorMenu = useCallback(
     (blockId: string, text: string): boolean => {
       if (text.endsWith("[[") && !pageSelector) {
-        setPageSelector({ blockId, position: getCaretRect(), filter: "" });
+        setPageSelector({ blockId, position: getCaretRect(blockId), filter: "" });
         return true;
       }
 
@@ -859,6 +891,31 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     (blockId: string, detection: ReturnType<typeof detectBlockType>): void => {
       if (!detection) return;
 
+      // Inside a callout/quote, a markdown shortcut typed on the TITLE line NESTS the
+      // detected block INSIDE the container (it holds anything — toggle headings,
+      // headings, lists, even another callout) instead of converting the container
+      // away. Children are their own blocks, so a shortcut typed in one still converts
+      // it in place. (Code fences are owned by tryHandleCodeOrTable and excluded.)
+      const target = findBlockInTree(contentRef.current, blockId);
+      if (target && (target.type === "callout" || target.type === "quote") && detection.type !== "code") {
+        const child: Block = {
+          id: crypto.randomUUID(),
+          type: detection.type,
+          content: detection.remainingContent,
+          ...(detection.type === "to_do" ? { checked: Boolean(detection.checked) } : {}),
+          ...(detection.type === "callout" ? { color: getCalloutIconForKind(detection.kind ?? "note") } : {}),
+          ...(detection.type === "toggle" ? { collapsed: false } : {}),
+          ...(detection.headingLevel ? { headingLevel: detection.headingLevel } : {}),
+        };
+        updateBlock(pageId, blockId, {
+          content: "",
+          children: [...(target.children ?? []), child],
+          collapsed: false,
+        });
+        focusBlock(child.id);
+        return;
+      }
+
       changeBlockType(pageId, blockId, detection.type);
       updateBlock(pageId, blockId, {
         content: detection.remainingContent,
@@ -876,7 +933,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       });
       repositionCursor(blockId, detection.remainingContent);
     },
-    [pageId, changeBlockType, updateBlock],
+    [pageId, changeBlockType, updateBlock, focusBlock],
   );
 
   const tryHandleMarkdownShortcut = useCallback(
@@ -885,6 +942,10 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       const detection = detectBlockType(text);
       if (!detection) return;
+      // Code fences are owned by tryHandleCodeOrTable, which waits for the fence
+      // line to finish so the language ("```mermaid") isn't swallowed; converting
+      // here on a bare "```" would lock the block to plaintext too early.
+      if (detection.type === "code") return;
 
       applyMarkdownDetection(blockId, detection);
     },
@@ -918,7 +979,10 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
       if (e.key !== " " || block.type !== "paragraph") return false;
 
-      const detection = detectBlockType(`${block.content} `);
+      // Live DOM text so the shortcut sees the just-typed prefix immediately
+      // (e.g. compact "###>" -> toggle heading) instead of stale committed text.
+      const liveText = (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
+      const detection = detectBlockType(`${liveText} `);
       if (!detection) return false;
 
       e.preventDefault();
@@ -929,20 +993,48 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     [applyMarkdownDetection, focusBlock],
   );
 
-  const handleToggleHeadingSpaceShortcut = useCallback(
+  // Container ("#"..."######") + space -> size the container's summary like a
+  // heading without changing its type, for any collapsible container (toggle,
+  // quote, callout). This is what makes "toggle heading", "quote heading" and
+  // "callout heading" combine.
+  const handleContainerHeadingSpaceShortcut = useCallback(
     (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
-      if (e.key !== " " || block.type !== "toggle") return false;
-      if (!HEADING_SHORTCUT_RE.test(block.content)) return false;
+      if (e.key !== " " || !acceptsHeadingLevel(block.type)) return false;
+      // Read the live DOM text: the just-typed "#"s may not be committed yet,
+      // and if missed here the inserted space would convert to a plain heading.
+      const liveText = (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
+      if (!HEADING_SHORTCUT_RE.test(liveText)) return false;
 
       e.preventDefault();
       updateBlock(pageId, blockId, {
         content: "",
-        headingLevel: block.content.length as 1 | 2 | 3 | 4 | 5 | 6,
+        headingLevel: liveText.length as 1 | 2 | 3 | 4 | 5 | 6,
       });
       focusBlock(blockId);
       return true;
     },
     [pageId, updateBlock, focusBlock],
+  );
+
+  // Heading + ">" (typed at the start) -> a toggle that keeps the heading level
+  // (a collapsible "toggle heading"), the mirror of the toggle + "#" path above.
+  const handleHeadingToggleSpaceShortcut = useCallback(
+    (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
+      if (e.key !== " " || !isHeadingBlock(block.type)) return false;
+      // Read the live DOM text: the just-typed ">" may not be committed yet.
+      const liveText = (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
+      if (!liveText.startsWith(">")) return false;
+
+      const level = Number(block.type.slice("heading_".length)) as 1 | 2 | 3 | 4 | 5 | 6;
+      const rest = liveText.replace(/^>\s*/, "");
+      e.preventDefault();
+      changeBlockType(pageId, blockId, "toggle");
+      updateBlock(pageId, blockId, { content: rest, collapsed: false, headingLevel: level });
+      focusBlock(blockId);
+      repositionCursor(blockId, rest);
+      return true;
+    },
+    [pageId, changeBlockType, updateBlock, focusBlock],
   );
 
   const handleBlockIndentation = useCallback(
@@ -976,6 +1068,29 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       return true;
     },
     [pageId, indentBlock, outdentBlock],
+  );
+
+  // Enter on an empty *indented* block walks it back out one level at a time
+  // (Notion behaviour), for any indentable type. Only once it reaches the root
+  // do the list/to-do handlers below convert it to a paragraph.
+  const handleEmptyEnterOutdent = useCallback(
+    (
+      e: React.KeyboardEvent,
+      blockId: string,
+      block: Block,
+      parentBlockId: string | null,
+      isEmpty: boolean,
+    ): boolean => {
+      if (e.key !== "Enter" || e.shiftKey || !isEmpty || !parentBlockId) return false;
+      if (!isIndentable(block.type)) return false;
+
+      e.preventDefault();
+      flushPendingBlockDraft(blockId, "structural");
+      outdentBlock(pageId, blockId);
+      repositionCursor(blockId, "");
+      return true;
+    },
+    [pageId, outdentBlock, flushPendingBlockDraft],
   );
 
   const handleEmptyListEnter = useCallback(
@@ -1125,6 +1240,15 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       if ((e.key !== "Backspace" && e.key !== "Delete") || !isEmpty)
         return false;
 
+      // Empty block sitting directly inside a column: delete it outright. The
+      // store prunes a column once it has no children (and unwraps a lone
+      // column back to plain blocks), so Backspace in an empty column removes
+      // the column instead of leaving an orphaned empty cell behind.
+      if (parentBlockId && findBlockInTree(contentRef.current, parentBlockId)?.type === "column") {
+        deleteAndFocusAdjacent(e, blockId);
+        return true;
+      }
+
       if (isHeadingBlock(block.type)) {
         e.preventDefault();
         changeBlockType(pageId, blockId, "paragraph");
@@ -1163,8 +1287,50 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     ],
   );
 
+  // Backspace at the very start of a NON-empty indented block outdents it one
+  // level (Notion behaviour), instead of doing nothing. Repeated presses walk
+  // the block back out level by level; at root level it falls through to the
+  // default merge-with-previous. Empty blocks keep their existing handling.
+  const handleStartBackspaceOutdent = useCallback(
+    (
+      e: React.KeyboardEvent,
+      blockId: string,
+      block: Block,
+      parentBlockId: string | null,
+      isEmpty: boolean,
+    ): boolean => {
+      if (e.key !== "Backspace" || e.shiftKey || isEmpty || !parentBlockId) return false;
+
+      const editorEl = e.currentTarget as HTMLElement | null;
+      const offsets = editorEl ? getInlineEditorSelectionOffsets(editorEl) : null;
+      if (!offsets || offsets.start !== 0 || offsets.end !== 0) return false;
+
+      e.preventDefault();
+      flushPendingBlockDraft(blockId, "structural");
+      outdentBlock(pageId, blockId);
+      repositionCursor(blockId, block.content);
+      return true;
+    },
+    [pageId, outdentBlock, flushPendingBlockDraft],
+  );
+
   const handleArrowNavigation = useCallback(
     (e: React.KeyboardEvent, blockId: string, content: Block[]): boolean => {
+      if (
+        e.key === "ArrowRight" &&
+        !e.shiftKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        !e.altKey
+      ) {
+        const mark = getInlineMarkAtCaretEnd(e.target as HTMLElement);
+        if (mark) {
+          e.preventDefault();
+          placeCaretAfterInlineMark(mark);
+          return true;
+        }
+      }
+
       if (e.key === "ArrowUp") {
         if (handleArrowUp(blockId, content, focusBlock)) e.preventDefault();
         return true;
@@ -1228,7 +1394,9 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         content: "",
       };
       const existingChildren = block.children ?? [];
-      updateBlock(pageId, blockId, { children: [...existingChildren, child] });
+      // Expand on child creation: a collapsed quote/callout would otherwise hide
+      // the new child (gated on !collapsed), losing focus and the keystroke.
+      updateBlock(pageId, blockId, { children: [...existingChildren, child], collapsed: false });
       focusBlock(child.id);
       return true;
     },
@@ -1332,7 +1500,9 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       const handled =
         handleBlockIndentation(e, blockId, nextBlock, nextContent) ||
         handleParagraphSpaceShortcut(e, blockId, nextBlock) ||
-        handleToggleHeadingSpaceShortcut(e, blockId, nextBlock) ||
+        handleContainerHeadingSpaceShortcut(e, blockId, nextBlock) ||
+        handleHeadingToggleSpaceShortcut(e, blockId, nextBlock) ||
+        handleEmptyEnterOutdent(e, blockId, nextBlock, parentBlockId, isEmpty) ||
         handleEmptyListEnter(e, blockId, nextBlock, nextBlockIdx, nextContent, isEmpty) ||
         handleEmptyTodoEnter(e, blockId, nextBlock, isEmpty) ||
         handleEmptyListDelete(e, blockId, nextBlock, nextBlockIdx, nextContent, isEmpty) ||
@@ -1342,6 +1512,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       if (handled) return;
       if (handleEnterAction(e, blockId, nextBlock.type)) return;
+      if (handleStartBackspaceOutdent(e, blockId, nextBlock, parentBlockId, isEmpty)) return;
       if (handleEmptyBackspace(e, blockId, nextBlock, nextBlockIdx, nextContent, parentBlockId, isEmptyForDeletion)) return;
       if (handleArrowNavigation(e, blockId, nextContent)) return;
       handleEscapeAction(e);
@@ -1351,13 +1522,16 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       maybePushStructuralSnapshot,
       handleBlockIndentation,
       handleParagraphSpaceShortcut,
-      handleToggleHeadingSpaceShortcut,
+      handleContainerHeadingSpaceShortcut,
+      handleHeadingToggleSpaceShortcut,
+      handleEmptyEnterOutdent,
       handleEmptyListEnter,
       handleEmptyTodoEnter,
       handleEmptyListDelete,
       handleDividerDelete,
       handleContainerEnter,
       handleEnterAction,
+      handleStartBackspaceOutdent,
       handleEmptyBackspace,
       handleArrowNavigation,
       handleEscapeAction,

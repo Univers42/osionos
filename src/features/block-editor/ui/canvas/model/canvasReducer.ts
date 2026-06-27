@@ -10,18 +10,38 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { pushCanvasHistory, redoCanvasHistory, snapshotCanvas, undoCanvasHistory } from "./history";
+import {
+  duplicateCellHandler,
+  restoreHistoryHandler,
+  updateCellFramesHandler,
+  updateCellHandler,
+  updateLayoutConfigHandler,
+} from "./canvasReducer.handlers";
+import { pushCanvasHistory, snapshotCanvas } from "./history";
 import { getNextZ } from "./selectors";
-import type { CanvasAction, CanvasCell, CanvasState } from "./types";
+import type { CanvasAction, CanvasState } from "./types";
+
+const PERSISTABLE_ACTIONS = new Set<CanvasAction["type"]>([
+  "addCell", "setCells", "updateCellFrame", "updateCellFrames", "updateCell", "removeCell", "removeCells",
+  "duplicateCell", "setCellZ", "setCellsZ", "setSnapToGrid", "setNoOverlap", "updateLayoutConfig",
+  "undo", "redo",
+]);
 
 export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasState {
   switch (action.type) {
     case "hydrate":
       return action.state;
     case "select":
-      return { ...state, selectedIds: uniqueIds(action.ids) };
+      return { ...state, selectedIds: [...new Set(action.ids)] };
+    case "toggleSelect":
+      return {
+        ...state,
+        selectedIds: state.selectedIds.includes(action.id)
+          ? state.selectedIds.filter((id) => id !== action.id)
+          : [...state.selectedIds, action.id],
+      };
     case "clearSelection":
-      return { ...state, selectedIds: [] };
+      return state.selectedIds.length === 0 ? state : { ...state, selectedIds: [] };
     case "setTool":
       return { ...state, tool: action.tool };
     case "setViewport":
@@ -30,59 +50,56 @@ export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasS
       return { ...state, layoutConfig: { ...state.layoutConfig, snapToGrid: action.enabled } };
     case "setNoOverlap":
       return { ...state, layoutConfig: { ...state.layoutConfig, noOverlap: action.enabled } };
+    case "updateLayoutConfig":
+      return updateLayoutConfigHandler(state, action.patch, withHistory);
     case "addCell":
       return withHistory(state, { ...state, cells: [...state.cells, { ...action.cell, z: action.cell.z ?? getNextZ(state.cells) }], selectedIds: [action.cell.id] });
+    case "setCells":
+      return withHistory(state, { ...state, cells: action.cells, selectedIds: [] });
     case "updateCellFrame":
-      return updateCell(state, action.id, (cell) => ({ ...cell, frame: action.frame }));
+      return updateCellFramesHandler(state, { [action.id]: action.frame }, false, withHistory);
+    case "updateCellFrames":
+      return updateCellFramesHandler(state, action.frames, action.resolveCollisions ?? false, withHistory);
     case "updateCell":
-      return updateCell(state, action.id, (cell) => ({ ...cell, ...action.patch }));
+      return updateCellHandler(state, action.id, (cell) => ({ ...cell, ...action.patch }), withHistory);
     case "removeCell":
-      return withHistory(state, { ...state, cells: state.cells.filter((cell) => cell.id !== action.id), selectedIds: state.selectedIds.filter((id) => id !== action.id) });
+      return canvasReducer(state, { type: "removeCells", ids: [action.id] });
+    case "removeCells": {
+      const removed = new Set(action.ids);
+      if (!state.cells.some((cell) => removed.has(cell.id))) return state;
+      return withHistory(state, {
+        ...state,
+        cells: state.cells.filter((cell) => !removed.has(cell.id)),
+        selectedIds: state.selectedIds.filter((id) => !removed.has(id)),
+      });
+    }
     case "duplicateCell":
-      return duplicateCell(state, action.id, action.newId, action.frame);
+      return duplicateCellHandler(state, action.id, action.newId, action.frame, withHistory);
     case "setCellZ":
-      return updateCell(state, action.id, (cell) => ({ ...cell, z: action.z }));
+      return updateCellHandler(state, action.id, (cell) => ({ ...cell, z: action.z }), withHistory);
+    case "setCellsZ": {
+      let changed = false;
+      const cells = state.cells.map((cell) => {
+        const z = action.zs[cell.id];
+        if (z === undefined || z === cell.z) return cell;
+        changed = true;
+        return { ...cell, z };
+      });
+      return changed ? withHistory(state, { ...state, cells }) : state;
+    }
     case "undo":
-      return restoreHistory(state, "undo");
+      return restoreHistoryHandler(state, "undo");
     case "redo":
-      return restoreHistory(state, "redo");
+      return restoreHistoryHandler(state, "redo");
     default:
       return state;
   }
 }
 
 export function isPersistableCanvasAction(action: CanvasAction): boolean {
-  return ["addCell", "updateCellFrame", "updateCell", "removeCell", "duplicateCell", "setCellZ", "setSnapToGrid", "setNoOverlap", "undo", "redo"].includes(action.type);
-}
-
-function updateCell(state: CanvasState, id: string, update: (cell: CanvasCell) => CanvasCell): CanvasState {
-  let changed = false;
-  const cells = state.cells.map((cell) => {
-    if (cell.id !== id) return cell;
-    changed = true;
-    return update(cell);
-  });
-  return changed ? withHistory(state, { ...state, cells }) : state;
-}
-
-function duplicateCell(state: CanvasState, id: string, newId: string, frame = state.cells.find((cell) => cell.id === id)?.frame): CanvasState {
-  const source = state.cells.find((cell) => cell.id === id);
-  if (!source || !frame) return state;
-  const duplicate: CanvasCell = structuredClone({ ...source, id: newId, frame, z: getNextZ(state.cells) });
-  return withHistory(state, { ...state, cells: [...state.cells, duplicate], selectedIds: [newId] });
-}
-
-function restoreHistory(state: CanvasState, direction: "undo" | "redo"): CanvasState {
-  const current = snapshotCanvas(state.cells, state.selectedIds);
-  const result = direction === "undo" ? undoCanvasHistory(state.history, current) : redoCanvasHistory(state.history, current);
-  if (!result.snapshot) return state;
-  return { ...state, cells: result.snapshot.cells, selectedIds: result.snapshot.selectedIds, history: result.history };
+  return PERSISTABLE_ACTIONS.has(action.type);
 }
 
 function withHistory(previous: CanvasState, next: CanvasState): CanvasState {
   return { ...next, history: pushCanvasHistory(previous.history, snapshotCanvas(previous.cells, previous.selectedIds)) };
-}
-
-function uniqueIds(ids: string[]): string[] {
-  return [...new Set(ids)];
 }

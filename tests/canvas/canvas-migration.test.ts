@@ -31,6 +31,18 @@ test("round-trips legacy layout cells through the v2 canvas model", () => {
   assert.deepEqual(legacyCells, fixture.layoutCells);
 });
 
+test("every legacy sizing mode round-trips through canvas sizing", () => {
+  const gridConfig = gridConfigFromLegacy(fixture.layoutConfig);
+  for (const sizing of ["fixed", "auto-height", "auto-width", "auto"] as const) {
+    for (const verticalConstraint of ["top", "stretch", "hug"] as const) {
+      const source: LayoutCell = { ...structuredClone(fixture.layoutCells[0]), sizing, verticalConstraint };
+      const roundTripped = unmigrate(migrate(source, gridConfig), gridConfig);
+      assert.equal(roundTripped.sizing, sizing, `sizing ${sizing} + ${verticalConstraint}`);
+      assert.equal(roundTripped.verticalConstraint, verticalConstraint, `constraint ${sizing} + ${verticalConstraint}`);
+    }
+  }
+});
+
 test("migrate and unmigrate stay pure at the cell boundary", () => {
   const gridConfig = gridConfigFromLegacy(fixture.layoutConfig);
   const source = structuredClone(fixture.layoutCells[1]);

@@ -14,15 +14,20 @@ import React from 'react';
 import type { Block } from '@/entities/block';
 import { continuesSameType } from '@/entities/block';
 
+/**
+ * Caret anchor for popovers, in VIEWPORT coordinates (the popovers portal to
+ * <body>, so they position against the viewport): `x` = caret/line-start left,
+ * `y` = caret bottom (below-anchor), `top` = caret top (above-anchor for the flip).
+ */
 export interface SlashMenuState {
   blockId: string;
-  position: { x: number; y: number };
+  position: { x: number; y: number; top: number };
   filter: string;
 }
 
 export interface PageSelectorMenuState {
   blockId: string;
-  position: { x: number; y: number };
+  position: { x: number; y: number; top: number };
   filter: string;
 }
 
@@ -42,6 +47,54 @@ export function getAdjacentRenderedBlockId(
   return orderedBlocks[idx + offset]?.dataset.blockId ?? null;
 }
 
+export function caretRect(range: Range): DOMRect | null {
+  const rects = range.getClientRects();
+  if (rects.length > 0) return rects[0];
+  const rect = range.getBoundingClientRect();
+  return rect.width || rect.height || rect.top ? rect : null;
+}
+
+// Best-effort editable element under the live caret. Only a FALLBACK for popover
+// anchoring when the caller has no blockId — anchoring popovers to a known
+// [data-block-id] is preferred (a stale/foreign selection drifts the anchor).
+export function resolveEditableFromSelection(): HTMLElement | null {
+  const sel = globalThis.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const node = sel.getRangeAt(0).startContainer;
+  const el = node.nodeType === 1 ? (node as Element) : node.parentElement;
+  return (
+    el?.closest<HTMLElement>('[contenteditable="true"]') ??
+    el?.closest<HTMLElement>("[data-block-id]") ??
+    null
+  );
+}
+
+function edgeRect(blockEl: Element, atStart: boolean): DOMRect | null {
+  const probe = document.createRange();
+  if (atStart) {
+    probe.setStart(blockEl, 0);
+    probe.collapse(true);
+  } else {
+    probe.selectNodeContents(blockEl);
+    probe.collapse(false);
+  }
+  const rect = probe.getBoundingClientRect();
+  return rect.width || rect.height || rect.top ? rect : null;
+}
+
+// Whether the collapsed caret sits on the first / last *visual* line of the
+// block (so single-line blocks always qualify and Arrow moves to the adjacent
+// block in one press instead of stepping start<->end first).
+function caretOnEdgeLine(blockEl: Element, range: Range, edge: "first" | "last"): boolean {
+  const caret = caretRect(range);
+  const reference = edgeRect(blockEl, edge === "first");
+  if (!caret || !reference) return true;
+  const lineHeight = caret.height || Number.parseFloat(getComputedStyle(blockEl).lineHeight) || 20;
+  return edge === "first"
+    ? caret.top <= reference.top + lineHeight * 0.5
+    : caret.bottom >= reference.bottom - lineHeight * 0.5;
+}
+
 export function handleArrowUp(
   blockId: string,
   content: Block[],
@@ -58,14 +111,10 @@ export function handleArrowUp(
   const range = sel.getRangeAt(0);
   if (!range.collapsed) return false;
 
-  // Check if cursor is at the very start of the editable content.
+  // Leave the block when the caret is on its first visual line (single-line
+  // blocks always qualify, so navigation is one press per block).
   const blockEl = document.querySelector(`[data-block-id="${blockId}"] [contenteditable]`);
-  if (blockEl) {
-    const testRange = document.createRange();
-    testRange.setStart(blockEl, 0);
-    testRange.setEnd(range.startContainer, range.startOffset);
-    if (testRange.toString().length > 0) return false;
-  }
+  if (blockEl && !caretOnEdgeLine(blockEl, range, "first")) return false;
 
   const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, 'prev');
   if (prevRenderedBlockId) {
@@ -92,7 +141,6 @@ export function handleArrowDown(
   const blockEl = document.querySelector(`[data-block-id="${blockId}"] [contenteditable]`);
 
   if (!sel?.rangeCount) {
-    console.log("  → no range, jumping directly");
     const nextId = getAdjacentRenderedBlockId(blockId, 'next');
     if (nextId) { focusBlock(nextId); return true; }
     return false;
@@ -100,23 +148,12 @@ export function handleArrowDown(
 
   const range = sel.getRangeAt(0);
   if (!range.collapsed) {
-    console.log("  → range not collapsed, skipping");
     return false;
   }
 
-  if (blockEl) {
-    const testRange = document.createRange();
-    testRange.setStart(range.endContainer, range.endOffset);
-    testRange.setEnd(blockEl, blockEl.childNodes.length);
-    const remainingText = testRange.toString();
-    console.log("  → remaining text after cursor:", JSON.stringify(remainingText), "length:", remainingText.length);
-    if (remainingText.length > 0) return false;
-  } else {
-    console.log("  → no contenteditable found, jumping directly");
-  }
+  if (blockEl && !caretOnEdgeLine(blockEl, range, "last")) return false;
 
   const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, 'next');
-  console.log("  → jumping to:", nextRenderedBlockId);
   if (nextRenderedBlockId) {
     focusBlock(nextRenderedBlockId);
     return true;

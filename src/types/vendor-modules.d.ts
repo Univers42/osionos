@@ -31,7 +31,7 @@ declare module 'mongodb' {
 
 declare module 'pg' {
   namespace pg {
-    interface QueryResult<TRow = any> {
+    interface QueryResult<TRow = unknown> {
       rows: TRow[];
     }
 
@@ -54,7 +54,7 @@ declare module 'pg' {
       constructor(options?: PoolOptions);
       connect(): Promise<PoolClient>;
       end(): Promise<void>;
-      query<TRow = any>(text: string, values?: unknown[]): Promise<QueryResult<TRow>>;
+      query<TRow = unknown>(text: string, values?: unknown[]): Promise<QueryResult<TRow>>;
     }
   }
 
@@ -81,8 +81,8 @@ declare module 'leaflet' {
     popupAnchor?: [number, number];
   }
 
-  export interface DivIcon {}
-  export interface Icon {}
+  export interface DivIcon { [option: string]: unknown }
+  export interface Icon { [option: string]: unknown }
   export interface LayerGroup {
     clearLayers(): this;
     addTo(map: Map): this;

@@ -10,17 +10,29 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { PanelLeftOpen } from 'lucide-react';
 import { useUIStore } from '@/shared/config/uiStore';
 
 /**
  * A floating button that appears at the top-left of the content area
- * when the sidebar is closed.
+ * when the sidebar is closed. Also hosts the global Cmd/Ctrl+Shift+F
+ * shortcut that opens the Search panel from anywhere (always mounted).
  */
 export const SidebarTrigger: React.FC = () => {
   const isSidebarOpen = useUIStore((s) => s.isSidebarOpen);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && (event.key === 'F' || event.key === 'f')) {
+        event.preventDefault();
+        useUIStore.getState().expandToPanel('search');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   if (isSidebarOpen) return null;
 

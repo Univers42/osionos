@@ -157,19 +157,13 @@ function detectToDo(line: string): BlockDetection | null {
 }
 
 function detectCallout(line: string): BlockDetection | null {
-  if (!line.startsWith('>![')) return null;
-
-  const close = line.indexOf(']', 3);
-  if (close === -1) return null;
-
-  const kind = line.substring(3, close).trim() || 'note';
-  const c = stripPrefix(line, close + 1);
-  return {
-    type: 'callout',
-    content: c,
-    remainingContent: c,
-    kind,
-  };
+  // Accept BOTH the compact `>![kind]` and the canonical/GitHub `> [!kind]` (the form the
+  // markdown parser + serializer use), so typing either turns into a callout live.
+  const match = /^>\s*(?:!\[|\[!)([^\]]*)\]\s?(.*)$/.exec(line);
+  if (!match) return null;
+  const kind = (match[1] ?? '').trim() || 'note';
+  const content = match[2] ?? '';
+  return { type: 'callout', content, remainingContent: content, kind };
 }
 
 function detectCodeFence(line: string): BlockDetection | null {

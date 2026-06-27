@@ -1,0 +1,77 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   ActivitySidebar.module.scss                        :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/06/25 12:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+.activitySidebar {
+  display: flex;
+  height: 100%;
+  flex-shrink: 0;
+  z-index: var(--osio-z-sidebar);
+}
+
+.panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--osio-bg-subtle);
+  border-right: 1px solid var(--osio-border-default);
+  transition: width var(--osio-motion-standard);
+}
+
+.rail {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* During an active drag the width is written every frame; kill the transition
+   so the edge tracks the pointer 1:1 (the body flag is set by useSidebarResize). */
+:global(body[data-sidebar-resizing]) .panel {
+  transition: none;
+}
+
+/* The drag handle is a thin flex column at the sidebar's right edge — stays
+   mounted across panel<->rail-preview swaps so the pointer-capture drag survives. */
+.resizeHandle {
+  position: relative;
+  flex: 0 0 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.resizeHandle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: transparent;
+  transition: background-color var(--osio-motion-fast);
+}
+
+.resizeHandle:hover::after,
+.resizeHandle:focus-visible::after {
+  background: var(--osio-accent);
+}
+
+.resizeHandle:focus-visible {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    transition: none;
+  }
+}

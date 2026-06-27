@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Bell,
   Check,
@@ -23,6 +23,7 @@ import {
   Languages,
   Link,
   Lock,
+  Code2,
   Maximize2,
   MoreHorizontal,
   Plug,
@@ -38,10 +39,11 @@ import {
   usePageActions,
 } from '@/entities/page';
 import type { PageConfig, PageFont, PageVersion } from '@/shared/config/pageConfigStore';
-import { useToastStore } from '@/shared/ui';
+import { useClickOutside, useEscapeKey, useToastStore } from '@/shared/ui';
 import { usePageStore } from '@/store/usePageStore';
 
 import { PageBreadcrumbs } from './PageBreadcrumbs';
+import { PageShareButton } from './PageShareButton';
 
 interface PageHeaderBarProps {
   pageId: string;
@@ -112,13 +114,16 @@ const AnalyticsPanel: React.FC<{ config: PageConfig }> = ({ config }) => (
   </div>
 );
 
-const VersionsPanel: React.FC<{ versions: PageVersion[]; onRestore: (version: PageVersion) => void }> = ({ versions, onRestore }) => (
+const VersionsPanel: React.FC<{ versions: PageVersion[]; onRestore: (version: PageVersion) => void; onSave: () => void }> = ({ versions, onRestore, onSave }) => (
   <div className="border-t border-[var(--osio-border-default)] px-3 py-2 text-xs text-[var(--osio-fg-muted)]">
-    <p className="mb-1 font-medium text-[var(--osio-fg-default)]">Version history</p>
-    {versions.length === 0 ? <p>No version saved yet.</p> : (
-      <div className="space-y-1">
-        {versions.slice(0, 5).map((version) => (
-          <button key={version.id} type="button" onClick={() => onRestore(version)} className="w-full rounded px-2 py-1 text-left hover:bg-[var(--osio-bg-hover)]">
+    <div className="mb-1.5 flex items-center justify-between">
+      <p className="font-medium text-[var(--osio-fg-default)]">Version history</p>
+      <button type="button" onClick={onSave} className="rounded border border-[var(--osio-border-default)] px-2 py-0.5 font-medium text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">Save version</button>
+    </div>
+    {versions.length === 0 ? <p>No version saved yet — edits autosave, or click “Save version”.</p> : (
+      <div className="max-h-64 space-y-1 overflow-y-auto">
+        {versions.map((version) => (
+          <button key={version.id} type="button" title="Restore this version" onClick={() => onRestore(version)} className="w-full rounded px-2 py-1 text-left hover:bg-[var(--osio-bg-hover)]">
             <span className="block text-[var(--osio-fg-default)]">{version.label}</span>
             <span>{new Date(version.createdAt).toLocaleString()}</span>
           </button>
@@ -146,8 +151,15 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
   const [actionQuery, setActionQuery] = useState('');
   const pushToast = useToastStore((state) => state.push);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuBoundaryRefs = useMemo(() => [triggerRef, menuRef] as const, []);
   const normalizedQuery = actionQuery.trim().toLowerCase();
   const hasActionMatch = useMemo(() => !normalizedQuery || ACTION_LABELS.some((label) => label.includes(normalizedQuery)), [normalizedQuery]);
+
+  const closeConfig = useCallback(() => setConfigOpen(false), []);
+  useClickOutside(menuBoundaryRefs, closeConfig, configOpen);
+  useEscapeKey(closeConfig, configOpen);
 
   function handleImportFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -168,8 +180,10 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
 
         <div className="flex shrink-0 items-center gap-3 pl-4">
           <span className="hidden whitespace-nowrap text-sm text-[var(--osio-fg-subtle)] sm:inline">{actions.editedLabel}</span>
+          <PageShareButton pageId={pageId} workspaceId={workspaceId} />
           <div className="relative">
             <button
+              ref={triggerRef}
               type="button"
               onClick={() => setConfigOpen((open) => !open)}
               className="flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
@@ -178,7 +192,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
               <MoreHorizontal size={18} />
             </button>
             {configOpen && (
-              <div className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 max-h-[80vh] w-72 overflow-y-auto rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-2 shadow-xl">
+              <div ref={menuRef} className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 max-h-[80vh] w-72 overflow-y-auto rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-2 shadow-[var(--osio-shadow-menu)]">
                 <div className="px-3 pb-2">
                   <div className="flex h-8 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2">
                     <Search size={14} className="text-[var(--osio-fg-muted)]" />
@@ -214,6 +228,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                       <MenuButton icon={<Text size={16} />} label="Small text" checked={actions.config.smallText} onClick={() => runPageAction(actions.toggleSmallText(), showActionError)} />
                       <MenuButton icon={<Maximize2 size={16} />} label="Full width" checked={actions.config.fullWidth} onClick={() => runPageAction(actions.toggleFullWidth(), showActionError)} />
                       <MenuButton icon={<Lock size={16} />} label="Lock page" checked={actions.config.locked} onClick={() => runPageAction(actions.toggleLock(), showActionError)} />
+                      <MenuButton icon={<Code2 size={16} />} label="Raw / code mode" checked={actions.config.rawMode} onClick={() => runPageAction(actions.toggleRawMode(), showActionError)} />
                       <div className="flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--osio-bg-hover)]">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--osio-fg-muted)]"><Languages size={16} /></span>
                         <span className="min-w-0 flex-1 truncate">Translate</span>
@@ -240,7 +255,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                 )}
 
                 {actions.detailPanel === 'analytics' && <AnalyticsPanel config={actions.config} />}
-                {actions.detailPanel === 'versions' && <VersionsPanel versions={actions.versions} onRestore={(version) => runPageAction(actions.restoreVersion(version), showActionError)} />}
+                {actions.detailPanel === 'versions' && <VersionsPanel versions={actions.versions} onRestore={(version) => runPageAction(actions.restoreVersion(version), showActionError)} onSave={() => runPageAction(actions.saveVersion(), showActionError)} />}
 
                 <div className="border-t border-[var(--osio-border-default)] px-3 py-2 text-xs text-[var(--osio-fg-subtle)]">
                   <p>Word count: {actions.wordCount} words</p>

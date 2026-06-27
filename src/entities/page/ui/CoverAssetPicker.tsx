@@ -252,7 +252,7 @@ export const CoverAssetPicker: React.FC<CoverAssetPickerProps> = ({
   }
 
   return (
-    <div className="osionos-cover-picker rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-2xl">
+    <div className="osionos-cover-picker rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-[var(--osio-shadow-menu)]">
       <div className="border-b border-[var(--osio-border-default)] px-3 py-2">
         <div className="mb-2 flex items-center gap-2 text-sm font-medium">
           <Image size={15} />

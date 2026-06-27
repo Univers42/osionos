@@ -13,11 +13,15 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { ObjectDatabase, type ObjectDatabaseProps } from '@notion-db/object-database';
+// Database engine styles ride with THIS lazy chunk, not the eager entry CSS
+// (perf): the object-database theme + leaflet (map view) only matter once a
+// database actually renders.
+import '@notion-db/object-database/theme.css';
+import 'leaflet/dist/leaflet.css';
 
 import type { Block } from '@/entities/block';
 import type { PageEntry, PagePropertyEntry } from '@/entities/page';
 import { useUserStore } from '@/features/auth';
-import { OsionosPage } from '@/pages/notion-page/ui/NotionPage';
 import {
   DEFAULT_OBJECT_DATABASE_ID,
   DEFAULT_OBJECT_DATABASE_VIEW_ID,
@@ -26,7 +30,34 @@ import { usePageStore } from '@/store/usePageStore';
 import { derivePageState } from '@/store/pageStore.helpers';
 import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseViewCatalog';
 import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
+import { getLiveDatabaseAdapter, isLiveDatabaseId } from '../model/liveDatabaseAdapter';
+// Side effect: registers the account-wide data-source catalog with NDS (the
+// Source picker). Lives here (not only the barrel) because lazyViews imports
+// this file directly, bypassing index.ts.
+import '../model/dataSourceProvider';
 import { getObjectDatabaseAdapter, hasObjectDatabaseRemoteAdapter } from '../model/objectDatabaseAdapter';
+import { createLiveSubItemsController } from '../model/liveSubItemsController';
+import {
+  isWorkspaceDatabaseId,
+  isWorkspaceViewId,
+  isHomeLiveDatabaseId,
+  isHomeLiveViewId,
+  RECENTS_DB_ID,
+  TEMPLATES_DB_ID,
+  TEMPLATES_GALLERY_VIEW,
+} from '../model/workspaceDatabaseConstants';
+import { getRecentsDatabaseAdapter } from '../model/recentsDatabaseState';
+import { getTemplatesDatabaseAdapter } from '../model/templatesDatabaseState';
+import { WorkspaceDatabaseBlock, WorkspaceRecordPeek } from './WorkspaceDatabaseBlock';
+import { RecordSubItemsPanel } from './RecordSubItemsPanel';
+import './databaseBlockEmbed.css';
+
+// Async boundary: the full osionos page (and its editor tree) loads only when
+// a database row is opened — keeping the database view chunk free of the
+// editor (same code-split discipline as lazyViews.tsx).
+const OsionosPage = React.lazy(() =>
+  import('@/pages/notion-page/ui/NotionPage').then((m) => ({ default: m.OsionosPage })),
+);
 
 const INLINE_KNOWN_DATABASE_LOAD_LIMIT = 8;
 
@@ -57,10 +88,88 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     [mode],
   );
   const remoteDatabaseAdapter = React.useMemo(() => getObjectDatabaseAdapter(), []);
+  const liveDatabaseAdapter = React.useMemo(
+    () => (isLiveDatabaseId(resolvedDatabaseId) ? getLiveDatabaseAdapter(resolvedDatabaseId) : null),
+    [resolvedDatabaseId],
+  );
   const renderPage = React.useCallback<NonNullable<ObjectDatabaseProps['renderPage']>>(
     (pageId, state, onClose) => <DatabaseObjectPage pageId={pageId} state={state} onClose={onClose} />,
     [],
   );
+  // Home live carousels: records are real osionos pages, so opening a card
+  // peeks the existing page (no synthetic record-page creation).
+  const renderHomePeek = React.useCallback<NonNullable<ObjectDatabaseProps['renderPage']>>(
+    (pageId, _state, onClose) => <WorkspaceRecordPeek pageId={pageId} onClose={onClose} />,
+    [],
+  );
+  // Notion-style row sub-items: every live record expands inline to its child
+  // records + note sub-items as column-aligned rows. Stable identity so the
+  // table's sub-items context never churns.
+  const liveSubItems = React.useMemo(() => createLiveSubItemsController(), []);
+
+  if (liveDatabaseAdapter) {
+    return (
+      <div
+        className={[
+          'osionos-database-block w-full min-w-0 overflow-auto',
+          mode === 'full' ? 'osionos-database-block--full h-full' : 'osionos-database-block--inline my-2',
+        ].join(' ')}
+        data-database-id={resolvedDatabaseId}
+        data-database-view-id={resolvedInitialView}
+      >
+        <ObjectDatabase
+          adapter={liveDatabaseAdapter}
+          databaseId={resolvedDatabaseId}
+          initialView={resolvedInitialView}
+          mode={resolvedMode}
+          renderPage={renderPage}
+          subItems={liveSubItems}
+          className={mode === 'full' ? 'h-full' : undefined}
+          // Full pages get the full chrome — the view tabs are how the curated
+          // preset views (boards/timelines/dashboards/calendars) are reached.
+          // Inline embeds stay single-view (no room for a tab row).
+          chrome={mode === 'full' ? 'full' : 'single-view'}
+        />
+      </div>
+    );
+  }
+
+  // Home live carousels (Recently visited / Templates): their records are real
+  // osionos pages, so the card-open seam reuses WorkspaceRecordPeek (open the
+  // existing page) exactly like the workspace databases.
+  if (isHomeLiveDatabaseId(resolvedDatabaseId) || isHomeLiveViewId(resolvedInitialView)) {
+    const isTemplates = resolvedDatabaseId === TEMPLATES_DB_ID || resolvedInitialView === TEMPLATES_GALLERY_VIEW;
+    return (
+      <div
+        className={[
+          'osionos-database-block w-full min-w-0 overflow-auto',
+          mode === 'full' ? 'osionos-database-block--full h-full' : 'osionos-database-block--inline my-2',
+        ].join(' ')}
+        data-database-id={resolvedDatabaseId}
+        data-database-view-id={resolvedInitialView}
+      >
+        <ObjectDatabase
+          adapter={isTemplates ? getTemplatesDatabaseAdapter() : getRecentsDatabaseAdapter()}
+          databaseId={isTemplates ? TEMPLATES_DB_ID : RECENTS_DB_ID}
+          initialView={resolvedInitialView}
+          mode={resolvedMode}
+          renderPage={renderHomePeek}
+          className={mode === 'full' ? 'h-full' : undefined}
+          chrome="single-view"
+        />
+      </div>
+    );
+  }
+
+  if (isWorkspaceDatabaseId(resolvedDatabaseId) || isWorkspaceViewId(resolvedInitialView)) {
+    return (
+      <WorkspaceDatabaseBlock
+        databaseId={resolvedDatabaseId}
+        initialViewId={resolvedInitialView}
+        mode={mode}
+      />
+    );
+  }
 
   if (knownViewId) {
     return (
@@ -172,7 +281,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
         className="fixed inset-0 cursor-default bg-transparent"
         onClick={onClose}
       />
-      <aside className="relative z-[var(--osio-z-modal)] h-full w-full max-w-5xl overflow-auto border-l border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl">
+      <aside className="relative z-[var(--osio-z-modal)] h-full w-full max-w-5xl overflow-auto border-l border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-modal)]">
         <div className="sticky top-0 flex items-center justify-between border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-6 py-3">
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">
             {database?.name ?? 'Database page'} · osionos page
@@ -185,11 +294,22 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
             Close
           </button>
         </div>
-        {osionosPage ? <OsionosPage pageId={pageId} /> : (
+        {osionosPage ? (
+          <React.Suspense
+            fallback={(
+              <div className="mx-auto max-w-3xl px-10 py-10 text-sm text-[var(--osio-fg-muted)]">
+                Loading page…
+              </div>
+            )}
+          >
+            <OsionosPage pageId={pageId} />
+          </React.Suspense>
+        ) : (
           <div className="mx-auto max-w-3xl px-10 py-10 text-sm text-[var(--osio-fg-muted)]">
             Page unavailable
           </div>
         )}
+        <RecordSubItemsPanel recordPageId={pageId} onOpenChild={onClose} />
       </aside>
     </div>,
     document.body,
@@ -264,6 +384,15 @@ function toOsionosPropertyType(type: DatabaseSchema['properties'][string]['type'
 
 function toOsionosPropertyValue(value: unknown, type: DatabaseSchema['properties'][string]['type']): PagePropertyEntry['value'] {
   if (type === 'relation') return toStringArray(value);
+  // A place value is `{address, lat?, lng?}` — show the address name, not the raw
+  // object (otherwise the opened record's property reads `{"address":"Reims"}`).
+  if (type === 'place') {
+    if (value && typeof value === 'object' && 'address' in value) {
+      const addr = (value as { address?: unknown }).address;
+      return typeof addr === 'string' ? addr : '';
+    }
+    return typeof value === 'string' ? value : '';
+  }
   if (type === 'checkbox') return Boolean(value);
   if (type === 'number') return toNumber(value);
   if (Array.isArray(value)) return value.map(toSafeString).filter(Boolean).join(', ');

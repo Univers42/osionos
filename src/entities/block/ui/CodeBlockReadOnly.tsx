@@ -26,11 +26,14 @@ import React from "react";
 import { Check, Copy } from "lucide-react";
 import type { Block } from "@/entities/block";
 import { MermaidDiagram, CodeSyntaxHighlight } from "@/shared/ui";
+import { CodeGutter } from "./CodeGutter";
 
 export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
   const [copied, setCopied] = React.useState(false);
   const lang = block.language || "plaintext";
   const isMermaid = lang.trim().toLowerCase() === "mermaid";
+  const showLineNumbers = Boolean(block.lineNumbers);
+  const lineCount = Math.max(1, (block.content || "").split("\n").length);
 
   const handleCopy = React.useCallback(() => {
     navigator.clipboard.writeText(block.content).then(() => {
@@ -40,32 +43,58 @@ export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
   }, [block.content]);
 
   return (
-    <div className="my-2 overflow-hidden rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-sm">
-      <div className="flex items-center justify-between gap-2 border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-1.5">
-        <span className="text-xs font-mono text-[var(--osio-fg-muted)]">
+    <div
+      data-code-theme={block.codeTheme ?? "dark"}
+      className="osio-code-card my-3 overflow-hidden rounded-[var(--osio-radius-lg)] border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-code-shadow)] ring-1 ring-inset ring-[var(--osio-code-ring)]"
+    >
+      <div className="flex items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
+        <span aria-hidden className="flex shrink-0 items-center gap-1.5">
+          <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+          <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
+          <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+        </span>
+        <span className="shrink-0 rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide text-[var(--osio-code-fg-muted)]">
           {lang}
         </span>
+        {block.fileName ? (
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--osio-code-fg-muted)]">
+            {block.fileName}
+          </span>
+        ) : (
+          <span className="flex-1" />
+        )}
         <button
           type="button"
           title="Copy code"
-          className="inline-flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+          className={[
+            "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-colors hover:bg-[var(--osio-code-btn-hover)]",
+            copied ? "text-[#3fb950]" : "text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]",
+          ].join(" ")}
           onClick={handleCopy}
         >
-          {copied ? <Check size={14} /> : <Copy size={14} />}
+          {copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
         </button>
       </div>
       {isMermaid ? (
         <MermaidDiagram
           chart={block.content}
-          className="overflow-x-auto bg-[var(--osio-bg-surface)] p-3"
+          className="overflow-x-auto bg-white p-4"
         />
       ) : (
-        <CodeSyntaxHighlight
-          code={block.content}
-          language={lang}
-          className="overflow-x-auto bg-[var(--osio-bg-surface)] p-3"
-          codeClassName="font-mono text-sm leading-6 whitespace-pre"
-        />
+        <div className="flex">
+          {showLineNumbers && (
+            <CodeGutter
+              lineCount={lineCount}
+              className="shrink-0 border-r border-[var(--osio-code-border)] pl-4"
+            />
+          )}
+          <CodeSyntaxHighlight
+            code={block.content}
+            language={lang}
+            className="min-w-0 grow overflow-x-auto p-4"
+            codeClassName="font-mono text-sm leading-6 whitespace-pre"
+          />
+        </div>
       )}
     </div>
   );
