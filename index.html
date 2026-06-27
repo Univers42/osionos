@@ -3,7 +3,41 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Playground — osionos DB Sys</title>
+		<title>osionos — Notion-style workspace & block editor</title>
+		<meta
+			name="description"
+			content="osionos is a fast, Notion-style workspace with a real-time block editor, rich Markdown engine, databases, and collaborative pages."
+		/>
+		<meta name="theme-color" content="#FAF9F5" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#1B1A17" media="(prefers-color-scheme: dark)" />
+		<meta name="color-scheme" content="light dark" />
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+		<link rel="apple-touch-icon" href="/favicon.svg" />
+		<link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+		<!-- Apply the preloaded body font at HTML-parse time so the preload is USED
+		     within the browser's window (no "preloaded but not used" warning) and
+		     there's no flash before global.css loads. @font-face is also in
+		     global.css. The serif (Newsreader) is heading-only / not first-paint, so
+		     it is NOT preloaded — it loads on demand via global.css. -->
+		<style>
+			@font-face{font-family:"Inter Variable";font-style:normal;font-weight:100 900;font-display:swap;src:url("/fonts/inter-latin-wght-normal.woff2") format("woff2")}
+			html,body{font-family:"Inter Variable",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+		</style>
+		<!-- Appearance bootstrap: apply the stored light/dark mode + color palette
+		     BEFORE first paint so there is no flash of the default theme. Mirrors
+		     src/shared/config/theme.ts; App.tsx re-applies on mount. -->
+		<script>
+			(function () {
+				try {
+					var ds = document.documentElement.dataset;
+					var m = localStorage.getItem('osionos:theme-mode');
+					ds.theme = (m === 'light' || m === 'dark') ? m
+						: (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+					var p = localStorage.getItem('osionos:palette');
+					if (p) ds.palette = p;
+				} catch (e) {}
+			})();
+		</script>
 	</head>
 	<body>
 		<div id="root"></div>

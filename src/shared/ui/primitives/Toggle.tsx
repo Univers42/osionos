@@ -58,7 +58,7 @@ export const Toggle: React.FC<ToggleProps> = ({
       aria-label={label ?? "Toggle setting"}
       aria-describedby={describedBy}
       disabled={disabled}
-      className="relative inline-flex shrink-0 items-center rounded-full p-0.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40 disabled:cursor-not-allowed disabled:opacity-55"
+      className="relative inline-flex shrink-0 items-center rounded-full p-0.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:cursor-not-allowed disabled:opacity-55"
       style={{
         width: metrics.trackWidth,
         height: metrics.trackHeight,

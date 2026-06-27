@@ -10,4 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-export * from "./ui/HomeKnowledgeGraph";
+// HomeKnowledgeGraph (legacy SVG graph) was cut over to @osionos/graph-engine
+// (rendered via @/widgets/graph-explorer) and removed.
+export * from "./ui/HomeDatabaseMode";
+export * from "./ui/HomeWorkspaceMode";

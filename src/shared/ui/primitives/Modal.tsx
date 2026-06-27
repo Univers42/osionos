@@ -152,7 +152,7 @@ export const Modal: React.FC<ModalProps> = ({
         aria-labelledby={title ? titleId : undefined}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className={`w-full overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl outline-none ${SIZE_CLASS[size]}`}
+        className={`w-full overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-modal)] outline-none ${SIZE_CLASS[size]}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
         {title ? <h2 id={titleId} className="sr-only">{title}</h2> : null}

@@ -16,6 +16,7 @@ import type { ActivePage, PageEntry, PageIndexEntry } from "@/entities/page";
 import { timed } from "@/shared/lib/perf/measure";
 
 const RECENTS_KEY = "pg:recents";
+const ACTIVE_PAGE_KEY = "pg:activePage";
 const LEGACY_PAGE_CACHE_KEYS = ["osio:pages", "pg:pages"];
 const PAGE_CACHE_WORKSPACE_PREFIX = "osio:pages:";
 const PAGE_CACHE_SAVE_DEBOUNCE_MS = 750;
@@ -74,6 +75,26 @@ export function nextDuplicateTitle(title: string): string {
   return `${prefix}(${parsedDuplicateNumber + 1})`;
 }
 
+/**
+ * Deep-clone a template's content for instantiation. Every `placeholder` block's
+ * filled `content` is reset to "" so a page created from the template starts
+ * unfilled (the authored prompt in `placeholderText` is preserved). Recurses into
+ * `children` and layout-cell blocks.
+ */
+export function instantiateTemplateContent(content: Block[] | undefined): Block[] {
+  if (!content || content.length === 0) return [];
+  const clone = structuredClone(content) as Block[];
+  const reset = (blocks: Block[]): void => {
+    for (const block of blocks) {
+      if (block.type === "placeholder") block.content = "";
+      if (block.children) reset(block.children);
+      if (block.layoutCells) for (const cell of block.layoutCells) reset(cell.blocks);
+    }
+  };
+  reset(clone);
+  return clone;
+}
+
 export function loadRecents(): ActivePage[] {
   try {
     return JSON.parse(
@@ -87,6 +108,41 @@ export function loadRecents(): ActivePage[] {
 export function saveRecents(recents: ActivePage[]) {
   try {
     localStorage.setItem(RECENTS_KEY, JSON.stringify(recents));
+  } catch {
+    // localStorage might be unavailable (e.g. private browsing quota)
+  }
+}
+
+/** Prepend `page` to recents, deduped, capped PER WORKSPACE — opening pages in
+ *  one workspace never evicts another workspace's recents. The list stays flat
+ *  (each entry carries its workspaceId); the sidebar shows only the active
+ *  workspace's slice, so recents never cross workspaces. */
+export function addRecent(
+  recents: ActivePage[],
+  page: ActivePage,
+  perWorkspaceLimit = 10,
+): ActivePage[] {
+  const sameWorkspace = [
+    page,
+    ...recents.filter((r) => r.workspaceId === page.workspaceId && r.id !== page.id),
+  ].slice(0, perWorkspaceLimit);
+  const otherWorkspaces = recents.filter((r) => r.workspaceId !== page.workspaceId);
+  return [...sameWorkspace, ...otherWorkspaces];
+}
+
+export function loadActivePage(): ActivePage | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_PAGE_KEY);
+    return raw ? (JSON.parse(raw) as ActivePage) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveActivePage(page: ActivePage | null) {
+  try {
+    if (page) localStorage.setItem(ACTIVE_PAGE_KEY, JSON.stringify(page));
+    else localStorage.removeItem(ACTIVE_PAGE_KEY);
   } catch {
     // localStorage might be unavailable (e.g. private browsing quota)
   }
@@ -107,7 +163,8 @@ export function derivePageState(
   const pagesIndex: Record<string, PageIndexEntry> = {};
 
   for (const [workspaceId, workspacePages] of Object.entries(pages)) {
-    const pageIds = workspacePages.map((page, index) => {
+    const list = Array.isArray(workspacePages) ? workspacePages : [];
+    const pageIds = list.map((page, index) => {
       pagesIndex[page._id] = { workspaceId, index };
       return page._id;
     });
@@ -212,7 +269,8 @@ function loadSplitPagesCache(): Record<string, PageEntry[]> {
       const key = localStorage.key(index);
       if (!key?.startsWith(PAGE_CACHE_WORKSPACE_PREFIX)) continue;
       const workspaceId = key.slice(PAGE_CACHE_WORKSPACE_PREFIX.length);
-      pages[workspaceId] = JSON.parse(localStorage.getItem(key) ?? "[]") as PageEntry[];
+      const parsed = JSON.parse(localStorage.getItem(key) ?? "[]");
+      pages[workspaceId] = Array.isArray(parsed) ? (parsed as PageEntry[]) : [];
     }
   } catch {
     return {};
@@ -331,9 +389,12 @@ export function mergeWorkspacePages(
 
   const incomingIds = new Set(incomingPages.map((page) => page._id));
   for (const cachedPage of previousPages) {
-    if (!incomingIds.has(cachedPage._id)) {
-      mergedPages.push(cachedPage);
-    }
+    if (incomingIds.has(cachedPage._id)) continue;
+    // The incoming list is authoritative (GET /api/pages/all). A cached page it
+    // omits was deleted server-side — keep it ONLY if it's an unsynced local page
+    // (temp id); drop persisted ghosts so deletions reconcile instead of
+    // resurrecting (the duplicate-cleanup 404 flood / phantom rows).
+    if (!isPersistedPageId(cachedPage._id)) mergedPages.push(cachedPage);
   }
 
   return mergedPages;
@@ -388,8 +449,16 @@ export function seedToEntry(sp: SeedPage): PageEntry {
     visibility: sp.visibility,
     collaborators: sp.collaborators,
     parentPageId: sp.parentPageId ?? null,
+    sortOrder: typeof sp.sortOrder === "number" ? sp.sortOrder : null,
     databaseId: sp.databaseId ?? null,
     archivedAt: sp.archivedAt ?? null,
+    isTemplate: sp.isTemplate ?? false,
+    isDefaultTemplate: sp.isDefaultTemplate ?? false,
+    // SeedPage carries these as open strings (e.g. "student-dashboard"); the
+    // PageEntry unions are narrower, so cast — the value round-trips verbatim.
+    templateSurface: sp.templateSurface as PageEntry["templateSurface"],
+    surface: sp.surface as PageEntry["surface"],
+    cover: sp.cover,
     content: sp.content,
   };
 }
@@ -567,13 +636,38 @@ export function applyBlockInsert(
   };
 }
 
+/**
+ * Drop columns emptied of all content and unwrap a column_list back to plain
+ * blocks once 0 or 1 column remains, so dragging the content that created a
+ * column out of it can never leave an unremovable empty column behind.
+ */
+export function pruneColumns(blocks: Block[]): Block[] {
+  const result: Block[] = [];
+  for (const block of blocks) {
+    if (block.type === "column_list") {
+      const columns = (block.children ?? [])
+        .map((column) => ({ ...column, children: pruneColumns(column.children ?? []) }))
+        .filter((column) => (column.children?.length ?? 0) > 0);
+      if (columns.length === 0) continue;
+      if (columns.length === 1) {
+        result.push(...(columns[0].children ?? []));
+        continue;
+      }
+      result.push({ ...block, children: columns });
+      continue;
+    }
+    result.push(block.children ? { ...block, children: pruneColumns(block.children) } : block);
+  }
+  return result;
+}
+
 /** Creates a page updater that removes a block. */
 export function applyBlockDelete(
   blockId: string,
 ): (page: PageEntry) => PageEntry {
   return (page) => ({
     ...page,
-    content: deleteBlockFromTree(page.content ?? [], blockId),
+    content: pruneColumns(deleteBlockFromTree(page.content ?? [], blockId)),
   });
 }
 
@@ -615,7 +709,7 @@ export function applyBlockMove(
       reorderInArray(content);
     }
 
-    return { ...page, content };
+    return { ...page, content: pruneColumns(content) };
   };
 }
 
@@ -656,7 +750,7 @@ export function applyBlockMoveAcrossTree(
     if (!targetParentBlockId) {
       const bounded = Math.max(0, Math.min(targetIndex, withoutBlock.length));
       withoutBlock.splice(bounded, 0, extracted);
-      return { ...page, content: withoutBlock };
+      return { ...page, content: pruneColumns(withoutBlock) };
     }
 
     // Step 3: Insert as child of target parent
@@ -680,7 +774,7 @@ export function applyBlockMoveAcrossTree(
       withoutBlock.splice(Math.max(0, Math.min(targetIndex, withoutBlock.length)), 0, extracted);
     }
 
-    return { ...page, content: withoutBlock };
+    return { ...page, content: pruneColumns(withoutBlock) };
   };
 }
 

@@ -47,6 +47,10 @@ export default [
       ...react.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
       "react/react-in-jsx-scope": "off", // No necesario en React 17+
+      // TypeScript already validates component props at compile time, so the
+      // runtime-era prop-types rule is redundant noise (and can't read
+      // forwardRef<T, Props> generics, producing false positives).
+      "react/prop-types": "off",
       "@typescript-eslint/no-explicit-any": "warn", // Evitar 'any' según GEMINI.md
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": [
@@ -56,6 +60,30 @@ export default [
     },
     settings: {
       react: { version: "detect" },
+    },
+  },
+  {
+    // Import firewall: @osionos/graph-engine core must stay decoupled and
+    // framework-agnostic. Data comes in via GraphModel; React lives in src/react/.
+    files: ["packages/graph-engine/src/core/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/*"],
+              message:
+                "graph-engine core must not import host-app code (@/...). Pass data in via GraphModel.",
+            },
+            {
+              group: ["react", "react-dom", "react/*", "react-dom/*"],
+              message:
+                "graph-engine core must be framework-agnostic. Keep React in packages/graph-engine/src/react/.",
+            },
+          ],
+        },
+      ],
     },
   },
 ];

@@ -16,8 +16,10 @@ import { readFileSync } from "node:fs";
 
 import { parseMarkdownToBlocks } from "../../src/shared/lib/markengine/markdown/shortcuts.ts";
 
+// Vendored copy of wiki/cybersecurity/auth-environment.md (the doc moved out
+// of the old monorepo docs/ path, which the test container never mounts).
 const AUTH_ENVIRONMENT_MARKDOWN = readFileSync(
-  new URL("../../../../../docs/auth-environment.md", import.meta.url),
+  new URL("./fixtures/auth-environment.md", import.meta.url),
   "utf8",
 );
 
@@ -44,7 +46,7 @@ const AUTH_ENVIRONMENT_OPENING_MARKDOWN = [
   "The public site key is safe for browser code. The Turnstile secret must only be read by the auth gateway or production backend. Generate the ignored file with Dockerized Node from the repository root:",
   "",
   "```sh",
-  "docker run --rm -v \"$PWD\":/workspace -w /workspace node:22-alpine node apps/baas/scripts/bootstrap-env.mjs",
+  "docker run --rm -v \"$PWD\":/workspace -w /workspace node:22-alpine node apps/grobase/scripts/env/bootstrap-env.mjs",
   "```",
   "",
   "## Local runtime",

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
@@ -10,7 +11,6 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#!/usr/bin/env node
 import { chromium } from 'playwright';
 import { randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';

@@ -10,10 +10,16 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useRef, useState } from 'react';
+import React, { lazy, Suspense, useRef, useState } from 'react';
 import { ChevronDown, PanelLeftClose, PenSquare } from 'lucide-react';
-import { AssetRenderer } from '@univers42/ui-collection';
-import { useUserStore , UserSwitcherPanel } from '@/features/auth';
+import { IconValueView } from "@/shared/ui/atoms/IconValueView";
+import { useUserStore } from '@/features/auth';
+
+// Lazy + deep path (NOT the auth barrel): the account-switcher popover (~37KB)
+// only mounts on click, so it must not be stapled to the warm entry chunk.
+const UserSwitcherPanel = lazy(() =>
+  import('@/features/auth/ui/UserSwitcherPanel').then((m) => ({ default: m.UserSwitcherPanel })),
+);
 import { usePageStore } from '@/store/usePageStore';
 import { useUIStore } from '@/shared/config/uiStore';
 import {
@@ -75,7 +81,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
         >
           {/* Avatar (rounded square, like osionos) */}
           <span className="flex items-center justify-center w-[22px] h-[22px] shrink-0 rounded text-base leading-none">
-            <AssetRenderer
+            <IconValueView
               value={persona?.emoji ?? getCollectionEmojiValue('package')}
               size={18}
             />
@@ -118,9 +124,11 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
           {/* Dropdown chevron */}
           <button
             type="button"
+            aria-label="More workspace options"
+            aria-expanded={open}
             onClick={() => setOpen(o => !o)}
             className={[
-              'flex items-center justify-center w-4 h-7 rounded shrink-0',
+              'flex items-center justify-center w-6 h-7 rounded shrink-0',
               'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]',
               'transition-all duration-100 cursor-pointer',
             ].join(' ')}
@@ -137,7 +145,11 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
         </div>
       </div>
 
-      {open && <UserSwitcherPanel onClose={() => setOpen(false)} anchorElement={anchorEl} />}
+      {open && (
+        <Suspense fallback={null}>
+          <UserSwitcherPanel onClose={() => setOpen(false)} anchorElement={anchorEl} />
+        </Suspense>
+      )}
     </div>
   );
 };

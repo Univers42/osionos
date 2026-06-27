@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:22 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/18 21:19:22 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/06/01 01:37:16 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -129,8 +129,18 @@ function createMockBaasFetch() {
 		fetchImpl: async (url, init = {}) => {
 			const parsed = new URL(url);
 			const table = parsed.pathname.split('/').pop();
-			if (table === 'osionos_workspace_members') {
-				return jsonResponse([{ role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] }]);
+			if (table === 'osionos_bridge_list_workspaces') {
+				return jsonResponse([{
+					workspace_id: workspaceId,
+					owner_id: subject,
+					workspace_name: "Owner's osionos",
+					workspace_slug: 'owner-osionos-3f6d2a70',
+					workspace_settings: { plan: 'Bridge' },
+					workspace_role: 'owner',
+					permissions: ['create', 'read', 'update', 'delete', 'admin'],
+					created_at: '2026-01-01T00:00:00.000Z',
+					updated_at: '2026-01-01T00:00:00.000Z',
+				}]);
 			}
 			if (table !== 'osionos_pages') return jsonResponse({ message: 'not found' }, 404);
 
@@ -249,16 +259,23 @@ describe('osionos bridge receiver', () => {
 		assert.throws(() => verifyAppSessionToken(token, config, issuedAt + 3_700_000), /expired/);
 	});
 
-	it('requires both token scope and BaaS workspace membership', async () => {
+	it('requires both token scope and scoped BaaS workspace membership', async () => {
 		const config = testBaasConfig();
 		const token = appSession(config).session.accessToken;
 		const request = { headers: { authorization: `Bearer ${token}` } };
-		const allowed = await requireWorkspaceAccess(request, workspaceId, 'update', config, async (url) => {
+		const allowed = await requireWorkspaceAccess(request, workspaceId, 'update', config, async (url, init = {}) => {
 			const parsed = new URL(url);
-			assert.equal(parsed.pathname.endsWith('/osionos_workspace_members'), true);
-			assert.equal(parsed.searchParams.get('workspace_id'), `eq.${workspaceId}`);
-			assert.equal(parsed.searchParams.get('user_id'), `eq.${subject}`);
-			return jsonResponse([{ role: 'editor', permissions: ['read', 'update'] }]);
+			assert.equal(parsed.pathname.endsWith('/rpc/osionos_bridge_list_workspaces'), true);
+			assert.deepEqual(JSON.parse(init.body), { p_user_id: subject, p_workspace_ids: [workspaceId] });
+			return jsonResponse([{
+				workspace_id: workspaceId,
+				owner_id: subject,
+				workspace_name: "Owner's osionos",
+				workspace_slug: 'owner-osionos-3f6d2a70',
+				workspace_settings: { plan: 'Bridge' },
+				workspace_role: 'editor',
+				permissions: ['read', 'update'],
+			}]);
 		});
 		assert.equal(allowed.userId, subject);
 		assert.equal(allowed.workspaceId, workspaceId);
@@ -268,7 +285,15 @@ describe('osionos bridge receiver', () => {
 			/not scoped/,
 		);
 		await assert.rejects(
-			() => requireWorkspaceAccess(request, workspaceId, 'delete', config, async () => jsonResponse([{ role: 'viewer', permissions: ['read'] }])),
+			() => requireWorkspaceAccess(request, workspaceId, 'delete', config, async () => jsonResponse([{
+				workspace_id: workspaceId,
+				owner_id: subject,
+				workspace_name: "Owner's osionos",
+				workspace_slug: 'owner-osionos-3f6d2a70',
+				workspace_settings: { plan: 'Bridge' },
+				workspace_role: 'viewer',
+				permissions: ['read'],
+			}])),
 			/permission denied/,
 		);
 	});
@@ -330,6 +355,30 @@ describe('osionos bridge receiver', () => {
 		assert.equal(imported.session.userId, subject);
 		assert.equal(handoffStore.size, 0);
 		assert.throws(() => consumeHandoffToken(decodeURIComponent(bridgeToken), handoffStore, now + 1000), /invalid/);
+	});
+
+	it('serves scoped workspace list and read routes from the bridge', async () => {
+		const config = testBaasConfig();
+		const { fetchImpl } = createMockBaasFetch();
+		const server = createBridgeServer({ config, fetchImpl });
+		const baseUrl = await listen(server);
+		const token = appSession(config).session.accessToken;
+		const headers = { authorization: `Bearer ${token}` };
+
+		try {
+			const listResponse = await fetch(`${baseUrl}/api/workspaces`, { headers });
+			assert.equal(listResponse.status, 200);
+			const workspaces = await listResponse.json();
+			assert.equal(workspaces[0]._id, workspaceId);
+			assert.equal(workspaces[0].role, 'owner');
+
+			const readResponse = await fetch(`${baseUrl}/api/workspaces/${workspaceId}`, { headers });
+			assert.equal(readResponse.status, 200);
+			const workspace = await readResponse.json();
+			assert.equal(workspace._id, workspaceId);
+		} finally {
+			await new Promise((resolveClose) => server.close(resolveClose));
+		}
 	});
 
 	it('serves Postgres-backed page CRUD routes from the bridge', async () => {

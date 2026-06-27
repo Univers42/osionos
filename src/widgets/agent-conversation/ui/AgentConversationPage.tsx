@@ -15,6 +15,7 @@ import { Bot, CheckCircle2, FilePlus2, Loader2, RotateCcw, Send, SlidersHorizont
 
 import type { Block } from "@/entities/block";
 import { useUserStore } from "@/features/auth";
+import { useAgentStream, type StreamPayload } from "@/shared/agent/useAgentStream";
 import { usePageStore, type PageEntry } from "@/store/usePageStore";
 
 interface AgentConversationPageProps {
@@ -51,27 +52,9 @@ interface AgentRunSettings {
 
 type AgentToolKey = "app" | "status" | "workspace" | "list" | "search" | "read" | "create" | "update" | "archive";
 
-type StreamPayload = Record<string, unknown> & {
-  text?: string;
-  id?: string;
-  name?: string;
-  input?: unknown;
-  toolUseId?: string;
-  message?: string;
-};
-
-
-
 const AGENT_THREADS_STORAGE_KEY = "osionos:agent-conversations";
 const AGENT_SETTINGS_STORAGE_KEY = "osionos:agent-settings";
-const CONFIGURED_CLAUDE_BRIDGE_URL = (
-  (import.meta.env as Record<string, string>)["VITE_OSIONOS_BRIDGE_URL"]
-  ?? (import.meta.env as Record<string, string>)["VITE_API_URL"]
-  ?? ""
-).trim().replace(/\/$/, "");
-const CLAUDE_BRIDGE_URLS = CONFIGURED_CLAUDE_BRIDGE_URL
-  ? [CONFIGURED_CLAUDE_BRIDGE_URL]
-  : ["http://localhost:4000"];
+const CLAUDE_STREAM_ENDPOINT = "/api/agent/claude/stream";
 const DEFAULT_PROMPT = "Ask Claude anything, or ask it to create/update osionos pages through MCP.";
 const EMPTY_WORKSPACE_PAGES: PageEntry[] = [];
 
@@ -312,57 +295,6 @@ function updateToolEvent(events: AgentToolEvent[] | undefined, toolId: string, p
   return (events ?? []).map((event) => event.id === toolId ? { ...event, ...patch } : event);
 }
 
-function parseSseBlock(block: string): { event: string; data: StreamPayload } | null {
-  const lines = block.split("\n");
-  const eventLine = lines.find((line) => line.startsWith("event:"));
-  const dataLines = lines.filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart());
-  if (dataLines.length === 0) return null;
-  try {
-    return { event: eventLine?.slice(6).trim() || "message", data: JSON.parse(dataLines.join("\n")) as StreamPayload };
-  } catch {
-    return null;
-  }
-}
-
-async function streamClaude(body: unknown, onEvent: (event: string, data: StreamPayload) => Promise<void> | void) {
-  const response = await openClaudeStream(body);
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const blocks = buffer.split("\n\n");
-    buffer = blocks.pop() ?? "";
-    for (const block of blocks) {
-      const parsed = parseSseBlock(block);
-      if (parsed) await onEvent(parsed.event, parsed.data);
-    }
-  }
-  const parsed = parseSseBlock(buffer);
-  if (parsed) await onEvent(parsed.event, parsed.data);
-}
-
-async function openClaudeStream(body: unknown) {
-  let lastError: Error | null = null;
-  for (const bridgeUrl of CLAUDE_BRIDGE_URLS) {
-    try {
-      const response = await fetch(`${bridgeUrl}/api/agent/claude/stream`, {
-        method: "POST",
-        headers: { Accept: "text/event-stream", "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (response.ok && response.body) return response;
-      lastError = new Error(`Claude bridge ${bridgeUrl} returned ${response.status}`);
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(`Claude bridge ${bridgeUrl} failed.`);
-    }
-  }
-  throw lastError ?? new Error("Claude bridge is unavailable.");
-}
-
 export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pageId }) => {
   const page = usePageStore((state) => state.pageById(pageId));
   const addPage = usePageStore((state) => state.addPage);
@@ -375,15 +307,25 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
   const [draft, setDraft] = useState(DEFAULT_PROMPT);
   const [messages, setMessages] = useState<AgentMessage[]>(() => loadMessages(pageId));
   const [settings, setSettings] = useState<AgentRunSettings>(() => readSettings(pageId));
-  const [running, setRunning] = useState(false);
+  const { send: streamAgent, streaming: running } = useAgentStream({ endpoint: CLAUDE_STREAM_ENDPOINT });
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const mirroredExternalIds = useRef(new Set<string>());
   const title = page?.title || "Claude MCP agent";
 
-  useEffect(() => {
+  // react-doctor/no-adjust-state-on-prop-change: reset state during render with
+  // a `prev`-prop comparison rather than in a useEffect so the UI commits the
+  // new pageId and its initial state in a single paint.
+  const [prevPageId, setPrevPageId] = useState(pageId);
+  if (prevPageId !== pageId) {
+    setPrevPageId(pageId);
     setMessages(loadMessages(pageId));
     setSettings(readSettings(pageId));
     setDraft(DEFAULT_PROMPT);
+  }
+
+  // Reset the per-page mirror-dedup set outside render (refs must not be
+  // written during render); the async mirror path only runs after commit.
+  useEffect(() => {
     mirroredExternalIds.current = new Set();
   }, [pageId]);
 
@@ -473,7 +415,6 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
     if (running || !workspaceId) return;
     const cleanedPrompt = prompt.trim();
     if (!cleanedPrompt) return;
-    setRunning(true);
     setDraft("");
 
     if (title === "New agent") updatePageTitle(pageId, "Claude MCP agent");
@@ -484,14 +425,12 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
     setMessages((current) => [...current, userMessage, assistantMessage]);
 
     try {
-      await streamClaude({ prompt: cleanedPrompt, ...settings, context: appContext() }, (event, data) => handleStreamEvent(assistantMessage.id, event, data, currentText));
+      await streamAgent({ prompt: cleanedPrompt, ...settings, context: appContext() }, (event, data) => handleStreamEvent(assistantMessage.id, event, data, currentText));
       if (!currentText.value.trim()) patchAssistantText(assistantMessage.id, "Claude completed the request without a text response.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Claude bridge failed.";
       patchAssistantText(assistantMessage.id, message);
       addToolEvent(assistantMessage.id, { id: createId("tool-error"), name: "claude-bridge", status: "error", detail: message });
-    } finally {
-      setRunning(false);
     }
   }
 
@@ -525,7 +464,7 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex min-h-16 items-center justify-between gap-3 border-b border-[var(--osio-border-default)] px-5">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--osio-accent-soft)] text-[var(--osio-accent)]">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--osio-accent-subtle)] text-[var(--osio-accent)]">
               <Bot size={18} aria-hidden="true" />
             </span>
             <div className="min-w-0">
@@ -574,7 +513,7 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
           </div>
           <div className="mx-auto mt-2 flex max-w-4xl flex-wrap gap-1.5">
             {TOOL_OPTIONS.map((tool) => (
-              <button key={tool.value} type="button" aria-pressed={settings.allowedTools.includes(tool.value)} data-agent-tool-toggle={tool.value} onClick={() => toggleTool(tool.value)} className="h-7 rounded-md border border-[var(--osio-border-default)] px-2 text-xs text-[var(--osio-fg-muted)] aria-pressed:border-[var(--osio-accent)] aria-pressed:bg-[var(--osio-accent-soft)] aria-pressed:text-[var(--osio-accent)] hover:bg-[var(--osio-bg-hover)]">
+              <button key={tool.value} type="button" aria-pressed={settings.allowedTools.includes(tool.value)} data-agent-tool-toggle={tool.value} onClick={() => toggleTool(tool.value)} className="h-7 rounded-md border border-[var(--osio-border-default)] px-2 text-xs text-[var(--osio-fg-muted)] transition-colors aria-pressed:border-[var(--osio-accent)] aria-pressed:bg-[var(--osio-accent-subtle)] aria-pressed:text-[var(--osio-accent-text)] hover:bg-[var(--osio-bg-hover)]">
                 {tool.label}
               </button>
             ))}

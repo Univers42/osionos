@@ -59,6 +59,8 @@ export interface CanvasCell {
   content?: string;
   blockType?: Block["type"];
   wrap?: boolean;
+  /** Named section key — preserved across migrate/unmigrate for per-section grants. */
+  section?: string;
 }
 
 export interface CanvasGridConfig {
@@ -71,10 +73,14 @@ export interface CanvasGridConfig {
   snapToGrid: boolean;
 }
 
+export type CanvasGuideVisibility = "auto" | "always" | "never";
+
 export interface CanvasLayoutConfig extends CanvasGridConfig {
   rootFrame: CanvasFrame;
   parentMode: CanvasParentMode;
   noOverlap: boolean;
+  preview: boolean;
+  guideVisibility: CanvasGuideVisibility;
 }
 
 export interface CanvasViewport {
@@ -116,17 +122,23 @@ export type CanvasCellPatch = Partial<Omit<CanvasCell, "id">>;
 export type CanvasAction =
   | { type: "hydrate"; state: CanvasState }
   | { type: "select"; ids: string[] }
+  | { type: "toggleSelect"; id: string }
   | { type: "clearSelection" }
   | { type: "setTool"; tool: CanvasTool }
   | { type: "setViewport"; viewport: Partial<CanvasViewport> }
   | { type: "setSnapToGrid"; enabled: boolean }
   | { type: "setNoOverlap"; enabled: boolean }
+  | { type: "updateLayoutConfig"; patch: Partial<Omit<CanvasLayoutConfig, "rootFrame" | "parentMode">> }
   | { type: "addCell"; cell: CanvasCell }
+  | { type: "setCells"; cells: CanvasCell[] }
   | { type: "updateCellFrame"; id: string; frame: CanvasFrame }
+  | { type: "updateCellFrames"; frames: Record<string, CanvasFrame>; resolveCollisions?: boolean }
   | { type: "updateCell"; id: string; patch: CanvasCellPatch }
   | { type: "removeCell"; id: string }
+  | { type: "removeCells"; ids: string[] }
   | { type: "duplicateCell"; id: string; newId: string; frame?: CanvasFrame }
   | { type: "setCellZ"; id: string; z: number }
+  | { type: "setCellsZ"; zs: Record<string, number> }
   | { type: "undo" }
   | { type: "redo" };
 

@@ -2,6 +2,8 @@ temp/
 playwright-report/
 playwright-report.stale/
 test-results/
+# throwaway debug/probe scripts (underscore-prefixed, never tracked)
+scripts/_*.mjs
 
 # Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,node,dotenv
 # Edit at https://www.toptal.com/developers/gitignore?templates=visualstudiocode,node,dotenv
@@ -59,6 +61,7 @@ bower_components
 
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/
+build-offline/
 build/Release
 
 # Dependency directories

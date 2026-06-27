@@ -122,6 +122,7 @@ const SubmenuPanel: React.FC<SubmenuPanelProps> = ({
 
   return (
     <div
+      data-submenu-panel
       className="overflow-y-auto rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-xl"
       style={style}
     >
@@ -205,7 +206,7 @@ const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
         </div>
         <button
           type="submit"
-          className="w-full rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+          className="w-full rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--osio-accent-fg)] transition-opacity hover:opacity-90"
         >
           + Save profile
         </button>
@@ -262,7 +263,11 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
 
   const openItemSubmenu = useCallback(
     (target: HTMLElement) => {
-      if (!item.subItems) {
+      if (item.panelOnly) {
+        setOpenSubmenu(item.label);
+        return;
+      }
+      if (!item.subItems?.length) {
         setSubmenuAnchor(null);
         setOpenSubmenu(null);
         return;
@@ -272,7 +277,7 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
       setSubmenuAnchor({ top: rect.top, left: rect.left });
       setOpenSubmenu(item.label);
     },
-    [item.label, item.subItems, setOpenSubmenu],
+    [item.label, item.panelOnly, item.subItems, setOpenSubmenu],
   );
 
   const closeItemSubmenu = useCallback(() => {
@@ -287,7 +292,7 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
       onMouseEnter={(event) => openItemSubmenu(event.currentTarget)}
       onClick={(event) => {
         if (item.disabled) return;
-        if (item.subItems) {
+        if (item.subItems?.length || item.panelOnly) {
           if (openSubmenu === item.label) closeItemSubmenu();
           else openItemSubmenu(event.currentTarget);
           return;
@@ -298,7 +303,7 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
         if (item.disabled) return;
-        if (item.subItems) {
+        if (item.subItems?.length || item.panelOnly) {
           if (openSubmenu === item.label) closeItemSubmenu();
           else openItemSubmenu(event.currentTarget);
           return;
@@ -316,10 +321,10 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
           {item.shortcut}
         </span>
       ) : null}
-      {item.subItems ? (
+      {item.subItems?.length || item.panelOnly ? (
         <span className="text-[var(--osio-fg-subtle)]">›</span>
       ) : null}
-      {item.subItems && openSubmenu === item.label ? (
+      {item.subItems?.length && !item.panelOnly && openSubmenu === item.label ? (
         <SubmenuPanel
           anchor={submenuAnchor}
           parentWidth={parentWidth}
@@ -375,7 +380,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
   }, [menu, width]);
 
   const profilePanelPosition = useMemo(() => {
-    if (!position || openSubmenu !== "Color") return null;
+    if (!position || openSubmenu !== "Create color profile") return null;
     return clampAnchoredPanelPosition(
       position,
       width,
@@ -413,7 +418,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
       />
       <div
         ref={ref}
-        className="fixed overflow-visible rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-2 shadow-xl"
+        className="fixed overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-2 shadow-xl"
         style={{
           top: position.top,
           left: position.left,
@@ -430,7 +435,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             className="h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)] focus:border-[var(--osio-accent)]"
           />
         </div>
-        <div className="max-h-[430px] overflow-visible" role="menu">
+        <div className="max-h-[400px] overflow-y-auto" role="menu">
         {visibleSections.map((section, index) => (
           <div key={`${section.label ?? "section"}-${index}`}>
             {section.label ? (

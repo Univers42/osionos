@@ -6,48 +6,29 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/13 13:52:59 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/06/08 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState, useMemo } from "react";
-import { ChevronRight, Plus } from "lucide-react";
-import { AssetRenderer } from "@univers42/ui-collection";
+import React, { useMemo, useState } from "react";
+import { BookOpen, ChevronRight, Folder, FolderOpen } from "lucide-react";
+import { IconValueView } from "@/shared/ui/atoms/IconValueView";
 import { useShallow } from "zustand/react/shallow";
 import { usePageStore, type PageEntry } from "@/store/usePageStore";
-import { PageOptionsMenu } from "@/features/page-management";
-import {
-  canReadPage,
-  usePageAccessContext,
-} from "@/shared/lib/auth/pageAccess";
+import { canReadPage, usePageAccessContext } from "@/shared/lib/auth/pageAccess";
+import { isFolderEntry, isWikiEntry, selectChildPageIds, selectPageTreeEntry } from "./pageTreeItem.helpers";
+import { SidebarRenameInput } from "./SidebarRenameInput";
+import { PageTreeRowActions } from "./PageTreeRowActions";
+import { ConfirmDeleteModal } from "@/features/page-management";
+import { PageContextMenu } from "@/features/page-management/context-menu/PageContextMenu";
+import { usePageContextClipboard } from "@/features/page-management/context-menu/clipboardStore";
+import type { MenuActionCtx } from "@/features/page-management/context-menu/types";
+import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { useToastStore } from "@/shared/ui/primitives";
+import { usePageRowDnd } from "./usePageRowDnd";
+import { useSidebarTreeDnd } from "../model/sidebarTreeDnd";
 
 const EMPTY_WORKSPACE_PAGES: readonly PageEntry[] = [];
-type PageStoreState = ReturnType<typeof usePageStore.getState>;
-
-function selectPageTreeEntry(state: PageStoreState, pageId: string): PageEntry | null {
-  const index = state.pagesIndex[pageId];
-  const page = index ? state.pages[index.workspaceId]?.[index.index] : undefined;
-  if (!page) return null;
-  return {
-    _id: page._id,
-    title: page.title,
-    icon: page.icon,
-    workspaceId: page.workspaceId,
-    ownerId: page.ownerId,
-    visibility: page.visibility,
-    collaborators: page.collaborators,
-    parentPageId: page.parentPageId,
-    databaseId: page.databaseId,
-    archivedAt: page.archivedAt,
-    surface: page.surface,
-  };
-}
-
-function selectChildPageIds(pages: readonly PageEntry[], parentPageId: string): string[] {
-  return pages
-    .filter((page) => page.parentPageId === parentPageId && !page.archivedAt)
-    .map((page) => page._id);
-}
 
 interface Props {
   pageId: string;
@@ -58,167 +39,212 @@ interface Props {
 }
 
 /**
- * Recursive page tree row.
- * – Indent: depth × --osio-space-4 with a --osio-space-2 row gutter
- * – Hover reveals ⋯ (actions) and + (add child) buttons
- * – Click opens the page in MainContent
+ * Recursive page-tree row with drag-and-drop reparenting.
+ * – A "folder" (surface === "folder") toggles expand/collapse and NEVER opens.
+ * – Drag a row onto another: dropping on its middle nests it as a child; dropping
+ *   on the top/bottom edge keeps it at the same depth (sibling, blue line).
+ * – Hovering a collapsed folder mid-drag springs it open after a short dwell.
  */
-export const PageTreeItem: React.FC<Props> = ({
-  pageId,
-  workspaceId,
-  jwt,
-  depth = 0,
-  activeId,
-}) => {
+export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth = 0, activeId }) => {
   const [expanded, setExpanded] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   const openPage = usePageStore((s) => s.openPage);
   const addPage = usePageStore((s) => s.addPage);
+  const updatePageTitle = usePageStore((s) => s.updatePageTitle);
+  const archivePage = usePageStore((s) => s.archivePage);
   const page = usePageStore(useShallow((s) => selectPageTreeEntry(s, pageId)));
   const childPageIds = usePageStore(useShallow((s) => selectChildPageIds(s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES, pageId)));
   const accessContext = usePageAccessContext();
+  const collapseToken = useSidebarTreeDnd((s) => s.collapseToken);
 
-  const children = useMemo(
-    () => childPageIds,
-    [childPageIds],
-  );
-  if (!page || page.archivedAt || !canReadPage(page, accessContext)) return null;
-  const pageEntry = page;
-
-  const isActive = activeId === pageEntry._id;
-  const hasChildren = children.length > 0;
-  const paddingLeft = `calc(var(--osio-space-2) + ${depth} * var(--osio-space-4))`;
-
-  const fallbackIcon = pageEntry.databaseId ? "icon:table" : "icon:page";
-
-  function handleOpen(e: React.MouseEvent) {
-    e.stopPropagation();
-    handleOpenPage();
+  const children = useMemo(() => childPageIds, [childPageIds]);
+  // Render-adjust: collapse in the SAME pass the broadcast token changes —
+  // a sync setState inside an effect cascades an extra render per node.
+  const [seenCollapseToken, setSeenCollapseToken] = useState(collapseToken);
+  if (seenCollapseToken !== collapseToken) {
+    setSeenCollapseToken(collapseToken);
+    setExpanded(false);
   }
 
-  function handleOpenPage() {
+  const isFolder = page ? isFolderEntry(page) : false;
+  const isWiki = page ? isWikiEntry(page) : false;
+  const hasChildren = children.length > 0;
+  const canExpand = hasChildren || isFolder || isWiki;
+  const { isDragging, indicator, dragHandlers, dropHandlers } = usePageRowDnd({
+    pageId,
+    parentPageId: page?.parentPageId,
+    workspaceId,
+    canExpand,
+    expanded,
+    onSpringOpen: () => setExpanded(true),
+  });
+
+  if (!page || page.archivedAt || !canReadPage(page, accessContext)) return null;
+  const pageEntry = page;
+  const isActive = activeId === pageEntry._id;
+  const paddingLeft = `calc(var(--osio-space-2) + ${depth} * var(--osio-space-4))`;
+  const fallbackIcon = pageEntry.databaseId ? "icon:table" : "icon:page";
+
+  function handleRowClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (isFolder) { setExpanded((o) => !o); return; }
     openPage({
-      id: pageEntry._id,
-      workspaceId,
+      id: pageEntry._id, workspaceId,
       kind: pageEntry.databaseId ? "database" : "page",
-      title: pageEntry.title,
-      icon: pageEntry.icon,
-      databaseId: pageEntry.databaseId,
+      title: pageEntry.title, icon: pageEntry.icon, databaseId: pageEntry.databaseId,
     });
   }
 
-  async function handleAddChild(e: React.MouseEvent) {
+  async function createChild(asFolder: boolean, e: React.MouseEvent) {
     e.stopPropagation();
-    const child = await addPage(workspaceId, "Untitled", jwt, pageEntry._id);
-    if (child) {
-      setExpanded(true);
-      openPage({
-        id: child._id,
-        workspaceId,
-        kind: "page",
-        title: child.title,
-      });
+    const title = asFolder ? "New folder" : "Untitled";
+    const child = await addPage(workspaceId, title, jwt, pageEntry._id, asFolder ? { surface: "folder" } : undefined);
+    if (!child) return;
+    setExpanded(true);
+    if (!asFolder) openPage({ id: child._id, workspaceId, kind: "page", title: child.title });
+  }
+
+  // Quick-delete: with the row focused (after a click), Del archives the page —
+  // confirmed once, then skippable via the modal's "Don't ask again".
+  function doArchivePage() {
+    setConfirmDelete(false);
+    void archivePage(pageEntry._id, workspaceId, jwt ?? "");
+  }
+  function requestDelete() {
+    if (globalThis.localStorage?.getItem("osionos.delete-skip-confirm") === "1") {
+      doArchivePage();
+    } else {
+      setConfirmDelete(true);
     }
+  }
+
+  // Build the action context once per open. onRename/onDelete reuse the row's
+  // existing inline-rename + archive-confirm flows (no duplicate logic).
+  function buildMenuCtx(): MenuActionCtx {
+    return {
+      page: pageEntry,
+      isFolder,
+      workspaceId,
+      jwt: jwt ?? "",
+      store: usePageStore,
+      layout: useWorkspaceLayout,
+      clipboard: usePageContextClipboard,
+      toast: useToastStore.getState().push,
+      onRename: () => setRenaming(true),
+      onDelete: () => requestDelete(),
+      workspacePages: () => usePageStore.getState().pages[workspaceId] ?? [],
+    };
+  }
+
+  function renderRowIcon() {
+    if (isFolder) {
+      return expanded
+        ? <FolderOpen size={14} className="shrink-0 text-[var(--osio-accent)]" />
+        : <Folder size={14} className="shrink-0 text-[var(--osio-fg-muted)]" />;
+    }
+    if (isWiki) return <BookOpen size={14} className="shrink-0 text-[var(--osio-accent)]" />;
+    return pageEntry.icon
+      ? <IconValueView value={pageEntry.icon} size={14} className="shrink-0" />
+      : <IconValueView value={fallbackIcon} size={13} className="opacity-40 shrink-0" />;
   }
 
   return (
     <>
       <div
-        className="group relative w-full flex items-center gap-0.5 h-7 rounded-md text-sm select-none"
+        className={[
+          "group relative w-full flex items-center gap-0.5 h-7 rounded-md text-sm select-none",
+          isDragging ? "opacity-40" : "",
+          indicator === "inside" ? "bg-[var(--osio-accent)]/10 ring-1 ring-inset ring-[var(--osio-accent)]/40" : "",
+        ].join(" ")}
         style={{ paddingLeft, paddingRight: "var(--osio-space-1)" }}
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY }); }}
+        {...dropHandlers}
       >
-        {hasChildren ? (
+        {indicator === "before" && <span className="pointer-events-none absolute inset-x-1 -top-px h-0.5 rounded bg-[var(--osio-accent)]" />}
+        {indicator === "after" && <span className="pointer-events-none absolute inset-x-1 -bottom-px h-0.5 rounded bg-[var(--osio-accent)]" />}
+
+        {canExpand ? (
           <button
             type="button"
-            className="flex items-center justify-center w-5 h-5 shrink-0 rounded hover:bg-[var(--osio-bg-hover)]"
-            onClick={(e) => {
-              e.stopPropagation();
-              setExpanded((o) => !o);
-            }}
+            className="flex items-center justify-center w-5 h-5 shrink-0 rounded-md transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
+            onClick={(e) => { e.stopPropagation(); setExpanded((o) => !o); }}
           >
-            <ChevronRight
-              size={12}
-              className={[
-                "transition-transform duration-150",
-                expanded ? "rotate-90" : "",
-              ].join(" ")}
-            />
+            <ChevronRight size={12} className={["transition-transform duration-150", expanded ? "rotate-90" : ""].join(" ")} />
           </button>
         ) : (
           <span className="flex items-center justify-center w-5 h-5 shrink-0">
-            <AssetRenderer
-              value={fallbackIcon}
-              size={13}
-              className="opacity-50"
-            />
+            <IconValueView value={fallbackIcon} size={13} className="opacity-50" />
           </span>
         )}
 
-        <button
-          type="button"
-          onClick={handleOpen}
-          className={[
-            "flex min-w-0 flex-1 items-center gap-0.5 h-full rounded-md text-sm text-left transition-colors duration-100 pr-14",
-            isActive
-              ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
-              : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
-          ].join(" ")}
-        >
-          {pageEntry.icon ? (
-            <AssetRenderer value={pageEntry.icon} size={14} className="shrink-0" />
-          ) : (
-            <AssetRenderer
-              value={fallbackIcon}
-              size={13}
-              className="opacity-40 shrink-0"
-            />
-          )}
-
-          <span className="flex-1 text-left truncate ml-1">
-            {pageEntry.title || "Untitled"}
-          </span>
-        </button>
-
-        {/* Action buttons — appear on hover */}
-        <span
-          className={[
-            "absolute right-0 flex items-center gap-0.5 mr-0.5 shrink-0 h-full transition-opacity",
-            isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-          ].join(" ")}
-        >
-          <PageOptionsMenu
-            pageId={pageEntry._id}
-            workspaceId={workspaceId}
-            pageTitle={pageEntry.title || "Untitled"}
-            isActivePage={isActive}
-            onRedirectHome={() =>
-              usePageStore.setState({ activePage: null, navigationPath: [] })
-            }
+        {renaming ? (
+          <SidebarRenameInput
+            initialValue={pageEntry.title || ""}
+            onCommit={(value) => { if (value) updatePageTitle(pageEntry._id, value); setRenaming(false); }}
+            onCancel={() => setRenaming(false)}
           />
+        ) : (
           <button
             type="button"
-            className="p-1 rounded hover:bg-[var(--osio-bg-subtle)]"
-            onClick={handleAddChild}
-            title="Add child page"
+            {...dragHandlers}
+            onClick={handleRowClick}
+            onDoubleClick={(e) => { e.stopPropagation(); setRenaming(true); }}
+            onKeyDown={(e) => {
+              if (e.key === "Delete") { e.preventDefault(); e.stopPropagation(); requestDelete(); }
+            }}
+            title="Double-click to rename · drag to move · Del to delete"
+            className={[
+              "flex min-w-0 flex-1 items-center gap-0.5 h-full rounded-md text-sm text-left transition-colors duration-100 pr-20",
+              isActive
+                ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-strong)]"
+                : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
+            ].join(" ")}
           >
-            <Plus size={13} />
+            {renderRowIcon()}
+            <span className="flex-1 text-left truncate ml-1">{pageEntry.title || "Untitled"}</span>
           </button>
-        </span>
+        )}
+
+        <PageTreeRowActions
+          pageId={pageEntry._id}
+          workspaceId={workspaceId}
+          title={pageEntry.title || "Untitled"}
+          isActive={isActive}
+          onNewFolder={(e) => createChild(true, e)}
+          onNewFile={(e) => createChild(false, e)}
+        />
       </div>
 
-      {/* Recurse for children */}
-      {expanded &&
-        hasChildren &&
+      {expanded && hasChildren &&
         children.map((childId) => (
-          <PageTreeItem
-            key={childId}
-            pageId={childId}
-            workspaceId={workspaceId}
-            jwt={jwt}
-            depth={depth + 1}
-            activeId={activeId}
-          />
+          <PageTreeItem key={childId} pageId={childId} workspaceId={workspaceId} jwt={jwt} depth={depth + 1} activeId={activeId} />
         ))}
+
+      {contextMenu ? (
+        <PageContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          ctx={buildMenuCtx()}
+          onClose={() => setContextMenu(null)}
+        />
+      ) : null}
+
+      {confirmDelete ? (
+        <ConfirmDeleteModal
+          variant="archive"
+          pageTitle={pageEntry.title || "Untitled"}
+          subPageCount={children.length}
+          showRemember
+          onConfirm={(remember) => {
+            if (remember) globalThis.localStorage?.setItem("osionos.delete-skip-confirm", "1");
+            doArchivePage();
+          }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      ) : null}
     </>
   );
 };

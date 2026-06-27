@@ -74,5 +74,6 @@ export interface UserStore {
   activePersona: () => StaticPersona | null;
   activeJwt: () => string | null;
   activePageJwt: () => string | null;
+  isAdmin: () => boolean;
   personaById: (id: string) => StaticPersona | undefined;
 }

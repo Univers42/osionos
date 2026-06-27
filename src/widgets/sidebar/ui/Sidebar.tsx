@@ -16,6 +16,8 @@ import { useUserStore, WorkspaceSwitcher } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { useUIStore } from "@/shared/config/uiStore";
 import { isPerfEnabled, recordRender } from "@/shared/lib/perf/measure";
+import { ChannelList } from "@/widgets/channel-list";
+import { DmList } from "@/widgets/dm-list";
 import { SidebarTopNav } from "./SidebarTopNav";
 import { SidebarPageTree } from "./SidebarPageTree";
 import { SidebarFooter } from "./SidebarFooter";
@@ -26,6 +28,7 @@ interface Props {
   onOpenHome?: () => void;
   onOpenSettings?: () => void;
   onOpenTrash?: () => void;
+  onOpenConsole?: () => void;
 }
 
 /** Renders the osionos-style sidebar with navigation, page tree, and user switching. */
@@ -33,9 +36,12 @@ export const Sidebar: React.FC<Props> = ({
   onOpenHome,
   onOpenSettings,
   onOpenTrash,
+  onOpenConsole,
 }) => {
   const renderCountRef = useRef(0);
-  renderCountRef.current += 1;
+  // Count COMMITTED renders in a dep-less effect: writing a ref during
+  // render is illegal under react-hooks/refs (and invisible to React).
+  useEffect(() => { renderCountRef.current += 1; });
   recordRender("Sidebar");
 
   useEffect(() => () => {
@@ -148,11 +154,14 @@ export const Sidebar: React.FC<Props> = ({
           jwt={jwt}
           onAddToWorkspace={handleAddToWorkspace}
         />
+        <ChannelList />
+        <DmList />
       </nav>
 
       <SidebarFooter
         onOpenSettings={onOpenSettings}
         onOpenTrash={onOpenTrash}
+        onOpenConsole={onOpenConsole}
         showInviteCTA={showInviteCTA}
         onDismissInvite={() => setShowInviteCTA(false)}
       />

@@ -14,13 +14,21 @@ import React, { useEffect, useState } from "react";
 
 import type { UserSession } from "@/entities/user";
 import { useUserStore } from "@/features/auth";
-import { isBridgeSession, PRISMATICA_URL } from "@/features/auth/model/userStore.helpers";
+import { isBridgeSession, isPortalMode, PRISMATICA_URL } from "@/features/auth/model/userStore.helpers";
+import { Portal } from "@/features/auth/ui/Portal";
+import { usePageSync } from "@/store/sync/usePageSync";
+import { useUnreadSync } from "@/store/chat/useUnreadSync";
+import { useNotifyLive } from "@/store/chat/useNotifyLive";
+import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
+import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
 import { usePageStore } from "@/store/usePageStore";
-import { derivePageState, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
-import { Sidebar } from "@/widgets/sidebar";
+import { derivePageState, loadActivePage, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
+import { ActivitySidebar } from "@/widgets/activity-rail";
+import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
-import { MainContent } from "@/widgets/page-renderer";
-import { applyTheme, readStoredThemeMode } from "@/shared/config/theme";
+import { LazyCanvasDebugRoute, LazyMainContent, LazyStyleGuideRoute } from "./lazyAppRegions";
+import { applyStoredAppearance } from "@/shared/config/theme";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
 import {
   applyWorkspaceAppearance,
@@ -29,9 +37,11 @@ import {
   useWorkspaceConfigStore,
   workspaceConfigKey,
 } from "@/shared/config/workspaceConfigStore";
-import { SettingsCenter } from "@/features/settings/SettingsCenter";
+import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
 import { ToastViewport } from "@/shared/ui";
-import { CanvasDebugRoute } from "@/features/block-editor/ui/canvas/__demo__/CanvasDebugRoute";
+import { ShareHost } from "@/features/share/ShareHost";
+import { TopBar } from "@/widgets/top-bar";
+import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
 
 type UserSessions = Record<string, UserSession>;
 
@@ -112,6 +122,11 @@ function isDevCanvasDebugRoute() {
   return globalThis.window.location.pathname === "/__canvas-debug" || globalThis.window.location.hash.includes("__canvas-debug");
 }
 
+function isDevStyleGuideRoute() {
+  if (!import.meta.env.DEV || globalThis.window === undefined) return false;
+  return globalThis.window.location.pathname === "/__styleguide";
+}
+
 /**
  * Root of the Playground app.
  *
@@ -130,11 +145,29 @@ const App: React.FC = () => {
   const workspaceKey = workspaceConfigKey(activeUserId || "anonymous", activeWorkspace?._id ?? "workspace");
   const storedWorkspaceConfig = useWorkspaceConfigStore((s) => s.configs[workspaceKey]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Captured once at first render, before init effects can reset activePage,
+  // so a refresh can reopen the page the user was last on.
+  const [persistedActivePage] = useState(() => loadActivePage());
+  const seeded = usePageStore((s) => s.seeded);
   const ready = initialized;
+
+  // Persist pages to the BaaS (source of truth) with hydrate-on-load + offline outbox;
+  // zustand + localStorage are the cache. The graph reads these canonical pages via the
+  // bridge (GET /api/graph/pages), so no separate note-mirror sync is needed.
+  usePageSync();
+  useUnreadSync(); // seed per-channel unread badges (mount + 60s + focus)
+  useNotifyLive(); // seed + live in-app notifications (toasts + store)
+
+  // App-wide presence: one heartbeat keeps last_seen_at fresh while osionos is open so
+  // peers render online (refcounted singleton — profile/search views reuse the same one).
+  usePresenceHeartbeat();
+
+  // Materialize recurring templates ("Duplicate every…") on a catch-up timer.
+  useTemplateRecurrence();
 
   // Run once on mount
   useEffect(() => {
-    applyTheme(readStoredThemeMode());
+    applyStoredAppearance();
 
     if (initialized) {
       return;
@@ -167,6 +200,17 @@ const App: React.FC = () => {
       .catch(() => undefined);
   }, [initUsers, initialized]);
 
+  // After pages are loaded, reopen the page from the previous session (refresh
+  // should stay on the same page instead of dropping back to Home).
+  useEffect(() => {
+    if (!seeded || !persistedActivePage) return;
+    const store = usePageStore.getState();
+    if (store.activePage || store.showTrash) return;
+    if (store.pageById(persistedActivePage.id)) {
+      store.openPage(persistedActivePage);
+    }
+  }, [seeded, persistedActivePage]);
+
   useEffect(() => {
     if (!activeWorkspace?._id) return;
     const appearance = resolveWorkspaceConfig(storedWorkspaceConfig).appearance;
@@ -178,7 +222,11 @@ const App: React.FC = () => {
   }, [activeWorkspace?._id, storedWorkspaceConfig]);
 
   if (isDevCanvasDebugRoute()) {
-    return <CanvasDebugRoute />;
+    return <LazyCanvasDebugRoute />;
+  }
+
+  if (isDevStyleGuideRoute()) {
+    return <LazyStyleGuideRoute />;
   }
 
   if (!ready) {
@@ -192,6 +240,10 @@ const App: React.FC = () => {
     );
   }
 
+  if (isPortalMode() && !activeUserId) {
+    return <Portal />;
+  }
+
   if (error === "bridge-session-required" || !activeUserId) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[var(--osio-bg-page)] px-6 text-[var(--osio-fg-default)]">
@@ -203,7 +255,7 @@ const App: React.FC = () => {
           </p>
           <button
             type="button"
-            className="mt-5 inline-flex w-full items-center justify-center rounded-md bg-[var(--osio-accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            className="mt-5 inline-flex w-full items-center justify-center rounded-md bg-[var(--osio-accent)] px-4 py-2 text-sm font-medium text-[var(--osio-accent-fg)] hover:opacity-90"
             onClick={() => { globalThis.location.href = PRISMATICA_URL; }}
           >
             Go to Prismatica
@@ -216,38 +268,33 @@ const App: React.FC = () => {
   return (
     <div
       data-testid="app-shell"
-      className="relative flex h-screen w-screen overflow-hidden bg-[var(--osio-bg-page)]"
+      className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-page)]"
     >
-      {/* Left sidebar */}
-      <Sidebar
-        onOpenSettings={() => setSettingsOpen(true)}
-        onOpenHome={() =>
-          usePageStore.setState({
-            activePage: null,
-            showTrash: false,
-            navigationPath: [],
-          })
-        }
-        onOpenTrash={() =>
-          usePageStore.setState({
-            activePage: null,
-            showTrash: true,
-            navigationPath: [],
-          })
-        }
-      />
+      {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
+      <TopBar onOpenSettings={() => setSettingsOpen(true)} />
 
-      {/* Floating trigger for when sidebar is closed */}
-      <SidebarTrigger />
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {/* Left sidebar */}
+        <ActivitySidebar
+          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
+          onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
+        />
 
-      {/* Content area */}
-      <main className="flex-1 flex min-w-0 overflow-hidden relative">
-        <MainContent />
-      </main>
+        {/* Floating trigger for when sidebar is closed */}
+        <SidebarTrigger />
+
+        {/* Content area */}
+        <main className="flex-1 flex min-w-0 overflow-hidden relative">
+          <LazyMainContent />
+        </main>
+      </div>
 
       <WorkspaceThemePanel />
-      {settingsOpen && <SettingsCenter initialTab="general" onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <LazySettingsCenter initialTab="general" onClose={() => setSettingsOpen(false)} />}
       <ToastViewport />
+      <ShareHost />
+      <ContactDock />
     </div>
   );
 };

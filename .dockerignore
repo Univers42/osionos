@@ -16,4 +16,10 @@ docker/archive
 docs
 scripts/__pycache__
 *.log
-*.local
+*.local# Recursive variants: bare names only match at the context root; the embedded
+# projects (notion-database-sys, markengine) carry their own .git/node_modules
+# which otherwise ship in every build context.
+**/node_modules
+**/.git
+**/test-results
+**/playwright-report

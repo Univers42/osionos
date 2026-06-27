@@ -105,7 +105,7 @@ export function MiniTabs<T extends string>({
             tabIndex={selected ? 0 : -1}
             disabled={option.disabled}
             className={[
-              "inline-flex items-center gap-1.5 rounded-md font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+              "inline-flex items-center gap-1.5 rounded-md font-medium transition-colors duration-[120ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:cursor-not-allowed disabled:opacity-50",
               buttonClass,
               selected
                 ? "bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-sm"

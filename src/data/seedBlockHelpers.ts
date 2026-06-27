@@ -53,6 +53,9 @@ export function divider(): Block {
 export function toggle(text: string, children: Block[] = []): Block {
   return { id: bid(), type: 'toggle', content: text, children, collapsed: true };
 }
+export function button(label: string, href?: string, variant: 'primary' | 'secondary' = 'primary'): Block {
+  return { id: bid(), type: 'button', content: '', buttonLabel: label, buttonHref: href, buttonVariant: variant };
+}
 
 /** Metadata and content blocks for a seed page. */
 export interface SeedPage {
@@ -68,7 +71,13 @@ export interface SeedPage {
     role: 'viewer' | 'editor' | 'owner';
   }>;
   parentPageId?: string | null;
+  sortOrder?:    number | null;
   databaseId?:   string | null;
   archivedAt?:   string | null;
+  isTemplate?:        boolean;
+  isDefaultTemplate?: boolean;
+  templateSurface?:   string;
+  surface?:           string;
+  cover?:             string;
   content:       Block[];
 }

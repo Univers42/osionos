@@ -39,9 +39,13 @@ export const BLOCK_HEIGHT_ESTIMATE_BY_TYPE: Record<BlockType, number> = {
   column_list: 180,
   column: 120,
   divider: 24,
+  button: 44,
   table_block: 220,
   database_inline: 260,
   database_full_page: 560,
+  graph_view: 360,
+  home_views: 280,
+  placeholder: 36,
 };
 
 export interface RootBlockRenderMeta {

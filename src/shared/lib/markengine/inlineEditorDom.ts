@@ -154,7 +154,8 @@ function readElementNode(element: HTMLElement): DomReadResult {
     nodes,
     requiresNormalization:
       childResult.requiresNormalization ||
-      !isCanonicalInlineElement(element, formatting),
+      !isCanonicalInlineElement(element, formatting) ||
+      nodes.length === 0,
     hasElementNodes: true,
   };
 }

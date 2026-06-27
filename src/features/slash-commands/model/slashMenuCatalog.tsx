@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { MousePointerClick } from "lucide-react";
 import {
   COLLECTION_SLASH_ITEMS,
   COLLECTION_SLASH_SECTION_LABELS,
@@ -139,7 +140,22 @@ const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.filter(
   },
 );
 
+/** The template-only placeholder command id; gated to template pages by the menu. */
+export const PLACEHOLDER_COMMAND_ID = "advanced:placeholder";
+
 const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
+  {
+    // Composer-only: a link card. Dispatched by id in the chat composer
+    // (onSlashSelect) — in the editor it harmlessly inserts the bare link text.
+    id: "media:url",
+    kind: "inline",
+    section: "media",
+    label: "Link / URL",
+    aliases: ["url", "link", "embed link", "link preview"],
+    icon: "🔗",
+    description: "Attach a link with a preview card",
+    insertText: "https://",
+  },
   {
     id: "advanced:equation-inline",
     kind: "inline",
@@ -157,6 +173,17 @@ const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
     icon: "∑",
     description: "Write a display equation with LaTeX",
     blockType: "equation",
+  },
+  {
+    // Template-only: gated to template pages in SlashCommandMenu.
+    id: PLACEHOLDER_COMMAND_ID,
+    kind: "block",
+    section: "advanced",
+    label: "Placeholder",
+    aliases: ["placeholder", "fill", "blank", "field"],
+    icon: "▢",
+    description: "A fillable placeholder for pages made from this template",
+    blockType: "placeholder",
   },
   {
     id: "layout:layout_inline",
@@ -188,6 +215,16 @@ const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
     icon: "▥",
     description: "Create two side-by-side columns",
     blockType: "column_list",
+  },
+  {
+    id: "basic:button",
+    kind: "block",
+    section: "basic",
+    label: "Button",
+    aliases: ["button", "cta", "link button", "action"],
+    icon: <MousePointerClick size={16} />,
+    description: "A clickable call-to-action button",
+    blockType: "button",
   },
 ];
 

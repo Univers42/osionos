@@ -17,7 +17,12 @@ export function createCanvasHistory(limit = 80): CanvasHistoryState {
 }
 
 export function snapshotCanvas(cells: CanvasCell[], selectedIds: string[]): CanvasHistorySnapshot {
-  return { cells: structuredClone(cells), selectedIds: [...selectedIds] };
+  // Shallow copies, sharing `blocks` (and other nested values) by reference.
+  // Invariant: the reducer never mutates a cell in place — it replaces cell
+  // objects — and nested block content is owned by the page store, re-entering
+  // only through hydrateFromBlock. Deep-cloning here (the old structuredClone)
+  // made every committed gesture O(total nested blocks).
+  return { cells: cells.map((cell) => ({ ...cell })), selectedIds: [...selectedIds] };
 }
 
 export function pushCanvasHistory(history: CanvasHistoryState, snapshot: CanvasHistorySnapshot): CanvasHistoryState {

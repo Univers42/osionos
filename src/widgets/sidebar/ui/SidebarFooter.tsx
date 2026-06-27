@@ -15,6 +15,7 @@ import {
   Settings,
   LayoutGrid,
   Archive,
+  Database,
   UserPlus,
   X,
 } from "lucide-react";
@@ -24,14 +25,20 @@ import { SidebarNavItem } from "./SidebarNavItem";
 interface SidebarFooterProps {
   onOpenSettings?: () => void;
   onOpenTrash?: () => void;
+  onOpenConsole?: () => void;
   showInviteCTA: boolean;
   onDismissInvite: () => void;
 }
+
+// Parity gate: the BaaS console nav item only exists when a project is
+// configured, so a stock build (no VITE_BAAS_URL) renders byte-identical.
+const BAAS_ENABLED = Boolean((import.meta.env ?? {}).VITE_BAAS_URL);
 
 /** Bottom section: Settings / Marketplace / archived files + optional Invite CTA. */
 export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   onOpenSettings,
   onOpenTrash,
+  onOpenConsole,
   showInviteCTA,
   onDismissInvite,
 }) => {
@@ -63,6 +70,13 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
           label="Archived files"
           onClick={() => onOpenTrash?.()}
         />
+        {BAAS_ENABLED && (
+          <SidebarNavItem
+            icon={<Database size={16} />}
+            label="BaaS Console"
+            onClick={() => onOpenConsole?.()}
+          />
+        )}
       </div>
 
       {showInviteCTA && (
@@ -88,13 +102,14 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
             {/* Dismiss button */}
             <button
               type="button"
+              aria-label="Dismiss invitation"
               onClick={(e) => {
                 e.stopPropagation();
                 onDismissInvite();
               }}
-              className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
+              className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-md text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
             >
-              <X size={12} />
+              <X size={14} />
             </button>
           </div>
         </div>

@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus } from "lucide-react";
 
@@ -82,7 +83,7 @@ export interface SurfaceBlockEditorProps {
 	onDeleteCodeBlock?: () => void;
 	onUpdateBlock?: (blockId: string, updates: Partial<Block>) => void;
 	onBeforeStructuralEdit?: () => void;
-	onRequestSlashMenu?: (position: { x: number; y: number }) => void;
+	onRequestSlashMenu?: (position: { x: number; y: number; top: number }) => void;
 	renderChildren?: () => React.ReactNode;
 	focusBlock: (blockId: string, cursorEnd?: boolean) => void;
 }
@@ -141,7 +142,9 @@ function setsEqual(left: Set<string>, right: Set<string>): boolean {
 function shouldRenderChildren(block: Block): boolean {
 	if (!block.children?.length) return false;
 	if (selfRendersChildren(block.type)) return false;
-	if (block.type === "toggle" && block.collapsed) return false;
+	// Any externally-rendered container honours `collapsed` (toggle, but also
+	// collapsible list items): collapsed hides the nested subtree.
+	if (block.collapsed) return false;
 	return true;
 }
 
@@ -484,7 +487,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		});
 	}, []);
 
-	const handleRequestSlashMenu = useCallback((blockId: string, position: { x: number; y: number }) => {
+	const handleRequestSlashMenu = useCallback((blockId: string, position: { x: number; y: number; top: number }) => {
 		setSlashMenu({ blockId, position, filter: "" });
 	}, [setSlashMenu]);
 
@@ -599,6 +602,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 			{slashMenu ? (
 				<SlashCommandMenu
 					key={`${slashMenu.blockId}:${slashMenu.filter}`}
+					pageId={pageId}
 					position={slashMenu.position}
 					filter={slashMenu.filter}
 					onSelect={(item) => {
@@ -648,12 +652,15 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 
 			<BlockContextMenu menu={contextMenu} sections={contextMenuSections} onClose={closeContextMenu} />
 
-			{selectionRect ? (
-				<div
-					className="pointer-events-none fixed z-[var(--osio-z-max)] rounded-sm border border-[var(--osio-accent)] bg-[var(--osio-accent)]/10"
-					style={{ left: selectionRect.left, top: selectionRect.top, width: selectionRect.width, height: selectionRect.height }}
-				/>
-			) : null}
+			{selectionRect && typeof document !== "undefined"
+				? createPortal(
+						<div
+							className="pointer-events-none fixed z-[var(--osio-z-max)] rounded-sm border border-[var(--osio-accent)] bg-[var(--osio-accent)]/10"
+							style={{ left: selectionRect.left, top: selectionRect.top, width: selectionRect.width, height: selectionRect.height }}
+						/>,
+						document.body,
+					)
+				: null}
 		</div>
 	);
 };
@@ -686,7 +693,7 @@ interface BlockTreeProps {
 	focusBlock: (blockId: string, cursorEnd?: boolean) => void;
 	onBeforeStructuralEdit: () => void;
 	onContextMenu: (e: React.MouseEvent, blockId: string) => void;
-	onRequestSlashMenu: (blockId: string, position: { x: number; y: number }) => void;
+	onRequestSlashMenu: (blockId: string, position: { x: number; y: number; top: number }) => void;
 	renderBlockEditor: (props: SurfaceBlockEditorProps) => React.ReactNode;
 }
 
@@ -922,6 +929,18 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 	);
 };
 
+function getHeadingClasses(type: Block["type"]): { pt: string; handleTop: string } {
+	switch (type) {
+		case "heading_1": return { pt: "pt-6", handleTop: "top-8" };
+		case "heading_2": return { pt: "pt-5", handleTop: "top-7" };
+		case "heading_3": return { pt: "pt-4", handleTop: "top-6" };
+		case "heading_4": return { pt: "pt-3", handleTop: "top-5" };
+		case "heading_5":
+		case "heading_6": return { pt: "pt-2", handleTop: "top-4" };
+		default:          return { pt: "",     handleTop: "top-2" };
+	}
+}
+
 interface DraggablePlaygroundBlockProps {
 	block: Block;
 	blocks: Block[];
@@ -1030,6 +1049,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 
 	const isDragged = draggedBlockId === block.id;
 	const isSelected = selectedBlockIds.has(block.id);
+	const { pt, handleTop } = getHeadingClasses(block.type);
 
 	return (
 		<article
@@ -1037,7 +1057,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 			data-draggable-block-id={block.id}
 			data-selected={isSelected ? "true" : undefined}
 			data-block-type={block.type}
-			className={`group/block relative rounded-md transition-colors transition-opacity hover:bg-[var(--osio-bg-subtle)] focus-within:bg-[var(--osio-bg-subtle)] ${isDragged ? "opacity-40" : ""} ${isSelected ? "bg-[var(--osio-accent)]/10 ring-1 ring-[var(--osio-accent)]/35" : ""}`}
+			className={`group/block relative rounded-md transition-colors transition-opacity hover:bg-[var(--osio-bg-hover)] focus-within:bg-[var(--osio-bg-hover)] ${pt} ${isDragged ? "opacity-40" : ""} ${isSelected ? "bg-[var(--osio-accent-subtle)] ring-1 ring-[var(--osio-accent)]" : ""}`}
 			onContextMenu={(e) => onContextMenu(e, block.id)}
 			onDragOver={handleDragOver}
 			onDragLeave={handleDragLeave}
@@ -1050,7 +1070,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 				onClick={(e) => onContextMenu(e, block.id)}
 				onDragStart={handleDragStart}
 				onDragEnd={handleDragEnd}
-				className="absolute -left-7 top-2 cursor-grab rounded p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-muted)] group-hover/block:opacity-100 active:cursor-grabbing"
+				className={`absolute -left-7 ${handleTop} cursor-grab rounded-md p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)] osio-drag-handle active:cursor-grabbing`}
 				aria-label="Drag to reorder block"
 				title="Drag to reorder"
 			>
@@ -1089,7 +1109,7 @@ interface EditableBlockProps {
 	registerRef: (blockId: string, el: HTMLElement | null) => void;
 	focusBlock: (blockId: string, cursorEnd?: boolean) => void;
 	onBeforeStructuralEdit: () => void;
-	onRequestSlashMenu: (blockId: string, position: { x: number; y: number }) => void;
+	onRequestSlashMenu: (blockId: string, position: { x: number; y: number; top: number }) => void;
 	moveBlock: (pageId: string, blockId: string, targetIndex: number, parentBlockId?: string | null) => void;
 	moveBlockAcrossTree: (pageId: string, blockId: string, targetParentBlockId: string | null, targetIndex: number) => void;
 	updateContent: (blocks: Block[]) => void;
@@ -1170,7 +1190,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 		if (block.type === "column_list") {
 			const columns = block.children;
 			return (
-				<div className="flex items-stretch gap-0 rounded-md border border-dashed border-transparent hover:border-[var(--osio-border-default)]">
+				<div className="flex items-stretch gap-0 rounded-md">
 					{columns.map((column, index) => (
 						<React.Fragment key={column.id}>
 							<div className="min-w-0 px-1" style={{ flexGrow: normalizeColumnRatio(column, columns.length), flexBasis: 0 }}>

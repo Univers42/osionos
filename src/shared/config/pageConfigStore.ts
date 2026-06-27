@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 
 import type { Block } from '@/entities/block';
 
@@ -81,6 +81,8 @@ export interface PageConfig {
   fullWidth: boolean;
   locked: boolean;
   presentationMode: boolean;
+  rawMode: boolean;
+  showLineNumbers: boolean;
   notifications: {
     comments: boolean;
   };
@@ -120,6 +122,8 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
   fullWidth: false,
   locked: false,
   presentationMode: false,
+  rawMode: false,
+  showLineNumbers: false,
   notifications: {
     comments: false,
   },
@@ -153,7 +157,7 @@ function buildCssTokens(config: PageConfig): PageCssTokens {
 
   return {
     fontFamily,
-    fontSizeScale: config.smallText ? 0.92 : 1,
+    fontSizeScale: config.smallText ? 0.85 : 1,
     contentMaxWidth: config.fullWidth ? 'none' : '900px',
     contentPaddingInline: config.fullWidth ? 'clamp(16px, 4vw, 48px)' : 'clamp(16px, 11%, 96px)',
   };
@@ -190,17 +194,82 @@ export function pageConfigKey(userId: string, pageId: string): string {
   return `${userId}:${pageId}`;
 }
 
+/** The bridge rejects oversized page bodies with a 413 (which would fail the
+ *  WHOLE config PATCH, dropping the lightweight settings too). Version and
+ *  translation block snapshots are the heavy, disposable part — when the
+ *  serialized config would trip that limit, shed them progressively (version
+ *  content → non-active translation content → all translation content) so the
+ *  settings still sync. localStorage already does the same for quota
+ *  (capVersionsInPersistedValue); the in-memory copy keeps full snapshots. */
+const API_CONFIG_SOFT_LIMIT_BYTES = 5_000_000;
+
+function byteSize(value: string): number {
+  return typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(value).length : value.length;
+}
+
+function shrinkConfigForApi(config: PageConfig): PageConfig {
+  let next = config;
+  const fits = () => byteSize(JSON.stringify(next)) <= API_CONFIG_SOFT_LIMIT_BYTES;
+  if (fits()) return next;
+  next = { ...next, versions: next.versions.map((version) => ({ ...version, content: [] })) };
+  if (fits()) return next;
+  const activeId = next.activeTranslation?.id;
+  next = { ...next, translations: next.translations.map((t) => (t.id === activeId ? t : { ...t, content: [] })) };
+  if (fits()) return next;
+  next = { ...next, translations: next.translations.map((t) => ({ ...t, content: [] })) };
+  return next;
+}
+
 async function persistPageConfigToApi(pageId: string, config: PageConfig) {
   const state = useUserStore.getState();
   const jwt = state.activePageJwt() || state.activeJwt();
   if (!jwt) return;
 
   try {
-    await api.patch(`/api/pages/${pageId}/config`, { config }, jwt);
+    await api.patch(`/api/pages/${pageId}/config`, { config: shrinkConfigForApi(config) }, jwt);
   } catch {
     // Offline mode keeps the persisted Zustand copy. The API endpoint can sync later.
   }
 }
+
+const MAX_PERSISTED_VERSIONS = 10;
+
+/** Returns the persisted blob with each page's version snapshots capped to
+ *  `perPageLimit`, used to shed weight when localStorage is over quota. */
+function capVersionsInPersistedValue(value: string, perPageLimit: number): string {
+  const parsed = JSON.parse(value);
+  const configs = parsed?.state?.configs as Record<string, { versions?: unknown[] }> | undefined;
+  if (configs) {
+    for (const key of Object.keys(configs)) {
+      const config = configs[key];
+      if (config && Array.isArray(config.versions)) config.versions = config.versions.slice(0, perPageLimit);
+    }
+  }
+  return JSON.stringify(parsed);
+}
+
+/**
+ * localStorage that never throws on quota: page-version snapshots are the heavy,
+ * disposable part, so on failure we progressively drop them (10 → 3 → 1 → 0) and
+ * retry. The page config itself (settings) is always preserved.
+ */
+const quotaSafeStorage: StateStorage = {
+  getItem: (name) => globalThis.localStorage?.getItem(name) ?? null,
+  removeItem: (name) => globalThis.localStorage?.removeItem(name),
+  setItem: (name, value) => {
+    const store = globalThis.localStorage;
+    if (!store) return;
+    const attempts = [value, ...[3, 1, 0].map((limit) => capVersionsInPersistedValue(value, limit))];
+    for (const candidate of attempts) {
+      try {
+        store.setItem(name, candidate);
+        return;
+      } catch {
+        // over quota — fall through to a leaner candidate
+      }
+    }
+  },
+};
 
 export const usePageConfigStore = create<PageConfigStore>()(
   persist(
@@ -268,7 +337,7 @@ export const usePageConfigStore = create<PageConfigStore>()(
           createdAt: new Date().toISOString(),
         };
         const nextConfig = resolvePageConfig(current, {
-          versions: [nextVersion, ...current.versions].slice(0, 20),
+          versions: [nextVersion, ...current.versions].slice(0, MAX_PERSISTED_VERSIONS),
         });
 
         set((state) => ({
@@ -284,6 +353,7 @@ export const usePageConfigStore = create<PageConfigStore>()(
     }),
     {
       name: 'osionos:page-configurations',
+      storage: createJSONStorage(() => quotaSafeStorage),
     },
   ),
 );

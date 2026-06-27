@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-export type FeatureFlagName = "osio.canvas.v2";
+export type FeatureFlagName = "osio.canvas.v2" | "osio.profile.template" | "osio.collab.shared";
 
 export function isFeatureFlagEnabled(name: FeatureFlagName, fallback = false): boolean {
   const urlValue = readUrlFlag(name);
@@ -22,8 +22,28 @@ export function isFeatureFlagEnabled(name: FeatureFlagName, fallback = false): b
   return fallback;
 }
 
+/** Canvas V2 (free-frame builder) is the default canvas. The legacy V1 grid
+ *  stays reachable as a fallback via any override (`?osio.canvas.v2=0`, the
+ *  `osio.canvas.v2` localStorage key, or `VITE_OSIO_CANVAS_V2=0`). The stored
+ *  document format is identical (`migration.ts` round-trips losslessly), so a
+ *  page authored under either engine opens correctly under the other. */
 export function isCanvasV2Enabled(): boolean {
-  return isFeatureFlagEnabled("osio.canvas.v2", false);
+  return isFeatureFlagEnabled("osio.canvas.v2", true);
+}
+
+/** Render the admin-authored, data-bound profile template (falls back to the
+ *  built-in ProfileView when off or when no template page exists). */
+export function isProfileTemplateEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.profile.template", false);
+}
+
+/** Shared-space live co-presence (AOC). Default OFF: the realtime channel is
+ *  membership-gated at the bridge, but server-side namespace isolation is not
+ *  fully enforced until the gateway `REALTIME_NAMESPACE_FALLBACK=deny` cutover
+ *  (which first needs chat/feed/live-DB migrated to scoped tokens). Until then
+ *  presence stays opt-in via `?osio.collab.shared=1` for dev/demo only. */
+export function isSharedCollabEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.collab.shared", false);
 }
 
 function readUrlFlag(name: FeatureFlagName): string | null {

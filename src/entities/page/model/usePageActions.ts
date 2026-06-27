@@ -276,6 +276,16 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     await logAction('version_history', 'Version restored', { versionId: version.id });
   }, [logAction, pageId, pageRevision, snapshot, updatePageContent, updatePageTitle]);
 
+  const saveVersion = useCallback(async () => {
+    await snapshot('Saved version');
+    await logAction('version_history', 'Version saved');
+  }, [logAction, snapshot]);
+
+  const toggleRawMode = useCallback(
+    () => updatePageSetting({ rawMode: !config.rawMode }, 'small_text', config.rawMode ? 'Raw mode off' : 'Raw mode on'),
+    [config.rawMode, updatePageSetting],
+  );
+
   return {
     actionMessage,
     config,
@@ -303,5 +313,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     openAnalytics,
     manageConnections,
     restoreVersion,
+    saveVersion,
+    toggleRawMode,
   };
 }

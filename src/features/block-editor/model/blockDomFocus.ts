@@ -121,7 +121,9 @@ export function focusEditableBlock(
     }
 
     editable.focus();
-    editable.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    // Instant (not smooth) keeps cursor navigation snappy like a code editor —
+    // a smooth-scroll animation on every Arrow/focus made movement feel laggy.
+    editable.scrollIntoView({ block: "nearest", behavior: "auto" });
     placeCaret(editable, placement);
 
     if (document.activeElement !== editable && remainingFrames > 0) {

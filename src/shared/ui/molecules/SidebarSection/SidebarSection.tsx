@@ -22,6 +22,8 @@ export interface SidebarSectionProps {
   defaultOpen?: boolean;
   onAdd?: () => void;
   onMore?: () => void;
+  /** Extra header buttons (e.g. a tree toolbar), shown on hover before "+". */
+  headerActions?: React.ReactNode;
 }
 
 export const SidebarSection: React.FC<SidebarSectionProps> = ({
@@ -30,6 +32,7 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
   defaultOpen = true,
   onAdd,
   onMore,
+  headerActions,
 }) => {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -54,6 +57,7 @@ export const SidebarSection: React.FC<SidebarSectionProps> = ({
         </button>
 
         <div className="flex items-center gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+          {headerActions}
           {onMore ? (
             <IconButton
               size="xs"

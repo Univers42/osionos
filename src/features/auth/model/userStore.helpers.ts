@@ -35,6 +35,9 @@ const TEST_MODE = (import.meta.env as Record<string, string>)['MODE'] === 'test'
 export const REQUIRE_BRIDGE_SESSION = ((import.meta.env as Record<string, string>)['VITE_REQUIRE_BRIDGE_SESSION'] ?? (TEST_MODE ? 'false' : 'true')) !== 'false';
 export const ALLOW_OFFLINE_MODE = ((import.meta.env as Record<string, string>)['VITE_ALLOW_OFFLINE_MODE'] ?? (TEST_MODE ? 'true' : 'false')) === 'true';
 export const PRISMATICA_URL = ((import.meta.env as Record<string, string>)['VITE_PRISMATICA_URL'] ?? 'http://localhost:4322').trim();
+export const AUTH_MODE = ((import.meta.env as Record<string, string>)['VITE_AUTH_MODE'] ?? '').trim();
+/** Portal mode: the app shows its own login/sign-up portal (no mock, no website redirect). */
+export function isPortalMode(): boolean { return AUTH_MODE === 'portal'; }
 export const BRIDGE_APP_TOKEN_PREFIX = 'osionos_v1.';
 
 export type BridgeSessionImport = {
@@ -82,6 +85,14 @@ export function pageApiJwtFromSessionToken(token: string | null | undefined): st
   return token ?? '';
 }
 
+/** Account-level administrator flag, read from the bridge app-session token's
+ *  signed `is_admin` claim. Derived (not stored separately) so it can't drift
+ *  from the session; false for non-bridge or expired tokens. */
+export function isAdminFromSessionToken(token: string | null | undefined): boolean {
+  if (isBridgeAppTokenExpired(token)) return false;
+  return decodeBridgeAppTokenPayload(token)?.is_admin === true;
+}
+
 export function isBridgeSession(session: UserSession | null | undefined): boolean {
   if (!session) return false;
   if (isBridgeAppToken(session.accessToken)) return true;
@@ -125,7 +136,7 @@ export async function loginPersona(persona: StaticPersona) {
   if (!API_BASE) return null; // no API configured → skip fetch entirely
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
+    const timeout = setTimeout(() => controller.abort(), 12000);
     const res = await fetch(
       `${API_BASE}/api/auth/login`,
       {
@@ -136,11 +147,11 @@ export async function loginPersona(persona: StaticPersona) {
       },
     );
     clearTimeout(timeout);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return { userId: data.user.id as string, accessToken: data.accessToken as string, refreshToken: data.refreshToken as string };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false as const, message: (data.message as string) || 'Invalid email or password.' };
+    return { ok: true as const, userId: data.user.id as string, accessToken: data.accessToken as string, refreshToken: data.refreshToken as string };
   } catch {
-    return null;
+    return { ok: false as const, message: 'Could not reach the server. Check your connection.' };
   }
 }
 
@@ -148,9 +159,9 @@ export async function signupPersona(persona: StaticPersona) {
   if (!API_BASE) return null;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
+    const timeout = setTimeout(() => controller.abort(), 12000);
     const res = await fetch(
-      `${API_BASE}/api/auth/signup`,
+      `${API_BASE}/api/auth/register`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -163,16 +174,21 @@ export async function signupPersona(persona: StaticPersona) {
       },
     );
     clearTimeout(timeout);
-    if (!res.ok) return null;
-    const data = await res.json();
-    return { userId: data.user.id as string, accessToken: data.accessToken as string, refreshToken: data.refreshToken as string };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false as const, message: (data.message as string) || 'Could not create the account.' };
+    return { ok: true as const, userId: data.user.id as string, accessToken: data.accessToken as string, refreshToken: data.refreshToken as string };
   } catch {
-    return null;
+    return { ok: false as const, message: 'Could not reach the server. Check your connection.' };
   }
 }
 
 export async function fetchWorkspaces(jwt: string): Promise<Workspace[]> {
-  const apiJwt = apiJwtFromSessionToken(jwt);
+  // /api/workspaces is a BRIDGE call that accepts the osionos_v1 app-session token
+  // (like the page calls), so pass it through. apiJwtFromSessionToken() is the
+  // gotrue-JWT-only variant (returns '' for bridge tokens) and would skip the
+  // fetch entirely — leaving portal accounts with no workspaces (empty sidebar,
+  // no active workspace -> stuck spinner + dead buttons).
+  const apiJwt = pageApiJwtFromSessionToken(jwt);
   if (!apiJwt || !API_BASE) return [];  // offline mode — skip network call
   try {
     return await api.get<Workspace[]>('/api/workspaces', apiJwt);

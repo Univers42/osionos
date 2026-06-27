@@ -50,6 +50,8 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
     <textarea
       ref={ref}
       aria-label="Page title"
+      name="page-title"
+      autoComplete="off"
       spellCheck
       rows={1}
       value={title}

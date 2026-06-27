@@ -1,0 +1,12 @@
+# Single-package "workspace" — osionos/app is not multi-package, but a
+# pnpm-workspace.yaml is the only way to expose pnpm-only config knobs such
+# as `minimumReleaseAge` that the rules engine (react-doctor) checks for.
+#
+# Mirrors the .npmrc settings so both `npm` and `pnpm` consumers honour the
+# same supply-chain guard.
+packages: []
+
+# react-doctor/require-pnpm-hardening — wait 7 days (10080 minutes) before
+# installing a newly published version so malicious uploads have time to be
+# caught and unpublished. See https://www.react.doctor/prompts/rules/react-doctor/require-pnpm-hardening.md
+minimumReleaseAge: 10080
