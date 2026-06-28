@@ -1,0 +1,36 @@
+# Keep the Vercel upload lean WITHOUT removing build inputs.
+# IMPORTANT: root-only excludes are anchored with a leading "/" so they do not
+# match same-named dirs deeper in the tree (e.g. a bare "config" would also
+# match src/shared/config and strip the app's config stores).
+
+# nested deps & vcs
+node_modules
+**/node_modules
+.git
+**/.git
+
+# never upload local env files — build env is injected via `vercel deploy -b`
+# (vite loadEnv would otherwise read these at build time and override/leak)
+/.env
+/.env.*
+/.vercel
+
+# tests & reports (root)
+/tests
+/playwright-report
+/test-results
+/playwright.config.ts
+
+# docs & tooling not needed by the build (root, anchored)
+/docs
+/.github
+/.gemini
+/.gitpatches
+/deploy
+/docker
+/config
+/sonar-project.properties
+
+# heavy, unreferenced parts of the vendored submodule
+/src/shared/notion-database-sys/vendor
+/src/shared/notion-database-sys/docs
