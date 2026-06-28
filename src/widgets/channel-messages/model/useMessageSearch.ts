@@ -22,6 +22,7 @@ export function useMessageSearch(query: string, channelId?: string) {
 
   useEffect(() => {
     const q = query.trim();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: clear stale results immediately when the query is too short to search
     if (q.length < 2) { setHits([]); setLoading(false); return; }
     let alive = true;
     const timer = setTimeout(() => {

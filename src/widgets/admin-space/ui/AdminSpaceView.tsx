@@ -18,13 +18,12 @@
  * claim; the server re-enforces every write.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ShieldAlert, PenSquare, Plus, FileText } from "lucide-react";
 
 import { useIsAdmin, useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import type { PageEntry } from "@/entities/page";
-import { isAdminWorkspace } from "@/shared/config/adminWorkspace";
 import { genId } from "@/widgets/workspace-grid/model/layoutTree";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import type { TemplateSurface } from "@/widgets/page-renderer/model/useTemplateForSurface";

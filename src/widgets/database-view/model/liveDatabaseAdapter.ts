@@ -24,6 +24,8 @@ import {
   isLiveDatabaseId,
   parseLiveDatabaseId,
 } from "@/shared/notion-database-sys/src/store/live/liveTypes";
+import { setLiveWriteNotifier } from "@/shared/notion-database-sys/src/store/live/liveNotice";
+import { useToastStore } from "@/shared/ui/primitives/useToastStore";
 // Side effects: register the preset packs (composable — first non-null per
 // table wins) BEFORE the first adapter loads state: agency investigation
 // (board/map/timeline/feed/gallery/dashboard), pg-commerce (pipeline board,
@@ -33,6 +35,17 @@ import "./agencyViewPresets";
 import "./commerceViewPresets";
 import "./opsActivityViewPresets";
 import "./gourmandViewPresets";
+
+// Surface live-write rejections to the user (the dbms host has no toast; see
+// liveConflict). A non-owner/stale/denied cell write still reconciles silently
+// to server truth, but now a toast explains why the edit did not persist.
+setLiveWriteNotifier((notice) => {
+  useToastStore.getState().push({
+    kind: notice.resolution === "deleted" ? "error" : "warning",
+    title: "Change not saved",
+    description: notice.message,
+  });
+});
 
 export { isLiveDatabaseId };
 

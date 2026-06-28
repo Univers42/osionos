@@ -67,7 +67,7 @@ export function useVoiceRecorder() {
     const node = analyser.current;
     let peak = 0;
     if (node) {
-      const buf = new Uint8Array(node.frequencyBinCount);
+      const buf = new Uint8Array(node.fftSize); // time-domain data is fftSize samples, not frequencyBinCount (fftSize/2)
       node.getByteTimeDomainData(buf);
       for (const v of buf) peak = Math.max(peak, Math.abs(v - 128) / 128);
     }
@@ -84,6 +84,13 @@ export function useVoiceRecorder() {
     stream.current = media;
     const ctx = new AudioContext();
     audioCtx.current = ctx;
+    // Browsers create an AudioContext in the 'suspended' state under the autoplay
+    // policy. We reach here only AFTER `await getUserMedia`, so the click's
+    // user-gesture window is already gone and the context stays suspended — its
+    // graph clock never advances, the analyser only ever reads the silent midline
+    // (128), and the live meter looks dead even though the mic is granted. Resume
+    // it (best-effort: MediaRecorder captures audio regardless of the meter).
+    if (ctx.state === 'suspended') { try { await ctx.resume(); } catch { /* meter stays flat; recording still works */ } }
     const node = ctx.createAnalyser();
     node.fftSize = 256;
     ctx.createMediaStreamSource(media).connect(node);

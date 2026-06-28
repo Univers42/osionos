@@ -5,7 +5,7 @@
       "command": "bash",
       "args": [
         "-lc",
-        "cd \"/home/dlesieur/Documents/ft_transcendence/apps/osionos/app\" && exec bash scripts/docker-run.sh mcp-claude"
+        "cd \"/home/dlesieur/Documents/groot/apps/osionos/app\" && exec bash scripts/docker-run.sh mcp-claude"
       ]
     }
   }

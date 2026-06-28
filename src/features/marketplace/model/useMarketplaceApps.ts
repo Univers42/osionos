@@ -33,6 +33,7 @@ export function useMarketplaceApps(): { apps: PageEntry[]; loading: boolean; err
   const [tick, setTick] = useState(0);
   useEffect(() => {
     let alive = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset loading before (re)fetching the catalogue on reload (tick change)
     setLoading(true);
     api
       .get<PageEntry[]>("/api/marketplace/apps", getActivePageJwt() ?? undefined)
@@ -78,6 +79,7 @@ export function useMarketplaceApp(appId: string | null): { app: PageEntry | null
   const [loading, setLoading] = useState(false);
   useEffect(() => {
     if (!appId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: clear stale app detail when the selection is cleared
       setData({ app: null, children: [] });
       return;
     }
