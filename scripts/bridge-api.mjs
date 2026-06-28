@@ -299,6 +299,12 @@ function responseStatusForBaasFailure(status) {
 	return 502;
 }
 
+function queryRouterStatus(httpStatus, body) {
+	if (httpStatus === 400 && /not mounted|engine.*not|not.*engine/i.test(body)) return 503;
+	if (httpStatus === 502 && /data-plane.*forward.*failed/i.test(body)) return 503;
+	return responseStatusForBaasFailure(httpStatus);
+}
+
 function assignPayloadValue(row, payload, payloadKey, rowKey, mapper) {
 	if (hasOwn(payload, payloadKey)) row[rowKey] = mapper(payload[payloadKey]);
 }
@@ -511,7 +517,7 @@ async function baasQueryGet(config, fetchImpl, path, timeoutMs = BAAS_FETCH_TIME
 	}, timeoutMs);
 	const text = await response.text().catch(() => '');
 	if (!response.ok) {
-		const status = responseStatusForBaasFailure(response.status);
+		const status = queryRouterStatus(response.status, text);
 		throw Object.assign(new Error(`query-router request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
 	}
 	if (!text) return null;
@@ -704,7 +710,9 @@ function pageUpdateRowFromPayload(payload) {
 	assignPayloadValue(row, payload, 'archivedAt', 'archived_at', (value) => safeTimestampOrNull(value, 'archivedAt'));
 	assignPayloadValue(row, payload, 'isTemplate', 'is_template', (value) => value === true);
 	assignPayloadValue(row, payload, 'isDefaultTemplate', 'is_default_template', (value) => value === true);
-	assignPayloadValue(row, payload, 'templateSurface', 'template_surface', (value) => (value === 'profile' || value === 'marketplace-app') ? value : null);
+	if (payload.templateSurface === 'profile' || payload.templateSurface === 'marketplace-app') {
+		row.template_surface = payload.templateSurface;
+	}
 	assignPayloadValue(row, payload, 'recurrence', 'recurrence', (value) => safeRecurrence(value));
 	return row;
 }

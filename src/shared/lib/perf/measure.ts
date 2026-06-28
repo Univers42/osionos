@@ -12,6 +12,11 @@
 
 const PERF_LOCAL_STORAGE_KEY = "osio:perf";
 const WARN_THRESHOLD_MS = 4;
+// Cap on retained profiler samples. reactCommits/eventTimings are append-only
+// dev/perf-harness buffers; without a bound they grow for the lifetime of a
+// long session (one entry per React commit / input event). 5k keeps a useful
+// recent window while preventing unbounded heap growth. Drop-oldest (ring).
+const MAX_PERF_SAMPLES = 5000;
 
 type MaybePromise<T> = T | Promise<T>;
 type ReactProfilerPhase = "mount" | "update" | "nested-update";
@@ -70,6 +75,11 @@ function warnIfSlow(name: string, durationMs: number) {
 function recordDuration(name: string, durationMs: number) {
   metrics.durations[name] = metrics.durations[name] ?? [];
   metrics.durations[name].push(durationMs);
+}
+
+function pushBounded<T>(buffer: T[], item: T): void {
+  buffer.push(item);
+  if (buffer.length > MAX_PERF_SAMPLES) buffer.shift();
 }
 
 function isPromiseLike<T>(value: MaybePromise<T>): value is Promise<T> {
@@ -152,7 +162,7 @@ export function recordReactCommit(
   commitTime: number,
 ): void {
   if (!isPerfEnabled()) return;
-  metrics.reactCommits.push({ id, phase, actualDuration, baseDuration, startTime, commitTime });
+  pushBounded(metrics.reactCommits, { id, phase, actualDuration, baseDuration, startTime, commitTime });
 }
 
 export function getPerfDurations(name: string): number[] {
@@ -184,7 +194,7 @@ export function startEventTimingCapture(): void {
           processingStart?: number;
           processingEnd?: number;
         };
-        metrics.eventTimings.push({
+        pushBounded(metrics.eventTimings, {
           name: eventEntry.name,
           duration: eventEntry.duration,
           startTime: eventEntry.startTime,
