@@ -2170,7 +2170,11 @@ async function handleDatabaseRows(match, request, response, config, fetchImpl) {
 	// Reads AND writes. An unknown op falls back to a safe list; the status is
 	// passed through so the write client can classify ok / conflict / rejected.
 	const op = typeof safe.op === 'string' && DB_OPS.has(safe.op) ? safe.op : 'list';
-	const { status, body } = await baasQueryPassthrough(config, fetchImpl, `/${dbId}/tables/${table}`, { ...safe, op });
+	// The table is in the URL path; the query-router's strict validator rejects a
+	// redundant `resource` (and legacy `values`) the live-DB write client tags onto
+	// update/delete/upsert ops — strip them so writes don't silently 400 and vanish.
+	const { resource: _resource, values: _values, ...opBody } = safe;
+	const { status, body } = await baasQueryPassthrough(config, fetchImpl, `/${dbId}/tables/${table}`, { ...opBody, op });
 	json(response, status || 502, body ?? { rows: [], affected_rows: 0 }, config);
 	return true;
 }
