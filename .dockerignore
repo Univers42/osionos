@@ -23,3 +23,10 @@ scripts/__pycache__
 **/.git
 **/test-results
 **/playwright-report
+
+# recursive excludes (embedded projects carry their own — keep the build context small)
+**/node_modules
+**/.git
+**/dist
+**/build
+**/.vite
