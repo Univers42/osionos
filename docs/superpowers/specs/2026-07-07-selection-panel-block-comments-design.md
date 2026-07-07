@@ -151,8 +151,10 @@ New feature slice (feature-sliced layout, no barrel needed):
 - Marks whose thread no longer exists (deleted server-side): render as plain
   children (renderer falls back when the store lacks the id), and the strip
   helper cleans them on next thread-list load.
-- Multi-block selections: Comment/AI act on the anchor block's selection
-  (first block); formatting already behaves per-block.
+- Multi-block selections: governed by the companion spec
+  `2026-07-07-dual-selection-clipboard-design.md` — the panel anchors on
+  cross-block text selections too; formatting/Turn-into/Comment apply across
+  the covered slices (Comment shares one thread id across its per-block marks).
 - Permissions: server rejects writes without a valid app session; UI hides
   Comment for read-only viewers (`canReadPage`/access context already exists).
 
