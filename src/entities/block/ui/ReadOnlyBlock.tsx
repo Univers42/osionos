@@ -131,8 +131,13 @@ function getNestedChildrenClassName(type: Block["type"]) {
   return "ml-6 mt-0.5";
 }
 
-function renderNestedChildren(block: Block, bulletDepth: number, numberedDepth: number) {
-  if (!block.children?.length || block.collapsed) {
+function renderNestedChildren(block: Block, bulletDepth: number, numberedDepth: number, forceExpand = false) {
+  // `forceExpand` lets a block whose expansion is driven by LOCAL state (the
+  // read-only toggle) override the persisted `block.collapsed` flag. Without it,
+  // a toggle saved collapsed never reveals its children on click — the local
+  // `expanded` state flips but this gate kept returning null. Default false
+  // keeps every other caller (lists, headings, callouts…) byte-identical.
+  if (!block.children?.length || (block.collapsed && !forceExpand)) {
     return null;
   }
 
@@ -416,7 +421,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
 
     case "divider":
       return (
-        <div className="py-2">
+        <div className="py-0 my-0">
           <hr className="w-full h-px border-0 bg-[var(--osio-fg-subtle)]" />
         </div>
       );
@@ -434,6 +439,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
             databaseId={block.databaseId}
             initialViewId={block.viewId}
             mode="inline"
+            recordLimit={block.recordLimit}
           />
         </Suspense>
       );
@@ -524,7 +530,7 @@ const ToggleBlockReadOnly: React.FC<{ block: Block; bulletDepth: number; numbere
           <InlineMarkdown content={block.content} />
         </button>
       </div>
-      {expanded && renderNestedChildren(block, bulletDepth, numberedDepth)}
+      {expanded && renderNestedChildren(block, bulletDepth, numberedDepth, true)}
       {expanded && !block.children?.length && (
         <div className="ml-6 mt-0.5 pl-3 border-l-2 border-[var(--osio-border-default)]">
           <span className="text-xs text-[var(--osio-fg-subtle)] py-1 italic">

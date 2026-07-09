@@ -60,6 +60,9 @@ const { parseInlineMarkdown } = loadModule(
 const { readInlineEditorDomState } = loadModule(
   "src/shared/lib/markengine/inlineEditorDom.ts",
 );
+const { autoformatInlineMarkdown } = loadModule(
+  "src/shared/lib/markengine/inlineAutoformat.ts",
+);
 
 function createSelection(start, end) {
   return { start, end };
@@ -212,6 +215,36 @@ test("inline code inherits background and text color through other wrappers", ()
   assert.equal(html.includes('data-inline-type="background_color"'), false);
   assert.equal(html.includes('data-inline-type="text_color"'), false);
   assert.match(html, /<strong>delta<\/strong>/);
+});
+
+test("autoformatInlineMarkdown converts a completed pair at the caret to bracket source", () => {
+  // Caret is right after the just-typed closing delimiter (source == plain text
+  // here since there is no preceding styled span). Delimiters are consumed; caret
+  // lands at the end of the styled content (visible length).
+  const bold = autoformatInlineMarkdown("say **hi**", 10);
+  assert.equal(bold.source, "say [b]hi[/b]");
+  assert.equal(bold.caret, 6); // "say " (4) + "hi" (2)
+
+  const code = autoformatInlineMarkdown("run `x`", 7);
+  assert.equal(code.source, "run `x`"); // inline code canonical form IS backticks
+  assert.equal(code.caret, 5); // "run " (4) + "x" (1)
+
+  const ital = autoformatInlineMarkdown("*yo*", 4);
+  assert.equal(ital.source, "[i]yo[/i]");
+  assert.equal(ital.caret, 2);
+});
+
+test("autoformatInlineMarkdown leaves incomplete pairs and non-delimiter typing raw", () => {
+  assert.equal(autoformatInlineMarkdown("**hi", 4), null); // no closing pair
+  assert.equal(autoformatInlineMarkdown("hello", 5), null); // last char not a delimiter
+  assert.equal(autoformatInlineMarkdown("hi *", 4), null); // a lone trailing * has no opener
+  assert.equal(autoformatInlineMarkdown("", 0), null);
+});
+
+test("the styled source autoformat produces still renders to styled HTML", () => {
+  const { source } = autoformatInlineMarkdown("**bold**", 8);
+  assert.equal(source, "[b]bold[/b]");
+  assert.match(parseInlineMarkdown(source), /<strong>bold<\/strong>/);
 });
 
 test("internal page links can render a friendly unavailable fallback title", () => {

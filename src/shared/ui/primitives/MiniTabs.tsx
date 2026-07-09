@@ -47,7 +47,7 @@ export function MiniTabs<T extends string>({
     () => Math.max(0, options.findIndex((option) => option.value === value)),
     [options, value],
   );
-  const buttonClass = size === "sm" ? "h-7 px-2 text-xs" : "h-8 px-3 text-sm";
+  const buttonClass = size === "sm" ? "h-[var(--osio-control-h-sm)] px-2 text-xs" : "h-[var(--osio-control-h-md)] px-3 text-sm";
 
   const focusAndSelect = useCallback(
     (index: number) => {
@@ -90,7 +90,7 @@ export function MiniTabs<T extends string>({
     <div
       role="tablist"
       tabIndex={0}
-      className="flex flex-wrap items-center gap-1 rounded-lg bg-[var(--osio-bg-subtle)] p-1"
+      className="flex flex-wrap items-center gap-1 rounded-[var(--osio-radius-panel)] bg-[var(--osio-bg-subtle)] p-1"
       onKeyDown={handleKeyDown}
     >
       {options.map((option, index) => {
@@ -105,10 +105,10 @@ export function MiniTabs<T extends string>({
             tabIndex={selected ? 0 : -1}
             disabled={option.disabled}
             className={[
-              "inline-flex items-center gap-1.5 rounded-md font-medium transition-colors duration-[120ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:cursor-not-allowed disabled:opacity-50",
+              "inline-flex items-center gap-1.5 rounded-[var(--osio-radius-control)] font-medium transition-[color,background-color,box-shadow,transform] duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
               buttonClass,
               selected
-                ? "bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-sm"
+                ? "bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-[var(--osio-e1)]"
                 : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
             ].join(" ")}
             onClick={() => onChange(option.value)}

@@ -77,7 +77,7 @@ export const Popover: React.FC<PopoverProps> = ({ anchorRef, open, onClose, alig
       ref={panelRef}
       style={style}
       className={cx(
-        "rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] p-1 shadow-[var(--osio-shadow-menu)] outline-none",
+        "rounded-[var(--osio-radius-overlay)] border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] p-1 shadow-[var(--osio-e3)] outline-none animate-[osio-pop-in_var(--osio-dur-fast)_var(--osio-ease-emphasized)]",
         className,
       )}
     >

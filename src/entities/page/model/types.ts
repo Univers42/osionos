@@ -54,6 +54,8 @@ export interface PageEntry {
   icon?: string;
   /** Cover image URL or CSS gradient. */
   cover?: string;
+  /** Vertical focal point (%) of the cover image (CSS object-position); default 50 (centered). */
+  coverPosition?: number;
   /** ISO timestamp of last modification (block edit, title change, etc.) */
   updatedAt?: string;
   workspaceId: string;
@@ -95,6 +97,7 @@ export interface ActivePage {
   title?: string;
   icon?: string;
   cover?: string;
+  coverPosition?: number;
   databaseId?: string | null;
 }
 

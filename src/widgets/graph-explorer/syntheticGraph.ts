@@ -91,7 +91,9 @@ function syntheticEdges(count: number, rnd: () => number, ids: string[]): GraphE
 
 /** Build a deterministic n-node model (icons included for LOD testing). */
 export function buildSyntheticModel(n: number): GraphModel {
-  const count = Math.max(2, Math.min(n, 50_000));
+  // Bench-only hook (?graphBench=N). Cap at 100k: the render pipeline (LOD cluster-blobs +
+  // node budget) is designed for this band; higher would OOM the resident per-node model.
+  const count = Math.max(2, Math.min(n, 100_000));
   const rnd = mulberry32(0x051042);
   const nodes: GraphNode[] = [];
   for (let i = 0; i < count; i += 1) nodes.push(syntheticNode(i, rnd));

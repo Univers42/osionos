@@ -51,3 +51,43 @@ test("drag-target: outside any row/gutter resolves to nothing", () => {
   assert.equal(hitTestDropTarget(rows, 500, 150).target, null, "right of the row");
   assert.equal(hitTestDropTarget([], 0, 0).target, null);
 });
+
+test("drag-target: card bottom band and the hole below a short card stack into the column", () => {
+  const short = [row("r1", 0, 2, {
+    slots: [
+      { left: 0, right: 200, cards: [{ top: 0, bottom: 40 }] },   // shrunk card, hole 40..100
+      { left: 200, right: 400, cards: [{ top: 0, bottom: 100 }] },
+    ],
+  })];
+  const hole = hitTestDropTarget(short, 100, 70);
+  assert.deepEqual(hole.target, { rowId: "r1", index: 0, intoStack: { col: 0, at: 1 } }, "hole appends");
+  assert.equal(hole.indicator?.kind, "stack");
+  const bottomBand = hitTestDropTarget(short, 300, 95);
+  assert.deepEqual(bottomBand.target?.intoStack, { col: 1, at: 1 }, "full-height card bottom band stacks below");
+  const topBand = hitTestDropTarget(short, 300, 10);
+  assert.deepEqual(topBand.target?.intoStack, { col: 1, at: 0 }, "top band stacks above");
+});
+
+test("drag-target: full stacks block, mid-card still resolves to column insert", () => {
+  const rows = [row("r1", 0, 2, {
+    slots: [
+      { left: 0, right: 200, cards: [{ top: 0, bottom: 33 }, { top: 39, bottom: 66 }, { top: 72, bottom: 100 }] },
+      { left: 200, right: 400, cards: [{ top: 0, bottom: 100 }] },
+    ],
+  })];
+  const band = hitTestDropTarget(rows, 100, 3);
+  assert.equal(band.target, null);
+  assert.equal(band.blocked, true, "3-deep stack rejects a 4th");
+  const mid = hitTestDropTarget(rows, 300, 50);
+  assert.deepEqual(mid.target, { rowId: "r1", index: 2 }, "mid-card x-midpoint column insert");
+});
+
+test("drag-target: trailing slack after the last column is a column-insert target", () => {
+  // Solo column shrunk to 60% width: x beyond its right edge = the slack.
+  const rows = [row("r1", 0, 1, {
+    slots: [{ left: 0, right: 240, cards: [{ top: 0, bottom: 100 }] }],
+  })];
+  const slack = hitTestDropTarget(rows, 320, 50);
+  assert.deepEqual(slack.target, { rowId: "r1", index: 1 }, "drop into the slack appends a column");
+  assert.equal(slack.indicator?.kind, "slot");
+});

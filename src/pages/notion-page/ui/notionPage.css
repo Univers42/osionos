@@ -53,37 +53,38 @@
 }
 
 .osionos-page--small-text {
-  font-size: calc(1rem * var(--page-font-size-scale, 0.85));
+  font-size: calc(1rem * var(--page-font-size-scale, 0.8));
 }
 
 .osionos-page--small-text .osionos-page-title {
-  font-size: calc(40px * var(--page-font-size-scale, 0.85));
+  font-size: calc(40px * var(--page-font-size-scale, 0.8));
 }
 
-/* Small text is a clearly more compact reading size (~15-20% smaller than the
-   default "larger" size) so the two modes read distinctly different. */
+/* Small text is a clearly more compact reading size (~22% smaller than the
+   default "larger" size) so the toggle reads as an obvious change, not a
+   near-imperceptible nudge. */
 .osionos-page--small-text .osionos-page-body :where(.text-xs) {
-  font-size: 0.625rem !important;
+  font-size: 0.6rem !important;
 }
 
 .osionos-page--small-text .osionos-page-body :where(.text-sm) {
-  font-size: 0.75rem !important;
+  font-size: 0.7rem !important;
 }
 
 .osionos-page--small-text .osionos-page-body :where(.text-base) {
-  font-size: 0.84rem !important;
+  font-size: 0.78rem !important;
 }
 
 .osionos-page--small-text .osionos-page-body :where(.text-lg) {
-  font-size: 0.95rem !important;
+  font-size: 0.9rem !important;
 }
 
 .osionos-page--small-text .osionos-page-body :where(.text-xl) {
-  font-size: 1.05rem !important;
+  font-size: 1rem !important;
 }
 
 .osionos-page--small-text .osionos-page-body :where(.text-2xl) {
-  font-size: 1.2rem !important;
+  font-size: 1.12rem !important;
 }
 
 .osionos-page--locked .osionos-page-body [contenteditable="true"] {
@@ -1133,6 +1134,40 @@ body[data-pane-resizing] .osionos-layout-cell {
 
 .osionos-page-cover-btn:hover {
   background: var(--osio-bg-surface);
+}
+
+/* ── Reposition mode (drag the cover image vertically) ────────────── */
+
+.osionos-page-cover-media[data-repositioning] {
+  cursor: ns-resize;
+}
+
+.osionos-page-cover-media[data-repositioning] .osionos-page-cover-img {
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.osionos-page-cover-controls--active {
+  opacity: 1;
+}
+
+.osionos-page-cover-reposition-hint {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  border-radius: var(--osio-radius-xs);
+  background: color-mix(in srgb, var(--osio-bg-surface) 92%, transparent);
+  color: var(--osio-fg-default);
+  box-shadow:
+    0 0 0 1px var(--osio-border-default),
+    var(--osio-shadow-sm);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* ── Header area (icon + toolbar + title) ─────────────────────────── */

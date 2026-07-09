@@ -19,6 +19,20 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import {
+  Baseline,
+  Bold,
+  Code,
+  Highlighter,
+  Italic,
+  Keyboard,
+  Link,
+  Radical,
+  RemoveFormatting,
+  Slash,
+  Strikethrough,
+  Underline,
+} from "lucide-react";
 import { getLoadedKatex, loadKatex, onKatexReady, renderMathToHtml } from "@/shared/lib/math/katexRuntime";
 import {
   ColorPickerBoard,
@@ -27,6 +41,7 @@ import {
 import {
   applyInlineFormatting,
   areInlineEditorSelectionSnapshotsEqual,
+  autoformatInlineMarkdown,
   getInlineEditorSelectionOffsets,
   getInlineEditorSelectionSnapshot,
   normalizeInlineLinkHref,
@@ -36,6 +51,12 @@ import {
   type InlineEditorSelectionSnapshot as SelectionSnapshot,
   type InlineFormattingCommand,
 } from "@/shared/lib/markengine";
+// Direct paths (not the barrel): the caret-escape that lands the caret OUTSIDE a
+// freshly-closed markdown style pair (so it never overflows), and the SOURCE-space
+// caret offset that lets autoformat fire on every inline style in a block — not
+// only the first.
+import { setInlineCaretAfterStyledBoundary } from "@/shared/lib/markengine/inlineEditorSelection";
+import { inlineSourceCaretOffset } from "@/shared/lib/markengine/inlineEditorDom";
 import {
   getInlineColorOption,
   normalizeInlineColorToken,
@@ -47,6 +68,9 @@ import {
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
 import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
+import { findLinks, removeLink, replaceLink } from "./linkSourceEdit";
+import { LinkEditorPanel, type LinkEditorAnchor } from "./LinkEditorPanel";
+import { TurnIntoMenu } from "./TurnIntoMenu";
 
 interface EditableContentProps {
   content: string;
@@ -60,6 +84,10 @@ interface EditableContentProps {
   onRequestSlashMenu?: (position: { x: number; y: number; top: number }) => void;
   onFocus?: React.FocusEventHandler<HTMLDivElement>;
   onBlur?: React.FocusEventHandler<HTMLDivElement>;
+  /** Current block type — powers the selection toolbar's "Turn into" dropdown. */
+  blockType?: string;
+  /** Convert this block to another type (from the "Turn into" dropdown). */
+  onTurnInto?: (type: string) => void;
 }
 
 type PaletteKind = "text" | "background" | null;
@@ -72,9 +100,39 @@ const MAX_INLINE_COLOR_RECENTS = 7;
 const LIGHT_THEME_DEFAULT_INLINE_COLOR = "var(--osio-fg-default)";
 const DARK_THEME_DEFAULT_INLINE_COLOR = "var(--osio-fg-default)";
 
+/** Closing delimiters that can complete an inline markdown style pair. */
+const INLINE_CLOSERS = new Set(["*", "_", "`", "~", "="]);
+
+/** The collapsed caret range inside `root`, or null (a text selection / no caret). */
+function caretRangeInRoot(root: HTMLElement): Range | null {
+  const selection = globalThis.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+  const range = selection.getRangeAt(0);
+  if (!range.collapsed || !root.contains(range.commonAncestorContainer)) return null;
+  return range;
+}
+
+/** True when the character just before the caret is an inline closing delimiter —
+ *  the cheap gate that keeps autoformat off every non-delimiter keystroke. */
+function endsWithInlineCloser(range: Range): boolean {
+  const node = range.startContainer;
+  if (node.nodeType !== Node.TEXT_NODE || range.startOffset === 0) return false;
+  const char = (node.textContent ?? "")[range.startOffset - 1];
+  return Boolean(char) && INLINE_CLOSERS.has(char);
+}
+
 interface LinkPickerState {
   mode: LinkPickerMode;
   query: string;
+}
+
+/** The link being edited via Ctrl/Cmd-click: its position in source-order (== its
+ *  .editor-link anchor index in the DOM), current text/href, and screen anchor. */
+interface LinkEditorTarget {
+  index: number;
+  text: string;
+  href: string;
+  rect: LinkEditorAnchor;
 }
 
 const INTERNAL_PAGE_LINK_PREFIX = "page://";
@@ -183,6 +241,7 @@ function renderInlineMathToHtml(source: string): string {
 function renderInlineHtmlPreservingLineBreaks(
   source: string,
   renderSourceForEditing: boolean,
+  renderLinkAsSource = false,
 ): string {
   const lines = source.split("\n");
 
@@ -191,7 +250,14 @@ function renderInlineHtmlPreservingLineBreaks(
       parseInlineMarkdown(line, {
         resolveInternalLinkTitle: resolveInternalPageLinkTitle,
         renderInlineMath: renderInlineMathToHtml,
+        // Math stays as `$…$` source while editing (typeset on blur); inline
+        // STYLES render live — a completed pair (**bold**, `code`) is converted
+        // in place by autoformatInlineMarkdown in handleInput, so it must NOT be
+        // held raw here (that was the "stays raw until blur" bug).
         renderInlineMathAsSource: renderSourceForEditing,
+        // Links reveal as raw `[text](url)` only during a Ctrl/Cmd-click edit —
+        // gesture-gated, NOT tied to focus, so plain click-to-open still works.
+        renderLinkAsSource,
       }),
     )
     .join("<br />");
@@ -330,7 +396,38 @@ interface InlineSelectionToolbarProps {
   onFormatBackgroundColor: (color: InlineColorOption) => void;
   onOpenSlashMenu: () => void;
   onOpenLinkPicker: () => void;
+  onClearFormat: () => void;
+  onToggleMath: () => void;
+  blockType?: string;
+  onTurnInto?: (type: string) => void;
 }
+
+const ToolbarDivider = () => (
+  <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 bg-[var(--osio-border-default)]" />
+);
+
+const TOOLBAR_ICON = "h-[18px] w-[18px]";
+
+// One icon button shape for the whole toolbar — keeps the 12 controls identical
+// (Notion-style: muted SVG that brightens on hover; `active` shows the pressed pill).
+const ToolbarIconButton: React.FC<{
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+  children: React.ReactNode;
+}> = ({ label, onClick, active, children }) => (
+  <button
+    type="button"
+    title={label}
+    aria-label={label}
+    aria-pressed={active}
+    className={[TOOLBAR_BUTTON_BASE, active ? TOOLBAR_ACTIVE_BUTTON : ""].join(" ")}
+    onMouseDown={(event) => event.preventDefault()}
+    onClick={onClick}
+  >
+    {children}
+  </button>
+);
 
 const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
   selection,
@@ -349,6 +446,10 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
   onFormatBackgroundColor,
   onOpenSlashMenu,
   onOpenLinkPicker,
+  onClearFormat,
+  onToggleMath,
+  blockType,
+  onTurnInto,
 }) => (
   <div
     data-testid="inline-selection-toolbar"
@@ -365,106 +466,63 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
     }}
   >
     <div className="relative rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-1.5 py-1 shadow-xl">
-      <div className="flex items-center gap-1">
-        <button
-          type="button"
-          title="Text color"
-          className={[
-            TOOLBAR_BUTTON_BASE,
-            palette === "text" ? TOOLBAR_ACTIVE_BUTTON : "",
-          ].join(" ")}
-          onMouseDown={(e) => e.preventDefault()}
+      <div className="flex items-center gap-0.5">
+        {blockType && onTurnInto ? (
+          <>
+            <TurnIntoMenu blockType={blockType} onTurnInto={onTurnInto} />
+            <ToolbarDivider />
+          </>
+        ) : null}
+        <ToolbarIconButton
+          label="Text color"
+          active={palette === "text"}
           onClick={() => onTogglePalette("text")}
         >
-          A
-        </button>
-        <button
-          type="button"
-          title="Background color"
-          className={[
-            TOOLBAR_BUTTON_BASE,
-            palette === "background" ? TOOLBAR_ACTIVE_BUTTON : "",
-          ].join(" ")}
-          onMouseDown={(e) => e.preventDefault()}
+          <Baseline className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
+        </ToolbarIconButton>
+        <ToolbarIconButton
+          label="Background color"
+          active={palette === "background"}
           onClick={() => onTogglePalette("background")}
         >
-          ▣
-        </button>
-        <button
-          type="button"
-          title="Bold"
-          className={TOOLBAR_BUTTON_BASE}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={onFormatBold}
-        >
-          B
-        </button>
-        <button
-          type="button"
-          title="Italic"
-          className={TOOLBAR_BUTTON_BASE}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={onFormatItalic}
-        >
-          I
-        </button>
-        <button
-          type="button"
-          title="Underline"
-          className={TOOLBAR_BUTTON_BASE}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={onFormatUnderline}
-        >
-          U
-        </button>
-        <button
-          type="button"
-          title="Strikethrough"
-          className={TOOLBAR_BUTTON_BASE}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={onFormatStrike}
-        >
-          S
-        </button>
-        <button
-          type="button"
-          title="Add link"
-          className={TOOLBAR_BUTTON_BASE}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={onOpenLinkPicker}
-        >
-          ↗
-        </button>
-        <button
-          type="button"
-          title="Inline code"
-          className={TOOLBAR_BUTTON_BASE}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={onFormatCode}
-        >
-          {"</>"}
-        </button>
-        <button
-          type="button"
-          title="Keyboard shortcuts"
-          className={[
-            TOOLBAR_BUTTON_BASE,
-            shortcutsOpen ? TOOLBAR_ACTIVE_BUTTON : "",
-          ].join(" ")}
-          onMouseDown={(e) => e.preventDefault()}
+          <Highlighter className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
+        </ToolbarIconButton>
+        <ToolbarIconButton label="Bold" onClick={onFormatBold}>
+          <Bold className={TOOLBAR_ICON} strokeWidth={2.5} aria-hidden />
+        </ToolbarIconButton>
+        <ToolbarIconButton label="Italic" onClick={onFormatItalic}>
+          <Italic className={TOOLBAR_ICON} strokeWidth={2.5} aria-hidden />
+        </ToolbarIconButton>
+        <ToolbarIconButton label="Underline" onClick={onFormatUnderline}>
+          <Underline className={TOOLBAR_ICON} strokeWidth={2.5} aria-hidden />
+        </ToolbarIconButton>
+        <ToolbarIconButton label="Clear formatting" onClick={onClearFormat}>
+          <RemoveFormatting className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
+        </ToolbarIconButton>
+        <ToolbarDivider />
+        <ToolbarIconButton label="Add link" onClick={onOpenLinkPicker}>
+          <Link className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
+        </ToolbarIconButton>
+        <ToolbarIconButton label="Strikethrough" onClick={onFormatStrike}>
+          <Strikethrough className={TOOLBAR_ICON} strokeWidth={2.5} aria-hidden />
+        </ToolbarIconButton>
+        <ToolbarIconButton label="Inline code" onClick={onFormatCode}>
+          <Code className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
+        </ToolbarIconButton>
+        <ToolbarIconButton label="Equation" onClick={onToggleMath}>
+          <Radical className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
+        </ToolbarIconButton>
+        <ToolbarDivider />
+        <ToolbarIconButton
+          label="Keyboard shortcuts"
+          active={shortcutsOpen}
           onClick={onToggleShortcuts}
         >
-          ?
-        </button>
-        <button
-          type="button"
-          title="Open slash menu"
-          className={TOOLBAR_BUTTON_BASE}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={onOpenSlashMenu}
-        >
-          /
-        </button>
+          <Keyboard className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
+        </ToolbarIconButton>
+        <ToolbarIconButton label="Open slash menu" onClick={onOpenSlashMenu}>
+          <Slash className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
+        </ToolbarIconButton>
       </div>
 
       {palette && (
@@ -585,6 +643,12 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
                 Ctrl/Cmd + Shift + L
               </span>
             </li>
+            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
+              <span>Delete previous word</span>
+              <span className="text-[var(--osio-fg-muted)]">
+                Ctrl + Backspace
+              </span>
+            </li>
           </ul>
         </div>
       )}
@@ -604,6 +668,8 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   onRequestSlashMenu,
   onFocus,
   onBlur,
+  blockType,
+  onTurnInto,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const isComposing = useRef(false);
@@ -616,6 +682,10 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const [openPalette, setOpenPalette] = useState<PaletteKind>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [linkPicker, setLinkPicker] = useState<LinkPickerState | null>(null);
+  // Ctrl/Cmd-click link editor. The ref mirrors the state so renderContent (a
+  // ref-free useCallback) can read "am I revealing link source?" without a dep churn.
+  const [linkEditor, setLinkEditor] = useState<LinkEditorTarget | null>(null);
+  const linkEditorRef = useRef<LinkEditorTarget | null>(null);
   const [resolvedTheme, setResolvedTheme] = useState<ResolvedThemeName>(() =>
     readResolvedThemeName(),
   );
@@ -628,17 +698,28 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const lastEmittedSourceRef = useRef(content);
   const pendingChangeRef = useRef<string | null>(null);
   const pendingChangeFrameRef = useRef<number | null>(null);
+  // ponytail: dedup the inline re-serialize. `input` fires before `keyup` for every
+  // content-mutating key, so keyup's fallback handleInput() re-walks the DOM for nothing.
+  // Set here when input handled it, reset on keydown; keyup only runs when input did NOT.
+  const inputHandledRef = useRef(false);
   const renderedContentCache = useRef<{ source: string; html: string }>({
     source: "",
     html: "",
   });
 
-  const currentPage = usePageStore((s) =>
-    pageId ? s.pageById(pageId) : undefined,
+  // ponytail: subscribe to the workspaceId string, not the whole page object — the id is
+  // stable across content edits, so a 250ms draft-commit (which rebuilds the edited page
+  // object) no longer re-renders every block on the page just to read this value.
+  const workspaceId = usePageStore((s) =>
+    pageId ? s.pageById(pageId)?.workspaceId : undefined,
   );
+  // selectablePages (the internal link-picker list) is the only consumer of the workspace
+  // page array, so only subscribe to it while the picker is open — otherwise each commit
+  // rebuilds that array ref and re-renders every mounted block over the whole workspace list.
+  const linkPickerOpen = linkPicker !== null;
   const workspacePages = usePageStore((s) =>
-    currentPage?.workspaceId
-      ? (s.pages[currentPage.workspaceId] ?? EMPTY_WORKSPACE_PAGES)
+    linkPickerOpen && workspaceId
+      ? (s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES)
       : EMPTY_WORKSPACE_PAGES,
   );
 
@@ -660,14 +741,14 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     [recentInlineColors, resolvedTheme],
   );
 
-  const getRenderedInlineHtml = useCallback((nextContent: string, renderMathAsSource: boolean) => {
-    const cacheKey = `${renderMathAsSource ? "source" : "rendered"}:${katexReady}:${nextContent}`;
+  const getRenderedInlineHtml = useCallback((nextContent: string, renderMathAsSource: boolean, renderLinkAsSource = false) => {
+    const cacheKey = `${renderMathAsSource ? "source" : "rendered"}:${renderLinkAsSource ? "linksrc" : "link"}:${katexReady}:${nextContent}`;
     if (renderedContentCache.current.source === cacheKey) {
       return renderedContentCache.current.html;
     }
 
     const html = nextContent
-      ? renderInlineHtmlPreservingLineBreaks(nextContent, renderMathAsSource)
+      ? renderInlineHtmlPreservingLineBreaks(nextContent, renderMathAsSource, renderLinkAsSource)
       : "";
     renderedContentCache.current = {
       source: cacheKey,
@@ -735,6 +816,14 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
   const scheduleChange = useCallback((source: string) => {
     pendingChangeRef.current = source;
+    // Menu triggers ("/", "[[", ":") must reach onChange at their exact char
+    // boundary: rAF coalescing swallows it under fast typing ("/toggle" arrives in
+    // one frame and never ends with "/"), so the slash/page/emoji menus silently
+    // fail to open. Flush those keystrokes synchronously; all others stay batched.
+    if (/[/:[]$/.test(source)) {
+      flushPendingChange();
+      return;
+    }
     if (pendingChangeFrameRef.current !== null) return;
 
     pendingChangeFrameRef.current = requestAnimationFrame(() => {
@@ -743,9 +832,8 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       pendingChangeRef.current = null;
       if (nextSource != null) emitChange(nextSource);
     });
-  }, [emitChange]);
+  }, [emitChange, flushPendingChange]);
 
-  useEffect(() => () => flushPendingChange(), [flushPendingChange]);
 
   const renderContent = useCallback(
     (nextContent: string, renderMathAsSource = isFocused.current) => {
@@ -755,7 +843,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       }
 
       canonicalSourceRef.current = nextContent;
-      const nextHtml = getRenderedInlineHtml(nextContent, renderMathAsSource);
+      const nextHtml = getRenderedInlineHtml(nextContent, renderMathAsSource, linkEditorRef.current !== null);
       if (root.innerHTML !== nextHtml) {
         // Overwriting innerHTML collapses the contenteditable selection to offset 0.
         // While this block is focused (the user is actively typing), a reactive
@@ -810,6 +898,14 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
   const updateSelectionSnapshot = useCallback(() => {
     const root = ref.current;
+    // A cross-block drag owns the selection UI (DOM seam, same family as
+    // data-pane-resizing) — the per-block toolbar stands down entirely.
+    if (document.body.dataset.crossTextActive) {
+      lastSelectionSnapshotRef.current = null;
+      setSelectionSnapshot((current) => (current ? null : current));
+      setOpenPalette((current) => (current ? null : current));
+      return;
+    }
     if (!root || !isFocused.current) {
       if (!linkPicker && !openPalette) {
         lastSelectionSnapshotRef.current = null;
@@ -864,6 +960,8 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     return normalizedSource;
   }, [flushPendingChange]);
 
+  useEffect(() => () => flushPendingChange(), [flushPendingChange]);
+
   const handleInput = useCallback(() => {
     if (isComposing.current) {
       return;
@@ -879,18 +977,49 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     const normalizedSource = normalizeInlineSource(source);
     canonicalSourceRef.current = normalizedSource;
 
+    // Live markdown autoformat: when a collapsed caret just typed a CLOSING style
+    // delimiter that completed a pair (**bold**, `code`, *i*, ~~s~~, ==h==, ***bi***),
+    // consume the delimiters and render styled IN PLACE — for every inline style in
+    // the block, not just the first.
+    const caret = caretRangeInRoot(root);
+    if (caret && endsWithInlineCloser(caret)) {
+      // sourceCaret indexes into the RAW DOM-read `source` (where `**B**` is still
+      // literal) — autoformat does its own parse of the left side.
+      const sourceCaret = inlineSourceCaretOffset(root, caret);
+      const auto = autoformatInlineMarkdown(source, sourceCaret);
+      if (auto) {
+        canonicalSourceRef.current = auto.source;
+        root.innerHTML = getRenderedInlineHtml(auto.source, true);
+        setInlineCaretAfterStyledBoundary(root, auto.caret);
+        scheduleChange(auto.source);
+        inputHandledRef.current = true;
+        requestAnimationFrame(updateSelectionSnapshot);
+        return;
+      }
+    }
+
     if (requiresNormalization) {
       const parsedHtml = getRenderedInlineHtml(normalizedSource, true);
 
       if (root.innerHTML !== parsedHtml) {
-        root.innerHTML = parsedHtml;
-        if (selectionOffsets) {
-          setInlineEditorSelectionOffsets(root, selectionOffsets);
+        // The innerHTML teardown + caret restore is the heavy per-keystroke cost
+        // that makes held Backspace / fast typing feel sluggish. It is only needed
+        // when the canonical render carries inline MARKUP (a tag), or the live DOM
+        // has stray markup to clean (a <br>/span left by editing). When both sides
+        // are tag-free the difference is benign text-node fragmentation that renders
+        // identically — skip the teardown and let the cheap serialize + rAF-batched
+        // onChange carry it, so plain-text editing stays smooth.
+        if (parsedHtml.includes("<") || root.innerHTML.includes("<")) {
+          root.innerHTML = parsedHtml;
+          if (selectionOffsets) {
+            setInlineEditorSelectionOffsets(root, selectionOffsets);
+          }
         }
       }
     }
 
     scheduleChange(normalizedSource);
+    inputHandledRef.current = true;
     requestAnimationFrame(updateSelectionSnapshot);
   }, [getRenderedInlineHtml, scheduleChange, updateSelectionSnapshot]);
 
@@ -910,7 +1039,10 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         return;
       }
 
-      handleInput();
+      // ponytail: only re-serialize on keyup if the `input` event didn't already (rare).
+      if (!inputHandledRef.current) {
+        handleInput();
+      }
     },
     [handleInput],
   );
@@ -922,6 +1054,81 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     [onPaste],
   );
 
+  // Ctrl/Cmd-click a link: reveal its raw `[text](url)` inline AND open the fields
+  // panel. The clicked anchor's position among .editor-link nodes maps to the Nth
+  // link in source (findLinks), which is the source-truth text/href — so an empty
+  // `[label]()` opens with a blank URL to fill rather than a dead `#`.
+  const openLinkEditorForAnchor = useCallback(
+    (e: React.MouseEvent, anchor: HTMLAnchorElement): boolean => {
+      const root = ref.current;
+      if (!root) return false;
+      const rawHref = anchor.getAttribute("href") ?? "";
+      // Internal page links keep their open-the-page behavior (edited via the page).
+      if (getInternalPageIdFromHref(normalizeInlineLinkHref(rawHref))) return false;
+
+      const anchors = Array.from(root.querySelectorAll("a.editor-link"));
+      const domIndex = anchors.indexOf(anchor);
+      const links = findLinks(canonicalSourceRef.current);
+      const anchorText = (anchor.textContent ?? "").replaceAll("​", "");
+      const link = links[domIndex] ?? links.find((l) => l.text === anchorText);
+      if (!link) return false;
+
+      e.preventDefault();
+      e.stopPropagation();
+      const box = anchor.getBoundingClientRect();
+      const target: LinkEditorTarget = {
+        index: links.indexOf(link),
+        text: link.text,
+        href: link.href,
+        rect: { left: box.left, top: box.top, bottom: box.bottom },
+      };
+      linkEditorRef.current = target;
+      setLinkEditor(target);
+      renderContent(canonicalSourceRef.current);
+      return true;
+    },
+    [renderContent],
+  );
+
+  const applyLinkEdit = useCallback(
+    (next: { text: string; href: string }) => {
+      const target = linkEditorRef.current;
+      if (!target) return;
+      const nextContent = replaceLink(canonicalSourceRef.current, target.index, next);
+      if (nextContent === canonicalSourceRef.current) return;
+      flushPendingChange();
+      emitChange(nextContent);
+      renderContent(nextContent);
+      const updated = { ...target, text: next.text || next.href, href: next.href };
+      linkEditorRef.current = updated;
+      setLinkEditor(updated);
+    },
+    [emitChange, flushPendingChange, renderContent],
+  );
+
+  const removeLinkAt = useCallback(() => {
+    const target = linkEditorRef.current;
+    if (!target) return;
+    const nextContent = removeLink(canonicalSourceRef.current, target.index);
+    linkEditorRef.current = null;
+    setLinkEditor(null);
+    flushPendingChange();
+    emitChange(nextContent);
+    renderContent(nextContent);
+  }, [emitChange, flushPendingChange, renderContent]);
+
+  const closeLinkEditor = useCallback(() => {
+    if (!linkEditorRef.current) return;
+    linkEditorRef.current = null;
+    setLinkEditor(null);
+    renderContent(canonicalSourceRef.current);
+  }, [renderContent]);
+
+  const handleOpenLinkUrl = useCallback((href: string) => {
+    const normalized = normalizeInlineLinkHref(href);
+    if (normalized) globalThis.open(normalized, "_blank", "noopener,noreferrer");
+  }, []);
+
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement | null;
     if (!target) {
@@ -932,8 +1139,15 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       return;
     }
 
+    if (e.metaKey || e.ctrlKey) {
+      const anchor = target.closest("a.editor-link") as HTMLAnchorElement | null;
+      if (anchor && openLinkEditorForAnchor(e, anchor)) {
+        return;
+      }
+    }
+
     handleAnchorMouseDown(e, target);
-  }, []);
+  }, [openLinkEditorForAnchor]);
 
   const applyInlineFormattingCommand = useCallback(
     (command: InlineFormattingCommand) => {
@@ -1007,6 +1221,14 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     });
   }, [applyInlineFormattingCommand]);
 
+  const handleClearFormat = useCallback(() => {
+    applyInlineFormattingCommand({ type: "clear_format" });
+  }, [applyInlineFormattingCommand]);
+
+  const handleToggleMath = useCallback(() => {
+    applyInlineFormattingCommand({ type: "toggle_math" });
+  }, [applyInlineFormattingCommand]);
+
   const handleAddLink = useCallback(() => {
     if (!(selectionSnapshot ?? lastSelectionSnapshotRef.current)) {
       return;
@@ -1071,12 +1293,29 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
+      // ponytail: reset the dedup flag before input/keyup for this keystroke fire.
+      inputHandledRef.current = false;
+
       if (handleInlineFormattingShortcut(e)) {
         requestAnimationFrame(updateSelectionSnapshot);
         return;
       }
 
-      if (e.key.length !== 1 || e.metaKey || e.ctrlKey || e.altKey) {
+      // A held Backspace/Delete fires this keydown on every OS auto-repeat tick.
+      // Flushing the rAF-batched onChange synchronously per tick forces a parent
+      // re-render for every deleted char (the "held-Backspace lag") — yet the
+      // parent's structural delete handlers only act at the block edge
+      // (start-outdent self-flushes via flushPendingBlockDraft; empty-block merge
+      // needs no text). So for a collapsed caret away from the start, skip the
+      // flush and let scheduleChange batch, exactly like printable typing; keep
+      // the synchronous flush at the edge (offset 0) and for selection-deletes.
+      let skipDeleteFlush = false;
+      if ((e.key === "Backspace" || e.key === "Delete") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const offsets = ref.current ? getInlineEditorSelectionOffsets(ref.current) : null;
+        skipDeleteFlush = !!offsets && offsets.start === offsets.end && offsets.start > 0;
+      }
+
+      if (!skipDeleteFlush && (e.key.length !== 1 || e.metaKey || e.ctrlKey || e.altKey)) {
         flushPendingChange(canonicalSourceRef.current);
       }
 
@@ -1187,6 +1426,30 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     };
   }, [linkPicker]);
 
+  // Close the link editor on Escape or a click outside both the panel and this
+  // block (a click inside the block keeps it open — that's inline source editing).
+  useEffect(() => {
+    if (!linkEditor) {
+      return;
+    }
+    const handleOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("[data-link-editor-panel]")) return;
+      if (ref.current?.contains(target)) return;
+      closeLinkEditor();
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeLinkEditor();
+    };
+    document.addEventListener("mousedown", handleOutside, true);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside, true);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [linkEditor, closeLinkEditor]);
+
   return (
     <>
       <div // NOSONAR - contentEditable is required for this osionos-like editor UX
@@ -1235,6 +1498,21 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         }}
       />
 
+      {linkEditor && typeof document !== "undefined"
+        ? createPortal(
+            <LinkEditorPanel
+              text={linkEditor.text}
+              href={linkEditor.href}
+              rect={linkEditor.rect}
+              onApply={applyLinkEdit}
+              onOpenUrl={handleOpenLinkUrl}
+              onRemove={removeLinkAt}
+              onClose={closeLinkEditor}
+            />,
+            document.body,
+          )
+        : null}
+
       {selectionSnapshot && typeof document !== "undefined"
         ? createPortal(
             <InlineSelectionToolbar
@@ -1263,6 +1541,10 @@ export const EditableContent: React.FC<EditableContentProps> = ({
               }
               onOpenSlashMenu={handleOpenSlashMenu}
               onOpenLinkPicker={handleAddLink}
+              onClearFormat={handleClearFormat}
+              onToggleMath={handleToggleMath}
+              blockType={blockType}
+              onTurnInto={onTurnInto}
             />,
             document.body,
           )

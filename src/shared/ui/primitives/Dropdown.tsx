@@ -221,7 +221,7 @@ export function Dropdown<T extends string>({
         aria-expanded={open}
         aria-haspopup="listbox"
         disabled={disabled}
-        className="inline-flex min-h-8 items-center justify-between gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 py-1.5 text-sm font-medium text-[var(--osio-fg-default)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex h-[var(--osio-control-h-md)] items-center justify-between gap-2 rounded-[var(--osio-radius-control)] border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-3 text-sm font-medium text-[var(--osio-fg-default)] transition-[color,background-color,border-color,box-shadow] duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)] hover:border-[var(--osio-border-strong)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:cursor-not-allowed disabled:opacity-60"
         onClick={() => (open ? closeMenu() : openMenu())}
         onKeyDown={handleTriggerKeyDown}
       >
@@ -234,7 +234,7 @@ export function Dropdown<T extends string>({
           id={listboxId}
           role="listbox"
           tabIndex={-1}
-          className="overflow-y-auto rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] py-1 shadow-[var(--osio-shadow-menu)] outline-none"
+          className="overflow-y-auto rounded-[var(--osio-radius-overlay)] border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] py-1 shadow-[var(--osio-e3)] outline-none animate-[osio-pop-in_var(--osio-dur-fast)_var(--osio-ease-emphasized)]"
           style={menuStyle}
           onKeyDown={handleMenuKeyDown}
         >
@@ -246,7 +246,7 @@ export function Dropdown<T extends string>({
               role="option"
               aria-selected={option.value === value}
               disabled={option.disabled}
-              className="flex w-full items-start gap-2 rounded-md px-3 py-2 text-left text-sm text-[var(--osio-fg-default)] outline-none transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] focus-visible:bg-[var(--osio-bg-hover)] aria-selected:bg-[var(--osio-bg-muted)] aria-selected:text-[var(--osio-fg-strong)] disabled:cursor-not-allowed disabled:text-[var(--osio-fg-subtle)] disabled:hover:bg-transparent"
+              className="flex w-full items-start gap-2 rounded-[var(--osio-radius-control)] px-3 py-2 text-left text-sm text-[var(--osio-fg-default)] outline-none transition-colors duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)] hover:bg-[var(--osio-bg-hover)] focus-visible:bg-[var(--osio-bg-hover)] aria-selected:bg-[var(--osio-bg-muted)] aria-selected:text-[var(--osio-fg-strong)] disabled:cursor-not-allowed disabled:text-[var(--osio-fg-subtle)] disabled:hover:bg-transparent"
               onClick={() => choose(index)}
             >
               {option.icon ? <span className="mt-0.5 shrink-0 text-[var(--osio-fg-muted)]">{option.icon}</span> : null}

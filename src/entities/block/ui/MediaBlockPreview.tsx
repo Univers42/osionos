@@ -12,11 +12,13 @@
 
 import React from "react";
 import { AssetRenderer } from "@univers42/ui-collection";
+import { FileText, ImageIcon, Music, Play } from "lucide-react";
 
 import {
   MEDIA_BLOCK_LABELS,
   isMediaBlockType,
   type Block,
+  type MediaBlockType,
 } from "@/entities/block";
 import {
   getSlashMediaPickerTabs,
@@ -42,10 +44,22 @@ export function resolveMediaBlockAsset(
   );
 }
 
-function Placeholder({ label }: Readonly<{ label: string }>) {
+// Notion-style empty "void" row: an icon + prompt, full-width and muted. It reads
+// as native page content (not a boxed widget); the parent editor makes it open the
+// embed dialog on click.
+const PLACEHOLDER: Record<MediaBlockType, { icon: React.ReactNode; label: string }> = {
+  image: { icon: <ImageIcon size={20} aria-hidden />, label: "Add an image" },
+  video: { icon: <Play size={20} aria-hidden />, label: "Embed or upload a video" },
+  audio: { icon: <Music size={20} aria-hidden />, label: "Add audio" },
+  file: { icon: <FileText size={20} aria-hidden />, label: "Add a file" },
+};
+
+function Placeholder({ kind }: Readonly<{ kind: MediaBlockType }>) {
+  const { icon, label } = PLACEHOLDER[kind];
   return (
-    <div className="flex min-h-[144px] items-center justify-center rounded-lg border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-4 text-sm text-[var(--osio-fg-subtle)]">
-      {label}
+    <div className="flex w-full items-center gap-3 rounded-[var(--osio-radius-panel)] bg-[var(--osio-bg-subtle)] px-3 py-3 text-sm text-[var(--osio-fg-muted)] transition-colors group-hover/media:bg-[var(--osio-bg-hover)]">
+      <span className="shrink-0 text-[var(--osio-fg-subtle)]">{icon}</span>
+      <span className="truncate">{label}</span>
     </div>
   );
 }
@@ -68,7 +82,7 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
   const label = resolved?.label ?? MEDIA_BLOCK_LABELS[block.type];
 
   if (!resolved?.url) {
-    return <Placeholder label={`Select a ${label.toLowerCase()}`} />;
+    return <Placeholder kind={block.type} />;
   }
 
   if (block.type === "image") {
@@ -77,7 +91,7 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
       <div style={mediaWidthStyle(block)}>
         <img
           src={resolved.url}
-          alt={label}
+          alt={block.mediaAlt ?? label}
           className={
             circle
               ? "mx-auto block aspect-square w-full rounded-full border border-[var(--osio-border-soft)] object-cover shadow-[var(--osio-shadow-cell)]"

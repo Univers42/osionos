@@ -15,15 +15,22 @@ import type { InlineNode } from "../ast";
 export type InlineStyleMap = Record<string, string>;
 
 const INLINE_CODE_STYLE_MAP = {
+  // Notion-style inline code: a soft, on-brand accent-tinted pill — NO hard
+  // border. Colours resolve to theme tokens (accent-text on accent-subtle, the
+  // same contrast-checked pairing the app already ships), so it adapts across
+  // light/dark and every palette. The --inline-code-* vars still let a rich-code
+  // span override the colour per instance. box-decoration-break keeps the pill
+  // rounded and filled when the code wraps across two lines.
   backgroundColor:
-    "var(--inline-code-background,var(--osio-bg-subtle))",
-  border: "1px solid var(--osio-border-default)",
-  borderRadius: "6px",
-  padding: "0 0.35em",
+    "var(--inline-code-background,var(--osio-accent-subtle))",
+  borderRadius: "5px",
+  padding: "0.1em 0.4em",
   fontFamily: "ui-monospace,SFMono-Regular,Menlo,Consolas,monospace",
   fontSize: "0.92em",
-  color: "var(--inline-code-color,currentColor)",
+  color: "var(--inline-code-color,var(--osio-accent-text))",
   textDecorationColor: "var(--inline-code-decoration-color,currentColor)",
+  boxDecorationBreak: "clone",
+  WebkitBoxDecorationBreak: "clone",
   ["--inline-background-fill" as const]: "transparent",
   ["--inline-background-padding" as const]: "0",
   ["--inline-background-radius" as const]: "0",

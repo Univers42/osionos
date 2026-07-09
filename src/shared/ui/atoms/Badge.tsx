@@ -41,7 +41,7 @@ const TONE_CLASS: Record<BadgeTone, string> = {
 export const Badge: React.FC<BadgeProps> = ({ tone = "default", children, className }) => (
   <span
     className={cx(
-      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+      "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium",
       TONE_CLASS[tone],
       className,
     )}

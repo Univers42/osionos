@@ -83,6 +83,7 @@ const CoverTile: React.FC<{
   return (
     <button
       type="button"
+      data-testid="cover-picker-item"
       className={[
         "group overflow-hidden rounded-md border text-left transition",
         selected

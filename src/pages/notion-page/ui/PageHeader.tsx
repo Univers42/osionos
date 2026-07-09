@@ -90,7 +90,14 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
     <>
       {templateBanner}
       {hasCover && (
-        <PageCover cover={cover} onChangeCover={actions.changeCover} onRemoveCover={actions.removeCover} disabled={locked} />
+        <PageCover
+          cover={cover}
+          position={page?.coverPosition ?? activePage?.coverPosition}
+          onChangeCover={actions.changeCover}
+          onChangeCoverPosition={actions.changeCoverPosition}
+          onRemoveCover={actions.removeCover}
+          disabled={locked}
+        />
       )}
 
       <div className={`osionos-page-header ${hasCover ? "osionos-page-header--with-cover" : "osionos-page-header--no-cover"}`}>

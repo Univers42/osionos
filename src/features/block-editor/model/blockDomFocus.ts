@@ -10,8 +10,24 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-export type CaretPlacement = "start" | "end";
+/**
+ * "start"/"end" collapse the caret to the block edge. `{ edge, x }` places it on
+ * the FIRST ("first") or LAST ("last") visual line at viewport column `x` — the
+ * goal-column carried across a block boundary so arrow-key navigation keeps the
+ * same column line-to-line through the page (a real text-editor feel), instead
+ * of snapping to line start/end.
+ */
+import { hitTestCaretRange } from "./caretGeometry";
+
+export type CaretEdge = { edge: "first" | "last"; x: number };
+export type CaretPlacement = "start" | "end" | CaretEdge;
 export const VIRTUAL_BLOCK_FOCUS_EVENT = "osionos:block-focus-request";
+
+/** Collapse an edge-placement to the coarse start/end used by cell/textarea targets. */
+function placementEdge(placement: CaretPlacement): "start" | "end" {
+  if (placement === "start" || placement === "end") return placement;
+  return placement.edge === "first" ? "start" : "end";
+}
 
 function requestVirtualBlockFocus(blockId: string, placement: CaretPlacement) {
   if (typeof document === "undefined") return;
@@ -22,13 +38,35 @@ function requestVirtualBlockFocus(blockId: string, placement: CaretPlacement) {
   );
 }
 
-function resolveEditableBlock(blockId: string, placement: CaretPlacement): HTMLElement | null {
-  const block = document.querySelector(`[data-block-id="${blockId}"]`);
+/**
+ * The editor surface (pane) that owns `node`. Block-navigation DOM lookups scope
+ * to it so a duplicate block id in ANOTHER mounted pane (split view, or a
+ * background tab kept mounted) can never capture the caret — an unscoped
+ * `document.querySelector` returns the first match, i.e. the wrong pane. Falls
+ * back to the document when there is no `.osionos-page` ancestor.
+ */
+export function paneRootOf(node: Node | null | undefined): ParentNode {
+  const el = node instanceof Element ? node : (node?.parentElement ?? null);
+  return el?.closest<HTMLElement>(".osionos-page") ?? document;
+}
+
+/** The pane that currently holds the caret — for scoping an imperative focus. */
+export function selectionPaneRoot(): ParentNode {
+  const sel = globalThis.getSelection?.();
+  return paneRootOf(sel && sel.rangeCount ? sel.anchorNode : null);
+}
+
+function resolveEditableBlock(
+  blockId: string,
+  placement: CaretPlacement,
+  root: ParentNode = document,
+): HTMLElement | null {
+  const block = root.querySelector(`[data-block-id="${blockId}"]`);
   if (!block) {
     return null;
   }
 
-  const tableCell = resolveTableCell(block as HTMLElement, placement);
+  const tableCell = resolveTableCell(block as HTMLElement, placementEdge(placement));
   if (tableCell) return tableCell;
 
   // Priority: contenteditable → textarea → input → direct child button → wrapper
@@ -47,12 +85,12 @@ function resolveEditableBlock(blockId: string, placement: CaretPlacement): HTMLE
   return editable;
 }
 
-function resolveTableCell(block: HTMLElement, placement: CaretPlacement): HTMLElement | null {
+function resolveTableCell(block: HTMLElement, edge: "start" | "end"): HTMLElement | null {
   if (block.dataset.blockType !== "table_block") return null;
   const cellFrames = Array.from(block.querySelectorAll<HTMLElement>("[data-table-cell]"));
   if (cellFrames.length === 0) return null;
 
-  if (placement === "start") return cellFrames[0].querySelector<HTMLElement>("[contenteditable]");
+  if (edge === "start") return cellFrames[0].querySelector<HTMLElement>("[contenteditable]");
 
   const lastRowCell = cellFrames.reduce<HTMLElement | null>((candidate, frame) => {
     const address = parseTableCellAddress(frame.dataset.tableCell);
@@ -74,10 +112,24 @@ function parseTableCellAddress(value: string | undefined): { rowIndex: number; c
   return { rowIndex, columnIndex };
 }
 
+// Place the caret at goal-column `x` on the block's first/last visual line, so
+// vertical navigation across blocks keeps the same column. Returns false (→
+// caller falls back to start/end) only when the sampled hit-test finds no caret
+// position inside the target (see hitTestCaretRange for the sampling strategy).
+function placeCaretAtGoalX(target: HTMLElement, placement: CaretEdge, selection: Selection): boolean {
+  const range = hitTestCaretRange(target, placement.edge, placement.x);
+  if (!range) return false;
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+}
+
 function placeCaret(target: HTMLElement, placement: CaretPlacement) {
+  const edge = placementEdge(placement);
   // Textarea and input: use selectionStart/selectionEnd
   if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
-    const pos = placement === "end" ? target.value.length : 0;
+    const pos = edge === "end" ? target.value.length : 0;
     target.selectionStart = pos;
     target.selectionEnd = pos;
     return;
@@ -89,9 +141,11 @@ function placeCaret(target: HTMLElement, placement: CaretPlacement) {
   const selection = globalThis.getSelection();
   if (!selection) return;
 
+  if (typeof placement === "object" && placeCaretAtGoalX(target, placement, selection)) return;
+
   const range = document.createRange();
   range.selectNodeContents(target);
-  range.collapse(placement !== "end");
+  range.collapse(edge !== "end");
   selection.removeAllRanges();
   selection.addRange(range);
 }
@@ -99,6 +153,7 @@ function placeCaret(target: HTMLElement, placement: CaretPlacement) {
 export function focusEditableBlock(
   blockId: string,
   placement: CaretPlacement = "start",
+  root: ParentNode = document,
   remainingFrames = 10,
 ) {
   let requestedVirtualScroll = false;
@@ -107,7 +162,7 @@ export function focusEditableBlock(
     globalThis.setTimeout(focusAttempt, 0);
   };
   const focusAttempt = () => {
-    const editable = resolveEditableBlock(blockId, placement);
+    const editable = resolveEditableBlock(blockId, placement, root);
     if (!editable) {
       if (!requestedVirtualScroll) {
         requestedVirtualScroll = true;

@@ -106,7 +106,7 @@ export const TabStrip: React.FC<{ pane: PaneNode }> = ({ pane }) => {
 
   return (
     <div
-      className="flex items-stretch h-8 shrink-0 bg-[var(--osio-bg-muted)] border-b border-[var(--osio-border-default)]"
+      className="flex items-stretch h-9 shrink-0 bg-[var(--osio-bg-muted)] border-b border-[var(--osio-border-default)]"
       onMouseDown={() => setActivePane(pane.id)}
       onDragOver={onDragOver}
       onDrop={onDrop}
@@ -129,13 +129,13 @@ export const TabStrip: React.FC<{ pane: PaneNode }> = ({ pane }) => {
         {hint && hint.replaceTabId === undefined && hint.index >= pane.tabs.length ? <InsertBar /> : null}
       </div>
       <div className="flex items-center gap-0.5 px-1 shrink-0">
-        <IconButton size="xs" title="Split right" onClick={() => splitActivePane(pane.id, "row")}>
+        <IconButton size="sm" title="Split right" onClick={() => splitActivePane(pane.id, "row")}>
           <SplitSquareHorizontal size={14} />
         </IconButton>
-        <IconButton size="xs" title="Split down" onClick={() => splitActivePane(pane.id, "column")}>
+        <IconButton size="sm" title="Split down" onClick={() => splitActivePane(pane.id, "column")}>
           <SplitSquareVertical size={14} />
         </IconButton>
-        <IconButton size="xs" title="Close pane" onClick={() => closePane(pane.id)}>
+        <IconButton size="sm" title="Close pane" onClick={() => closePane(pane.id)}>
           <X size={14} />
         </IconButton>
       </div>

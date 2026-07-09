@@ -200,6 +200,32 @@ async function embedDirectory(deps, session, response, config) {
  * request, response)` → true when handled. deps: { config, verifySession,
  * fetchImpl?, env? }.
  */
+/**
+ * GET /api/profile/:userId/shares — the posts this member shared to their profile
+ * (osionos_feed_shares target=profile), newest first + de-duped, with page
+ * title/icon/cover for a gallery render. Pages outside osionos_pages (live-DB
+ * rows) render as "Untitled".
+ */
+async function listProfileShares(deps, userId, response, config) {
+	const shares = await rest(config, deps.fetchImpl, `osionos_feed_shares?user_id=eq.${userId}&target=eq.profile&select=page_id,created_at&order=created_at.desc&limit=60`);
+	const list = Array.isArray(shares) ? shares : [];
+	const pageIds = [...new Set(list.map((row) => row.page_id).filter((id) => UUID_REGEX.test(String(id))))];
+	const pagesById = new Map();
+	if (pageIds.length > 0) {
+		const pages = await rest(config, deps.fetchImpl, `osionos_pages?id=in.(${pageIds.join(',')})&select=id,title,icon,cover`);
+		for (const page of Array.isArray(pages) ? pages : []) pagesById.set(page.id, page);
+	}
+	const seen = new Set();
+	const items = [];
+	for (const row of list) {
+		if (seen.has(row.page_id)) continue; // one card per page (latest share), not every re-share
+		seen.add(row.page_id);
+		const page = pagesById.get(row.page_id);
+		items.push({ pageId: row.page_id, title: page?.title || 'Untitled', icon: page?.icon ?? null, cover: page?.cover ?? null, sharedAt: row.created_at });
+	}
+	return sendJson(response, 200, { ok: true, shares: items }, config);
+}
+
 export function createProfileHandler({ config, verifySession, fetchImpl = fetch, env = process.env }) {
 	const deps = { fetchImpl, env };
 	return async function handleProfileRoute(url, request, response, requestConfig = config) {
@@ -215,6 +241,10 @@ export function createProfileHandler({ config, verifySession, fetchImpl = fetch,
 			if (pathname === '/api/profile/me' && method === 'PATCH') return await patchMe(deps, session, request, response, requestConfig);
 			if (pathname === '/api/profile/avatar' && method === 'POST') return await postAvatar(deps, session, request, response, requestConfig);
 			if (pathname === '/api/profile/heartbeat' && method === 'POST') return await heartbeat(deps, session, response, requestConfig);
+			const sharesMatch = /^\/api\/profile\/([0-9a-f-]{36})\/shares$/i.exec(pathname);
+			if (sharesMatch && method === 'GET') {
+				return await listProfileShares(deps, requireUuid(sharesMatch[1], 'userId'), response, requestConfig);
+			}
 			const profileMatch = /^\/api\/profile\/([0-9a-f-]{36})$/i.exec(pathname);
 			if (profileMatch && method === 'GET') {
 				return await getProfile(deps, requireUuid(profileMatch[1], 'userId'), response, requestConfig);

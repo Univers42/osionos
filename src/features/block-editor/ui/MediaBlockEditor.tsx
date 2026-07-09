@@ -23,15 +23,18 @@
 /* ************************************************************************** */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ImagePlus, SlidersHorizontal } from "lucide-react";
 
 import type { Block } from "@/entities/block";
 import { MEDIA_BLOCK_LABELS, isMediaBlockType } from "@/entities/block";
-import { MediaBlockPreview } from "@/entities/block/ui/MediaBlockPreview";
+import { MediaBlockPreview, resolveMediaBlockAsset } from "@/entities/block/ui/MediaBlockPreview";
 import { EditableContent } from "@/components/blocks/EditableContent";
-import { MediaAssetPicker } from "@/shared/ui/molecules/MediaAssetPicker";
 import { usePageStore } from "@/store/usePageStore";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
+import { MediaEmbedDialog } from "./MediaEmbedDialog";
+import { MediaSettingsBar } from "./media/MediaSettingsBar";
+import { ImageHoverToolbar } from "./media/ImageHoverToolbar";
+import { ImageFullscreen } from "./media/ImageFullscreen";
+import { AltTextDialog } from "./media/AltTextDialog";
 
 interface MediaBlockEditorProps {
   pageId: string;
@@ -50,22 +53,28 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
 }) => {
   const updateBlock = usePageStore((state) => state.updateBlock);
   const editorRef = useRef<HTMLDivElement | null>(null);
-  const pickerRef = useRef<HTMLDivElement | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [showPicker, setShowPicker] = useState(false);
+  const [showEmbed, setShowEmbed] = useState(false);
+  const [captionOpen, setCaptionOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [altOpen, setAltOpen] = useState(false);
 
   const kind = isMediaBlockType(block.type) ? block.type : "image";
   const label = MEDIA_BLOCK_LABELS[kind];
   const mediaWidth = typeof block.mediaWidth === "number" ? block.mediaWidth : 100;
-  const shouldShowSettings = showSettings || !block.asset;
+  const hasAsset = Boolean(block.asset);
+  const isImage = kind === "image";
+  const imageUrl = isImage ? resolveMediaBlockAsset(block)?.url : undefined;
+  const altText = block.mediaAlt ?? "";
+  const shouldShowSettings = showSettings && hasAsset;
   const hasCaption = block.content.trim().length > 0;
+  const showCaption = shouldShowSettings || hasCaption || captionOpen;
   const surfaceStyle = getBlockSurfaceStyle(block);
   const textStyle = getBlockTextStyle(block);
 
   const handleSelect = useCallback(
     (value: string) => {
       updateBlock(pageId, block.id, { asset: value });
-      setShowPicker(false);
       setShowSettings(false);
     },
     [updateBlock, pageId, block.id],
@@ -78,21 +87,23 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
     [block.id, pageId, updateBlock],
   );
 
+  const handleAltSave = useCallback(
+    (alt: string) => {
+      updateBlock(pageId, block.id, { mediaAlt: alt || undefined });
+    },
+    [block.id, pageId, updateBlock],
+  );
+
   useEffect(() => {
-    if (!showPicker && !showSettings) return;
+    if (!showSettings) return undefined;
 
     const handleMouseDown = (event: MouseEvent) => {
       if (editorRef.current?.contains(event.target as Node)) return;
-      if (pickerRef.current?.contains(event.target as Node)) return;
-      setShowPicker(false);
       setShowSettings(false);
     };
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setShowPicker(false);
-        setShowSettings(false);
-      }
+      if (event.key === "Escape") setShowSettings(false);
     };
 
     document.addEventListener("mousedown", handleMouseDown);
@@ -102,97 +113,65 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
       document.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [showPicker, showSettings]);
+  }, [showSettings]);
 
   return (
     <div
       ref={editorRef}
       data-testid="media-block-editor"
       className={[
-        "my-3 rounded-lg transition-colors",
-        shouldShowSettings
-          ? "border border-[var(--osio-border-default)]"
-          : "border border-transparent",
+        "group/media relative my-3 rounded-lg transition-colors",
+        shouldShowSettings ? "border border-[var(--osio-border-default)]" : "border border-transparent",
       ].join(" ")}
       style={surfaceStyle}
-      onFocusCapture={() => setShowSettings(true)}
+      onFocusCapture={() => { if (hasAsset) setShowSettings(true); }}
     >
-      {kind === "image" ? (
+      {!hasAsset ? (
+        // Empty: the Notion-style void row opens the embed dialog on click.
+        <button
+          type="button"
+          className="block w-full rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40"
+          aria-label={`Add ${label.toLowerCase()}`}
+          onClick={() => setShowEmbed(true)}
+        >
+          <MediaBlockPreview block={block} />
+        </button>
+      ) : isImage ? (
         <button
           type="button"
           className="block w-full rounded-lg p-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/30"
-          aria-label={`Select ${label.toLowerCase()}`}
+          aria-label={`Edit ${label.toLowerCase()}`}
           onClick={() => setShowSettings(true)}
         >
           <MediaBlockPreview block={block} />
         </button>
       ) : (
-        <div
-          className="rounded-lg p-2"
-          onPointerDown={() => setShowSettings(true)}
-        >
+        <div className="rounded-lg p-2" onPointerDown={() => setShowSettings(true)}>
           <MediaBlockPreview block={block} />
         </div>
       )}
-
-      {shouldShowSettings ? (
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--osio-border-default)] px-3 py-2">
-          <div className="flex items-center gap-2 rounded-md border border-[var(--osio-border-default)] px-2 py-1 text-xs text-[var(--osio-fg-muted)]">
-            <SlidersHorizontal size={13} />
-            <input
-              type="range"
-              min={25}
-              max={100}
-              step={5}
-              value={mediaWidth}
-              aria-label={`${label} width`}
-              className="h-1.5 w-24 accent-[var(--osio-accent)]"
-              onChange={(event) => handleWidthChange(Number(event.target.value))}
-            />
-            <span className="w-9 tabular-nums">{mediaWidth}%</span>
-          </div>
-
-          {[50, 75, 100].map((width) => (
-            <button
-              key={width}
-              type="button"
-              className="rounded-md border border-[var(--osio-border-default)] px-2 py-1 text-xs font-medium text-[var(--osio-fg-default)] transition-colors hover:bg-black/[0.04]"
-              onClick={() => handleWidthChange(width)}
-            >
-              {width}%
-            </button>
-          ))}
-
-          <div ref={pickerRef} className="relative">
-            <button
-              type="button"
-              data-testid="media-block-change-asset"
-              aria-label={`Change ${label.toLowerCase()}`}
-              title={`Change ${label.toLowerCase()}`}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--osio-border-default)] text-[var(--osio-fg-default)] transition-colors hover:bg-black/[0.04]"
-              onClick={() => setShowPicker((current) => !current)}
-            >
-              <ImagePlus size={15} />
-            </button>
-
-            {showPicker && (
-              <div
-                data-testid="media-block-picker"
-                className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 w-[320px] overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl"
-              >
-                <MediaAssetPicker
-                  kind={kind}
-                  value={block.asset}
-                  label={label}
-                  onSelect={handleSelect}
-                />
-              </div>
-            )}
-          </div>
-        </div>
+      {isImage && hasAsset ? (
+        <ImageHoverToolbar
+          pageId={pageId}
+          blockId={block.id}
+          url={imageUrl}
+          altText={altText}
+          onCaption={() => setCaptionOpen(true)}
+          onFullScreen={() => setFullscreen(true)}
+          onReplace={() => setShowEmbed(true)}
+          onAltText={() => setAltOpen(true)}
+        />
       ) : null}
 
-      {shouldShowSettings || hasCaption ? (
+      {shouldShowSettings ? (
+        <MediaSettingsBar
+          label={label}
+          mediaWidth={mediaWidth}
+          onWidthChange={handleWidthChange}
+          onChangeAsset={() => setShowEmbed(true)}
+        />
+      ) : null}
+      {showCaption ? (
         <div className="border-t border-[var(--osio-border-default)] px-3 py-2">
           <EditableContent
             content={block.content}
@@ -205,6 +184,16 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
             pageId={pageId}
           />
         </div>
+      ) : null}
+
+      {showEmbed ? (
+        <MediaEmbedDialog kind={kind} onSelect={handleSelect} onClose={() => setShowEmbed(false)} />
+      ) : null}
+      {fullscreen && imageUrl ? (
+        <ImageFullscreen url={imageUrl} alt={altText || label} onClose={() => setFullscreen(false)} />
+      ) : null}
+      {altOpen ? (
+        <AltTextDialog value={altText} onSave={handleAltSave} onClose={() => setAltOpen(false)} />
       ) : null}
     </div>
   );

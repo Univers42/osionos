@@ -18,7 +18,11 @@ import {
   isCanonicalInlineElement,
   type ElementFormattingState,
 } from "./inlineEditorDomFormatting";
+import { containsBareUrlShape } from "./markdown/parserInlineMatchers";
 
+// The char-class trigger deliberately excludes `.` and `/` (they abound in prose), so a
+// bare scheme-less URL (`www.foo.com`) never matched — its live autolink re-render is
+// gated below via containsBareUrlShape instead.
 const INLINE_SOURCE_NORMALIZATION_PATTERN = /[[\]_*~`:$!<\\=]/;
 
 interface DomReadResult {
@@ -58,10 +62,34 @@ export function readInlineEditorDomState(
     requiresNormalization:
       requiresElementNormalization ||
       (!result.hasElementNodes &&
-        INLINE_SOURCE_NORMALIZATION_PATTERN.test(source)),
+        (INLINE_SOURCE_NORMALIZATION_PATTERN.test(source) ||
+          containsBareUrlShape(source))),
     hasElementNodes: result.hasElementNodes,
     requiresElementNormalization,
   };
+}
+
+/**
+ * The caret's offset in the SERIALIZED SOURCE (bracket) space — not the visible
+ * plain-text offset. Clones the DOM from the root start up to the caret and runs
+ * it through the SAME reader/serializer, so a prior rendered span (`[b]x[/b]`)
+ * contributes its full bracket length. This is what lets the markdown autoformat
+ * fire on the 2nd, 3rd, … inline style in a block (where DOM plain-text offset ≠
+ * source offset), not only the first.
+ *
+ * Correct at the fire moment: a just-typed closing delimiter leaves the caret in a
+ * PLAIN TEXT node (the raw markdown, not yet rendered), so the clone never splits a
+ * wrapper — prior wrappers are fully contained and serialize exactly.
+ */
+export function inlineSourceCaretOffset(root: HTMLElement, range: Range): number {
+  const prefix = document.createRange();
+  prefix.selectNodeContents(root);
+  prefix.setEnd(range.startContainer, range.startOffset);
+  const holder = document.createElement("div");
+  holder.appendChild(prefix.cloneContents());
+  return serializeInlineNodes(
+    normalizeInlineNodes(readDomChildNodes(Array.from(holder.childNodes)).nodes),
+  ).length;
 }
 
 function readDomChildNodes(childNodes: Node[]): DomReadResult {

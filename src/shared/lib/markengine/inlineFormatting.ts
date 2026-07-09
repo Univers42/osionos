@@ -47,6 +47,14 @@ export type InlineFormattingCommand =
   | {
       type: "set_link";
       href: string;
+    }
+  // Strip every inline mark from the selection back to plain text.
+  | {
+      type: "clear_format";
+    }
+  // Wrap the selection as an inline `$…$` equation, or unwrap it if already one.
+  | {
+      type: "toggle_math";
     };
 
 interface InlineSelectionPartition {
@@ -139,7 +147,25 @@ function applyCommandToSelection(
       return applyColor(selection, command.colorKind, command.color);
     case "set_link":
       return applyLink(selection, command.href);
+    case "clear_format":
+      return applyClearFormat(selection);
+    case "toggle_math":
+      return applyMath(selection);
   }
+}
+
+function applyClearFormat(selection: InlineNode[]): InlineNode[] {
+  const text = getInlineNodesTextContent(selection);
+  return text ? [{ type: "text", value: text }] : selection;
+}
+
+function applyMath(selection: InlineNode[]): InlineNode[] {
+  const [only] = selection;
+  if (selection.length === 1 && only.type === "math_inline") {
+    return [{ type: "text", value: only.value }];
+  }
+  const value = getInlineNodesTextContent(selection).trim();
+  return value ? [{ type: "math_inline", value }] : selection;
 }
 
 function applyToggleFormat(selection: InlineNode[], format: InlineFormatKind) {

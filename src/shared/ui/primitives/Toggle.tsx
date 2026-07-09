@@ -58,7 +58,7 @@ export const Toggle: React.FC<ToggleProps> = ({
       aria-label={label ?? "Toggle setting"}
       aria-describedby={describedBy}
       disabled={disabled}
-      className="relative inline-flex shrink-0 items-center rounded-full p-0.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:cursor-not-allowed disabled:opacity-55"
+      className="relative inline-flex shrink-0 items-center rounded-full p-0.5 transition-colors duration-[var(--osio-dur-base)] ease-[var(--osio-ease-standard)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:cursor-not-allowed disabled:opacity-55"
       style={{
         width: metrics.trackWidth,
         height: metrics.trackHeight,
@@ -68,7 +68,7 @@ export const Toggle: React.FC<ToggleProps> = ({
       onKeyDown={handleKeyDown}
     >
       <span
-        className="block rounded-full bg-[var(--osio-accent-fg)] shadow-sm transition-transform duration-150"
+        className="block rounded-full bg-[var(--osio-accent-fg)] shadow-[var(--osio-e1)] transition-transform duration-[var(--osio-dur-base)] ease-[var(--osio-ease-spring)]"
         style={{
           width: metrics.knob,
           height: metrics.knob,

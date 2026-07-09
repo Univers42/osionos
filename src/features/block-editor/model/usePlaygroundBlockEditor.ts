@@ -21,8 +21,11 @@ import { usePageStore } from "@/store/usePageStore";
 import {
   detectBlockType,
   getInlineEditorSelectionOffsets,
+  setInlineEditorSelectionOffsets,
   getCalloutIconForKind,
   parseMarkdownToBlocks,
+  bareUrlToLinkSource,
+  isSingleBareUrl,
   type InlineEditorSelectionOffsets,
 } from "@/shared/lib/markengine";
 import { useSlashSelect, repositionCursor } from "@/features/slash-commands";
@@ -47,15 +50,23 @@ import {
   handleArrowDown,
   handleEnterKey,
   getAdjacentRenderedBlockId,
+  clearVerticalGoalX,
 } from "./playgroundBlockEditor.helpers";
 import { useBlockHistory } from "./useBlockHistory";
+import { isAutomationsEnabled } from "@/shared/config/featureFlags";
 import { getInlineMarkAtCaretEnd, placeCaretAfterInlineMark } from "./inlineMarkHelpers";
-import type {
-  SlashMenuState,
-  PageSelectorMenuState,
+import {
+  EMOJI_TRIGGER_RE,
+  type SlashMenuState,
+  type PageSelectorMenuState,
+  type EmojiMenuState,
+  type ColorMenuState,
 } from "./playgroundBlockEditor.helpers";
+import { buildColoredPlaceholder } from "./inlineColorInsert";
+import { inlineIconInsertText } from "./inlineIconInsert";
+import { matchInternalCopy } from "./blockClipboard";
 import { useBlockContextMenu } from "./useBlockContextMenu";
-import { focusEditableBlock } from "./blockDomFocus";
+import { focusEditableBlock, selectionPaneRoot, type CaretPlacement } from "./blockDomFocus";
 import {
   clearBlockDraft,
   clearBlockDraftsForSource,
@@ -599,8 +610,16 @@ function outdentBlockInEditorTree(blocks: Block[], blockId: string): Block[] {
 
 /** Manages block editing, slash commands, and keyboard navigation for playground pages. */
 export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSource) {
-  const source = useMemo(() => normalizeEditorSource(editorSource), [editorSource]);
-  const sourceKey = useMemo(() => editorSourceKey(source), [source]);
+  // Stabilize `source` by VALUE, not caller-object identity. Callers commonly pass a
+  // fresh `{kind:"page", pageId}` literal each render; an ancestor re-rendering on a
+  // page-store commit then churns `source`, cascading a new identity through
+  // updatePageContent → the store selector → every mutation callback, on every 250ms
+  // text commit while typing. Anchoring `source`'s identity to its string key
+  // (recompute only when the key changes) stops the churn.
+  const normalizedSource = normalizeEditorSource(editorSource);
+  const sourceKey = editorSourceKey(normalizedSource);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- identity anchored to sourceKey, not the churning `normalizedSource` object
+  const source = useMemo(() => normalizedSource, [sourceKey]);
   const pageId = source.pageId;
   const content = usePageStore(
     useCallback(
@@ -612,12 +631,19 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null);
   const [pageSelector, setPageSelector] =
     useState<PageSelectorMenuState | null>(null);
+  const [emojiMenu, setEmojiMenu] = useState<EmojiMenuState | null>(null);
+  const [colorMenu, setColorMenu] = useState<ColorMenuState | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
   const contentRef = useRef<Block[]>(content);
 
-  /** Focus a block element after a short delay. */
-  const focusBlock = useCallback((blockId: string, cursorEnd = false) => {
-    focusEditableBlock(blockId, cursorEnd ? "end" : "start");
+  /** Focus a block element after a short delay. `placement`: true = end, false =
+   * start, or an explicit edge/goal-X placement carried from arrow navigation. */
+  const focusBlock = useCallback((blockId: string, placement: boolean | CaretPlacement = false) => {
+    const resolved: CaretPlacement =
+      placement === true ? "end" : placement === false ? "start" : placement;
+    // Scope resolution to the pane holding the caret so an imperative focus (arrow
+    // crossing, block create) lands in THIS pane, not a duplicate id in another.
+    focusEditableBlock(blockId, resolved, selectionPaneRoot());
   }, []);
 
   const updatePageContent = useCallback(
@@ -741,11 +767,15 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   }, [sourceKey, clearHistory]);
 
   /**
-   * Anchor (viewport coords) for the slash / page-selector popovers.
-   * X is the editable block's LEFT edge — a Notion-style line-start anchor that
-   * is stable as you type the filter. We deliberately do NOT use the caret's own
-   * X: on an empty line the `::before` placeholder corrupts `getClientRects()`,
-   * throwing the caret X ~130px to the right (the menu then looked "drifted").
+   * Anchor (viewport coords) for the slash / page-selector / emoji popovers.
+   * X is the caret's OWN x — the trigger char's position — so the menu opens
+   * directly under the "/" (or "[[" / ":"), not at the line start. It is captured
+   * once when the menu opens and kept while filtering, so it stays put. The one
+   * exception is a trigger typed on an otherwise-empty line: the empty-line
+   * `::before` placeholder is still in layout at capture time (its `data-empty`
+   * gate lags the native "/" by one React render) and shoves the caret rect
+   * ~140px right, so there X falls back to the block's left edge (see the inline
+   * note below). X is clamped inside the block either way.
    * Y (top/bottom) comes from the caret rect so the menu hugs the caret's visual
    * line and can flip cleanly above it; `caretRect` prefers getClientRects() and
    * falls back to the block element on a truly empty line.
@@ -776,13 +806,24 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         ? editable.contains(range.startContainer)
         : false;
 
-      const left = editable ? editable.getBoundingClientRect().left : 100;
+      const rect = editable ? editable.getBoundingClientRect() : null;
       const caret = selInBlock && range ? caretRect(range) : null;
-      if (caret && caret.height > 0) return { x: left, y: caret.bottom, top: caret.top };
-      if (editable) {
-        const b = editable.getBoundingClientRect();
-        return { x: left, y: b.bottom, top: b.top };
+      // The empty-line placeholder is an inline `::before` gated by `data-empty`.
+      // `data-empty` mirrors the React `content` prop, which lags the native DOM
+      // by one render, so at slash-open time the block text is already "/" but
+      // `data-empty` is still stale-true — the pseudo stays in layout and shoves
+      // the caret rect ~140px right. Its X is then unreliable, so anchor X to the
+      // block's left edge. When the block already had text (no placeholder), the
+      // caret X is trustworthy and the menu opens right under the "/". The pseudo
+      // only grows horizontally, so caret Y is always correct.
+      const placeholderInLayout = editable?.getAttribute("data-empty") === "true";
+      if (caret && caret.height > 0) {
+        const x = !placeholderInLayout && rect
+          ? Math.min(Math.max(caret.left, rect.left), rect.right)
+          : (rect?.left ?? caret.left);
+        return { x, y: caret.bottom, top: caret.top };
       }
+      if (rect) return { x: rect.left, y: rect.bottom, top: rect.top };
       return { x: 100, y: 300, top: 282 };
     },
     [],
@@ -887,6 +928,24 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     [pageSelector, getCaretRect],
   );
 
+  const tryHandleEmojiMenu = useCallback(
+    (blockId: string, text: string): boolean => {
+      const match = EMOJI_TRIGGER_RE.exec(text);
+      if (match) {
+        const filter = match[1];
+        setEmojiMenu((prev) =>
+          prev && prev.blockId === blockId
+            ? (prev.filter === filter ? prev : { ...prev, filter })
+            : { blockId, position: getCaretRect(blockId), filter },
+        );
+        return true;
+      }
+      if (emojiMenu?.blockId === blockId) setEmojiMenu(null);
+      return false;
+    },
+    [emojiMenu, getCaretRect],
+  );
+
   const applyMarkdownDetection = useCallback(
     (blockId: string, detection: ReturnType<typeof detectBlockType>): void => {
       if (!detection) return;
@@ -955,6 +1014,10 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   /** Handle content change — detects '/' trigger and markdown shortcuts. */
   const handleBlockChange = useCallback(
     (blockId: string, text: string) => {
+      // ponytail: O(blocks) tree walk per emitted change (rAF-coalesced, so per frame).
+      // Sub-ms and imperceptible under ~5000 blocks. If a large-doc profile shows it bite,
+      // upgrade to a blockId->block index rebuilt on each commit (contentRef is stable
+      // between the 250ms commits) — deferred until measured, not built speculatively.
       const block = findBlockInTree(contentRef.current, blockId);
       setBlockDraft(sourceKey, blockId, block?.content ?? "", text);
       if (tryHandleCodeOrTable(blockId, text)) return;
@@ -964,6 +1027,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       if (tryHandleSlashMenu(blockId, text)) return;
       if (tryHandlePageSelectorMenu(blockId, text)) return;
+      if (tryHandleEmojiMenu(blockId, text)) return;
       tryHandleMarkdownShortcut(blockId, text);
     },
     [
@@ -971,6 +1035,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       tryHandleCodeOrTable,
       tryHandleSlashMenu,
       tryHandlePageSelectorMenu,
+      tryHandleEmojiMenu,
       tryHandleMarkdownShortcut,
     ],
   );
@@ -1316,6 +1381,13 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
   const handleArrowNavigation = useCallback(
     (e: React.KeyboardEvent, blockId: string, content: Block[]): boolean => {
+      // While a caret popover (slash / page-selector / emoji) is open it OWNS
+      // ArrowUp/Down for list navigation — never also move the caret between
+      // blocks (that double-handling made arrows jump the caret instead).
+      if ((slashMenu || pageSelector || emojiMenu) && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        return false;
+      }
+
       if (
         e.key === "ArrowRight" &&
         !e.shiftKey &&
@@ -1346,7 +1418,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       return false;
     },
-    [focusBlock],
+    [focusBlock, slashMenu, pageSelector, emojiMenu],
   );
 
   const handlePaste = useCallback(
@@ -1359,6 +1431,32 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       const rawPlainText = e.clipboardData.getData("text/plain");
       const raw = rawMarkdown || rawPlainText;
       if (!raw) return;
+
+      // An internal "Copy block"/selection copy pastes losslessly — real block
+      // clones (type + props + children), on any page in this tab — instead of a
+      // markdown re-parse, which would drop non-markdown block properties.
+      const internalBlocks = matchInternalCopy(raw);
+      if (internalBlocks) {
+        e.preventDefault();
+        const offsets = resolvePasteSelectionOffsets(e, currentBlock.content ?? "");
+        const replacement = buildMarkdownPasteReplacement(currentBlock, internalBlocks, offsets);
+        updatePageContent(pageId, replaceBlockInEditorTree(contentRef.current, blockId, replacement));
+        focusBlock(internalBlocks.at(-1)?.id ?? blockId, true);
+        return;
+      }
+
+      // A pasted bare URL becomes a blue `[hostname](url)` link, not pure URL text.
+      if (isSingleBareUrl(raw)) {
+        e.preventDefault();
+        const content = currentBlock.content ?? "";
+        const offsets = resolvePasteSelectionOffsets(e, content);
+        const lo = Math.max(0, Math.min(offsets.start, offsets.end, content.length));
+        const hi = Math.max(lo, Math.min(Math.max(offsets.start, offsets.end), content.length));
+        const next = content.slice(0, lo) + bareUrlToLinkSource(raw) + content.slice(hi);
+        updateBlock(pageId, blockId, { content: next });
+        focusBlock(blockId, true);
+        return;
+      }
 
       const markdown = raw.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
       if (!markdown.trim() || !isBlockStructuredMarkdown(markdown)) return;
@@ -1373,7 +1471,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       updatePageContent(pageId, replaceBlockInEditorTree(contentRef.current, blockId, replacement));
       focusBlock(parsed.at(-1)?.id ?? replacement.at(-1)?.id ?? blockId, true);
     },
-    [flushPendingBlockDraft, pageId, updatePageContent, focusBlock],
+    [flushPendingBlockDraft, pageId, updatePageContent, updateBlock, focusBlock],
   );
 
   const handleContainerEnter = useCallback(
@@ -1406,6 +1504,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   /** Handle Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z for undo/redo. Returns true if handled. */
   const handleUndoRedo = useCallback(
     (e: React.KeyboardEvent): boolean => {
+      if (isAutomationsEnabled()) return false; // the automation dispatcher owns undo/redo
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return false;
 
       if (e.key === "z" && !e.shiftKey) {
@@ -1433,6 +1532,31 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       return false;
     },
     [canRedo, canUndo, flushPendingDrafts, redo, sourceKey, undo],
+  );
+
+  /** No-arg undo/redo for the command bus (keyboard-automation dispatcher). */
+  const commandUndo = useCallback(() => {
+    if (!canUndo()) return;
+    flushPendingDrafts("undo-redo");
+    if (undo(contentRef.current)) clearBlockDraftsForSource(sourceKey);
+  }, [canUndo, flushPendingDrafts, sourceKey, undo]);
+
+  const commandRedo = useCallback(() => {
+    if (!canRedo()) return;
+    flushPendingDrafts("undo-redo");
+    if (redo(contentRef.current)) clearBlockDraftsForSource(sourceKey);
+  }, [canRedo, flushPendingDrafts, redo, sourceKey]);
+
+  /** Commit a discrete structural change from the command bus / right-click menu
+   *  (heading, move, duplicate, delete, paste) as ONE undo step: snapshot the
+   *  current tree first, then replace it — otherwise the change is not undoable. */
+  const commitContent = useCallback(
+    (blocks: Block[]) => {
+      flushPendingDrafts("structural");
+      pushSnapshot(contentRef.current);
+      updatePageContent(pageId, blocks);
+    },
+    [flushPendingDrafts, pageId, pushSnapshot, updatePageContent],
   );
 
   /** Push an undo snapshot if the key will trigger a structural block mutation. */
@@ -1478,6 +1602,10 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       parentBlockId: string | null = null,
     ) => {
       if (handleUndoRedo(e)) return;
+
+      // Any non-vertical key ends a vertical run, so the carried goal column is
+      // dropped and the next Up/Down recaptures it from the live caret.
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") clearVerticalGoalX();
 
       const content = parentBlockId
         ? (findChildrenForParent(contentRef.current, parentBlockId) ?? [])
@@ -1700,6 +1828,56 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     setPageSelector,
   ]);
 
+  // Bridges the unified icon picker's serialized value into inline content: an emoji goes
+  // in as its bare char (inherits the block font-size, no fixed wrapper); an icon / SVG /
+  // uploaded image collapses to a round-trippable inline `![](src)` (async for lucide).
+  const handleEmojiSelect = useCallback(
+    async (value: string) => {
+      if (!emojiMenu) return;
+      const { blockId } = emojiMenu;
+      setEmojiMenu(null);
+      const insert = await inlineIconInsertText(value);
+      if (insert === null) return;
+      flushPendingBlockDraft(blockId, "shortcut");
+      const block = findBlockInTree(contentRef.current, blockId);
+      if (!block) return;
+
+      // `:name` trigger -> replace it; opened via `/emoji` (no trigger) -> append.
+      const text = block.content;
+      const colonIdx = EMOJI_TRIGGER_RE.test(text) ? text.lastIndexOf(":") : -1;
+      const newContent = colonIdx >= 0 ? text.slice(0, colonIdx) + insert : text + insert;
+      updateBlock(pageId, blockId, { content: newContent });
+      focusBlock(blockId, true);
+    },
+    [emojiMenu, flushPendingBlockDraft, pageId, updateBlock, focusBlock],
+  );
+
+  // Insert a colored placeholder and select it, so the text typed next replaces
+  // it while staying inside the color wrapper (the "following text" is colored).
+  const handleColorSelect = useCallback(
+    (color: string) => {
+      if (!colorMenu) return;
+      const { blockId } = colorMenu;
+      setColorMenu(null);
+      flushPendingBlockDraft(blockId, "shortcut");
+      const block = findBlockInTree(contentRef.current, blockId);
+      if (!block) return;
+
+      const built = buildColoredPlaceholder(block.content, color);
+      if (!built) return;
+      updateBlock(pageId, blockId, { content: built.content });
+      requestAnimationFrame(() => {
+        const root = document.querySelector<HTMLElement>(
+          `[data-block-id="${blockId}"] [contenteditable="true"]`,
+        );
+        if (!root) return;
+        root.focus();
+        setInlineEditorSelectionOffsets(root, { start: built.start, end: built.end });
+      });
+    },
+    [colorMenu, flushPendingBlockDraft, pageId, updateBlock],
+  );
+
   /** Add a new blank paragraph at the end. */
   const handleAddBlock = useCallback(
     (content: Block[]) => {
@@ -1749,6 +1927,12 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     setSlashMenu,
     pageSelector,
     setPageSelector,
+    emojiMenu,
+    setEmojiMenu,
+    handleEmojiSelect,
+    colorMenu,
+    setColorMenu,
+    handleColorSelect,
     contextMenu,
     contextMenuSections,
     openContextMenu,
@@ -1775,10 +1959,15 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     updateBlock,
     deleteBlock,
     updateContent: replaceContent,
+    commitContent,
     moveBlock,
     moveBlockAcrossTree,
     undo,
     redo,
+    canUndo,
+    canRedo,
+    commandUndo,
+    commandRedo,
     pushSnapshot,
   };
 }

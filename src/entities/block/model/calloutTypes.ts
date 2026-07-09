@@ -15,7 +15,10 @@
  * word KIND (markdown `> [!warning]`), so the renderer can't key tints off the emoji alone.
  * `resolveCalloutType` maps either form (or none) to one preset, unifying both inputs and
  * fixing kind-based callouts that used to render flat. Tints reuse the `--osio-block-tint-*`
- * tokens and color only the SURFACE + border + icon — body text stays default for contrast.
+ * tokens and color only the SURFACE + icon — body text stays default for contrast. A callout
+ * is a flat tinted surface (Notion pattern): no border, no accent rail, never collapsible —
+ * collapsing is the `toggle` block's job (`/toggle`, heading + `>`), and the vertical bar
+ * belongs to a nested quote/citation child, which draws its own.
  */
 
 import type { CSSProperties } from "react";
@@ -76,15 +79,14 @@ export function calloutDisplayIcon(color?: string | null): string {
   return /^[a-z]+$/i.test(raw) ? resolveCalloutType(raw).icon : raw;
 }
 
-/** Tint for the callout surface + 3px left accent rail (admonition pattern; NOT the body text). */
+/** Tint for the callout surface (flat, borderless; NOT the body text). */
 export function calloutSurface(type: CalloutType): CSSProperties {
   return {
     backgroundColor: `var(--osio-block-tint-${type.tone}-bg)`,
-    borderLeftColor: `var(--osio-block-tint-${type.tone}-fg)`,
   };
 }
 
-/** Accent color (icon, left rail, type chip) for a callout type. */
+/** Accent color (icon, type chip) for a callout type. */
 export function calloutAccent(type: CalloutType): string {
   return `var(--osio-block-tint-${type.tone}-fg)`;
 }

@@ -1,0 +1,45 @@
+# osionos-bridge — fly.io app (tiny Node persistence proxy in front of grobase).
+#
+# Deploy from the osionos app root so the Docker build context can reach scripts/:
+#   cd apps/osionos/app
+#   flyctl deploy . --config deploy/bridge-fly/fly.toml \
+#                   --dockerfile deploy/bridge-fly/Dockerfile
+#
+# Region matches grobase-stack (cdg) so /rest/v1 hops stay intra-region.
+app = "osionos-bridge"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# Non-secret config. Secrets (SERVICE_ROLE_KEY, OSIONOS_APP_SESSION_SECRET,
+# OSIONOS_BRIDGE_SHARED_SECRET, OSIONOS_BRIDGE_EMAIL_HASH_SALT, AUTH_GATEWAY_URL)
+# are set with `flyctl secrets set` — see deploy steps. OSIONOS_BAAS_URL is the
+# public grobase Kong gateway; the bridge persists pages over its /rest/v1 route
+# with the service-role key.
+[env]
+  OSIONOS_BRIDGE_PORT = "4000"
+  OSIONOS_BAAS_URL = "https://grobase-stack.fly.dev"
+  OSIONOS_BRIDGE_PERSISTENCE = "auto"
+  OSIONOS_BRIDGE_REQUIRE_BAAS = "false"
+  OSIONOS_BAAS_TENANT_ID = "agency"
+  # OSIONOS_APP_URL / OSIONOS_ALLOWED_ORIGIN (the osionos-app browser origin for
+  # CORS) are injected via `flyctl secrets set` once the osionos Vercel URL is known.
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "get"
+    path = "/api/auth/bridge/health"
+    interval = "15s"
+    timeout = "3s"
+    grace_period = "20s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
