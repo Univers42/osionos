@@ -20,6 +20,7 @@
 import React from 'react';
 
 import { ProfileActions } from './profileChrome';
+import { ProfileSharedPosts } from './ProfileSharedPosts';
 import { useProfile } from './useProfile';
 
 interface ProfileViewProps {
@@ -69,6 +70,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
         </div>
 
         <ProfileActions userId={userId} name={profile.name} />
+
+        <ProfileSharedPosts userId={userId} />
       </div>
     </div>
   );

@@ -110,7 +110,12 @@ export function renderFrame(f: FrameInput): void {
     drawNodes(base, f.sprites, true);
     if (!lq && mix.card > 0.001) drawCards(base, mix.card, f.hoverIndex, f.selectedIndex, true);
   } else {
-    drawLinks(base);
+    // ponytail: on a large graph, a motion (zoom/pan) frame that has zoomed in past the
+    // density gate would iterate every edge — O(edges) with drawArrows, the measured 100k
+    // zoom hotspot (2fps). Edges are an unreadable moving hairball mid-zoom, so defer the
+    // full edge pass to the settled frame (lq=false), matching the decorative-pass policy
+    // above. Smaller graphs keep edges during motion (cheap). Fixed at count > AGG_MIN_NODES.
+    if (!lq || f.state.count <= AGG_MIN_NODES) drawLinks(base);
     if (!lq) {
       drawEdgeFlow(base, f.selectedIndex, false);
       if (f.hoverIndex !== f.selectedIndex) drawEdgeFlow(base, f.hoverIndex, true);

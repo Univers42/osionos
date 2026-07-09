@@ -10,10 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState } from "react";
-import { ChevronRight } from "lucide-react";
+import React from "react";
 import type { Block } from "@/entities/block";
-import { calloutAccent, calloutDisplayIcon, calloutSurface, resolveCalloutType } from "@/entities/block";
+import { calloutDisplayIcon, calloutSurface, resolveCalloutType } from "@/entities/block";
 import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { IconValueView } from "@/shared/ui";
 import { parseInlineMarkdown } from "@/shared/lib/markengine";
@@ -21,15 +20,15 @@ import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInter
 import { ReadOnlyBlock } from "./ReadOnlyBlock";
 
 /**
- * A callout = a tagged container. The tint (resolved from its semantic type) colors the
- * SURFACE + border + icon only — body text stays default for contrast — and child blocks sit
- * in an accent-railed inset so the "everything nests here" affordance reads at a glance.
+ * A callout = a flat tinted surface (Notion pattern): no border, no rail, never collapsible.
+ * The tint colors SURFACE + icon only — body text stays default for contrast — and children
+ * render flush with the title text. Collapsing belongs to the `toggle` block; the vertical
+ * bar belongs to a nested quote/citation child, which draws its own. `collapsed` is ignored
+ * here on purpose so legacy-collapsed callouts never hide content without an affordance.
  */
 export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
-  const [expanded, setExpanded] = useState(!block.collapsed);
   const type = resolveCalloutType(block.color);
   const icon = calloutDisplayIcon(block.color);
-  const accent = calloutAccent(type);
   const hasChildren = Boolean(block.children?.length);
   const content = block.content
     ? { __html: parseInlineMarkdown(block.content, { resolveInternalLinkTitle: resolveInternalPageLinkTitle }) }
@@ -39,29 +38,17 @@ export const CalloutBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
     <div
       role="note"
       aria-label={`${type.label} callout`}
-      className="flex items-start gap-3 my-0.5 rounded-lg border-l-[3px] py-3 pl-4 pr-4"
+      className="my-1 flex items-start gap-3 rounded-lg px-4 py-3"
       style={calloutSurface(type)}
     >
-      {hasChildren ? (
-        <button
-          type="button"
-          aria-label={expanded ? "Collapse" : "Expand"}
-          aria-expanded={expanded}
-          onClick={() => setExpanded((open) => !open)}
-          className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-[var(--osio-bg-hover)]"
-          style={{ color: accent }}
-        >
-          <ChevronRight size={14} className={`transition-transform duration-150 ${expanded ? "rotate-90" : ""}`} />
-        </button>
-      ) : null}
-      <IconValueView value={icon} size={20} className="shrink-0 leading-none" />
-      <div className="min-w-0 flex-1">
+      <IconValueView value={icon} size={20} className="mt-0.5 shrink-0 leading-none" />
+      <div className="min-w-0 max-w-full flex-1">
         <span
-          className={`${getToggleHeadingClass(block.headingLevel)} py-0.5 leading-relaxed text-[var(--osio-fg-default)]`}
+          className={`block break-words ${getToggleHeadingClass(block.headingLevel)} py-0.5 leading-relaxed text-[var(--osio-fg-default)]`}
           dangerouslySetInnerHTML={content ?? undefined}
         />
-        {expanded && hasChildren ? (
-          <div className="mt-1 border-l-2 pl-3" style={{ borderColor: accent }}>
+        {hasChildren ? (
+          <div className="min-w-0 max-w-full">
             {block.children?.map((child, index) => (
               <ReadOnlyBlock key={child.id} block={child} index={index} />
             ))}

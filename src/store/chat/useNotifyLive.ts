@@ -32,6 +32,9 @@ const VERB: Record<NotificationType, string> = {
   reaction: 'reacted to your message',
   connection: 'wants to connect',
   system: '',
+  feed_reaction: 'reacted to your post',
+  feed_comment: 'commented on your post',
+  feed_share: 'shared your post',
 };
 
 export function useNotifyLive(): void {

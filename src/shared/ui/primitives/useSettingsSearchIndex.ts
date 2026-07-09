@@ -28,7 +28,8 @@ export type SettingsTab =
   | "teamspaces"
   | "permissions"
   | "billing"
-  | "plans";
+  | "plans"
+  | "shortcuts";
 
 export interface SettingsSearchEntry {
   tab: SettingsTab;
@@ -80,6 +81,7 @@ export const SETTINGS_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   { tab: "permissions", anchor: "view-as", label: "View as", keywords: ["view as", "simulate", "decide", "allow", "deny"] },
   { tab: "billing", anchor: "billing", label: "Billing", keywords: ["plan", "payment", "invoice", "vat", "gst"] },
   { tab: "plans", anchor: "plans", label: "Explore plans", keywords: ["free", "plus", "business", "enterprise", "upgrade"] },
+  { tab: "shortcuts", anchor: "keyboard-shortcuts", label: "Keyboard shortcuts", keywords: ["shortcut", "shortcuts", "keyboard", "keybinding", "hotkey", "automation", "combo", "vscode"], description: "Rebind, add, and export keyboard shortcuts." },
 ];
 
 function normalize(value: string) {

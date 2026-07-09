@@ -27,6 +27,10 @@ export interface InlineHtmlOptions {
   resolveInternalLinkTitle?: (pageId: string) => { title: string; icon?: string } | null;
   renderInlineMath?: (source: string) => string;
   renderInlineMathAsSource?: boolean;
+  // When set, links render as their raw `[text](url)` source instead of an <a> —
+  // the inline "reveal" the editor's Ctrl/Cmd-click link editor toggles on, so a
+  // link can be edited as markdown in place (symmetric to renderInlineMathAsSource).
+  renderLinkAsSource?: boolean;
 }
 
 const DEFAULT_INLINE_HTML_OPTIONS: Required<
@@ -58,11 +62,27 @@ function renderCodeRich(node: Extract<InlineNode, { type: "code_rich" }>, option
   return `<code class="inline-code" data-inline-type="code" style="${style}">${renderChildren(codeChildren, options)}</code>`;
 }
 
+function inlineNodesToPlainText(nodes: InlineNode[]): string {
+  return nodes
+    .map((n) => {
+      if (n.type === "text" || n.type === "code" || n.type === "emoji") return n.value;
+      if ("children" in n && Array.isArray(n.children)) return inlineNodesToPlainText(n.children);
+      return "";
+    })
+    .join("");
+}
+
 function renderLink(node: Extract<InlineNode, { type: "link" }>, options: ResolvedInlineHtmlOptions): string {
+  // Raw-source reveal: emit the editable `[text](url)` markdown (node.href is the
+  // source-truth href, so an empty `[label]()` round-trips instead of becoming `#`).
+  if (options.renderLinkAsSource) {
+    const title = node.title ? ` "${node.title}"` : "";
+    return esc(`[${inlineNodesToPlainText(node.children)}](${node.href}${title})`);
+  }
   const href = sanitizeUrl(node.href);
   const attrs = [
     `href="${esc(href || "#")}"`,
-    node.title ? `title="${esc(node.title)}"` : "",
+    node.title ? `title="${esc(node.title)}"` : options.editorChrome ? 'title="Ctrl/\u2318-click to edit \u00B7 click to open"' : "",
     options.editorChrome ? 'class="editor-link"' : "",
     options.externalLinks && isExternalUrl(href) ? 'target="_blank" rel="noopener noreferrer"' : "",
   ].filter(Boolean).join(" ");
@@ -78,8 +98,17 @@ function renderInternalLink(node: Extract<InlineNode, { type: "internal_link" }>
   return `<span class="editor-mention page-mention-placeholder" data-page-id="${esc(node.pageId)}" contenteditable="false">${icon}${esc(title)}</span>${suffix}`;
 }
 
+// sanitizeUrl drops every non-http(s) scheme, which would blank an uploaded / pasted
+// / lucide-derived asset. `data:image/*` is safe in an <img src> (SVG loaded via <img>
+// cannot run scripts), so allow the image data-URI explicitly for inline media.
+function sanitizeInlineImageSrc(value: string): string {
+  const trimmed = value.trim();
+  if (/^data:image\//i.test(trimmed)) return trimmed;
+  return sanitizeUrl(trimmed);
+}
+
 function renderImage(node: Extract<InlineNode, { type: "image" }>): string {
-  const src = sanitizeUrl(node.src);
+  const src = sanitizeInlineImageSrc(node.src);
   const title = node.title ? ` title="${esc(node.title)}"` : "";
   return src ? `<img src="${esc(src)}" alt="${esc(node.alt)}"${title} />` : "";
 }

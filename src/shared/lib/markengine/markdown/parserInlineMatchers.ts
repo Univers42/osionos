@@ -19,6 +19,79 @@ import type {
 } from "./parserInlineTypes";
 import { EMOJI_MAP } from "./parserEmoji";
 import { findClosingBracket } from "./parserInlineUtils";
+import { hostnameFromUrl } from "./urlSugar";
+import { normalizeInlineLinkHref } from "../inlineLinks";
+
+// A bare URL not already wrapped in `[]()` or `<>` — its href is the full URL,
+// its visible label is the hostname (so it renders blue, not the "pure url").
+// Trailing sentence punctuation is left outside the link. Two forms: fully
+// schemed (`https://…`) and scheme-less `www.…` (normalized to https below).
+export const BARE_URL_RE = /^https?:\/\/[^\s<>()[\]]+[^\s<>()[\].,;:!?'"]/;
+export const BARE_WWW_RE = /^www\.[^\s<>()[\]]+[^\s<>()[\].,;:!?'"]/i;
+
+// Non-anchored twin of the two bare-URL matchers (leading `^` dropped) so the editor's
+// live-render gate can ask "does this source contain a bare-URL shape anywhere?" — a
+// scheme-less `www.…`/`https://…` must re-render while typing, but the char-class gate
+// deliberately has no `.`/`/` trigger. Reuses the SAME patterns (not a lone `.`) so
+// ordinary prose with sentence periods never over-triggers.
+const BARE_URL_SHAPE_RE = new RegExp(
+  `${BARE_URL_RE.source.slice(1)}|${BARE_WWW_RE.source.slice(1)}`,
+  "i",
+);
+
+/** True when `text` contains a bare (scheme-less `www.` or fully-schemed) URL shape. */
+export function containsBareUrlShape(text: string): boolean {
+  return BARE_URL_SHAPE_RE.test(text);
+}
+
+function matchBareUrl(text: string, pos: number): InlineMatchResult | null {
+  // Only at a boundary: never mid-word (e.g. "ahttps://") or after url-ish chars.
+  if (pos > 0 && /[\w@/.-]/.test(text[pos - 1])) return null;
+  const slice = text.slice(pos);
+  const match = BARE_URL_RE.exec(slice) ?? BARE_WWW_RE.exec(slice);
+  if (!match) return null;
+  const raw = match[0];
+  // Autolink only once the URL is followed by something (space/punctuation/text),
+  // i.e. "on space" — a URL still at the caret's end stays plain text so typing it
+  // isn't disrupted by an early collapse to the hostname label.
+  if (pos + raw.length >= text.length) return null;
+  // Scheme-less `www.` hosts resolve to https so the anchor label + href agree.
+  const href = normalizeInlineLinkHref(raw);
+  return {
+    start: pos,
+    end: pos + raw.length,
+    node: { type: "link", href, children: [{ type: "text", value: hostnameFromUrl(href) }] },
+  };
+}
+
+// Reversed link sugar `(text)[url]` — the inverse of standard `[text](url)`.
+// Notion is forgiving: users type the brackets swapped by mistake. Only fires
+// when a `)` is immediately followed by a `[…]` destination, so a plain
+// `(parenthetical remark)` with no trailing `[…]` stays inert text.
+function matchReversedLink(
+  text: string,
+  pos: number,
+  parseInline: InlineParser,
+): InlineMatchResult | null {
+  if (text[pos] !== "(") return null;
+  const parenClose = text.indexOf(")", pos + 1);
+  if (parenClose === -1 || parenClose === pos + 1) return null; // no text, e.g. "()"
+  if (text[parenClose + 1] !== "[") return null; // must be `(text)[…]`
+  const bracketClose = text.indexOf("]", parenClose + 2);
+  if (bracketClose === -1) return null;
+  const rawUrl = text.slice(parenClose + 2, bracketClose).trim();
+  if (!rawUrl) return null; // `(text)[]` is not a link
+  const label = text.slice(pos + 1, parenClose);
+  return {
+    start: pos,
+    end: bracketClose + 1,
+    node: {
+      type: "link",
+      href: normalizeInlineLinkHref(rawUrl),
+      children: parseInline(label),
+    },
+  };
+}
 
 type InlineMatcherSpec = {
   firstChars: readonly string[];
@@ -341,7 +414,7 @@ export function createInlineDispatch(
       const label = text.slice(pos + 1, labelClose);
       const inside = text.slice(labelClose + 2, parenClose).trim();
       const titleMatch = /^(.*?)\s+"([^"]*)"$/.exec(inside);
-      const href = titleMatch ? titleMatch[1] : inside;
+      const href = normalizeInlineLinkHref(titleMatch ? titleMatch[1] : inside);
       const title = titleMatch ? titleMatch[2] : undefined;
       return {
         start: pos,
@@ -465,6 +538,8 @@ export function createInlineDispatch(
       }
       return null;
     }),
+    defineMatcher(["("], (text, pos) => matchReversedLink(text, pos, parseInline)),
+    defineMatcher(["h", "w"], matchBareUrl),
   ];
 
   const dispatch: Record<string, InlineMatcher[]> = {};

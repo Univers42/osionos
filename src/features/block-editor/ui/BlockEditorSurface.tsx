@@ -30,9 +30,36 @@ import {
 } from "@/features/block-editor/model/usePlaygroundBlockEditor";
 import { BlockContextMenu } from "./BlockContextMenu";
 import { PageSelectorMenu } from "./PageSelectorMenu";
+import { EmojiPicker } from "@/shared/ui";
+import { ColorMenu } from "./ColorMenu";
 import { getBlockSurfaceStyle } from "../model/blockColors";
 import { VIRTUAL_BLOCK_FOCUS_EVENT } from "../model/blockDomFocus";
 import { commitBlockDraft, useBlockDraftContent } from "../model/blockDraftStore";
+import { useSurfaceMarquee } from "../model/useSurfaceMarquee";
+import { useCrossTextSelection } from "../model/useCrossTextSelection";
+import { useBlockSelection, selectIdsForSurface } from "../model/blockSelectionStore";
+import { useEditorCommandBus, type EditorHandle } from "../model/editorCommandBus";
+import { isTextEntryTarget } from "../model/marqueeGeometry";
+import { expandSelectionWithDescendants, removeBlocksFromTree } from "@/entities/block/model/blockTreeUtils";
+import { isBlockSelectEnabled } from "@/shared/config/featureFlags";
+import { usePageContextMenu } from "../model/usePageContextMenu";
+
+// useEvent: an identity-STABLE wrapper whose call always runs the latest fn. The
+// callbacks returned by usePlaygroundBlockEditor get a fresh identity on every
+// surface render (each 250ms persistence commit, each keystroke), which flows into
+// every EditableBlock and defeats its React.memo — so a keystroke re-renders every
+// visible block on a heavy page. Wrapping them here freezes the identity (the memo
+// holds) while the ref keeps the behavior current. Event-time calls only, so the
+// ref (updated in a layout effect) is always fresh before any handler fires.
+function useStableFn<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
+	const ref = useRef(fn);
+	useLayoutEffect(() => {
+		ref.current = fn;
+	});
+	// ref.current is read at CALL time (inside the callback), never during render,
+	// so the identity is frozen (empty deps) while the behavior stays current.
+	return useCallback((...args: A): R => ref.current(...args), []);
+}
 
 type DropPosition = "above" | "below" | "inside" | "left" | "right" | null;
 const DND_TYPE = "application/x-playground-block-id";
@@ -56,18 +83,6 @@ interface DropIntent {
 	position: Exclude<DropPosition, null>;
 	targetParentBlockId: string | null;
 	targetIndex: number;
-}
-
-interface SelectionPoint {
-	x: number;
-	y: number;
-}
-
-interface SelectionRect {
-	left: number;
-	top: number;
-	width: number;
-	height: number;
 }
 
 export interface SurfaceBlockEditorProps {
@@ -102,43 +117,6 @@ type EditorSurfaceSource =
 	| { kind: "page"; pageId: string }
 	| { kind: "cell"; pageId: string; layoutBlockId: string; cellId: string };
 
-function createSelectionRect(start: SelectionPoint, end: SelectionPoint): SelectionRect {
-	const left = Math.min(start.x, end.x);
-	const top = Math.min(start.y, end.y);
-	return {
-		left,
-		top,
-		width: Math.abs(end.x - start.x),
-		height: Math.abs(end.y - start.y),
-	};
-}
-
-function rectsIntersect(rect: SelectionRect, target: DOMRect): boolean {
-	return !(
-		rect.left + rect.width < target.left ||
-		rect.left > target.right ||
-		rect.top + rect.height < target.top ||
-		rect.top > target.bottom
-	);
-}
-
-function isInteractiveSelectionTarget(target: EventTarget | null): boolean {
-	if (!(target instanceof Element)) return true;
-	return Boolean(
-		target.closest(
-			'button, input, textarea, select, a, [contenteditable="true"], [data-column-resize-handle], [data-layout-cell-handle], [data-table-handle]',
-		),
-	);
-}
-
-function setsEqual(left: Set<string>, right: Set<string>): boolean {
-	if (left.size !== right.size) return false;
-	for (const value of left) {
-		if (!right.has(value)) return false;
-	}
-	return true;
-}
-
 function shouldRenderChildren(block: Block): boolean {
 	if (!block.children?.length) return false;
 	if (selfRendersChildren(block.type)) return false;
@@ -154,6 +132,9 @@ function getNestedTreeClassName(parentBlockType: Block["type"] | null, isRoot: b
 	if (parentBlockType === "to_do") return "ml-[2.75rem] mt-0.5";
 	if (parentBlockType === "toggle") return "ml-6 mt-0.5 pl-3 border-l-2 border-[var(--osio-border-default)]";
 	if (parentBlockType === "column") return "mt-0.5";
+	// Callout lines all share one left edge (flat surface, no "title"); different
+	// alignment comes from other styles (toggle rail, list indent, quote bar).
+	if (parentBlockType === "callout") return "mt-0.5";
 	return "ml-6 mt-0.5";
 }
 
@@ -405,6 +386,12 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		setSlashMenu,
 		pageSelector,
 		setPageSelector,
+		emojiMenu,
+		setEmojiMenu,
+		handleEmojiSelect,
+		colorMenu,
+		setColorMenu,
+		handleColorSelect,
 		contextMenu,
 		contextMenuSections,
 		openContextMenu,
@@ -430,19 +417,102 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		updateBlock,
 		deleteBlock,
 		updateContent,
+		commitContent,
 		moveBlock,
 		moveBlockAcrossTree,
 		pushSnapshot,
+		canUndo,
+		canRedo,
+		commandUndo,
+		commandRedo,
 		flushPendingDrafts,
 	} = usePlaygroundBlockEditor(source ?? pageId);
 	const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
 	const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
-	const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null);
-	const [selectedBlockIds, setSelectedBlockIds] = useState<Set<string>>(() => new Set());
 	const selectionRootRef = useRef<HTMLDivElement | null>(null);
-	const selectionStartRef = useRef<SelectionPoint | null>(null);
 	const blocksRef = useRef<Block[]>(blocks);
 	const highlightedRootBlockId = useMemo(() => getHighlightedRootBlockId(blocks, focusedBlockId), [blocks, focusedBlockId]);
+
+	// Block selection now lives in a store so the context menu + keyboard dispatcher share it.
+	const selectedIds = useBlockSelection(selectIdsForSurface(sourceKey));
+	const selectedBlockIds = useMemo(() => new Set(selectedIds), [selectedIds]);
+	const hasFullPageLayout = blocks.length === 1 && blocks[0]?.type === "layout" && blocks[0]?.layoutMode === "full_page";
+	useSurfaceMarquee({
+		rootRef: selectionRootRef,
+		sourceKey,
+		pageId,
+		enabled: !compact && blocks.length > 0 && !hasFullPageLayout,
+		anchor: isBlockSelectEnabled() ? "page" : "column",
+		getBlocks: () => blocksRef.current,
+	});
+
+	// The text twin of the marquee: drags that START inside a block's text and
+	// leave it become a cross-block text selection (custom-painted; the anchor
+	// block keeps its native partial). Copy/cut/typing are intercepted while active.
+	useCrossTextSelection({
+		rootRef: selectionRootRef,
+		sourceKey,
+		pageId,
+		enabled: !compact && blocks.length > 0 && !hasFullPageLayout,
+		getBlocks: () => blocksRef.current,
+		flushBlocks: () => flushPendingDrafts("structural"),
+		updateContent,
+	});
+
+	const buildSelectAll = useCallback(() => {
+		const current = blocksRef.current;
+		const ids = expandSelectionWithDescendants(current, current.map((block) => block.id));
+		useBlockSelection.getState().select(sourceKey, pageId, [...ids]);
+	}, [pageId, sourceKey]);
+
+	// The active-editor handle the command bus resolves keyboard/menu actions against.
+	const editorHandle = useMemo<EditorHandle>(() => ({
+		sourceKey,
+		pageId,
+		kind: "linear",
+		getContent: () => flushPendingDrafts("structural"),
+		// commitContent snapshots before replacing, so a menu/keyboard structural
+		// command (heading, move, duplicate, delete, paste) is one undoable step.
+		updateContent: commitContent,
+		undo: commandUndo,
+		redo: commandRedo,
+		canUndo,
+		canRedo,
+		focusBlock,
+		selectAll: buildSelectAll,
+	}), [sourceKey, pageId, flushPendingDrafts, commitContent, commandUndo, commandRedo, canUndo, canRedo, focusBlock, buildSelectAll]);
+	// Mirror the memoized handle into a ref so the focus/selection listeners below
+	// read the current handle without re-binding (refs must be written in an effect).
+	const editorHandleRef = useRef<EditorHandle | null>(null);
+	useEffect(() => {
+		editorHandleRef.current = editorHandle;
+	}, [editorHandle]);
+
+	const { menu: pageMenuState, sections: pageMenuSections, open: openPageMenu, close: closePageMenu } = usePageContextMenu(sourceKey);
+
+	// The surface holding a non-empty selection becomes the active editor, so the
+	// right-click menu + keyboard automations resolve clipboard actions against it.
+	useEffect(() => {
+		if (selectedIds.length === 0) return;
+		const handle = editorHandleRef.current;
+		if (handle) useEditorCommandBus.getState().setActive(handle);
+	}, [selectedIds]);
+
+	// Right-click routing: inside the current selection → selection menu; on another
+	// block → single-block menu (clearing the selection); flag off → legacy path.
+	const handleBlockContextMenu = useCallback((event: React.MouseEvent, blockId: string) => {
+		if (!isBlockSelectEnabled()) {
+			openContextMenu(event, blockId);
+			return;
+		}
+		const ids = useBlockSelection.getState().selectedIdsFor(sourceKey);
+		if (ids.length > 0 && ids.includes(blockId)) {
+			openPageMenu(event);
+		} else {
+			useBlockSelection.getState().clearSelection();
+			openContextMenu(event, blockId);
+		}
+	}, [openContextMenu, openPageMenu, sourceKey]);
 
 	useEffect(() => {
 		blocksRef.current = blocks;
@@ -468,8 +538,17 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 
 		const handleFocusIn = (event: FocusEvent) => {
 			const target = event.target as HTMLElement | null;
-			const blockId = target?.closest<HTMLElement>("[data-block-id]")?.dataset.blockId ?? null;
+			const blockEl = target?.closest<HTMLElement>("[data-block-id]") ?? null;
+			const blockId = blockEl?.dataset.blockId ?? null;
 			setFocusedBlockId(blockId);
+			if (!blockId) return;
+			// Editing a block's text clears any marquee selection.
+			useBlockSelection.getState().clearSelection();
+			// The surface owning the focused block becomes the active editor.
+			if (selectionRootRef.current?.contains(blockEl)) {
+				const handle = editorHandleRef.current;
+				if (handle) useEditorCommandBus.getState().setActive(handle);
+			}
 		};
 
 		const handleFocusOut = () => globalThis.setTimeout(syncFocusedBlock, 0);
@@ -480,6 +559,10 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 			document.removeEventListener("focusout", handleFocusOut);
 		};
 	}, []);
+
+	useEffect(() => () => {
+		useEditorCommandBus.getState().clearActive(sourceKey);
+	}, [sourceKey]);
 
 	const runEditorAction = useCallback((action: Promise<unknown>) => {
 		action.catch((error: unknown) => {
@@ -497,44 +580,85 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		pushSnapshot(currentBlocks);
 	}, [flushPendingDrafts, pushSnapshot]);
 
-	const updateMouseSelection = useCallback((rect: SelectionRect) => {
-		const root = selectionRootRef.current;
-		if (!root) return;
+	// Stable identities so a persistence commit's surface re-render doesn't defeat
+	// every EditableBlock's React.memo (inline arrows here were a fresh identity per
+	// render → all visible blocks re-rendered on each 250ms idle commit).
+	const handleDeleteBlock = useCallback(
+		(blockId: string) => deleteBlock(pageId, blockId),
+		[deleteBlock, pageId],
+	);
+	const handleUpdateBlock = useCallback(
+		(blockId: string, updates: Partial<Block>) => updateBlock(pageId, blockId, updates),
+		[updateBlock, pageId],
+	);
 
-		const nextSelected = new Set<string>();
-		root.querySelectorAll<HTMLElement>("[data-block-id]").forEach((element) => {
-			const blockId = element.dataset.blockId;
-			if (blockId && rectsIntersect(rect, element.getBoundingClientRect())) nextSelected.add(blockId);
-		});
+	// usePlaygroundBlockEditor returns these with a fresh identity every render, so
+	// even the useCallback'd handles above (deps include store fns that also churn)
+	// change per keystroke and defeat every EditableBlock's memo. Freeze their
+	// identities with useEvent so the tree of memoized blocks stays put; the wrapped
+	// call always runs the latest logic. Behavior identical, re-renders collapse to
+	// the block that actually changed. (source/rootBlocks change by value each key —
+	// ignored in editableBlockPropsEqual, being drag-only fallbacks.)
+	const stableChange = useStableFn(handleBlockChange);
+	const stableKeyDown = useStableFn(handleKeyDown);
+	const stablePaste = useStableFn(handlePaste);
+	const stableDeleteBlock = useStableFn(handleDeleteBlock);
+	const stableUpdateBlock = useStableFn(handleUpdateBlock);
+	const stableMoveBlock = useStableFn(moveBlock);
+	const stableMoveBlockAcrossTree = useStableFn(moveBlockAcrossTree);
+	const stableUpdateContent = useStableFn(updateContent);
 
-		setSelectedBlockIds((previous) => setsEqual(previous, nextSelected) ? previous : nextSelected);
-	}, []);
+	// Left-click the drag handle → single-select the whole block. Delegated off the
+	// handle's data-testid so no setter needs drilling through the block tree; the
+	// existing onContextMenu (right-click, on the <article>) is untouched.
+	const handleSurfaceClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+		if (compact) return;
+		const handle = (event.target as Element | null)?.closest?.('[data-testid="block-drag-handle"]');
+		if (!handle) return;
+		const blockId = handle.closest<HTMLElement>("[data-draggable-block-id]")?.dataset.draggableBlockId;
+		if (!blockId) return;
+		// Selecting a parent takes its whole subtree with it. The block menu opens
+		// at the handle (Notion ⋮⋮ parity: left-click = select + menu, drag = move).
+		const ids = expandSelectionWithDescendants(blocksRef.current, [blockId]);
+		useBlockSelection.getState().select(sourceKey, pageId, [...ids]);
+		openContextMenu(event, blockId);
+	}, [compact, openContextMenu, pageId, sourceKey]);
 
-	const handleSelectionPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-		if (compact || event.button !== 0 || draggedBlockId) return;
-		if (isInteractiveSelectionTarget(event.target)) return;
-
-		const start = { x: event.clientX, y: event.clientY };
-		selectionStartRef.current = start;
-		setSelectionRect(createSelectionRect(start, start));
-		setSelectedBlockIds(new Set());
-
-		const handlePointerMove = (moveEvent: PointerEvent) => {
-			const rect = createSelectionRect(start, { x: moveEvent.clientX, y: moveEvent.clientY });
-			setSelectionRect(rect);
-			updateMouseSelection(rect);
+	// Delete/Backspace removes the selected block(s) with their whole subtree — but only
+	// when focus is not in a text-entry surface, so typing is never hijacked. Reads the
+	// selection store imperatively and commits ONE new tree (never a per-block loop, which
+	// would orphan a parent's children via deleteBlockFromTree's child-promotion). When the
+	// automations flag owns the key, the capture-phase dispatcher stops this from firing.
+	useEffect(() => {
+		if (compact) return;
+		const handleDeleteKey = (event: KeyboardEvent) => {
+			if (event.key !== "Backspace" && event.key !== "Delete") return;
+			const ids = useBlockSelection.getState().selectedIdsFor(sourceKey);
+			if (ids.length === 0 || isTextEntryTarget(document.activeElement)) return;
+			event.preventDefault();
+			const current = flushPendingDrafts("structural");
+			const idSet = expandSelectionWithDescendants(current, ids);
+			updateContent(removeBlocksFromTree(current, idSet));
+			useBlockSelection.getState().clearSelection();
 		};
+		document.addEventListener("keydown", handleDeleteKey);
+		return () => document.removeEventListener("keydown", handleDeleteKey);
+	}, [compact, sourceKey, flushPendingDrafts, updateContent]);
 
-		const handlePointerUp = () => {
-			selectionStartRef.current = null;
-			setSelectionRect(null);
-			globalThis.removeEventListener("pointermove", handlePointerMove);
-			globalThis.removeEventListener("pointerup", handlePointerUp);
+	// Right-click on the page margins / empty whitespace (not on a block) opens the
+	// selection/paste menu too — so the menu is reachable from anywhere on the page.
+	useEffect(() => {
+		if (compact || !isBlockSelectEnabled()) return;
+		const scrollEl = selectionRootRef.current?.closest<HTMLElement>(".osionos-page");
+		if (!scrollEl) return;
+		const onContextMenu = (event: MouseEvent) => {
+			const target = event.target as Element | null;
+			if (target?.closest("[data-block-id]")) return; // block right-clicks handled per block
+			openPageMenu(event);
 		};
-
-		globalThis.addEventListener("pointermove", handlePointerMove);
-		globalThis.addEventListener("pointerup", handlePointerUp, { once: true });
-	}, [compact, draggedBlockId, updateMouseSelection]);
+		scrollEl.addEventListener("contextmenu", onContextMenu);
+		return () => scrollEl.removeEventListener("contextmenu", onContextMenu);
+	}, [compact, openPageMenu]);
 
 	if (locked) {
 		return (
@@ -560,31 +684,31 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	}
 
 	return (
-		<div ref={selectionRootRef} className={`relative flex min-w-0 flex-col ${className}`} onPointerDown={handleSelectionPointerDown}>
+		<div ref={selectionRootRef} className={`relative flex min-w-0 flex-col ${className}`} onClick={handleSurfaceClick}>
 			<BlockTree
 				blocks={blocks}
 				pageId={pageId}
 				isRoot
 				highlightedRootBlockId={highlightedRootBlockId}
 				selectedBlockIds={selectedBlockIds}
-				moveBlock={moveBlock}
-				moveBlockAcrossTree={moveBlockAcrossTree}
-				updateContent={updateContent}
+				moveBlock={stableMoveBlock}
+				moveBlockAcrossTree={stableMoveBlockAcrossTree}
+				updateContent={stableUpdateContent}
 				source={resolvedSource}
 				sourceKey={sourceKey}
 				rootBlocks={blocks}
 				draggedBlockId={draggedBlockId}
 				setDraggedBlockId={setDraggedBlockId}
-				onChange={handleBlockChange}
-				onKeyDown={handleKeyDown}
-				onPaste={handlePaste}
-				onDeleteBlock={(blockId) => deleteBlock(pageId, blockId)}
-				onUpdateBlock={(blockId, updates) => updateBlock(pageId, blockId, updates)}
+				onChange={stableChange}
+				onKeyDown={stableKeyDown}
+				onPaste={stablePaste}
+				onDeleteBlock={stableDeleteBlock}
+				onUpdateBlock={stableUpdateBlock}
 				registerRef={registerBlockRef}
 				focusBlock={focusBlock}
 				onBeforeStructuralEdit={handleBeforeStructuralEdit}
 				onRequestSlashMenu={handleRequestSlashMenu}
-				onContextMenu={openContextMenu}
+				onContextMenu={handleBlockContextMenu}
 				renderBlockEditor={renderBlockEditor}
 			/>
 
@@ -601,10 +725,13 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 
 			{slashMenu ? (
 				<SlashCommandMenu
-					key={`${slashMenu.blockId}:${slashMenu.filter}`}
+					key={slashMenu.blockId}
 					pageId={pageId}
 					position={slashMenu.position}
 					filter={slashMenu.filter}
+					onFilterChange={(nextFilter) =>
+						setSlashMenu(slashMenu ? { ...slashMenu, filter: nextFilter } : null)
+					}
 					onSelect={(item) => {
 						const currentBlocks = flushPendingDrafts("shortcut");
 						blocksRef.current = currentBlocks;
@@ -621,6 +748,18 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 							return;
 						}
 						if (item.kind === "inline") {
+							// Emoji / color open their own picker at the caret instead of
+							// inserting text: strip the "/emoji"|"/color" trigger, then open.
+							if (item.id === "inline:emoji" || item.id === "inline:color") {
+								const trigger = slashMenu;
+								handleSlashInlineSelect("", currentBlocks);
+								if (trigger && item.id === "inline:emoji") {
+									setEmojiMenu({ blockId: trigger.blockId, position: trigger.position, filter: "" });
+								} else if (trigger) {
+									setColorMenu({ blockId: trigger.blockId, position: trigger.position });
+								}
+								return;
+							}
 							handleSlashInlineSelect(item.insertText, currentBlocks);
 							return;
 						}
@@ -635,7 +774,11 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 						blocksRef.current = currentBlocks;
 						handleSlashMediaSelect(kind, value, currentBlocks);
 					}}
-					onClose={() => setSlashMenu(null)}
+					onClose={() => {
+						const closingBlockId = slashMenu.blockId;
+						setSlashMenu(null);
+						focusBlock(closingBlockId, true);
+					}}
 				/>
 			) : null}
 
@@ -650,17 +793,45 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 				/>
 			) : null}
 
-			<BlockContextMenu menu={contextMenu} sections={contextMenuSections} onClose={closeContextMenu} />
-
-			{selectionRect && typeof document !== "undefined"
+			{emojiMenu && typeof document !== "undefined"
 				? createPortal(
+						// IconPicker self-positions `absolute` under its parent, so anchor it to
+						// the caret via a fixed, viewport-clamped wrapper (mirrors the old EmojiMenu
+						// portal). It flips above the caret when it would overflow the bottom edge.
 						<div
-							className="pointer-events-none fixed z-[var(--osio-z-max)] rounded-sm border border-[var(--osio-accent)] bg-[var(--osio-accent)]/10"
-							style={{ left: selectionRect.left, top: selectionRect.top, width: selectionRect.width, height: selectionRect.height }}
-						/>,
+							className="fixed z-[var(--osio-z-popover)]"
+							style={{
+								left: Math.min(
+									Math.max(emojiMenu.position.x, 8),
+									(globalThis.innerWidth || 1024) - 348,
+								),
+								top:
+									emojiMenu.position.y + 420 > (globalThis.innerHeight || 768) - 8
+										? Math.max(emojiMenu.position.top - 428, 8)
+										: emojiMenu.position.y,
+							}}
+						>
+							<EmojiPicker
+								initialQuery={emojiMenu.filter}
+								onSelect={handleEmojiSelect}
+								onRemove={() => undefined}
+								onClose={() => setEmojiMenu(null)}
+							/>
+						</div>,
 						document.body,
 					)
 				: null}
+
+			{colorMenu ? (
+				<ColorMenu
+					position={colorMenu.position}
+					onPick={handleColorSelect}
+					onClose={() => setColorMenu(null)}
+				/>
+			) : null}
+
+			<BlockContextMenu menu={contextMenu} sections={contextMenuSections} onClose={closeContextMenu} />
+			<BlockContextMenu menu={pageMenuState} sections={pageMenuSections} onClose={closePageMenu} />
 		</div>
 	);
 };
@@ -929,15 +1100,44 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 	);
 };
 
-function getHeadingClasses(type: Block["type"]): { pt: string; handleTop: string } {
+// Inter-block vertical rhythm — the ONE home for it (block content owns only its
+// internal box padding, never inter-block margin). Rule: top > bottom > 0. More
+// space ABOVE each block, less below but always present, so a block binds to what
+// follows it (a heading hugs its section; a paragraph hugs the next line). Values
+// stay on the 4pt scale; headings jump tiers (section breaks), lists cluster tight.
+function getBlockSpacing(type: Block["type"]): { pt: string; pb: string; handleTop: string } {
 	switch (type) {
-		case "heading_1": return { pt: "pt-6", handleTop: "top-8" };
-		case "heading_2": return { pt: "pt-5", handleTop: "top-7" };
-		case "heading_3": return { pt: "pt-4", handleTop: "top-6" };
-		case "heading_4": return { pt: "pt-3", handleTop: "top-5" };
+		// Headings: big space above (new section), tight below (bind to content).
+		case "heading_1": return { pt: "pt-8", pb: "pb-1",   handleTop: "top-9" };
+		case "heading_2": return { pt: "pt-6", pb: "pb-1",   handleTop: "top-7" };
+		case "heading_3": return { pt: "pt-5", pb: "pb-0.5", handleTop: "top-6" };
+		case "heading_4": return { pt: "pt-4", pb: "pb-0.5", handleTop: "top-5" };
 		case "heading_5":
-		case "heading_6": return { pt: "pt-2", handleTop: "top-4" };
-		default:          return { pt: "",     handleTop: "top-2" };
+		case "heading_6": return { pt: "pt-3", pb: "pb-0.5", handleTop: "top-4" };
+		// Media / code / equation: generous, still asymmetric.
+		case "code":
+		case "equation":
+		case "image":
+		case "video":
+		case "audio":
+		case "file":      return { pt: "pt-3",   pb: "pb-1.5", handleTop: "top-4" };
+		// Embeds read as native page content — the most air above.
+		case "database_inline":
+		case "database_full_page":
+		case "graph_view": return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
+		// Boxed blocks: medium.
+		case "callout":
+		case "quote":     return { pt: "pt-2",   pb: "pb-1",   handleTop: "top-3" };
+		// The one exception to the rhythm: a separator is a hairline, so it stays the
+		// tightest block — just enough shell pad to hover/select/drag it, no more.
+		case "divider":   return { pt: "pt-1",   pb: "pb-0.5", handleTop: "top-1" };
+		case "toggle":    return { pt: "pt-1.5", pb: "pb-0.5", handleTop: "top-2" };
+		// List items cluster tightly and evenly so a list reads as one unit.
+		case "bulleted_list":
+		case "numbered_list":
+		case "to_do":     return { pt: "pt-0.5", pb: "pb-0.5", handleTop: "top-1.5" };
+		// Paragraph & everything else: tight body rhythm, top a hair over bottom.
+		default:          return { pt: "pt-1",   pb: "pb-0.5", handleTop: "top-2" };
 	}
 }
 
@@ -1049,30 +1249,65 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 
 	const isDragged = draggedBlockId === block.id;
 	const isSelected = selectedBlockIds.has(block.id);
-	const { pt, handleTop } = getHeadingClasses(block.type);
+	const { pt, pb, handleTop } = getBlockSpacing(block.type);
+
+	// Dynamic handle alignment: the static per-type `handleTop` class is only the
+	// first-paint fallback — real block first-line metrics vary (heading sizes,
+	// wrapped text, callout padding), so on hover the handle is measured against
+	// THIS block's own leaf and centered on its first line box. Direct style
+	// write, no state: runs once per hover, never re-renders.
+	const articleRef = useRef<HTMLElement | null>(null);
+	const handleRef = useRef<HTMLButtonElement | null>(null);
+	const alignHandle = useCallback(() => {
+		const article = articleRef.current;
+		const handle = handleRef.current;
+		if (!article || !handle) return;
+		const leaf = article.querySelector<HTMLElement>(
+			`[data-block-id="${block.id}"] [contenteditable="true"]`,
+		);
+		if (!leaf) return; // media/embed blocks keep the static fallback
+		const styles = getComputedStyle(leaf);
+		let line = Number.parseFloat(styles.lineHeight);
+		if (Number.isNaN(line)) line = Number.parseFloat(styles.fontSize) * 1.5;
+		const leafTop = leaf.getBoundingClientRect().top - article.getBoundingClientRect().top;
+		const top = leafTop + (line - handle.offsetHeight) / 2;
+		handle.style.top = `${Math.max(0, Math.round(top))}px`;
+	}, [block.id]);
+	// The block shell paints a background ONLY when the block is selected (left-click
+	// the drag handle → isSelected, the accent box + ring below). Hover and edit-focus
+	// deliberately paint NO background — a hover/focus box on every block reads as noise
+	// and hid the fact that selection is the real affordance. Embeds (database/graph)
+	// keep no rounded shell at all so they read as native page content.
+	const isEmbedBlock =
+		block.type === "database_inline" ||
+		block.type === "database_full_page" ||
+		block.type === "graph_view";
+	const shellChrome = isEmbedBlock ? "" : "rounded-md";
 
 	return (
 		<article
+			ref={articleRef}
 			data-testid="draggable-block"
 			data-draggable-block-id={block.id}
 			data-selected={isSelected ? "true" : undefined}
 			data-block-type={block.type}
-			className={`group/block relative rounded-md transition-colors transition-opacity hover:bg-[var(--osio-bg-hover)] focus-within:bg-[var(--osio-bg-hover)] ${pt} ${isDragged ? "opacity-40" : ""} ${isSelected ? "bg-[var(--osio-accent-subtle)] ring-1 ring-[var(--osio-accent)]" : ""}`}
+			className={`group/block relative transition-colors transition-opacity ${shellChrome} ${pt} ${pb} ${isDragged ? "opacity-40" : ""} ${isSelected ? "bg-[var(--osio-accent-subtle)]" : ""}`}
 			onContextMenu={(e) => onContextMenu(e, block.id)}
+			onPointerEnter={alignHandle}
 			onDragOver={handleDragOver}
 			onDragLeave={handleDragLeave}
 			onDrop={handleDrop}
 		>
 			<button
+				ref={handleRef}
 				type="button"
 				draggable
 				data-testid="block-drag-handle"
-				onClick={(e) => onContextMenu(e, block.id)}
 				onDragStart={handleDragStart}
 				onDragEnd={handleDragEnd}
 				className={`absolute -left-7 ${handleTop} cursor-grab rounded-md p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)] osio-drag-handle active:cursor-grabbing`}
-				aria-label="Drag to reorder block"
-				title="Drag to reorder"
+				aria-label="Open block menu, or drag to reorder block"
+				title="Click for menu · Drag to reorder"
 			>
 				<svg className="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
 					<circle cx="5.5" cy="3.5" r="1.5" />
@@ -1298,7 +1533,31 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 	);
 };
 
-const EditableBlock = React.memo(EditableBlockBase);
+// Shallow-equal EXCEPT the drag-only fallback props `rootBlocks` and `source`:
+// both rebuild by value on every keystroke / 250ms persistence commit, yet neither
+// drives THIS block's render — content comes from block.content, and drag / column-
+// resize handlers pull the freshest tree from surfaceRegistry.getContent(). Ignoring
+// their identity (together with the useEvent-stabilized callback props) lets an
+// unchanged sibling keep its memo across a keystroke, so typing no longer re-renders
+// every visible block on a heavy page. All other props (incl. block identity, which
+// updateBlockInTree preserves for unchanged blocks) are compared normally, so
+// behavior is unchanged.
+const IGNORED_MEMO_KEYS = new Set<keyof EditableBlockProps>(["rootBlocks", "source"]);
+function editableBlockPropsEqual(
+	prev: Readonly<EditableBlockProps>,
+	next: Readonly<EditableBlockProps>,
+): boolean {
+	const prevKeys = Object.keys(prev) as (keyof EditableBlockProps)[];
+	const nextKeys = Object.keys(next) as (keyof EditableBlockProps)[];
+	if (prevKeys.length !== nextKeys.length) return false;
+	for (const key of nextKeys) {
+		if (IGNORED_MEMO_KEYS.has(key)) continue;
+		if (prev[key] !== next[key]) return false;
+	}
+	return true;
+}
+
+const EditableBlock = React.memo(EditableBlockBase, editableBlockPropsEqual);
 
 interface ColumnResizeHandleProps {
 	rootBlocks: Block[];
@@ -1321,25 +1580,41 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
 		event.preventDefault();
 		event.stopPropagation();
 
-		const container = event.currentTarget.parentElement;
-		const totalWidth = Math.max(container?.getBoundingClientRect().width ?? 1, 1);
+		const handleEl = event.currentTarget;
+		// The two columns flanking this handle in the flex row — driven DIRECTLY on
+		// the DOM during the drag so NOT ONE React render fires per pointermove (the
+		// old per-move updateContent rebuilt the whole block tree ~90×/s → jank/flicker).
+		const leftEl = handleEl.previousElementSibling as HTMLElement | null;
+		const rightEl = handleEl.nextElementSibling as HTMLElement | null;
+		const totalWidth = Math.max(handleEl.parentElement?.getBoundingClientRect().width ?? 1, 1);
 		const startX = event.clientX;
 		const startLeft = normalizeColumnRatio(leftColumn, columnCount);
-		const startRight = normalizeColumnRatio(rightColumn, columnCount);
-		const pairTotal = startLeft + startRight;
+		const pairTotal = startLeft + normalizeColumnRatio(rightColumn, columnCount);
 		const minRatio = Math.min(0.24, pairTotal / 2 - 0.02);
+
+		let latestLeft = startLeft;
+		let frame = 0;
+
+		const paint = () => {
+			frame = 0;
+			if (leftEl) leftEl.style.flexGrow = String(latestLeft);
+			if (rightEl) rightEl.style.flexGrow = String(pairTotal - latestLeft);
+		};
 
 		const handlePointerMove = (moveEvent: PointerEvent) => {
 			const deltaRatio = (moveEvent.clientX - startX) / totalWidth;
-			const nextLeft = Math.min(pairTotal - minRatio, Math.max(minRatio, startLeft + deltaRatio));
-			updateContent(updateColumnRatiosInTree(rootBlocks, columnListId, leftColumn.id, rightColumn.id, nextLeft, pairTotal - nextLeft));
+			latestLeft = Math.min(pairTotal - minRatio, Math.max(minRatio, startLeft + deltaRatio));
+			if (!frame) frame = requestAnimationFrame(paint);
 		};
 
 		const handlePointerUp = () => {
 			globalThis.removeEventListener("pointermove", handlePointerMove);
-			globalThis.removeEventListener("pointerup", handlePointerUp);
+			if (frame) cancelAnimationFrame(frame);
 			document.body.style.cursor = "";
 			document.body.style.userSelect = "";
+			// Persist the final ratios ONCE — a single re-render that matches the DOM
+			// the drag already painted, so there is no jump on release.
+			updateContent(updateColumnRatiosInTree(rootBlocks, columnListId, leftColumn.id, rightColumn.id, latestLeft, pairTotal - latestLeft));
 		};
 
 		document.body.style.cursor = "col-resize";
@@ -1354,7 +1629,7 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
 			aria-orientation="vertical"
 			title="Drag to resize columns"
 			data-column-resize-handle
-			className="group/resize flex w-3 shrink-0 cursor-col-resize items-stretch justify-center"
+			className="group/resize flex w-3 shrink-0 cursor-col-resize touch-none items-stretch justify-center"
 			onPointerDown={handlePointerDown}
 		>
 			<div className="w-px rounded-full bg-[var(--osio-border-default)] transition-colors group-hover/resize:bg-[var(--osio-accent)]" />

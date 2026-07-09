@@ -27,7 +27,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     <input
       ref={ref}
       className={cx(
-        "w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2.5 py-1.5 text-sm text-[var(--osio-fg-default)] transition-colors duration-[120ms] placeholder:text-[var(--osio-fg-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:cursor-not-allowed disabled:opacity-60",
+        "h-[var(--osio-control-h-md)] w-full rounded-[var(--osio-radius-control)] border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2.5 text-sm text-[var(--osio-fg-default)] transition-[color,background-color,border-color,box-shadow] duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)] placeholder:text-[var(--osio-fg-subtle)] hover:border-[var(--osio-border-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:cursor-not-allowed disabled:opacity-60",
         className,
       )}
       {...props}

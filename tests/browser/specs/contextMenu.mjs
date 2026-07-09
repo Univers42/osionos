@@ -13,10 +13,13 @@
 import { expect } from "@playwright/test";
 
 import {
+  activateFirstEditor,
+  blockLocator,
   clearAndType,
   contextMenuItem,
   contextSubMenuItem,
   createBlockViaSlash,
+  createNewWorkspacePage,
   createParagraphs,
   editorHasFocus,
   getEditors,
@@ -51,15 +54,60 @@ export const contextMenuScenarios = [
   defineScenario(
     "5. Context Menu",
     "Basic operations",
-    "clicking the drag handle opens the same block context menu",
+    "clicking the drag handle selects the whole block",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createParagraphs(page, ["Handle target"]);
       await dragHandle(page).hover();
       await dragHandle(page).click();
-      await expect(contextMenuItem(page, "Insert text above")).toBeVisible();
-      await expect(contextMenuItem(page, "Duplicate")).toBeVisible();
+      await expect(blockLocator(page, 0)).toHaveAttribute("data-selected", "true");
     },
+  ),
+  defineScenario(
+    "5. Context Menu",
+    "Basic operations",
+    "clicking the drag handle opens the block menu and paints the accent selection tint",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await createParagraphs(page, ["Handle menu target"]);
+      await dragHandle(page).hover();
+      await dragHandle(page).click();
+      await expect(contextMenuItem(page, "Turn into")).toBeVisible();
+      await expect(contextMenuItem(page, "Delete")).toBeVisible();
+      const block = blockLocator(page, 0);
+      await expect(block).toHaveAttribute("data-selected", "true");
+      // The selection background is the THEME accent tint, not the neutral hover gray.
+      const { actual, accent } = await block.evaluate((el) => {
+        const probe = document.createElement("div");
+        probe.style.backgroundColor = "var(--osio-accent-subtle)";
+        document.body.appendChild(probe);
+        const resolved = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return { actual: getComputedStyle(el).backgroundColor, accent: resolved };
+      });
+      expect(actual).toBe(accent);
+    },
+  ),
+  defineScenario(
+    "5. Context Menu",
+    "Basic operations",
+    "Copy block then Ctrl+V pastes the block on another page",
+    async ({ page, appUrl }) => {
+      await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+      await openFreshPage(page, appUrl);
+      await createParagraphs(page, ["Travel block"]);
+      await dragHandle(page).hover();
+      await dragHandle(page).click();
+      await contextMenuItem(page, "Copy block").click();
+      // Switch to a NEW page client-side (no reload — the in-memory block payload
+      // must survive navigation within the tab).
+      await createNewWorkspacePage(page);
+      const editor = await activateFirstEditor(page);
+      await editor.click();
+      await page.keyboard.press("Control+v");
+      await expect(getEditors(page).first()).toHaveText("Travel block");
+    },
+    { serial: true },
   ),
   defineScenario(
     "5. Context Menu",

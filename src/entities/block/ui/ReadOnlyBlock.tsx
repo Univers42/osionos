@@ -421,7 +421,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
 
     case "divider":
       return (
-        <div className="py-2">
+        <div className="py-0 my-0">
           <hr className="w-full h-px border-0 bg-[var(--osio-fg-subtle)]" />
         </div>
       );
@@ -439,6 +439,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
             databaseId={block.databaseId}
             initialViewId={block.viewId}
             mode="inline"
+            recordLimit={block.recordLimit}
           />
         </Suspense>
       );

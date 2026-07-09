@@ -15,6 +15,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, Database, Loader2, RefreshCw,
 
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { liveDatabaseTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { useDatabaseStore } from "@/store/useDatabaseStore";
 import { useLiveDatabaseCatalog } from "../model/useLiveDatabaseCatalog";
 import type { LiveSourceMount } from "../model/liveMountTables";
 
@@ -87,6 +88,34 @@ const MountGroup: React.FC<{ source: LiveSourceMount; query: string }> = ({ sour
   );
 };
 
+/** "Your databases": every database created from the editor — the origin place.
+ *  Click one to open its full-page tab (rename/manage it there). */
+const CreatedDatabasesSection: React.FC<{ query: string }> = ({ query }) => {
+  const created = useDatabaseStore((s) => s.created);
+  const q = query.trim().toLowerCase();
+  const visible = q ? created.filter((entry) => entry.name.toLowerCase().includes(q)) : created;
+  if (visible.length === 0) return null;
+
+  return (
+    <div className="mb-2">
+      <p className="px-1.5 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
+        Your databases
+      </p>
+      {visible.map((entry) => (
+        <button
+          key={entry.id}
+          type="button"
+          onClick={() => useWorkspaceLayout.getState().openTab({ ...liveDatabaseTab(entry.id, entry.name), viewId: entry.viewId })}
+          className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left hover:bg-[var(--osio-bg-hover)]"
+        >
+          <Database size={14} className="shrink-0 text-[var(--osio-fg-muted)]" />
+          <span className="min-w-0 flex-1 truncate text-sm text-[var(--osio-fg-default)]">{entry.name}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
 /** Sidebar navigator: every connected live database + its tables. */
 export const DatabasesPanel: React.FC = () => {
   const { status, mounts, error, reload } = useLiveDatabaseCatalog();
@@ -114,6 +143,7 @@ export const DatabasesPanel: React.FC = () => {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 pb-5 pt-1">
+        <CreatedDatabasesSection query={query} />
         {status === "loading" ? (
           <p className="flex items-center gap-2 px-2 py-10 text-center text-xs text-[var(--osio-fg-subtle)]">
             <Loader2 size={14} className="animate-spin" /> Connecting to your databases…

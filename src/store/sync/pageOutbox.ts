@@ -38,6 +38,10 @@ function pageToPatchBody(page: PageEntry): Record<string, unknown> {
     cover: page.cover ?? null,
     properties: page.properties ?? [],
   };
+  // Only send the cover focal point once the user has actually repositioned a
+  // cover, so ordinary pages never depend on the `cover_position` column (a
+  // backend that lags the migration still accepts every other page write).
+  if (typeof page.coverPosition === "number") body.coverPosition = page.coverPosition;
   // Only template pages carry these columns; omit them for ordinary pages so a
   // backend whose schema predates the template migration still accepts the write.
   // (A template page sends all three — including `false`/`null` — so clearing the

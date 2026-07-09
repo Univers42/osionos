@@ -88,10 +88,23 @@ declare module 'leaflet' {
     addTo(map: Map): this;
     addLayer(layer: unknown): this;
   }
+  export interface LeafletPoint { x: number; y: number }
+  export interface LatLngBounds { pad(ratio: number): LatLngBounds }
   export interface Map {
     remove(): void;
     setView(center: [number, number], zoom: number): this;
     fitBounds(bounds: unknown, options?: Record<string, unknown>): this;
+    flyTo(center: [number, number], zoom?: number, options?: Record<string, unknown>): this;
+    flyToBounds(bounds: LatLngBounds, options?: Record<string, unknown>): this;
+    getZoom(): number;
+    getSize(): LeafletPoint;
+    getPanes(): { overlayPane: HTMLElement };
+    project(latlng: [number, number], zoom: number): LeafletPoint;
+    latLngToContainerPoint(latlng: [number, number]): LeafletPoint;
+    containerPointToLayerPoint(point: [number, number]): LeafletPoint;
+    on(events: string, handler: (...args: unknown[]) => void): this;
+    off(events: string, handler: (...args: unknown[]) => void): this;
+    once(events: string, handler: (...args: unknown[]) => void): this;
   }
 
   export class Marker {
@@ -102,6 +115,9 @@ declare module 'leaflet' {
   export interface LeafletMarker {
     addTo(group: LayerGroup): LeafletMarker;
     bindPopup(content: string, options?: Record<string, unknown>): LeafletMarker;
+    on(events: string, handler: (...args: unknown[]) => void): LeafletMarker;
+    openPopup(): LeafletMarker;
+    closePopup(): LeafletMarker;
   }
 
   export function icon(options: IconOptions): Icon;
@@ -110,7 +126,9 @@ declare module 'leaflet' {
   export function tileLayer(url: string, options?: Record<string, unknown>): { addTo(map: Map): unknown };
   export function layerGroup(): LayerGroup;
   export function marker(position: [number, number], options?: Record<string, unknown>): LeafletMarker;
-  export function latLngBounds(points: Array<[number, number]>): unknown;
+  export function circleMarker(position: [number, number], options?: Record<string, unknown>): LeafletMarker;
+  export function latLngBounds(points: Array<[number, number]>): LatLngBounds;
+  export const DomUtil: { setPosition(el: HTMLElement, point: LeafletPoint): void };
   export const control: {
     zoom(options?: Record<string, unknown>): { addTo(map: Map): unknown };
     attribution(options?: Record<string, unknown>): {

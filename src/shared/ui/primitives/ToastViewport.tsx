@@ -26,7 +26,7 @@ const TONE_CLASS: Record<Toast["kind"], string> = {
   success: "text-[var(--osio-accent)]",
   error: "text-[var(--osio-danger)]",
   info: "text-[var(--osio-fg-muted)]",
-  warning: "text-amber-600",
+  warning: "text-[var(--osio-warning)]",
 };
 
 const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => {
@@ -41,12 +41,12 @@ const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => {
 
   return (
     <li
-      className="flex w-[min(360px,calc(100vw-32px))] animate-[toast-in_160ms_ease-out] items-start gap-3 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-3 text-[var(--osio-fg-default)] shadow-xl"
-      role="status"
-      aria-live={toast.kind === "error" ? "assertive" : "polite"}
+      className="flex w-[min(360px,calc(100vw-32px))] animate-[toast-in_var(--osio-dur-slow)_var(--osio-ease-emphasized)] items-start gap-3 rounded-[var(--osio-radius-panel)] border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-3 text-[var(--osio-fg-default)] shadow-[var(--osio-e3)]"
     >
       <span className={`mt-0.5 shrink-0 ${TONE_CLASS[toast.kind]}`}>{ICONS[toast.kind]}</span>
-      <div className="min-w-0 flex-1">
+      {/* role=status lives INSIDE the li — a role on the li itself breaks the
+          ol/li list semantics (Lighthouse list + aria-allowed-role). */}
+      <div className="min-w-0 flex-1" role="status" aria-live={toast.kind === "error" ? "assertive" : "polite"}>
         <p className="text-sm font-medium">{toast.title}</p>
         {toast.description ? <p className="mt-1 text-sm leading-5 text-[var(--osio-fg-muted)]">{toast.description}</p> : null}
         {toast.action ? (
@@ -64,7 +64,7 @@ const ToastItem: React.FC<{ toast: Toast }> = ({ toast }) => {
       </div>
       <button
         type="button"
-        className="rounded p-1 text-[var(--osio-fg-subtle)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+        className="rounded-[var(--osio-radius-chip)] p-1 text-[var(--osio-fg-subtle)] transition-colors duration-[var(--osio-dur-fast)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
         aria-label="Dismiss notification"
         onClick={() => dismiss(toast.id)}
       >

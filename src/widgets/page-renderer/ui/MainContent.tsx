@@ -25,7 +25,7 @@ import { derivePageState, savePagesCache } from "@/store/pageStore.helpers";
 import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 
-const HOME_DASHBOARD_VERSION = 9;
+const HOME_DASHBOARD_VERSION = 10;
 const HOME_DASHBOARD_FOCUS_VIEW_ID = "v-prod-table";
 
 function getHomeDashboardFocusViewId(page: PageEntry | undefined): string | undefined {
@@ -33,15 +33,20 @@ function getHomeDashboardFocusViewId(page: PageEntry | undefined): string | unde
   return typeof value === "string" ? value : undefined;
 }
 
-function hasHomeDashboardCanvas(page: PageEntry | undefined): boolean {
-  // The redesigned Home is a single-column layout block of 6 cells (greeting +
-  // 5 NDS sections); anything below that floor is treated as stale → re-seed.
-  const layoutBlock = page?.content?.find((block) => block.type === "layout");
-  return Boolean(layoutBlock?.layoutCells && layoutBlock.layoutCells.length >= 5);
+function hasHomeDashboardSections(page: PageEntry | undefined): boolean {
+  // The redesigned Home is a flat vertical stack (greeting heading + titled NDS
+  // sections), NOT a full_page canvas. A stale canvas seed (which overlapped) or
+  // a too-short body is treated as stale → re-seed.
+  const content = page?.content ?? [];
+  if (content.some((block) => block.type === "layout")) return false;
+  const sectionCount = content.filter(
+    (block) => block.type === "database_inline" || block.type === "home_views",
+  ).length;
+  return sectionCount >= 4;
 }
 
 function homeDashboardNeedsRefresh(page: PageEntry | undefined, focusViewId: string | undefined): boolean {
-  if (page?.homeDashboardVersion !== HOME_DASHBOARD_VERSION || !hasHomeDashboardCanvas(page)) return true;
+  if (page?.homeDashboardVersion !== HOME_DASHBOARD_VERSION || !hasHomeDashboardSections(page)) return true;
   return Boolean(focusViewId && getHomeDashboardFocusViewId(page) !== focusViewId);
 }
 

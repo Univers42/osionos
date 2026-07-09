@@ -13,6 +13,7 @@
 import React, { useMemo } from "react";
 import { PanelLeft } from "lucide-react";
 import { useUIStore } from "@/shared/config/uiStore";
+import type { SettingsTab } from "@/shared/ui/primitives/useSettingsSearchIndex";
 import { buildCommands } from "../model/commands";
 import { buildMenus } from "../model/menus";
 import { useTopBarHotkeys } from "../model/usePalette";
@@ -23,7 +24,7 @@ import { UpdateButton } from "./UpdateButton";
 import { WindowControls } from "./WindowControls";
 
 interface TopBarProps {
-  onOpenSettings: () => void;
+  onOpenSettings: (tab?: SettingsTab) => void;
 }
 
 /** Global VSCode-style top bar: logo · menus · command/search · update · window controls. */
@@ -43,7 +44,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
         type="button"
         aria-label="Toggle sidebar"
         onClick={toggleSidebar}
-        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]"
+        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--osio-radius-chip)] text-[var(--osio-fg-muted)] transition-[background-color,color,transform] duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)] active:scale-[0.92] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-topbar-bg)]"
       >
         <PanelLeft size={16} aria-hidden />
       </button>

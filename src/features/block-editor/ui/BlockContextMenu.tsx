@@ -431,6 +431,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            aria-label="Search actions"
             placeholder="Search actions…"
             className="h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)] focus:border-[var(--osio-accent)]"
           />
