@@ -172,7 +172,7 @@ export async function handleGallery(deps, session, url, channelId, response, con
 }
 
 /** Reject loopback/private/link-local hosts (SSRF guard) before a server fetch. */
-async function assertPublicHttpUrl(rawUrl) {
+export async function assertPublicHttpUrl(rawUrl) {
 	let parsed;
 	try {
 		parsed = new URL(rawUrl);

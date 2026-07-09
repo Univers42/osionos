@@ -12,18 +12,31 @@
 
 import process from "node:process";
 
-export async function openFreshPage(page, appUrl) {
-  await page.goto(appUrl, { waitUntil: "domcontentloaded" });
+/** Create a new workspace page via whichever affordance the current UI offers
+ *  (client-side — no reload, so in-memory app state survives). Waits for the
+ *  primary "New page" button instead of an instant visibility probe — the
+ *  sidebar can still be rendering when this runs. */
+export async function createNewWorkspacePage(page) {
   const newPageButton = page.getByRole("button", { name: /New page/i }).first();
-  const oldHomeButtonVisible = await newPageButton.isVisible().catch(() => false);
-  if (oldHomeButtonVisible) {
+  const appeared = await newPageButton
+    .waitFor({ state: "visible", timeout: 5_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (appeared) {
     await newPageButton.click();
   } else {
-    const addPrivatePageButton = page.locator('button[title="Add to Private"]').first();
+    const addPrivatePageButton = page
+      .locator('button[title="Add to Private"], button[title="Add file"]')
+      .first();
     await addPrivatePageButton.waitFor({ state: "attached" });
     await addPrivatePageButton.evaluate((node) => node.click());
   }
   await page.getByRole("textbox", { name: "Page title" }).waitFor();
+}
+
+export async function openFreshPage(page, appUrl) {
+  await page.goto(appUrl, { waitUntil: "domcontentloaded" });
+  await createNewWorkspacePage(page);
 }
 
 export async function openHarnessPage(page, appUrl, relativePath) {
@@ -501,7 +514,7 @@ export async function pickAssetFromVisiblePicker(page, selectableIndex = 0) {
       ':not([title="Add child page"])',
       ':not([title="Open menu"])',
       ':not([title="Add to Private"])',
-      ':not([title="Drag to reorder"])',
+      ':not([data-testid="block-drag-handle"])',
     ].join(""),
   );
 

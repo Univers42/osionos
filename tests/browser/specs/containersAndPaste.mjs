@@ -47,7 +47,7 @@ function toggleChevron(page) {
   return page
     .locator("[data-block-id]")
     .first()
-    .locator('button:not([title="Drag to reorder"])')
+    .locator('button:not([data-testid="block-drag-handle"])')
     .first();
 }
 
@@ -232,7 +232,7 @@ export const containerAndPasteScenarios = [
   defineScenario(
     "8. Callout & Quote as Containers",
     "Callout",
-    "indenting a paragraph under a callout renders it as a child inside the container",
+    "a callout child shares the summary's left edge (flat callout, no indent)",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createBlockViaSlash(page, "callout", "Callout");
@@ -240,9 +240,10 @@ export const containerAndPasteScenarios = [
       await clearAndType(callout, "Callout");
       await pressEnter(callout);
       const child = getEditors(page).nth(1);
-      expect(await editorLeft(child)).toBeGreaterThan(
-        (await editorLeft(callout)) + 8,
+      const delta = Math.abs(
+        (await editorLeft(child)) - (await editorLeft(callout)),
       );
+      expect(delta).toBeLessThanOrEqual(2);
     },
   ),
   defineScenario(

@@ -13,6 +13,7 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { isAutomationsEnabled } from "@/shared/config/featureFlags";
 
 interface PaletteState {
   open: boolean;
@@ -51,6 +52,7 @@ export function isCommandMode(query: string): boolean {
 export function useTopBarHotkeys(): void {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
+      if (isAutomationsEnabled()) return; // the automation dispatcher owns these chords
       if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
       const key = event.key.toLowerCase();
       if (key === "k") {

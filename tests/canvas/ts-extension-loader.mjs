@@ -19,9 +19,11 @@ export async function resolve(specifier, context, nextResolve) {
     ? new URL(specifier.slice(2), SRC_BASE).href
     : specifier;
   if ((target.startsWith(".") || target.startsWith("file:")) && !hasKnownExtension(target)) {
-    for (const extension of [".ts", ".tsx"]) {
+    // Mirror Vite/tsconfig resolution: a bare specifier is a .ts/.tsx file, else a
+    // directory with an index.ts/.tsx (barrel imports like "@/shared/lib/markengine").
+    for (const suffix of [".ts", ".tsx", "/index.ts", "/index.tsx"]) {
       try {
-        return await nextResolve(`${target}${extension}`, context);
+        return await nextResolve(`${target}${suffix}`, context);
       } catch (error) {
         if (error?.code !== "ERR_MODULE_NOT_FOUND") throw error;
       }

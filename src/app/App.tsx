@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import type { UserSession } from "@/entities/user";
 import { useUserStore } from "@/features/auth";
@@ -23,12 +23,14 @@ import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
 import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
 import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, loadActivePage, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
+import { resetObjectDatabaseSync, startObjectDatabaseSync } from "@/widgets/database-view/model/knownDatabaseState";
 import { ActivitySidebar } from "@/widgets/activity-rail";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
 import { LazyCanvasDebugRoute, LazyMainContent, LazyStyleGuideRoute } from "./lazyAppRegions";
 import { applyStoredAppearance } from "@/shared/config/theme";
+import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
 import {
   applyWorkspaceAppearance,
@@ -38,6 +40,9 @@ import {
   workspaceConfigKey,
 } from "@/shared/config/workspaceConfigStore";
 import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
+import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
+import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
+import type { SettingsTab } from "@/shared/ui/primitives/useSettingsSearchIndex";
 import { ToastViewport } from "@/shared/ui";
 import { ShareHost } from "@/features/share/ShareHost";
 import { TopBar } from "@/widgets/top-bar";
@@ -145,6 +150,11 @@ const App: React.FC = () => {
   const workspaceKey = workspaceConfigKey(activeUserId || "anonymous", activeWorkspace?._id ?? "workspace");
   const storedWorkspaceConfig = useWorkspaceConfigStore((s) => s.configs[workspaceKey]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
+  const openSettings = (tab?: SettingsTab) => {
+    setSettingsTab(tab ?? "general");
+    setSettingsOpen(true);
+  };
   // Captured once at first render, before init effects can reset activePage,
   // so a refresh can reopen the page the user was last on.
   const [persistedActivePage] = useState(() => loadActivePage());
@@ -164,6 +174,29 @@ const App: React.FC = () => {
 
   // Materialize recurring templates ("Duplicate every…") on a catch-up timer.
   useTemplateRecurrence();
+
+  // Collapse the pushing sidebar to the icon rail on mobile so content isn't squished.
+  useResponsiveSidebar();
+
+  // Single document-level keyboard-shortcut dispatcher (flag osio.automations; inert when OFF).
+  useAutomationDispatcher();
+
+  // Database automations → app services: notify events become toasts; webhook
+  // actions route through the bridge's SSRF-guarded proxy endpoint.
+  useDatabaseAutomationBridge();
+
+  // Pull this account's object databases (records + sidebar registry) from the
+  // server whenever a session is active — on load, after an interactive login,
+  // and on account switch (reset first so the new account starts clean).
+  const objectDbActiveUser = useUserStore((s) => s.activeUserId);
+  const objectDbPrevUser = useRef<string | null>(null);
+  useEffect(() => {
+    if (objectDbPrevUser.current && objectDbPrevUser.current !== objectDbActiveUser) {
+      resetObjectDatabaseSync();
+    }
+    objectDbPrevUser.current = objectDbActiveUser ?? null;
+    startObjectDatabaseSync();
+  }, [objectDbActiveUser]);
 
   // Run once on mount
   useEffect(() => {
@@ -271,12 +304,12 @@ const App: React.FC = () => {
       className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-page)]"
     >
       {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
-      <TopBar onOpenSettings={() => setSettingsOpen(true)} />
+      <TopBar onOpenSettings={openSettings} />
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {/* Left sidebar */}
         <ActivitySidebar
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={() => openSettings()}
           onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
           onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
         />
@@ -291,7 +324,7 @@ const App: React.FC = () => {
       </div>
 
       <WorkspaceThemePanel />
-      {settingsOpen && <LazySettingsCenter initialTab="general" onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <LazySettingsCenter initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />}
       <ToastViewport />
       <ShareHost />
       <ContactDock />

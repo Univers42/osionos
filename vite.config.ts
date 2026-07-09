@@ -113,6 +113,18 @@ export default defineConfig(({ mode }) => {
             // warm entry so they download in parallel instead of inflating it.
             if (/notion-database-sys[/\\].*[/\\]iconRegistry[AB]?\.ts$/.test(id)) return 'vendor-icon-registry';
             if (!id.includes('node_modules')) return undefined;
+            // lucide ships ~1500 icons as individual dynamic-import modules
+            // (lucide-react/dynamicIconImports, used by the icon picker). Left
+            // alone rollup emits one tiny chunk PER icon, which makes the prod
+            // build crawl. Bucket them into a fixed handful of chunks: the build
+            // stays fast and a lazily-loaded icon still pulls only its bucket.
+            const lucideIcon = /[/\\]lucide-react[/\\]dist[/\\]esm[/\\]icons[/\\]([^/\\]+)\.js$/.exec(id);
+            if (lucideIcon) {
+              const name = lucideIcon[1];
+              let hash = 0;
+              for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+              return `vendor-lucide-${((hash % 32) + 32) % 32}`;
+            }
             if (/[/\\](react|react-dom|scheduler|use-sync-external-store)[/\\]/.test(id)) return 'vendor-react';
             if (/[/\\](motion|framer-motion|motion-dom)[/\\]/.test(id)) return 'vendor-motion';
             if (id.includes('@univers42')) return 'vendor-ui-collection';

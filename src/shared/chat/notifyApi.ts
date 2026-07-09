@@ -14,7 +14,9 @@
 
 import { api, getActivePageJwt } from '@/shared/api/client';
 
-export type NotificationType = 'mention' | 'dm' | 'reply' | 'reaction' | 'connection' | 'system';
+export type NotificationType =
+  | 'mention' | 'dm' | 'reply' | 'reaction' | 'connection' | 'system'
+  | 'feed_reaction' | 'feed_comment' | 'feed_share';
 
 export interface NotificationItem {
   id: string;

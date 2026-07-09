@@ -11,17 +11,11 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { DEFAULT_EMOJI_PICKER_ITEMS } from "@univers42/ui-collection";
+import { searchEmojis } from "@/shared/ui/molecules/EmojiPicker/emojiSearch";
 
-interface EmojiItem { id: string; value: string; label?: string; keywords?: string[]; group?: string }
-const ITEMS = DEFAULT_EMOJI_PICKER_ITEMS as unknown as EmojiItem[];
-
-/** Searchable emoji grid (reuses the ui-collection emoji set). */
+/** Searchable emoji grid (reuses the shared ui-collection emoji set). */
 export const EmojiTab: React.FC<{ query: string; bg?: string; onPick: (emoji: string) => void }> = ({ query, bg, onPick }) => {
-  const q = query.trim().toLowerCase();
-  const items = q
-    ? ITEMS.filter((it) => `${it.label ?? ""} ${it.id} ${(it.keywords ?? []).join(" ")} ${it.group ?? ""}`.toLowerCase().includes(q))
-    : ITEMS;
+  const items = searchEmojis(query);
 
   if (items.length === 0) {
     return <p className="p-6 text-center text-sm text-[var(--osio-fg-muted)]">No emoji match “{query}”.</p>;

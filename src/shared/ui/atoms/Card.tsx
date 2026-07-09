@@ -37,8 +37,10 @@ export interface CardProps {
   className?: string;
 }
 
-const BASE = "block rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 text-left transition-colors duration-[120ms]";
-const INTERACTIVE = "hover:border-[var(--osio-accent)] hover:shadow-[var(--osio-shadow-sm)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)]";
+const BASE =
+  "block rounded-[var(--osio-radius-panel)] border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 text-left transition-[border-color,box-shadow,transform] duration-[var(--osio-dur-base)] ease-[var(--osio-ease-standard)]";
+const INTERACTIVE =
+  "hover:border-[var(--osio-accent)] hover:shadow-[var(--osio-e2)] hover:-translate-y-0.5 active:translate-y-0 active:shadow-[var(--osio-e1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)]";
 
 function CardBody({ icon, title, description, children }: Pick<CardProps, "icon" | "title" | "description" | "children">) {
   if (children) return <>{children}</>;

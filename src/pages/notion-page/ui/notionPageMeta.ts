@@ -13,7 +13,7 @@
 import type { ActivePage } from "@/entities/page";
 import { usePageStore } from "@/store/usePageStore";
 
-export type ActivePageMetadataPatch = Partial<Pick<ActivePage, "cover" | "icon" | "title">>;
+export type ActivePageMetadataPatch = Partial<Pick<ActivePage, "cover" | "coverPosition" | "icon" | "title">>;
 
 /** Keep the active page / breadcrumb / recents entries in sync with a metadata change. */
 export function patchActivePageMetadata(pageId: string, patch: ActivePageMetadataPatch) {

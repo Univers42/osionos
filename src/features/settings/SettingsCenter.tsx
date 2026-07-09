@@ -28,6 +28,7 @@ import {
   FileText,
   Globe,
   Import,
+  Keyboard,
   KeyRound,
   LayoutGrid,
   Mail,
@@ -51,6 +52,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useUserStore, type StaticPersona } from '@/features/auth';
 import { PermissionsPanel } from '@/features/settings/permissions';
 import { LazySocialSettings } from '@/features/settings/social/LazySocialSettings';
+import { LazyAutomationManager } from '@/features/automations/ui/LazyAutomationManager';
 import { PeopleDatabasePanel } from '@/features/settings/people/PeopleDatabasePanel';
 import { usePeopleCounts } from '@/features/settings/people/usePeopleCounts';
 import type { PeopleSourceKey } from '@/features/settings/people/peopleModel';
@@ -130,6 +132,7 @@ const tabGroups: Array<{ label: string; tabs: TabItem[] }> = [
       { id: 'people', label: 'People', icon: <Users size={16} /> },
       { id: 'import', label: 'Import', icon: <Import size={16} /> },
       { id: 'page_settings', label: 'Page settings', icon: <FileText size={16} /> },
+      { id: 'shortcuts', label: 'Keyboard shortcuts', icon: <Keyboard size={16} /> },
     ],
   },
   {
@@ -163,6 +166,7 @@ const prompts: Record<SettingsTab, { title: string; subtitle: string }> = {
   people: { title: 'People', subtitle: 'Manage people in your workspace and their roles' },
   import: { title: 'Import', subtitle: 'Import data from other apps and files into osionos' },
   page_settings: { title: 'Page settings', subtitle: 'Actions, style switches, analytics and connections from settings_page.md' },
+  shortcuts: { title: 'Keyboard shortcuts', subtitle: 'Rebind, add, toggle, and export keyboard shortcuts — each is an editable automation' },
   ai: { title: 'osionos AI', subtitle: 'Search everywhere, automate meeting notes and configure AI features' },
   mcp: { title: 'osionos MCP', subtitle: 'Connect osionos to your AI tools to summarize, search, and move faster' },
   public_pages: { title: 'Public pages', subtitle: 'Manage public content from your workspace' },
@@ -353,9 +357,11 @@ function textFromReactNode(node: React.ReactNode): string {
 }
 
 const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 'default' | 'primary' | 'danger' | 'ghost' }> = ({ className = '', tone = 'default', onClick, children, ...props }) => {
+  // Chrome mirrors the shared atoms/Button invariant (radius-control, token motion,
+  // press, one focus-ring); danger keeps the settings-local subtle tint on purpose.
   const toneClass = {
-    default: 'border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]',
-    primary: 'bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] hover:opacity-90',
+    default: 'border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] hover:border-[var(--osio-border-strong)] hover:bg-[var(--osio-bg-hover)]',
+    primary: 'bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] shadow-[var(--osio-e1)] hover:bg-[var(--osio-accent-hover)] hover:shadow-[var(--osio-e2)]',
     danger: 'bg-[var(--osio-danger)]/10 text-[var(--osio-danger)] hover:bg-[var(--osio-danger)]/15',
     ghost: 'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]',
   }[tone];
@@ -369,7 +375,7 @@ const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 
     noopHandledAction('settings_button_click', { label });
   };
 
-  return <button type="button" className={`inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${toneClass} ${className}`} onClick={handleClick} {...props}>{children}</button>;
+  return <button type="button" className={`inline-flex h-[var(--osio-control-h-md)] select-none items-center justify-center gap-1.5 rounded-[var(--osio-radius-control)] px-3 text-sm font-medium transition-[background-color,border-color,color,box-shadow,transform] duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100 ${toneClass} ${className}`} onClick={handleClick} {...props}>{children}</button>;
 };
 
 const SelectButton: React.FC<{
@@ -608,6 +614,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
               {activeTab === 'people' && <PeoplePanel workspaceId={activeWorkspace?._id} activeUserId={activeUserId} personas={members} fallbackRows={memberRows} membersCount={members.length} />}
               {activeTab === 'import' && <ImportPanel workspaceId={activeWorkspace?._id} activeUserId={activeUserId} />}
               {activeTab === 'page_settings' && <PageSettingsPanel />}
+              {activeTab === 'shortcuts' && <LazyAutomationManager />}
               {activeTab === 'ai' && <AiPanel />}
               {activeTab === 'mcp' && <McpPanel />}
               {activeTab === 'public_pages' && <PublicPagesPanel />}

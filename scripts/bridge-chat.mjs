@@ -452,14 +452,16 @@ async function setReaction(deps, session, request, url, messageId, add, response
 	return sendJson(response, 200, { ok: true, messageId, emoji, added: add }, config);
 }
 
-/** Find-or-create the 2-member DM channel (deterministic dm_key, race-safe). */
-async function openDm(deps, session, request, response, config) {
-	const payload = await readJsonBody(request);
-	const peerUserId = requireUuid(payload.peerUserId, 'peerUserId');
+/**
+ * Find-or-create the 2-member DM channel (deterministic dm_key, race-safe).
+ * Shared by the /api/chat/dm handler AND feed share-to-DM (bridge-feed) so the
+ * DM find-or-create logic lives in exactly one place.
+ */
+export async function ensureDmChannel(deps, session, config, peerUserId, workspaceHint = '') {
 	if (peerUserId === session.userId) throw httpError('Cannot open a DM with yourself.', 422);
 	const blockRows = await rest(config, deps.fetchImpl, `osionos_user_blocks?or=(and(blocker_id.eq.${session.userId},blocked_id.eq.${peerUserId}),and(blocker_id.eq.${peerUserId},blocked_id.eq.${session.userId}))&select=blocker_id&limit=1`);
 	if (Array.isArray(blockRows) && blockRows.length > 0) throw httpError('You cannot message this person.', 403);
-	let workspaceId = UUID_REGEX.test(safeText(payload.workspaceId, 80)) ? payload.workspaceId : '';
+	let workspaceId = UUID_REGEX.test(safeText(workspaceHint, 80)) ? workspaceHint : '';
 	const pairRows = await rest(config, deps.fetchImpl, `osionos_workspace_members?user_id=in.(${session.userId},${peerUserId})&select=user_id,workspace_id`);
 	const mine = new Set();
 	const shared = [];
@@ -494,7 +496,41 @@ async function openDm(deps, session, request, response, config) {
 			prefer: 'resolution=ignore-duplicates,return=minimal',
 		});
 	}
+	return row;
+}
+
+async function openDm(deps, session, request, response, config) {
+	const payload = await readJsonBody(request);
+	const peerUserId = requireUuid(payload.peerUserId, 'peerUserId');
+	const row = await ensureDmChannel(deps, session, config, peerUserId, safeText(payload.workspaceId, 80));
 	return sendJson(response, 200, { ok: true, channel: channelEntry(row, 'member'), peerUserId }, config);
+}
+
+/**
+ * Deliver `content` into the DM with `peerUserId` (feed share-to-DM). Reuses the
+ * exact DM channel + message insert + "messaged you" notification + realtime
+ * frame the normal chat path uses, so a shared post lands as a live DM.
+ */
+export async function shareToDmChannel(deps, session, config, peerUserId, content) {
+	const channel = await ensureDmChannel(deps, session, config, peerUserId);
+	const rows = await rest(config, deps.fetchImpl, 'osionos_messages', {
+		method: 'POST',
+		body: { channel_id: channel.id, author_id: session.userId, content: safeText(content, 8000), attachments: [] },
+		prefer: 'return=representation',
+	});
+	const row = Array.isArray(rows) ? rows[0] : rows;
+	if (!row) throw httpError('Share message delivery failed.', 502);
+	const identity = (await identitySummaries(config, deps.fetchImpl, [session.userId])).get(session.userId);
+	const actorName = identity?.name ?? 'Member';
+	void emitNotifications(deps, config, [{ recipientId: peerUserId, type: 'dm', actorId: session.userId, actorName, channelId: channel.id, messageId: row.id, preview: safeText(content, 140) }]).catch(() => undefined);
+	await publishRealtime({
+		topic: chatTopic(channel),
+		eventType: 'message_created',
+		payload: { messageId: row.id, channelId: channel.id, authorId: session.userId, authorName: actorName, authorAvatar: identity?.avatar ?? null, content: row.content, createdAt: row.created_at, attachments: [], replyTo: null, mentions: [], threadRootId: null },
+		fetchImpl: deps.fetchImpl,
+		env: deps.env,
+	});
+	return { channelId: channel.id, messageId: row.id };
 }
 
 /** POST /api/chat/groups — create a group channel + seed members. */

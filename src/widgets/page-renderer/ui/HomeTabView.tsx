@@ -19,6 +19,7 @@ import { WS_FILES_DB_ID, WS_FILES_TABLE_VIEW } from "@/widgets/database-view/mod
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
+import { LoadingPane } from "@/shared/ui";
 import {
   LazyGraphEngineExplorer,
   LazyHomeWorkspaceMode,
@@ -27,12 +28,6 @@ import {
 } from "./lazyViews";
 
 import "./homeVariants.css";
-
-const LoadingPane: React.FC = () => (
-  <div className="flex-1 flex items-center justify-center h-full">
-    <div className="animate-spin w-6 h-6 border-2 border-[var(--osio-accent)] border-t-transparent rounded-full" />
-  </div>
-);
 
 /** The Home "tab": the Dashboard / Second Brain / Database / Gallery surfaces. */
 export const HomeTabView: React.FC = () => {

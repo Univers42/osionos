@@ -27,7 +27,7 @@ export const Menu = React.forwardRef<HTMLDivElement, MenuProps>(
       ref={ref}
       role={role}
       className={cx(
-        "min-w-[180px] rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] py-1 shadow-[var(--osio-shadow-menu)] outline-none",
+        "min-w-[180px] rounded-[var(--osio-radius-overlay)] border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] py-1 shadow-[var(--osio-e3)] outline-none animate-[osio-pop-in_var(--osio-dur-fast)_var(--osio-ease-emphasized)]",
         className,
       )}
       {...props}
@@ -59,7 +59,7 @@ export const MenuItem = React.forwardRef<HTMLButtonElement, MenuItemProps>(
       type={type}
       role={role}
       className={cx(
-        "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:bg-[var(--osio-bg-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--osio-accent)] disabled:cursor-not-allowed disabled:opacity-60",
+        "flex w-full items-center gap-2 rounded-[var(--osio-radius-control)] px-3 py-2 text-left text-sm transition-colors duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:bg-[var(--osio-bg-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--osio-focus-ring-color)] disabled:cursor-not-allowed disabled:opacity-60",
         destructive ? "text-[var(--osio-danger)]" : "text-[var(--osio-fg-default)]",
         className,
       )}

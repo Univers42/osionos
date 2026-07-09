@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { MoveVertical, Trash2 } from 'lucide-react';
 import {
   COVER_PICKER_TABS,
   IconImage,
@@ -19,12 +19,18 @@ import {
   resolveCollectionMediaAsset,
 } from '@/shared/lib/markengine/uiCollectionAssets';
 import { CoverAssetPicker } from './CoverAssetPicker';
+import { DEFAULT_COVER_POSITION } from './coverPositionMath';
+import { useCoverReposition } from './useCoverReposition';
 
 interface PageCoverProps {
   /** Current cover value — URL, CSS gradient, or canonical ui-collection media ref. */
   cover: string;
+  /** Vertical focal point (%) for the cover image; defaults to centered (50). */
+  position?: number;
   /** Update the cover. */
   onChangeCover: (cover: string) => void;
+  /** Persist a new vertical focal point (%) after the user repositions the image. */
+  onChangeCoverPosition?: (position: number) => void;
   /** Remove the cover entirely. */
   onRemoveCover: () => void;
   disabled?: boolean;
@@ -36,12 +42,16 @@ interface PageCoverProps {
  */
 export const PageCover: React.FC<PageCoverProps> = ({
   cover,
+  position,
   onChangeCover,
+  onChangeCoverPosition,
   onRemoveCover,
   disabled = false,
 }) => {
   const [showPicker, setShowPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const noop = useCallback(() => {}, []);
+  const repos = useCoverReposition(position ?? DEFAULT_COVER_POSITION, onChangeCoverPosition ?? noop);
 
   const isGradient = cover.startsWith('linear-gradient') || cover.startsWith('radial-gradient');
   const resolvedCover = isGradient
@@ -49,6 +59,8 @@ export const PageCover: React.FC<PageCoverProps> = ({
     : resolveCollectionMediaAsset(cover, COVER_PICKER_TABS);
   const isUrl = !isGradient;
   const coverSrc = normalizeMediaSource(resolvedCover?.url ?? cover);
+  // Reposition only makes sense for an image cover (a gradient always fills).
+  const canReposition = isUrl && !!onChangeCoverPosition;
 
   /* Close picker on outside click */
   useEffect(() => {
@@ -88,14 +100,22 @@ export const PageCover: React.FC<PageCoverProps> = ({
 
   return (
     <div data-testid="page-cover" className="osionos-page-cover">
-      <div data-testid="page-cover-media" className="osionos-page-cover-media">
+      <div
+        data-testid="page-cover-media"
+        className="osionos-page-cover-media"
+        data-repositioning={repos.active ? '' : undefined}
+      >
         {isUrl ? (
           <img
             src={coverSrc}
             alt=""
             data-testid="page-cover-image"
             className="osionos-page-cover-img"
+            style={{ objectPosition: `center ${repos.position}%` }}
             draggable={false}
+            onPointerDown={repos.handlers.onPointerDown}
+            onPointerMove={repos.handlers.onPointerMove}
+            onPointerUp={repos.handlers.onPointerUp}
           />
         ) : (
           <div
@@ -106,8 +126,41 @@ export const PageCover: React.FC<PageCoverProps> = ({
         )}
       </div>
 
+      {/* While repositioning: a drag hint + Save / Cancel */}
+      {!disabled && repos.active && (
+        <>
+          <div data-testid="page-cover-reposition-hint" className="osionos-page-cover-reposition-hint">
+            Drag image up or down to reposition
+          </div>
+          <div className="osionos-page-cover-controls osionos-page-cover-controls--active">
+            <button
+              type="button"
+              data-testid="page-cover-reposition-save"
+              className="osionos-page-cover-btn"
+              onClick={repos.save}
+            >
+              Save position
+            </button>
+            <button type="button" className="osionos-page-cover-btn" onClick={repos.cancel}>
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+
       {/* Hover controls */}
-      {!disabled && <div className="osionos-page-cover-controls">
+      {!disabled && !repos.active && <div className="osionos-page-cover-controls">
+        {canReposition && (
+          <button
+            type="button"
+            data-testid="page-cover-reposition"
+            className="osionos-page-cover-btn"
+            onClick={repos.start}
+          >
+            <MoveVertical size={14} />
+            Reposition
+          </button>
+        )}
         <button
           type="button"
           data-testid="page-cover-toggle-picker"

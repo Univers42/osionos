@@ -54,10 +54,10 @@ export const InternalPageLink: React.FC<InternalPageLinkProps> = ({ pageId }) =>
       className="editor-mention align-baseline border-none"
       style={{ display: "inline-flex" }}
     >
-      <span className="flex items-center justify-center text-base mr-1">
+      <span className="flex items-center justify-center text-base mr-1.5">
         {linkMetadata.icon || <Icon className="h-3.5 w-3.5" />}
       </span>
-      <span className="text-sm">
+      <span className="text-sm underline">
         {linkMetadata.title}
       </span>
     </button>

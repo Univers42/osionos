@@ -25,7 +25,13 @@
 .osionos-database-block--inline .osionos-object-database-single-view {
   margin: 0;
   background: transparent;
+  /* Fully integrate the embed into the page: the submodule card ships
+     `border border-line rounded-xl shadow-sm`; neutralizing only the color/shadow
+     left a 1px box + rounded corners floating in the text. Zero the width and
+     radius too so the database reads as native page content, not a boxed widget. */
   border-color: transparent;
+  border-width: 0;
+  border-radius: 0;
   box-shadow: none;
 }
 
@@ -39,6 +45,7 @@
  * users reveal them via :focus-within; data-panels-open keeps them up while
  * a portal-rendered panel/dialog is open and the pointer has left. */
 .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-actions,
+.osionos-database-block--inline .osionos-object-database-single-view .odb-collapse-btn,
 .osionos-database-block--inline .osionos-object-database-single-view .odb-filter-bar {
   opacity: 0;
   pointer-events: none;
@@ -48,6 +55,8 @@
 .osionos-database-block--inline .osionos-object-database-single-view:hover .odb-topbar-actions,
 .osionos-database-block--inline .osionos-object-database-single-view:focus-within .odb-topbar-actions,
 .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar[data-panels-open] .odb-topbar-actions,
+.osionos-database-block--inline .osionos-object-database-single-view:hover .odb-collapse-btn,
+.osionos-database-block--inline .osionos-object-database-single-view:focus-within .odb-collapse-btn,
 .osionos-database-block--inline .osionos-object-database-single-view:hover .odb-filter-bar,
 .osionos-database-block--inline .osionos-object-database-single-view:focus-within .odb-filter-bar,
 .osionos-database-block--inline .osionos-object-database-single-view:has(.odb-topbar[data-panels-open]) .odb-filter-bar {
@@ -55,17 +64,22 @@
   pointer-events: auto;
 }
 
-/* The HOST floats its DataSourceButton pill at the top-right corner of every
- * database block (BlockEditor, `absolute right-2 top-2`), revealed on the
- * same block hover as the toolbar — reserve that corner so the pill never
- * lands on the +New button. Scoped to the BlockEditor wrapper: full-page
- * tabs without the pill keep the full-width toolbar. */
-.osio-block-scroll-x .odb-topbar > div:first-child {
-  padding-right: 96px;
+/* A collapsed embed must stay restorable: keep its toggle visible at rest. */
+.osionos-database-block--inline .osionos-object-database-single-view .odb-topbar[data-collapsed] .odb-collapse-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Notion parity: embedded toolbars are icon-only (filter/sort/automations drop
+ * their text labels) — the header row must fit the title, the toolbar AND the
+ * reserved hover-pill corner without crushing the title to zero width. */
+.osionos-database-block--inline .osionos-object-database-single-view .odb-action-label {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-actions,
+  .osionos-database-block--inline .osionos-object-database-single-view .odb-collapse-btn,
   .osionos-database-block--inline .osionos-object-database-single-view .odb-filter-bar {
     transition: none;
   }

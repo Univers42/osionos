@@ -44,9 +44,28 @@ export function useChannelActions({ mode, channelId, userId, userName, setMessag
     const content = body.trim();
     if (!content && !(attachments && attachments.length)) return false;
     if (mode !== 'bridge') return Boolean(sendLocal(`channel:${channelId}`, userId, userName, content));
-    const message = await sendMessage(channelId, content, attachments, replyTo);
-    setMessages((messages) => messages.some((m) => m.id === message.id) ? messages : [...messages, message]);
-    return true;
+    // Optimistic: show the message instantly under a temp id, then reconcile with
+    // the server row on await (the WS echo de-dupes by id, so a double never
+    // sticks); roll the temp back on failure. Removes the round-trip from the
+    // sender's perceived latency.
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimistic: ChatMessage = {
+      id: tempId, channelId, authorId: userId, authorName: userName, authorAvatar: null,
+      content, createdAt: new Date().toISOString(), reactions: [],
+      attachments: attachments ?? [], mentions: [], threadRootId: null, replyCount: 0, replyTo: null,
+    };
+    setMessages((messages) => [...messages, optimistic]);
+    try {
+      const message = await sendMessage(channelId, content, attachments, replyTo);
+      setMessages((messages) => {
+        const withoutTemp = messages.filter((m) => m.id !== tempId);
+        return withoutTemp.some((m) => m.id === message.id) ? withoutTemp : [...withoutTemp, message];
+      });
+      return true;
+    } catch {
+      setMessages((messages) => messages.filter((m) => m.id !== tempId)); // send failed → drop the temp
+      return false;
+    }
   }, [mode, channelId, userId, userName, sendLocal, setMessages]);
 
   const edit = useCallback(async (messageId: string, content: string) => {
