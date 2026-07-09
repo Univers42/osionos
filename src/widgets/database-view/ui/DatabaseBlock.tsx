@@ -12,25 +12,34 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom';
+import { ArrowLeft } from 'lucide-react';
+// The object-database entry imports its own theme CSS, so the styles ride
+// with whichever lazy chunk first pulls the component. Leaflet (map view)
+// still belongs here: it only matters once a database actually renders.
 import { ObjectDatabase, type ObjectDatabaseProps } from '@notion-db/object-database';
-// Database engine styles ride with THIS lazy chunk, not the eager entry CSS
-// (perf): the object-database theme + leaflet (map view) only matter once a
-// database actually renders.
-import '@notion-db/object-database/theme.css';
 import 'leaflet/dist/leaflet.css';
 
 import type { Block } from '@/entities/block';
 import type { PageEntry, PagePropertyEntry } from '@/entities/page';
+import {
+  COVER_PICKER_TABS,
+  normalizeMediaSource,
+  resolveCollectionMediaAsset,
+} from '@/shared/lib/markengine/uiCollectionAssets';
 import { useUserStore } from '@/features/auth';
 import {
   DEFAULT_OBJECT_DATABASE_ID,
   DEFAULT_OBJECT_DATABASE_VIEW_ID,
+  useDatabaseStore,
 } from '@/store/useDatabaseStore';
 import { usePageStore } from '@/store/usePageStore';
+import { useWorkspaceLayout } from '@/widgets/workspace-grid/model/workspaceLayout';
+import { liveDatabaseTab } from '@/widgets/workspace-grid/model/layoutPersist';
 import { derivePageState } from '@/store/pageStore.helpers';
 import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseViewCatalog';
 import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
 import { getLiveDatabaseAdapter, isLiveDatabaseId } from '../model/liveDatabaseAdapter';
+import { useHealedLiveDatabaseId } from '../model/useHealedLiveDatabaseId';
 // Side effect: registers the account-wide data-source catalog with NDS (the
 // Source picker). Lives here (not only the barrel) because lazyViews imports
 // this file directly, bypassing index.ts.
@@ -48,6 +57,8 @@ import {
 } from '../model/workspaceDatabaseConstants';
 import { getRecentsDatabaseAdapter } from '../model/recentsDatabaseState';
 import { getTemplatesDatabaseAdapter } from '../model/templatesDatabaseState';
+import { withRecordLimit } from '../model/recordLimitAdapter';
+import { useDatabaseHostAdapters } from '../model/databaseHostAdapters';
 import { WorkspaceDatabaseBlock, WorkspaceRecordPeek } from './WorkspaceDatabaseBlock';
 import { RecordSubItemsPanel } from './RecordSubItemsPanel';
 import './databaseBlockEmbed.css';
@@ -59,41 +70,80 @@ const OsionosPage = React.lazy(() =>
   import('@/pages/notion-page/ui/NotionPage').then((m) => ({ default: m.OsionosPage })),
 );
 
+/** ObjectDatabase with the app's host integrations pre-wired: workspace people
+ *  for person cells and "+ Invite" opening the Discover surface. */
+const HostedObjectDatabase: React.FC<ObjectDatabaseProps> = (props) => {
+  const hostAdapters = useDatabaseHostAdapters();
+  return <ObjectDatabase {...props} hostAdapters={hostAdapters} />;
+};
+
 const INLINE_KNOWN_DATABASE_LOAD_LIMIT = 8;
 
 interface DatabaseBlockProps {
   databaseId?: string;
   initialViewId?: string;
   mode?: 'inline' | 'full';
+  /** Cap on records an inline embed displays (its height follows this count). */
+  recordLimit?: number;
 }
 
 export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
   databaseId,
   initialViewId,
   mode = 'inline',
+  recordLimit,
 }) => {
+  // Inline embeds fall back to a compact default so a large database never
+  // overflows the page — but ONLY as a fallback for a view with no Limit set:
+  // an explicit per-view Limit (view settings) always wins and persists. Full
+  // -page tabs stay uncapped. `recordLimit` (block-level) is a separate hard cap.
+  const defaultLoadLimit = mode === 'inline' ? INLINE_KNOWN_DATABASE_LOAD_LIMIT : undefined;
   const resolvedMode = mode === 'full' ? 'page' : 'inline';
-  const resolvedDatabaseId = databaseId ?? DEFAULT_OBJECT_DATABASE_ID;
-  const resolvedInitialView = initialViewId
+  // An orphaned live source (a mount re-registered under a new id — e.g. a
+  // dashboard authored before a re-seed) heals to the current accessible mount
+  // that serves the same table, rewriting its viewId in lockstep; healthy ids
+  // pass through untouched.
+  const { databaseId: healedDatabaseId, viewId: healedViewId } = useHealedLiveDatabaseId(databaseId, initialViewId);
+  const resolvedDatabaseId = healedDatabaseId ?? DEFAULT_OBJECT_DATABASE_ID;
+  const resolvedInitialView = healedViewId
     ?? (resolvedDatabaseId === DEFAULT_OBJECT_DATABASE_ID ? DEFAULT_OBJECT_DATABASE_VIEW_ID : undefined);
   const knownViewId = resolvedInitialView && getKnownDatabaseView(resolvedInitialView)
     ? resolvedInitialView
     : KNOWN_DATABASE_VIEWS.find((viewDefinition) => viewDefinition.databaseId === resolvedDatabaseId)?.id;
+  // Notion collection-view header seams: the inline title/"Open as full page"
+  // button open the database's ORIGIN — a kind:"database" tab (pageId == the
+  // database id, so re-opening focuses instead of duplicating).
+  const createdEntry = useDatabaseStore((s) => s.created.find((entry) => entry.id === resolvedDatabaseId));
+  const openFullPage = React.useCallback(
+    (target: { databaseId: string; viewId?: string; name?: string }) => {
+      useWorkspaceLayout.getState().openTab({
+        ...liveDatabaseTab(target.databaseId, target.name ?? 'Database'),
+        viewId: target.viewId,
+      });
+    },
+    [],
+  );
+  const handleDatabaseRenamed = React.useCallback((renamedId: string, name: string) => {
+    useDatabaseStore.getState().renameCreatedDatabase(renamedId, name);
+  }, []);
+  const onOpenFullPage = mode === 'inline' ? openFullPage : undefined;
   const knownDatabaseAdapter = React.useMemo(
-    () => getKnownDatabaseAdapter({ inlineLoadLimit: mode === 'inline' ? INLINE_KNOWN_DATABASE_LOAD_LIMIT : undefined }),
-    [mode],
+    () => getKnownDatabaseAdapter({ defaultLoadLimit, recordCap: recordLimit }),
+    [defaultLoadLimit, recordLimit],
   );
   const fallbackDatabaseAdapter = React.useMemo(
-    () => getKnownDatabaseAdapter({ inlineLoadLimit: mode === 'inline' ? INLINE_KNOWN_DATABASE_LOAD_LIMIT : undefined }),
-    [mode],
+    () => getKnownDatabaseAdapter({ defaultLoadLimit, recordCap: recordLimit }),
+    [defaultLoadLimit, recordLimit],
   );
-  const remoteDatabaseAdapter = React.useMemo(() => getObjectDatabaseAdapter(), []);
-  const liveDatabaseAdapter = React.useMemo(
-    () => (isLiveDatabaseId(resolvedDatabaseId) ? getLiveDatabaseAdapter(resolvedDatabaseId) : null),
-    [resolvedDatabaseId],
-  );
+  const remoteDatabaseAdapter = React.useMemo(() => withRecordLimit(getObjectDatabaseAdapter(), recordLimit), [recordLimit]);
+  const liveDatabaseAdapter = React.useMemo(() => {
+    const live = isLiveDatabaseId(resolvedDatabaseId) ? getLiveDatabaseAdapter(resolvedDatabaseId) : null;
+    return live ? withRecordLimit(live, recordLimit) : null;
+  }, [resolvedDatabaseId, recordLimit]);
   const renderPage = React.useCallback<NonNullable<ObjectDatabaseProps['renderPage']>>(
-    (pageId, state, onClose) => <DatabaseObjectPage pageId={pageId} state={state} onClose={onClose} />,
+    (pageId, state, onClose, openIn) => (
+      <DatabaseObjectPage pageId={pageId} state={state} onClose={onClose} openIn={openIn} />
+    ),
     [],
   );
   // Home live carousels: records are real osionos pages, so opening a card
@@ -117,7 +167,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
         data-database-id={resolvedDatabaseId}
         data-database-view-id={resolvedInitialView}
       >
-        <ObjectDatabase
+        <HostedObjectDatabase
           adapter={liveDatabaseAdapter}
           databaseId={resolvedDatabaseId}
           initialView={resolvedInitialView}
@@ -127,8 +177,11 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
           className={mode === 'full' ? 'h-full' : undefined}
           // Full pages get the full chrome — the view tabs are how the curated
           // preset views (boards/timelines/dashboards/calendars) are reached.
-          // Inline embeds stay single-view (no room for a tab row).
-          chrome={mode === 'full' ? 'full' : 'single-view'}
+          // Inline embeds get the Notion collection-view header (title link,
+          // tabs, collapse) via the 'inline' chrome.
+          chrome={mode === 'full' ? 'full' : 'inline'}
+          onOpenFullPage={onOpenFullPage}
+          onDatabaseRenamed={handleDatabaseRenamed}
         />
       </div>
     );
@@ -148,7 +201,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
         data-database-id={resolvedDatabaseId}
         data-database-view-id={resolvedInitialView}
       >
-        <ObjectDatabase
+        <HostedObjectDatabase
           adapter={isTemplates ? getTemplatesDatabaseAdapter() : getRecentsDatabaseAdapter()}
           databaseId={isTemplates ? TEMPLATES_DB_ID : RECENTS_DB_ID}
           initialView={resolvedInitialView}
@@ -181,14 +234,16 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
         data-database-id={resolvedDatabaseId}
         data-database-view-id={knownViewId}
       >
-        <ObjectDatabase
+        <HostedObjectDatabase
           adapter={knownDatabaseAdapter}
           databaseId={resolvedDatabaseId}
           initialView={knownViewId}
           mode={resolvedMode}
           renderPage={renderPage}
           className={mode === 'full' ? 'h-full' : undefined}
-          chrome="single-view"
+          chrome={mode === 'full' ? 'single-view' : 'inline'}
+          onOpenFullPage={onOpenFullPage}
+          onDatabaseRenamed={handleDatabaseRenamed}
         />
       </div>
     );
@@ -203,14 +258,19 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
       data-database-id={resolvedDatabaseId}
       data-database-view-id={resolvedInitialView}
     >
-      <ObjectDatabase
+      <HostedObjectDatabase
         adapter={hasObjectDatabaseRemoteAdapter() && remoteDatabaseAdapter ? remoteDatabaseAdapter : fallbackDatabaseAdapter}
         databaseId={resolvedDatabaseId}
         initialView={resolvedInitialView}
         mode={resolvedMode}
         renderPage={renderPage}
         className={mode === 'full' ? 'h-full' : undefined}
-        chrome="single-view"
+        // User-created databases land here: 'full' at the origin tab (editable
+        // h1 + db switcher), Notion inline header inside documents.
+        chrome={mode === 'full' ? 'full' : 'inline'}
+        databaseName={createdEntry?.name}
+        onOpenFullPage={onOpenFullPage}
+        onDatabaseRenamed={handleDatabaseRenamed}
       />
     </div>
   );
@@ -220,9 +280,28 @@ type DatabaseObjectPageProps = {
   pageId: Parameters<NonNullable<ObjectDatabaseProps['renderPage']>>[0];
   state: Parameters<NonNullable<ObjectDatabaseProps['renderPage']>>[1];
   onClose: Parameters<NonNullable<ObjectDatabaseProps['renderPage']>>[2];
+  openIn?: Parameters<NonNullable<ObjectDatabaseProps['renderPage']>>[3];
 };
 
-const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, onClose }) => {
+/** Per-mode layout for the record surface (the view's "Open pages in" setting). */
+const OPEN_IN_LAYOUT = {
+  side_peek: {
+    container: 'flex justify-end',
+    panel: 'h-full w-full max-w-5xl border-l border-[var(--osio-border-default)]',
+  },
+  center_peek: {
+    container: 'flex items-center justify-center p-6',
+    // Definite height (not max-h): .osionos-page is container-type:size, so
+    // inside an auto-height panel it collapses to zero and only the header shows.
+    panel: 'h-[85vh] w-full max-w-4xl rounded-xl border border-[var(--osio-border-default)]',
+  },
+  full_page: {
+    container: 'flex',
+    panel: 'h-full w-full',
+  },
+} as const;
+
+const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, onClose, openIn }) => {
   const databasePage = state.pages[pageId];
   const database = databasePage ? state.databases[databasePage.databaseId] : null;
   const title = databasePage ? String(state.getPageTitle(databasePage) || 'Untitled') : 'Page unavailable';
@@ -273,19 +352,57 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
     }
   }, [databasePage, osionosContentKey, osionosPage, pageId, state]);
 
+  // Icon/cover write-back: the record page header edits the OSIONOS entry
+  // (patchPage) — mirror it into the engine page so gallery/board cards show
+  // it. Covers resolve to a displayable value (URL or CSS gradient) here at
+  // the boundary; the engine knows nothing about ui-collection media refs.
+  const resolvedCover = osionosPage?.cover === undefined
+    ? undefined
+    : resolveCoverForEngine(osionosPage.cover);
+  const osionosIcon = osionosPage?.icon;
+
+  React.useEffect(() => {
+    if (!databasePage || !osionosPage) return;
+    const nextIcon = osionosIcon ?? databasePage.icon;
+    if (resolvedCover !== databasePage.cover || nextIcon !== databasePage.icon) {
+      state.updatePageMeta(pageId, { icon: nextIcon, cover: resolvedCover });
+    }
+  }, [databasePage, osionosIcon, osionosPage, pageId, resolvedCover, state]);
+
+  const layout = OPEN_IN_LAYOUT[openIn ?? 'side_peek'] ?? OPEN_IN_LAYOUT.side_peek;
+
+  // Escape always closes the record surface — in full_page mode the overlay
+  // covers the app chrome, so the header breadcrumb/Close must not be the
+  // only way back.
+  React.useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-[var(--osio-z-modal)] flex justify-end bg-[var(--osio-overlay)]">
+    <div className={`fixed inset-0 z-[var(--osio-z-modal)] bg-[var(--osio-overlay)] ${layout.container}`}>
       <button
         type="button"
         aria-label="Close database page"
         className="fixed inset-0 cursor-default bg-transparent"
         onClick={onClose}
       />
-      <aside className="relative z-[var(--osio-z-modal)] h-full w-full max-w-5xl overflow-auto border-l border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-modal)]">
+      <aside
+        data-open-in={openIn ?? 'side_peek'}
+        className={`relative z-[var(--osio-z-modal)] overflow-auto bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-modal)] ${layout.panel}`}
+      >
         <div className="sticky top-0 flex items-center justify-between border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-6 py-3">
-          <span className="text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">
-            {database?.name ?? 'Database page'} · osionos page
-          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            title="Back to database"
+            className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+          >
+            <ArrowLeft size={14} className="shrink-0" />
+            <span className="truncate">{database?.name ?? 'Database page'}</span>
+            <span className="shrink-0 text-[var(--osio-fg-subtle)]">· osionos page</span>
+          </button>
           <button
             type="button"
             className="rounded-md px-2 py-1 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
@@ -356,9 +473,21 @@ function mergeOsionosDatabasePage(entry: PageEntry, nextEntry: PageEntry): PageE
     ...entry,
     ...nextEntry,
     title: entry.title || nextEntry.title,
+    // Icon/cover are edited on the OSIONOS entry (page header) — the engine
+    // side must never clobber them with its (possibly empty) copies.
+    icon: entry.icon || nextEntry.icon,
+    cover: entry.cover ?? nextEntry.cover,
     properties: nextEntry.properties,
     content: entry.content?.length ? entry.content : nextEntry.content,
   };
+}
+
+/** Cover values can be a URL, a CSS gradient, or a ui-collection media ref —
+ *  the engine renders only URLs/gradients, so refs resolve here. */
+function resolveCoverForEngine(cover: string): string {
+  if (cover.startsWith('linear-gradient') || cover.startsWith('radial-gradient')) return cover;
+  const resolved = resolveCollectionMediaAsset(cover, COVER_PICKER_TABS);
+  return normalizeMediaSource(resolved?.url ?? cover) ?? cover;
 }
 
 function toOsionosPageProperties(database: DatabaseSchema, page: DatabasePage): PagePropertyEntry[] {

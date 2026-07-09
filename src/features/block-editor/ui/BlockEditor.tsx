@@ -24,7 +24,6 @@ import { EquationView } from "@/shared/ui/EquationView";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
 import { PlaceholderBlock } from "./PlaceholderBlock";
-import { DataSourceButton } from "@/widgets/database-view/ui/DataSourceButton";
 import {
   getBlockPlaceholder,
   calloutAccent,
@@ -191,6 +190,15 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       commitBlockUpdate(block.id, { language });
       setShowLangPicker(false);
       setLangQuery("");
+    },
+    [commitBlockUpdate, block.id],
+  );
+
+  // "Turn into" from the selection toolbar — content is markdown, so a type swap
+  // is enough (the block re-renders in the new shape). Menu options are validated.
+  const handleTurnInto = useCallback(
+    (type: string) => {
+      commitBlockUpdate(block.id, { type: type as Block["type"] });
     },
     [commitBlockUpdate, block.id],
   );
@@ -448,6 +456,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
           pageId={pageId}
+          blockType={block.type}
+          onTurnInto={handleTurnInto}
         />
       );
     case "heading_2":
@@ -462,6 +472,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
           pageId={pageId}
+          blockType={block.type}
+          onTurnInto={handleTurnInto}
         />
       );
     case "heading_3":
@@ -476,6 +488,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
           pageId={pageId}
+          blockType={block.type}
+          onTurnInto={handleTurnInto}
         />
       );
 
@@ -491,6 +505,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
           pageId={pageId}
+          blockType={block.type}
+          onTurnInto={handleTurnInto}
         />
       );
 
@@ -506,6 +522,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
           pageId={pageId}
+          blockType={block.type}
+          onTurnInto={handleTurnInto}
         />
       );
 
@@ -521,6 +539,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
           pageId={pageId}
+          blockType={block.type}
+          onTurnInto={handleTurnInto}
         />
       );
 
@@ -536,6 +556,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
           pageId={pageId}
+          blockType={block.type}
+          onTurnInto={handleTurnInto}
         />
       );
 
@@ -585,6 +607,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
               pageId={pageId}
+              blockType={block.type}
+              onTurnInto={handleTurnInto}
             />
           </div>
         </div>
@@ -614,6 +638,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
               pageId={pageId}
+              blockType={block.type}
+              onTurnInto={handleTurnInto}
             />
           </div>
         </div>
@@ -650,7 +676,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       // Borderless like Notion: the flex row + resize handles (in renderChildren)
       // carry the structure. No outer box, so columns don't nest borders/offset.
       return (
-        <div className="my-1">
+        <div className="my-0">
           {renderChildren?.() ?? (
             <span className="text-xs text-[var(--osio-fg-subtle)]">Columns</span>
           )}
@@ -684,7 +710,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <div
           data-code-theme={block.codeTheme ?? "dark"}
-          className="osio-code-card group/code relative my-3 rounded-xl border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-code-shadow)] ring-1 ring-inset ring-[var(--osio-code-ring)]"
+          className="osio-code-card group/code relative my-0 rounded-xl border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-code-shadow)] ring-1 ring-inset ring-[var(--osio-code-ring)]"
         >
           {codeBlockHeader}
           <div ref={codeBodyRef} className="overflow-hidden rounded-b-xl">
@@ -747,6 +773,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             )}
           </div>
           <div
+            role="separator" aria-label="Resize code block" aria-orientation="horizontal"
             className="absolute bottom-1 right-1 h-3.5 w-3.5 cursor-ns-resize rounded-sm opacity-0 transition-opacity group-hover/code:opacity-100 z-[1] bg-[linear-gradient(135deg,transparent_50%,var(--osio-code-fg-muted)_50%,var(--osio-code-fg-muted)_60%,transparent_60%,transparent_72%,var(--osio-code-fg-muted)_72%,var(--osio-code-fg-muted)_82%,transparent_82%)]"
             onPointerDown={handleResizePointerDown}
           />
@@ -755,7 +782,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "quote":
       return (
-        <div className="flex my-0.5 rounded-md px-1">
+        <div className="flex my-0 rounded-md px-1">
           {block.children?.length ? (
             <BlockCollapseToggle collapsed={block.collapsed} onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })} />
           ) : null}
@@ -777,8 +804,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       );
 
     case "callout": {
-      // WYSIWYG: tint the surface + border + icon from the resolved semantic type while
-      // editing (read-only used to be the only place colour appeared). Body text stays default.
+      // WYSIWYG: flat tinted surface (Notion pattern) — tint colors SURFACE + icon only, no
+      // border, no rail, never collapsible (that's the `toggle` block's job; a nested quote/
+      // citation child draws its own vertical bar). `collapsed` is ignored on purpose so
+      // legacy-collapsed callouts never hide content without an affordance.
       const calloutType = resolveCalloutType(block.color);
       const accent = calloutAccent(calloutType);
       const hasChildren = Boolean(block.children?.length);
@@ -786,20 +815,17 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <div
           role="note"
           aria-label={`${calloutType.label} callout`}
-          className="group/callout relative my-0.5 flex items-start gap-2 rounded-lg border p-3"
+          className="group/callout relative my-0 flex items-start gap-3 rounded-lg px-4 py-3"
           style={{ ...calloutSurface(calloutType), ...surfaceStyle }}
         >
           <span
-            className="pointer-events-none absolute right-2 top-1.5 select-none rounded px-1 text-[10px] font-semibold uppercase tracking-wide opacity-0 transition-opacity group-hover/callout:opacity-60"
+            className="pointer-events-none absolute right-2 top-1.5 max-w-[45%] truncate select-none rounded px-1 text-[10px] font-semibold uppercase tracking-wide opacity-0 transition-opacity group-hover/callout:opacity-60"
             style={{ color: accent }}
             aria-hidden="true"
           >
             {calloutType.label}
           </span>
-          {hasChildren ? (
-            <BlockCollapseToggle collapsed={block.collapsed} onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })} />
-          ) : null}
-          <div className="relative shrink-0">
+          <div className="relative mt-0.5 shrink-0">
             <button
               type="button"
               className="inline-flex cursor-pointer items-center justify-center rounded"
@@ -818,10 +844,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               />
             )}
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 max-w-full flex-1">
             <EditableContent
               content={block.content}
-              className={`py-0.5 leading-relaxed text-[var(--osio-fg-default)] ${getToggleHeadingClass(block.headingLevel)}`}
+              className={`py-0.5 leading-relaxed break-words text-[var(--osio-fg-default)] ${getToggleHeadingClass(block.headingLevel)}`}
               style={editableStyle}
               placeholder={getBlockPlaceholder(block, "Type… '/' for commands · Enter to add blocks inside")}
               onChange={onChange}
@@ -829,15 +855,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
             />
-            {!hasChildren ? (
-              <p className="mt-0.5 select-none text-xs italic text-[var(--osio-fg-subtle)] opacity-0 transition-opacity group-hover/callout:opacity-100">
-                Press Enter, or Tab a block in, to nest anything here — text, lists, code, even another callout.
-              </p>
-            ) : null}
-            {!block.collapsed && hasChildren ? (
-              <div className="mt-1 border-l-2 pl-3" style={{ borderColor: accent }}>
-                {renderChildren?.()}
-              </div>
+            {hasChildren ? (
+              <div className="min-w-0 max-w-full">{renderChildren?.()}</div>
             ) : null}
           </div>
         </div>
@@ -848,7 +867,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
       return (
         <div
-          className="relative my-2 rounded-lg border border-[var(--osio-border-default)] p-3"
+          className="relative my-0 rounded-lg border border-[var(--osio-border-default)] p-3"
           style={surfaceStyle}
         >
           {shouldEditEquation ? null : (
@@ -893,17 +912,19 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       );
 
     case "divider":
+      // A void block, so it must be grabbable/selectable like any other. The old 1px
+      // <button> gave a ~1px hit area (the drag handle never revealed on hover) and
+      // trapped focus. This is a comfortable hover target — the shell's drag handle
+      // then selects/moves/deletes it — with a dashed outline on block-hover so it
+      // reads as a discrete, selectable component.
       return (
-        <button
-          type="button"
-          className="w-full py-2 rounded outline-none focus:bg-[var(--osio-bg-subtle)]"
-          onKeyDown={(e) => {
-            onKeyDown(e);
-          }}
+        <div
+          role="separator"
           aria-label="Divider block"
+          className="group/divider relative flex w-full select-none items-center rounded py-0 outline-offset-4 transition-[outline-color] group-hover/block:outline-dashed group-hover/block:outline-1 group-hover/block:outline-[var(--osio-border-default)]"
         >
-          <hr className="w-full h-px border-0 bg-[var(--osio-fg-subtle)]" />
-        </button>
+          <hr className="pointer-events-none w-full border-0 border-t border-[var(--osio-fg-subtle)] transition-colors group-hover/block:border-[var(--osio-accent)]" />
+        </div>
       );
 
     case "table_block":
@@ -957,16 +978,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           aria-label="Database block"
           className="relative group/dbblock"
         >
-          <DataSourceButton
-            databaseId={block.databaseId}
-            onChange={(databaseId) => commitBlockUpdate(block.id, { databaseId })}
-          />
           <div className="osio-block-scroll-x">
             <Suspense fallback={null}>
               <DatabaseBlock
                 databaseId={block.databaseId}
                 initialViewId={block.viewId}
                 mode="inline"
+                recordLimit={block.recordLimit}
               />
             </Suspense>
           </div>
@@ -990,12 +1008,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           }}
           tabIndex={-1}
           aria-label="Full-page database block"
-          className="relative group/dbblock my-3 min-h-[520px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
+          className="relative group/dbblock my-0 min-h-[520px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
         >
-          <DataSourceButton
-            databaseId={block.databaseId}
-            onChange={(databaseId) => commitBlockUpdate(block.id, { databaseId })}
-          />
           <div className="osio-block-scroll-x h-full">
             <Suspense fallback={null}>
               <DatabaseBlock
@@ -1013,7 +1027,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <div
           tabIndex={-1}
           aria-label="Graph block"
-          className="relative my-3 h-full min-h-[336px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
+          className="relative my-0 h-full min-h-[336px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
         >
           <Suspense fallback={null}>
             <GraphViewBlock />
@@ -1042,6 +1056,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onPaste={onPaste}
           onRequestSlashMenu={onRequestSlashMenu}
           pageId={pageId}
+          blockType={block.type}
+          onTurnInto={handleTurnInto}
         />
       );
   }

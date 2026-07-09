@@ -189,6 +189,26 @@
   --osio-motion-slow: 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
   --osio-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 
+  /* Motion vocabulary — one easing + duration system for every state change.
+     (The legacy --osio-motion-* above are kept as aliases for existing callers.)
+     Globally neutralised under prefers-reduced-motion at the bottom of this file. */
+  --osio-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1); /* default hover/color */
+  --osio-ease-emphasized: cubic-bezier(0.2, 0.9, 0.1, 1); /* expressive enter */
+  --osio-ease-decelerate: cubic-bezier(0, 0, 0.2, 1); /* elements entering */
+  --osio-ease-accelerate: cubic-bezier(0.4, 0, 1, 1); /* elements exiting (faster) */
+  --osio-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1); /* subtle overshoot/press */
+  --osio-dur-instant: 80ms;
+  --osio-dur-fast: 120ms;
+  --osio-dur-base: 180ms;
+  --osio-dur-slow: 260ms;
+  /* Ready-made transition presets — the two hot cases (state colors + press). */
+  --osio-transition-colors:
+    color var(--osio-dur-fast) var(--osio-ease-standard),
+    background-color var(--osio-dur-fast) var(--osio-ease-standard),
+    border-color var(--osio-dur-fast) var(--osio-ease-standard),
+    box-shadow var(--osio-dur-fast) var(--osio-ease-standard);
+  --osio-transition-press: transform var(--osio-dur-instant) var(--osio-ease-spring);
+
   /* Radius scale — editorial: cards/code/callouts 10-12px, controls 6-8px */
   --osio-radius-xs: 4px;
   --osio-radius-sm: 6px;
@@ -196,6 +216,25 @@
   --osio-radius-lg: 12px;
   --osio-radius-full: 9999px;
   --osio-border-width: 1px;
+
+  /* Semantic radius hierarchy — map intent onto the numeric scale so every
+     surface picks a radius by ROLE, not an ad-hoc `rounded-*`. */
+  --osio-radius-chip: var(--osio-radius-sm); /* 6 — badges, chips, tiny controls */
+  --osio-radius-control: var(--osio-radius); /* 8 — buttons, inputs, tabs, rows */
+  --osio-radius-panel: var(--osio-radius-lg); /* 12 — cards, panels */
+  --osio-radius-overlay: var(--osio-radius-lg); /* 12 — menus, popovers, modals */
+  /* (--osio-radius-card:14 = canvas cells; --osio-radius-full = pills.) */
+
+  /* Canonical control heights — one density system for the whole app. */
+  --osio-control-h-xs: 24px;
+  --osio-control-h-sm: 28px;
+  --osio-control-h-md: 32px;
+  --osio-control-h-lg: 40px;
+
+  /* One focus-ring spec, used on EVERY interactive element (a11y baseline). */
+  --osio-focus-ring-width: 2px;
+  --osio-focus-ring-offset: 2px;
+  --osio-focus-ring-color: var(--osio-accent);
 
   /* Comfortable reading-column width for the editorial page surface */
   --osio-page-max-width: 740px;
@@ -236,9 +275,15 @@
   --osio-accent-subtle: #F7ECE5;
 
   /* Update / sync action — deliberately blue, distinct from the terracotta accent. */
-  --osio-update: #2563EB;
-  --osio-update-hover: #1D4ED8;
+  --osio-update: #1D4ED8; /* blue-700: >=4.5:1 on the tinted chip (a11y contrast) */
+  --osio-update-hover: #1E40AF;
   --osio-update-fg: #FFFFFF;
+
+  /* Web links — conventionally blue (a link affordance, not the brand accent).
+     Palette-independent: links stay blue across every palette. #2563EB on cream
+     is ~5.3:1 (AA). Internal page mentions keep --osio-accent-text. */
+  --osio-link: #2563EB;
+  --osio-link-hover: #1D4ED8;
 
   --osio-danger: #B42318;
   --osio-danger-hover: #8E1C13;
@@ -254,6 +299,22 @@
   --osio-shadow-sm: 0 1px 2px rgba(40, 33, 24, 0.05);
   --osio-shadow-menu: 0 4px 14px rgba(40, 33, 24, 0.08), 0 1px 3px rgba(40, 33, 24, 0.05);
   --osio-shadow-modal: 0 16px 40px rgba(40, 33, 24, 0.12), 0 2px 8px rgba(40, 33, 24, 0.07);
+
+  /* Numeric elevation ladder e0–e5 (ambient + key light, warm-brown based). One
+     depth scale so surfaces pick a level by prominence, not a bespoke shadow. */
+  --osio-e0: none;
+  --osio-e1: 0 1px 2px rgba(40, 33, 24, 0.05), 0 1px 1px rgba(40, 33, 24, 0.03);
+  --osio-e2: 0 2px 6px rgba(40, 33, 24, 0.07), 0 1px 2px rgba(40, 33, 24, 0.05);
+  --osio-e3: 0 6px 16px rgba(40, 33, 24, 0.09), 0 2px 5px rgba(40, 33, 24, 0.05);
+  --osio-e4: 0 12px 28px rgba(40, 33, 24, 0.12), 0 4px 9px rgba(40, 33, 24, 0.07);
+  --osio-e5: 0 24px 56px rgba(40, 33, 24, 0.16), 0 8px 18px rgba(40, 33, 24, 0.08);
+
+  /* Graph overlay chrome (StatsBar/EmptyState float over the Canvas field) —
+     tokenised so they adapt to theme instead of hard-coded black/white. */
+  --osio-graph-overlay-bg: rgba(255, 255, 255, 0.82);
+  --osio-graph-overlay-fg: var(--osio-fg-default);
+  --osio-graph-overlay-muted: var(--osio-fg-muted);
+  --osio-graph-overlay-border: var(--osio-border-default);
 
   /* "Soft floating cards" — the /canvas cell material (editor + read-only share
      these). Rounder than the editorial 8/12 radius, a faint hairline edge, and a
@@ -326,6 +387,10 @@
   --osio-update: #3B82F6;
   --osio-update-hover: #60A5FA;
   --osio-update-fg: #0B1220;
+
+  /* Web links — lighter blue for AA as text on dark (#60A5FA ~5.7:1). */
+  --osio-link: #60A5FA;
+  --osio-link-hover: #93C0FF;
   --osio-danger: #F2998C;
   --osio-danger-hover: #F7B6AD;
   --osio-danger-fg: #1B1A17;
@@ -339,6 +404,20 @@
   --osio-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
   --osio-shadow-menu: 0 4px 16px rgba(0, 0, 0, 0.55);
   --osio-shadow-modal: 0 18px 44px rgba(0, 0, 0, 0.6);
+
+  /* Elevation ladder e0–e5 — deeper, black-based so layers separate on charcoal. */
+  --osio-e0: none;
+  --osio-e1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --osio-e2: 0 2px 8px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.35);
+  --osio-e3: 0 6px 18px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --osio-e4: 0 14px 34px rgba(0, 0, 0, 0.6), 0 4px 10px rgba(0, 0, 0, 0.45);
+  --osio-e5: 0 26px 60px rgba(0, 0, 0, 0.66), 0 10px 20px rgba(0, 0, 0, 0.5);
+
+  /* Graph overlay chrome — dark field. */
+  --osio-graph-overlay-bg: rgba(20, 18, 15, 0.74);
+  --osio-graph-overlay-fg: var(--osio-fg-default);
+  --osio-graph-overlay-muted: var(--osio-fg-muted);
+  --osio-graph-overlay-border: var(--osio-border-strong);
 
   /* Soft floating cards — ember variant (a touch more border + black-based shadow
      so cards separate on the dark field). */
@@ -1252,14 +1331,22 @@ body {
   height: 100%;
 }
 
-/* Global accent focus ring for every interactive element — EXCEPT contenteditable
-   text-editing surfaces (block lines, table cells). While writing, the blinking
-   caret is the focus indicator; the chunky accent box read as an unwanted "focus
-   mode". Multi-select feedback is a separate ring on the block wrapper, untouched. */
-:where(a, button, [role="button"], input, select, textarea, [tabindex]):not([contenteditable=""], [contenteditable="true"], [role="textbox"]):focus-visible {
-  outline: 2px solid var(--osio-accent);
-  outline-offset: 2px;
-  border-radius: var(--osio-radius-sm);
+/* Keyboard-focus "showcase" — a lighter-gray highlight so you can SEE which
+   component the keyboard is on as you Tab through the app. It only ever appears
+   via keyboard (:focus-visible, never a mouse click), and the contenteditable
+   text surfaces are excluded: while writing, the blinking caret is their focus
+   indicator. Built to be unmissable AND robust:
+   - a translucent gray FILL via an inset box-shadow, so it tints OVER whatever
+     background the element already has instead of replacing it — a solid button
+     keeps its colour, a transparent nav row shows the gray fill;
+   - a soft gray RING so focus reads clearly even on a coloured surface, and it
+     survives the 40+ components that set `focus:outline-none` (the fill remains).
+   Both derive from --osio-fg-default via color-mix, so they auto-adapt to light
+   AND dark themes with one definition (no terracotta accent — a calm neutral). */
+:where(a, button, [role="button"], [role="link"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="tab"], input, select, textarea, [tabindex]):not([contenteditable=""], [contenteditable="true"], [role="textbox"]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--osio-fg-default) 45%, transparent);
+  outline-offset: 1px;
+  box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--osio-fg-default) 9%, transparent);
 }
 
 /* Editorial serif headings. */
@@ -1303,6 +1390,21 @@ body {
 
 /* Selection — warm accent tint */
 ::selection {
+  background: color-mix(in srgb, var(--osio-accent) 26%, transparent);
+}
+
+/* Cross-block text selection — the anchor block keeps the native ::selection;
+   these tints paint the covered middle/focus blocks to match it. */
+.osio-cross-select-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.osio-cross-select-tint {
+  position: absolute;
+  border-radius: 2px;
   background: color-mix(in srgb, var(--osio-accent) 26%, transparent);
 }
 
@@ -1441,21 +1543,22 @@ body {
 
 /* Link and Mention Unification */
 .editor-link {
-  color: var(--osio-accent-text) !important;
+  color: var(--osio-link) !important;
   text-decoration: underline !important;
   text-underline-offset: 0.14em !important;
   cursor: pointer !important;
-  transition: opacity 0.15s ease;
+  transition: color 0.15s ease, opacity 0.15s ease;
 }
 
 .editor-link:hover {
-  opacity: 0.75;
+  color: var(--osio-link-hover) !important;
+  opacity: 0.85;
 }
 
 .editor-mention {
-  color: var(--osio-accent-text) !important;
+  color: var(--osio-fg-strong) !important;
   text-decoration: none !important;
-  background-color: var(--osio-bg-muted) !important;
+  background-color: var(--osio-accent-subtle) !important;
   font-weight: 500 !important;
   padding: 0 4px !important;
   border-radius: 4px !important;
@@ -1463,11 +1566,13 @@ body {
   display: inline-flex !important;
   align-items: center !important;
   white-space: nowrap !important;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.15s ease, outline-color 0.15s ease;
 }
 
 .editor-mention:hover {
-  background-color: var(--osio-bg-hover) !important;
+  background-color: var(--osio-accent-subtle) !important;
+  outline: var(--osio-focus-ring-width) solid var(--osio-focus-ring-color);
+  outline-offset: 1px;
 }
 
 @keyframes toast-in {
@@ -1482,6 +1587,58 @@ body {
   }
 }
 
+/* Overlay entrances — surfaces animate from their trigger (scale+fade), the
+   scrim fades. All duration-driven, so the reduced-motion reset below neutralizes
+   them for users who ask for it. */
+@keyframes osio-overlay-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes osio-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes osio-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.975);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .group\/block:hover:not(:has(.group\/block:hover)) > .osio-drag-handle {
   opacity: 1;
+}
+
+/* Accessibility baseline: honor the OS "reduce motion" preference. Defensive-only —
+   it activates solely when the user has asked for reduced motion, collapsing CSS
+   transitions/animations to near-instant so the UI never induces motion sickness.
+   (The Canvas graph/aurora loops throttle themselves separately.) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

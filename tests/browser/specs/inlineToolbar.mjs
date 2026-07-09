@@ -595,4 +595,41 @@ export const inlineToolbarScenarios = [
       await expect(page.locator("text=Ctrl/Cmd + U")).toBeVisible();
     },
   ),
+  defineScenario(
+    "11. Inline Text Selection & Formatting Toolbar",
+    "Format actions",
+    "the Clear formatting button strips inline marks from the selection",
+    async ({ page, appUrl }) => {
+      const editor = await createFormattedParagraph(page, appUrl);
+      await selectText(editor, "alpha");
+      await toolbarButton(page, "Bold").click();
+      expect(await wrapperCount(editor, "strong")).toBeGreaterThan(0);
+      await selectText(editor, "alpha");
+      await toolbarButton(page, "Clear formatting").click();
+      expect(await wrapperCount(editor, "strong")).toBe(0);
+    },
+  ),
+  defineScenario(
+    "11. Inline Text Selection & Formatting Toolbar",
+    "Format actions",
+    "the Equation button wraps the selection as an inline equation",
+    async ({ page, appUrl }) => {
+      const editor = await createFormattedParagraph(page, appUrl);
+      await selectText(editor, "beta");
+      await toolbarButton(page, "Equation").click();
+      await expect(editor).toContainText("$beta$");
+    },
+  ),
+  defineScenario(
+    "11. Inline Text Selection & Formatting Toolbar",
+    "Turn into",
+    "the Turn into dropdown converts the block to a heading",
+    async ({ page, appUrl }) => {
+      const editor = await createFormattedParagraph(page, appUrl);
+      await selectText(editor, "alpha");
+      await toolbarButton(page, "Turn into").click();
+      await page.getByRole("menuitem", { name: "Heading 1" }).click();
+      await expect(page.locator('article[data-block-type="heading_1"]')).toBeVisible();
+    },
+  ),
 ];

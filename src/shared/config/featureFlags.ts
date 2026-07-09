@@ -10,7 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-export type FeatureFlagName = "osio.canvas.v2" | "osio.profile.template" | "osio.collab.shared";
+export type FeatureFlagName =
+  | "osio.canvas.v2"
+  | "osio.profile.template"
+  | "osio.collab.shared"
+  | "osio.blockselect"
+  | "osio.automations"
+  | "osio.db.server";
 
 export function isFeatureFlagEnabled(name: FeatureFlagName, fallback = false): boolean {
   const urlValue = readUrlFlag(name);
@@ -44,6 +50,37 @@ export function isProfileTemplateEnabled(): boolean {
  *  presence stays opt-in via `?osio.collab.shared=1` for dev/demo only. */
 export function isSharedCollabEnabled(): boolean {
   return isFeatureFlagEnabled("osio.collab.shared", false);
+}
+
+/** Full-page marquee (rubber-band) multi-select + the right-click selection
+ *  menu (cut/copy/paste/duplicate/delete). Default OFF: promotes block
+ *  selection into a store and re-anchors the marquee to the whole page. Enable
+ *  Default ON; disable via `?osio.blockselect=0`, the `osio.blockselect`
+ *  localStorage key, or `VITE_OSIO_BLOCKSELECT=0`. */
+export function isBlockSelectEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.blockselect", true);
+}
+
+/** Data-driven keyboard automations (the VSCode-style shortcut manager: each
+ *  shortcut is a keyboard-trigger → run-command automation record). Default
+ *  OFF: a document-level dispatcher owns the bound chords only when ON, so
+ *  the legacy keybindings route through the dispatcher's commands. Default ON;
+ *  disable via `?osio.automations=0`, the `osio.automations` localStorage key,
+ *  or `VITE_OSIO_AUTOMATIONS=0`. */
+export function isAutomationsEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.automations", true);
+}
+
+/** Server-side persistence for user-created object databases (the inline
+ *  `/database` blocks, `source=adapter`). Default ON: a database's schema,
+ *  views AND records live in Postgres (owner-isolated, via the bridge) instead
+ *  of browser localStorage alone — so they survive a cache clear and follow the
+ *  account across machines. localStorage stays a write-through offline cache
+ *  (no data loss). Disable via `?osio.db.server=0`, the `osio.db.server`
+ *  localStorage key, or `VITE_OSIO_DB_SERVER=0` (the offline/Playwright build
+ *  has no bridge URL, so sync no-ops there regardless). */
+export function isObjectDatabaseServerSyncEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.db.server", true);
 }
 
 function readUrlFlag(name: FeatureFlagName): string | null {

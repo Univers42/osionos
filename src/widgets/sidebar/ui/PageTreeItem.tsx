@@ -169,6 +169,8 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
         {canExpand ? (
           <button
             type="button"
+            aria-label={`${expanded ? "Collapse" : "Expand"} ${pageEntry.title || "Untitled"}`}
+            aria-expanded={expanded}
             className="flex items-center justify-center w-5 h-5 shrink-0 rounded-md transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
             onClick={(e) => { e.stopPropagation(); setExpanded((o) => !o); }}
           >

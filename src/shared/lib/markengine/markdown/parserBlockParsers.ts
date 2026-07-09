@@ -74,6 +74,10 @@ export const HTML_BLOCK_TAGS = new Set([
   'nav', 'noframes', 'ol', 'optgroup', 'option', 'p', 'param', 'pre',
   'section', 'source', 'summary', 'table', 'tbody', 'td', 'tfoot', 'th',
   'thead', 'title', 'tr', 'track', 'ul',
+  // Media blocks — let a bare <video>/<audio>/<img>/<picture> line pass through
+  // as a raw HTML block (parity with the already-allowed <iframe>/<figure>), so
+  // .xmd docs can embed images, video, and audio without a wrapping <div>.
+  'video', 'audio', 'img', 'picture', 'embed', 'object', 'svg',
 ]);
 export function isHtmlBlockTag(line: string): boolean {
   const match = /^<\/?([a-zA-Z][a-zA-Z0-9-]*)/.exec(line);

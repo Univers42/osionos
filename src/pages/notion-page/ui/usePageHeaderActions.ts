@@ -65,6 +65,12 @@ export function usePageHeaderActions(pageId: string, locked: boolean) {
     patchActivePageMetadata(pageId, { cover: undefined });
   }, [locked, pageId, patchPage]);
 
+  const changeCoverPosition = useCallback((position: number) => {
+    if (locked) return;
+    patchPage(pageId, { coverPosition: position });
+    patchActivePageMetadata(pageId, { coverPosition: position });
+  }, [locked, pageId, patchPage]);
+
   const toggleCoverPicker = useCallback(() => {
     if (!locked) setCoverPickerOpen((open) => !open);
   }, [locked]);
@@ -74,5 +80,5 @@ export function usePageHeaderActions(pageId: string, locked: boolean) {
     setCoverPickerOpen(false);
   }, [changeCover]);
 
-  return { changeIcon, removeIcon, addIcon, changeCover, removeCover, toggleCoverPicker, selectCover, coverPickerOpen, coverPickerRef };
+  return { changeIcon, removeIcon, addIcon, changeCover, removeCover, changeCoverPosition, toggleCoverPicker, selectCover, coverPickerOpen, coverPickerRef };
 }

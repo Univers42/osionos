@@ -17,6 +17,7 @@ export * from "./atoms/IconValueView";
 export * from "./atoms/Card";
 export * from "./atoms/Badge";
 export * from "./atoms/Input";
+export * from "./atoms/LoadingPane";
 export * from "./atoms/SectionHeader";
 export * from "./molecules/IconPicker";
 export * from "./molecules/CodeSyntaxHighlight";

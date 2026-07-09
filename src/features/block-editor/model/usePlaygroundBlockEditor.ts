@@ -610,8 +610,16 @@ function outdentBlockInEditorTree(blocks: Block[], blockId: string): Block[] {
 
 /** Manages block editing, slash commands, and keyboard navigation for playground pages. */
 export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSource) {
-  const source = useMemo(() => normalizeEditorSource(editorSource), [editorSource]);
-  const sourceKey = useMemo(() => editorSourceKey(source), [source]);
+  // Stabilize `source` by VALUE, not caller-object identity. Callers commonly pass a
+  // fresh `{kind:"page", pageId}` literal each render; an ancestor re-rendering on a
+  // page-store commit then churns `source`, cascading a new identity through
+  // updatePageContent → the store selector → every mutation callback, on every 250ms
+  // text commit while typing. Anchoring `source`'s identity to its string key
+  // (recompute only when the key changes) stops the churn.
+  const normalizedSource = normalizeEditorSource(editorSource);
+  const sourceKey = editorSourceKey(normalizedSource);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- identity anchored to sourceKey, not the churning `normalizedSource` object
+  const source = useMemo(() => normalizedSource, [sourceKey]);
   const pageId = source.pageId;
   const content = usePageStore(
     useCallback(
@@ -759,11 +767,15 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   }, [sourceKey, clearHistory]);
 
   /**
-   * Anchor (viewport coords) for the slash / page-selector popovers.
-   * X is the editable block's LEFT edge — a Notion-style line-start anchor that
-   * is stable as you type the filter. We deliberately do NOT use the caret's own
-   * X: on an empty line the `::before` placeholder corrupts `getClientRects()`,
-   * throwing the caret X ~130px to the right (the menu then looked "drifted").
+   * Anchor (viewport coords) for the slash / page-selector / emoji popovers.
+   * X is the caret's OWN x — the trigger char's position — so the menu opens
+   * directly under the "/" (or "[[" / ":"), not at the line start. It is captured
+   * once when the menu opens and kept while filtering, so it stays put. The one
+   * exception is a trigger typed on an otherwise-empty line: the empty-line
+   * `::before` placeholder is still in layout at capture time (its `data-empty`
+   * gate lags the native "/" by one React render) and shoves the caret rect
+   * ~140px right, so there X falls back to the block's left edge (see the inline
+   * note below). X is clamped inside the block either way.
    * Y (top/bottom) comes from the caret rect so the menu hugs the caret's visual
    * line and can flip cleanly above it; `caretRect` prefers getClientRects() and
    * falls back to the block element on a truly empty line.
@@ -794,13 +806,24 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         ? editable.contains(range.startContainer)
         : false;
 
-      const left = editable ? editable.getBoundingClientRect().left : 100;
+      const rect = editable ? editable.getBoundingClientRect() : null;
       const caret = selInBlock && range ? caretRect(range) : null;
-      if (caret && caret.height > 0) return { x: left, y: caret.bottom, top: caret.top };
-      if (editable) {
-        const b = editable.getBoundingClientRect();
-        return { x: left, y: b.bottom, top: b.top };
+      // The empty-line placeholder is an inline `::before` gated by `data-empty`.
+      // `data-empty` mirrors the React `content` prop, which lags the native DOM
+      // by one render, so at slash-open time the block text is already "/" but
+      // `data-empty` is still stale-true — the pseudo stays in layout and shoves
+      // the caret rect ~140px right. Its X is then unreliable, so anchor X to the
+      // block's left edge. When the block already had text (no placeholder), the
+      // caret X is trustworthy and the menu opens right under the "/". The pseudo
+      // only grows horizontally, so caret Y is always correct.
+      const placeholderInLayout = editable?.getAttribute("data-empty") === "true";
+      if (caret && caret.height > 0) {
+        const x = !placeholderInLayout && rect
+          ? Math.min(Math.max(caret.left, rect.left), rect.right)
+          : (rect?.left ?? caret.left);
+        return { x, y: caret.bottom, top: caret.top };
       }
+      if (rect) return { x: rect.left, y: rect.bottom, top: rect.top };
       return { x: 100, y: 300, top: 282 };
     },
     [],
@@ -1358,6 +1381,13 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
   const handleArrowNavigation = useCallback(
     (e: React.KeyboardEvent, blockId: string, content: Block[]): boolean => {
+      // While a caret popover (slash / page-selector / emoji) is open it OWNS
+      // ArrowUp/Down for list navigation — never also move the caret between
+      // blocks (that double-handling made arrows jump the caret instead).
+      if ((slashMenu || pageSelector || emojiMenu) && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        return false;
+      }
+
       if (
         e.key === "ArrowRight" &&
         !e.shiftKey &&
@@ -1388,7 +1418,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       return false;
     },
-    [focusBlock],
+    [focusBlock, slashMenu, pageSelector, emojiMenu],
   );
 
   const handlePaste = useCallback(

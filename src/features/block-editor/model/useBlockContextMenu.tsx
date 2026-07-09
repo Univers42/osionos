@@ -37,6 +37,7 @@ import {
   BLOCK_COLOR_OPTIONS,
   ensureReadableTextColor,
 } from "./blockColors";
+import { copyBlocks } from "./blockClipboard";
 import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
 import {
   BLOCK_TRANSFORM_OPTIONS,
@@ -303,6 +304,12 @@ export function useBlockContextMenu({
     },
     [applyOperation, content, contextMenu],
   );
+
+  const handleCopyBlock = useCallback(() => {
+    if (!contextMenu) return;
+    copyBlocks(content, [contextMenu.blockId]);
+    closeContextMenu();
+  }, [closeContextMenu, content, contextMenu]);
 
   const handleCopyText = useCallback(() => {
     if (!blockLocation?.block.content.trim()) return;
@@ -582,6 +589,11 @@ export function useBlockContextMenu({
     );
 
     const actionItems = [
+      {
+        icon: <Copy size={15} />,
+        label: "Copy block",
+        onClick: handleCopyBlock,
+      },
       ...(blockLocation.block.content.trim()
         ? [
             {
@@ -667,6 +679,7 @@ export function useBlockContextMenu({
     blockLocation,
     colorProfiles,
     handleChangeType,
+    handleCopyBlock,
     handleCopyText,
     handleCopyLink,
     handleDelete,

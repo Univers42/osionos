@@ -28,17 +28,19 @@ const TABS: Array<{ id: TabId; label: string; icon: React.ReactNode }> = [
 
 interface Props {
   current?: string;
+  /** Seeds the search box — e.g. the `:name` filter typed inline before the picker opened. */
+  initialQuery?: string;
   onSelect: (value: string) => void;
   onRemove: () => void;
   onClose: () => void;
 }
 
 /** Beautiful unified asset picker: Emoji · Icons (lucide) · Custom SVG, with a color row. */
-export const IconPicker: React.FC<Props> = ({ current, onSelect, onRemove, onClose }) => {
+export const IconPicker: React.FC<Props> = ({ current, initialQuery, onSelect, onRemove, onClose }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const parsed = parseIconValue(current);
   const [tab, setTab] = useState<TabId>(parsed?.kind === "icon" ? "icons" : parsed?.kind === "image" ? "custom" : "emoji");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery ?? "");
   const [color, setColor] = useState<string | undefined>(parsed?.color ?? parsed?.bg);
 
   useEffect(() => {
@@ -80,6 +82,7 @@ export const IconPicker: React.FC<Props> = ({ current, onSelect, onRemove, onClo
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            aria-label={`Search ${tab}`}
             placeholder={`Search ${tab}…`}
             className="w-full bg-transparent text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
           />

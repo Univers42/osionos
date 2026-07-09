@@ -22,10 +22,17 @@ import type {
 } from "@notion-db/object-database";
 
 import seedState from "@/shared/notion-database-sys/src/store/dbms/mongodb/_notion_state.json";
+import { defaultStatusSchema } from "@/shared/notion-database-sys/src/store/slices/statusDefaults";
 import { timed } from "@/shared/lib/perf/measure";
 import { applyWikiSeed } from "./wikiSeed";
 import { applyHomeDemoSeed } from "./homeDemoSeed";
 import { applyGradesSeed } from "./gradesSeed";
+import {
+  ensureObjectDatabaseHydration,
+  pushDirtyObjectDatabases,
+  type ObjectDatabaseSyncHooks,
+} from "./objectDatabaseBridgeSync";
+import { useDatabaseStore } from "@/store/useDatabaseStore";
 
 export const KNOWN_DATABASE_STATE_STORAGE_KEY = "osionos.knownDatabaseState.v1";
 const KNOWN_DATABASE_STATE_FLUSH_DELAY_MS = 1000;
@@ -38,7 +45,12 @@ type KnownDatabaseStoreState = {
 };
 
 interface KnownDatabaseAdapterOptions {
-  inlineLoadLimit?: number;
+  /** Compact fallback for an inline embed — fills a view's `loadLimit` ONLY when
+   *  the user hasn't set a per-view Limit. Never clamps an explicit choice
+   *  (the collision that made the Limit setting appear not to persist). */
+  defaultLoadLimit?: number;
+  /** Explicit per-embed hard cap (block `recordLimit`) — clamps every view. */
+  recordCap?: number;
 }
 
 export interface PersistableObjectDatabaseAdapter extends ObjectDatabaseAdapter {
@@ -87,12 +99,38 @@ export function createKnownDatabaseAdapter(options: KnownDatabaseAdapterOptions 
 }
 
 export function getKnownDatabaseAdapter(options: KnownDatabaseAdapterOptions = {}): PersistableObjectDatabaseAdapter {
-  const cacheKey = `${options.inlineLoadLimit ?? "all"}`;
+  // First use of an object database → reconcile local ⇄ server once this session
+  // (pull server truth, auto-repair any browser-only databases up to Postgres).
+  ensureObjectDatabaseHydration(objectDatabaseSyncHooks);
+  const cacheKey = `${options.defaultLoadLimit ?? "all"}:${options.recordCap ?? "none"}`;
   const cachedAdapter = knownDatabaseAdapterCache.get(cacheKey);
   if (cachedAdapter) return cachedAdapter;
   const adapter = createKnownDatabaseAdapter(options);
   knownDatabaseAdapterCache.set(cacheKey, adapter);
   return adapter;
+}
+
+/** Notion parity: a `status` property is never optionless. Legacy databases
+ *  created before the status-seed shipped persist a status column with zero
+ *  options — an empty, unusable picker. Backfill the three default states
+ *  (To-do / In Progress / Complete) on load so every status is pickable. */
+function withStatusDefaults(state: NotionState): NotionState {
+  let changed = false;
+  const databases: NotionState["databases"] = { ...state.databases };
+  for (const [dbId, database] of Object.entries(state.databases)) {
+    let props: Record<string, SchemaProperty> | null = null;
+    for (const [propId, prop] of Object.entries(database.properties)) {
+      if (prop.type === "status" && (prop.options?.length ?? 0) === 0) {
+        props ??= { ...database.properties };
+        props[propId] = { ...prop, ...defaultStatusSchema(propId) };
+      }
+    }
+    if (props) {
+      databases[dbId] = { ...database, properties: props };
+      changed = true;
+    }
+  }
+  return changed ? { ...state, databases } : state;
 }
 
 export function loadKnownDatabaseState(): NotionState {
@@ -103,7 +141,7 @@ export function loadKnownDatabaseState(): NotionState {
   try {
     const raw = globalThis.localStorage.getItem(KNOWN_DATABASE_STATE_STORAGE_KEY);
     if (!raw) return seeded;
-    return mergeWithSeedState(JSON.parse(raw) as Partial<NotionState>, seeded);
+    return withStatusDefaults(mergeWithSeedState(JSON.parse(raw) as Partial<NotionState>, seeded));
   } catch {
     return seeded;
   }
@@ -131,6 +169,9 @@ export function flushKnownDatabaseStatePersist() {
         // localStorage can be unavailable or quota-limited.
       }
     });
+    // Write-through: mirror every user-created database to the server (bridge →
+    // Postgres, owner-isolated). No-ops offline / without a session — see module.
+    pushDirtyObjectDatabases(nextState, seedDatabaseIds());
   }
 }
 
@@ -369,6 +410,12 @@ class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
     return () => this.subscribers.delete(callback);
   }
 
+  /** Tell mounted views their whole state changed underneath them (a server
+   *  pull merged in) so they reload from `loadState()`. */
+  notifyStateReplaced(): void {
+    this.emit({ type: "state-replaced" } as ChangeEvent);
+  }
+
   private updateState(update: (state: NotionState) => NotionState): void {
     useKnownDatabaseStateStore.getState().replaceState(update(useKnownDatabaseStateStore.getState().state));
   }
@@ -392,20 +439,22 @@ function mergeWithSeedState(stored: Partial<NotionState>, seeded: NotionState): 
 }
 
 function applyAdapterOptions(state: NotionState, options: KnownDatabaseAdapterOptions): NotionState {
-  if (!options.inlineLoadLimit) return state;
-  const loadLimit = Math.max(1, Math.round(options.inlineLoadLimit));
+  const fill = options.defaultLoadLimit && options.defaultLoadLimit > 0 ? Math.max(1, Math.round(options.defaultLoadLimit)) : undefined;
+  const cap = options.recordCap && options.recordCap > 0 ? Math.max(1, Math.round(options.recordCap)) : undefined;
+  if (fill === undefined && cap === undefined) return state;
   return {
     ...state,
     views: Object.fromEntries(Object.entries(state.views).map(([viewId, view]) => {
       if (view.type !== "table" && view.type !== "list" && view.type !== "timeline") return [viewId, view];
-      const currentLimit = Number(view.settings?.loadLimit);
-      return [viewId, {
-        ...view,
-        settings: {
-          ...view.settings,
-          loadLimit: Number.isFinite(currentLimit) ? Math.min(currentLimit, loadLimit) : loadLimit,
-        },
-      }];
+      const current = Number(view.settings?.loadLimit);
+      // Respect an explicit per-view Limit (incl. 0 = "All"); only fall back to
+      // the compact inline default when the user hasn't chosen one. This is the
+      // fix for the Limit that "didn't persist": the default no longer clamps it.
+      let next = Number.isFinite(current) ? current : fill;
+      // An explicit per-embed record cap still clamps (0 = "All" is never capped).
+      if (cap !== undefined && next !== undefined && next !== 0) next = Math.min(next, cap);
+      if (next === undefined) return [viewId, view];
+      return [viewId, { ...view, settings: { ...view.settings, loadLimit: next } }];
     })),
   };
 }
@@ -534,6 +583,56 @@ function seedSnapshot(): NotionState {
   // the JSON seed at the same precedence level — stored user state overlays all.
   return applyGradesSeed(applyHomeDemoSeed(applyWikiSeed(cloneState(seedState as NotionState))));
 }
+
+let seedDatabaseIdsCache: ReadonlySet<string> | null = null;
+
+/** The ids of every code-shipped seed database (the JSON seed + the wiki/home/
+ *  grades appliers). Anything NOT in this set is a user-created database that
+ *  syncs to the server; the seeds regenerate from code, so they stay local. */
+function seedDatabaseIds(): ReadonlySet<string> {
+  if (!seedDatabaseIdsCache) seedDatabaseIdsCache = new Set(Object.keys(seedSnapshot().databases));
+  return seedDatabaseIdsCache;
+}
+
+/** After a server pull merges into the store, nudge every mounted object-database
+ *  view (each cached adapter's subscribers) to reload from `loadState()`. */
+function notifyObjectDatabaseAdaptersReloaded(): void {
+  for (const adapter of knownDatabaseAdapterCache.values()) {
+    (adapter as KnownDatabaseAdapter).notifyStateReplaced();
+  }
+}
+
+/** Make every synced object database appear in the sidebar "Your databases"
+ *  list — its registry (`useDatabaseStore.created`) is local-only and never ran
+ *  createInlineDatabase on this device, so derive each entry from the state. */
+function reconcileObjectDatabaseRegistry(userDbKeys: string[]): void {
+  const { databases, views } = useKnownDatabaseStateStore.getState().state;
+  const entries = userDbKeys
+    .filter((dbKey) => databases[dbKey])
+    .map((dbKey) => ({
+      id: dbKey,
+      name: (databases[dbKey] as { name?: string }).name ?? "Untitled Database",
+      viewId: Object.values(views).find((view) => view.databaseId === dbKey)?.id ?? `${dbKey}-table`,
+    }));
+  if (entries.length) useDatabaseStore.getState().ensureRegistered(entries);
+}
+
+const objectDatabaseSyncHooks: ObjectDatabaseSyncHooks = {
+  getSeedIds: seedDatabaseIds,
+  getLiveState: () => useKnownDatabaseStateStore.getState().state,
+  applyMerged: (state) => useKnownDatabaseStateStore.getState().replaceState(state),
+  notifyReloaded: notifyObjectDatabaseAdaptersReloaded,
+  reconcileRegistry: reconcileObjectDatabaseRegistry,
+};
+
+/** Kick the object-database server sync once, eagerly, on app start — so a fresh
+ *  browser pulls the account's databases (into the store AND the sidebar) without
+ *  first having to open one. Safe/no-op offline, without a session, or if off. */
+export function startObjectDatabaseSync(): void {
+  ensureObjectDatabaseHydration(objectDatabaseSyncHooks);
+}
+
+export { resetObjectDatabaseSync } from "./objectDatabaseBridgeSync";
 
 function createId(prefix: string): string {
   if (globalThis.crypto?.randomUUID) return `${prefix}-${globalThis.crypto.randomUUID()}`;

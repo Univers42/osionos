@@ -17,11 +17,6 @@ import {
   IconPage,
 } from "@/shared/lib/markengine/uiCollectionAssets";
 import type { BlockType, MediaBlockType } from "@/entities/block";
-import {
-  KNOWN_DATABASE_VIEWS,
-  VIEW_TYPE_ICONS,
-  VIEW_TYPE_LABELS,
-} from "@/widgets/database-view/model/databaseViewCatalog";
 import type {
   SlashCreatePageCommand,
   SlashCommand,
@@ -145,16 +140,40 @@ export const PLACEHOLDER_COMMAND_ID = "advanced:placeholder";
 
 const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
   {
-    // Composer-only: a link card. Dispatched by id in the chat composer
-    // (onSlashSelect) — in the editor it harmlessly inserts the bare link text.
+    // Emoji: dispatched by id in the editor to OPEN the emoji picker at the caret
+    // (see BlockEditorSurface). insertText is the no-op fallback for other hosts.
+    id: "inline:emoji",
+    kind: "inline",
+    section: "basic",
+    label: "Emoji",
+    aliases: ["emoji", "emoticon", "smiley"],
+    icon: "😊",
+    description: "Insert an emoji (or type ':' then a name)",
+    insertText: "",
+  },
+  {
+    // Color: dispatched by id in the editor to OPEN a color picker; the pick
+    // colors the text typed next. insertText is the no-op fallback.
+    id: "inline:color",
+    kind: "inline",
+    section: "basic",
+    label: "Text color",
+    aliases: ["color", "colour", "text color", "highlight"],
+    icon: "🎨",
+    description: "Set the color of the text you type next",
+    insertText: "",
+  },
+  {
+    // Editor: inserts a blue placeholder link `[Link](https://)`. Dispatched by id
+    // in the chat composer (onSlashSelect) as a link-preview card instead.
     id: "media:url",
     kind: "inline",
     section: "media",
     label: "Link / URL",
     aliases: ["url", "link", "embed link", "link preview"],
     icon: "🔗",
-    description: "Attach a link with a preview card",
-    insertText: "https://",
+    description: "Insert a link with placeholder text",
+    insertText: "[Link](https://)",
   },
   {
     id: "advanced:equation-inline",
@@ -228,26 +247,11 @@ const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
   },
 ];
 
-const VIEW_SLASH_COMMANDS: SlashCommand[] = KNOWN_DATABASE_VIEWS.map((viewDefinition) => ({
-  id: `view:${viewDefinition.id}`,
-  kind: "database-view",
-  section: "database",
-  label: `View: ${viewDefinition.databaseName} · ${viewDefinition.name}`,
-  aliases: [
-    "view",
-    `view ${viewDefinition.databaseName}`,
-    `view ${viewDefinition.databaseName} ${viewDefinition.name}`,
-    `${viewDefinition.databaseName} ${viewDefinition.name}`,
-    `${VIEW_TYPE_LABELS[viewDefinition.type]} view`,
-    viewDefinition.id,
-    ...viewDefinition.aliases,
-  ],
-  icon: VIEW_TYPE_ICONS[viewDefinition.type],
-  description: `${VIEW_TYPE_LABELS[viewDefinition.type]} view from ${viewDefinition.databaseName}. ${viewDefinition.description}`,
-  databaseId: viewDefinition.databaseId,
-  viewId: viewDefinition.id,
-  viewType: viewDefinition.type,
-}));
+// ponytail: the slash menu inserts only generic EMPTY database blocks
+// (database_inline / database_full_page, in BASE_SLASH_COMMANDS). Views bound to
+// existing databases used to be listed here (kind "database-view") — dropped so
+// the menu never proposes fetching a specific known database. The database-view
+// select path in useSlashSelect stays but is now unreachable from the menu.
 
 export const TURN_INTO_COMMANDS: SlashTurnIntoCommand[] =
   [
@@ -304,7 +308,6 @@ const CREATE_PAGE_COMMAND: SlashCreatePageCommand[] = [
 export const SLASH_COMMANDS: SlashCommand[] = [
   ...CREATE_PAGE_COMMAND,
   ...BASE_SLASH_COMMANDS,
-  ...VIEW_SLASH_COMMANDS,
   ...LOCAL_SLASH_COMMANDS,
   ...TURN_INTO_COMMANDS,
 ];
@@ -321,8 +324,6 @@ export function filterSlashCommands(filter: string): SlashCommand[] {
       item.aliases?.some((alias) => alias.toLowerCase().includes(lower)) ||
       item.description.toLowerCase().includes(lower) ||
       ("blockType" in item && item.blockType.toLowerCase().includes(lower)) ||
-      ("viewId" in item && item.viewId.toLowerCase().includes(lower)) ||
-      ("databaseId" in item && item.databaseId.toLowerCase().includes(lower)) ||
       item.id.toLowerCase().includes(lower)
     );
   });

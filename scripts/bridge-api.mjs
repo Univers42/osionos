@@ -20,6 +20,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordSubitemNoteBody } from './bridge-records.mjs';
+import { publishRealtime } from './bridge-social-core.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createConnectorHandler } from './bridge-connector.mjs';
 import { createOAuthHandler } from './bridge-oauth.mjs';
@@ -32,6 +33,7 @@ import { handlePermsRoute } from './bridge-perms.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
 import { createSocialHandler } from './bridge-social.mjs';
+import { assertPublicHttpUrl } from './bridge-chat-media.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -599,6 +601,7 @@ function pageRowToEntry(row) {
 		title: typeof row.title === 'string' && row.title ? row.title : 'Untitled',
 		icon: row.icon ?? undefined,
 		cover: row.cover ?? undefined,
+		coverPosition: typeof row.cover_position === 'number' ? row.cover_position : undefined,
 		updatedAt: row.updated_at ?? row.created_at ?? undefined,
 		workspaceId: row.workspace_id,
 		ownerId: row.owner_id ?? null,
@@ -680,6 +683,11 @@ function pageCreateRowFromPayload(payload, authContext) {
 		properties: safeJsonArray(payload.properties),
 		content: safeJsonArray(payload.content),
 	};
+	// Only attach the cover focal point when the create actually carries one, so a
+	// backend that lags the cover_position migration still accepts ordinary inserts.
+	if (hasOwn(payload, 'coverPosition') && typeof payload.coverPosition === 'number') {
+		row.cover_position = Math.max(0, Math.min(100, payload.coverPosition));
+	}
 	// Only attach template columns for template creates, so a backend whose schema
 	// predates the template migration still accepts ordinary page inserts.
 	if (payload.isTemplate === true || payload.isDefaultTemplate === true || payload.recurrence || payload.templateSurface) {
@@ -701,6 +709,7 @@ function pageUpdateRowFromPayload(payload) {
 	assignPayloadValue(row, payload, 'title', 'title', (value) => safeText(value, 200) || 'Untitled');
 	assignPayloadValue(row, payload, 'icon', 'icon', (value) => textOrNull(value, 80));
 	assignPayloadValue(row, payload, 'cover', 'cover', (value) => textOrNull(value, 1024));
+	assignPayloadValue(row, payload, 'coverPosition', 'cover_position', (value) => typeof value === 'number' ? Math.max(0, Math.min(100, value)) : null);
 	assignPayloadValue(row, payload, 'databaseId', 'database_id', (value) => value === null ? null : textOrNull(value, 160));
 	assignPayloadValue(row, payload, 'surface', 'surface', (value) => PAGE_SURFACE_VALUES.has(value) ? value : null);
 	assignPayloadValue(row, payload, 'visibility', 'visibility', (value) => PAGE_VISIBILITY_VALUES.has(value) ? value : 'private');
@@ -1850,16 +1859,26 @@ async function handleMarketplacePost(url, request, response, config, fetchImpl) 
  * BaaS graph (note nodes + parent + tag edges). Owner-scoping is authoritative here:
  * we only include rows the caller owns, so the graph never leaks another user's pages.
  */
-/** osionos_workspace_databases rows for the given workspace ids ([] on failure). */
-async function listWorkspaceDatabases(workspaceIds, config, fetchImpl) {
+/** osionos_workspace_databases rows for the given workspace ids — THROWS on a
+ *  backend failure. ACL callers use this so a transient blip (postgres still
+ *  starting, Kong 502) surfaces as a retryable 5xx, NOT a swallowed [] that the
+ *  ACL then reports as a permanent 403 "no accessible mount" — which the live-DB
+ *  client latches for the whole SPA lifetime (see livePoll.isPermanentDenial). */
+async function fetchWorkspaceDatabases(workspaceIds, config, fetchImpl) {
 	if (workspaceIds.length === 0) return [];
+	const query = postgrestQuery({
+		workspace_id: `in.(${workspaceIds.join(',')})`,
+		select: 'workspace_id,db_id,engine,tables,edges_table,label',
+	});
+	const rows = await baasRest(config, fetchImpl, `osionos_workspace_databases?${query}`);
+	return Array.isArray(rows) ? rows : [];
+}
+
+/** Graceful variant — [] on any failure. For the data graph, which degrades to
+ *  no records rather than erroring. NOT for ACL checks (see fetchWorkspaceDatabases). */
+async function listWorkspaceDatabases(workspaceIds, config, fetchImpl) {
 	try {
-		const query = postgrestQuery({
-			workspace_id: `in.(${workspaceIds.join(',')})`,
-			select: 'workspace_id,db_id,engine,tables,edges_table,label',
-		});
-		const rows = await baasRest(config, fetchImpl, `osionos_workspace_databases?${query}`);
-		return Array.isArray(rows) ? rows : [];
+		return await fetchWorkspaceDatabases(workspaceIds, config, fetchImpl);
 	} catch {
 		return [];
 	}
@@ -1927,7 +1946,7 @@ async function resolveAccessibleMount(request, dbId, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
 	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
-	const mounts = await listWorkspaceDatabases(accessible, config, fetchImpl);
+	const mounts = await fetchWorkspaceDatabases(accessible, config, fetchImpl);
 	const mount = mounts.find((row) => row && row.db_id === dbId);
 	if (!mount) throw Object.assign(new Error('Database is not linked to an accessible workspace.'), { status: 403 });
 	return { authContext, mount };
@@ -1943,7 +1962,7 @@ async function accessibleMountIds(request, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
 	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
-	const mounts = await listWorkspaceDatabases(accessible, config, fetchImpl);
+	const mounts = await fetchWorkspaceDatabases(accessible, config, fetchImpl);
 	return new Set(mounts.map((row) => row && row.db_id).filter(Boolean));
 }
 
@@ -2241,6 +2260,7 @@ async function handleGraphPages(url, request, response, config, fetchImpl) {
 
 async function handlePagesGet(url, request, response, config, fetchImpl) {
 	if (await handleMarketplaceGet(url, request, response, config, fetchImpl)) return true;
+	if (await handleObjectDatabasesGet(url, request, response, config, fetchImpl)) return true;
 	if (await handleDatabasesGet(url, request, response, config, fetchImpl)) return true;
 	if (url.pathname === '/api/graph/data') {
 		return handleGraphData(url, request, response, config, fetchImpl);
@@ -2388,6 +2408,77 @@ async function handlePageConfigPatch(url, request, response, config, fetchImpl) 
 	return true;
 }
 
+// ── Object databases (user-created `/database` blocks; id `db-<hex>`, source=adapter)
+// Server-side, owner-isolated home for inline object databases that used to live
+// only in browser localStorage. ONE row per (owner, db_key) holds the whole
+// database slice (schema + views + records) as JSONB `state`. owner_id is stamped
+// from the VERIFIED token, never the payload — the cross-account isolation gate.
+const OBJECT_DB_KEY_MAX = 128;
+
+async function handleObjectDatabasesGet(url, request, response, config, fetchImpl) {
+	if (url.pathname !== '/api/object-databases') return false;
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	const rows = await baasRest(config, fetchImpl,
+		`osionos_object_databases?${postgrestQuery({ owner_id: `eq.${authContext.userId}`, select: 'db_key,title,state,workspace_id,updated_at' })}`);
+	const databases = Array.isArray(rows) ? rows.map((row) => ({
+		dbKey: row.db_key,
+		title: row.title ?? 'Untitled',
+		state: row.state ?? {},
+		workspaceId: row.workspace_id ?? null,
+		updatedAt: row.updated_at ?? null,
+	})) : [];
+	json(response, 200, { databases }, config);
+	return true;
+}
+
+async function handleObjectDatabasesUpsert(url, request, response, config, fetchImpl) {
+	if (url.pathname !== '/api/object-databases') return false;
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	const dbKey = safeText(payload.dbKey, OBJECT_DB_KEY_MAX);
+	if (!dbKey) throw Object.assign(new Error('dbKey is required.'), { status: 422 });
+	// workspace_id is optional metadata; keep it only if the caller may reach it.
+	let workspaceId = null;
+	if (payload.workspaceId) {
+		const requested = requireUuid(payload.workspaceId, 'workspaceId');
+		const accessible = new Set([...authContext.workspaceIds, ...(await memberWorkspaceIds(authContext.userId, config, fetchImpl))]);
+		workspaceId = accessible.has(requested) ? requested : null;
+	}
+	const rows = await baasRest(config, fetchImpl, 'osionos_object_databases?on_conflict=owner_id,db_key', {
+		method: 'POST',
+		body: {
+			owner_id: authContext.userId,
+			workspace_id: workspaceId,
+			db_key: dbKey,
+			title: safeText(payload.title, 200) || 'Untitled',
+			state: safeJsonObject(payload.state, 'state'),
+			updated_at: new Date().toISOString(),
+		},
+		prefer: 'resolution=merge-duplicates,return=representation',
+	});
+	const row = Array.isArray(rows) ? rows[0] : rows;
+	// Nudge the owner's OTHER browsers/tabs to re-hydrate — cross-client realtime for
+	// object DBs, which otherwise only pick up remote writes on a full reload. The
+	// per-owner topic matches the token `sub` the client subscribes with. Best-effort.
+	void publishRealtime({ topic: `objectdb:${authContext.userId}`, eventType: 'objectdb_changed', payload: { dbKey, userId: authContext.userId } });
+	json(response, 200, { ok: true, dbKey, updatedAt: row?.updated_at ?? null }, config);
+	return true;
+}
+
+async function handleObjectDatabasesDelete(url, request, response, config, fetchImpl) {
+	const match = /^\/api\/object-databases\/([^/]+)$/.exec(url.pathname);
+	if (!match) return false;
+	const dbKey = safeText(decodeURIComponent(match[1]), OBJECT_DB_KEY_MAX);
+	if (!dbKey) return false;
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	await baasRest(config, fetchImpl,
+		`osionos_object_databases?${postgrestQuery({ owner_id: `eq.${authContext.userId}`, db_key: `eq.${dbKey}` })}`,
+		{ method: 'DELETE', prefer: 'return=minimal' });
+	void publishRealtime({ topic: `objectdb:${authContext.userId}`, eventType: 'objectdb_changed', payload: { dbKey, userId: authContext.userId } });
+	json(response, 200, { ok: true, dbKey }, config);
+	return true;
+}
+
 async function handlePageActionCreate(url, request, response, config, fetchImpl) {
 	const pageId = pageSubresourceIdFromPath(url.pathname, 'actions');
 	if (!pageId) return false;
@@ -2450,6 +2541,7 @@ async function handlePageDelete(url, request, response, config, fetchImpl) {
 
 async function handlePagesPost(url, request, response, config, fetchImpl) {
 	if (await handleMarketplacePost(url, request, response, config, fetchImpl)) return true;
+	if (await handleObjectDatabasesUpsert(url, request, response, config, fetchImpl)) return true;
 	if (await handleDatabasesPost(url, request, response, config, fetchImpl)) return true;
 	if (await handleRecordsPost(url, request, response, config, fetchImpl)) return true;
 	if (url.pathname === '/api/pages') return handlePageCreate(request, response, config, fetchImpl);
@@ -2555,9 +2647,39 @@ async function handleAuthProxy(url, request, response, config, handoffStore, fet
 	}, config);
 }
 
+// Database automations deliver webhooks server-side: the browser can't reach
+// arbitrary hosts (CORS) and the bridge must not become an SSRF proxy — HTTPS
+// only, public hosts only, 5s cap, response body discarded.
+async function handleAutomationWebhook(request, response, config, fetchImpl) {
+	verifyAppSessionToken(bearerToken(request), config);
+	const payload = await readJson(request);
+	const rawUrl = safeText(payload.url, 2048);
+	const parsed = await assertPublicHttpUrl(rawUrl);
+	if (parsed.protocol !== 'https:') {
+		throw Object.assign(new Error('Automation webhooks must use https.'), { status: 422 });
+	}
+	let status = 0;
+	try {
+		const res = await fetchWithTimeout(fetchImpl, parsed.href, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify(payload.payload ?? {}),
+		}, 5000);
+		status = res.status;
+	} catch {
+		json(response, 502, { ok: false, message: 'Webhook endpoint did not respond.' }, config);
+		return;
+	}
+	json(response, 200, { ok: status >= 200 && status < 300, status }, config);
+}
+
 async function handleBridgePost(url, request, response, config, handoffStore, replayStore, fetchImpl) {
 	if (url.pathname === '/api/auth/login' || url.pathname === '/api/auth/register') {
 		await handleAuthProxy(url, request, response, config, handoffStore, fetchImpl);
+		return true;
+	}
+	if (url.pathname === '/api/automations/webhook') {
+		await handleAutomationWebhook(request, response, config, fetchImpl);
 		return true;
 	}
 	if (url.pathname === '/api/agent/claude/stream') {
@@ -2610,6 +2732,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (request.method === 'PATCH' && await handleMarketplacePatch(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'PATCH' && await handlePageConfigPatch(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'PATCH' && await handlePageUpdate(url, request, response, context.config, context.fetchImpl)) return;
+	if (request.method === 'DELETE' && await handleObjectDatabasesDelete(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'DELETE' && await handlePageDelete(url, request, response, context.config, context.fetchImpl)) return;
 	json(response, 404, { ok: false, message: 'Not found.' }, context.config);
 }

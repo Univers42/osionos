@@ -79,8 +79,8 @@ async function main() {
 
   console.error(`[graph-bench] ${browserName} dpr=${dpr} ${base} nodes=${nodes}`);
   await page.goto(`${base}/?home=graph&graphBench=${nodes}`, { waitUntil: "load", timeout: 60_000 });
-  await page.waitForSelector("canvas.osio-graph__fg", { timeout: 30_000 });
-  await page.waitForTimeout(6000); // worker layout settle
+  await page.waitForSelector("canvas.osio-graph__fg", { timeout: 120_000 });
+  await page.waitForTimeout(12000); // worker layout settle (generous for 100k in throttled CI)
 
   const canvas = await page.locator("canvas.osio-graph__fg").boundingBox();
   const cx = canvas.x + canvas.width / 2;

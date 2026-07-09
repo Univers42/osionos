@@ -219,5 +219,18 @@ export function createHomeLayout(greetingName?: string, options: ViewShowcaseOpt
 }
 
 export function createHomeLayoutContent(greetingName?: string, options: ViewShowcaseOptions = {}): Block[] {
-  return [createHomeLayout(greetingName, options)];
+  // A plain vertical document stack (greeting → titled NDS sections), NOT a
+  // full_page canvas: the canvas pinned every section at a fixed 72px-pitch y
+  // while each grew to 300–560px, so they all overlapped. Normal block flow
+  // stacks them with natural rhythm and cannot overlap — matching the reference.
+  const idScope = options.idScope ?? stableDashboardId("home", "content");
+  const blocks: Block[] = [
+    heading1(homeGreeting(greetingName), stableDashboardBlockId(idScope, "greeting")),
+  ];
+  for (const section of HOME_SECTIONS) {
+    const scope = stableDashboardCellId(idScope, "home", section.rowStart, section.role);
+    if (section.title) blocks.push(heading2(section.title, stableDashboardBlockId(scope, "title")));
+    blocks.push(section.body(scope));
+  }
+  return blocks;
 }

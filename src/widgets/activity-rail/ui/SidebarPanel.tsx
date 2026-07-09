@@ -72,8 +72,8 @@ export const SidebarPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onO
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--osio-bg-subtle)]">
       <WorkspaceSwitcher />
-      <div className="flex items-center justify-between px-3 py-1">
-        <span className="text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
+      <div className="flex items-center justify-between px-3 py-2">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--osio-fg-subtle)]">
           {PANEL_TITLES[activePanel]}
         </span>
         <IconButton aria-label="Collapse to rail" title="Collapse to rail" onClick={collapseToRail}>

@@ -86,6 +86,17 @@ export function getInlineEditorSelectionOffsets(
   return createSelectionOffsetsFromRange(root, range);
 }
 
+/**
+ * Converts an arbitrary DOM range (e.g. built from caretRangeFromPoint during a
+ * cross-block drag) into plain-text offsets inside the editor root.
+ */
+export function getInlineEditorOffsetsForRange(
+  root: HTMLElement,
+  range: Range,
+): InlineEditorSelectionOffsets | null {
+  return createSelectionOffsetsFromRange(root, range);
+}
+
 export function areInlineEditorSelectionSnapshotsEqual(
   previous: InlineEditorSelectionSnapshot | null,
   next: InlineEditorSelectionSnapshot | null,
@@ -155,6 +166,72 @@ export function setInlineEditorSelectionOffsets(
 
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+/** The inline formatting wrappers a markdown shortcut can produce. */
+function isInlineFormatElement(element: Element): boolean {
+  const tag = element.tagName;
+  if (
+    tag === "STRONG" || tag === "EM" || tag === "DEL" ||
+    tag === "U" || tag === "MARK" || tag === "CODE" || tag === "A"
+  ) {
+    return true;
+  }
+  return tag === "SPAN" && element.hasAttribute("data-inline-type");
+}
+
+/**
+ * Autoformat caret placement: after a markdown style pair just CLOSED at `offset`,
+ * land the caret OUTSIDE the trailing styled element so the next character is
+ * unstyled — the pair's effect must stay within its delimiters and never overflow.
+ *
+ * This is deliberately different from TOOLBAR formatting, where the caret stays
+ * inside the mark and ArrowRight escapes it (see tests/browser/specs/inlineMarkCaret.mjs):
+ * completing `**bold**` by typing signals "I'm done with this style", so we exit it.
+ * Falls back to the plain offset placement when the caret does not land at the
+ * trailing edge of a styled element (nested marks climb to the OUTERMOST wrapper).
+ */
+export function setInlineCaretAfterStyledBoundary(
+  root: HTMLElement,
+  offset: number,
+): void {
+  setInlineEditorSelectionOffsets(root, { start: offset, end: offset });
+  const selection = globalThis.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  const container = range.startContainer;
+  // Only act at the very END of a text node — the closing edge of the pair.
+  if (
+    container.nodeType !== Node.TEXT_NODE ||
+    range.startOffset !== (container.textContent?.length ?? 0)
+  ) {
+    return;
+  }
+  // Climb to the outermost inline-format element whose trailing edge the caret is at.
+  let outer: Element | null = null;
+  let child: Node = container;
+  let parent: Node | null = container.parentNode;
+  while (
+    parent &&
+    parent !== root &&
+    parent.nodeType === Node.ELEMENT_NODE &&
+    isInlineFormatElement(parent as Element) &&
+    (parent as Element).lastChild === child
+  ) {
+    outer = parent as Element;
+    child = parent;
+    parent = parent.parentNode;
+  }
+  if (!outer || !outer.parentNode) {
+    return;
+  }
+  const after = document.createRange();
+  after.setStartAfter(outer);
+  after.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(after);
 }
 
 function createSelectionOffsetsFromRange(

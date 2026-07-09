@@ -14,6 +14,7 @@ import { useUserStore } from "@/features/auth";
 import { applyTheme, persistThemeMode } from "@/shared/config/theme";
 import { useUIStore } from "@/shared/config/uiStore";
 import { useToastStore } from "@/shared/ui/primitives/useToastStore";
+import type { SettingsTab } from "@/shared/ui/primitives/useSettingsSearchIndex";
 import { usePageStore } from "@/store/usePageStore";
 import { consoleTab, homeTab, trashTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
@@ -37,7 +38,7 @@ export interface MenuGroup {
 
 /** App-level callbacks the menubar needs that live in React state (not a store). */
 export interface MenuContext {
-  openSettings: () => void;
+  openSettings: (tab?: SettingsTab) => void;
 }
 
 const DOCS_URL = "https://github.com/Univers42/osionos";
@@ -111,7 +112,7 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
     {
       id: "help", label: "Help", items: [
         { id: "help.docs", label: "Documentation", run: () => { globalThis.open(DOCS_URL, "_blank", "noopener"); } },
-        { id: "help.shortcuts", label: "Keyboard shortcuts", run: () => palette().openCommand() },
+        { id: "help.shortcuts", label: "Keyboard shortcuts", run: () => ctx.openSettings("shortcuts") },
         { id: "help.about", label: "About osionos", run: () => useToastStore.getState().push({ kind: "info", title: "osionos", description: "Notion-style collaborative workspace" }) },
       ],
     },

@@ -32,7 +32,18 @@ export function caretRect(range: Range, affinity: CaretAffinity = "first"): DOMR
     return affinity === "last" ? rects[rects.length - 1] : rects[0];
   }
   const rect = range.getBoundingClientRect();
-  return rect.width || rect.height || rect.top ? rect : null;
+  if (rect.width || rect.height || rect.top) return rect;
+  // Element-boundary caret (an empty block, or offset 0 before the first text
+  // node): the collapsed range has no client rects AND a degenerate bounding
+  // rect. Common on a VIRTUALIZED page, where the range — but not its element —
+  // loses its box. Fall back to the caret container's own rect so edge detection
+  // still fires. Without this, caretOnEdgeLine fails closed → the caret is
+  // stranded (native arrow movement can't cross the virtualizer's absolutely
+  // positioned rows), which is the "stuck in its own block" bug on long pages.
+  const node = range.startContainer;
+  const el = node.nodeType === 1 ? (node as Element) : node.parentElement;
+  const elRect = el?.getBoundingClientRect();
+  return elRect && (elRect.width || elRect.height || elRect.top) ? elRect : null;
 }
 
 /**

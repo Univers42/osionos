@@ -24,6 +24,9 @@ test("isPermanentDenial flags 403/401 by status or message; transient otherwise"
   assert.ok(isPermanentDenial({ message: "Database is not linked to an accessible workspace." }));
   assert.ok(isPermanentDenial({ message: "Live BaaS request failed: HTTP 403" }));
   assert.ok(!isPermanentDenial({ status: 500 }));
+  // 503/network (FETCH_FAILED) is TRANSIENT — a bridge blip must not latch the
+  // adapter's forbidden state and poison the mount for the SPA lifetime.
+  assert.ok(!isPermanentDenial({ status: 503 }));
   assert.ok(!isPermanentDenial({ message: "network blip" }));
   assert.ok(!isPermanentDenial(null));
 });

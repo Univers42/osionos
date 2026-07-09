@@ -12,7 +12,7 @@
 
 import React, { Suspense, useEffect } from "react";
 
-import { ErrorBoundary } from "@/shared/ui";
+import { ErrorBoundary, LoadingPane } from "@/shared/ui";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
@@ -39,12 +39,6 @@ import {
 // `import './model/dataSourceProvider'` that pulls knownDatabaseState (and its
 // ~458KB seed JSON) onto this warm pane path. The constants module is leaf-pure.
 import { WS_FILES_DB_ID, WS_FOLDERS_DB_ID } from "@/widgets/database-view/model/workspaceDatabaseConstants";
-
-const LoadingPane: React.FC = () => (
-  <div className="flex-1 flex items-center justify-center h-full">
-    <div className="animate-spin w-6 h-6 border-2 border-[var(--osio-accent)] border-t-transparent rounded-full" />
-  </div>
-);
 
 /** A page tab: lazily fetch its content, then render agent or osionos view.
  *  EVERY pane mounts its own live, editable editor so several files can be edited

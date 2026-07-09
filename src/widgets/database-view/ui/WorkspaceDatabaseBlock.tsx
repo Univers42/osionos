@@ -22,6 +22,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { OsionosPage } from "@/pages/notion-page/ui/NotionPage";
 import { getWorkspaceDatabaseAdapter } from "../model/workspaceDatabaseState";
+import { useDatabaseHostAdapters } from "../model/databaseHostAdapters";
 import {
   WS_FILES_DB_ID,
   WS_FILES_GALLERY_VIEW,
@@ -116,6 +117,7 @@ export const WorkspaceDatabaseBlock: React.FC<WorkspaceDatabaseBlockProps> = ({
 }) => {
   const adapter = React.useMemo(() => getWorkspaceDatabaseAdapter(), []);
   const templates = useWorkspaceTemplatesController();
+  const hostAdapters = useDatabaseHostAdapters();
   const view = initialViewId
     ?? (databaseId === WS_FILES_DB_ID ? WS_FILES_GALLERY_VIEW : WS_FOLDERS_TABLE_VIEW);
   const renderPage = React.useCallback<NonNullable<ObjectDatabaseProps["renderPage"]>>(
@@ -133,6 +135,7 @@ export const WorkspaceDatabaseBlock: React.FC<WorkspaceDatabaseBlockProps> = ({
     >
       <ObjectDatabase
         adapter={adapter}
+        hostAdapters={hostAdapters}
         databaseId={databaseId}
         initialView={view}
         mode={mode === "full" ? "page" : "inline"}

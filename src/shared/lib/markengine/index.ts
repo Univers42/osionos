@@ -238,6 +238,10 @@ export {
   type InlineTextEditCommand,
   type InlineTextEditResult,
 } from "./inlineTextEditing";
+export {
+  autoformatInlineMarkdown,
+  type InlineAutoformatResult,
+} from "./inlineAutoformat";
 /**
  * Mutable inline document handle for AST-backed editor integrations.
  *
@@ -353,3 +357,18 @@ export { normalizeInlineSource } from "./inlineSource";
  * ```
  */
 export { getCalloutIcon as getCalloutIconForKind } from "./markdown/renderers/terminalHelpers";
+/**
+ * URL sugar: detect a single bare URL and turn it into `[hostname](url)` source.
+ *
+ * @example
+ * ```ts
+ * import { bareUrlToLinkSource, isSingleBareUrl } from "markengine";
+ * const source = isSingleBareUrl(pasted) ? bareUrlToLinkSource(pasted) : pasted;
+ * ```
+ */
+export { bareUrlToLinkSource, hostnameFromUrl, isSingleBareUrl } from "./markdown/urlSugar";
+/**
+ * Editor live-render gate predicate: true when a source contains a bare-URL shape, so a
+ * scheme-less `www.…` autolinks while typing (the char-class gate omits `.`/`/`).
+ */
+export { containsBareUrlShape } from "./markdown/parserInlineMatchers";
