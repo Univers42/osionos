@@ -93,6 +93,31 @@ export function caretOnEdgeLine(blockEl: Element, range: Range, edge: CaretAffin
     : caret.bottom >= bounds.bottom - epsilon;
 }
 
+/**
+ * Whether the collapsed caret sits at the very start / end of `editable`'s text
+ * — the gate for crossing into the previous / next block horizontally (ArrowLeft
+ * at the start, ArrowRight at the end). Measures the text before/after the caret
+ * (empty ⇒ at that edge), so an empty block reads as BOTH edges. Conservative on
+ * a foreign range (caret not inside `editable`): neither edge, so the caret does
+ * the native in-block move instead of spuriously jumping.
+ */
+export function caretAtBlockEdge(
+  editable: Element,
+  range: Range,
+): { atStart: boolean; atEnd: boolean } {
+  if (!editable.contains(range.startContainer)) return { atStart: false, atEnd: false };
+  const before = document.createRange();
+  before.selectNodeContents(editable);
+  before.setEnd(range.startContainer, range.startOffset);
+  const after = document.createRange();
+  after.selectNodeContents(editable);
+  after.setStart(range.endContainer, range.endOffset);
+  return {
+    atStart: before.toString().length === 0,
+    atEnd: after.toString().length === 0,
+  };
+}
+
 /** Cross-browser caret hit-test at a viewport point (Blink/WebKit vs Firefox). */
 export function caretRangeFromPoint(x: number, y: number): Range | null {
   const doc = document as Document & {

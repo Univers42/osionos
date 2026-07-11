@@ -48,6 +48,8 @@ import {
   resolveEditableFromSelection,
   handleArrowUp,
   handleArrowDown,
+  handleArrowLeft,
+  handleArrowRight,
   handleEnterKey,
   getAdjacentRenderedBlockId,
   clearVerticalGoalX,
@@ -1388,17 +1390,27 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         return false;
       }
 
-      if (
-        e.key === "ArrowRight" &&
-        !e.shiftKey &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey
-      ) {
+      const plainHorizontal =
+        !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey;
+
+      if (e.key === "ArrowRight" && plainHorizontal) {
+        // Crossing at the block's text end wins over inline-mark skipping (which
+        // only fires mid-text, where the caret is not yet at the block edge).
+        if (handleArrowRight(blockId, content, focusBlock)) {
+          e.preventDefault();
+          return true;
+        }
         const mark = getInlineMarkAtCaretEnd(e.target as HTMLElement);
         if (mark) {
           e.preventDefault();
           placeCaretAfterInlineMark(mark);
+          return true;
+        }
+      }
+
+      if (e.key === "ArrowLeft" && plainHorizontal) {
+        if (handleArrowLeft(blockId, content, focusBlock)) {
+          e.preventDefault();
           return true;
         }
       }
