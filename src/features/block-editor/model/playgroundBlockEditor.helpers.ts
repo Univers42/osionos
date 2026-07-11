@@ -15,7 +15,7 @@ import type { Block } from '@/entities/block';
 import { continuesSameType } from '@/entities/block';
 import type { CaretPlacement } from './blockDomFocus';
 import { paneRootOf } from './blockDomFocus';
-import { caretRect, caretOnEdgeLine } from './caretGeometry';
+import { caretRect, caretOnEdgeLine, caretAtBlockEdge } from './caretGeometry';
 
 // Re-exported so consumers keep importing caret geometry from this module.
 export { caretRect };
@@ -211,6 +211,67 @@ export function handleArrowDown(
     return true;
   }
 
+  return false;
+}
+
+// Reading flows left-to-right: ArrowRight at the END of a block's text steps
+// into the next block's start, so the caret is never trapped at a block edge.
+// Mirrors handleArrowDown but keyed on the horizontal (text-end) edge.
+export function handleArrowRight(
+  blockId: string,
+  content: Block[],
+  focusBlock: FocusBlockFn,
+): boolean {
+  const sel = globalThis.getSelection();
+  if (!sel?.rangeCount) return false;
+  const range = sel.getRangeAt(0);
+  if (!range.collapsed) return false;
+
+  const root = paneRootOf(range.startContainer);
+  const editable = root.querySelector(`[data-block-id="${blockId}"] [contenteditable]`);
+  if (editable && !caretAtBlockEdge(editable, range).atEnd) return false;
+
+  const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, 'next', root);
+  if (nextRenderedBlockId) {
+    focusBlock(nextRenderedBlockId, 'start');
+    return true;
+  }
+
+  const idx = content.findIndex(b => b.id === blockId);
+  if (idx >= 0 && idx < content.length - 1) {
+    focusBlock(content[idx + 1].id, 'start');
+    return true;
+  }
+  return false;
+}
+
+// ArrowLeft at the START of a block's text steps into the previous block's end.
+// Mirrors handleArrowUp but keyed on the horizontal (text-start) edge.
+export function handleArrowLeft(
+  blockId: string,
+  content: Block[],
+  focusBlock: FocusBlockFn,
+): boolean {
+  const sel = globalThis.getSelection();
+  if (!sel?.rangeCount) return false;
+  const range = sel.getRangeAt(0);
+  if (!range.collapsed) return false;
+
+  const root = paneRootOf(range.startContainer);
+  const editable = root.querySelector(`[data-block-id="${blockId}"] [contenteditable]`);
+  if (editable && !caretAtBlockEdge(editable, range).atStart) return false;
+
+  const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, 'prev', root);
+  if (prevRenderedBlockId) {
+    focusBlock(prevRenderedBlockId, 'end');
+    return true;
+  }
+
+  const idx = content.findIndex(b => b.id === blockId);
+  if (idx > 0) {
+    focusBlock(content[idx - 1].id, 'end');
+    return true;
+  }
   return false;
 }
 
