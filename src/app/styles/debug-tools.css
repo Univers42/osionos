@@ -1,0 +1,115 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   debug-tools.css                                    :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/07/12 12:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/07/12 12:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+/* Page debug tools (··· → Tools). Every rule is scoped under a data-debug-*
+   attribute on .osionos-page, so this whole sheet is inert until a tool is
+   toggled on. Deliberate raw hues (this file lives in app/styles, outside the
+   style-token guard): debug overlays need a fixed rainbow that never follows
+   the theme, and `outline` never shifts layout. */
+
+/* ── Container outlines: hue-coded by kind ─────────────────────────────── */
+.osionos-page[data-debug-outlines] .osionos-page-body [data-block-id] {
+  outline: 1px solid rgba(139, 92, 246, 0.65); /* blocks — violet */
+  outline-offset: -1px;
+}
+.osionos-page[data-debug-outlines] .osionos-page-body [data-block-id] [data-block-id] {
+  outline-color: rgba(59, 130, 246, 0.65); /* nested blocks — blue */
+}
+.osionos-page[data-debug-outlines] .osionos-page-body [data-block-id] [data-block-id] [data-block-id] {
+  outline-color: rgba(16, 185, 129, 0.7); /* deeper — green */
+}
+.osionos-page[data-debug-outlines] .osionos-layout-cell {
+  outline: 1px dashed rgba(6, 182, 212, 0.9) !important; /* layout cells — cyan */
+  outline-offset: -1px;
+}
+.osionos-page[data-debug-outlines] .osionos-page-body [data-block-type="column_list"],
+.osionos-page[data-debug-outlines] .osionos-page-body [data-block-type="column"] {
+  outline: 1px dotted rgba(245, 158, 11, 0.9); /* columns — amber */
+}
+.osionos-page[data-debug-outlines] .osionos-page-header,
+.osionos-page[data-debug-outlines] .osionos-page-cover,
+.osionos-page[data-debug-outlines] .osionos-page-body {
+  outline: 2px solid rgba(236, 72, 153, 0.5); /* page regions — magenta */
+  outline-offset: -2px;
+}
+
+/* ── Surface tint: depth-stacked translucency (contrast mode) ──────────── */
+.osionos-page[data-debug-surfaces] .osionos-page-body [data-block-id] {
+  background-color: rgba(139, 92, 246, 0.07);
+}
+.osionos-page[data-debug-surfaces] .osionos-page-body [data-block-id] [data-block-id] {
+  background-color: rgba(59, 130, 246, 0.09);
+}
+.osionos-page[data-debug-surfaces] .osionos-page-body [data-block-id] [data-block-id] [data-block-id] {
+  background-color: rgba(16, 185, 129, 0.11);
+}
+.osionos-page[data-debug-surfaces] .osionos-layout-cell {
+  background-color: rgba(6, 182, 212, 0.08) !important;
+}
+
+/* ── Baseline grid: 8px vertical rhythm over the body ──────────────────── */
+.osionos-page[data-debug-grid] .osionos-page-body {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 7px,
+    rgba(236, 72, 153, 0.18) 7px,
+    rgba(236, 72, 153, 0.18) 8px
+  );
+}
+
+/* ── Block info on hover: type + id badge on the innermost hovered block ── */
+.osionos-page[data-debug-blockinfo] .osionos-page-body [data-block-id] {
+  position: relative;
+}
+.osionos-page[data-debug-blockinfo] .osionos-page-body
+  [data-block-id]:hover:not(:has([data-block-id]:hover))::before {
+  content: attr(data-block-type) " · " attr(data-block-id);
+  position: absolute;
+  top: -18px;
+  left: 0;
+  z-index: 80;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(17, 17, 27, 0.92);
+  color: rgba(103, 232, 249, 1);
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  line-height: 15px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ── Overflow highlighter: offenders stamped by the JS scanner ─────────── */
+.osionos-page [data-debug-overflowing] {
+  outline: 2px solid rgba(239, 68, 68, 0.95) !important;
+  outline-offset: -2px;
+}
+.osionos-page[data-debug-blockinfo] [data-debug-overflowing]::before,
+.osionos-page [data-debug-overflowing][data-block-id]::after {
+  content: "overflow";
+  position: absolute;
+  right: 0;
+  top: -18px;
+  z-index: 80;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(239, 68, 68, 0.95);
+  color: rgba(255, 255, 255, 1);
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  line-height: 15px;
+  pointer-events: none;
+}
+.osionos-page[data-debug-overflow] .osionos-page-body [data-block-id] {
+  position: relative;
+}
