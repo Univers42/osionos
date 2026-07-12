@@ -316,3 +316,18 @@
   justify-content: center;
   gap: 2px;
 }
+
+/* "Glass" fill sentinel (cell background === "glass"): frosted card that lets
+   the page cover show through in header-canvas mode. Token-driven. */
+.osionos-layout-cell--glass {
+  background: color-mix(in srgb, var(--osio-bg-elevated) 46%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  backdrop-filter: blur(16px) saturate(1.3);
+  border: 1px solid color-mix(in srgb, var(--osio-border-default) 45%, transparent);
+  border-radius: 14px;
+  box-shadow: var(--osio-shadow-menu);
+}
+.osio-canvas-fill-swatch[data-glass] {
+  background: color-mix(in srgb, var(--osio-bg-elevated) 58%, transparent);
+  border-style: dashed;
+}

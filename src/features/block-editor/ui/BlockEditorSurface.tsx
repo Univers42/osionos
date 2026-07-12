@@ -767,7 +767,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 							handleSlashDatabaseViewSelect(item.databaseId, item.viewId, currentBlocks);
 							return;
 						}
-						handleSlashSelect(item.blockType, currentBlocks, item.calloutIcon, item.layoutMode);
+						handleSlashSelect(item.blockType, currentBlocks, item.calloutIcon, item.layoutMode, item.layoutPreset);
 					}}
 					onMediaSelect={(kind, value) => {
 						const currentBlocks = flushPendingDrafts("shortcut");

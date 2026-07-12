@@ -1032,7 +1032,7 @@ const LayoutCellViewComponent: React.FC<LayoutCellViewProps> = ({
     gridColumn: `${cell.colStart} / span ${cell.colSpan}`,
     gridRow: `${cell.rowStart} / span ${cell.rowSpan}`,
     color: cell.textColor,
-    backgroundColor: cell.backgroundColor,
+    backgroundColor: cell.backgroundColor === "glass" ? undefined : cell.backgroundColor,
     "--osionos-layout-cell-min-height": `${cellMinHeight}px`,
     "--osionos-layout-cell-offset-x": `${liveOffset?.x ?? 0}px`,
     "--osionos-layout-cell-offset-y": `${liveOffset?.y ?? 0}px`,
@@ -1082,7 +1082,7 @@ const LayoutCellViewComponent: React.FC<LayoutCellViewProps> = ({
     <section
       ref={cellRef}
       aria-label={cell.label || "Layout cell"}
-      className="osionos-layout-cell group/cell"
+      className={`osionos-layout-cell group/cell${cell.backgroundColor === "glass" ? " osionos-layout-cell--glass" : ""}`}
       data-layout-cell-id={cell.id}
       data-layout-cell-selected={dataFlag(isSelected)}
       data-layout-cell-dragging={dataFlag(isDragging)}

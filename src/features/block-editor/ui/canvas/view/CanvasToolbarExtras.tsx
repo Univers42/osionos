@@ -22,6 +22,9 @@ import type { CanvasCell, CanvasFrame } from "../model/types";
 /** Cell fill presets — the warm-editorial swatch row (tints mixed onto surface). */
 export const CANVAS_FILL_SWATCHES: { label: string; background?: string; foreground?: string }[] = [
   { label: "None" },
+  // "glass" is a sentinel resolved by CanvasCellView/canvas.css (frosted card
+  // over the page cover in header-canvas mode), not a CSS color value.
+  { label: "Glass", background: "glass" },
   { label: "Surface", background: "var(--osio-bg-surface)", foreground: "var(--osio-fg-default)" },
   { label: "Sand", background: "color-mix(in srgb, var(--osio-accent) 8%, var(--osio-bg-surface))", foreground: "var(--osio-fg-default)" },
   { label: "Sage", background: "color-mix(in srgb, #0f766e 10%, var(--osio-bg-surface))", foreground: "var(--osio-fg-default)" },
@@ -39,7 +42,8 @@ export const CanvasFillSwatches: React.FC<{ onPick: (background?: string, foregr
         aria-label={`${swatch.label} fill`}
         className="osio-canvas-fill-swatch"
         data-empty={swatch.background ? undefined : "true"}
-        style={{ background: swatch.background ?? "transparent" }}
+        data-glass={swatch.background === "glass" ? "true" : undefined}
+        style={swatch.background === "glass" ? undefined : { background: swatch.background ?? "transparent" }}
         onClick={() => onPick(swatch.background, swatch.foreground)}
       />
     ))}
