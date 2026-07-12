@@ -40,9 +40,12 @@ function buildRows<T>(sections: GridSection<T>[], perRow: number): GridRow<T>[] 
 
 /** Virtualized picker grid: fixed-height cell rows with optional sticky-free section
  *  headers, driven by the caller's scroll container. Only visible rows mount — which
- *  also means only visible lazy icon chunks / images ever load. */
-export function VirtualGrid<T>({ scrollRef, sections, perRow, renderItem }: {
-  scrollRef: React.RefObject<HTMLDivElement | null>;
+ *  also means only visible lazy icon chunks / images ever load.
+ *  `scrollElement` must be STATE (callback ref), not a ref read: with a plain ref the
+ *  virtualizer can capture a 0-rect on lazy/Suspense mounts in prod and renders nothing
+ *  (dev hides this via StrictMode's double effect) — same pattern as BlockEditorSurface. */
+export function VirtualGrid<T>({ scrollElement, sections, perRow, renderItem }: {
+  scrollElement: HTMLDivElement | null;
   sections: GridSection<T>[];
   perRow: number;
   renderItem: (item: T) => React.ReactNode;
@@ -51,7 +54,7 @@ export function VirtualGrid<T>({ scrollRef, sections, perRow, renderItem }: {
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual returns unmemoizable functions; the React Compiler skips this component by design (documented plugin behavior), nothing to fix here
   const virtualizer = useVirtualizer({
     count: rows.length,
-    getScrollElement: () => scrollRef.current,
+    getScrollElement: () => scrollElement,
     estimateSize: (index) => (rows[index]?.header !== undefined ? HEADER_HEIGHT : ROW_HEIGHT),
     getItemKey: (index) => rows[index]?.key ?? index,
     overscan: 6,

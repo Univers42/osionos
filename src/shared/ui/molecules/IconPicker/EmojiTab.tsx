@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { EMOJI_ITEMS, filterEmojiItems, type EmojiItem } from "@/shared/ui/molecules/EmojiPicker/emojiSearch";
 import { loadEmojiCatalog, type EmojiCatalog } from "@/shared/ui/molecules/EmojiPicker/emojiCatalog";
 import { applyEmojiTone, EMOJI_SKIN_TONES } from "@/shared/lib/emoji/emojiTone";
@@ -40,7 +40,7 @@ function groupSections(items: EmojiItem[], groups: readonly string[]): GridSecti
 /** Full RGI emoji grid (~1.9k, virtualized, grouped) with a skin-tone selector.
  *  Renders the small legacy set instantly while the full catalog chunk loads. */
 export const EmojiTab: React.FC<{ query: string; bg?: string; onPick: (emoji: string) => void }> = ({ query, bg, onPick }) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const [catalog, setCatalog] = useState<EmojiCatalog | null>(null);
   const [tone, setTone] = useState(readStoredTone);
 
@@ -86,12 +86,12 @@ export const EmojiTab: React.FC<{ query: string; bg?: string; onPick: (emoji: st
           </button>
         ))}
       </div>
-      <div ref={scrollRef} className="flex-1 overflow-auto py-1">
+      <div ref={setScroller} className="flex-1 overflow-auto py-1">
         {empty ? (
           <p className="p-6 text-center text-sm text-[var(--osio-fg-muted)]">No emoji match “{query}”.</p>
         ) : (
           <VirtualGrid
-            scrollRef={scrollRef}
+            scrollElement={scroller}
             sections={sections}
             perRow={8}
             renderItem={(item) => (

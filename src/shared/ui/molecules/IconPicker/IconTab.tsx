@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useState } from "react";
 import dynamicIconImports from "lucide-react/dynamicIconImports";
 import LucideGlyph from "@/shared/ui/atoms/IconValueView/LucideGlyph";
 import { VirtualGrid, type GridSection } from "./VirtualRows";
@@ -30,7 +30,7 @@ const COMMON = [
 /** The full lucide set (~1.9k), virtualized: a Popular section on top, then every
  *  icon A→Z. Only visible rows mount, so only visible per-icon chunks load. */
 export const IconTab: React.FC<{ query: string; color?: string; onPick: (name: string) => void }> = ({ query, color, onPick }) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
 
   const sections = useMemo<Array<GridSection<string>>>(() => {
     const q = query.trim().toLowerCase();
@@ -48,9 +48,9 @@ export const IconTab: React.FC<{ query: string; color?: string; onPick: (name: s
     return <p className="p-6 text-center text-sm text-[var(--osio-fg-muted)]">No icon matches “{query}”.</p>;
   }
   return (
-    <div ref={scrollRef} className="h-full overflow-auto py-1">
+    <div ref={setScroller} className="h-full overflow-auto py-1">
       <VirtualGrid
-        scrollRef={scrollRef}
+        scrollElement={scroller}
         sections={sections}
         perRow={8}
         renderItem={(name) => (
