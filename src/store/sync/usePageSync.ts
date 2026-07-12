@@ -45,6 +45,7 @@ const MAX_RETRY_MS = 120000;
 
 export function usePageSync(): void {
   const activeUserId = useUserStore((store) => store.activeUserId);
+  const activeWorkspaceId = useUserStore((store) => store.activeWorkspace()?._id ?? "");
   // The outbox must not publish before HYDRATE seeds the ledger, otherwise every page just
   // pulled from the server looks "unsynced" and gets re-PATCHed — a needless write storm.
   const hydratedRef = useRef(false);
@@ -63,10 +64,11 @@ export function usePageSync(): void {
     const switched = prevUserRef.current !== "" && prevUserRef.current !== activeUserId;
     if (switched) usePageStore.setState({ ...derivePageState({}, {}), activePage: null });
     prevUserRef.current = activeUserId;
-    useWorkspaceLayout.getState().restoreForUser(activeUserId);
+    // Per (user, workspace): a user OR workspace switch loads that identity's own slot.
+    useWorkspaceLayout.getState().restoreForScope(activeUserId, activeWorkspaceId);
     if (!API_BASE) { hydratedRef.current = true; return; }
     hydratePagesFromBaas().catch(() => undefined).finally(() => { hydratedRef.current = true; });
-  }, [activeUserId]);
+  }, [activeUserId, activeWorkspaceId]);
 
   useEffect(() => {
     if (!API_BASE) return undefined;

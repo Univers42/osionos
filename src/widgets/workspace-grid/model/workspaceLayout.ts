@@ -17,13 +17,18 @@ import {
   type LayoutNode, type PaneNode, type WorkspaceTab,
 } from "./layoutTree";
 import { removePane, setSizes, splitPane } from "./layoutMutations";
-import { freshLayout, loadLayout, saveLayout } from "./layoutPersist";
+import { freshLayout, layoutScope, loadLayout, saveLayout } from "./layoutPersist";
 import { activePageToTab } from "./pageToTab";
 import { mirrorActiveTab } from "./layoutSync";
 
 interface LayoutState {
   root: LayoutNode;
   activePaneId: string;
+  /** The `user:workspace` identity this tree BELONGS to ("" = nobody → never
+   *  persisted). Saves always target this scope, so a commit that fires in the
+   *  middle of a user/workspace switch can never write these tabs into the
+   *  incoming identity's slot. */
+  scope: string;
   /** openPage handoff: reflect the legacy active page as a tab (no mirror-back). */
   syncFromActivePage: (page: ActivePage) => void;
   openTab: (tab: WorkspaceTab, paneId?: string) => void;
@@ -42,16 +47,17 @@ interface LayoutState {
   resize: (splitId: string, sizes: number[]) => void;
   /** Drop all open tabs/splits back to a single fresh home pane (used on account switch). */
   reset: () => void;
-  /** Load the given user's OWN persisted layout (per-user keyed in layoutPersist) — called
-   *  on auth resolve / account switch so a different account never inherits open tabs. */
-  restoreForUser: (userId: string) => void;
+  /** Load the persisted layout OWNED by (user, workspace) — called on auth resolve and
+   *  on every user/workspace switch, so no identity ever inherits another's open tabs. */
+  restoreForScope: (userId: string, workspaceId: string) => void;
 }
 
 export const useWorkspaceLayout = create<LayoutState>((set, get) => {
-  /** Commit a new tree, persist it, and (optionally) mirror the active tab. */
+  /** Commit a new tree, persist it under ITS OWN scope, and (optionally) mirror
+   *  the active tab. */
   function commit(root: LayoutNode, activePaneId: string, mirror: WorkspaceTab | null | false): void {
     set({ root, activePaneId });
-    saveLayout({ root, activePaneId });
+    saveLayout({ root, activePaneId }, get().scope);
     if (mirror !== false) mirrorActiveTab(mirror);
   }
 
@@ -61,17 +67,21 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
   }
 
   return {
-    ...loadLayout(),
+    // Boot state is a fresh unowned layout (scope "") — never persisted. The real
+    // slot loads once usePageSync resolves the signed-in user + active workspace.
+    ...freshLayout(),
+    scope: "",
     reset: () => {
       const fresh = freshLayout();
       set(fresh);
-      saveLayout(fresh);
+      saveLayout(fresh, get().scope);
     },
 
-    restoreForUser: (userId) => {
-      // Read the per-user slot; loadLayout returns a fresh single-Home layout when this
-      // account has none, so a freshly-logged-in user never inherits another's tabs.
-      set(loadLayout(userId));
+    restoreForScope: (userId, workspaceId) => {
+      // Read the (user, workspace) slot; loadLayout returns a fresh single-Home
+      // layout when that identity has none, so nobody ever inherits foreign tabs.
+      const scope = layoutScope(userId, workspaceId);
+      set({ scope, ...loadLayout(scope) });
     },
 
     syncFromActivePage: (page) => {

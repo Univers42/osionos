@@ -24,29 +24,37 @@ export const MAIL_TAB_ID = "__mail__";
 export const CALENDAR_TAB_ID = "__calendar__";
 export const CHAT_TAB_ID = "__chat__";
 
-const STORAGE_KEY = "osionos.workspace.layout.v1";
+const STORAGE_KEY = "osionos.workspace.layout.v2";
+const LEGACY_PREFIX = "osionos.workspace.layout.v1";
 
-/** The signed-in user's id, read from the user store's global publish seam
- *  (`__playgroundUserStore` — the same decoupling seam the api client + page ACL
- *  read). Used to SCOPE the persisted layout per account so one user's open tabs
- *  never bleed into another's on a shared browser. */
-function currentUserId(): string {
+/** The identity a layout tree BELONGS to: user + workspace. Open tabs are private
+ *  to that pair — switching either loads that pair's own slot (fresh when none),
+ *  so tabs can never bleed across accounts or workspaces on a shared browser. */
+export function layoutScope(userId: string, workspaceId: string): string {
+  return userId ? `${userId}:${workspaceId || "none"}` : "";
+}
+
+function layoutKeyForScope(scope: string): string {
+  return `${STORAGE_KEY}.${scope}`;
+}
+
+/** One-time privacy cleanup: v1 slots were per-user at best and a save race could
+ *  cross-contaminate them (one account's tabs written under another's key), so
+ *  they are untrustworthy — wipe every v1 key rather than migrate. */
+function wipeLegacyLayouts(): void {
   try {
-    const store = (globalThis as Record<string, unknown>).__playgroundUserStore as
-      { getState?: () => { activeUserId?: string } } | undefined;
-    return store?.getState?.().activeUserId ?? "";
+    for (const key of Object.keys(globalThis.localStorage)) {
+      if (key.startsWith(LEGACY_PREFIX)) globalThis.localStorage.removeItem(key);
+    }
   } catch {
-    return "";
+    /* ignore storage/privacy-mode errors */
   }
 }
 
-/** Per-user localStorage key (the bare base key only when no user is known). */
-function layoutKey(userId: string): string {
-  return userId ? `${STORAGE_KEY}.${userId}` : STORAGE_KEY;
-}
-
-const MAIL_APP_URL = ((import.meta.env as Record<string, string>)["VITE_MAIL_APP_URL"] ?? "http://localhost:3002").trim();
-const CALENDAR_APP_URL = ((import.meta.env as Record<string, string>)["VITE_CALENDAR_APP_URL"] ?? "http://localhost:3003").trim();
+// import.meta.env is undefined outside Vite (node tests) — guard the module-scope read.
+const VITE_ENV = ((import.meta as { env?: Record<string, string> }).env ?? {}) as Record<string, string>;
+const MAIL_APP_URL = (VITE_ENV["VITE_MAIL_APP_URL"] ?? "http://localhost:3002").trim();
+const CALENDAR_APP_URL = (VITE_ENV["VITE_CALENDAR_APP_URL"] ?? "http://localhost:3003").trim();
 
 /** Mail / Calendar open as in-app iframe tabs (stable id → focus, not duplicate). */
 export function mailTab(): WorkspaceTab {
@@ -113,13 +121,15 @@ export function freshLayout(): { root: PaneNode; activePaneId: string } {
   return { root: pane, activePaneId: pane.id };
 }
 
-export function loadLayout(userId: string = currentUserId()): { root: LayoutNode; activePaneId: string } {
-  // No window (SSR/tests) OR no signed-in user yet → a clean layout. Returning fresh
-  // when the user is unknown is what stops a DIFFERENT account's persisted tabs from
-  // ever showing before usePageSync restores the correct per-user layout.
-  if (globalThis.window === undefined || !userId) return freshLayout();
+export function loadLayout(scope: string): { root: LayoutNode; activePaneId: string } {
+  // No window (SSR/tests) OR no known identity yet → a clean layout. Returning
+  // fresh when the scope is unknown is what stops a DIFFERENT identity's persisted
+  // tabs from ever showing before usePageSync restores the correct slot.
+  if (globalThis.window === undefined) return freshLayout();
+  wipeLegacyLayouts();
+  if (!scope) return freshLayout();
   try {
-    const raw = globalThis.localStorage.getItem(layoutKey(userId));
+    const raw = globalThis.localStorage.getItem(layoutKeyForScope(scope));
     if (!raw) return freshLayout();
     const parsed = JSON.parse(raw) as { root?: LayoutNode; activePaneId?: string };
     if (!parsed?.root || !parsed.activePaneId) return freshLayout();
@@ -129,10 +139,13 @@ export function loadLayout(userId: string = currentUserId()): { root: LayoutNode
   }
 }
 
-export function saveLayout(state: { root: LayoutNode; activePaneId: string }, userId: string = currentUserId()): void {
-  if (globalThis.window === undefined) return;
+/** Persist a tree under the scope that OWNS it. A missing scope means the tree
+ *  belongs to nobody signed-in — never persisted — so a mid-switch commit can't
+ *  write one identity's tabs into another identity's slot (the v1 bleed bug). */
+export function saveLayout(state: { root: LayoutNode; activePaneId: string }, scope: string): void {
+  if (globalThis.window === undefined || !scope) return;
   try {
-    globalThis.localStorage.setItem(layoutKey(userId), JSON.stringify({ root: state.root, activePaneId: state.activePaneId }));
+    globalThis.localStorage.setItem(layoutKeyForScope(scope), JSON.stringify({ root: state.root, activePaneId: state.activePaneId }));
   } catch {
     /* ignore storage quota / privacy-mode errors */
   }
