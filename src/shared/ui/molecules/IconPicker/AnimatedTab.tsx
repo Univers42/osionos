@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useState } from "react";
 import { NOTO_ANIMATED_BASE, NOTO_ANIMATED_DATA } from "./notoAnimated.generated";
 import { VirtualGrid } from "./VirtualRows";
 
@@ -33,7 +33,7 @@ export function notoAnimatedUrl(cp: string): string {
  *  URL as a regular `img:` icon, so it animates everywhere icons render. Previews
  *  load lazily from fonts.gstatic.com — offline they simply stay blank. */
 export const AnimatedTab: React.FC<{ query: string; onPick: (url: string) => void }> = ({ query, onPick }) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
 
   const sections = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -45,9 +45,9 @@ export const AnimatedTab: React.FC<{ query: string; onPick: (url: string) => voi
     return <p className="p-6 text-center text-sm text-[var(--osio-fg-muted)]">No animated emoji match “{query}”.</p>;
   }
   return (
-    <div ref={scrollRef} className="h-full overflow-auto py-1">
+    <div ref={setScroller} className="h-full overflow-auto py-1">
       <VirtualGrid
-        scrollRef={scrollRef}
+        scrollElement={scroller}
         sections={sections}
         perRow={8}
         renderItem={(item) => (
