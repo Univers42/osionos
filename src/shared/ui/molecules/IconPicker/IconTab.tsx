@@ -6,13 +6,14 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/08 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/08 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/07/12 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from "react";
+import React, { useMemo, useRef } from "react";
 import dynamicIconImports from "lucide-react/dynamicIconImports";
 import LucideGlyph from "@/shared/ui/atoms/IconValueView/LucideGlyph";
+import { VirtualGrid, type GridSection } from "./VirtualRows";
 
 const ALL_NAMES = Object.keys(dynamicIconImports as Record<string, unknown>);
 const COMMON = [
@@ -26,27 +27,44 @@ const COMMON = [
   "credit-card", "dollar-sign", "activity", "book", "graduation-cap", "briefcase", "lightbulb", "wand-2", "palette", "brush",
 ].filter((name, i, arr) => arr.indexOf(name) === i && name in (dynamicIconImports as Record<string, unknown>));
 
-/** Searchable lucide grid; default view shows a curated common set, search spans all icons. */
+/** The full lucide set (~1.9k), virtualized: a Popular section on top, then every
+ *  icon A→Z. Only visible rows mount, so only visible per-icon chunks load. */
 export const IconTab: React.FC<{ query: string; color?: string; onPick: (name: string) => void }> = ({ query, color, onPick }) => {
-  const q = query.trim().toLowerCase();
-  const names = q ? ALL_NAMES.filter((name) => name.includes(q)).slice(0, 150) : COMMON;
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  if (names.length === 0) {
+  const sections = useMemo<Array<GridSection<string>>>(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      return [
+        { title: "Popular", items: COMMON },
+        { title: `All icons · ${ALL_NAMES.length}`, items: ALL_NAMES },
+      ];
+    }
+    const kebab = q.replace(/\s+/g, "-");
+    return [{ items: ALL_NAMES.filter((name) => name.includes(kebab) || name.includes(q)) }];
+  }, [query]);
+
+  if (sections.every((section) => section.items.length === 0)) {
     return <p className="p-6 text-center text-sm text-[var(--osio-fg-muted)]">No icon matches “{query}”.</p>;
   }
   return (
-    <div className="grid grid-cols-8 gap-1 p-2">
-      {names.map((name) => (
-        <button
-          key={name}
-          type="button"
-          title={name}
-          onClick={() => onPick(name)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--osio-fg-default)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
-        >
-          <LucideGlyph name={name} size={20} color={color} />
-        </button>
-      ))}
+    <div ref={scrollRef} className="h-full overflow-auto py-1">
+      <VirtualGrid
+        scrollRef={scrollRef}
+        sections={sections}
+        perRow={8}
+        renderItem={(name) => (
+          <button
+            key={name}
+            type="button"
+            title={name}
+            onClick={() => onPick(name)}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-[var(--osio-fg-default)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
+          >
+            <LucideGlyph name={name} size={20} color={color} />
+          </button>
+        )}
+      />
     </div>
   );
 };
