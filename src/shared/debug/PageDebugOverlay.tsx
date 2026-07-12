@@ -18,6 +18,12 @@
 
 import React, { useEffect, useState } from "react";
 import { anyJsDebugToolEnabled, usePageDebugStore } from "./pageDebugStore";
+import {
+  getEventTimingDurations,
+  getReactCommitDurations,
+  startEventTimingCapture,
+  usedJSHeapSize,
+} from "@/shared/lib/perf/measure";
 
 const CHIP: React.CSSProperties = {
   position: "fixed",
@@ -117,17 +123,77 @@ function useCaretInspector(active: boolean): string | null {
   return info;
 }
 
+function usePerfHud(active: boolean): string | null {
+  const [info, setInfo] = useState<string | null>(null);
+  useEffect(() => {
+    if (!active) return; // stale value is render-gated by the caller
+    startEventTimingCapture();
+    let frames = 0;
+    let frame = requestAnimationFrame(function tick() {
+      frames += 1;
+      frame = requestAnimationFrame(tick);
+    });
+    // Long tasks (>50ms main-thread blocks) — the best jank signal that works
+    // in production, where React commit profiling does not exist.
+    let longTasks = 0;
+    let worstTask = 0;
+    let taskObserver: PerformanceObserver | null = null;
+    try {
+      taskObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          longTasks += 1;
+          worstTask = Math.max(worstTask, entry.duration);
+        }
+      });
+      taskObserver.observe({ type: "longtask", buffered: false });
+    } catch { /* longtask unsupported */ }
+
+    const timer = globalThis.setInterval(() => {
+      const fps = frames;
+      frames = 0;
+      const events = getEventTimingDurations();
+      const slowEvents = events.filter((d) => d > 100).length;
+      const heap = usedJSHeapSize();
+      // React commits exist only in dev (prod React never fires <Profiler> onRender).
+      const commits = import.meta.env.DEV ? getReactCommitDurations() : null;
+      const recent = commits?.slice(-60) ?? [];
+      const avg = recent.length ? recent.reduce((a, b) => a + b, 0) / recent.length : 0;
+      setInfo(
+        `${fps} fps` +
+        ` · long tasks ${longTasks}${worstTask ? ` (worst ${worstTask.toFixed(0)}ms)` : ""}` +
+        ` · events ${events.length}${slowEvents ? ` (${slowEvents} >100ms)` : ""}` +
+        (heap !== null ? ` · heap ${(heap / 1048576).toFixed(0)}MB` : "") +
+        (commits ? ` · commits ${commits.length}${recent.length ? ` (avg ${avg.toFixed(1)}ms)` : ""}` : ""),
+      );
+    }, 1000);
+    return () => {
+      cancelAnimationFrame(frame);
+      globalThis.clearInterval(timer);
+      taskObserver?.disconnect();
+    };
+  }, [active]);
+  return info;
+}
+
 const PageDebugOverlay: React.FC = () => {
   const enabled = usePageDebugStore((s) => s.enabled);
   useOverflowScanner(!!enabled.overflow);
   const ruler = useHoverRuler(!!enabled.measure);
   const caret = useCaretInspector(!!enabled.caret);
+  const perf = usePerfHud(!!enabled.perf);
 
   if (!anyJsDebugToolEnabled(enabled)) return null;
   return (
     <>
+      {/* Bottom-center stack: bottom-right belongs to the floating chat bubble
+          on the live app, which was hiding the ruler chip entirely. */}
       {enabled.measure && ruler && (
-        <div data-testid="debug-ruler-chip" style={{ ...CHIP, right: 12, bottom: 12 }}>{ruler}</div>
+        <div data-testid="debug-ruler-chip" style={{ ...CHIP, left: "50%", transform: "translateX(-50%)", bottom: 12 }}>{ruler}</div>
+      )}
+      {enabled.perf && (
+        <div data-testid="debug-perf-chip" style={{ ...CHIP, left: "50%", transform: "translateX(-50%)", bottom: 44, color: "#a7f3d0" }}>
+          {perf ?? "collecting…"}
+        </div>
       )}
       {enabled.caret && caret && (
         <div data-testid="debug-caret-chip" style={{ ...CHIP, left: 12, bottom: 12 }}>{caret}</div>

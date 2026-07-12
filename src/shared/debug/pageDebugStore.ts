@@ -32,7 +32,7 @@ export type PageDebugToolId =
   | "perf"; // passthrough to the existing osio:perf profiler harness
 
 /** Tools that need the lazy JS overlay mounted (the rest are pure CSS). */
-export const PAGE_DEBUG_JS_TOOLS: readonly PageDebugToolId[] = ["overflow", "measure", "caret"];
+export const PAGE_DEBUG_JS_TOOLS: readonly PageDebugToolId[] = ["overflow", "measure", "caret", "perf"];
 
 export const PAGE_DEBUG_TOOLS: ReadonlyArray<{ id: PageDebugToolId; label: string; hint: string }> = [
   { id: "outlines", label: "Container outlines", hint: "Outline every block, cell, column and page region" },
@@ -42,7 +42,7 @@ export const PAGE_DEBUG_TOOLS: ReadonlyArray<{ id: PageDebugToolId; label: strin
   { id: "overflow", label: "Overflow highlighter", hint: "Flag containers whose content overflows" },
   { id: "measure", label: "Hover ruler", hint: "Live size readout for the hovered container" },
   { id: "caret", label: "Caret inspector", hint: "Live caret block + offset readout" },
-  { id: "perf", label: "Perf profiler", hint: "Enable the osio:perf console harness" },
+  { id: "perf", label: "Perf HUD", hint: "Live FPS, React commits, input events and heap (plus the osio:perf console harness)" },
 ];
 
 const PERF_LOCAL_STORAGE_KEY = "osio:perf"; // mirrors shared/lib/perf/measure.ts
