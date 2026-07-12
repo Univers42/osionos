@@ -30,21 +30,30 @@ test("debug tools toggle overlays on and off from the page ··· menu", async (
   await expect(pageRoot).toHaveAttribute("data-debug-outlines", "");
   await expect(pageRoot).toHaveAttribute("data-debug-surfaces", "");
 
-  // JS tool: the caret inspector HUD reports the focused block live.
+  // JS tools: caret inspector, hover ruler and perf HUD all report live.
   await page.getByTestId("debug-tool-caret").click();
+  await page.getByTestId("debug-tool-measure").click();
+  await page.getByTestId("debug-tool-perf").click();
   await page.keyboard.press("Escape");
   const editor = await activateFirstEditor(page);
   await editor.click();
   await page.keyboard.type("debugging");
   await expect(page.getByTestId("debug-caret-chip")).toBeVisible();
   await expect(page.getByTestId("debug-caret-chip")).toContainText("paragraph");
+  await editor.hover();
+  await expect(page.getByTestId("debug-ruler-chip")).toBeVisible();
+  await expect(page.getByTestId("debug-ruler-chip")).toContainText("px");
+  await expect(page.getByTestId("debug-perf-chip")).toContainText("fps", { timeout: 5000 });
 
   // Toggles are symmetric: everything off again, attributes and HUD gone.
   await page.getByRole("button", { name: "Open page configuration" }).click();
   await page.getByTestId("debug-tool-outlines").click();
   await page.getByTestId("debug-tool-surfaces").click();
   await page.getByTestId("debug-tool-caret").click();
+  await page.getByTestId("debug-tool-measure").click();
+  await page.getByTestId("debug-tool-perf").click();
   await expect(pageRoot).not.toHaveAttribute("data-debug-outlines", "");
   await expect(pageRoot).not.toHaveAttribute("data-debug-surfaces", "");
   await expect(page.getByTestId("debug-caret-chip")).toHaveCount(0);
+  await expect(page.getByTestId("debug-perf-chip")).toHaveCount(0);
 });
