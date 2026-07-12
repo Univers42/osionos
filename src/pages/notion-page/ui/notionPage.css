@@ -145,14 +145,11 @@
   color: var(--osio-fg-default);
   --osionos-layout-panel-width: 0px;
   --osionos-layout-panel-gap: 16px;
-  transition: margin-right var(--osio-motion-standard);
 }
 
-@media (min-width: 900px) {
-  .osionos-layout-block[data-layout-panel-open="true"] {
-    margin-right: calc(var(--osionos-layout-panel-width) + var(--osionos-layout-panel-gap));
-  }
-}
+/* The settings/inspector panels are pure overlays (fixed, LEFT-docked, above
+   everything) — they never displace the layout or the page content, and they
+   never cover the cell being edited (content lives right of the sidebar). */
 
 .osionos-layout-shell {
   position: relative;
@@ -177,7 +174,7 @@
 
 .osionos-layout-settings-panel {
   position: fixed;
-  right: 0;
+  left: 0;
   top: 0;
   bottom: 0;
   z-index: calc(var(--osio-z-popover) + 20);
@@ -188,7 +185,7 @@
   overflow: auto;
   padding: 48px 12px 12px;
   border: 1px solid var(--osio-border-default);
-  border-right: 0;
+  border-left: 0;
   border-radius: 0;
   background: var(--osio-bg-surface);
   box-shadow: var(--osio-shadow-menu);
@@ -198,7 +195,7 @@
 
 .osionos-layout-cell-inspector {
   position: fixed;
-  right: 0;
+  left: 0;
   top: 0;
   bottom: 0;
   z-index: calc(var(--osio-z-popover) + 20);
@@ -210,7 +207,7 @@
   overflow: auto;
   padding: 12px;
   border: 1px solid var(--osio-border-default);
-  border-right: 0;
+  border-left: 0;
   border-radius: 0;
   background: var(--osio-bg-surface);
   box-shadow: var(--osio-shadow-modal);
@@ -219,7 +216,7 @@
 }
 
 @keyframes osionos-layout-panel-slide-in {
-  from { transform: translateX(100%); }
+  from { transform: translateX(-100%); }
   to { transform: translateX(0); }
 }
 
@@ -1033,7 +1030,7 @@ body[data-pane-resizing] .osionos-layout-cell {
     bottom: 12px;
     width: auto;
     max-height: min(70vh, 560px);
-    border-right: 1px solid var(--osio-border-default);
+    border-left: 1px solid var(--osio-border-default);
     border-radius: var(--osio-radius);
     padding-top: 48px;
   }
@@ -1046,7 +1043,7 @@ body[data-pane-resizing] .osionos-layout-cell {
     bottom: 12px;
     width: auto;
     max-height: min(70vh, 560px);
-    border-right: 1px solid var(--osio-border-default);
+    border-left: 1px solid var(--osio-border-default);
     border-radius: var(--osio-radius);
   }
 
@@ -1628,6 +1625,42 @@ button.osionos-page-breadcrumb:hover {
    paint the page background, which would curtain the backdrop. */
 .osionos-page--header-canvas .osionos-layout-shell,
 .osionos-page--header-canvas .osionos-layout-grid {
+  background: transparent;
+}
+
+/* Header BAND: same backdrop treatment, but scoped — the cover backs the title
+   + the layoutRole="header" canvas only; the rest of the page flows normally
+   below on the plain page background. */
+.osionos-page--header-band {
+  position: relative;
+}
+.osionos-page--header-band .osionos-page-cover {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: var(--osio-header-band-cover, 560px);
+  max-height: none;
+  z-index: 0;
+}
+.osionos-page--header-band .osionos-page-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 72%, var(--osio-bg-page) 100%);
+  pointer-events: none;
+}
+.osionos-page--header-band .osionos-page-header,
+.osionos-page--header-band .osionos-page-body {
+  position: relative;
+  z-index: 1;
+}
+.osionos-page--header-band .osionos-page-header {
+  /* The cover leaves the flow in band mode, so the header floats to the very
+     top — clear the sticky breadcrumbs bar (h-11) and let the hero breathe. */
+  padding-top: 64px;
+  text-shadow: 0 1px 12px color-mix(in srgb, var(--osio-bg-page) 85%, transparent);
+}
+[data-layout-role="header"] .osionos-layout-shell,
+[data-layout-role="header"] .osionos-layout-grid {
   background: transparent;
 }
 .osionos-page--header-canvas .osionos-page-header,

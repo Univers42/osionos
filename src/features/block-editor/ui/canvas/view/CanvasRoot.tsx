@@ -98,6 +98,7 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
       ref={rootRef}
       className={`osionos-layout-block ${modeClass} osio-canvas-v2-root`}
       data-layout-mode={layoutMode}
+      data-layout-role={block.layoutRole}
     >
       <div className="osionos-layout-shell">
         <button

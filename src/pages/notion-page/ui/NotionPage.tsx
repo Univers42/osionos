@@ -82,6 +82,11 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
   // backdrop behind the top of the canvas (glass cells float over it). The
   // toggle IS the cover — remove it to get a plain canvas again.
   const hasHeaderCanvas = hasFullPageLayout && !!(page?.cover ?? activePage?.cover);
+  // Header BAND: a layoutRole="header" canvas as the first block — the cover
+  // backdrops only that band; the rest of the page flows normally below it.
+  const hasHeaderBand = page?.content?.[0]?.type === "layout" &&
+    page.content[0]?.layoutRole === "header" &&
+    !!(page?.cover ?? activePage?.cover);
 
   const pageStyle: React.CSSProperties & {
     "--page-font-family": string;
@@ -104,6 +109,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
         pageConfig.fullWidth ? "osionos-page--full-width" : "",
         hasFullPageLayout ? "osionos-page--layout-canvas" : "",
         hasHeaderCanvas ? "osionos-page--header-canvas" : "",
+        hasHeaderBand ? "osionos-page--header-band" : "",
         pageConfig.locked ? "osionos-page--locked" : "",
         pageConfig.presentationMode ? "osionos-page--present" : "",
       ].filter(Boolean).join(" ")}

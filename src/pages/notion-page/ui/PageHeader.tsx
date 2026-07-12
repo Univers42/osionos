@@ -63,10 +63,16 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
   const icon = page?.icon ?? activePage?.icon;
   const cover = page?.cover ?? activePage?.cover;
   const hasCover = !!cover;
-  // Already a header canvas → the canvas tools own the layout; hide the entry button.
+  // Full-page canvas pages own their whole layout → hide the header button there.
   const hasHeaderCanvasLayout = page?.content?.length === 1 &&
     page.content[0]?.type === "layout" &&
     page.content[0]?.layoutMode === "full_page";
+  // Header BAND state drives the button label: none → add, preview → edit, editing → done.
+  const headerBand = page?.content?.[0]?.type === "layout" && page.content[0]?.layoutRole === "header"
+    ? page.content[0]
+    : null;
+  const headerBandEditing = !!headerBand && headerBand.layoutConfig?.preview === false;
+  const customizeLabel = headerBandEditing ? "Done editing header" : "Customize header";
   const hasIcon = !!icon;
 
   function changeTitle(newTitle: string) {
@@ -100,7 +106,7 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
           onChangeCover={actions.changeCover}
           onChangeCoverPosition={actions.changeCoverPosition}
           onRemoveCover={actions.removeCover}
-          onCustomizeHeader={hasHeaderCanvasLayout ? undefined : actions.customizeHeader}
+          onCustomizeHeader={hasHeaderCanvasLayout || headerBand ? undefined : actions.customizeHeader}
           disabled={locked}
         />
       )}
@@ -126,7 +132,7 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
           {!locked && !hasHeaderCanvasLayout && (
             <button type="button" className="osionos-page-toolbar-btn" onClick={actions.customizeHeader}>
               <LayoutDashboard size={14} />
-              Customize header
+              {customizeLabel}
             </button>
           )}
           <button type="button" className="osionos-page-toolbar-btn" onClick={onToggleComments}>
