@@ -54,9 +54,10 @@ export const ColorSwatches: React.FC<{ value?: string; onChange: (color?: string
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        {/* No title attrs on swatches: the e2e pick-helper selects the first `button[title]`
+            as "the asset" — titled swatches made every pick-scenario grab a color instead. */}
         <button
           type="button"
-          title="Default (no color)"
           aria-label="Default color"
           aria-pressed={value === undefined}
           onClick={() => onChange(undefined)}
@@ -69,7 +70,6 @@ export const ColorSwatches: React.FC<{ value?: string; onChange: (color?: string
           <button
             key={color.name}
             type="button"
-            title={color.name}
             aria-label={color.name}
             aria-pressed={value === color.value}
             onClick={() => onChange(color.value)}
@@ -79,7 +79,6 @@ export const ColorSwatches: React.FC<{ value?: string; onChange: (color?: string
         ))}
 
         <label
-          title="Custom color"
           aria-label="Custom color"
           className={`relative flex cursor-pointer items-center justify-center overflow-hidden ${DOT} ${isCustom ? SELECTED : ""}`}
           style={{ background: isCustom ? value : RAINBOW }}

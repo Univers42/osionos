@@ -30,7 +30,7 @@ export const CustomTab: React.FC<{ onPick: (ref: string) => void }> = ({ onPick 
   };
 
   return (
-    <div className="space-y-3 p-3">
+    <div className="h-full space-y-3 overflow-auto p-3">
       <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed border-[var(--osio-border-default)] px-3 py-3 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]">
         <Upload size={16} /> Upload an image or SVG
         <input type="file" accept="image/*,.svg" className="hidden" onChange={onFile} />

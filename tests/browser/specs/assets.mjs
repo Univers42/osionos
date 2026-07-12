@@ -169,6 +169,66 @@ export const assetScenarios = [
   ),
   defineScenario(
     "12. Emojis, Icons & Media",
+    "Expanded catalogs",
+    "the emoji tab exposes the full Unicode catalog with group headers",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await addPageIcon(page);
+      await openPageIconPicker(page);
+      await expect(page.getByTestId("emoji-picker").getByText("Smileys & Emotion")).toBeVisible();
+      await page.getByLabel("Search emoji").fill("shaking face");
+      await expect(page.getByTitle("shaking face", { exact: true })).toBeVisible();
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Expanded catalogs",
+    "the skin-tone selector composes tone variants into grid and picked value",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await addPageIcon(page);
+      await openPageIconPicker(page);
+      await page.getByRole("button", { name: "Skin tone 5" }).click();
+      await page.getByLabel("Search emoji").fill("thumbs up");
+      const cell = page.getByTitle("thumbs up", { exact: true }).first();
+      await expect(cell).toHaveText("👍🏿");
+      await cell.click();
+      await expect(pageIconButton(page)).toContainText("👍🏿");
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Expanded catalogs",
+    "the icons tab browses the entire lucide set beyond the curated defaults",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await addPageIcon(page);
+      await openPageIconPicker(page);
+      await page.getByRole("button", { name: /^Icons$/ }).click();
+      await expect(page.getByTestId("emoji-picker").getByText(/All icons · \d{4}/)).toBeVisible();
+      await page.getByLabel("Search icons").fill("zap");
+      await page.getByTitle("zap-off", { exact: true }).click();
+      await expect(pageIconButton(page).locator("svg")).toHaveCount(1);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Expanded catalogs",
+    "the GIFs tab lists Noto animated emoji and picking one sets an animated icon",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await addPageIcon(page);
+      await openPageIconPicker(page);
+      await page.getByRole("button", { name: /^GIFs$/ }).click();
+      const picker = page.getByTestId("emoji-picker");
+      await expect(picker.getByText(/Animated · Noto Emoji · \d{3}/)).toBeVisible();
+      await expect(picker.locator('img[src*="notoemoji"]').first()).toBeAttached();
+      await pickFirstAssetFromVisiblePicker(page);
+      await expect(pageIconButton(page).locator('img[src*="fonts.gstatic.com"]')).toHaveCount(1);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
     "Callout icons",
     "new callout blocks start with the default light bulb icon",
     async ({ page, appUrl }) => {

@@ -88,7 +88,7 @@ export const ComposerToolbar: React.FC<ComposerToolbarProps> = ({
         <Mic size={18} />
       </button>
 
-      <Popover anchorRef={emojiBtn} open={emojiOpen} onClose={() => setEmojiOpen(false)} className="w-72">
+      <Popover anchorRef={emojiBtn} open={emojiOpen} onClose={() => setEmojiOpen(false)} className="w-80">
         <div className="border-b border-[var(--osio-border-default)] p-2">
           <input
             value={emojiQuery}
@@ -97,7 +97,8 @@ export const ComposerToolbar: React.FC<ComposerToolbarProps> = ({
             className="w-full rounded-md bg-[var(--osio-bg-subtle)] px-2 py-1.5 text-sm outline-none placeholder:text-[var(--osio-fg-subtle)]"
           />
         </div>
-        <div className="max-h-64 overflow-y-auto">
+        {/* EmojiTab scrolls itself (virtualized full catalog) — give it a fixed height, not max-h. */}
+        <div className="h-72">
           <EmojiTab query={emojiQuery} onPick={(emoji) => { onInsertEmoji(emoji); setEmojiOpen(false); }} />
         </div>
       </Popover>
