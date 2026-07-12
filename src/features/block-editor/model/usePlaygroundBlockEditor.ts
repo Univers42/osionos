@@ -1390,10 +1390,12 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         return false;
       }
 
-      const plainHorizontal =
+      // No modifier: shift extends a selection, ctrl/meta/alt are shortcuts —
+      // block-crossing (and the stuck-caret fallback) applies to plain arrows.
+      const plainArrow =
         !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey;
 
-      if (e.key === "ArrowRight" && plainHorizontal) {
+      if (e.key === "ArrowRight" && plainArrow) {
         // Crossing at the block's text end wins over inline-mark skipping (which
         // only fires mid-text, where the caret is not yet at the block edge).
         if (handleArrowRight(blockId, content, focusBlock)) {
@@ -1408,7 +1410,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         }
       }
 
-      if (e.key === "ArrowLeft" && plainHorizontal) {
+      if (e.key === "ArrowLeft" && plainArrow) {
         if (handleArrowLeft(blockId, content, focusBlock)) {
           e.preventDefault();
           return true;
@@ -1416,13 +1418,13 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       }
 
       if (e.key === "ArrowUp") {
-        if (handleArrowUp(blockId, content, focusBlock)) e.preventDefault();
+        if (handleArrowUp(blockId, content, focusBlock, plainArrow)) e.preventDefault();
         return true;
       }
 
       if (e.key === "ArrowDown") {
         if (
-          handleArrowDown(blockId, content, e.target as HTMLElement, focusBlock)
+          handleArrowDown(blockId, content, e.target as HTMLElement, focusBlock, plainArrow)
         )
           e.preventDefault();
         return true;
@@ -1686,7 +1688,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   const createPageInPrivateWorkspace = useCallback(
     async (
       title = "Untitled",
-      options?: { icon?: string; content?: Block[]; open?: boolean },
+      options?: { icon?: string; content?: Block[]; open?: boolean; cover?: string },
     ) => {
       const session = useUserStore.getState().activeSession();
       const privateWorkspaceId = session?.privateWorkspaces[0]?._id;
@@ -1699,6 +1701,10 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
           icon: options?.icon,
           content: options?.content,
         });
+
+      if (page && options?.cover) {
+        usePageStore.getState().patchPage(page._id, { cover: options.cover });
+      }
 
       if (page && options?.open) {
         globalThis.setTimeout(() => {

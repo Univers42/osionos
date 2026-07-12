@@ -107,7 +107,7 @@ const CanvasCellViewComponent: React.FC<CanvasCellViewProps> = ({
   return (
     <section
       aria-label={cell.visuals.label || "Layout cell"}
-      className="osionos-layout-cell group/cell"
+      className={`osionos-layout-cell group/cell${cell.visuals.background === "glass" ? " osionos-layout-cell--glass" : ""}`}
       tabIndex={-1}
       data-layout-cell-id={cell.id}
       data-layout-cell-selected={selected ? "true" : undefined}
@@ -122,7 +122,7 @@ const CanvasCellViewComponent: React.FC<CanvasCellViewProps> = ({
       style={{
         zIndex: cell.z + 1,
         color: cell.visuals.foreground,
-        backgroundColor: cell.visuals.background,
+        backgroundColor: cell.visuals.background === "glass" ? undefined : cell.visuals.background,
         "--osio-cell-x": `${frame.x}px`,
         "--osio-cell-y": `${frame.y}px`,
         "--osio-cell-w": `${frame.width}px`,

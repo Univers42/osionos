@@ -78,6 +78,10 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
   const hasFullPageLayout = page?.content?.length === 1 &&
     page.content[0]?.type === "layout" &&
     page.content[0]?.layoutMode === "full_page";
+  // Header canvas: cover + full-page layout = the cover becomes a full-bleed
+  // backdrop behind the top of the canvas (glass cells float over it). The
+  // toggle IS the cover — remove it to get a plain canvas again.
+  const hasHeaderCanvas = hasFullPageLayout && !!(page?.cover ?? activePage?.cover);
 
   const pageStyle: React.CSSProperties & {
     "--page-font-family": string;
@@ -99,6 +103,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
         pageConfig.smallText ? "osionos-page--small-text" : "",
         pageConfig.fullWidth ? "osionos-page--full-width" : "",
         hasFullPageLayout ? "osionos-page--layout-canvas" : "",
+        hasHeaderCanvas ? "osionos-page--header-canvas" : "",
         pageConfig.locked ? "osionos-page--locked" : "",
         pageConfig.presentationMode ? "osionos-page--present" : "",
       ].filter(Boolean).join(" ")}

@@ -41,6 +41,8 @@ export interface SlashBlockCommand extends SlashCommandBase {
   kind: "block";
   blockType: BlockType;
   layoutMode?: LayoutMode;
+  /** Prefilled layout recipe (e.g. the "/header" profile dashboard). */
+  layoutPreset?: "profile_header";
 }
 
 export interface SlashTurnIntoCommand extends SlashCommandBase {

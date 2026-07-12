@@ -24,6 +24,7 @@ import { createDefaultTableBlock } from "@/entities/block/model/tableBlocks";
 import type { SlashMenuState } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
 import { focusEditableBlock } from "@/features/block-editor/model/blockDomFocus";
 import { createViewShowcaseLayoutContent } from "@/widgets/database-view/model/databaseViewShowcase";
+import { createProfileHeaderContent, PROFILE_HEADER_COVER } from "./profileHeaderPreset";
 
 interface UseSlashSelectOptions {
   pageId: string;
@@ -45,7 +46,7 @@ interface UseSlashSelectOptions {
   ) => { databaseId: string; viewId: string } | null;
   createPageInPrivateWorkspace: (
     title?: string,
-    options?: { icon?: string; content?: Block[]; open?: boolean },
+    options?: { icon?: string; content?: Block[]; open?: boolean; cover?: string },
   ) => Promise<{ id: string } | null>;
   createDatabasePageInPrivateWorkspace: () => Promise<{ id: string } | null>;
   focusBlock: (blockId: string, end?: boolean) => void;
@@ -95,6 +96,7 @@ export function useSlashSelect({
         calloutIcon?: string;
         placeholderText?: string;
         layoutMode?: LayoutMode;
+        layoutPreset?: "profile_header";
       },
     ) => {
       if (!slashMenu) return;
@@ -179,6 +181,26 @@ export function useSlashSelect({
       }
 
       if (selectedType === "layout") {
+        if (options?.layoutPreset === "profile_header") {
+          void (async () => {
+            const createdPage = await createPageInPrivateWorkspace("Profile header", {
+              icon: "icon:id-card",
+              cover: PROFILE_HEADER_COVER,
+              content: createProfileHeaderContent(),
+              open: true,
+            });
+            const nextContent = createdPage
+              ? appendInternalPageLink(cleanContent, createdPage.id)
+              : cleanContent;
+
+            updateBlock(pageId, blockId, {
+              content: nextContent,
+              placeholderText: undefined,
+            });
+            if (!createdPage) repositionCursor(blockId, nextContent);
+          })();
+          return;
+        }
         if (options?.layoutMode === "full_page") {
           void (async () => {
             const createdPage = await createPageInPrivateWorkspace("Layout dashboard", {
@@ -253,8 +275,8 @@ export function useSlashSelect({
   );
 
   const handleSlashBlockSelect = useCallback(
-    (selectedType: BlockType, content: Block[], calloutIcon?: string, layoutMode?: LayoutMode) => {
-      applyBlockSelection(selectedType, content, { calloutIcon, layoutMode });
+    (selectedType: BlockType, content: Block[], calloutIcon?: string, layoutMode?: LayoutMode, layoutPreset?: "profile_header") => {
+      applyBlockSelection(selectedType, content, { calloutIcon, layoutMode, layoutPreset });
     },
     [applyBlockSelection],
   );

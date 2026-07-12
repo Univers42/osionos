@@ -1603,3 +1603,38 @@ button.osionos-page-breadcrumb:hover {
     grid-template-columns: repeat(7, 1fr);
   }
 }
+
+/* Header canvas: when a page has BOTH a cover and a full-page layout, the cover
+   becomes a full-bleed backdrop behind the top of the canvas so glass cells
+   float over it (dashboard/profile headers). The toggle is the cover itself. */
+.osionos-page--header-canvas {
+  position: relative;
+}
+.osionos-page--header-canvas .osionos-page-cover {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: var(--osio-header-canvas-cover, 640px);
+  max-height: none;
+  z-index: 0;
+}
+.osionos-page--header-canvas .osionos-page-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 78%, var(--osio-bg-page) 100%);
+  pointer-events: none;
+}
+/* Let the cover show through the top of the canvas: the shell/grid normally
+   paint the page background, which would curtain the backdrop. */
+.osionos-page--header-canvas .osionos-layout-shell,
+.osionos-page--header-canvas .osionos-layout-grid {
+  background: transparent;
+}
+.osionos-page--header-canvas .osionos-page-header,
+.osionos-page--header-canvas .osionos-page-body {
+  position: relative;
+  z-index: 1;
+}
+.osionos-page--header-canvas .osionos-page-header {
+  text-shadow: 0 1px 12px color-mix(in srgb, var(--osio-bg-page) 85%, transparent);
+}

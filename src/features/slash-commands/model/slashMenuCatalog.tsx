@@ -227,6 +227,18 @@ const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
     layoutMode: "full_page",
   },
   {
+    id: "layout:profile_header",
+    kind: "block",
+    section: "layout",
+    label: "Profile header",
+    aliases: ["header", "profile header", "company header", "dashboard header", "hero"],
+    icon: "▦",
+    description: "Glass identity/stats cards over an ambient video cover",
+    blockType: "layout",
+    layoutMode: "full_page",
+    layoutPreset: "profile_header",
+  },
+  {
     id: "layout:column_list",
     kind: "block",
     section: "layout",
