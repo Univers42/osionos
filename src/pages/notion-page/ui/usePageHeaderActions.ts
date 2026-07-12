@@ -14,6 +14,7 @@ import React, { useCallback, useEffect, useState } from "react";
 
 import { usePageStore } from "@/store/usePageStore";
 import { randomUiCollectionEmoji } from "@/shared/lib/markengine/uiCollectionAssets";
+import { createHeaderCanvasBlock, PROFILE_HEADER_COVER } from "@/features/slash-commands/model/profileHeaderPreset";
 import { patchActivePageMetadata } from "./notionPageMeta";
 
 /** Icon + cover actions for the page header, plus the cover-picker popover state. */
@@ -53,6 +54,22 @@ export function usePageHeaderActions(pageId: string, locked: boolean) {
 
   const addIcon = useCallback(() => changeIcon(randomUiCollectionEmoji()), [changeIcon]);
 
+  /** In-place "Customize header": turn THIS page into a header canvas — glass
+   *  cards over the cover (adding the ambient video cover when none is set),
+   *  with any existing blocks preserved in a Content cell below the hero. */
+  const customizeHeader = useCallback(() => {
+    if (locked) return;
+    const page = usePageStore.getState().pageById(pageId);
+    if (!page) return;
+    const first = page.content?.[0];
+    if (page.content?.length === 1 && first?.type === "layout" && first.layoutMode === "full_page") return;
+    patchPage(pageId, { content: [createHeaderCanvasBlock(page.content ?? [])] });
+    if (!page.cover) {
+      patchPage(pageId, { cover: PROFILE_HEADER_COVER });
+      patchActivePageMetadata(pageId, { cover: PROFILE_HEADER_COVER });
+    }
+  }, [locked, pageId, patchPage]);
+
   const changeCover = useCallback((newCover: string) => {
     if (locked) return;
     patchPage(pageId, { cover: newCover });
@@ -80,5 +97,5 @@ export function usePageHeaderActions(pageId: string, locked: boolean) {
     setCoverPickerOpen(false);
   }, [changeCover]);
 
-  return { changeIcon, removeIcon, addIcon, changeCover, removeCover, changeCoverPosition, toggleCoverPicker, selectCover, coverPickerOpen, coverPickerRef };
+  return { changeIcon, removeIcon, addIcon, customizeHeader, changeCover, removeCover, changeCoverPosition, toggleCoverPicker, selectCover, coverPickerOpen, coverPickerRef };
 }

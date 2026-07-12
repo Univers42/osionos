@@ -44,3 +44,14 @@ test("slash /header creates a glass header-canvas page over a video cover", asyn
   // Live database views are mounted inside the header cells.
   await expect(page.locator(".osionos-layout-cell--glass .osionos-database-block").first()).toBeAttached({ timeout: 15_000 });
 });
+
+test("Customize header button transforms the current page in place", async ({ page, baseURL }) => {
+  await openFreshPage(page, baseURL);
+  await page.getByRole("button", { name: /Customize header/i }).click();
+
+  await expect(page.locator(".osionos-page--header-canvas")).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('[data-testid="page-cover-video"]')).toHaveCount(1);
+  expect(await page.locator(".osionos-layout-cell--glass").count()).toBeGreaterThanOrEqual(4);
+  // The button retires once the page is a header canvas.
+  await expect(page.getByRole("button", { name: /Customize header/i })).toHaveCount(0);
+});

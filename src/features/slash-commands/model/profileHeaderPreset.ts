@@ -87,9 +87,31 @@ export function createProfileHeaderCells(): LayoutCell[] {
   ];
 }
 
-/** The whole page body: one full-page canvas whose top band floats over the cover. */
-export function createProfileHeaderContent(): Block[] {
-  return [{
+/** True for blocks that carry no user content (blank paragraphs). */
+function isBlankBlock(candidate: Block): boolean {
+  return candidate.type === "paragraph" && !(candidate.content ?? "").trim() && !(candidate.children?.length);
+}
+
+/** One full-page header canvas. Any existing page blocks are preserved in a
+ *  full-width auto-height "Content" cell below the hero cards, so the
+ *  in-place "Customize header" transform never loses work. */
+export function createHeaderCanvasBlock(existing: Block[] = []): Block {
+  const cells = createProfileHeaderCells();
+  const kept = existing.filter((candidate) => !isBlankBlock(candidate));
+  if (kept.length > 0) {
+    cells.push({
+      id: crypto.randomUUID(),
+      colStart: 1, colSpan: 12, rowStart: 7, rowSpan: 3,
+      label: "Content",
+      sizing: "auto-height",
+      horizontalConstraint: "stretch",
+      verticalConstraint: "top",
+      wrap: true,
+      padding: "spacious",
+      blocks: kept,
+    });
+  }
+  return {
     id: crypto.randomUUID(),
     type: "layout",
     content: "",
@@ -106,6 +128,11 @@ export function createProfileHeaderContent(): Block[] {
       preview: false,
       theme: "spacious",
     },
-    layoutCells: createProfileHeaderCells(),
-  }];
+    layoutCells: cells,
+  };
+}
+
+/** The whole page body: one full-page canvas whose top band floats over the cover. */
+export function createProfileHeaderContent(): Block[] {
+  return [createHeaderCanvasBlock()];
 }
