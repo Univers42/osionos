@@ -29,6 +29,7 @@ import {
   type InlineEditorSelectionOffsets,
 } from "@/shared/lib/markengine";
 import { useSlashSelect, repositionCursor } from "@/features/slash-commands";
+import { createHeaderBandBlock } from "@/features/slash-commands/model/profileHeaderPreset";
 import { useUserStore } from "@/features/auth";
 import {
   isIndentable,
@@ -732,6 +733,37 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     },
     [flushPendingDrafts, pageId, updatePageContent],
   );
+
+  // "Customize header" (PageHeader button → osionos:customize-header event) runs
+  // INSIDE the editor pipeline: drafts are flushed first so prepending the band
+  // never clobbers just-typed text; the toggle round-trips the same tree helpers.
+  const customizeHeaderBand = useCallback(() => {
+    flushPendingDrafts("structural");
+    const current = contentRef.current;
+    const first = current[0];
+    if (first?.type === "layout" && first.layoutRole === "header") {
+      const preview = first.layoutConfig?.preview ?? true;
+      updatePageContent(pageId, updateBlockInEditorTree(current, first.id, (block) => ({
+        ...block,
+        layoutConfig: { ...block.layoutConfig, preview: !preview },
+      })));
+      return;
+    }
+    if (current.length === 1 && first?.type === "layout" && first.layoutMode === "full_page") return;
+    updatePageContent(pageId, [createHeaderBandBlock({ preview: false }), ...current]);
+  }, [flushPendingDrafts, pageId, updatePageContent]);
+
+  useEffect(() => {
+    const onCustomizeHeader = (event: Event) => {
+      const detail = (event as CustomEvent<{ pageId?: string }>).detail;
+      if (detail?.pageId && detail.pageId !== pageId) return;
+      // Same page open in several panes: the first editor handles it, the rest skip.
+      event.stopImmediatePropagation();
+      customizeHeaderBand();
+    };
+    globalThis.addEventListener("osionos:customize-header", onCustomizeHeader);
+    return () => globalThis.removeEventListener("osionos:customize-header", onCustomizeHeader);
+  }, [customizeHeaderBand, pageId]);
 
   const moveBlockAcrossTree = useCallback(
     (_pid: string, blockId: string, targetParentBlockId: string | null, targetIndex: number) => {

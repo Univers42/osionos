@@ -87,52 +87,37 @@ export function createProfileHeaderCells(): LayoutCell[] {
   ];
 }
 
-/** True for blocks that carry no user content (blank paragraphs). */
-function isBlankBlock(candidate: Block): boolean {
-  return candidate.type === "paragraph" && !(candidate.content ?? "").trim() && !(candidate.children?.length);
-}
-
-/** One full-page header canvas. Any existing page blocks are preserved in a
- *  full-width auto-height "Content" cell below the hero cards, so the
- *  in-place "Customize header" transform never loses work. */
-export function createHeaderCanvasBlock(existing: Block[] = []): Block {
-  const cells = createProfileHeaderCells();
-  const kept = existing.filter((candidate) => !isBlankBlock(candidate));
-  if (kept.length > 0) {
-    cells.push({
-      id: crypto.randomUUID(),
-      colStart: 1, colSpan: 12, rowStart: 7, rowSpan: 3,
-      label: "Content",
-      sizing: "auto-height",
-      horizontalConstraint: "stretch",
-      verticalConstraint: "top",
-      wrap: true,
-      padding: "spacious",
-      blocks: kept,
-    });
-  }
+/** The header BAND: an inline layout canvas with `layoutRole: "header"` that
+ *  sits as the page's first block. The page itself stays a normal page — every
+ *  other block keeps flowing below the band. `preview` controls the focus
+ *  toggle: true = clean reading view, false = header-editing (grid + tools). */
+export function createHeaderBandBlock(options: { preview?: boolean } = {}): Block {
   return {
     id: crypto.randomUUID(),
     type: "layout",
     content: "",
-    layoutMode: "full_page",
+    layoutMode: "inline",
+    layoutRole: "header",
     layoutConfig: {
       columns: 12,
-      rows: 10,
+      rows: 6,
       gap: 16,
       rowHeight: 96,
       wrap: true,
       autoArrange: false,
       snapToGrid: true,
       guideVisibility: "auto",
-      preview: false,
+      preview: options.preview ?? true,
       theme: "spacious",
     },
-    layoutCells: cells,
+    layoutCells: createProfileHeaderCells(),
   };
 }
 
-/** The whole page body: one full-page canvas whose top band floats over the cover. */
+/** The "/header" page body: the hero band on top, then a normal empty page below. */
 export function createProfileHeaderContent(): Block[] {
-  return [createHeaderCanvasBlock()];
+  return [
+    createHeaderBandBlock({ preview: true }),
+    { id: crypto.randomUUID(), type: "paragraph", content: "" },
+  ];
 }

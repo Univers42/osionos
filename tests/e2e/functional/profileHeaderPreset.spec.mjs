@@ -10,9 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// "/header" → a linked "Profile header" page: ambient VIDEO cover as a
-// full-bleed backdrop (header-canvas mode) with glass layout cells floating
-// over it, wired to live database views (chart + timeline).
+// "/header" → a linked "Profile header" page: an ambient VIDEO cover backdrops
+// the header BAND (a layoutRole="header" canvas of glass cells with live
+// database views) while the rest of the page stays a normal page below.
 
 import { expect, test } from "@playwright/test";
 
@@ -29,9 +29,8 @@ test("slash /header creates a glass header-canvas page over a video cover", asyn
   await openSlashMenuFromEditor(editor, "/header");
   await slashCommandEntry(page, "Profile header").click();
 
-  // The preset opens the created page: header-canvas mode = cover + full-page canvas.
-  const headerCanvasPage = page.locator(".osionos-page--header-canvas");
-  await expect(headerCanvasPage).toBeVisible({ timeout: 15_000 });
+  // The preset opens the created page: header-band mode = cover + header-role canvas.
+  await expect(page.locator(".osionos-page--header-band")).toBeVisible({ timeout: 15_000 });
 
   // Video cover attached (offline env: the element exists; the asset itself is remote).
   await expect(page.locator('[data-testid="page-cover-video"]')).toHaveCount(1);
@@ -45,13 +44,27 @@ test("slash /header creates a glass header-canvas page over a video cover", asyn
   await expect(page.locator(".osionos-layout-cell--glass .osionos-database-block").first()).toBeAttached({ timeout: 15_000 });
 });
 
-test("Customize header button transforms the current page in place", async ({ page, baseURL }) => {
+test("Customize header adds a band, keeps the page, and toggles focus", async ({ page, baseURL }) => {
   await openFreshPage(page, baseURL);
-  await page.getByRole("button", { name: /Customize header/i }).click();
+  const editor = await activateFirstEditor(page);
+  await editor.click();
+  await page.keyboard.type("Body text stays put");
 
-  await expect(page.locator(".osionos-page--header-canvas")).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: /^Customize header$/ }).click();
+
+  // Band mode: cover video backdrop + glass hero cells, page content intact below.
+  await expect(page.locator(".osionos-page--header-band")).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('[data-testid="page-cover-video"]')).toHaveCount(1);
   expect(await page.locator(".osionos-layout-cell--glass").count()).toBeGreaterThanOrEqual(4);
-  // The button retires once the page is a header canvas.
-  await expect(page.getByRole("button", { name: /Customize header/i })).toHaveCount(0);
+  await expect(page.getByText("Body text stays put")).toBeVisible();
+
+  // Focus toggle: inserting opens edit mode ("Done editing header"), clicking returns to normal sight.
+  const doneButton = page.getByRole("button", { name: /Done editing header/ });
+  await expect(doneButton).toBeVisible();
+  // The page auto-scrolls during insert; surface the toolbar from under the sticky breadcrumbs bar.
+  await page.locator(".osionos-page").first().evaluate((el) => el.scrollTo(0, 0));
+  await doneButton.click();
+  await expect(page.getByRole("button", { name: /^Customize header$/ })).toBeVisible();
+  await expect(page.locator(".osionos-page--header-band")).toBeVisible();
+  await expect(page.getByText("Body text stays put")).toBeVisible();
 });

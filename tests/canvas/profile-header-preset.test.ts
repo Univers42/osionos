@@ -6,21 +6,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  createHeaderCanvasBlock,
+  createHeaderBandBlock,
   createProfileHeaderCells,
   createProfileHeaderContent,
   PROFILE_HEADER_COVER,
 } from "../../src/features/slash-commands/model/profileHeaderPreset.ts";
 import { isVideoCoverSource } from "../../src/entities/page/ui/coverMedia.ts";
 
-test("profile header: one full-page layout block with a 12-col config", () => {
+test("profile header: a header BAND block on top of a normal page", () => {
   const content = createProfileHeaderContent();
-  assert.equal(content.length, 1);
-  const layout = content[0];
-  assert.equal(layout.type, "layout");
-  assert.equal(layout.layoutMode, "full_page");
-  assert.equal(layout.layoutConfig?.columns, 12);
-  assert.ok((layout.layoutCells?.length ?? 0) >= 4);
+  assert.equal(content.length, 2);
+  const [band, body] = content;
+  assert.equal(band.type, "layout");
+  assert.equal(band.layoutMode, "inline");
+  assert.equal(band.layoutRole, "header");
+  assert.equal(band.layoutConfig?.preview, true);
+  assert.equal(band.layoutConfig?.columns, 12);
+  assert.ok((band.layoutCells?.length ?? 0) >= 4);
+  assert.equal(body.type, "paragraph");
 });
 
 test("profile header cells: glass fills, inside the grid, unique ids", () => {
@@ -51,22 +54,11 @@ test("profile header cover: an https ambient video the cover pipeline plays", ()
   assert.equal(isVideoCoverSource(PROFILE_HEADER_COVER), true);
 });
 
-test("customize-header transform: existing blocks survive in a Content cell", () => {
-  const existing = [
-    { id: "a", type: "heading_1" as const, content: "Keep me" },
-    { id: "b", type: "paragraph" as const, content: "  " }, // blank — dropped
-    { id: "c", type: "paragraph" as const, content: "Body text" },
-  ];
-  const layout = createHeaderCanvasBlock(existing);
-  const contentCell = layout.layoutCells?.find((cell) => cell.label === "Content");
-  assert.ok(contentCell, "expected a Content cell for existing blocks");
-  assert.deepEqual(contentCell?.blocks.map((b) => b.id), ["a", "c"]);
-  assert.equal(contentCell?.sizing, "auto-height");
-  assert.ok(contentCell!.colStart === 1 && contentCell!.colSpan === 12);
-});
-
-test("customize-header transform: an effectively-empty page gets no Content cell", () => {
-  const layout = createHeaderCanvasBlock([{ id: "x", type: "paragraph", content: "" }]);
-  assert.equal(layout.layoutCells?.some((cell) => cell.label === "Content"), false);
-  assert.equal(layout.layoutCells?.length, createProfileHeaderCells().length);
+test("header band block: focus flag drives the customize/done toggle", () => {
+  assert.equal(createHeaderBandBlock().layoutConfig?.preview, true);
+  assert.equal(createHeaderBandBlock({ preview: false }).layoutConfig?.preview, false);
+  const band = createHeaderBandBlock();
+  assert.equal(band.layoutRole, "header");
+  assert.equal(band.layoutMode, "inline");
+  assert.equal(band.layoutCells?.length, createProfileHeaderCells().length);
 });
