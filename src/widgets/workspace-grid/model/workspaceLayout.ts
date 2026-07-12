@@ -50,6 +50,14 @@ interface LayoutState {
   /** Load the persisted layout OWNED by (user, workspace) — called on auth resolve and
    *  on every user/workspace switch, so no identity ever inherits another's open tabs. */
   restoreForScope: (userId: string, workspaceId: string) => void;
+  /** Close every open tab whose pageId is in the set — a page that was archived
+   *  (deleted → trash) or removed must not linger in the tab bar. Emptied panes
+   *  collapse; a fully-emptied tree falls back to a fresh Home. */
+  closeTabsForPages: (pageIds: Set<string>) => void;
+  /** Refresh title/icon on every open tab of a page (rename / icon change) so the
+   *  tab strip never shows a stale snapshot — and a stale snapshot can never flow
+   *  back over the live title when the tab is refocused. */
+  updateTabsForPage: (pageId: string, patch: { title?: string; icon?: string }) => void;
 }
 
 export const useWorkspaceLayout = create<LayoutState>((set, get) => {
@@ -75,6 +83,21 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
       const fresh = freshLayout();
       set(fresh);
       saveLayout(fresh, get().scope);
+    },
+
+    updateTabsForPage: (pageId, patch) => {
+      const state = get();
+      let root = state.root;
+      let changed = false;
+      for (const pane of collectPanes(state.root)) {
+        if (!pane.tabs.some((tab) => tab.pageId === pageId)) continue;
+        changed = true;
+        root = updatePane(root, pane.id, (p) => ({
+          ...p,
+          tabs: p.tabs.map((tab) => (tab.pageId === pageId ? { ...tab, ...patch } : tab)),
+        }));
+      }
+      if (changed) commit(root, state.activePaneId, false);
     },
 
     restoreForScope: (userId, workspaceId) => {

@@ -134,6 +134,17 @@ function bumpPageRevision(
   };
 }
 
+
+/** Tabs snapshot titles/icons at open time — refresh them on every title/icon write.
+ *  Dynamic import: the layout store is widget-side; a static import here would be a
+ *  store ↔ widget module cycle at init. */
+function notifyTabsOfPagePatch(pageId: string, patch: { title?: string; icon?: string }): void {
+  if (patch.title === undefined && patch.icon === undefined) return;
+  void import("@/widgets/workspace-grid/model/workspaceLayout")
+    .then((m) => m.useWorkspaceLayout.getState().updateTabsForPage(pageId, patch))
+    .catch(() => undefined);
+}
+
 export const usePageStore = create<PageStore>((set, get) => ({
   ...cachedPageState,
   pageRevisions: {},
@@ -402,6 +413,9 @@ export const usePageStore = create<PageStore>((set, get) => ({
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     }));
+    if (typeof patch !== "function") {
+      notifyTabsOfPagePatch(pageId, { title: patch.title, icon: patch.icon ?? undefined });
+    }
   },
 
   updatePageTitle: (pageId, title) => {
@@ -424,6 +438,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       };
     });
     persistPageTitle(pageId, title);
+    notifyTabsOfPagePatch(pageId, { title });
   },
 
   pagesForWorkspace: (workspaceId) => get().pages[workspaceId] ?? [],

@@ -36,12 +36,20 @@ export function tabToActivePage(tab: WorkspaceTab): ActivePage | null {
  */
 export function mirrorActiveTab(tab: WorkspaceTab | null): void {
   const store = usePageStore.getState();
-  const activePage = tab ? tabToActivePage(tab) : null;
+  const snapshot = tab ? tabToActivePage(tab) : null;
 
-  if (!activePage) {
+  if (!snapshot) {
     usePageStore.setState({ activePage: null, showTrash: tab?.kind === "trash", navigationPath: [] });
     return;
   }
+
+  // Prefer the LIVE page record over the tab's creation-time snapshot: a tab
+  // opened before a rename must never push its stale "Untitled" back into the
+  // active page (the rename-reverts-on-tab-click bug).
+  const live = store.pageById(snapshot.id);
+  const activePage = live
+    ? { ...snapshot, title: live.title, icon: live.icon ?? snapshot.icon }
+    : snapshot;
 
   const recents = addRecent(store.recents, activePage);
   saveRecents(recents);
