@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 
 import type { ActivePage } from "@/entities/page";
 import { usePageStore } from "@/store/usePageStore";
@@ -22,8 +22,14 @@ import { PageHeaderBar } from "@/entities/page";
 import { PageBody } from "./PageBody";
 import { PageHeader } from "./PageHeader";
 import { PageOutlineRail } from "@/widgets/page-toc/PageOutlineRail";
+import { anyJsDebugToolEnabled, usePageDebugStore } from "@/shared/debug/pageDebugStore";
 
 import "./notionPage.css";
+import "@/app/styles/debug-tools.css";
+
+// Debug HUD (overflow scan / hover ruler / caret readout) — own chunk, mounted
+// only while a JS debug tool is toggled on in ··· → Tools.
+const LazyPageDebugOverlay = React.lazy(() => import("@/shared/debug/PageDebugOverlay"));
 
 interface OsionosPageProps {
   pageId: string;
@@ -64,6 +70,10 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
   useEffect(() => {
     initRealtimeMessagesBridge();
   }, []);
+
+  // ··· → Tools debug toggles; each becomes a data attribute the debug-tools
+  // stylesheet keys on (zero cost while off).
+  const debugTools = usePageDebugStore((s) => s.enabled);
 
   useEffect(() => {
     const handleAddPageComment = (event: Event) => {
@@ -114,6 +124,11 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
         pageConfig.presentationMode ? "osionos-page--present" : "",
       ].filter(Boolean).join(" ")}
       style={pageStyle}
+      data-debug-outlines={debugTools.outlines ? "" : undefined}
+      data-debug-surfaces={debugTools.surfaces ? "" : undefined}
+      data-debug-grid={debugTools.grid ? "" : undefined}
+      data-debug-blockinfo={debugTools.blockInfo ? "" : undefined}
+      data-debug-overflow={debugTools.overflow ? "" : undefined}
     >
       {!hasFullPageLayout && <PageOutlineRail pageId={pageId} />}
 
@@ -134,6 +149,12 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
       />
 
       <PageBody pageId={pageId} locked={pageConfig.locked} />
+
+      {anyJsDebugToolEnabled(debugTools) && (
+        <Suspense fallback={null}>
+          <LazyPageDebugOverlay />
+        </Suspense>
+      )}
     </div>
   );
 };
