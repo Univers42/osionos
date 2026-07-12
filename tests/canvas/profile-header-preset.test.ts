@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createHeaderCanvasBlock,
   createProfileHeaderCells,
   createProfileHeaderContent,
   PROFILE_HEADER_COVER,
@@ -48,4 +49,24 @@ test("profile header: live database views (chart + timeline) are wired in", () =
 test("profile header cover: an https ambient video the cover pipeline plays", () => {
   assert.ok(PROFILE_HEADER_COVER.startsWith("https://"));
   assert.equal(isVideoCoverSource(PROFILE_HEADER_COVER), true);
+});
+
+test("customize-header transform: existing blocks survive in a Content cell", () => {
+  const existing = [
+    { id: "a", type: "heading_1" as const, content: "Keep me" },
+    { id: "b", type: "paragraph" as const, content: "  " }, // blank — dropped
+    { id: "c", type: "paragraph" as const, content: "Body text" },
+  ];
+  const layout = createHeaderCanvasBlock(existing);
+  const contentCell = layout.layoutCells?.find((cell) => cell.label === "Content");
+  assert.ok(contentCell, "expected a Content cell for existing blocks");
+  assert.deepEqual(contentCell?.blocks.map((b) => b.id), ["a", "c"]);
+  assert.equal(contentCell?.sizing, "auto-height");
+  assert.ok(contentCell!.colStart === 1 && contentCell!.colSpan === 12);
+});
+
+test("customize-header transform: an effectively-empty page gets no Content cell", () => {
+  const layout = createHeaderCanvasBlock([{ id: "x", type: "paragraph", content: "" }]);
+  assert.equal(layout.layoutCells?.some((cell) => cell.label === "Content"), false);
+  assert.equal(layout.layoutCells?.length, createProfileHeaderCells().length);
 });

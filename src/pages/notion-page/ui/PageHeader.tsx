@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { MessageSquare } from "lucide-react";
+import { LayoutDashboard, MessageSquare } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
 
 import { usePageStore } from "@/store/usePageStore";
@@ -63,6 +63,10 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
   const icon = page?.icon ?? activePage?.icon;
   const cover = page?.cover ?? activePage?.cover;
   const hasCover = !!cover;
+  // Already a header canvas → the canvas tools own the layout; hide the entry button.
+  const hasHeaderCanvasLayout = page?.content?.length === 1 &&
+    page.content[0]?.type === "layout" &&
+    page.content[0]?.layoutMode === "full_page";
   const hasIcon = !!icon;
 
   function changeTitle(newTitle: string) {
@@ -96,6 +100,7 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
           onChangeCover={actions.changeCover}
           onChangeCoverPosition={actions.changeCoverPosition}
           onRemoveCover={actions.removeCover}
+          onCustomizeHeader={hasHeaderCanvasLayout ? undefined : actions.customizeHeader}
           disabled={locked}
         />
       )}
@@ -116,6 +121,12 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
             <button type="button" className="osionos-page-toolbar-btn" onClick={actions.toggleCoverPicker}>
               <IconImage />
               Add cover
+            </button>
+          )}
+          {!locked && !hasHeaderCanvasLayout && (
+            <button type="button" className="osionos-page-toolbar-btn" onClick={actions.customizeHeader}>
+              <LayoutDashboard size={14} />
+              Customize header
             </button>
           )}
           <button type="button" className="osionos-page-toolbar-btn" onClick={onToggleComments}>
