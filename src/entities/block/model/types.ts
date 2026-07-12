@@ -123,11 +123,13 @@ export interface Block {
   content: string;
   children?: Block[];		/** Children blocks (for toggle, nested lists, etc.) */
   checked?: boolean;		/** Whether a to_do is checked */
+  dueAt?: string;		/** ISO date (YYYY-MM-DD) a to_do is due — indexed into osionos_tasks */
   language?: string;		/** Programming language for code blocks */
   codeView?: "preview" | "source";		/** View mode for renderable code blocks (default: preview) */
   fileName?: string;					/** Optional title/filename shown in a code block header */
   codeTheme?: "dark" | "light";			/** Per-block code card theme (default: dark) */
   lineNumbers?: boolean;				/** Show a line-number gutter in a code block */
+  sqlMountId?: string;		/** Live-DB mount a `sql` code block runs against (read-only) */
   heightLines?: number;					/** Persisted height in lines for code blocks */
   color?: string;			/** Color for callouts, etc. */
   textColor?: string;		/** Optional block text color */
@@ -153,6 +155,7 @@ export interface Block {
   recordRef?: '$record' | '$viewedUser'; /** Sentinel binding — the bound record in context ($viewedUser = legacy alias) */
   fieldBind?: string;        /** Field key a bound block renders, e.g. "headline" or "custom:<key>" */
   layoutMode?: LayoutMode;
+  layoutRole?: "header";	/** "header": hero band — the page cover backdrops this layout; the page flows normally below */
   layoutConfig?: Partial<LayoutConfig>;
   layoutCells?: LayoutCell[];
   schemaVersion?: number;
