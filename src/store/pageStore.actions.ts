@@ -168,14 +168,22 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
       const fullPage = await api.get<PageEntry>(`/api/pages/${pageId}`, pageJwt);
       if (!fullPage) return;
       set((s) => ({
-        ...derivePageState(updatePageInState(s.pages, pageId, (p) => ({
-          ...p,
-          content: fullPage.content ?? p.content,
-          title: fullPage.title ?? p.title,
-          icon: fullPage.icon ?? p.icon,
-          cover: fullPage.cover ?? p.cover,
-          updatedAt: fullPage.updatedAt ?? p.updatedAt,
-        })), s.pageIdsByWorkspace),
+        ...derivePageState(updatePageInState(s.pages, pageId, (p) => {
+          // Last-write-wins (same rule as hydratePages.mergePage): a background
+          // fetch (search index, export prefetch, lazy mount) must never apply a
+          // STALE server copy over newer local edits — e.g. a rename still inside
+          // the outbox debounce window. ISO strings compare lexicographically.
+          const serverNewer = (fullPage.updatedAt ?? "") > (p.updatedAt ?? "");
+          return {
+            ...p,
+            // Filling missing content is this fetch's whole purpose — always take it.
+            content: p.content === undefined || serverNewer ? (fullPage.content ?? p.content) : p.content,
+            title: serverNewer ? (fullPage.title ?? p.title) : p.title,
+            icon: serverNewer ? (fullPage.icon ?? p.icon) : p.icon,
+            cover: serverNewer ? (fullPage.cover ?? p.cover) : p.cover,
+            updatedAt: serverNewer ? (fullPage.updatedAt ?? p.updatedAt) : p.updatedAt,
+          };
+        }), s.pageIdsByWorkspace),
       }));
       savePagesCache(get().pages, page.workspaceId);
     } catch (err) {
