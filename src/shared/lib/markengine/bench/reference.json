@@ -1,8 +1,9 @@
 {
   "schemaVersion": 2,
   "ref": "f1c2a7296741248158af620245f96acc5cc4a6e2",
-  "tolerancePercent": 15,
+  "tolerancePercent": 10,
+  "rounds": 2,
   "benchTimeMs": 2000,
   "benchWarmupMs": 400,
-  "note": "Hardware-relative gate (schemaVersion 2). Older schemaVersion 1 (bench/baseline.json) recorded absolute ops/sec from one developer workstation (node v25.9.0, 2026-05-11) and could never pass on a different machine -- every CI run was 9/9 uniformly ~35-45% 'slow' purely from hardware/Node-version, not code. This version pins a known-good git ref instead: abGuard.cjs benchmarks HEAD and this ref in the SAME process/run and gates on the ratio between them, so absolute machine speed cancels out. tolerancePercent=15: docs/phase-1-3-benchmark-report.md measured this suite's same-run noise floor at <4% swing (worst case 'parse inline mixed 10K chars' at +/-3.9%), so 15% leaves ~4x headroom for CI-runner jitter while still catching a real double-digit-percent regression. Update `ref` (and re-verify) only after confirming a perf change is intentional -- do not widen tolerancePercent to make a real regression disappear."
+  "note": "Hardware-relative gate (schemaVersion 2). schemaVersion 1 (bench/baseline.json) froze absolute ops/sec from one developer workstation (node v25.9.0, 2026-05-11) and could never pass elsewhere: on CI all 9/9 benchmarks read uniformly ~35-45% 'slow' purely from hardware/Node-version, not code. This version pins a known-good git ref instead -- abGuard.cjs benchmarks HEAD and this ref in the SAME process/run and gates on the RATIO between them, so absolute machine speed cancels out. tolerancePercent stays at the original gate's 10% (NOT widened): measured same-run noise is <4% (worst observed ratio 0.962), so 10% keeps ~2.5x headroom. rounds=2 buys noise-robustness the honest way -- each round re-runs both sides with the A/B order swapped and we keep the BEST ratio per benchmark, so a transient stall on one side of one round is discarded while a real regression (slow in every round) still fails. Verified: injected regressions measuring -10.4% and -20.0% both FAIL this gate. Update `ref` only after confirming a perf change is intentional -- never raise tolerancePercent to make a real regression disappear."
 }
