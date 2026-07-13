@@ -18,6 +18,7 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 
 COPY index.html tsconfig.json vite.config.ts eslint.config.js ./
 COPY src ./src
+COPY packages ./packages
 COPY config ./config
 
 ARG VITE_API_URL=""
@@ -34,7 +35,15 @@ ENV VITE_BAAS_ANON_KEY=$VITE_BAAS_ANON_KEY
 # Build, then strip source maps from the shipped image (they tripled its size
 # and leak source) and precompress static assets so nginx's gzip_static
 # serves them with zero CPU per request.
-RUN pnpm run build \
+#
+# Runs the graph-engine + root typecheck and the vite build directly (the
+# same steps as `npm run build` / scripts/docker-run.sh's build case) instead
+# of through docker-run.sh: that script's host/container proxy is pointless
+# noise inside a container that's already the build target, and it requires
+# bash, which this Alpine builder stage doesn't have.
+RUN pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit \
+ && pnpm exec tsc --noEmit \
+ && pnpm exec vite build \
  && find build -name '*.map' -delete \
  && find build -type f \( -name '*.js' -o -name '*.css' -o -name '*.svg' \
       -o -name '*.json' -o -name '*.wasm' \) -size +1k -print0 \
