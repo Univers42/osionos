@@ -10,7 +10,6 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-const { readFileSync } = require("node:fs");
 const { join, resolve } = require("node:path");
 const vm = require("node:vm");
 const esbuild = require("esbuild");
@@ -22,14 +21,14 @@ const NODE_GLOBAL = {
   ELEMENT_NODE: 1,
 };
 
-function loadModule(relativeEntryPoint) {
+function loadModule(relativeEntryPoint, root = MARKENGINE_ROOT) {
   const bundle = esbuild.buildSync({
-    entryPoints: [join(MARKENGINE_ROOT, relativeEntryPoint)],
+    entryPoints: [join(root, relativeEntryPoint)],
     bundle: true,
     platform: "node",
     format: "cjs",
     write: false,
-    tsconfig: join(MARKENGINE_ROOT, "tsconfig.json"),
+    tsconfig: join(root, "tsconfig.json"),
   });
 
   const module = { exports: {} };
@@ -216,13 +215,13 @@ function medianOpsPerSecond(latencyP50Ms) {
   return latencyP50Ms > 0 ? 1000 / latencyP50Ms : 0;
 }
 
-function createBenchmarkScenarios() {
-  const canonical = loadModule("markdown.ts");
-  const richParser = loadModule("markdown/parser.ts");
-  const inlineFormatting = loadModule("inlineFormatting.ts");
-  const inlineTextEditing = loadModule("inlineTextEditing.ts");
-  const inlineDocument = loadModule("inlineDocument.ts");
-  const inlineEditorDom = loadModule("inlineEditorDom.ts");
+function createBenchmarkScenarios(root = MARKENGINE_ROOT) {
+  const canonical = loadModule("markdown.ts", root);
+  const richParser = loadModule("markdown/parser.ts", root);
+  const inlineFormatting = loadModule("inlineFormatting.ts", root);
+  const inlineTextEditing = loadModule("inlineTextEditing.ts", root);
+  const inlineDocument = loadModule("inlineDocument.ts", root);
+  const inlineEditorDom = loadModule("inlineEditorDom.ts", root);
 
   const markdown1Kb = createMarkdownDocument(1024);
   const markdown100Kb = createMarkdownDocument(100 * 1024);
@@ -334,7 +333,7 @@ function createBenchmarkScenarios() {
 }
 
 function runBenchmarks(options = {}) {
-  const scenarios = createBenchmarkScenarios();
+  const scenarios = createBenchmarkScenarios(options.root ?? MARKENGINE_ROOT);
   const bench = new Bench({
     time: options.time ?? Number(process.env.MARKENGINE_BENCH_TIME_MS ?? 300),
     iterations: options.iterations ?? 1,
@@ -387,36 +386,49 @@ function runBenchmarks(options = {}) {
   };
 }
 
-function loadBaseline(path = join(__dirname, "baseline.json")) {
-  return JSON.parse(readFileSync(path, "utf8"));
-}
-
-function compareToBaseline(current, baseline, allowedRegression = 0.1) {
-  const baselineByName = new Map(
-    baseline.benchmarks.map((benchmark) => [benchmark.name, benchmark]),
+// Hardware-relative comparison: `current` and `reference` are both live
+// runBenchmarks() results measured in the SAME process/run (see abGuard.cjs),
+// one against HEAD's source and one against a pinned reference commit's
+// source. Comparing two same-run measurements cancels out machine speed —
+// unlike the old design, which compared a live run against numbers frozen on
+// a single developer workstation (see bench/reference.json for why).
+function compareResults(current, reference, tolerancePercent) {
+  const referenceByName = new Map(
+    reference.benchmarks.map((benchmark) => [benchmark.name, benchmark]),
   );
+  const allowedRegression = tolerancePercent / 100;
+  const comparisons = [];
   const failures = [];
 
   for (const benchmark of current.benchmarks) {
-    const previous = baselineByName.get(benchmark.name);
+    const previous = referenceByName.get(benchmark.name);
     if (!previous) {
-      failures.push(`${benchmark.name}: missing from baseline`);
+      failures.push(`${benchmark.name}: missing from reference commit`);
       continue;
     }
 
-    const minOps = previous.opsPerSecond * (1 - allowedRegression);
-    if (benchmark.opsPerSecond < minOps) {
+    const ratio = benchmark.opsPerSecond / previous.opsPerSecond;
+    comparisons.push({
+      name: benchmark.name,
+      headOpsPerSecond: benchmark.opsPerSecond,
+      referenceOpsPerSecond: previous.opsPerSecond,
+      ratio,
+    });
+
+    if (ratio < 1 - allowedRegression) {
+      const deltaPercent = ((1 - ratio) * 100).toFixed(1);
       failures.push(
-        `${benchmark.name}: median throughput ${benchmark.opsPerSecond.toFixed(2)} ops/sec is below ${minOps.toFixed(2)} ops/sec`,
+        `${benchmark.name}: ${deltaPercent}% slower than the reference commit ` +
+          `(${benchmark.opsPerSecond.toFixed(2)} vs ${previous.opsPerSecond.toFixed(2)} ops/sec; ` +
+          `tolerance is ${tolerancePercent}%)`,
       );
     }
   }
 
-  return failures;
+  return { comparisons, failures };
 }
 
 module.exports = {
-  compareToBaseline,
-  loadBaseline,
+  compareResults,
   runBenchmarks,
 };
