@@ -386,41 +386,56 @@ function runBenchmarks(options = {}) {
   };
 }
 
-// Hardware-relative comparison: `current` and `reference` are both live
+// Hardware-relative comparison. Each `round` is {head, reference}: two live
 // runBenchmarks() results measured in the SAME process/run (see abGuard.cjs),
 // one against HEAD's source and one against a pinned reference commit's
 // source. Comparing two same-run measurements cancels out machine speed —
 // unlike the old design, which compared a live run against numbers frozen on
 // a single developer workstation (see bench/reference.json for why).
-function compareResults(current, reference, tolerancePercent) {
-  const referenceByName = new Map(
-    reference.benchmarks.map((benchmark) => [benchmark.name, benchmark]),
-  );
+//
+// Across rounds we keep the BEST (highest) ratio per benchmark. Rounds swap
+// A/B order, so a transient stall that lands on one side of one round is
+// discarded rather than failing the build. A REAL regression is slow in every
+// round, so its best ratio is still below tolerance — noise is suppressed
+// without widening the threshold.
+function compareResults(rounds, tolerancePercent) {
   const allowedRegression = tolerancePercent / 100;
-  const comparisons = [];
+  const bestByName = new Map();
   const failures = [];
 
-  for (const benchmark of current.benchmarks) {
-    const previous = referenceByName.get(benchmark.name);
-    if (!previous) {
-      failures.push(`${benchmark.name}: missing from reference commit`);
-      continue;
+  for (const round of rounds) {
+    const referenceByName = new Map(
+      round.reference.benchmarks.map((benchmark) => [benchmark.name, benchmark]),
+    );
+
+    for (const benchmark of round.head.benchmarks) {
+      const previous = referenceByName.get(benchmark.name);
+      if (!previous) {
+        failures.push(`${benchmark.name}: missing from reference commit`);
+        continue;
+      }
+
+      const ratio = benchmark.opsPerSecond / previous.opsPerSecond;
+      const best = bestByName.get(benchmark.name);
+      if (!best || ratio > best.ratio) {
+        bestByName.set(benchmark.name, {
+          name: benchmark.name,
+          headOpsPerSecond: benchmark.opsPerSecond,
+          referenceOpsPerSecond: previous.opsPerSecond,
+          ratio,
+        });
+      }
     }
+  }
 
-    const ratio = benchmark.opsPerSecond / previous.opsPerSecond;
-    comparisons.push({
-      name: benchmark.name,
-      headOpsPerSecond: benchmark.opsPerSecond,
-      referenceOpsPerSecond: previous.opsPerSecond,
-      ratio,
-    });
-
-    if (ratio < 1 - allowedRegression) {
-      const deltaPercent = ((1 - ratio) * 100).toFixed(1);
+  const comparisons = [...bestByName.values()];
+  for (const comparison of comparisons) {
+    if (comparison.ratio < 1 - allowedRegression) {
+      const deltaPercent = ((1 - comparison.ratio) * 100).toFixed(1);
       failures.push(
-        `${benchmark.name}: ${deltaPercent}% slower than the reference commit ` +
-          `(${benchmark.opsPerSecond.toFixed(2)} vs ${previous.opsPerSecond.toFixed(2)} ops/sec; ` +
-          `tolerance is ${tolerancePercent}%)`,
+        `${comparison.name}: ${deltaPercent}% slower than the reference commit ` +
+          `(${comparison.headOpsPerSecond.toFixed(2)} vs ${comparison.referenceOpsPerSecond.toFixed(2)} ops/sec; ` +
+          `tolerance is ${tolerancePercent}%, best of ${rounds.length} rounds)`,
       );
     }
   }

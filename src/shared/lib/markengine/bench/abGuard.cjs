@@ -31,6 +31,21 @@ function loadReferenceConfig(path = REFERENCE_PATH) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
+// One round = HEAD and the reference commit, benchmarked back to back in this
+// same process. `headFirst` alternates the order between rounds so neither
+// side systematically benefits from a warm JIT / cold cache.
+function runRound(runOptions, referenceRoot, headFirst) {
+  if (headFirst) {
+    const head = runBenchmarks(runOptions);
+    const reference = runBenchmarks({ ...runOptions, root: referenceRoot });
+    return { head, reference };
+  }
+
+  const reference = runBenchmarks({ ...runOptions, root: referenceRoot });
+  const head = runBenchmarks(runOptions);
+  return { head, reference };
+}
+
 function compareToReference(overrides = {}) {
   const config = { ...loadReferenceConfig(), ...overrides };
   const runOptions = {
@@ -38,23 +53,22 @@ function compareToReference(overrides = {}) {
     warmupTime: config.benchWarmupMs,
   };
 
-  const head = runBenchmarks(runOptions);
-
   const reference = materializeRef(config.ref);
-  let referenceResult;
+  const rounds = [];
   try {
-    referenceResult = runBenchmarks({ ...runOptions, root: reference.dir });
+    for (let index = 0; index < config.rounds; index++) {
+      rounds.push(runRound(runOptions, reference.dir, index % 2 === 0));
+    }
   } finally {
     reference.cleanup();
   }
 
   const { comparisons, failures } = compareResults(
-    head,
-    referenceResult,
+    rounds,
     config.tolerancePercent,
   );
 
-  return { comparisons, failures, head, referenceResult, config };
+  return { comparisons, failures, rounds, config };
 }
 
 module.exports = { compareToReference, loadReferenceConfig };

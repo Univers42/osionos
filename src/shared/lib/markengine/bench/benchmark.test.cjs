@@ -26,7 +26,7 @@ test("markengine benchmarks stay within tolerance of the pinned reference commit
     })),
   );
   console.log(
-    `Reference commit: ${config.ref} | tolerance: ${config.tolerancePercent}%`,
+    `Reference commit: ${config.ref} | tolerance: ${config.tolerancePercent}% | best of ${config.rounds} rounds`,
   );
 
   assert.deepEqual(failures, []);

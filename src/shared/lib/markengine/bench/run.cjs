@@ -52,7 +52,7 @@ function compareReference() {
     })),
   );
   console.log(
-    `Reference commit: ${config.ref} | tolerance: ${config.tolerancePercent}%`,
+    `Reference commit: ${config.ref} | tolerance: ${config.tolerancePercent}% | best of ${config.rounds} rounds`,
   );
   if (failures.length > 0) {
     console.error(`Benchmark regressions exceeded ${config.tolerancePercent}%:`);
