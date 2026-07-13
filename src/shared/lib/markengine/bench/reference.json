@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 2,
+  "ref": "f1c2a7296741248158af620245f96acc5cc4a6e2",
+  "tolerancePercent": 15,
+  "benchTimeMs": 2000,
+  "benchWarmupMs": 400,
+  "note": "Hardware-relative gate (schemaVersion 2). Older schemaVersion 1 (bench/baseline.json) recorded absolute ops/sec from one developer workstation (node v25.9.0, 2026-05-11) and could never pass on a different machine -- every CI run was 9/9 uniformly ~35-45% 'slow' purely from hardware/Node-version, not code. This version pins a known-good git ref instead: abGuard.cjs benchmarks HEAD and this ref in the SAME process/run and gates on the ratio between them, so absolute machine speed cancels out. tolerancePercent=15: docs/phase-1-3-benchmark-report.md measured this suite's same-run noise floor at <4% swing (worst case 'parse inline mixed 10K chars' at +/-3.9%), so 15% leaves ~4x headroom for CI-runner jitter while still catching a real double-digit-percent regression. Update `ref` (and re-verify) only after confirming a perf change is intentional -- do not widen tolerancePercent to make a real regression disappear."
+}
