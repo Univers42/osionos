@@ -11,7 +11,10 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --include=dev --ignore-scripts
 
 FROM deps AS build
-COPY tsconfig.json vite.config.ts markdown.ts ./
+# tsconfig.json's "include" is ["markdown.ts", "renderCore.ts", "src/**/*.ts"] —
+# every one of those must be in the build stage or tsc fails to resolve them
+# (src/*.ts import "../renderCore").
+COPY tsconfig.json vite.config.ts markdown.ts renderCore.ts ./
 COPY src ./src
 COPY markdown ./markdown
 COPY playground/public ./playground/public
