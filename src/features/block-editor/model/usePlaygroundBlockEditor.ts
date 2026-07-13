@@ -21,7 +21,6 @@ import { usePageStore } from "@/store/usePageStore";
 import {
   detectBlockType,
   getInlineEditorSelectionOffsets,
-  setInlineEditorSelectionOffsets,
   getCalloutIconForKind,
   parseMarkdownToBlocks,
   bareUrlToLinkSource,
@@ -30,6 +29,7 @@ import {
 } from "@/shared/lib/markengine";
 import { useSlashSelect, repositionCursor } from "@/features/slash-commands";
 import { createHeaderBandBlock } from "@/features/slash-commands/model/profileHeaderPreset";
+import { contentWithoutHeader, isRemovableHeader } from "@/entities/block/model/headerCanvas";
 import { useUserStore } from "@/features/auth";
 import {
   isIndentable,
@@ -64,9 +64,7 @@ import {
   type PageSelectorMenuState,
   type EmojiMenuState,
   type ColorMenuState,
-} from "./playgroundBlockEditor.helpers";
-import { buildColoredPlaceholder } from "./inlineColorInsert";
-import { inlineIconInsertText } from "./inlineIconInsert";
+} from "./playgroundBlockEditor.helpers";import { inlineIconInsertText } from "./inlineIconInsert";
 import { matchInternalCopy } from "./blockClipboard";
 import { useBlockContextMenu } from "./useBlockContextMenu";
 import { focusEditableBlock, selectionPaneRoot, type CaretPlacement } from "./blockDomFocus";
@@ -753,6 +751,16 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     updatePageContent(pageId, [createHeaderBandBlock({ preview: false }), ...current]);
   }, [flushPendingDrafts, pageId, updatePageContent]);
 
+  // "Remove header" — the way BACK from customize: drop a header band, or unwrap
+  // a header-canvas page (restore the Content cell's blocks as the page). Runs in
+  // the editor pipeline for the same draft-flush reason as customize.
+  const removeHeader = useCallback(() => {
+    flushPendingDrafts("structural");
+    const current = contentRef.current;
+    if (!isRemovableHeader(current)) return;
+    updatePageContent(pageId, contentWithoutHeader(current));
+  }, [flushPendingDrafts, pageId, updatePageContent]);
+
   useEffect(() => {
     const onCustomizeHeader = (event: Event) => {
       const detail = (event as CustomEvent<{ pageId?: string }>).detail;
@@ -761,9 +769,19 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       event.stopImmediatePropagation();
       customizeHeaderBand();
     };
+    const onRemoveHeader = (event: Event) => {
+      const detail = (event as CustomEvent<{ pageId?: string }>).detail;
+      if (detail?.pageId && detail.pageId !== pageId) return;
+      event.stopImmediatePropagation();
+      removeHeader();
+    };
     globalThis.addEventListener("osionos:customize-header", onCustomizeHeader);
-    return () => globalThis.removeEventListener("osionos:customize-header", onCustomizeHeader);
-  }, [customizeHeaderBand, pageId]);
+    globalThis.addEventListener("osionos:remove-header", onRemoveHeader);
+    return () => {
+      globalThis.removeEventListener("osionos:customize-header", onCustomizeHeader);
+      globalThis.removeEventListener("osionos:remove-header", onRemoveHeader);
+    };
+  }, [customizeHeaderBand, removeHeader, pageId]);
 
   const moveBlockAcrossTree = useCallback(
     (_pid: string, blockId: string, targetParentBlockId: string | null, targetIndex: number) => {
@@ -1084,6 +1102,24 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       const detection = detectBlockType(`${liveText} `);
       if (!detection) return false;
 
+      e.preventDefault();
+      applyMarkdownDetection(blockId, detection);
+      focusBlock(blockId);
+      return true;
+    },
+    [applyMarkdownDetection, focusBlock],
+  );
+
+  // Enter also finishes a code fence. The space shortcut above needs a trailing
+  // SPACE ("``` " / "```bash ") so the language can be typed first, but typing
+  // "```"/"```bash" then ENTER is the muscle-memory markdown way — without this
+  // it stayed a plain paragraph (the reported "it doesn't understand that").
+  const handleFenceEnter = useCallback(
+    (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
+      if (e.key !== "Enter" || e.shiftKey || block.type === "code") return false;
+      const liveText = (e.currentTarget as HTMLElement | null)?.textContent ?? block.content;
+      const detection = detectBlockType(liveText);
+      if (detection?.type !== "code") return false;
       e.preventDefault();
       applyMarkdownDetection(blockId, detection);
       focusBlock(blockId);
@@ -1665,9 +1701,18 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       maybePushStructuralSnapshot(e, isEmptyForDeletion);
 
-      const nextContent = parentBlockId
-        ? (findChildrenForParent(contentRef.current, parentBlockId) ?? [])
-        : contentRef.current;
+      // Re-walk the tree ONLY when the snapshot flush above could have mutated it
+      // (its exact structural-key condition). For printable keystrokes the tree is
+      // untouched, and the second recursive findChildrenForParent per nested
+      // keydown was pure waste — every list-item keystroke paid 2× O(tree).
+      const isStructuralKey =
+        e.key === "Tab" || e.key === "Enter" ||
+        ((e.key === "Backspace" || e.key === "Delete") && isEmptyForDeletion);
+      const nextContent = isStructuralKey
+        ? (parentBlockId
+            ? (findChildrenForParent(contentRef.current, parentBlockId) ?? [])
+            : contentRef.current)
+        : content;
       const nextBlock = nextContent.find((b) => b.id === blockId) ?? block;
       const nextBlockIdx = nextContent.findIndex((b) => b.id === blockId);
 
@@ -1676,6 +1721,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         handleParagraphSpaceShortcut(e, blockId, nextBlock) ||
         handleContainerHeadingSpaceShortcut(e, blockId, nextBlock) ||
         handleHeadingToggleSpaceShortcut(e, blockId, nextBlock) ||
+        handleFenceEnter(e, blockId, nextBlock) ||
         handleEmptyEnterOutdent(e, blockId, nextBlock, parentBlockId, isEmpty) ||
         handleEmptyListEnter(e, blockId, nextBlock, nextBlockIdx, nextContent, isEmpty) ||
         handleEmptyTodoEnter(e, blockId, nextBlock, isEmpty) ||
@@ -1698,6 +1744,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       handleParagraphSpaceShortcut,
       handleContainerHeadingSpaceShortcut,
       handleHeadingToggleSpaceShortcut,
+      handleFenceEnter,
       handleEmptyEnterOutdent,
       handleEmptyListEnter,
       handleEmptyTodoEnter,
@@ -1902,30 +1949,23 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     [emojiMenu, flushPendingBlockDraft, pageId, updateBlock, focusBlock],
   );
 
-  // Insert a colored placeholder and select it, so the text typed next replaces
-  // it while staying inside the color wrapper (the "following text" is colored).
+  // Color the WHOLE block: a pick sets the block-level textColor (rendered by
+  // getBlockSurfaceStyle on the block wrapper, persisted by updateBlock) — same
+  // as the right-click Color submenu, NOT an inline run over part of the text.
   const handleColorSelect = useCallback(
-    (color: string) => {
-      if (!colorMenu) return;
-      const { blockId } = colorMenu;
+    (color: string, targetBlockId?: string, targetMode?: "text" | "background") => {
+      // targetBlockId is passed by the "/color <name>" direct path (which never opens
+      // the menu); the ColorMenu's onPick omits it and falls back to the open menu's
+      // block. Reading blockId only from colorMenu silently no-op'd the direct path.
+      const blockId = targetBlockId ?? colorMenu?.blockId;
+      if (!blockId) return;
+      const mode = targetMode ?? colorMenu?.mode ?? "text";
       setColorMenu(null);
       flushPendingBlockDraft(blockId, "shortcut");
-      const block = findBlockInTree(contentRef.current, blockId);
-      if (!block) return;
-
-      const built = buildColoredPlaceholder(block.content, color);
-      if (!built) return;
-      updateBlock(pageId, blockId, { content: built.content });
-      requestAnimationFrame(() => {
-        const root = document.querySelector<HTMLElement>(
-          `[data-block-id="${blockId}"] [contenteditable="true"]`,
-        );
-        if (!root) return;
-        root.focus();
-        setInlineEditorSelectionOffsets(root, { start: built.start, end: built.end });
-      });
+      updateBlock(pageId, blockId, mode === "background" ? { backgroundColor: color } : { textColor: color });
+      focusBlock(blockId, true);
     },
-    [colorMenu, flushPendingBlockDraft, pageId, updateBlock],
+    [colorMenu, flushPendingBlockDraft, pageId, updateBlock, focusBlock],
   );
 
   /** Add a new blank paragraph at the end. */

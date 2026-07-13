@@ -227,8 +227,16 @@ export function setInlineCaretAfterStyledBoundary(
   if (!outer || !outer.parentNode) {
     return;
   }
+  // A collapsed caret at the boundary right after an inline element is ambiguous:
+  // Chromium ABSORBS the next typed character back INTO the element, so the mark
+  // overflows ("boldX" inside <strong>) and only re-settles on blur. Anchor the
+  // caret in a zero-width-space CARRIER text node that lives OUTSIDE the mark, so
+  // the next keystroke lands unstyled. readInlineEditorDomState strips the ZWSP
+  // and flags a re-render, so the carrier is transient and never reaches the source.
+  const carrier = document.createTextNode("\u200B");
+  outer.parentNode.insertBefore(carrier, outer.nextSibling);
   const after = document.createRange();
-  after.setStartAfter(outer);
+  after.setStart(carrier, 1);
   after.collapse(true);
   selection.removeAllRanges();
   selection.addRange(after);

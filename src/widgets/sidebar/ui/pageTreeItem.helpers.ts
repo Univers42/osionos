@@ -68,10 +68,32 @@ export function byPageOrder(a: Pick<PageEntry, "sortOrder">, b: Pick<PageEntry, 
   return pageOrder(a) - pageOrder(b);
 }
 
+/** Children index, built ONCE per pages-array identity (the store replaces the
+ *  array immutably on every commit). Before this, EVERY rendered tree row ran the
+ *  full filter+sort over the whole workspace list on every store commit —
+ *  O(rows × pages) per ~250ms typing commit. Now the first row to ask groups the
+ *  list once; every other row this commit is an O(1) lookup. */
+const childrenIndexCache = new WeakMap<readonly PageEntry[], Map<string, string[]>>();
+const NO_CHILDREN: string[] = [];
+
+function childrenIndexOf(pages: readonly PageEntry[]): Map<string, string[]> {
+  const cached = childrenIndexCache.get(pages);
+  if (cached) return cached;
+  const buckets = new Map<string, PageEntry[]>();
+  for (const page of pages) {
+    if (page.archivedAt || !page.parentPageId) continue;
+    const bucket = buckets.get(page.parentPageId);
+    if (bucket) bucket.push(page);
+    else buckets.set(page.parentPageId, [page]);
+  }
+  const index = new Map<string, string[]>();
+  for (const [parentId, children] of buckets) {
+    index.set(parentId, children.sort(byPageOrder).map((page) => page._id));
+  }
+  childrenIndexCache.set(pages, index);
+  return index;
+}
+
 export function selectChildPageIds(pages: readonly PageEntry[], parentPageId: string): string[] {
-  return pages
-    .filter((page) => page.parentPageId === parentPageId && !page.archivedAt)
-    .slice()
-    .sort(byPageOrder)
-    .map((page) => page._id);
+  return childrenIndexOf(pages).get(parentPageId) ?? NO_CHILDREN;
 }

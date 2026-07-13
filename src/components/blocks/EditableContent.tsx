@@ -927,11 +927,17 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     }
   }, [linkPicker, openPalette]);
 
+  // Only the FOCUSED block listens for selectionchange. Previously every mounted
+  // block attached its own document-level listener, so each caret move (i.e. every
+  // keystroke) invoked O(mounted blocks) handlers — same disease the scroll
+  // listener below already cured. Blur clears the snapshot with the identical
+  // guard, so detaching while unfocused loses nothing.
   useEffect(() => {
+    if (!hasFocus) return;
     const handleSelectionChange = () => updateSelectionSnapshot();
     document.addEventListener("selectionchange", handleSelectionChange);
     return () => document.removeEventListener("selectionchange", handleSelectionChange);
-  }, [updateSelectionSnapshot]);
+  }, [hasFocus, updateSelectionSnapshot]);
 
   // Reposition the floating toolbar on scroll/resize — but ONLY for the block
   // that currently has a selection. Previously every block attached a

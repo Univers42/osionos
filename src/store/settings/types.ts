@@ -222,11 +222,27 @@ export interface AiSettings {
 
 export type McpAllowedTool = 'status' | 'search' | 'read' | 'create' | 'update' | 'archive';
 
+// How members are allowed to connect external AI apps through osionos MCP.
+export type McpRestrictPolicy = 'all' | 'approved' | 'none';
+
+// One member ↔ external-app link. A member can connect many apps; an app can be
+// connected by many members. This is the persisted state that stands in for the
+// real per-provider OAuth handshake we don't have locally.
+export interface McpConnection {
+  appId: string;
+  memberId: string;
+  memberName: string;
+  connectedAt: string;
+}
+
 export interface McpSettings {
   workspaceId: string;
   connected: boolean;
   allowedTools: McpAllowedTool[];
   developerMode: boolean;
+  restrictPolicy: McpRestrictPolicy;
+  approvedApps: string[];
+  connections: McpConnection[];
   updatedAt: string;
 }
 

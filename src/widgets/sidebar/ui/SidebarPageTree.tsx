@@ -18,6 +18,12 @@ import { useShallow } from "zustand/react/shallow";
 import type { ActivePage, PageEntry } from "@/entities/page";
 import { SidebarNavItem } from "./SidebarNavItem";
 import { SidebarSection } from "./SidebarSection";
+import { FavoriteSidebarItem } from "./FavoriteSidebarItem";
+import { useFavoritesStore } from "@/store/favorites/favoritesStore";
+import { favoritesForWorkspace } from "@/store/favorites/favoritesScope";
+import { isFavoritesEnabled, isIdeEnabled } from "@/shared/config/featureFlags";
+import { useDevMode } from "@/shared/config/useDevMode";
+import { createCodeFileBlock } from "@/features/ide/model/codeFile";
 import { OsionosAppsSection } from "./OsionosAppsSection";
 import { PageTreeItem } from "./PageTreeItem";
 import { SidebarTreeToolbar } from "./SidebarTreeToolbar";
@@ -47,13 +53,14 @@ const EMPTY_WORKSPACE_PAGES: readonly PageEntry[] = [];
 type PageStoreState = ReturnType<typeof usePageStore.getState>;
 type RootPageBucket = "agent" | "private" | "owned-shared" | "shared-workspace";
 
-function selectPageAccessEntry(state: PageStoreState, pageId: string): PageEntry | null {
+export function selectPageAccessEntry(state: PageStoreState, pageId: string): PageEntry | null {
   const index = state.pagesIndex[pageId];
   const page = index ? state.pages[index.workspaceId]?.[index.index] : undefined;
   if (!page) return null;
   return {
     _id: page._id,
     title: page.title,
+    icon: page.icon,
     workspaceId: page.workspaceId,
     ownerId: page.ownerId,
     visibility: page.visibility,
@@ -275,6 +282,9 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   }, []);
 
   const addPage = usePageStore((s) => s.addPage);
+  // Dev-mode "New code file" affordance — double-gated (flag + dev toggle).
+  const devMode = useDevMode((s) => s.dev);
+  const showCodeFile = isIdeEnabled() && devMode;
   const fetchPages = usePageStore((s) => s.fetchPages);
   const bumpCollapse = useSidebarTreeDnd((s) => s.bumpCollapse);
   const activeUserId = useUserStore((s) => s.activeUserId);
@@ -374,6 +384,15 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
     if (!workspaceId) return;
     // A folder never opens, so we create it without navigating to it.
     void addPage(workspaceId, "New folder", jwt, undefined, { surface: "folder", visibility });
+  }
+
+  function createCodeFile(workspaceId: string) {
+    if (!workspaceId) return;
+    // ponytail: native prompt is the minimal name-your-file input; a modal is
+    // overkill for a dev affordance. The extension drives the language.
+    const name = globalThis.prompt("New code file (e.g. main.py, hello.cpp, run.sh)", "main.py")?.trim();
+    if (!name) return;
+    void createAndOpenPage(workspaceId, name, { surface: "code", content: [createCodeFileBlock(name)] });
   }
 
   function refreshTree(workspaceId: string) {
@@ -489,9 +508,25 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   }
 
   const workspaceRecents = recents.filter((r) => r.workspaceId === activeWorkspaceId);
+  const favoriteIds = useFavoritesStore((s) => s.pageIds);
+  const pagesIndex = usePageStore((s) => s.pagesIndex);
+  // Favorites are per-user; a starred page belongs to its own workspace, so
+  // scope the list to the active workspace or stars bleed across workspaces.
+  const workspaceFavoriteIds = useMemo(
+    () => favoritesForWorkspace(favoriteIds, workspacePagesKey, (id) => pagesIndex[id]?.workspaceId),
+    [favoriteIds, pagesIndex, workspacePagesKey],
+  );
 
   return (
     <div className="flex flex-col gap-3">
+      {isFavoritesEnabled() && workspaceFavoriteIds.length > 0 && (
+        <SidebarSection label="Favorites">
+          {workspaceFavoriteIds.map((id) => (
+            <FavoriteSidebarItem key={id} pageId={id} activePageId={activePageId} onOpenPage={openPage} />
+          ))}
+        </SidebarSection>
+      )}
+
       <SidebarSection label="Recents">
         {workspaceRecents.length > 0 ? (
           workspaceRecents
@@ -564,6 +599,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
               <SidebarTreeToolbar
                 onAddFile={() => onAddToWorkspace(ws._id)}
                 onAddFolder={() => createRootFolder(ws._id, "private")}
+                onAddCodeFile={showCodeFile ? () => createCodeFile(ws._id) : undefined}
                 onCollapseAll={bumpCollapse}
                 onRefresh={() => refreshTree(ws._id)}
               />
@@ -601,6 +637,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
           <SidebarTreeToolbar
             onAddFile={createSharedPage}
             onAddFolder={() => createRootFolder(activeWorkspaceId, "shared")}
+            onAddCodeFile={showCodeFile ? () => createCodeFile(activeWorkspaceId) : undefined}
             onCollapseAll={bumpCollapse}
             onRefresh={() => refreshTree(activeWorkspaceId)}
           />

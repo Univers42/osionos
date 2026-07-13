@@ -16,6 +16,7 @@ import { continuesSameType } from '@/entities/block';
 import type { CaretPlacement } from './blockDomFocus';
 import { paneRootOf } from './blockDomFocus';
 import { caretRect, caretOnEdgeLine, caretAtBlockEdge } from './caretGeometry';
+import { renderedBlocksInVisualOrder } from './blockVisualOrder';
 
 // Re-exported so consumers keep importing caret geometry from this module.
 export { caretRect };
@@ -75,6 +76,9 @@ export interface EmojiMenuState {
 export interface ColorMenuState {
   blockId: string;
   position: { x: number; y: number; top: number };
+  // "text" tints the block's foreground (block.textColor); "background" tints the
+  // block surface (block.backgroundColor). Same picker, different target field.
+  mode: "text" | "background";
 }
 
 /**
@@ -85,23 +89,35 @@ export interface ColorMenuState {
  */
 export const EMOJI_TRIGGER_RE = /(?:^|[\s(]):([a-z0-9_+-]+)$/i;
 
-function getRenderedBlocks(root: ParentNode = document): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>('[data-block-id]'));
+// A block can host the caret when it holds a real focus target that placeCaret
+// can move the SELECTION into. Parking focus on anything else (divider, media)
+// leaves the selection in the departed block, whose caret-restore then steals
+// focus back on the next draft-commit re-render — a race the caret always
+// loses. Navigation therefore steps OVER such void blocks.
+function hasCaretHost(blockEl: HTMLElement): boolean {
+  return Boolean(blockEl.querySelector('[contenteditable], textarea, input'));
 }
 
 // `root` scopes the block list to the caret's own pane so a duplicate block id in
 // another mounted pane (split view / background tab) is never picked as adjacent.
+// The list is in VISUAL order (see blockVisualOrder): canvas layout cells are
+// walked left→right regardless of their model order, and grouping-only wrappers
+// (layout / column_list / column) are excluded so a column edge never resolves
+// to the caret's own container. Void blocks (no caret host) are skipped.
 export function getAdjacentRenderedBlockId(
   blockId: string,
   direction: 'prev' | 'next',
   root: ParentNode = document,
 ): string | null {
-  const orderedBlocks = getRenderedBlocks(root);
+  const orderedBlocks = renderedBlocksInVisualOrder(root);
   const idx = orderedBlocks.findIndex((el) => el.dataset.blockId === blockId);
   if (idx < 0) return null;
 
-  const offset = direction === 'prev' ? -1 : 1;
-  return orderedBlocks[idx + offset]?.dataset.blockId ?? null;
+  const step = direction === 'prev' ? -1 : 1;
+  for (let i = idx + step; i >= 0 && i < orderedBlocks.length; i += step) {
+    if (hasCaretHost(orderedBlocks[i])) return orderedBlocks[i].dataset.blockId ?? null;
+  }
+  return null;
 }
 
 // Best-effort editable element under the live caret. Only a FALLBACK for popover
@@ -119,10 +135,40 @@ export function resolveEditableFromSelection(): HTMLElement | null {
   );
 }
 
+/**
+ * Native in-block ArrowUp/Down can silently FAIL to move the caret — e.g. a
+ * trailing space wrapped onto a phantom line after an inline page chip in a
+ * narrow column leaves no caret stop on the block's real last line. After the
+ * handlers defer to native, verify the caret actually moved; when it did not,
+ * cross into the adjacent block anyway — the caret must never freeze.
+ */
+function scheduleCrossIfCaretStuck(
+  blockId: string,
+  direction: 'prev' | 'next',
+  placement: CaretPlacement,
+  focusBlock: FocusBlockFn,
+): void {
+  const sel = globalThis.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const before = sel.getRangeAt(0);
+  const container = before.startContainer;
+  const offset = before.startOffset;
+  globalThis.setTimeout(() => {
+    const after = globalThis.getSelection();
+    if (!after || after.rangeCount === 0) return;
+    const range = after.getRangeAt(0);
+    if (!range.collapsed) return;
+    if (range.startContainer !== container || range.startOffset !== offset) return;
+    const adjacentId = getAdjacentRenderedBlockId(blockId, direction, paneRootOf(container));
+    if (adjacentId) focusBlock(adjacentId, placement);
+  }, 0);
+}
+
 export function handleArrowUp(
   blockId: string,
   content: Block[],
   focusBlock: FocusBlockFn,
+  allowStuckCross = false,
 ): boolean {
   const sel = globalThis.getSelection();
   if (!sel?.rangeCount) {
@@ -143,13 +189,16 @@ export function handleArrowUp(
   // line), so the column is preserved even across a multi-line in-block move.
   const goalX = resolveGoalX(range);
 
+  // Enter the previous block on its LAST line at the carried goal column.
+  const placement: CaretPlacement = goalX != null ? { edge: "last", x: goalX } : "end";
+
   // Leave the block when the caret is on its first visual line (single-line
   // blocks always qualify, so navigation is one press per block).
   const blockEl = root.querySelector(`[data-block-id="${blockId}"] [contenteditable]`);
-  if (blockEl && !caretOnEdgeLine(blockEl, range, "first")) return false;
-
-  // Enter the previous block on its LAST line at the carried goal column.
-  const placement: CaretPlacement = goalX != null ? { edge: "last", x: goalX } : "end";
+  if (blockEl && !caretOnEdgeLine(blockEl, range, "first")) {
+    if (allowStuckCross) scheduleCrossIfCaretStuck(blockId, 'prev', placement, focusBlock);
+    return false;
+  }
 
   const prevRenderedBlockId = getAdjacentRenderedBlockId(blockId, 'prev', root);
   if (prevRenderedBlockId) {
@@ -171,6 +220,7 @@ export function handleArrowDown(
   content: Block[],
   el: HTMLElement,
   focusBlock: FocusBlockFn,
+  allowStuckCross = false,
 ): boolean {
   const sel = globalThis.getSelection();
 
@@ -194,10 +244,13 @@ export function handleArrowDown(
   // line), so the column is preserved even across a multi-line in-block move.
   const goalX = resolveGoalX(range);
 
-  if (blockEl && !caretOnEdgeLine(blockEl, range, "last")) return false;
-
   // Enter the next block on its FIRST line at the carried goal column.
   const placement: CaretPlacement = goalX != null ? { edge: "first", x: goalX } : "start";
+
+  if (blockEl && !caretOnEdgeLine(blockEl, range, "last")) {
+    if (allowStuckCross) scheduleCrossIfCaretStuck(blockId, 'next', placement, focusBlock);
+    return false;
+  }
 
   const nextRenderedBlockId = getAdjacentRenderedBlockId(blockId, 'next', root);
   if (nextRenderedBlockId) {

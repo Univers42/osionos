@@ -12,8 +12,8 @@ const domGlobals = globalThis as unknown as { Element?: unknown };
 domGlobals.Element ??= class Element {};
 
 import { DEFAULT_AUTOMATIONS } from "../../src/features/automations/model/defaultAutomations.ts";
-import { matchAutomation } from "../../src/features/automations/model/automationMatch.ts";
-import { normalizeComboString } from "../../src/features/automations/model/combo.ts";
+import { isChordPrefix, matchAutomation } from "../../src/features/automations/model/automationMatch.ts";
+import { comboSteps, normalizeComboString } from "../../src/features/automations/model/combo.ts";
 import type { CommandContext, CommandId } from "../../src/features/automations/model/types.ts";
 
 // The command vocabulary, mirroring the CommandId union in model/types.ts. The
@@ -24,7 +24,7 @@ const KNOWN_COMMAND_IDS = new Set<CommandId>([
   "undo", "redo", "selectAll", "clearSelection", "copy", "cut", "paste",
   "pastePlain", "duplicate", "delete", "moveBlockUp", "moveBlockDown",
   "heading1", "heading2", "heading3", "openPalette", "openSearch", "splitPane",
-  "bold", "italic", "underline", "inlineCode", "link",
+  "bold", "italic", "underline", "inlineCode", "link", "toggleZenMode",
 ]);
 
 /** A context where every enabled default's `when` predicate holds (block selection
@@ -53,10 +53,16 @@ test("every default maps to a known command via a run_command action", () => {
 test("every ENABLED default resolves via matchAutomation to exactly itself", () => {
   const ctx = passingContext();
   for (const automation of DEFAULT_AUTOMATIONS.filter((a) => a.enabled)) {
-    const combo = normalizeComboString(automation.trigger.combo);
-    const matched = matchAutomation(DEFAULT_AUTOMATIONS, combo, ctx);
+    // Chord-aware: a multi-step binding resolves by replaying step 1 as `pending`.
+    // (normalizeComboString alone would mangle "mod+k mod+z" → "mod+z" and make
+    // this test demand that Zen answer Undo's combo.)
+    const steps = comboSteps(automation.trigger.combo);
+    const combo = steps.join(" ");
+    const matched = steps.length > 1
+      ? matchAutomation(DEFAULT_AUTOMATIONS, steps[steps.length - 1], ctx, steps[0])
+      : matchAutomation(DEFAULT_AUTOMATIONS, steps[0], ctx);
     assert.ok(matched, `${automation.id} (${combo}) resolves under a passing context`);
-    assert.equal(matched?.id, automation.id, `${combo} resolves to ${automation.id}, not ${matched?.id}`);
+    assert.equal(matched?.id, automation.id, `${combo} resolves to ${matched?.id}, not ${automation.id}`);
   }
 });
 
@@ -73,9 +79,31 @@ test("DISABLED defaults (native-handled format keys) never fire", () => {
 test("no two seeded shortcuts collide on combo + condition, and ids are unique", () => {
   const keys = DEFAULT_AUTOMATIONS
     .filter((a) => a.enabled && a.trigger.combo)
-    .map((a) => `${normalizeComboString(a.trigger.combo)}::${a.trigger.when}`);
+    // Chord-aware: normalizeComboString alone would mangle "mod+k mod+z" → "mod+z".
+    .map((a) => `${comboSteps(a.trigger.combo).join(" ")}::${a.trigger.when}`);
   assert.equal(new Set(keys).size, keys.length, "combo + condition pairs are unique among enabled defaults");
 
   const ids = DEFAULT_AUTOMATIONS.map((a) => a.id);
   assert.equal(new Set(ids).size, ids.length, "ids are unique");
+});
+
+test("Zen mode is a CHORD: Ctrl+K Ctrl+Z resolves, and it does not steal Ctrl+K from Search", () => {
+  const ctx = passingContext();
+
+  // "mod+k" alone still resolves to Search — the chord costs no existing binding.
+  const single = matchAutomation(DEFAULT_AUTOMATIONS, "mod+k", ctx);
+  assert.equal(single?.actions[0]?.commandId, "openSearch", "mod+k alone stays Search");
+
+  // ...and "mod+k" is recognised as a chord prefix, so the dispatcher arms step 2.
+  assert.equal(isChordPrefix(DEFAULT_AUTOMATIONS, "mod+k", ctx), true, "mod+k arms the chord");
+
+  // Step 2 with the prefix pending → Zen.
+  const chorded = matchAutomation(DEFAULT_AUTOMATIONS, "mod+z", ctx, "mod+k");
+  assert.equal(chorded?.actions[0]?.commandId, "toggleZenMode", "mod+k then mod+z toggles Zen");
+
+  // A bare "mod+z" (no pending prefix) must NOT hit Zen — it is Undo's combo.
+  const bare = matchAutomation(DEFAULT_AUTOMATIONS, "mod+z", ctx);
+  assert.notEqual(bare?.actions[0]?.commandId, "toggleZenMode", "mod+z alone is never Zen");
+
+  assert.deepEqual(comboSteps("mod+k mod+z"), ["mod+k", "mod+z"]);
 });

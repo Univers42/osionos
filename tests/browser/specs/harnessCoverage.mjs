@@ -72,10 +72,11 @@ export const harnessCoverageScenarios = [
     "media blocks without an asset show their placeholder preview",
     async ({ page, appUrl }) => {
       await openHarnessPage(page, appUrl, "tests/browser/mediaPlaceholderHarness.html");
-      await expect(page.getByText("Select a image")).toBeVisible();
-      await expect(page.getByText("Select a video")).toBeVisible();
-      await expect(page.getByText("Select a audio")).toBeVisible();
-      await expect(page.getByText("Select a file")).toBeVisible();
+      // Notion-style placeholder copy (MediaBlockPreview PLACEHOLDERS map).
+      await expect(page.getByText("Add an image")).toBeVisible();
+      await expect(page.getByText("Embed or upload a video")).toBeVisible();
+      await expect(page.getByText("Add audio")).toBeVisible();
+      await expect(page.getByText("Add a file")).toBeVisible();
     },
   ),
 ];

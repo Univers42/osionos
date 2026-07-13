@@ -22,6 +22,7 @@ import { TopBarMenu } from "./TopBarMenu";
 import { TopBarSearch } from "./TopBarSearch";
 import { UpdateButton } from "./UpdateButton";
 import { WindowControls } from "./WindowControls";
+import { QuickCaptureButton } from "@/features/quick-capture/ui/QuickCaptureButton";
 
 interface TopBarProps {
   onOpenSettings: (tab?: SettingsTab) => void;
@@ -61,6 +62,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
       </div>
 
       <SharedSpacePresenceBar />
+      <QuickCaptureButton />
       <UpdateButton />
       <WindowControls />
     </header>

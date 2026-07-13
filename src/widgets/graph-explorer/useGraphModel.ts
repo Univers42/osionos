@@ -83,10 +83,15 @@ export function useGraphModel(): GraphData {
   // every workspace; the local synthetic path is kept only for the ?graphBench probe.
   const baasMode = BENCH_COUNT === 0 && Boolean(viewerId) && Boolean(activeWorkspaceId);
   const localModel = useMemo(
-    () => (BENCH_COUNT > 0
-      ? buildSyntheticModel(BENCH_COUNT)
-      : deriveGraph(state, { source: GRAPH_SOURCE, tagConfig: deriveTagConfig(state) })),
-    [state],
+    () => {
+      if (BENCH_COUNT > 0) return buildSyntheticModel(BENCH_COUNT);
+      // In BaaS mode the bridge graph is authoritative and this model is discarded
+      // — skip deriving it (a full walk of the known-database state on every state
+      // change while the graph is open) instead of computing it into the void.
+      if (baasMode) return EMPTY;
+      return deriveGraph(state, { source: GRAPH_SOURCE, tagConfig: deriveTagConfig(state) });
+    },
+    [state, baasMode],
   );
   const baas = useBaasGraph(baasMode, viewerId, scope === "workspace" ? activeWorkspaceId : null, scope);
   const model = baasMode ? baas.model ?? EMPTY : localModel;

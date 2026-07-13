@@ -55,10 +55,21 @@ export function normalizeComboString(combo: string): string {
   return [...MODIFIER_ORDER.filter((mod) => mods.has(mod)), key].filter(Boolean).join("+");
 }
 
-/** Human label for a combo, e.g. "mod+shift+z" → "Ctrl + Shift + Z". */
+/** Steps of a (possibly chorded) binding — VSCode style, space-separated:
+ *  "mod+k mod+z" → ["mod+k", "mod+z"]. A single combo yields one step. */
+export function comboSteps(combo: string): string[] {
+  return combo.trim().split(/\s+/).filter(Boolean).map(normalizeComboString);
+}
+
+/** Human label, e.g. "mod+shift+z" → "Ctrl + Shift + Z";
+ *  a chord "mod+k mod+z" → "Ctrl + K, then Ctrl + Z". */
 export function formatCombo(combo: string): string {
-  return normalizeComboString(combo)
-    .split("+")
-    .map((part) => (part === "mod" ? "Ctrl" : part.charAt(0).toUpperCase() + part.slice(1)))
-    .join(" + ");
+  return comboSteps(combo)
+    .map((step) =>
+      step
+        .split("+")
+        .map((part) => (part === "mod" ? "Ctrl" : part.charAt(0).toUpperCase() + part.slice(1)))
+        .join(" + "),
+    )
+    .join(", then ");
 }

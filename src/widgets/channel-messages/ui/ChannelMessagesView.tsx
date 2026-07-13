@@ -21,7 +21,10 @@
  * yanking the viewport. Rows are grouped by author + date (model/messageGrouping).
  */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+/** Newest messages rendered per window; "Show earlier" grows by another window. */
+const MESSAGE_WINDOW = 80;
 
 import { useUserStore } from "@/features/auth";
 import type { ChatMessage } from "@/shared/chat/messageApi";
@@ -99,6 +102,22 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
   // so the "New" divider stays anchored to where the reader left off.
   const readSnapshot = useMemo(() => useUnreadStore.getState().lastSeen[channelId] ?? null, [channelId]);
   const firstUnread = useMemo(() => firstUnreadId(messages, readSnapshot, activeUserId), [messages, readSnapshot, activeUserId]);
+  // Windowed tail: only the newest slice becomes DOM. A busy channel previously
+  // mounted EVERY message (thousands of rows + one authed media fetch each) on
+  // open. The window always reaches back to the unread anchor so the "New"
+  // divider is never hidden; "Show earlier" grows it on demand.
+  const [visibleCount, setVisibleCount] = useState(MESSAGE_WINDOW);
+  useEffect(() => setVisibleCount(MESSAGE_WINDOW), [channelId]);
+  const windowStart = useMemo(() => {
+    const start = Math.max(0, rows.length - visibleCount);
+    if (!firstUnread || start === 0) return start;
+    const anchor = rows.findIndex((row) => row.message.id === firstUnread);
+    return anchor >= 0 ? Math.min(start, anchor) : start;
+  }, [rows, visibleCount, firstUnread]);
+  const visibleRows = useMemo(
+    () => (windowStart > 0 ? rows.slice(windowStart) : rows),
+    [rows, windowStart],
+  );
   const authorNames = useMemo(() => {
     const map: Record<string, string> = {};
     for (const m of messages) map[m.authorId] = m.authorName;
@@ -112,6 +131,23 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
     userName: persona?.name ?? activeUserId,
     setMessages: history.setMessages,
   });
+  // Stable row callbacks: inline arrows gave every MessageRow fresh props each
+  // render, defeating its memo — one incoming message re-rendered every row.
+  // Destructured because the individual fns are useCallback'd in useChannelActions
+  // (stable), while the wrapping `actions` object is rebuilt every render.
+  const { edit: editMessage, remove: removeMessage, react: reactMessage } = actions;
+  const handleEdit = useCallback(
+    (id: string, content: string) => { void editMessage(id, content).catch(() => undefined); },
+    [editMessage],
+  );
+  const handleDelete = useCallback(
+    (id: string) => { void removeMessage(id).catch(() => undefined); },
+    [removeMessage],
+  );
+  const handleReact = useCallback(
+    (id: string, emoji: string, add: boolean) => { void reactMessage(id, emoji, add).catch(() => undefined); },
+    [reactMessage],
+  );
 
   const jumpToBottom = () => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -139,6 +175,7 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
   }, []);
 
   // Channel switch: reset to bottom and clear the unread pill.
+  const readPostTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     atBottomRef.current = true;
     setAtBottom(true);
@@ -146,6 +183,11 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
     prevLenRef.current = 0;
     markSeen(channelId);
     void postChannelRead(channelId).catch(() => undefined);
+    return () => {
+      // Drop a pending high-water write for the channel we're leaving.
+      if (readPostTimerRef.current) globalThis.clearTimeout(readPostTimerRef.current);
+      readPostTimerRef.current = null;
+    };
   }, [channelId, markSeen]);
 
   // New messages: stick to the bottom only if already there, else count them.
@@ -155,8 +197,15 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
     if (atBottomRef.current) {
       endRef.current?.scrollIntoView({ block: "end" });
       if (delta > 0) {
-        markSeen(channelId);
-        void postChannelRead(channelId, messages[messages.length - 1]?.id).catch(() => undefined);
+        markSeen(channelId); // local badge clears immediately
+        // Coalesced: the read POST fired once PER incoming message while parked
+        // at the bottom. The high-water id is idempotent — one write per burst.
+        if (readPostTimerRef.current) globalThis.clearTimeout(readPostTimerRef.current);
+        const lastId = messages[messages.length - 1]?.id;
+        readPostTimerRef.current = globalThis.setTimeout(() => {
+          readPostTimerRef.current = null;
+          void postChannelRead(channelId, lastId).catch(() => undefined);
+        }, 1200);
       }
       setNewCount(0);
     } else if (delta > 0) {
@@ -206,20 +255,29 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
                 No messages yet — say hello to start the conversation.
               </div>
             )}
+            {windowStart > 0 && (
+              <button
+                type="button"
+                onClick={() => setVisibleCount((count) => count + MESSAGE_WINDOW)}
+                className="mb-2 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-1.5 text-xs text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-muted)] hover:text-[var(--osio-fg-default)]"
+              >
+                Show earlier messages ({windowStart})
+              </button>
+            )}
             <div className="space-y-1">
-              {rows.map(({ message, grouped, divider }) => (
+              {visibleRows.map(({ message, grouped, divider }, index) => (
                 <React.Fragment key={message.id}>
                   {divider && <DateDivider label={divider} />}
                   {message.id === firstUnread && <UnreadDivider />}
                   <MessageRow
                     message={message}
-                    grouped={grouped}
+                    grouped={index === 0 && windowStart > 0 ? false : grouped}
                     isAuthor={message.authorId === activeUserId}
                     canInteract={history.mode === "bridge"}
                     userId={activeUserId}
-                    onEdit={(id, content) => { void actions.edit(id, content).catch(() => undefined); }}
-                    onDelete={(id) => { void actions.remove(id).catch(() => undefined); }}
-                    onReact={(id, emoji, add) => { void actions.react(id, emoji, add).catch(() => undefined); }}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onReact={handleReact}
                     onReply={setReplyTarget}
                     onOpenThread={compact ? undefined : setThreadRoot}
                   />

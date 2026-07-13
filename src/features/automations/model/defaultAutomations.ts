@@ -29,6 +29,10 @@ export const DEFAULT_AUTOMATIONS: Automation[] = [
   shortcut("heading-3", "Heading 3", "mod+alt+3", "heading3", "editorFocused"),
   shortcut("open-palette", "Command palette", "mod+shift+p", "openPalette", "always"),
   shortcut("open-search", "Search", "mod+k", "openSearch", "always"),
+  // A CHORD (VSCode style): Ctrl+K then Ctrl+Z, keeping Ctrl held. Step 2 carries a
+  // modifier on purpose — a bare "z" would collide with typing "z" into the Search
+  // box that step 1 opens. mod+k keeps working as Search; the chord costs nothing.
+  shortcut("toggle-zen", "Zen mode (focus)", "mod+k mod+z", "toggleZenMode", "always"),
   shortcut("split-pane", "Split pane right", "mod+\\", "splitPane", "always"),
   shortcut("bold", "Bold", "mod+b", "bold", "inTextEntry", false),
   shortcut("italic", "Italic", "mod+i", "italic", "inTextEntry", false),

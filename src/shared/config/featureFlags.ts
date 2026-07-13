@@ -16,7 +16,18 @@ export type FeatureFlagName =
   | "osio.collab.shared"
   | "osio.blockselect"
   | "osio.automations"
-  | "osio.db.server";
+  | "osio.db.server"
+  | "osio.search.unified"
+  | "osio.favorites"
+  | "osio.capture"
+  | "osio.push"
+  | "osio.tasks"
+  | "osio.backlinks"
+  | "osio.comments"
+  | "osio.sqlrun"
+  | "osio.publish"
+  | "osio.draw"
+  | "osio.ide";
 
 export function isFeatureFlagEnabled(name: FeatureFlagName, fallback = false): boolean {
   const urlValue = readUrlFlag(name);
@@ -81,6 +92,87 @@ export function isAutomationsEnabled(): boolean {
  *  has no bridge URL, so sync no-ops there regardless). */
 export function isObjectDatabaseServerSyncEnabled(): boolean {
   return isFeatureFlagEnabled("osio.db.server", true);
+}
+
+/** Unified ⌘K palette: also surface chat-message hits (bridge FTS) alongside
+ *  pages/people/commands. Default ON; page-content search itself is a server
+ *  internal (not flagged). Disable via `?osio.search.unified=0`, the localStorage
+ *  key, or `VITE_OSIO_SEARCH_UNIFIED=0`. */
+export function isUnifiedSearchEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.search.unified", true);
+}
+
+/** Sidebar Favorites section + star/unstar affordance (persisted per user via
+ *  the bridge). Default ON; disable via `?osio.favorites=0`, the localStorage
+ *  key, or `VITE_OSIO_FAVORITES=0`. */
+export function isFavoritesEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.favorites", true);
+}
+
+/** Quick capture → today's daily note (top-bar button + palette command).
+ *  Default ON; disable via `?osio.capture=0`, the localStorage key, or
+ *  `VITE_OSIO_CAPTURE=0`. */
+export function isQuickCaptureEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.capture", true);
+}
+
+/** Browser Web Push for notifications (service worker + VAPID subscribe). Default
+ *  OFF: requires the VAPID keypair server-side and an explicit permission grant.
+ *  Enable via `?osio.push=1`, the localStorage key, or `VITE_OSIO_PUSH=1`. */
+export function isPushEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.push", false);
+}
+
+/** Task due-dates on to_do blocks + the "My Tasks" view. Default ON; disable via
+ *  `?osio.tasks=0`, the localStorage key, or `VITE_OSIO_TASKS=0`. */
+export function isTasksEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.tasks", true);
+}
+
+/** Inline [[page]] backlinks + unlinked mentions in the page connections panel.
+ *  Default ON; disable via `?osio.backlinks=0`, the localStorage key, or
+ *  `VITE_OSIO_BACKLINKS=0`. */
+export function isBacklinksEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.backlinks", true);
+}
+
+/** Page comments (header comment button + panel; notifies the page owner).
+ *  Default OFF until reviewed. Enable via `?osio.comments=1`, the localStorage
+ *  key, or `VITE_OSIO_COMMENTS=1`. */
+export function isCommentsEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.comments", false);
+}
+
+/** Run a read-only SQL query from a `sql` code block against a mounted database.
+ *  Default OFF; also requires OSIONOS_SQL_RO (bridge) + QUERY_ROUTER_SQL_RO
+ *  (grobase). Enable client via `?osio.sqlrun=1` or `VITE_OSIO_SQLRUN=1`. */
+export function isSqlRunEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.sqlrun", false);
+}
+
+/** Publish a page to a public read-only URL (/p/:token). Default OFF; also
+ *  requires OSIONOS_PUBLISH_ENABLED at the bridge. Enable client via
+ *  `?osio.publish=1` or `VITE_OSIO_PUBLISH=1`. */
+export function isPublishEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.publish", false);
+}
+
+/** The Draw whiteboard app (marketplace `osionos.draw`, `tab.kind === "draw"`).
+ *  Default ON — the surface is only reachable once installed from the marketplace
+ *  or via the View menu, so the flag is a kill-switch. Disable via `?osio.draw=0`,
+ *  the `osio.draw` localStorage key, or `VITE_OSIO_DRAW=0`. */
+export function isDrawEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.draw", true);
+}
+
+/** The IDE / Dev-Mode surface: line-based code files (`surface: "code"`), a
+ *  CodeMirror editor, and (server-gated) a sandboxed run terminal. Default OFF —
+ *  the whole feature is additive and must never affect block pages. Turn on via
+ *  `?osio.ide=1`, the `osio.ide` localStorage key, or `VITE_OSIO_IDE=1`. Code
+ *  EXECUTION is double-gated: this flag AND the bridge env `OSIONOS_RUNNER_URL`
+ *  must both be set, so the flag alone can never open an execution path. */
+export function isIdeEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.ide", false);
 }
 
 function readUrlFlag(name: FeatureFlagName): string | null {

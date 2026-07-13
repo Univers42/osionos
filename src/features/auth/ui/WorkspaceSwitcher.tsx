@@ -25,6 +25,7 @@ import { useUIStore } from '@/shared/config/uiStore';
 import {
   getCollectionEmojiValue,
 } from '@/shared/lib/markengine/uiCollectionAssets';
+import { useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
 
 interface Props {
   onNewPage?: () => void;
@@ -47,6 +48,20 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
   const addPage         = usePageStore(s => s.addPage);
   const openPage        = usePageStore(s => s.openPage);
   const setSidebarOpen  = useUIStore(s => s.setSidebarOpen);
+  const renameWorkspace = useUserStore(s => s.renameWorkspace);
+  const activeUserId    = useUserStore(s => s.activeUserId);
+  // Icon precedence: durable workspace config (Settings → Workspace → Icon) → session record.
+  const configIcon = useWorkspaceConfigStore(s =>
+    activeUserId && activeWorkspace ? s.configs[workspaceConfigKey(activeUserId, activeWorkspace._id)]?.icon : undefined);
+  const workspaceIcon = configIcon ?? activeWorkspace?.icon;
+  const [renaming, setRenaming] = useState(false);
+  const canRename = !!activeWorkspace && activeWorkspace.ownerId === activeUserId;
+
+  function commitRename(value: string) {
+    const name = value.trim();
+    if (name && activeWorkspace && name !== activeWorkspace.name) renameWorkspace(activeWorkspace._id, name);
+    setRenaming(false);
+  }
 
   const firstWsId = activeWorkspace?._id ?? session?.privateWorkspaces[0]?._id ?? '';
 
@@ -67,30 +82,50 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
   return (
     <div ref={anchorRef} className="relative mx-2 mt-1.5 mb-1.5">
       <div className="flex items-center h-8 w-full">
-        {/* Workspace name button (opens switcher) */}
-        <button
-          type="button"
-          onClick={() => setOpen(o => !o)}
+        {/* Workspace name (single-click opens switcher; double-click renames) */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => { if (!renaming) setOpen(o => !o); }}
+          onKeyDown={(event) => { if (!renaming && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setOpen(o => !o); } }}
           className={[
             'flex items-center gap-2 flex-1 min-w-0 h-8 px-2 rounded-[6px]',
             'transition-colors duration-100 cursor-pointer select-none',
-            open
-              ? 'bg-[var(--osio-bg-muted)]'
-              : 'hover:bg-[var(--osio-bg-hover)]',
+            open ? 'bg-[var(--osio-bg-muted)]' : 'hover:bg-[var(--osio-bg-hover)]',
           ].join(' ')}
         >
           {/* Avatar (rounded square, like osionos) */}
           <span className="flex items-center justify-center w-[22px] h-[22px] shrink-0 rounded text-base leading-none">
             <IconValueView
-              value={persona?.emoji ?? getCollectionEmojiValue('package')}
+              value={workspaceIcon ?? persona?.emoji ?? getCollectionEmojiValue('package')}
               size={18}
             />
           </span>
 
-          <span className="flex-1 text-base font-semibold text-[var(--osio-fg-default)] truncate text-left leading-5">
-            {workspaceName}
-          </span>
-        </button>
+          {renaming ? (
+            <input
+              autoFocus
+              defaultValue={workspaceName}
+              aria-label="Workspace name"
+              onClick={(event) => event.stopPropagation()}
+              onBlur={(event) => commitRename(event.target.value)}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === 'Enter') commitRename((event.target as HTMLInputElement).value);
+                else if (event.key === 'Escape') setRenaming(false);
+              }}
+              className="flex-1 min-w-0 rounded px-1 bg-transparent text-base font-semibold text-[var(--osio-fg-default)] leading-5 outline-none ring-1 ring-[var(--osio-accent)]"
+            />
+          ) : (
+            <span
+              onDoubleClick={(event) => { if (canRename) { event.stopPropagation(); setRenaming(true); } }}
+              title={canRename ? 'Double-click to rename' : undefined}
+              className="flex-1 text-base font-semibold text-[var(--osio-fg-default)] truncate text-left leading-5"
+            >
+              {workspaceName}
+            </span>
+          )}
+        </div>
 
         {/* Right-side buttons */}
         <div className="flex items-center gap-0.5 ml-auto">

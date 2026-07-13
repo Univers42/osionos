@@ -361,13 +361,15 @@
   --osio-bg-surface: #242120;
   --osio-bg-subtle: #201E1B;
   --osio-bg-muted: #2A2723;
-  --osio-bg-elevated: #2A2723;
+  /* Elevated MUST differ from muted: menus paint the panel with elevated and the
+     active row with muted — identical values made the highlight invisible. */
+  --osio-bg-elevated: #33302B;
   --osio-bg-hover: #2F2B27;
   --osio-bg-panel: #242120;
 
   --osio-fg-default: #EDEAE3;
   --osio-fg-muted: #A8A399;
-  --osio-fg-subtle: #8C877D;
+  --osio-fg-subtle: #99948A; /* ≥4.5:1 on surface — was #8C877D at 4.47 (AA fail) */
   --osio-fg-strong: #FBF8F2;
   --osio-fg-inverse: #1B1A17;
 
@@ -858,7 +860,8 @@
   --osio-bg-surface: #1E1726;
   --osio-bg-subtle: #1A1426;
   --osio-bg-muted: #271F33;
-  --osio-bg-elevated: #271F33;
+  /* Same collision as warm dark: elevated == muted hid every active menu row. */
+  --osio-bg-elevated: #322847;
   --osio-bg-hover: #2D2440;
   --osio-bg-panel: #1E1726;
   --osio-fg-default: #ECE6F5;
@@ -966,7 +969,7 @@
   --osio-bg-panel: #3B4252;
   --osio-fg-default: #ECEFF4;
   --osio-fg-muted: #A9B2C3;
-  --osio-fg-subtle: #8E99AD;
+  --osio-fg-subtle: #9AA4B8; /* ≥4.5:1 on #2E3440 — was #8E99AD at 4.39 (AA fail) */
   --osio-fg-strong: #F5F8FC;
   --osio-fg-inverse: #2E3440;
   --osio-border-default: #404959;
@@ -1069,7 +1072,7 @@
   --osio-bg-panel: #073642;
   --osio-fg-default: #ABB6B3;
   --osio-fg-muted: #839496;
-  --osio-fg-subtle: #657B83;
+  --osio-fg-subtle: #7E929A; /* 4.62:1 on #002B36 — was #657B83 at 3.37 (AA fail) */
   --osio-fg-strong: #EEE8D5;
   --osio-fg-inverse: #002B36;
   --osio-border-default: #104A59;
@@ -1641,4 +1644,32 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ==========================================================================
+   Zen (focus) mode — Ctrl+K Ctrl+Z (see useZenMode + defaultAutomations).
+   Strip every chrome region so only the current page remains.
+
+   CSS rather than unmounting on purpose: each region keeps its own state
+   (sidebar scroll, tab set, TOC), so exiting zen restores exactly what was
+   there — and a hidden region costs nothing to keep mounted.
+   ========================================================================== */
+[data-zen="1"] [data-testid="app-topbar"],
+[data-zen="1"] aside[aria-label="Sidebar"],
+[data-zen="1"] [data-osio-sidebar-trigger],
+[data-zen="1"] [data-osio-tabstrip],
+[data-zen="1"] [data-osio-toc],
+[data-zen="1"] [data-osio-dock] {
+  display: none !important;
+}
+
+/* The active-pane accent ring is a Tailwind `ring-*` (a box-shadow) — noise in zen. */
+[data-zen="1"] [data-osio-pane] {
+  box-shadow: none !important;
+}
+
+/* The page's own toolbar / cover controls, same as presentation mode hides them. */
+[data-zen="1"] .osionos-page-toolbar,
+[data-zen="1"] .osionos-page-cover-controls {
+  display: none;
 }

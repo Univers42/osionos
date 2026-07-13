@@ -562,6 +562,9 @@ export const useUserStore = create<UserStore>((set, get) => ({
       savePersistedWorkspaces(sessions);
       return { sessions };
     });
+    // Persist to the BaaS (owner-only PATCH); optimistic local update stays on failure.
+    const jwt = get().activeJwt();
+    if (jwt) void api.patch(`/api/workspaces/${workspaceId}`, { name }, jwt).catch(() => undefined);
   },
 
   deleteWorkspace: async (workspaceId) => {

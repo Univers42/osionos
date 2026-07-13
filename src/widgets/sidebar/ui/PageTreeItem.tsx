@@ -27,6 +27,8 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import { useToastStore } from "@/shared/ui/primitives";
 import { usePageRowDnd } from "./usePageRowDnd";
 import { useSidebarTreeDnd } from "../model/sidebarTreeDnd";
+import { useDevMode } from "@/shared/config/useDevMode";
+import { languageForFileName } from "@/features/ide/model/ideLanguages";
 
 const EMPTY_WORKSPACE_PAGES: readonly PageEntry[] = [];
 
@@ -59,6 +61,7 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
   const childPageIds = usePageStore(useShallow((s) => selectChildPageIds(s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES, pageId)));
   const accessContext = usePageAccessContext();
   const collapseToken = useSidebarTreeDnd((s) => s.collapseToken);
+  const devMode = useDevMode((s) => s.dev);
 
   const children = useMemo(() => childPageIds, [childPageIds]);
   // Render-adjust: collapse in the SAME pass the broadcast token changes —
@@ -146,6 +149,15 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
         : <Folder size={14} className="shrink-0 text-[var(--osio-fg-muted)]" />;
     }
     if (isWiki) return <BookOpen size={14} className="shrink-0 text-[var(--osio-accent)]" />;
+    // Dev mode: a code file shows a language-colored chip so the filesystem
+    // "showcases the extension" at a glance (the extension is already in the title).
+    if (devMode && pageEntry.surface === "code") {
+      return (
+        <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center" title={languageForFileName(pageEntry.title).label}>
+          <span className="h-2.5 w-2.5 rounded-[3px]" style={{ backgroundColor: languageForFileName(pageEntry.title).accent }} />
+        </span>
+      );
+    }
     return pageEntry.icon
       ? <IconValueView value={pageEntry.icon} size={14} className="shrink-0" />
       : <IconValueView value={fallbackIcon} size={13} className="opacity-40 shrink-0" />;

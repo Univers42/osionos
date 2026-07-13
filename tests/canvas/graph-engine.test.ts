@@ -28,6 +28,7 @@ import { DARK_THEME } from "../../packages/graph-engine/src/core/theme/tokens.ts
 import { cloneControls, DEFAULT_CONTROLS } from "../../packages/graph-engine/src/core/state/controls.ts";
 import { SceneState } from "../../packages/graph-engine/src/core/render/sceneState.ts";
 import { parseStyleKey, shapeOf, styleKey } from "../../packages/graph-engine/src/core/render/nodeShape.ts";
+import { darken, lighten, mix, rgba } from "../../packages/graph-engine/src/core/theme/shade.ts";
 import { sceneToSvg } from "../../packages/graph-engine/src/core/render/exportSvg.ts";
 import { ForceLayout } from "../../packages/graph-engine/src/core/layout/forceLayout.ts";
 
@@ -162,6 +163,25 @@ test("nodeShape: shapeOf maps kinds + styleKey round-trips", () => {
   const parsed = parseStyleKey(styleKey("ring", "oklch(0.7 0.04 255)"));
   assert.equal(parsed.shape, "ring");
   assert.equal(parsed.color, "oklch(0.7 0.04 255)"); // color may itself contain no "|"
+});
+
+test("shade: tone math the node materials light from", () => {
+  const base: [number, number, number] = [100, 150, 200];
+  // Endpoints are exact, so a body ramp never drifts off the node's own hue.
+  assert.deepEqual(mix(base, [0, 0, 0], 0), base);
+  assert.deepEqual(lighten(base, 1), [255, 255, 255]);
+  assert.deepEqual(darken(base, 1), [0, 0, 0]);
+  // Lighten brightens every channel, darken dims every channel (no hue inversion).
+  const lit = lighten(base, 0.5);
+  const dim = darken(base, 0.5);
+  base.forEach((c, i) => {
+    assert.ok(lit[i] > c, `lighten raised channel ${i}`);
+    assert.ok(dim[i] < c, `darken lowered channel ${i}`);
+  });
+  // Clamped: an out-of-range t can't produce an invalid color.
+  assert.deepEqual(lighten(base, 5), [255, 255, 255]);
+  assert.deepEqual(darken(base, -5), base);
+  assert.equal(rgba(base, 0), "rgba(100, 150, 200, 0)"); // the halo's fade-out stop
 });
 
 test("SceneState.styleBuckets groups by shape|color", () => {

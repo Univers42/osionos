@@ -16,7 +16,9 @@ import { EditableContent } from "@/components/blocks/EditableContent";
 import { getBlockPlaceholder, type Block } from "@/entities/block";
 
 import { usePageStore } from "@/store/usePageStore";
+import { isTasksEnabled } from "@/shared/config/featureFlags";
 import { BlockListCollapse } from "./BlockListCollapse";
+import { TodoDueDate } from "./TodoDueDate";
 
 export const TodoBlockEditor: React.FC<{
   block: Block;
@@ -39,6 +41,12 @@ export const TodoBlockEditor: React.FC<{
     if (!page) return;
     updateBlock(page.id, block.id, { checked: !block.checked });
   }, [page, block.id, block.checked, onUpdateBlock, updateBlock]);
+
+  const setDueAt = useCallback((dueAt: string | undefined) => {
+    if (onUpdateBlock) { onUpdateBlock(block.id, { dueAt }); return; }
+    if (!page) return;
+    updateBlock(page.id, block.id, { dueAt });
+  }, [page, block.id, onUpdateBlock, updateBlock]);
 
   return (
     <div className="group relative flex items-start gap-2 pl-5">
@@ -77,11 +85,11 @@ export const TodoBlockEditor: React.FC<{
           </svg>
         )}
       </button>
-      <div className="flex-1">
+      <div className="flex min-w-0 flex-1 flex-wrap items-start gap-1">
         <EditableContent
           content={block.content}
           className={[
-            "text-sm leading-relaxed py-0.5",
+            "min-w-0 flex-1 text-sm leading-relaxed py-0.5",
             block.checked
               ? "text-[var(--osio-fg-muted)] line-through"
               : "text-[var(--osio-fg-default)]",
@@ -93,6 +101,7 @@ export const TodoBlockEditor: React.FC<{
           onKeyDown={onKeyDown}
           onRequestSlashMenu={onRequestSlashMenu}
         />
+        {isTasksEnabled() && <TodoDueDate dueAt={block.dueAt} checked={block.checked} onChange={setDueAt} />}
       </div>
     </div>
   );

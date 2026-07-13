@@ -13,6 +13,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import { getActivePageJwt } from '@/shared/api/client';
 import { defaultConnections } from './defaults';
 import { createLocalId, errorMessage, nowIso, pushSettingsError, removeById, scheduleSettingsWrite, trySettingsDelete, trySettingsGet, trySettingsPatch, trySettingsPost, upsertById } from './settingsStoreUtils';
 import type { ConnectionRecord, ConnectionStatus } from './types';
@@ -61,8 +62,9 @@ export const useConnectionsStore = create<ConnectionsStore>()(
         if (!userId) return;
         set({ loading: true, error: null });
         try {
-          const remote = await trySettingsGet<ConnectionRecord[]>('/api/connections');
-          set({ data: remote ?? (get().data.length ? get().data : defaultConnections(userId, email)), loading: false, error: null });
+          const remote = await trySettingsGet<{ connections: ConnectionRecord[] }>('/api/app-connections', getActivePageJwt());
+          const rows = remote?.connections ?? null;
+          set({ data: rows ?? (get().data.length ? get().data : defaultConnections(userId, email)), loading: false, error: null });
         } catch (error) {
           set({ data: get().data.length ? get().data : defaultConnections(userId, email), loading: false, error: errorMessage(error) });
           pushSettingsError('Connections unavailable', error);
@@ -72,8 +74,8 @@ export const useConnectionsStore = create<ConnectionsStore>()(
       connect: async (input) => {
         const previous = get().data;
         try {
-          const remote = await trySettingsPost<ConnectionRecord>('/api/connections', input);
-          const connection = remote ?? localConnection(input);
+          const remote = await trySettingsPost<{ connection: ConnectionRecord }>('/api/app-connections', input, getActivePageJwt());
+          const connection = remote?.connection ?? localConnection(input);
           set({ data: upsertById(previous, connection), error: null });
           return connection;
         } catch (error) {
@@ -88,7 +90,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
         set({ data: previous.map((connection) => connection._id === connectionId ? { ...connection, ...patch, updatedAt: timestamp } : connection), error: null });
         scheduleSettingsWrite(`${STORE_NAME}:${connectionId}`, async () => {
           try {
-            const remote = await trySettingsPatch<ConnectionRecord>(`/api/connections/${encodeURIComponent(connectionId)}`, patch);
+            const remote = await trySettingsPatch<ConnectionRecord>(`/api/app-connections/${encodeURIComponent(connectionId)}`, patch);
             if (remote) set({ data: upsertById(get().data, remote), error: null });
           } catch (error) {
             set({ data: previous, error: errorMessage(error) });
@@ -102,8 +104,12 @@ export const useConnectionsStore = create<ConnectionsStore>()(
       remove: async (connectionId) => {
         const previous = get().data;
         set({ data: removeById(previous, connectionId), error: null });
+        // A `connection-…` local id was never persisted server-side (added while
+        // offline or before the session token resolved) — the DELETE route only
+        // accepts a real row uuid, so skip the call and keep the optimistic drop.
+        if (connectionId.startsWith('connection-')) return;
         try {
-          await trySettingsDelete<void>(`/api/connections/${encodeURIComponent(connectionId)}`);
+          await trySettingsDelete<void>(`/api/app-connections/${encodeURIComponent(connectionId)}`, getActivePageJwt());
         } catch (error) {
           set({ data: previous, error: errorMessage(error) });
           pushSettingsError('Could not remove connection', error);
@@ -114,7 +120,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
         const timestamp = nowIso();
         set({ data: previous.map((connection) => connection._id === connectionId ? { ...connection, lastSyncAt: timestamp, updatedAt: timestamp } : connection), error: null });
         try {
-          const remote = await trySettingsPost<ConnectionRecord>(`/api/connections/${encodeURIComponent(connectionId)}/sync`, {});
+          const remote = await trySettingsPost<ConnectionRecord>(`/api/app-connections/${encodeURIComponent(connectionId)}/sync`, {});
           if (remote) set({ data: upsertById(get().data, remote), error: null });
         } catch (error) {
           set({ data: previous, error: errorMessage(error) });

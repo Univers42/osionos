@@ -280,9 +280,13 @@ function normalizeBlockForType(block: Block, nextType: BlockType): Block {
         layoutCells: [],
       };
     case "column_list":
+      // The source block's colors move INTO column 1 with its clone — the
+      // list itself must stay unstyled or the tint paints every column.
       return {
         ...base,
         content: "",
+        textColor: undefined,
+        backgroundColor: undefined,
         children: createColumnsFromBlock(block, 2),
       };
     case "divider":
@@ -315,17 +319,24 @@ export function changeBlockToColumnsInTree(
 ): { blocks: Block[]; focusBlockId?: string } {
   const safeCount = Math.min(5, Math.max(2, Math.round(count)));
   const transform = (list: Block[]): Block[] =>
-    list.map((block) => ({
-      ...(block.id === blockId
-        ? {
-            ...block,
-            type: "column_list" as BlockType,
-            content: "",
-            children: createColumnsFromBlock(block, safeCount),
-          }
-        : block),
-      children: block.children ? transform(block.children) : undefined,
-    }));
+    list.map((block) => {
+      if (block.id === blockId) {
+        // The freshly built columns ARE the children — the old mapping spread
+        // `children: block.children ? … : undefined` clobbered them, so
+        // converting a childless block yielded a childless column_list. The
+        // source colors move into column 1 with the clone; the list itself
+        // stays unstyled or the tint would paint every column.
+        return {
+          ...block,
+          type: "column_list" as BlockType,
+          content: "",
+          textColor: undefined,
+          backgroundColor: undefined,
+          children: createColumnsFromBlock(block, safeCount),
+        };
+      }
+      return block.children ? { ...block, children: transform(block.children) } : block;
+    });
 
   return { blocks: transform(blocks), focusBlockId: blockId };
 }
@@ -336,12 +347,17 @@ export function changeBlockTypeInTree(
   nextType: BlockType,
 ): { blocks: Block[]; focusBlockId?: string } {
   const transform = (list: Block[]): Block[] =>
-    list.map((block) => ({
-      ...(block.id === blockId
-        ? normalizeBlockForType(block, nextType)
-        : block),
-      children: block.children ? transform(block.children) : undefined,
-    }));
+    list.map((block) => {
+      if (block.id === blockId) {
+        const next = normalizeBlockForType(block, nextType);
+        // A converter that BUILT new children (column_list) keeps them — the
+        // old mapping spread clobbered them with the source's children.
+        return next.children === block.children && block.children
+          ? { ...next, children: transform(block.children) }
+          : next;
+      }
+      return block.children ? { ...block, children: transform(block.children) } : block;
+    });
 
   return {
     blocks: transform(blocks),

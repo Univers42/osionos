@@ -16,9 +16,9 @@ import { addRecent, saveRecents } from "@/store/pageStore.helpers";
 import { usePageStore } from "@/store/usePageStore";
 import type { WorkspaceTab } from "./layoutTree";
 
-/** The legacy ActivePage projection of a tab (null for Home/Trash/Folder/Console). */
+/** The legacy ActivePage projection of a tab (null for Home/Trash/Folder/Console/Draw). */
 export function tabToActivePage(tab: WorkspaceTab): ActivePage | null {
-  if (tab.kind === "home" || tab.kind === "trash" || tab.kind === "folder" || tab.kind === "console") return null;
+  if (tab.kind === "home" || tab.kind === "trash" || tab.kind === "folder" || tab.kind === "console" || tab.kind === "draw") return null;
   return {
     id: tab.pageId,
     workspaceId: tab.workspaceId,

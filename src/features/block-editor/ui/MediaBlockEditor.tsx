@@ -27,11 +27,11 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { Block } from "@/entities/block";
 import { MEDIA_BLOCK_LABELS, isMediaBlockType } from "@/entities/block";
 import { MediaBlockPreview, resolveMediaBlockAsset } from "@/entities/block/ui/MediaBlockPreview";
-import { EditableContent } from "@/components/blocks/EditableContent";
 import { usePageStore } from "@/store/usePageStore";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import { MediaEmbedDialog } from "./MediaEmbedDialog";
 import { MediaSettingsBar } from "./media/MediaSettingsBar";
+import { MediaCaption } from "./media/MediaCaption";
 import { ImageHoverToolbar } from "./media/ImageHoverToolbar";
 import { ImageFullscreen } from "./media/ImageFullscreen";
 import { AltTextDialog } from "./media/AltTextDialog";
@@ -83,6 +83,13 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
   const handleWidthChange = useCallback(
     (width: number) => {
       updateBlock(pageId, block.id, { mediaWidth: Math.min(100, Math.max(25, width)) });
+    },
+    [block.id, pageId, updateBlock],
+  );
+
+  const handleAspectChange = useCallback(
+    (aspect: string) => {
+      updateBlock(pageId, block.id, { mediaAspect: aspect === "original" ? undefined : aspect });
     },
     [block.id, pageId, updateBlock],
   );
@@ -169,21 +176,20 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
           mediaWidth={mediaWidth}
           onWidthChange={handleWidthChange}
           onChangeAsset={() => setShowEmbed(true)}
+          mediaAspect={isImage ? block.mediaAspect ?? "original" : undefined}
+          onAspectChange={isImage ? handleAspectChange : undefined}
         />
       ) : null}
       {showCaption ? (
-        <div className="border-t border-[var(--osio-border-default)] px-3 py-2">
-          <EditableContent
-            content={block.content}
-            className="min-h-[1.5em] text-sm leading-relaxed text-[var(--osio-fg-muted)]"
-            style={textStyle}
-            placeholder="Write a caption..."
-            onChange={onChange}
-            onKeyDown={onKeyDown}
-            onPaste={onPaste}
-            pageId={pageId}
-          />
-        </div>
+        <MediaCaption
+          content={block.content}
+          style={textStyle}
+          pageId={pageId}
+          onChange={onChange}
+          onKeyDown={onKeyDown}
+          onPaste={onPaste}
+          autoFocus={captionOpen}
+        />
       ) : null}
 
       {showEmbed ? (

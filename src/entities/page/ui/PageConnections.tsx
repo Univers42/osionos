@@ -11,10 +11,11 @@
 /* ************************************************************************** */
 
 import React, { useMemo } from "react";
-import { Folder, CornerDownRight, Link2 } from "lucide-react";
+import { Folder, CornerDownRight, Link2, AtSign } from "lucide-react";
 
 import { usePageStore } from "@/store/usePageStore";
-import { backlinkRefs, childRefs, parentRef, type PageRef } from "./pageConnections.helpers";
+import { useBacklinks } from "../model/useBacklinks";
+import { backlinkRefs, childRefs, mergeRefs, parentRef, type PageRef } from "./pageConnections.helpers";
 
 interface Props {
   pageId: string;
@@ -29,24 +30,29 @@ interface Props {
 export const PageConnections: React.FC<Props> = ({ pageId, workspaceId }) => {
   const openPage = usePageStore((s) => s.openPage);
   const wsPages = usePageStore((s) => s.pages[workspaceId]);
+  const { linked, mentions } = useBacklinks(pageId);
   const data = useMemo(() => {
     const all = wsPages ?? [];
     const page = all.find((candidate) => candidate._id === pageId);
-    return { parent: parentRef(page, all), children: childRefs(pageId, all), backlinks: backlinkRefs(pageId, all) };
-  }, [wsPages, pageId]);
+    // Relation-property backlinks ∪ inline [[page]] backlinks (deduped by id).
+    const backlinks = mergeRefs(backlinkRefs(pageId, all), linked.map((ref) => ({ id: ref.id, title: ref.title })));
+    const mentionRefs = mentions.map((ref) => ({ id: ref.id, title: ref.title }));
+    return { parent: parentRef(page, all), children: childRefs(pageId, all), backlinks, mentionRefs };
+  }, [wsPages, pageId, linked, mentions]);
 
   function go(ref: PageRef) {
     if (ref.surface === "folder") return; // folders never open
     openPage({ id: ref.id, workspaceId, kind: "page", title: ref.title });
   }
 
-  if (!data.parent && data.children.length === 0 && data.backlinks.length === 0) return null;
+  if (!data.parent && data.children.length === 0 && data.backlinks.length === 0 && data.mentionRefs.length === 0) return null;
 
   return (
     <div className="mt-2 flex flex-col gap-1 text-sm">
       {data.parent ? <ConnRow icon={<Folder size={13} />} label="In folder" refs={[data.parent]} onGo={go} /> : null}
       {data.children.length ? <ConnRow icon={<CornerDownRight size={13} />} label="Contains" refs={data.children} onGo={go} /> : null}
       {data.backlinks.length ? <ConnRow icon={<Link2 size={13} />} label="Linked from" refs={data.backlinks} onGo={go} /> : null}
+      {data.mentionRefs.length ? <ConnRow icon={<AtSign size={13} />} label="Mentions" refs={data.mentionRefs} onGo={go} /> : null}
     </div>
   );
 };

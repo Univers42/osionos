@@ -16,6 +16,7 @@
 
 import React, { useState } from "react";
 import { Button, Modal } from "@/shared/ui";
+import { isVideoCoverSource } from "@/entities/page/ui/coverMedia";
 import type { Page } from "@notion-db/object-database";
 import type { WorkspaceMemberRole } from "@/store/settings";
 import { CONTACT, DIR, GROUP, GUEST, MEMBER, type PeopleSourceKey } from "./peopleModel";
@@ -60,7 +61,7 @@ export const PeoplePeek: React.FC<PeekProps> = ({ source, page, workspaceId, con
     <Modal open onClose={onClose} size="sm" title={title}>
       <div className="p-6">
         <div className="flex items-center gap-3">
-          {page.cover
+          {page.cover && !isVideoCoverSource(page.cover)
             ? <img src={page.cover} alt="" className="h-12 w-12 rounded-full object-cover" />
             : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--osio-bg-subtle)] text-lg">{page.icon ?? title.charAt(0).toUpperCase()}</div>}
           <div className="min-w-0">

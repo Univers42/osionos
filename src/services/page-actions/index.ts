@@ -36,7 +36,8 @@ export type PageActionName =
   | "updates_analytics"
   | "version_history"
   | "notify_me"
-  | "connections";
+  | "connections"
+  | "remove_header";
 
 interface TranslateResponse {
   title?: string;
@@ -181,6 +182,22 @@ function parseConfiguredTranslateResponse(payload: unknown): string | null {
   return typeof translated === "string" && translated.trim() ? translated : null;
 }
 
+// Public translation endpoints have no SLA — Google's gtx is usually CORS-blocked
+// (fast reject) but MyMemory can hang for many seconds with no response. Cap every
+// request so a stalled provider can't freeze a page translation: on timeout we
+// abort and fall through to the next provider (or the untranslated original).
+const TRANSLATE_FETCH_TIMEOUT_MS = 4000;
+
+async function fetchWithTimeout(input: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = globalThis.setTimeout(() => controller.abort(), TRANSLATE_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    globalThis.clearTimeout(timer);
+  }
+}
+
 async function translateWithConfiguredEndpoint(
   text: string,
   targetLocale: string,
@@ -189,7 +206,7 @@ async function translateWithConfiguredEndpoint(
   const endpoint = configuredTranslationEndpoint();
   if (!endpoint) return null;
 
-  const response = await fetch(endpoint, {
+  const response = await fetchWithTimeout(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -209,7 +226,7 @@ async function translateWithGooglePublicEndpoint(text: string, targetLocale: str
   url.searchParams.set("dt", "t");
   url.searchParams.set("q", text);
 
-  const response = await fetch(url.toString());
+  const response = await fetchWithTimeout(url.toString());
   if (!response.ok) return null;
   return parseGoogleTranslateResponse(await response.json());
 }
@@ -219,7 +236,7 @@ async function translateWithMyMemory(text: string, targetLocale: string): Promis
   url.searchParams.set("q", text);
   url.searchParams.set("langpair", `auto|${targetLocale}`);
 
-  const response = await fetch(url.toString());
+  const response = await fetchWithTimeout(url.toString());
   if (!response.ok) return null;
   const payload = await response.json() as Record<string, unknown>;
   const translated = (payload.responseData as Record<string, unknown> | undefined)?.translatedText;

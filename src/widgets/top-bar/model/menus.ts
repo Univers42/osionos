@@ -11,12 +11,15 @@
 /* ************************************************************************** */
 
 import { useUserStore } from "@/features/auth";
+import { isDrawEnabled, isQuickCaptureEnabled } from "@/shared/config/featureFlags";
+import { useQuickCapture } from "@/features/quick-capture/model/useQuickCapture";
 import { applyTheme, persistThemeMode } from "@/shared/config/theme";
 import { useUIStore } from "@/shared/config/uiStore";
 import { useToastStore } from "@/shared/ui/primitives/useToastStore";
 import type { SettingsTab } from "@/shared/ui/primitives/useSettingsSearchIndex";
 import { usePageStore } from "@/store/usePageStore";
-import { consoleTab, homeTab, trashTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { clearDrawBinding } from "@/widgets/draw-canvas/model/drawHandoff";
+import { consoleTab, drawTab, homeTab, trashTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { usePalette } from "./usePalette";
@@ -82,6 +85,9 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
       id: "file", label: "File", items: [
         { id: "file.new-page", label: "New page", run: () => createPage("Untitled") },
         { id: "file.new-folder", label: "New folder", run: () => createPage("New folder", "folder"), separatorAfter: true },
+        ...(isQuickCaptureEnabled()
+          ? [{ id: "file.capture", label: "Quick capture", run: () => useQuickCapture.getState().setOpen(true), separatorAfter: true }]
+          : []),
         { id: "file.search", label: "Search…", accelerator: "⌘K", run: () => palette().openSearch(), separatorAfter: true },
         { id: "file.settings", label: "Settings", run: ctx.openSettings },
       ],
@@ -107,6 +113,15 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
         { id: "view.home", label: "Home", run: () => layout().openTab(homeTab()) },
         { id: "view.trash", label: "Trash", run: () => layout().openTab(trashTab()) },
         { id: "view.console", label: "BaaS Console", run: () => layout().openTab(consoleTab()) },
+        ...(isDrawEnabled()
+          ? [{
+              id: "view.draw",
+              label: "New drawing",
+              // Unbind first: a blank drawing must not write into the draw BLOCK
+              // that last expanded into this (singleton) tab.
+              run: () => { clearDrawBinding(); layout().openTab(drawTab()); },
+            }]
+          : []),
       ],
     },
     {

@@ -46,9 +46,24 @@ function hashJson(value: unknown): string {
   return (hash >>> 0).toString(36);
 }
 
+/** Content hashes cached by the content array's IDENTITY: the store replaces the
+ *  array immutably only when that page is edited, so on each outbox flush (every
+ *  ~800ms while an edit is pending, re-stamping ALL loaded pages) only the edited
+ *  page pays the full-tree JSON.stringify — the rest hit the cache. */
+const contentHashCache = new WeakMap<object, string>();
+
+function hashContentCached(content: unknown): string {
+  if (typeof content !== "object" || content === null) return hashJson(content);
+  const cached = contentHashCache.get(content);
+  if (cached !== undefined) return cached;
+  const hash = hashJson(content);
+  contentHashCache.set(content, hash);
+  return hash;
+}
+
 /** The fields whose change must reach the server, folded into one stamp string. */
 export function pageStamp(page: PageEntry): string {
-  const content = page.content === undefined ? CONTENT_UNLOADED : hashJson(page.content);
+  const content = page.content === undefined ? CONTENT_UNLOADED : hashContentCached(page.content);
   return [
     page.updatedAt ?? "",
     page.title ?? "",

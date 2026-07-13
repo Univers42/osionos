@@ -16,7 +16,7 @@ import {
   activeTabOf, collectPanes, findOpenTab, findPane, genId, updatePane,
   type LayoutNode, type PaneNode, type WorkspaceTab,
 } from "./layoutTree";
-import { removePane, setSizes, splitPane } from "./layoutMutations";
+import { pruneTabsForPages, removePane, setSizes, splitPane } from "./layoutMutations";
 import { freshLayout, layoutScope, loadLayout, saveLayout } from "./layoutPersist";
 import { activePageToTab } from "./pageToTab";
 import { mirrorActiveTab } from "./layoutSync";
@@ -183,6 +183,18 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
       if (!removed) { const fresh = freshLayout(); return commit(fresh.root, fresh.activePaneId, activeTabOf(fresh.root, fresh.activePaneId)); }
       const activePaneId = findPane(removed, state.activePaneId) ? state.activePaneId : (collectPanes(removed)[0]?.id ?? "");
       commit(removed, activePaneId, activeTabOf(removed, activePaneId));
+    },
+
+    closeTabsForPages: (pageIds) => {
+      if (pageIds.size === 0) return;
+      const state = get();
+      const result = pruneTabsForPages(state.root, state.activePaneId, (t) => Boolean(t.pageId) && pageIds.has(t.pageId));
+      if (result === null) return; // no open tab matched
+      if (result === "empty") {
+        const fresh = freshLayout();
+        return commit(fresh.root, fresh.activePaneId, activeTabOf(fresh.root, fresh.activePaneId));
+      }
+      commit(result.root, result.activePaneId, activeTabOf(result.root, result.activePaneId));
     },
 
     setActiveTab: (paneId, tabId) => focusInPane(paneId, tabId, true),

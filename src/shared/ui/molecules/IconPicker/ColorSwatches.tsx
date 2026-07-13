@@ -38,6 +38,28 @@ export const PICKER_COLORS: ReadonlyArray<{ name: string; value: string }> = [
   { name: "Graphite", value: "#475569" },
 ];
 
+/** Common English color words that aren't literal swatch names, mapped to the
+ *  closest swatch — so "/color gray" resolves instead of falling back to the picker. */
+const COLOR_ALIASES: Record<string, string> = {
+  gray: "graphite",
+  grey: "graphite",
+  magenta: "fuchsia",
+  turquoise: "teal",
+};
+
+/** Resolve a typed color argument ("gray", "blue", "gr") to a swatch hex, or
+ *  undefined when it matches nothing — in which case the caller opens the picker.
+ *  Exact name wins, then a unique prefix. */
+export function resolveColorName(arg: string): string | undefined {
+  const query = arg.trim().toLowerCase();
+  if (!query) return undefined;
+  const resolved = COLOR_ALIASES[query] ?? query;
+  return (
+    PICKER_COLORS.find((color) => color.name.toLowerCase() === resolved) ??
+    PICKER_COLORS.find((color) => color.name.toLowerCase().startsWith(resolved))
+  )?.value;
+}
+
 const RAINBOW = "conic-gradient(from 210deg, #f43f5e, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #f43f5e)";
 const DOT = "h-6 w-6 rounded-full ring-1 ring-inset ring-[var(--osio-border-default)] transition-[box-shadow] duration-[120ms]";
 const SELECTED = "ring-2 ring-[var(--osio-accent)] ring-offset-2 ring-offset-[var(--osio-bg-surface)]";

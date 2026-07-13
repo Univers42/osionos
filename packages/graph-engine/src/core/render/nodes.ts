@@ -31,6 +31,10 @@ export function drawNodes(d: DrawCtx, sprites: NodeSpriteCache, focusOnly = fals
   // in — fewer in view — and the stride drops to 1, resolving every record.
   const stride = !focusOnly && cull.count > NODE_BUDGET ? Math.ceil(cull.count / NODE_BUDGET) : 1;
   let seen = 0;
+  // globalAlpha assignments cross the canvas binding layer; on a steady frame
+  // (no reveal) the value is constant, so writing it per blit is pure waste —
+  // track the last value and only touch the context when it actually changes.
+  let lastAlpha = -1;
   for (const [key, indices] of state.styleBuckets) {
     const base = mix.icon < 0.999 ? sprites.get(baseKeyOf(key)) : null;
     const iconed = mix.icon > 0.001 ? sprites.get(key) : null;
@@ -56,17 +60,25 @@ export function drawNodes(d: DrawCtx, sprites: NodeSpriteCache, focusOnly = fals
       const half = r / DISC_FRACTION;
       const alpha = rv * d.alpha * mix.sprite;
       if (base) {
-        ctx.globalAlpha = alpha;
+        if (alpha !== lastAlpha) {
+          ctx.globalAlpha = alpha;
+          lastAlpha = alpha;
+        }
         ctx.drawImage(base, state.posX[i] - half, state.posY[i] - half, half * 2, half * 2);
       }
       if (iconed) {
-        ctx.globalAlpha = alpha * mix.icon;
+        const iconAlpha = alpha * mix.icon;
+        if (iconAlpha !== lastAlpha) {
+          ctx.globalAlpha = iconAlpha;
+          lastAlpha = iconAlpha;
+        }
         ctx.drawImage(iconed, state.posX[i] - half, state.posY[i] - half, half * 2, half * 2);
       }
     }
     if (dotPath) {
       // One fill covers every tiny node of this bucket (same color by key).
-      ctx.globalAlpha = d.alpha * mix.sprite;
+      lastAlpha = d.alpha * mix.sprite;
+      ctx.globalAlpha = lastAlpha;
       ctx.fillStyle = state.fills[indices[0]];
       ctx.fill();
     }

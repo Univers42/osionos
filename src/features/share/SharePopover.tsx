@@ -15,6 +15,8 @@ import { Link2, X } from 'lucide-react';
 import { ShareRow } from './ShareRow';
 import { SharePeoplePicker } from './SharePeoplePicker';
 import { useShareModel } from './useShareModel';
+import { PublishSection } from './PublishSection';
+import { isPublishEnabled } from '@/shared/config/featureFlags';
 import type { ShareResource } from './types';
 
 interface SharePopoverProps {
@@ -117,6 +119,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
           <Link2 size={12} /> Copy link
         </button>
       </div>
+      {isPublishEnabled() && resource.resourceType === 'page' && <PublishSection pageId={resource.resourceId} />}
     </div>
   );
 };

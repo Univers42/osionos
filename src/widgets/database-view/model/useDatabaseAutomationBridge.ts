@@ -18,7 +18,12 @@
 // leave the transport unset so the engine's warn fallback applies.
 
 import { useEffect } from 'react';
-import { AUTOMATION_FIRED_EVENT, setAutomationWebhookTransport } from '@notion-db/object-database';
+// Deep imports, deliberately: this hook mounts once in App (warm path), and the
+// @notion-db/object-database BARREL carries a side-effect CSS import + the full
+// ObjectDatabase module eval — the exact barrel-leak class the lazy-view rule
+// exists for. Both symbols live in side-effect-free leaf modules.
+import { AUTOMATION_FIRED_EVENT } from '@/shared/notion-database-sys/src/lib/automations/automationRunner';
+import { setAutomationWebhookTransport } from '@/shared/notion-database-sys/src/lib/automations/webhookTransport';
 import { useToastStore } from '@/shared/ui/primitives/useToastStore';
 import { api, API_BASE, getActivePageJwt } from '@/shared/api/client';
 

@@ -64,7 +64,11 @@ export function useGraphEngine(args: UseGraphEngineArgs): GraphEngineRefs {
     const themeWatcher = new MutationObserver(() => engine.setTheme());
     themeWatcher.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["data-theme", "class", "style"],
+      // `data-palette` is load-bearing: the 8 colour palettes switch the --osio-graph-*
+      // tokens through it (shared/config/theme.ts sets root.dataset.palette). Leaving it
+      // out meant a palette change never re-resolved the theme — the graph kept the old
+      // colours until a hard refresh remounted the engine.
+      attributeFilter: ["data-theme", "data-palette", "class", "style"],
     });
     args.onReady?.(engine);
 

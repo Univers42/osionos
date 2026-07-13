@@ -15,7 +15,7 @@ import { persist } from 'zustand/middleware';
 
 import { resolveWorkspaceConfig, useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
 import { defaultWorkspaceSettings } from './defaults';
-import { errorMessage, nowIso, pushSettingsError, scheduleSettingsWrite, trySettingsGet, trySettingsPatch } from './settingsStoreUtils';
+import { errorMessage, nowIso, pushSettingsError, scheduleSettingsWrite, stableDefault, trySettingsGet, trySettingsPatch } from './settingsStoreUtils';
 import type { WorkspaceSettings } from './types';
 
 interface WorkspaceSettingsStore {
@@ -82,7 +82,7 @@ export const useWorkspaceSettingsStore = create<WorkspaceSettingsStore>()(
       data: {},
       loading: {},
       error: {},
-      getData: (workspaceId, name) => get().data[workspaceId] ?? defaultWorkspaceSettings(workspaceId || 'local-workspace', name),
+      getData: (workspaceId, name) => get().data[workspaceId] ?? stableDefault(`workspace:${workspaceId || 'local-workspace'}:${name ?? ''}`, () => defaultWorkspaceSettings(workspaceId || 'local-workspace', name)),
       hydrate: async (userId, workspaceId, name) => {
         if (!workspaceId) return;
         set((state) => ({ loading: { ...state.loading, [workspaceId]: true }, error: { ...state.error, [workspaceId]: null } }));

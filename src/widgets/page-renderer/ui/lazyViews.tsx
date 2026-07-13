@@ -88,3 +88,16 @@ export const LazyAdminSpaceView = lazy(() =>
 export const LazyChatShell = lazy(() =>
   import("@/widgets/chat-shell").then((m) => ({ default: m.ChatShell })),
 );
+
+// Deep import (never a barrel): the Draw surface pulls @osionos/draw-engine, a
+// large canvas chunk that must never leak onto the warm pane path.
+export const LazyDrawView = lazy(() =>
+  import("@/widgets/draw-canvas/ui/DrawCanvasView").then((m) => ({ default: m.DrawCanvasView })),
+);
+
+// Deep import (never a barrel): the IDE editor pulls CodeMirror 6 + its language
+// packs, a large chunk that must never leak onto the warm pane path. Only reached
+// for surface==='code' pages when osio.ide is on (default OFF).
+export const LazyCodeFileView = lazy(() =>
+  import("@/features/ide/ui/CodeFileView").then((m) => ({ default: m.CodeFileView })),
+);

@@ -68,7 +68,7 @@ export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
           title="Copy code"
           className={[
             "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-colors hover:bg-[var(--osio-code-btn-hover)]",
-            copied ? "text-[#3fb950]" : "text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]",
+            copied ? "text-[var(--osio-success)]" : "text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]",
           ].join(" ")}
           onClick={handleCopy}
         >
@@ -76,10 +76,7 @@ export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
         </button>
       </div>
       {isMermaid ? (
-        <MermaidDiagram
-          chart={block.content}
-          className="overflow-x-auto bg-white p-4"
-        />
+        <MermaidDiagram chart={block.content} codeTheme={block.codeTheme ?? "dark"} />
       ) : (
         <div className="flex">
           {showLineNumbers && (

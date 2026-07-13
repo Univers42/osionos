@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import { normalizeComboString } from "./combo";
+import { comboSteps } from "./combo";
 import { DEFAULT_AUTOMATIONS } from "./defaultAutomations";
 import type { Automation } from "./types";
 
@@ -35,7 +35,9 @@ function baseById(id: string): Automation | undefined {
 }
 
 function conflictKey(automation: Automation): string {
-  return `${normalizeComboString(automation.trigger.combo)}::${automation.trigger.when}`;
+  // Chord-aware: normalizeComboString only splits on "+", so it would mangle
+  // "mod+k mod+z" down to "mod+z" and falsely report a clash with Undo.
+  return `${comboSteps(automation.trigger.combo).join(" ")}::${automation.trigger.when}`;
 }
 
 /** Ids of enabled automations that share a combo + condition with another enabled one. */

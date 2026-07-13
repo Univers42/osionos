@@ -23,6 +23,7 @@ import { Check, UserPlus, X } from 'lucide-react';
 import { Button } from '@/shared/ui/atoms/Button';
 import { useContactsStore } from '@/store/social/useContactsStore';
 import type { ContactEdge } from '@/store/social/types';
+import { PushToggleRow } from './PushToggleRow';
 
 const InviteRow: React.FC<{ edge: ContactEdge; onAccept: () => void; onDecline: () => void }> = ({
   edge,
@@ -69,6 +70,7 @@ export const NotificationsPanel: React.FC = () => {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <PushToggleRow />
       {invites.length > 0 ? (
         <ul className="flex flex-col">
           {invites.map((edge) => (

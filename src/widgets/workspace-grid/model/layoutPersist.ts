@@ -23,6 +23,7 @@ export const COMMUNITY_TAB_ID = "__community__";
 export const MAIL_TAB_ID = "__mail__";
 export const CALENDAR_TAB_ID = "__calendar__";
 export const CHAT_TAB_ID = "__chat__";
+export const DRAW_TAB_ID = "__draw__";
 
 const STORAGE_KEY = "osionos.workspace.layout.v2";
 const LEGACY_PREFIX = "osionos.workspace.layout.v1";
@@ -76,6 +77,12 @@ export function trashTab(): WorkspaceTab {
 /** The BaaS console tab — manage the tenant's own mini-baas project. */
 export function consoleTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: CONSOLE_TAB_ID, workspaceId: "", kind: "console", title: "BaaS Console", icon: "icon:database" };
+}
+
+/** The Draw whiteboard tab — the Excalidraw/Figma-class drawing surface. Stable
+ *  id → re-opening focuses the tab instead of duplicating it. */
+export function drawTab(): WorkspaceTab {
+  return { tabId: genId("tab"), pageId: DRAW_TAB_ID, workspaceId: "", kind: "draw", title: "Draw", icon: "icon:pen-tool" };
 }
 
 /** A live external-database table tab (`baas:<dbId>:<table>` id). pageId == the

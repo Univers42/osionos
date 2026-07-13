@@ -71,8 +71,8 @@ export interface PageEntry {
   content?: Block[];
   /** Editable properties shown below the page title. */
   properties?: PagePropertyEntry[];
-  /** Surface classification (agents, home). "folder" = a container that groups children, acts as a graph hub, and never opens on click (a file may also act as a folder). "wiki" = a governed knowledge root: groups children like a folder but OPENS onto its own index content; articles inside carry governance properties (owner, status, verified, domain). */
-  surface?: "page" | "agent" | "home" | "folder" | "wiki" | "app";
+  /** Surface classification (agents, home). "folder" = a container that groups children, acts as a graph hub, and never opens on click (a file may also act as a folder). "wiki" = a governed knowledge root: groups children like a folder but OPENS onto its own index content; articles inside carry governance properties (owner, status, verified, domain). "code" = an IDE / Dev-Mode source file: line-based, rendered by the CodeMirror editor (not the block editor), body stored as a single `code` block. */
+  surface?: "page" | "agent" | "home" | "folder" | "wiki" | "app" | "code";
   /** Local version for generated home dashboard content. */
   homeDashboardVersion?: number;
   /** True when this page is a database template (hidden from the normal tree/records). */

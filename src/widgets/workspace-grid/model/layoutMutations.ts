@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { genId, type LayoutNode, type PaneNode } from "./layoutTree";
+import { collectPanes, findPane, genId, updatePane, type LayoutNode, type PaneNode, type WorkspaceTab } from "./layoutTree";
 
 /** Scale a list of split sizes so it sums to 100. */
 function normalizeSizes(sizes: number[]): number[] {
@@ -56,6 +56,46 @@ export function splitPane(
     return { type: "split", id: genId("split"), direction, children, sizes: [50, 50] };
   }
   return { ...node, children: node.children.map((child) => splitPane(child, paneId, direction, newPane, side)) };
+}
+
+/**
+ * Close every open tab that `shouldClose` matches (a page archived → trash, or
+ * deleted, must not linger in the tab bar). Emptied panes collapse via removePane.
+ * Pure — the store method is thin glue over this. Returns:
+ *   - `null`   → nothing matched, tree unchanged;
+ *   - `"empty"`→ the whole tree emptied (caller resets to a fresh Home layout);
+ *   - `{ root, activePaneId }` → the pruned tree + a still-live active pane.
+ */
+export function pruneTabsForPages(
+  root: LayoutNode,
+  activePaneId: string,
+  shouldClose: (tab: WorkspaceTab) => boolean,
+): { root: LayoutNode; activePaneId: string } | "empty" | null {
+  const panes = collectPanes(root);
+  if (!panes.some((pane) => pane.tabs.some(shouldClose))) return null;
+
+  let next: LayoutNode = root;
+  for (const pane of panes) {
+    if (!pane.tabs.some(shouldClose)) continue;
+    const remaining = pane.tabs.filter((tab) => !shouldClose(tab));
+    if (remaining.length > 0) {
+      next = updatePane(next, pane.id, (p) => ({
+        ...p,
+        // Keep the active tab if it survived, else fall to the rightmost survivor.
+        tabs: remaining,
+        activeTabId: remaining.some((t) => t.tabId === p.activeTabId)
+          ? p.activeTabId
+          : remaining[remaining.length - 1].tabId,
+      }));
+    } else {
+      next = removePane(next, pane.id) ?? next; // null only for the LAST pane → guard below
+    }
+  }
+
+  const livePanes = collectPanes(next);
+  if (livePanes.length <= 1 && (livePanes[0]?.tabs.some(shouldClose) ?? true)) return "empty";
+  const nextActive = findPane(next, activePaneId) ? activePaneId : livePanes[0].id;
+  return { root: next, activePaneId: nextActive };
 }
 
 /** Immutably set the sizes of one split node. */

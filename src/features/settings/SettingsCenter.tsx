@@ -34,7 +34,6 @@ import {
   Mail,
   MoreHorizontal,
   Palette,
-  Plug,
   Search,
   Settings,
   Shield,
@@ -54,6 +53,7 @@ import { PermissionsPanel } from '@/features/settings/permissions';
 import { LazySocialSettings } from '@/features/settings/social/LazySocialSettings';
 import { LazyAutomationManager } from '@/features/automations/ui/LazyAutomationManager';
 import { PeopleDatabasePanel } from '@/features/settings/people/PeopleDatabasePanel';
+import { McpPanel } from '@/features/settings/mcp/McpPanel';
 import { usePeopleCounts } from '@/features/settings/people/usePeopleCounts';
 import type { PeopleSourceKey } from '@/features/settings/people/peopleModel';
 import { ImageAvatarUpload } from '@/features/settings/profile/ImageAvatarUpload';
@@ -66,7 +66,6 @@ import { useUIStore } from '@/shared/config/uiStore';
 import { usePageStore } from '@/store/usePageStore';
 import { derivePageState } from '@/store/pageStore.helpers';
 import {
-  MCP_TOOL_OPTIONS,
   recordSettingsAction,
   useAiSettingsStore,
   useAccountDevicesStore,
@@ -76,7 +75,6 @@ import {
   useBillingStore,
   useConnectionsStore,
   useImportHistoryStore,
-  useMcpSettingsStore,
   useNotificationSettingsStore,
   useTeamspacesStore,
   useUserPreferencesStore,
@@ -85,9 +83,7 @@ import {
   useWorkspaceSettingsStore,
   type BillingState,
   type BillingInvoice,
-  type ConnectionRecord,
   type ImportHistoryEntry,
-  type McpAllowedTool,
   type PublicDomain,
   type WorkspaceMember,
   type WorkspaceSettings,
@@ -105,6 +101,7 @@ import {
   type SettingsSearchEntry,
   type SettingsTab,
 } from '@/shared/ui';
+import { ConnectionsPanel } from './connections/ConnectionsPanel';
 
 interface SettingsCenterProps {
   initialTab?: SettingsTab;
@@ -678,7 +675,7 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
   const visibleDevices = devices.filter((device) => !device.revokedAt);
   const activePasskeys = passkeys.filter((passkey) => !passkey.removedAt);
   const deviceRows = visibleDevices.map((device, index) => [
-    <span key={`${device._id}-name`}>{index === 0 ? 'Ubuntu · This Device' : device.userAgent?.split(')')[0]?.replace('(', '') || 'Linux'}{device._id === 'current-device' ? <span className="ml-2 rounded bg-[var(--osio-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--osio-accent)]">Current</span> : null}</span>,
+    <span key={`${device._id}-name`}>{index === 0 ? 'Ubuntu · This Device' : device.userAgent?.split(')')[0]?.replace('(', '') || 'Linux'}{device._id === 'current-device' ? <span className="ml-2 rounded bg-[var(--osio-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">Current</span> : null}</span>,
     device._id === 'current-device' ? 'Now' : new Date(device.lastActiveAt).toLocaleString(),
     device.location ?? 'Unknown location',
     device._id === 'current-device' ? '' : <Button key={`${device._id}-logout`} onClick={() => { runAsync(revokeDevice(device._id)); }}>Log out</Button>,
@@ -733,7 +730,7 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
           </label>
           <ImageAvatarUpload onUploaded={(dataUrl) => updateAccount({ profile: { ...account?.profile, avatar: dataUrl } })} />
         </div>
-        <p className="text-sm text-[var(--osio-fg-muted)]"><span className="text-[var(--osio-accent)]">Create a custom self-portrait</span> with osionos Faces</p>
+        <p className="text-sm text-[var(--osio-fg-muted)]"><span className="text-[var(--osio-accent-text)]">Create a custom self-portrait</span> with osionos Faces</p>
       </Section>
       <Section title="Account security">
         <SettingRow title="Email" description={primaryEmail} action={<Button onClick={() => setModal({ name: 'email-manager' })}>Manage emails</Button>} />
@@ -1043,7 +1040,7 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
         <SettingRow title="Custom landing page" description={<>When a new member joins this workspace, a copy of this page will be added to their <b>Private</b> pages</>} action={<Button onClick={() => setModal({ name: 'page-selector' })}>{settings.landingPageId ? 'Change page' : 'Select page'}</Button>} />
       </Section>
       <Section title="Sidebar">
-        <SettingRow title={<span className="inline-flex items-center gap-2">Try the new sidebar <span className="rounded bg-[var(--osio-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--osio-accent)]">New</span></span>} description="Keep your pages, meetings, and AI within reach." action={<Switch checked={sidebar.newSidebar ?? true} onChange={(checked) => { setUseNewSidebar(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, newSidebar: checked } }); }} />} />
+        <SettingRow title={<span className="inline-flex items-center gap-2">Try the new sidebar <span className="rounded bg-[var(--osio-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">New</span></span>} description="Keep your pages, meetings, and AI within reach." action={<Switch checked={sidebar.newSidebar ?? true} onChange={(checked) => { setUseNewSidebar(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, newSidebar: checked } }); }} />} />
         <SettingRow title="Show other osionos apps in sidebar" description="Show osionos Calendar and osionos Mail in your sidebar" action={<Switch checked={sidebar.showApps ?? true} onChange={(checked) => { setShowOtherApps(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, showApps: checked } }); }} />} />
       </Section>
       <Section title="Export">
@@ -1134,71 +1131,6 @@ const PageNotificationOverridesModal: React.FC<{ onClose: () => void }> = ({ onC
   );
 };
 
-const ConnectionsPanel: React.FC<{ activeUserId: string; personaEmail?: string }> = ({ activeUserId, personaEmail }) => {
-  const userId = activeUserId || 'anonymous';
-  const connections = useConnectionsStore((state) => state.data);
-  const hydrate = useConnectionsStore((state) => state.hydrate);
-  const connect = useConnectionsStore((state) => state.connect);
-  const sync = useConnectionsStore((state) => state.sync);
-  const disconnect = useConnectionsStore((state) => state.disconnect);
-  const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
-
-  useEffect(() => {
-    runAsync(hydrate(userId, personaEmail));
-  }, [hydrate, personaEmail, userId]);
-
-  async function connectWithDelay(provider: string) {
-    await new Promise((resolve) => globalThis.setTimeout(resolve, 800));
-    await connect(providerConnectionInput(userId, provider));
-  }
-
-  const rows = connections.filter((connection) => !connection.removedAt).map((connection) => [
-    connection.label,
-    connection.scopes.length ? connection.scopes.join(', ') : 'Can preview links',
-    <div key={`${connection._id}-actions`} className="flex flex-wrap justify-end gap-2">
-      <Button tone="ghost" onClick={() => { runAsync(sync(connection._id)); }}>Sync</Button>
-      <Button onClick={() => setModal({ name: 'connection-scopes', payload: { connectionId: connection._id } })}>Manage scopes</Button>
-      <Button tone="danger" onClick={() => setModal({ name: 'connection-scopes', payload: { connectionId: connection._id, disconnect: true } })}>Disconnect</Button>
-    </div>,
-  ]);
-  const selectedConnection = connections.find((connection) => connection._id === modal?.payload?.connectionId);
-
-  return (
-    <>
-      <Section title="My connections">
-        <DataTable headers={['Connection', 'Access', '']} rows={rows.length ? rows : [['No connections yet', 'Install one from Discover connections', '']]} />
-      </Section>
-      <Section title="Discover connections">
-        <div className="grid gap-3">
-          <FeatureCard icon={<Sparkles size={16} />} title="ChartBase" description="Use charts from databases and docs without leaving osionos." action={<Button onClick={() => { runAsync(connectWithDelay('chartbase')); }}>Explore</Button>} />
-          <FeatureCard icon={<Bot size={16} />} title="Slack" description="Preview threads and send notifications from pages." action={<Button onClick={() => { runAsync(connectWithDelay('slack')); }}>Install</Button>} />
-          <FeatureCard icon={<LayoutGrid size={16} />} title="GitHub" description="Attach issues, pull requests, and repository previews." action={<Button onClick={() => { runAsync(connectWithDelay('github')); }}>Install</Button>} />
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2"><Button onClick={() => setModal({ name: 'connection-gallery' })}>See all</Button><Button onClick={() => setModal({ name: 'connection-gallery' })}>Browse connections in Gallery</Button><Button onClick={() => setModal({ name: 'connection-gallery', payload: { developer: true } })}>Develop or manage connections</Button></div>
-      </Section>
-      {modal?.name === 'connection-gallery' && <ConnectionGalleryModal onConnect={(provider) => runAsync(connectWithDelay(provider))} onClose={() => setModal(null)} />}
-      {modal?.name === 'connection-scopes' && selectedConnection && modal.payload?.disconnect !== true && <ConnectionScopesModal connection={selectedConnection} onClose={() => setModal(null)} />}
-      {modal?.name === 'connection-scopes' && selectedConnection && modal.payload?.disconnect === true && <ConfirmModal title="Disconnect connection" message={`Disconnect ${selectedConnection.label}?`} danger actionLabel="Disconnect" onConfirm={() => { runAsync(disconnect(selectedConnection._id)); setModal(null); }} onClose={() => setModal(null)} />}
-    </>
-  );
-};
-
-const ConnectionScopesModal: React.FC<{ connection: ConnectionRecord; onClose: () => void }> = ({ connection, onClose }) => (
-  <Modal open onClose={onClose} title="Manage scopes" size="sm">
-    <div className="space-y-3">
-      {connection.scopes.map((scope) => <SettingRow key={scope} title={scope} description="Granted locally for this connection." action={<Switch checked />} />)}
-      <div className="flex justify-end"><Button tone="primary" onClick={onClose}>Done</Button></div>
-    </div>
-  </Modal>
-);
-
-const ConnectionGalleryModal: React.FC<{ onConnect: (provider: string) => void; onClose: () => void }> = ({ onConnect, onClose }) => (
-  <Modal open onClose={onClose} title="Connection gallery" size="lg">
-    <div className="grid gap-3 sm:grid-cols-2">
-      {CONNECTION_PROVIDERS.map((provider) => <FeatureCard key={provider.provider} title={provider.label} description={provider.scopes.join(', ')} icon={<Plug size={16} />} action={<Button onClick={() => onConnect(provider.provider)}>Install</Button>} />)}
-    </div>
-  </Modal>
-);
 
 const MailCalendarPanel: React.FC<{ activeUserId: string; personaEmail?: string }> = ({ activeUserId, personaEmail = 'dev.pro.photo@gmail.com' }) => {
   const userId = activeUserId || 'anonymous';
@@ -1478,35 +1410,8 @@ const AiPanel = () => {
   );
 };
 
-const McpPanel = () => {
-  const workspaceId = useUserStore((state) => state.activeWorkspace()?._id ?? 'local-workspace');
-  const settings = useMcpSettingsStore((state) => state.getData(workspaceId));
-  const update = useMcpSettingsStore((state) => state.update);
-  const toggleTool = useMcpSettingsStore((state) => state.toggleTool);
-  const [developerOpen, setDeveloperOpen] = useState(false);
-  return (
-    <Section title="osionos MCP">
-      <FeatureCard icon={<Bot size={16} />} title="Connect osionos to AI tools" description="Summarize, search, and move faster with MCP-compatible clients." action={<Switch checked={settings.connected} onChange={(checked) => update(workspaceId, { connected: checked })} />} />
-      <div className="grid gap-2 rounded-lg border border-[var(--osio-border-default)] p-3">
-        {MCP_TOOL_OPTIONS.map((tool) => <SettingRow key={tool.value} title={tool.label} description={tool.value} action={<Switch checked={settings.allowedTools.includes(tool.value)} onChange={() => toggleTool(workspaceId, tool.value)} />} />)}
-      </div>
-      <SettingRow title="Developer mode" description="Expose MCP debugging details and local command setup." action={<Switch checked={settings.developerMode} onChange={(checked) => update(workspaceId, { developerMode: checked })} />} />
-      <SettingRow title="Developer access" description="Develop or manage connections" action={<Button onClick={() => setDeveloperOpen(true)}>Manage</Button>} />
-      {developerOpen && <McpDeveloperModal settings={settings} onClose={() => setDeveloperOpen(false)} />}
-    </Section>
-  );
-};
-
-const McpDeveloperModal: React.FC<{ settings: { connected: boolean; allowedTools: McpAllowedTool[]; developerMode: boolean }; onClose: () => void }> = ({ settings, onClose }) => (
-  <Modal open onClose={onClose} title="MCP developer" size="md">
-    <div className="space-y-3 text-sm text-[var(--osio-fg-muted)]">
-      <p>Status: {settings.connected ? 'Connected' : 'Disconnected'}</p>
-      <p>Allowed tools: {settings.allowedTools.join(', ')}</p>
-      <pre className="overflow-auto rounded-md bg-[var(--osio-bg-subtle)] p-3 text-xs">claude mcp get osionos</pre>
-      <div className="flex justify-end"><Button tone="primary" onClick={onClose}>Done</Button></div>
-    </div>
-  </Modal>
-);
+// McpPanel now lives in ./mcp/McpPanel (Discover/Manage tabs, app catalog,
+// restrict policy, disconnect-all) — imported at the top of this file.
 
 const PublicPagesPanel = () => {
   const userId = useUserStore((state) => state.activeUserId) || 'anonymous';
@@ -1623,13 +1528,17 @@ const LibraryPanel = () => {
   );
 };
 
+// Stable empty: `?? []` inside a zustand-v5 selector returns a FRESH array each
+// getSnapshot when the key is absent (new workspace) → infinite-loop blank panel.
+const EMPTY_TEAMSPACES: never[] = [];
+
 const TeamspacesPanel: React.FC<{ workspaceName?: string }> = ({ workspaceName = '42 school HQ' }) => {
   const workspace = useUserStore((state) => state.activeWorkspace());
   const workspaceId = workspace?._id ?? 'local-workspace';
   const activeUserId = useUserStore((state) => state.activeUserId) || 'anonymous';
   const jwt = useUserStore((state) => state.activePageJwt());
   const addPage = usePageStore((state) => state.addPage);
-  const teamspaces = useTeamspacesStore((state) => state.data[workspaceId] ?? []);
+  const teamspaces = useTeamspacesStore((state) => state.data[workspaceId] ?? EMPTY_TEAMSPACES);
   const createTeamspace = useTeamspacesStore((state) => state.create);
   const updateTeamspace = useTeamspacesStore((state) => state.update);
   const archiveTeamspace = useTeamspacesStore((state) => state.archive);

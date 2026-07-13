@@ -105,6 +105,31 @@ function defineMatcher(
   return { firstChars, matcher };
 }
 
+/** Emphasis delimiters that STACK ("*"/"**"/"***"), so a run length is meaningful. */
+const STACKING_DELIMITERS = new Set(["*", "_"]);
+
+/**
+ * CommonMark: an opening delimiter RUN longer than the delimiter being matched does
+ * not open here — the surplus stays OUTSIDE the span as literal text ("***foo**" is
+ * `*<strong>foo</strong>`, not `<strong>*foo</strong>`).
+ *
+ * Without this, "**" happily opened at the FIRST star of "***hello**" and swallowed
+ * the third star into the content -> bold("*hello"). Live, that made "***bold
+ * italic***" impossible to ever close: the stray "*" was stranded inside the mark and
+ * the user's last "*" landed outside it. Refusing here lets the parser emit the extra
+ * "*" as text and re-match the clean "**" one char later.
+ *
+ * Scoped to "*"/"_": "~~", "==" and backticks do not stack, and a run guard there
+ * would wrongly reject things like a ``double-backtick`` code span.
+ */
+function opensOverlongRun(text: string, pos: number, open: string): boolean {
+  const delim = open[0];
+  if (!STACKING_DELIMITERS.has(delim) || open !== delim.repeat(open.length)) return false;
+  let runEnd = pos;
+  while (runEnd < text.length && text[runEnd] === delim) runEnd += 1;
+  return runEnd - pos > open.length;
+}
+
 function matchDelimited(
   text: string,
   pos: number,
@@ -114,6 +139,7 @@ function matchDelimited(
   factory: (children: InlineNode[]) => InlineNode,
 ): InlineMatchResult | null {
   if (!text.startsWith(open, pos)) return null;
+  if (opensOverlongRun(text, pos, open)) return null;
   const start = pos + open.length;
   const end = text.indexOf(close, start);
   if (end === -1 || end === start) return null;

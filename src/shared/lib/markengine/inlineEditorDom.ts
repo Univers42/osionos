@@ -128,16 +128,24 @@ function readDomNode(node: Node): DomReadResult {
 }
 
 function readTextNode(node: Node): DomReadResult {
-  const value = (node.textContent ?? "").replaceAll("\u200B", "");
+  const raw = node.textContent ?? "";
+  const value = raw.replaceAll("\u200B", "");
+  // A stripped ZWSP flags a re-render so a transient caret CARRIER (inserted by the
+  // autoformat mark-exit, setInlineCaretAfterStyledBoundary) is cleaned once the user
+  // types into it \u2192 the text stays "boldX", not "bold\u200BX". Scoped to a carrier
+  // that now holds text (value.length > 0): a BARE ZWSP node \u2014 the persistent
+  // trailing suffix links/mentions render \u2014 is left untouched, so link editing and
+  // the page picker are unaffected.
+  const requiresNormalization = value.length > 0 && raw.length !== value.length;
   return value
     ? {
         nodes: [{ type: "text", value }],
-        requiresNormalization: false,
+        requiresNormalization,
         hasElementNodes: false,
       }
     : {
         nodes: [],
-        requiresNormalization: false,
+        requiresNormalization,
         hasElementNodes: false,
       };
 }

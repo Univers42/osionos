@@ -47,7 +47,7 @@ function appProps(m) {
     prop("categories", "Categories", "multi_select", m.categories),
     prop("resources", "Resources", "multi_select", [m.website]),
     prop("published", "Published", "checkbox", true),
-    prop("launchKind", "Launch", "text", "embed"),
+    prop("launchKind", "Launch", "text", m.launchKind ?? "embed"),
     prop("launchUrl", "Launch URL", "url", m.launchUrl),
   ];
 }
@@ -92,6 +92,14 @@ const APPS = [
     launchUrl: "https://localhost:3001",
     features: ["Native-feel window shell", "Loopback to the local suite", "Offline-friendly"],
   },
+  {
+    id: "osionos.draw", title: "Draw", icon: "icon:pen-tool", company: "osionos", website: "https://localhost:3001",
+    description: "An Excalidraw-class whiteboard — shapes, freehand, diagrams & real-time collaboration inside osionos.",
+    overview: "Draw is a full drawing and diagramming surface: hand-drawn shapes, arrows that stay connected to what they link, Figma-style frames, and multiplayer editing — a native osionos app, not an iframe.",
+    version: "0.1.0", categories: ["Productivity", "Design"], launchKind: "panel",
+    launchUrl: "https://localhost:3001",
+    features: ["Shapes, arrows & freehand drawing", "Connectors that follow the shapes they link", "Figma-style frames", "Real-time multiplayer", "Keyboard-first — draw without the mouse"],
+  },
 ];
 
 const out = [];
@@ -117,7 +125,7 @@ for (const m of APPS) {
   for (const sub of SUBPAGES(m)) {
     out.push(pageInsert({ id: det(`${m.id}:${sub.slug}`), parent: appId, title: sub.title, icon: sub.icon, surface: "page", dbId: null, props: [], content: sub.content }));
   }
-  installed[m.id] = { identifier: m.id, title: m.title, icon: m.icon, launchKind: "embed", launchUrl: m.launchUrl, autoUpdate: true, active: true, installedAt: "2026-06-01T00:00:00Z" };
+  installed[m.id] = { identifier: m.id, title: m.title, icon: m.icon, launchKind: m.launchKind ?? "embed", launchUrl: m.launchUrl, autoUpdate: true, active: true, installedAt: "2026-06-01T00:00:00Z" };
 }
 
 // 3) install Mail + Calendar for dev.pro.photo only (per-user simulation)

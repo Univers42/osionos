@@ -37,7 +37,7 @@ export const SidebarTrigger: React.FC = () => {
   if (isSidebarOpen) return null;
 
   return (
-    <div className="absolute top-2 left-2 z-[var(--osio-z-popover)]">
+    <div data-osio-sidebar-trigger className="absolute top-2 left-2 z-[var(--osio-z-popover)]">
       <button
         type="button"
         onClick={() => setSidebarOpen(true)}

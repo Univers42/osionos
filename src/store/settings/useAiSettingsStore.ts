@@ -13,7 +13,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { nowIso } from './settingsStoreUtils';
+import { nowIso, stableDefault } from './settingsStoreUtils';
 import { recordSettingsAction } from './useSettingsAuditStore';
 import type { AiSettings } from './types';
 
@@ -43,7 +43,7 @@ export const useAiSettingsStore = create<AiSettingsStore>()(
   persist(
     (set, get) => ({
       data: {},
-      getData: (workspaceId) => get().data[workspaceId] ?? defaultAiSettings(workspaceId || 'local-workspace'),
+      getData: (workspaceId) => get().data[workspaceId] ?? stableDefault(`ai:${workspaceId || 'local-workspace'}`, () => defaultAiSettings(workspaceId || 'local-workspace')),
       update: (workspaceId, patch) => {
         const current = get().getData(workspaceId);
         const next = { ...current, ...patch, updatedAt: nowIso() };

@@ -178,6 +178,20 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
     undoStack: [],
     redoStack: [],
   });
+
+  // The settings panel has no backdrop and panes stay mounted in the
+  // background: dismiss it on any press outside this layout block so a
+  // forgotten panel can't linger while the user works on other pages.
+  useEffect(() => {
+    if (!settingsOpen) return undefined;
+    const dismissOnOutsidePress = (event: PointerEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target || layoutRootRef.current?.contains(target)) return;
+      setSettingsOpen(false);
+    };
+    document.addEventListener("pointerdown", dismissOnOutsidePress, true);
+    return () => document.removeEventListener("pointerdown", dismissOnOutsidePress, true);
+  }, [settingsOpen]);
   // Measured auto-height footprints are PRESENTATION state: they depend on
   // this instance's rendered width, so they are resolved at render time and
   // NEVER persisted. Persisting them (the old auto-write effect) made two

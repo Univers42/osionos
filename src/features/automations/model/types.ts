@@ -20,6 +20,7 @@ export type CommandId =
   | "openPalette"
   | "openSearch"
   | "splitPane"
+  | "toggleZenMode"
   | "bold"
   | "italic"
   | "underline"

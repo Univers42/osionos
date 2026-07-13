@@ -14,8 +14,10 @@ import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, MoreHorizontal, Plus, Settings, Users, X } from 'lucide-react';
 import { AssetRenderer } from '@univers42/ui-collection';
+import { IconValueView } from '@/shared/ui/atoms/IconValueView';
+import { useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
 import { useUserStore } from '@/features/auth';
-import { usePageStore } from '@/store/usePageStore';
+import { useWorkspaceOnboarding } from '@/features/workspace-onboarding/model/useWorkspaceOnboarding';
 import {
   COLLECTION_ROLE_BADGES,
 } from '@/shared/lib/markengine/uiCollectionAssets';
@@ -150,26 +152,6 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
 
 // SettingsPanel removed — use `SettingsCenter` component instead.
 
-function toWorkspaceSlug(value: string): string {
-  let slug = "";
-  let previousWasSeparator = true;
-
-  for (const char of value.toLowerCase()) {
-    const isAlphaNumeric =
-      (char >= "a" && char <= "z") || (char >= "0" && char <= "9");
-
-    if (isAlphaNumeric) {
-      slug += char;
-      previousWasSeparator = false;
-    } else if (!previousWasSeparator) {
-      slug += "-";
-      previousWasSeparator = true;
-    }
-  }
-
-  return slug.endsWith("-") ? slug.slice(0, -1) : slug || "workspace";
-}
-
 /**
  * Floating dropdown that lists all 3 pre-logged-in personas.
  * Click a row → switch active user.
@@ -181,8 +163,8 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
   const activeId = useUserStore(s => s.activeUserId);
   const switchUser = useUserStore(s => s.switchUser);
   const switchWorkspace = useUserStore(s => s.switchWorkspace);
+  const workspaceConfigs = useWorkspaceConfigStore(s => s.configs);
   const logoutUser = useUserStore(s => s.logoutUser);
-  const createWorkspace = useUserStore(s => s.createWorkspace);
   const activePersona = useUserStore(s => s.activePersona());
   const activeSession = useUserStore(s => s.activeSession());
   const selectedWorkspace = useUserStore(s => s.activeWorkspace());
@@ -252,32 +234,9 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose, authOpen, settingsTab]);
 
-  async function handleNewWorkspace() {
-    if (!activePersona) return;
-    const name = `${activePersona.name}'s workspace`;
-    const slug = toWorkspaceSlug(name);
-    const workspace = await createWorkspace(name, slug);
-    if (!workspace) return;
-
-    const pageStore = usePageStore.getState();
-    const session = useUserStore.getState().activeSession();
-    pageStore.clearWorkspace(workspace._id);
-    const firstPage = await pageStore.addPage(
-      workspace._id,
-      'Untitled',
-      session?.accessToken ?? '',
-      undefined,
-      { content: [] },
-    );
-    if (!firstPage) return;
-
-    pageStore.openPage({
-      id: firstPage._id,
-      workspaceId: workspace._id,
-      kind: 'page',
-      title: firstPage.title,
-      icon: firstPage.icon,
-    });
+  function handleNewWorkspace() {
+    onClose();
+    useWorkspaceOnboarding.getState().setOpen(true);
   }
 
   const panelStyle: React.CSSProperties = {
@@ -338,7 +297,11 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
           </button>
         </div>
 
-        {workspaces.map((workspace) => (
+        {workspaces.map((workspace) => {
+          // Icon precedence: durable per-workspace config (Settings → Workspace →
+          // Icon, persisted) → session record → initial-letter fallback.
+          const icon = workspaceConfigs[workspaceConfigKey(activeId ?? '', workspace._id)]?.icon ?? workspace.icon;
+          return (
           <button
             key={workspace._id}
             type="button"
@@ -346,12 +309,15 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
             className="flex h-8 w-full items-center gap-2 px-3 text-left text-sm hover:bg-[var(--osio-bg-hover)]"
           >
             <span className="flex h-5 w-5 items-center justify-center rounded bg-[var(--osio-bg-muted)] text-xs">
-              {(workspace.name[0] ?? 'W').toUpperCase()}
+              {icon
+                ? <IconValueView value={icon} size={14} />
+                : (workspace.name[0] ?? 'W').toUpperCase()}
             </span>
             <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
             {workspace._id === activeWorkspace?._id && <Check size={14} className="text-[var(--osio-accent)]" />}
           </button>
-        ))}
+          );
+        })}
         <button
           type="button"
           onClick={handleNewWorkspace}
