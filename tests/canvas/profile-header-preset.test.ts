@@ -62,3 +62,68 @@ test("header band block: focus flag drives the customize/done toggle", () => {
   assert.equal(band.layoutMode, "inline");
   assert.equal(band.layoutCells?.length, createProfileHeaderCells().length);
 });
+
+// -- The way BACK: "Remove header canvas" (··· menu) -------------------------
+
+import {
+  contentWithoutHeader,
+  extractHeaderCanvasContent,
+  isRemovableHeader,
+  PROFILE_HEADER_COVER_URL,
+} from "../../src/entities/block/model/headerCanvas.ts";
+import type { Block } from "../../src/entities/block/model/types.ts";
+
+/** A page as the OLD destructive converter left it: one full-page canvas whose
+ *  "Content" cell swallowed the original blocks. */
+function convertedPage(original: Block[]): Block[] {
+  return [{
+    id: "canvas-1",
+    type: "layout",
+    content: "",
+    layoutMode: "full_page",
+    layoutCells: [
+      { id: "c1", label: "Identity", colStart: 1, colSpan: 4, rowStart: 1, rowSpan: 3, blocks: [] },
+      { id: "c2", label: "Content", colStart: 1, colSpan: 12, rowStart: 7, rowSpan: 3, blocks: original },
+    ],
+  } as Block];
+}
+
+test("remove header: a converted page gets its Content-cell blocks back", () => {
+  const original: Block[] = [
+    { id: "p1", type: "paragraph", content: "hello" },
+    { id: "p2", type: "heading_2", content: "world" },
+  ];
+  const page = convertedPage(original);
+  assert.equal(isRemovableHeader(page), true);
+  assert.deepEqual(contentWithoutHeader(page), original);
+});
+
+test("remove header: a header BAND is dropped, the rest of the page stays", () => {
+  const page: Block[] = [createHeaderBandBlock(), { id: "p1", type: "paragraph", content: "kept" }];
+  assert.equal(isRemovableHeader(page), true);
+  const restored = contentWithoutHeader(page);
+  assert.equal(restored.length, 1);
+  assert.equal(restored[0].content, "kept");
+});
+
+test("remove header: a REAL full-page dashboard (no Content cell) is untouchable", () => {
+  const dashboard: Block[] = [{
+    id: "dash",
+    type: "layout",
+    content: "",
+    layoutMode: "full_page",
+    layoutCells: [{ id: "c1", label: "Hero", colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 3, blocks: [] }],
+  } as Block];
+  assert.equal(extractHeaderCanvasContent(dashboard[0]), null);
+  assert.equal(isRemovableHeader(dashboard), false);
+});
+
+test("remove header: an emptied Content cell restores to one empty paragraph, never a blank page", () => {
+  const restored = contentWithoutHeader(convertedPage([]));
+  assert.equal(restored.length, 1);
+  assert.equal(restored[0].type, "paragraph");
+});
+
+test("remove header: the preset cover constant matches what customize sets", () => {
+  assert.equal(PROFILE_HEADER_COVER_URL, PROFILE_HEADER_COVER);
+});

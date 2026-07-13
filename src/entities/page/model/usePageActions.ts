@@ -79,6 +79,8 @@ function formatEditedLabel(updatedAt: string | undefined, now: number): string {
   return `Edited ${days} day${days === 1 ? '' : 's'} ago`;
 }
 
+import { isRemovableHeader, PROFILE_HEADER_COVER_URL } from '@/entities/block/model/headerCanvas';
+
 function textWordCount(value: string | undefined): number {
   return String(value ?? '').split(/\s+/).filter(Boolean).length;
 }
@@ -210,10 +212,21 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
   const translate = useCallback(async (targetLocale = translateLocale) => {
     if (!page || !pageId) return;
     const label = translationLabel(targetLocale);
-    await snapshot(`Before translation to ${label}`);
+
+    // Undo point: addVersion updates the store synchronously, so the in-memory
+    // version is ready immediately; only its API persist trails — don't await it.
+    void snapshot(`Before translation to ${label}`);
+
     const translated = await translatePage(page, jwt ?? undefined, targetLocale);
+
+    // Show the result at once. Everything below is persistence bookkeeping — the
+    // store writes localStorage synchronously (nothing is lost), only the bridge
+    // sync trails — so it must NOT block the visible translation. On a huge page
+    // this used to serialize + PATCH the (multi-MB) config THREE times in series.
     if (translated.title) updatePageTitle(pageId, translated.title);
     if (translated.content) updatePageContent(pageId, translated.content);
+
+    const now = new Date().toISOString();
     const translationRecord = {
       id: crypto.randomUUID(),
       userId: safeUserId,
@@ -222,15 +235,26 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
       label,
       title: translated.title ?? page.title,
       content: translated.content ?? page.content ?? [],
-      createdAt: new Date().toISOString(),
+      createdAt: now,
     };
     const latestConfig = usePageConfigStore.getState().getConfig(safeUserId, pageId);
-    await updateConfig(safeUserId, pageId, {
+    // ONE combined config write (translations + active + analytics/action) instead
+    // of a separate updateConfig + recordAction — halves the heavy serialize/persist/PATCH.
+    void updateConfig(safeUserId, pageId, {
       translations: [translationRecord, ...latestConfig.translations.filter((item) => item.locale !== targetLocale)].slice(0, 20),
       activeTranslation: { id: translationRecord.id, locale: targetLocale, label },
+      analytics: {
+        ...latestConfig.analytics,
+        actions: latestConfig.analytics.actions + 1,
+        translations: latestConfig.analytics.translations + 1,
+        lastActionAt: now,
+      },
+      lastAction: { action: 'translate', userId: safeUserId, pageId, createdAt: now, metadata: { targetLocale } },
     });
-    await logAction('translate', `Page translated to ${label}`, { targetLocale });
-  }, [jwt, logAction, page, pageId, safeUserId, snapshot, translateLocale, updateConfig, updatePageContent, updatePageTitle]);
+    void syncPageActionEvent(pageId, 'translate', jwt ?? undefined, { targetLocale });
+    setActionMessage(`Page translated to ${label}`);
+    pushToast({ kind: 'success', title: `Page translated to ${label}` });
+  }, [jwt, page, pageId, pushToast, safeUserId, snapshot, translateLocale, updateConfig, updatePageContent, updatePageTitle]);
 
   const importFile = useCallback(async (file: File) => {
     if (!page || !pageId) return;
@@ -286,7 +310,23 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     [config.rawMode, updatePageSetting],
   );
 
+  // The way back from "Customize header": drop the band / unwrap the header
+  // canvas (the open editor performs the content mutation so typing drafts are
+  // flushed first — same seam as customize). The preset's video cover goes too.
+  const hasRemovableHeader = isRemovableHeader(page?.content);
+  const removeHeaderCanvas = useCallback(async () => {
+    if (!pageId) return;
+    await snapshot('Before header removal');
+    globalThis.dispatchEvent(new CustomEvent('osionos:remove-header', { detail: { pageId } }));
+    if (page?.cover === PROFILE_HEADER_COVER_URL) {
+      usePageStore.getState().patchPage(pageId, { cover: undefined });
+    }
+    await logAction('remove_header', 'Header removed — content restored');
+  }, [logAction, page?.cover, pageId, snapshot]);
+
   return {
+    hasRemovableHeader,
+    removeHeaderCanvas,
     actionMessage,
     config,
     detailPanel,

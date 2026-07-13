@@ -23,6 +23,7 @@ export type ActivePanel =
   | 'agents'
   | 'messenger'
   | 'notifications'
+  | 'tasks'
   | 'public'
   | 'database';
 

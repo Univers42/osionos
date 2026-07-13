@@ -21,6 +21,7 @@ const PROXY_PATH = (ENV.VITE_UNSPLASH_PROXY_PATH ?? DEFAULT_PROXY_PATH).trim();
 interface UnsplashSearchOptions {
   query: string;
   perPage?: number;
+  page?: number;
   orientation?: "landscape" | "portrait" | "squarish";
   signal?: AbortSignal;
 }
@@ -114,7 +115,8 @@ function normalizePhoto(raw: unknown): UnsplashPickerAsset | null {
 async function fetchViaBridge(options: UnsplashSearchOptions): Promise<UnsplashPickerAsset[]> {
   const params = new URLSearchParams({
     query: options.query,
-    perPage: String(options.perPage ?? 12),
+    perPage: String(options.perPage ?? 30),
+    page: String(options.page ?? 1),
     orientation: options.orientation ?? "landscape",
   });
   const payload = await api.get<UnsplashGatewayPayload>(`${PROXY_PATH}?${params.toString()}`);
@@ -126,7 +128,8 @@ async function fetchDirect(options: UnsplashSearchOptions): Promise<UnsplashPick
 
   const url = new URL("https://api.unsplash.com/search/photos");
   url.searchParams.set("query", options.query);
-  url.searchParams.set("per_page", String(options.perPage ?? 12));
+  url.searchParams.set("per_page", String(options.perPage ?? 30));
+  url.searchParams.set("page", String(options.page ?? 1));
   url.searchParams.set("orientation", options.orientation ?? "landscape");
   url.searchParams.set("content_filter", "high");
 

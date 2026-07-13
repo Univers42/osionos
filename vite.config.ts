@@ -92,6 +92,14 @@ export default defineConfig(({ mode }) => {
           replacement: `${path.resolve(root, 'packages/graph-engine/src')}/`,
         },
         {
+          find: /^@osionos\/draw-engine$/,
+          replacement: path.resolve(root, 'packages/draw-engine/src/index.ts'),
+        },
+        {
+          find: /^@osionos\/draw-engine\//,
+          replacement: `${path.resolve(root, 'packages/draw-engine/src')}/`,
+        },
+        {
           find: '@',
           replacement: path.resolve(root, 'src'),
         },

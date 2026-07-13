@@ -36,8 +36,11 @@ interface MessageRowProps {
   onOpenThread?: (message: ChatMessage) => void;
 }
 
+// Hoisted: constructing an Intl.DateTimeFormat is one of the pricier JS built-ins;
+// one shared instance serves every row instead of a fresh one per row per render.
+const TIME_FORMAT = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
 function formatTime(value: string) {
-  return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+  return TIME_FORMAT.format(new Date(value));
 }
 
 function groupReactions(message: ChatMessage) {
@@ -81,7 +84,7 @@ function renderContent(content: string): React.ReactNode {
   );
 }
 
-export const MessageRow: React.FC<MessageRowProps> = ({ message, isAuthor, canInteract, userId, grouped, onEdit, onDelete, onReact, onReply, onOpenThread }) => {
+const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInteract, userId, grouped, onEdit, onDelete, onReact, onReply, onOpenThread }) => {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -190,3 +193,8 @@ export const MessageRow: React.FC<MessageRowProps> = ({ message, isAuthor, canIn
     </article>
   );
 };
+
+// Memoized: a realtime frame re-renders the list container; without memo every
+// row re-ran markdown + link scanning. With stable callbacks from the view,
+// only the row whose message changed re-renders.
+export const MessageRow = React.memo(MessageRowImpl);

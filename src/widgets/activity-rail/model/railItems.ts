@@ -17,6 +17,7 @@ import {
   Database,
   Files,
   Globe,
+  ListTodo,
   Mail,
   MessagesSquare,
   Search,
@@ -53,6 +54,7 @@ export const RAIL_TOP_ITEMS: RailItem[] = [
   { id: "agents", label: "Assistant", Icon: Bot, action: { kind: "chat" } },
   { id: "messenger", label: "Messenger", Icon: MessagesSquare, action: { kind: "panel", panel: "messenger" } },
   { id: "notifications", label: "Notifications", Icon: Bell, action: { kind: "panel", panel: "notifications" } },
+  { id: "tasks", label: "My Tasks", Icon: ListTodo, action: { kind: "panel", panel: "tasks" } },
   // ponytail: nav LABEL renamed Public→Shared (AOC §12); panel id stays "public"
   // (R-R3) so the persisted uiStore activePanel keeps resolving — label-only, no
   // migration. Upgrade: to change the id, bump uiStore persist version + migrate-hook 'public'→'shared'.

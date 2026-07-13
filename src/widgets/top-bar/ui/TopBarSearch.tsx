@@ -13,9 +13,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { cx } from "@/shared/ui/shared/classNames";
+import { isUnifiedSearchEnabled } from "@/shared/config/featureFlags";
 import { ConnectButton } from "@/features/connections/ConnectButton";
 import type { PaletteCommand } from "../model/commands";
-import { matchCommands, searchPages, searchPagesRemote, type PaletteResult } from "../model/search";
+import { matchCommands, searchMessagesPalette, searchPages, searchPagesRemote, type PaletteResult } from "../model/search";
 import { searchPeoplePalette } from "../model/searchPeople";
 import { isCommandMode, usePalette } from "../model/usePalette";
 
@@ -44,12 +45,15 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
   );
   const [remote, setRemote] = useState<{ q: string; rows: PaletteResult[] }>({ q: "", rows: [] });
   const [people, setPeople] = useState<{ q: string; rows: PaletteResult[] }>({ q: "", rows: [] });
+  const [messages, setMessages] = useState<{ q: string; rows: PaletteResult[] }>({ q: "", rows: [] });
   const pages = !command && remote.q === query && remote.rows.length ? remote.rows : instant;
-  // People (bridge directory) are merged after page/command matches, never in command mode.
+  // People (directory) then messages (chat FTS) are merged after page/command
+  // matches, never in command mode.
   const results = useMemo<PaletteResult[]>(() => {
     const peopleRows = !command && people.q === query ? people.rows : [];
-    return [...pages, ...peopleRows];
-  }, [command, pages, people, query]);
+    const messageRows = !command && messages.q === query ? messages.rows : [];
+    return [...pages, ...peopleRows, ...messageRows];
+  }, [command, pages, people, messages, query]);
 
   useEffect(() => {
     if (command || !query.trim()) return;
@@ -57,6 +61,9 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
     const timer = setTimeout(() => {
       searchPagesRemote(target).then((rows) => setRemote({ q: target, rows })).catch(() => undefined);
       searchPeoplePalette(target).then((rows) => setPeople({ q: target, rows })).catch(() => undefined);
+      if (isUnifiedSearchEnabled()) {
+        searchMessagesPalette(target).then((rows) => setMessages({ q: target, rows })).catch(() => undefined);
+      }
     }, 180);
     return () => clearTimeout(timer);
   }, [command, query]);
@@ -145,9 +152,9 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
                 onClick={() => activate(result)}
                 className="flex min-w-0 flex-1 items-center justify-between gap-4 px-3 py-1.5 text-left text-sm text-[var(--osio-fg-default)]"
               >
-                <span className="flex min-w-0 items-baseline gap-2">
-                  <span className="truncate">{result.title}</span>
-                  {result.subtitle && <span className="shrink-0 text-xs text-[var(--osio-fg-subtle)]">{result.subtitle}</span>}
+                <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                  <span className="max-w-[60%] shrink-0 truncate">{result.title}</span>
+                  {result.subtitle && <span className="min-w-0 flex-1 truncate text-xs text-[var(--osio-fg-subtle)]">{result.subtitle}</span>}
                 </span>
                 {result.accelerator && <span className="shrink-0 font-mono text-xs text-[var(--osio-fg-subtle)]">{result.accelerator}</span>}
               </button>

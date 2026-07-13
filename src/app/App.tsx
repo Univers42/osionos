@@ -19,13 +19,17 @@ import { Portal } from "@/features/auth/ui/Portal";
 import { usePageSync } from "@/store/sync/usePageSync";
 import { useUnreadSync } from "@/store/chat/useUnreadSync";
 import { useNotifyLive } from "@/store/chat/useNotifyLive";
+import { useFavoritesStore } from "@/store/favorites/favoritesStore";
+import { QuickCaptureModal } from "@/features/quick-capture/ui/QuickCaptureModal";
+import { WorkspaceIntentModal } from "@/features/workspace-onboarding/ui/WorkspaceIntentModal";
 import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
+import { useZenMode } from "@/shared/config/useZenMode";
 import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
 import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, loadActivePage, savePagesCache, saveRecents } from "@/store/pageStore.helpers";
-import { resetObjectDatabaseSync, startObjectDatabaseSync } from "@/widgets/database-view/model/knownDatabaseState";
 import { ActivitySidebar } from "@/widgets/activity-rail";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPagePrune";
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
 import { LazyCanvasDebugRoute, LazyMainContent, LazyStyleGuideRoute } from "./lazyAppRegions";
@@ -43,7 +47,7 @@ import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
 import type { SettingsTab } from "@/shared/ui/primitives/useSettingsSearchIndex";
-import { ToastViewport } from "@/shared/ui";
+import { ToastViewport } from "@/shared/ui/primitives";
 import { ShareHost } from "@/features/share/ShareHost";
 import { TopBar } from "@/widgets/top-bar";
 import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
@@ -165,8 +169,14 @@ const App: React.FC = () => {
   // zustand + localStorage are the cache. The graph reads these canonical pages via the
   // bridge (GET /api/graph/pages), so no separate note-mirror sync is needed.
   usePageSync();
+  useLayoutPagePrune(); // close tab-bar tabs when their page is archived/deleted
   useUnreadSync(); // seed per-channel unread badges (mount + 60s + focus)
   useNotifyLive(); // seed + live in-app notifications (toasts + store)
+
+  // Hydrate the per-user favorites set (bridge is source of truth) when the session changes.
+  useEffect(() => {
+    if (activeUserId) void useFavoritesStore.getState().hydrate();
+  }, [activeUserId]);
 
   // App-wide presence: one heartbeat keeps last_seen_at fresh while osionos is open so
   // peers render online (refcounted singleton — profile/search views reuse the same one).
@@ -181,6 +191,10 @@ const App: React.FC = () => {
   // Single document-level keyboard-shortcut dispatcher (flag osio.automations; inert when OFF).
   useAutomationDispatcher();
 
+  // Zen (focus) mode — Ctrl+K Ctrl+Z. Drives [data-zen] on the shell; global.css
+  // hides every chrome region off it. Session-only: a reload always exits zen.
+  const zen = useZenMode((s) => s.zen);
+
   // Database automations → app services: notify events become toasts; webhook
   // actions route through the bridge's SSRF-guarded proxy endpoint.
   useDatabaseAutomationBridge();
@@ -191,11 +205,20 @@ const App: React.FC = () => {
   const objectDbActiveUser = useUserStore((s) => s.activeUserId);
   const objectDbPrevUser = useRef<string | null>(null);
   useEffect(() => {
-    if (objectDbPrevUser.current && objectDbPrevUser.current !== objectDbActiveUser) {
-      resetObjectDatabaseSync();
-    }
-    objectDbPrevUser.current = objectDbActiveUser ?? null;
-    startObjectDatabaseSync();
+    // Dynamic import, deliberately: knownDatabaseState statically drags the 458KB
+    // object-DB seed JSON (+ the notion-database-sys store) — as a static import in
+    // App it was the single largest module in the warm chunk. Loading it here moves
+    // all of it to an async chunk fetched right after mount; the module is cached,
+    // so account switches re-enter instantly.
+    void import("@/widgets/database-view/model/knownDatabaseState").then(
+      ({ resetObjectDatabaseSync, startObjectDatabaseSync }) => {
+        if (objectDbPrevUser.current && objectDbPrevUser.current !== objectDbActiveUser) {
+          resetObjectDatabaseSync();
+        }
+        objectDbPrevUser.current = objectDbActiveUser ?? null;
+        startObjectDatabaseSync();
+      },
+    );
   }, [objectDbActiveUser]);
 
   // Run once on mount
@@ -301,6 +324,7 @@ const App: React.FC = () => {
   return (
     <div
       data-testid="app-shell"
+      data-zen={zen ? "1" : undefined}
       className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-page)]"
     >
       {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
@@ -328,6 +352,8 @@ const App: React.FC = () => {
       <ToastViewport />
       <ShareHost />
       <ContactDock />
+      <QuickCaptureModal />
+      <WorkspaceIntentModal />
     </div>
   );
 };

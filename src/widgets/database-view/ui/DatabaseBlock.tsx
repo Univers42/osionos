@@ -161,8 +161,8 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     return (
       <div
         className={[
-          'osionos-database-block w-full min-w-0 overflow-auto',
-          mode === 'full' ? 'osionos-database-block--full h-full' : 'osionos-database-block--inline my-2',
+          'osionos-database-block w-full min-w-0',
+          mode === 'full' ? 'osionos-database-block--full h-full min-h-0 overflow-hidden' : 'osionos-database-block--inline my-2 overflow-auto',
         ].join(' ')}
         data-database-id={resolvedDatabaseId}
         data-database-view-id={resolvedInitialView}
@@ -195,8 +195,8 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     return (
       <div
         className={[
-          'osionos-database-block w-full min-w-0 overflow-auto',
-          mode === 'full' ? 'osionos-database-block--full h-full' : 'osionos-database-block--inline my-2',
+          'osionos-database-block w-full min-w-0',
+          mode === 'full' ? 'osionos-database-block--full h-full min-h-0 overflow-hidden' : 'osionos-database-block--inline my-2 overflow-auto',
         ].join(' ')}
         data-database-id={resolvedDatabaseId}
         data-database-view-id={resolvedInitialView}
@@ -228,8 +228,8 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     return (
       <div
         className={[
-          'osionos-database-block w-full min-w-0 overflow-auto',
-          mode === 'full' ? 'osionos-database-block--full h-full' : 'osionos-database-block--inline my-2',
+          'osionos-database-block w-full min-w-0',
+          mode === 'full' ? 'osionos-database-block--full h-full min-h-0 overflow-hidden' : 'osionos-database-block--inline my-2 overflow-auto',
         ].join(' ')}
         data-database-id={resolvedDatabaseId}
         data-database-view-id={knownViewId}
@@ -252,8 +252,8 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
   return (
     <div
       className={[
-        'osionos-database-block w-full min-w-0 overflow-auto',
-        mode === 'full' ? 'osionos-database-block--full h-full' : 'osionos-database-block--inline my-2',
+        'osionos-database-block w-full min-w-0',
+        mode === 'full' ? 'osionos-database-block--full h-full min-h-0 overflow-hidden' : 'osionos-database-block--inline my-2 overflow-auto',
       ].join(' ')}
       data-database-id={resolvedDatabaseId}
       data-database-view-id={resolvedInitialView}

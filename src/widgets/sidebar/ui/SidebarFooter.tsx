@@ -16,11 +16,14 @@ import {
   LayoutGrid,
   Archive,
   Database,
+  Code2,
   UserPlus,
   X,
 } from "lucide-react";
 
 import { SidebarNavItem } from "./SidebarNavItem";
+import { isIdeEnabled } from "@/shared/config/featureFlags";
+import { useDevMode } from "@/shared/config/useDevMode";
 
 interface SidebarFooterProps {
   onOpenSettings?: () => void;
@@ -42,6 +45,12 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   showInviteCTA,
   onDismissInvite,
 }) => {
+  // Dev Mode toggle — only exists when the IDE feature flag is on, so a stock
+  // build never shows it. Toggling reveals file extensions + the "New code file"
+  // affordance and switches code panes to the JetBrains/IDE chrome.
+  const dev = useDevMode((s) => s.dev);
+  const toggleDev = useDevMode((s) => s.toggle);
+  const ideOn = isIdeEnabled();
   return (
     <>
       <div
@@ -75,6 +84,26 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
             icon={<Database size={16} />}
             label="BaaS Console"
             onClick={() => onOpenConsole?.()}
+          />
+        )}
+        {ideOn && (
+          <SidebarNavItem
+            icon={<Code2 size={16} />}
+            label="Dev Mode"
+            active={dev}
+            onClick={toggleDev}
+            rightElement={
+              <span
+                className={
+                  "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide " +
+                  (dev
+                    ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg,#fff)]"
+                    : "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-subtle)]")
+                }
+              >
+                {dev ? "On" : "Off"}
+              </span>
+            }
           />
         )}
       </div>

@@ -1,0 +1,14 @@
+{
+  "name": "@osionos/draw-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Runtime-agnostic Canvas2D drawing/whiteboard engine (Excalidraw/Figma-class): scene model, dirty-driven rAF renderer, camera, and (later) bindings/collab. Decoupled from the host app — feed it a Scene, it renders. Thin React adapter in src/react/.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

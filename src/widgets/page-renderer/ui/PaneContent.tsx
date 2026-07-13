@@ -30,11 +30,14 @@ import {
   LazyMessagesView,
   LazyAdminSpaceView,
   LazyChatShell,
+  LazyCodeFileView,
+  LazyDrawView,
   LazyOsionosPage,
   LazyProfilePageView,
   LazyTrashView,
   LazyWorkspaceDatabaseBlock,
 } from "./lazyViews";
+import { isDrawEnabled, isIdeEnabled } from "@/shared/config/featureFlags";
 // Deep path, NOT the barrel: `@/widgets/database-view` has a side-effect
 // `import './model/dataSourceProvider'` that pulls knownDatabaseState (and its
 // ~458KB seed JSON) onto this warm pane path. The constants module is leaf-pure.
@@ -59,6 +62,12 @@ const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab }) 
   if (!page) return <LoadingPane />;
   if (page.surface === "agent") {
     return <div className="h-full overflow-hidden"><LazyAgentConversationPage pageId={tab.pageId} /></div>;
+  }
+  // IDE code file: line-based CodeMirror editor instead of the block editor.
+  // Double guard — surface AND flag — so a code page falls back to the normal
+  // editor (never a blank pane) whenever osio.ide is off.
+  if (page.surface === "code" && isIdeEnabled()) {
+    return <div className="h-full overflow-hidden"><LazyCodeFileView pageId={tab.pageId} /></div>;
   }
   return (
     <div className="h-full overflow-hidden">
@@ -92,7 +101,7 @@ const PaneContentImpl: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab
     return (
       <ErrorBoundary>
         <Suspense fallback={<LoadingPane />}>
-          <div className="h-full overflow-auto bg-[var(--osio-bg-page)]">
+          <div className="h-full min-h-0 overflow-hidden bg-[var(--osio-bg-page)]">
             {isWorkspaceDb ? (
               <LazyWorkspaceDatabaseBlock databaseId={tab.databaseId ?? WS_FILES_DB_ID} mode="full" chrome="full" />
             ) : (
@@ -122,6 +131,18 @@ const PaneContentImpl: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab
         <Suspense fallback={<LoadingPane />}>
           <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
             <LazyBaasConsoleView />
+          </div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "draw" && isDrawEnabled()) {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
+            <LazyDrawView />
           </div>
         </Suspense>
       </ErrorBoundary>

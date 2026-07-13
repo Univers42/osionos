@@ -12,7 +12,7 @@
 
 import React, { useCallback, useRef, useState } from "react";
 import { usePageStore } from "@/store/usePageStore";
-import { resolvePageConfig, usePageConfigStore } from "@/shared/config/pageConfigStore";
+import { usePageConfigStore } from "@/shared/config/pageConfigStore";
 import { useUserStore } from "@/features/auth";
 import { RawModeHeader } from "./RawModeHeader";
 import { RawCodePane } from "./RawCodePane";
@@ -26,7 +26,9 @@ export function RawModeView({ pageId }: Readonly<{ pageId: string }>) {
   const title = usePageStore((state) => state.pageById(pageId)?.title ?? "");
   const updateConfig = usePageConfigStore((state) => state.updateConfig);
   const userId = useUserStore((state) => state.activeUserId) || "anonymous";
-  const showLineNumbers = usePageConfigStore((state) => resolvePageConfig(state.configs[`${userId}:${pageId}`]).showLineNumbers);
+  // Raw field read — resolvePageConfig() built a whole config object per store
+  // change just to expose one boolean. Default matches (false).
+  const showLineNumbers = usePageConfigStore((state) => state.configs[`${userId}:${pageId}`]?.showLineNumbers ?? false);
   // The textarea is uncontrolled and owns the live text; the hook exposes only
   // a debounced `previewSource`, so keystrokes never re-render this tree.
   const { initialSource, previewSource, edit, save, exit, dirty } = useRawMode(pageId);

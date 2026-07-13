@@ -73,18 +73,29 @@ async function requireOwner(config, fetchImpl, userId, workspaceId) {
 	return workspace;
 }
 
-/** PATCH /api/workspaces/:id {visibility} — owner only. */
-async function patchVisibility(deps, session, request, workspaceId, response, config) {
+/** PATCH /api/workspaces/:id {name?, visibility?} — owner only. */
+async function patchWorkspace(deps, session, request, workspaceId, response, config) {
 	await requireOwner(config, deps.fetchImpl, session.userId, workspaceId);
 	const payload = await readJsonBody(request);
-	const visibility = safeText(payload.visibility, 24);
-	if (!VISIBILITY_VALUES.has(visibility)) throw httpError('visibility must be confidential|request_to_join|public.', 422);
+	const patch = {};
+	if (typeof payload.name === 'string') {
+		const name = safeText(payload.name, 120).trim();
+		if (!name) throw httpError('name cannot be empty.', 422);
+		patch.name = name;
+	}
+	if (payload.visibility !== undefined) {
+		const visibility = safeText(payload.visibility, 24);
+		if (!VISIBILITY_VALUES.has(visibility)) throw httpError('visibility must be confidential|request_to_join|public.', 422);
+		patch.visibility = visibility;
+	}
+	if (Object.keys(patch).length === 0) throw httpError('Nothing to update.', 422);
+	patch.updated_at = new Date().toISOString();
 	await rest(config, deps.fetchImpl, `osionos_workspaces?id=eq.${workspaceId}`, {
 		method: 'PATCH',
-		body: { visibility },
+		body: patch,
 		prefer: 'return=minimal',
 	});
-	return sendJson(response, 200, { ok: true, workspaceId, visibility }, config);
+	return sendJson(response, 200, { ok: true, workspaceId, ...patch }, config);
 }
 
 /** GET /api/collaboration — discoverable workspaces + memberCount + joinState. */
@@ -310,7 +321,7 @@ export function createCollabHandler({ config, verifySession, fetchImpl = fetch, 
 		const method = (request.method || 'GET').toUpperCase();
 		try {
 			const session = verifySession(bearerToken(request), requestConfig);
-			if (wsPatch && method === 'PATCH') return await patchVisibility(deps, session, request, requireUuid(wsPatch[1], 'workspaceId'), response, requestConfig);
+			if (wsPatch && method === 'PATCH') return await patchWorkspace(deps, session, request, requireUuid(wsPatch[1], 'workspaceId'), response, requestConfig);
 			if (wsMembers && method === 'GET') return await listWorkspaceMembers(deps, session, requireUuid(wsMembers[1], 'workspaceId'), response, requestConfig);
 			if (wsRequests && method === 'GET') return await listJoinRequests(deps, session, requireUuid(wsRequests[1], 'workspaceId'), response, requestConfig);
 			if (pathname === '/api/collaboration' && method === 'GET') return await listCollaboration(deps, session, url, response, requestConfig);

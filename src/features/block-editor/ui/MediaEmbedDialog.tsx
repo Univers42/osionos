@@ -18,6 +18,7 @@ import { MiniTabs } from "@/shared/ui/primitives/MiniTabs";
 import { Button } from "@/shared/ui";
 import { useUserStore } from "@/features/auth";
 import { useAssetLibraryStore } from "@/shared/config/assetLibraryStore";
+import { uploadPageMedia } from "@/shared/lib/media/pageMediaUpload";
 import { searchUnsplashPickerAssets } from "@/shared/lib/media/unsplash";
 import { giphyEnabled } from "@/shared/chat/giphyApi";
 import { GifPicker } from "@/widgets/channel-messages/ui/composer/GifPicker";
@@ -75,6 +76,11 @@ export const MediaEmbedDialog: React.FC<MediaEmbedDialogProps> = ({ kind, onSele
   const [unsplashQuery, setUnsplashQuery] = useState("");
   const [unsplash, setUnsplash] = useState<Array<{ ref: string; previewUrl: string }>>([]);
   const [busy, setBusy] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Inline (data:) embedding is the OFFLINE fallback only — big base64 blobs
+  // blow the localStorage quota and the sync body cap, so cap them hard.
+  const MAX_INLINE_BYTES = 4 * 1024 * 1024;
 
   function commit(value: string) {
     onSelect(value);
@@ -83,12 +89,35 @@ export const MediaEmbedDialog: React.FC<MediaEmbedDialogProps> = ({ kind, onSele
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
+    // Reset so picking the same file again re-fires the change event.
+    event.target.value = "";
     if (!file) return;
     setBusy(true);
+    setUploadError(null);
     try {
+      // Real storage first: the bridge keeps page content small (a URL, not
+      // megabytes of base64) and the file survives across devices.
+      try {
+        commit(`url:${await uploadPageMedia(file)}`);
+        return;
+      } catch {
+        // Offline / no session / bridge down → inline fallback below.
+      }
+      if (file.size > MAX_INLINE_BYTES) {
+        setUploadError(
+          "This file is too large to embed offline (max 4 MB). Reconnect to your workspace and try again.",
+        );
+        return;
+      }
       const source = await readFileAsDataUrl(file);
-      const asset = addAsset(activeUserId, { kind, name: file.name, source, origin: "upload" });
-      commit(asset.source.startsWith("url:") ? asset.source : `url:${asset.source}`);
+      let value = source;
+      try {
+        const asset = addAsset(activeUserId, { kind, name: file.name, source, origin: "upload" });
+        value = asset.source;
+      } catch {
+        // Asset-library quota — the block still embeds the file directly.
+      }
+      commit(value.startsWith("url:") ? value : `url:${value}`);
     } finally {
       setBusy(false);
     }
@@ -133,8 +162,11 @@ export const MediaEmbedDialog: React.FC<MediaEmbedDialogProps> = ({ kind, onSele
             <p className="text-sm text-[var(--osio-fg-muted)]">Upload {kind === "image" ? "an image" : `a ${kind}`} from your device.</p>
             <input ref={fileRef} type="file" accept={ACCEPT[kind]} className="hidden" onChange={handleUpload} />
             <Button tone="primary" disabled={busy} onClick={() => fileRef.current?.click()}>
-              {UPLOAD_LABEL[kind]}
+              {busy ? "Uploading…" : UPLOAD_LABEL[kind]}
             </Button>
+            {uploadError ? (
+              <p role="alert" className="text-sm text-[var(--osio-danger-fg)]">{uploadError}</p>
+            ) : null}
           </div>
         ) : null}
 

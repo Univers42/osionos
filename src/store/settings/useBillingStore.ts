@@ -14,7 +14,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { defaultBillingState } from './defaults';
-import { errorMessage, nowIso, pushSettingsError, scheduleSettingsWrite, trySettingsGet, trySettingsPatch } from './settingsStoreUtils';
+import { errorMessage, nowIso, pushSettingsError, scheduleSettingsWrite, stableDefault, trySettingsGet, trySettingsPatch } from './settingsStoreUtils';
 import type { BillingInvoice, BillingState } from './types';
 
 interface BillingStore {
@@ -38,7 +38,7 @@ export const useBillingStore = create<BillingStore>()(
       invoices: {},
       loading: {},
       error: {},
-      getData: (workspaceId) => get().data[workspaceId] ?? defaultBillingState(workspaceId || 'local-workspace'),
+      getData: (workspaceId) => get().data[workspaceId] ?? stableDefault(`billing:${workspaceId || 'local-workspace'}`, () => defaultBillingState(workspaceId || 'local-workspace')),
       hydrate: async (workspaceId) => {
         if (!workspaceId) return;
         set((state) => ({ loading: { ...state.loading, [workspaceId]: true }, error: { ...state.error, [workspaceId]: null } }));

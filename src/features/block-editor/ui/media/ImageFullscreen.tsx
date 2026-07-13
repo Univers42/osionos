@@ -30,6 +30,10 @@ export const ImageFullscreen: React.FC<ImageFullscreenProps> = ({ url, alt, onCl
     const raf = requestAnimationFrame(() => setVisible(true));
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        // Capture phase + stop: this modal is topmost, so it must win the key
+        // even when a focused contenteditable stops Escape from bubbling.
+        event.preventDefault();
+        event.stopPropagation();
         onClose();
         return;
       }
@@ -38,12 +42,12 @@ export const ImageFullscreen: React.FC<ImageFullscreenProps> = ({ url, alt, onCl
         closeRef.current?.focus();
       }
     };
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       cancelAnimationFrame(raf);
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, true);
       document.body.style.overflow = prevOverflow;
     };
   }, [onClose]);

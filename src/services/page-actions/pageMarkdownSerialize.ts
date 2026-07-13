@@ -92,6 +92,9 @@ export function blockToMarkdown(block: Block, depth = 0): string {
     case "code": line = `\`\`\`${block.language ?? ""}\n${content}\n\`\`\``; break;
     case "equation": line = `$$\n${content}\n$$`; break;
     case "table_block": return tableBlockToMarkdown(block);
+    // A drawing's content is an .osidraw JSON blob — fence it so it never leaks
+    // raw into markdown exports or the clipboard (and can round-trip back).
+    case "draw": line = content ? `\`\`\`osidraw\n${content}\n\`\`\`` : "*[drawing]*"; break;
     // default: paragraph and any other type keep `content` as-is.
   }
   const children = childMarkdown(block, depth);

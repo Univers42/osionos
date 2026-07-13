@@ -86,4 +86,29 @@ export default [
       ],
     },
   },
+  {
+    // Import firewall: @osionos/draw-engine core stays decoupled and
+    // framework-agnostic. Scene data comes in via the engine facade; React lives
+    // in packages/draw-engine/src/react/.
+    files: ["packages/draw-engine/src/core/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/*"],
+              message:
+                "draw-engine core must not import host-app code (@/...). Pass data in via the engine facade.",
+            },
+            {
+              group: ["react", "react-dom", "react/*", "react-dom/*"],
+              message:
+                "draw-engine core must be framework-agnostic. Keep React in packages/draw-engine/src/react/.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];

@@ -729,4 +729,33 @@ export const codeBlockScenarios = [
       expect(after).toBeGreaterThan(before);
     },
   ),
+  defineScenario(
+    "7. Code block",
+    "Fence shortcut",
+    "typing ``` then Enter converts the paragraph into a code block",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await editor.click();
+      await page.keyboard.type("```");
+      await page.keyboard.press("Enter");
+      await expect(page.locator('[data-block-type="code"]')).toHaveCount(1);
+      await getCodeTextarea(page).waitFor({ state: "visible", timeout: 10_000 });
+    },
+  ),
+  defineScenario(
+    "7. Code block",
+    "Fence shortcut",
+    "typing ```bash then Enter converts into a code block with the bash language",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await editor.click();
+      await page.keyboard.type("```bash");
+      await page.keyboard.press("Enter");
+      await expect(page.locator('[data-block-type="code"]')).toHaveCount(1);
+      await getCodeTextarea(page).waitFor({ state: "visible", timeout: 10_000 });
+      await expect(page.getByRole("button", { name: "bash", exact: true })).toBeVisible();
+    },
+  ),
 ];

@@ -13,6 +13,20 @@
 import type { Block } from "./types";
 
 /**
+ * Hoist a `column` that merely wraps a single `column_list` (the old drag-bug
+ * shape) so its inner columns become siblings — keeps a column row FLAT and
+ * evenly rendered. Non-mutating; only the unambiguous sole-child wrap is hoisted,
+ * so a genuinely nested column (heading + a sub-grid) is left untouched.
+ */
+export function flattenColumns(columns: Block[]): Block[] {
+  return columns.flatMap((column) =>
+    column.type === "column" && column.children?.length === 1 && column.children[0].type === "column_list"
+      ? flattenColumns(column.children[0].children ?? [])
+      : [column],
+  );
+}
+
+/**
  * Recursively find a block by ID in a nested tree of blocks.
  */
 export function findBlockInTree(blocks: Block[], blockId: string): Block | null {

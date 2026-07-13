@@ -65,6 +65,7 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
 
   return (
     <div
+      data-osio-pane
       // `contain: layout paint` isolates each pane's rendering so an edit/scroll in
       // one pane can't trigger layout/paint of the other panes (key with 8 open).
       style={{ contain: "layout paint" }}

@@ -22,10 +22,13 @@ import {
   MoreHorizontal,
   Archive,
   BookOpen,
+  Bug,
+  Check,
   Copy,
   ArrowRight,
   Trash2,
   Folder,
+  FileDown,
   FileText,
 } from "lucide-react";
 import {
@@ -42,6 +45,8 @@ import {
 } from "@/shared/lib/auth/pageAccess";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import { MovePageModal } from "./MovePageModal";
+import { ExportDialog } from "@/features/page-export/ui/ExportDialog";
+import { PAGE_DEBUG_TOOLS, usePageDebugStore } from "@/shared/debug/pageDebugStore";
 import { getAllDescendantIds } from "@/store/pageStore.helpers";
 import type { PageEntry } from "@/entities/page";
 
@@ -72,6 +77,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
   onRedirectHome,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [confirmationMode, setConfirmationMode] = useState<
     "archive" | "delete" | null
   >(null);
@@ -84,6 +90,8 @@ export const PageOptionsMenu: React.FC<Props> = ({
 
   const jwt = useUserStore((s) => s.activePageJwt());
   const activePageId = usePageStore((s) => s.activePage?.id);
+  const debugToolsEnabled = usePageDebugStore((s) => s.enabled);
+  const toggleDebugTool = usePageDebugStore((s) => s.toggle);
 
   const storeWorkspaceId = usePageStore((s) =>
     Object.keys(s.pages).find((wsId) =>
@@ -322,6 +330,20 @@ export const PageOptionsMenu: React.FC<Props> = ({
 
             <button
               type="button"
+              data-testid="page-options-export"
+              className={styles.menuItem}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsMenuOpen(false);
+                setIsExportOpen(true);
+              }}
+            >
+              <FileDown size={14} className="shrink-0" />
+              <span>Export</span>
+            </button>
+
+            <button
+              type="button"
               className={styles.menuItem}
               onClick={handleConvertClick}
             >
@@ -369,9 +391,44 @@ export const PageOptionsMenu: React.FC<Props> = ({
               <Trash2 size={14} className="shrink-0" />
               <span>Delete</span>
             </button>
+
+            {/* Debug tools: layout/edit diagnostics. Toggles keep the menu open
+                so several can be flipped in one visit; state persists. */}
+            <div className="mx-2 my-1 border-t border-[var(--osio-border-default)]" />
+            <div className="flex items-center gap-1.5 px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">
+              <Bug size={11} className="shrink-0" />
+              Tools
+            </div>
+            {PAGE_DEBUG_TOOLS.map((tool) => (
+              <button
+                key={tool.id}
+                type="button"
+                data-testid={`debug-tool-${tool.id}`}
+                className={styles.menuItem}
+                title={tool.hint}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleDebugTool(tool.id);
+                }}
+              >
+                <span className="min-w-0 flex-1 truncate">{tool.label}</span>
+                {debugToolsEnabled[tool.id] && (
+                  <Check size={14} className="shrink-0 text-[var(--osio-accent)]" />
+                )}
+              </button>
+            ))}
           </div>,
           portalTarget,
         )}
+
+      {isExportOpen && workspaceId ? (
+        <ExportDialog
+          open
+          pageId={pageId}
+          workspaceId={workspaceId}
+          onClose={() => setIsExportOpen(false)}
+        />
+      ) : null}
 
       {confirmationMode &&
         portalTarget &&

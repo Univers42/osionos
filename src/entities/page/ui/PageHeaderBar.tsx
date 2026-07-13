@@ -17,21 +17,32 @@ import {
   Clipboard,
   Clock,
   Copy,
+  Activity,
+  AlertTriangle,
+  Bug,
   Download,
+  Grid3X3,
   History,
   Import,
+  Info,
   Languages,
   Link,
   Lock,
   Code2,
   Maximize2,
   MoreHorizontal,
+  PaintBucket,
   Plug,
   Presentation,
+  Ruler,
   Search,
+  Square,
   Text,
+  TextCursor,
   Trash2,
 } from 'lucide-react';
+import { LayoutDashboard } from 'lucide-react';
+import { PAGE_DEBUG_TOOLS, usePageDebugStore, type PageDebugToolId } from '@/shared/debug/pageDebugStore';
 
 import {
   TRANSLATION_LANGUAGES,
@@ -44,6 +55,8 @@ import { usePageStore } from '@/store/usePageStore';
 
 import { PageBreadcrumbs } from './PageBreadcrumbs';
 import { PageShareButton } from './PageShareButton';
+import { PageFavoriteButton } from './PageFavoriteButton';
+import { PageCommentsButton } from '@/features/comments/ui/PageCommentsButton';
 
 interface PageHeaderBarProps {
   pageId: string;
@@ -68,6 +81,7 @@ const FONT_OPTIONS: Array<{ id: PageFont; label: string; sample: string }> = [
 ];
 
 const ACTION_LABELS = [
+  'remove header canvas',
   'copy link',
   'copy page contents',
   'duplicate',
@@ -84,6 +98,17 @@ const ACTION_LABELS = [
   'notify me',
   'connections',
 ];
+
+const DEBUG_TOOL_ICONS: Record<PageDebugToolId, React.ReactNode> = {
+  outlines: <Square size={16} />,
+  surfaces: <PaintBucket size={16} />,
+  grid: <Grid3X3 size={16} />,
+  blockInfo: <Info size={16} />,
+  overflow: <AlertTriangle size={16} />,
+  measure: <Ruler size={16} />,
+  caret: <TextCursor size={16} />,
+  perf: <Activity size={16} />,
+};
 
 const MenuButton: React.FC<MenuButtonProps> = ({ icon, label, onClick, checked, destructive, shortcut, trailing, badge }) => (
   <button
@@ -147,6 +172,8 @@ function openPageActionsHome() {
 
 export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceId }) => {
   const actions = usePageActions(pageId, workspaceId);
+  const debugToolsEnabled = usePageDebugStore((s) => s.enabled);
+  const toggleDebugTool = usePageDebugStore((s) => s.toggle);
   const [configOpen, setConfigOpen] = useState(false);
   const [actionQuery, setActionQuery] = useState('');
   const pushToast = useToastStore((state) => state.push);
@@ -180,6 +207,8 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
 
         <div className="flex shrink-0 items-center gap-3 pl-4">
           <span className="hidden whitespace-nowrap text-sm text-[var(--osio-fg-subtle)] sm:inline">{actions.editedLabel}</span>
+          <PageFavoriteButton pageId={pageId} />
+          <PageCommentsButton pageId={pageId} />
           <PageShareButton pageId={pageId} workspaceId={workspaceId} />
           <div className="relative">
             <button
@@ -229,6 +258,13 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                       <MenuButton icon={<Maximize2 size={16} />} label="Full width" checked={actions.config.fullWidth} onClick={() => runPageAction(actions.toggleFullWidth(), showActionError)} />
                       <MenuButton icon={<Lock size={16} />} label="Lock page" checked={actions.config.locked} onClick={() => runPageAction(actions.toggleLock(), showActionError)} />
                       <MenuButton icon={<Code2 size={16} />} label="Raw / code mode" checked={actions.config.rawMode} onClick={() => runPageAction(actions.toggleRawMode(), showActionError)} />
+                      {actions.hasRemovableHeader && (
+                        <MenuButton
+                          icon={<LayoutDashboard size={16} />}
+                          label="Remove header canvas"
+                          onClick={() => runPageAction(actions.removeHeaderCanvas(), showActionError)}
+                        />
+                      )}
                       <div className="flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--osio-bg-hover)]">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--osio-fg-muted)]"><Languages size={16} /></span>
                         <span className="min-w-0 flex-1 truncate">Translate</span>
@@ -250,6 +286,25 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                       <MenuButton icon={<History size={16} />} label="Version history" onClick={actions.openVersionHistory} />
                       <MenuButton icon={<Bell size={16} />} label="Notify me" checked={actions.config.notifications.comments} trailing="Comments" onClick={() => runPageAction(actions.toggleNotifications(), showActionError)} />
                       <MenuButton icon={<Plug size={16} />} label="Connections" trailing={actions.config.connections.length ? 'MongoDB' : 'None'} checked={actions.config.connections.length > 0} onClick={() => runPageAction(actions.manageConnections(), showActionError)} />
+                    </div>
+
+                    {/* Debug tools: layout/edit diagnostics; toggles keep the menu
+                        open so several can be flipped in one visit, and persist. */}
+                    <div className="border-t border-[var(--osio-border-default)] py-1">
+                      <div className="flex items-center gap-1.5 px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">
+                        <Bug size={11} className="shrink-0" />
+                        Tools
+                      </div>
+                      {PAGE_DEBUG_TOOLS.map((tool) => (
+                        <div key={tool.id} data-testid={`debug-tool-${tool.id}`} title={tool.hint}>
+                          <MenuButton
+                            icon={DEBUG_TOOL_ICONS[tool.id]}
+                            label={tool.label}
+                            checked={!!debugToolsEnabled[tool.id]}
+                            onClick={() => toggleDebugTool(tool.id)}
+                          />
+                        </div>
+                      ))}
                     </div>
                   </>
                 )}

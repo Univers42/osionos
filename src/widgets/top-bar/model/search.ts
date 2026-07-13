@@ -13,7 +13,9 @@
 import type { PageEntry } from "@/entities/page";
 import { useUserStore } from "@/features/auth";
 import { api, getActivePageJwt } from "@/shared/api/client";
+import { searchMessages } from "@/shared/chat/searchApi";
 import { usePageStore } from "@/store/usePageStore";
+import { genId } from "@/widgets/workspace-grid/model/layoutTree";
 import { pageEntryToTab } from "@/widgets/workspace-grid/model/pageToTab";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import type { PaletteCommand } from "./commands";
@@ -23,7 +25,7 @@ export interface PaletteResult {
   title: string;
   subtitle?: string;
   accelerator?: string;
-  kind: "page" | "command" | "person";
+  kind: "page" | "command" | "person" | "message";
   run: () => void;
 }
 
@@ -67,12 +69,39 @@ export async function searchPagesRemote(query: string, limit = 12): Promise<Pale
   const workspaceId = useUserStore.getState().activeWorkspace()?._id;
   if (!workspaceId || !trimmed) return [];
   const params = new URLSearchParams({ workspaceId, q: trimmed, limit: String(limit) });
-  const entries = await api.get<PageEntry[]>(`/api/pages/search?${params.toString()}`, getActivePageJwt() ?? undefined);
+  const entries = await api.get<Array<PageEntry & { snippet?: string }>>(`/api/pages/search?${params.toString()}`, getActivePageJwt() ?? undefined);
   return (entries ?? []).map((entry) => ({
     id: entry._id,
     title: entry.title || "Untitled",
+    subtitle: entry.snippet,
     kind: "page" as const,
     run: () => useWorkspaceLayout.getState().openTab(pageEntryToTab(entry)),
+  }));
+}
+
+/**
+ * Chat-message search for the unified palette (bridge FTS, membership-scoped via
+ * bridge-chat-search.mjs). A hit opens its channel tab. The caller gates this on
+ * isUnifiedSearchEnabled(); no token / not a member simply yields no rows.
+ */
+export async function searchMessagesPalette(query: string, limit = 6): Promise<PaletteResult[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  const hits = await searchMessages(trimmed, undefined, limit);
+  const fallbackWorkspace = useUserStore.getState().activeWorkspace()?._id ?? "";
+  return hits.map((hit) => ({
+    id: `message:${hit.messageId}`,
+    title: hit.snippet || "Message",
+    subtitle: `#${hit.channelName} · ${hit.authorName}`,
+    kind: "message" as const,
+    run: () => useWorkspaceLayout.getState().openTab({
+      tabId: genId("tab"),
+      pageId: hit.channelId,
+      workspaceId: hit.workspaceId ?? fallbackWorkspace,
+      kind: "channel",
+      title: hit.channelName,
+      icon: "icon:hash",
+    }),
   }));
 }
 

@@ -22,6 +22,27 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
+// zustand v5's useStore wraps a NON-memoizing useSyncExternalStore, so a
+// selector that returns a fresh object every call is an unstable snapshot →
+// React's "getSnapshot should be cached" infinite render loop → the panel
+// blanks. The `getData(id) => data[id] ?? defaultX(id)` pattern hits this the
+// moment a workspace has no persisted row (defaultX() mints a new object with a
+// fresh nowIso() each call). Caching the default per key gives getData a stable
+// reference so the loop never starts. One home for the fix; every settings
+// store shares it. (ponytail: unbounded Map, but bounded in practice by
+// stores × workspaces — a handful of entries; add eviction only if that ever
+// grows, which it won't.)
+const DEFAULTS_CACHE = new Map<string, unknown>();
+
+export function stableDefault<T>(key: string, make: () => T): T {
+  let cached = DEFAULTS_CACHE.get(key) as T | undefined;
+  if (cached === undefined) {
+    cached = make();
+    DEFAULTS_CACHE.set(key, cached);
+  }
+  return cached;
+}
+
 export function createLocalId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
 }
@@ -46,32 +67,33 @@ export function pushSettingsError(title: string, error: unknown) {
   });
 }
 
-export async function trySettingsGet<T>(path: string): Promise<T | null> {
-  const jwt = settingsJwt();
+// jwt defaults to settingsJwt() (the gotrue-path token). A caller whose bridge
+// route verifies the `osionos_v1.` app-session token — e.g. connections, which
+// hits the same verifyAppSessionToken() gate as object databases — passes
+// getActivePageJwt() explicitly; settingsJwt() blanks for a bridge session, so
+// the default would silently no-op to localStorage. Default keeps every other
+// store byte-identical.
+export async function trySettingsGet<T>(path: string, jwt = settingsJwt()): Promise<T | null> {
   if (!API_BASE || !jwt) return null;
   return api.get<T>(path, jwt);
 }
 
-export async function trySettingsPost<T>(path: string, body: unknown): Promise<T | null> {
-  const jwt = settingsJwt();
+export async function trySettingsPost<T>(path: string, body: unknown, jwt = settingsJwt()): Promise<T | null> {
   if (!API_BASE || !jwt) return null;
   return api.post<T>(path, body, jwt);
 }
 
-export async function trySettingsPut<T>(path: string, body: unknown): Promise<T | null> {
-  const jwt = settingsJwt();
+export async function trySettingsPut<T>(path: string, body: unknown, jwt = settingsJwt()): Promise<T | null> {
   if (!API_BASE || !jwt) return null;
   return api.put<T>(path, body, jwt);
 }
 
-export async function trySettingsPatch<T>(path: string, body: unknown): Promise<T | null> {
-  const jwt = settingsJwt();
+export async function trySettingsPatch<T>(path: string, body: unknown, jwt = settingsJwt()): Promise<T | null> {
   if (!API_BASE || !jwt) return null;
   return api.patch<T>(path, body, jwt);
 }
 
-export async function trySettingsDelete<T>(path: string): Promise<T | null> {
-  const jwt = settingsJwt();
+export async function trySettingsDelete<T>(path: string, jwt = settingsJwt()): Promise<T | null> {
   if (!API_BASE || !jwt) return null;
   return api.delete<T>(path, jwt);
 }

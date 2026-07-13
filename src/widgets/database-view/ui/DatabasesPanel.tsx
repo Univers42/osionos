@@ -162,13 +162,13 @@ export const DatabasesPanel: React.FC = () => {
             <AlertTriangle size={24} strokeWidth={1.5} className="text-[var(--osio-danger)]" />
             <p className="text-xs text-[var(--osio-fg-subtle)]">Couldn&apos;t load your databases.</p>
             {error ? <p className="text-[11px] break-all text-[var(--osio-danger)]">{error}</p> : null}
-            <button type="button" onClick={reload} className="text-xs text-[var(--osio-accent)] hover:underline">Retry</button>
+            <button type="button" onClick={reload} className="text-xs text-[var(--osio-accent-text)] hover:underline">Retry</button>
           </div>
         ) : visible.length === 0 ? (
           <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
             <Database size={24} strokeWidth={1.5} className="text-[var(--osio-fg-subtle)]" />
             <p className="text-xs text-[var(--osio-fg-subtle)]">{query ? "No matching databases." : "No databases connected."}</p>
-            <button type="button" onClick={reload} className="text-xs text-[var(--osio-accent)] hover:underline">Retry</button>
+            <button type="button" onClick={reload} className="text-xs text-[var(--osio-accent-text)] hover:underline">Retry</button>
           </div>
         ) : (
           visible.map((source) => <MountGroup key={source.mount.dbId} source={source} query={query} />)

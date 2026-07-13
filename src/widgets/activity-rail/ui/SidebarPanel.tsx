@@ -16,13 +16,28 @@ import { WorkspaceSwitcher } from "@/features/auth";
 import { IconButton } from "@/shared/ui";
 import { useUIStore, type ActivePanel } from "@/shared/config/uiStore";
 import { FilesPanel } from "./panels/FilesPanel";
-import { AgentsPanel } from "./panels/AgentsPanel";
-import { MessengerPanel } from "./panels/MessengerPanel";
-import { PublicSwitcherPanel } from "./panels/PublicSwitcherPanel";
-import { MarketplacePanel } from "./panels/MarketplacePanel";
-import { SearchPanelSlot } from "./panels/SearchPanelSlot";
-import { DatabasesPanel } from "@/widgets/database-view/ui/DatabasesPanel";
-import { NotificationsPanel } from "@/widgets/notifications/ui/NotificationsPanel";
+
+// Only the default Explorer panel loads eagerly — every other panel mounts on
+// demand when its rail icon is clicked. Static imports here were a warm-chunk
+// leak: this file mounts in App, and PublicSwitcher/Marketplace statically drag
+// PageBlocksRenderer → ReadOnlyBlock → MediaBlockPreview → MermaidDiagram
+// (~100KB of editor renderer) onto the entry bundle. Deep imports, never barrels.
+const AgentsPanel = React.lazy(() =>
+  import("./panels/AgentsPanel").then((m) => ({ default: m.AgentsPanel })));
+const MessengerPanel = React.lazy(() =>
+  import("./panels/MessengerPanel").then((m) => ({ default: m.MessengerPanel })));
+const PublicSwitcherPanel = React.lazy(() =>
+  import("./panels/PublicSwitcherPanel").then((m) => ({ default: m.PublicSwitcherPanel })));
+const MarketplacePanel = React.lazy(() =>
+  import("./panels/MarketplacePanel").then((m) => ({ default: m.MarketplacePanel })));
+const SearchPanelSlot = React.lazy(() =>
+  import("./panels/SearchPanelSlot").then((m) => ({ default: m.SearchPanelSlot })));
+const DatabasesPanel = React.lazy(() =>
+  import("@/widgets/database-view/ui/DatabasesPanel").then((m) => ({ default: m.DatabasesPanel })));
+const NotificationsPanel = React.lazy(() =>
+  import("@/widgets/notifications/ui/NotificationsPanel").then((m) => ({ default: m.NotificationsPanel })));
+const MyTasksPanel = React.lazy(() =>
+  import("@/widgets/tasks/ui/MyTasksPanel").then((m) => ({ default: m.MyTasksPanel })));
 
 const PANEL_TITLES: Record<ActivePanel, string> = {
   files: "Explorer",
@@ -30,6 +45,7 @@ const PANEL_TITLES: Record<ActivePanel, string> = {
   agents: "Agents",
   messenger: "Messenger",
   notifications: "Notifications",
+  tasks: "My Tasks",
   public: "Shared", // label-only rename (AOC §12); id stays "public" (R-R3)
   marketplace: "Marketplace",
   database: "Databases",
@@ -41,8 +57,10 @@ interface Props {
   onOpenConsole?: () => void;
 }
 
-/** The expanded side panel: shared workspace/account header + the active view. */
-export const SidebarPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpenConsole }) => {
+/** The expanded side panel: shared workspace/account header + the active view.
+ *  Memoized — it stays mounted as a hidden layer, and the parent re-renders on
+ *  every rail-preview flip; memo keeps those flips from re-rendering the tree. */
+export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, onOpenTrash, onOpenConsole }: Props) {
   const activePanel = useUIStore((s) => s.activePanel);
   const collapseToRail = useUIStore((s) => s.collapseToRail);
 
@@ -58,6 +76,8 @@ export const SidebarPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onO
         return <MessengerPanel />;
       case "notifications":
         return <NotificationsPanel />;
+      case "tasks":
+        return <MyTasksPanel />;
       case "public":
         return <PublicSwitcherPanel />;
       case "marketplace":
@@ -80,7 +100,9 @@ export const SidebarPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onO
           <PanelLeftClose size={14} />
         </IconButton>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col">{body()}</div>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <React.Suspense fallback={null}>{body()}</React.Suspense>
+      </div>
     </div>
   );
-};
+});

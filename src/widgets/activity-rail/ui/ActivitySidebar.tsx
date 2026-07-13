@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useUIStore, PANEL_MAX_WIDTH } from "@/shared/config/uiStore";
 import { ActivityRail } from "./ActivityRail";
 import { SidebarPanel } from "./SidebarPanel";
@@ -31,6 +31,13 @@ interface Props {
  * the way down to the rail width — no snap jump. Below the transition width the
  * content swaps to the icon rail; release there collapses, release wider keeps
  * the panel. From the rail, drag right → expand, drag far left → hide.
+ *
+ * Smoothness invariants: BOTH the rail and the panel stay mounted as
+ * crossfading layers — crossing the drag threshold or toggling modes never
+ * mounts/unmounts the heavy panel subtree (the old swap was a mid-drag mount
+ * storm). The panel layer keeps its COMMITTED width, so a narrower container
+ * clips it (VSCode-style) instead of re-wrapping every row per frame. The
+ * panel pre-mounts on first idle so even the first expand is instant.
  */
 export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpenConsole }) => {
   const sidebarMode = useUIStore((s) => s.sidebarMode);
@@ -43,6 +50,21 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, 
   const draggingRef = useRef(false);
   const previewRef = useRef(false);
   const [previewRail, setPreviewRail] = useState(false);
+
+  // Mount the panel once and keep it mounted forever (hidden layers cost no
+  // renders). Render-adjust in the same pass — an effect would cascade.
+  const [panelMounted, setPanelMounted] = useState(sidebarMode !== "rail");
+  if (sidebarMode === "panel" && !panelMounted) setPanelMounted(true);
+  useEffect(() => {
+    if (panelMounted) return undefined;
+    // Pre-warm during idle so the FIRST rail→panel expand pays no mount cost.
+    if (typeof requestIdleCallback === "function") {
+      const id = requestIdleCallback(() => setPanelMounted(true));
+      return () => cancelIdleCallback(id);
+    }
+    const timer = setTimeout(() => setPanelMounted(true), 800);
+    return () => clearTimeout(timer);
+  }, [panelMounted]);
 
   const targetWidth = sidebarMode === "rail" ? RAIL_WIDTH : sidebarWidth;
 
@@ -132,13 +154,25 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, 
   return (
     <aside className={styles.activitySidebar} aria-label="Sidebar">
       {/* width is driven by useLayoutEffect/drag (DOM), never React's style prop,
-          so a re-render mid-drag can't snap it back. */}
+          so a re-render mid-drag can't snap it back. Rail + panel are persistent
+          crossfading layers — threshold crossings toggle a class, never a mount. */}
       <div ref={sizeRef} className={styles.panel}>
-        {showRail ? (
+        <div
+          className={[styles.layer, showRail ? styles.layerVisible : ""].join(" ")}
+          style={{ width: RAIL_WIDTH }}
+          aria-hidden={!showRail}
+        >
           <ActivityRail onOpenSettings={onOpenSettings} />
-        ) : (
-          <SidebarPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />
-        )}
+        </div>
+        {panelMounted ? (
+          <div
+            className={[styles.layer, !showRail ? styles.layerVisible : ""].join(" ")}
+            style={{ width: sidebarWidth }}
+            aria-hidden={showRail}
+          >
+            <SidebarPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />
+          </div>
+        ) : null}
       </div>
       <div
         role="separator"

@@ -29,8 +29,10 @@ interface Props {
 }
 
 /** The thin (~48px) icon column. Selecting an item opens/toggles its panel;
- *  Mail/Calendar open an in-app iframe tab instead. role=tablist + roving focus. */
-export const ActivityRail: React.FC<Props> = ({ onOpenSettings }) => {
+ *  Mail/Calendar open an in-app iframe tab instead. role=tablist + roving focus.
+ *  Memoized — it stays mounted as a crossfade layer; parent preview-flips
+ *  re-render it for free otherwise. */
+export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }: Props) {
   const sidebarMode = useUIStore((s) => s.sidebarMode);
   const activePanel = useUIStore((s) => s.activePanel);
   const selectPanel = useUIStore((s) => s.selectPanel);
@@ -127,4 +129,4 @@ export const ActivityRail: React.FC<Props> = ({ onOpenSettings }) => {
       </div>
     </div>
   );
-};
+});

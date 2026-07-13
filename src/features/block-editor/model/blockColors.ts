@@ -25,7 +25,6 @@ export const BLOCK_COLOR_OPTIONS = [
   { label: "Red", text: "var(--osio-block-tint-red-fg)", background: "var(--osio-block-tint-red-bg)" },
 ] as const;
 
-const RGAA_TEXT_CONTRAST = 4.5;
 const DEFAULT_DARK_TEXT = "#1f2937";
 const DEFAULT_LIGHT_TEXT = "#ffffff";
 
@@ -74,14 +73,22 @@ export function getAccessibleTextColor(backgroundColor?: string): string | undef
   return darkContrast >= lightContrast ? DEFAULT_DARK_TEXT : DEFAULT_LIGHT_TEXT;
 }
 
+/**
+ * Text colour and background ACCUMULATE: `/color red` then `/background yellow`
+ * must keep BOTH. An explicitly chosen text colour is the user's call, so it is
+ * never silently swapped for a contrast-safe default — doing that made the two
+ * commands mutually exclusive ("it's either one or the other").
+ *
+ * The readability guard still does the job it is actually needed for: when a block
+ * has a background but NO chosen text colour, derive one that stays legible on it
+ * (otherwise default-coloured text can vanish into a dark tint).
+ */
 export function ensureReadableTextColor(
   backgroundColor: string | undefined,
   textColor: string | undefined,
 ): string | undefined {
-  if (!backgroundColor) return textColor;
-  if (textColor && contrastRatio(textColor, backgroundColor) >= RGAA_TEXT_CONTRAST) {
-    return textColor;
-  }
+  if (textColor) return textColor;
+  if (!backgroundColor) return undefined;
   return getAccessibleTextColor(backgroundColor);
 }
 

@@ -25,6 +25,7 @@ interface DockShellProps {
 
 export const DockShell: React.FC<DockShellProps> = ({ raised = false, children }) => (
   <div
+    data-osio-dock
     className="pointer-events-none fixed bottom-0 right-0 flex max-w-full items-end gap-[var(--osio-space-3)] p-[var(--osio-space-4)]"
     style={{ zIndex: raised ? 'var(--osio-z-popover)' : 'var(--osio-z-sticky)' }}
   >

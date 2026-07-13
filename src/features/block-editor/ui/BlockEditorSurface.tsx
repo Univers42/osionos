@@ -16,7 +16,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus } from "lucide-react";
 
 import type { Block } from "@/entities/block";
-import { isParentable, selfRendersChildren } from "@/entities/block";
+import { flattenColumns, isParentable, selfRendersChildren } from "@/entities/block";
 import {
 	estimateBlockHeight,
 	ROOT_BLOCK_VIRTUALIZATION_OVERSCAN,
@@ -24,6 +24,8 @@ import {
 } from "@/entities/block/model/blockVirtualization";
 import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
 import { SlashCommandMenu } from "@/features/slash-commands";
+import { parseSlashQuery } from "@/features/slash-commands/model/slashMenuCatalog";
+import { resolveColorName } from "@/shared/ui/molecules/IconPicker/ColorSwatches";
 import {
 	usePlaygroundBlockEditor,
 	type PlaygroundBlockEditorSource,
@@ -33,6 +35,7 @@ import { PageSelectorMenu } from "./PageSelectorMenu";
 import { EmojiPicker } from "@/shared/ui";
 import { ColorMenu } from "./ColorMenu";
 import { getBlockSurfaceStyle } from "../model/blockColors";
+import { insertColumnForTarget } from "../model/columnLayout";
 import { VIRTUAL_BLOCK_FOCUS_EVENT } from "../model/blockDomFocus";
 import { commitBlockDraft, useBlockDraftContent } from "../model/blockDraftStore";
 import { useSurfaceMarquee } from "../model/useSurfaceMarquee";
@@ -181,16 +184,6 @@ function removeBlockById(blocks: Block[], blockId: string): { blocks: Block[]; r
 	return { blocks: next, removed };
 }
 
-function createColumn(children: Block[]): Block {
-	return {
-		id: crypto.randomUUID(),
-		type: "column",
-		content: "",
-		widthRatio: 0.5,
-		children,
-	};
-}
-
 function normalizeColumnRatio(column: Block, columnCount: number): number {
 	return typeof column.widthRatio === "number" && Number.isFinite(column.widthRatio)
 		? Math.max(0.08, column.widthRatio)
@@ -226,28 +219,10 @@ function updateColumnRatiosInTree(
 	});
 }
 
-function wrapTargetInColumns(blocks: Block[], targetId: string, draggedBlock: Block, side: "left" | "right"): Block[] {
-	return blocks.map((block) => {
-		if (block.id === targetId) {
-			const targetColumn = createColumn([cloneBlock(block)]);
-			const draggedColumn = createColumn([draggedBlock]);
-			return {
-				id: crypto.randomUUID(),
-				type: "column_list",
-				content: "",
-				children: side === "left" ? [draggedColumn, targetColumn] : [targetColumn, draggedColumn],
-			};
-		}
-		return block.children?.length
-			? { ...cloneBlock(block), children: wrapTargetInColumns(block.children, targetId, draggedBlock, side) }
-			: cloneBlock(block);
-	});
-}
-
 function splitBlocksIntoColumns(blocks: Block[], draggedId: string, targetId: string, side: "left" | "right"): Block[] {
 	const withoutDragged = removeBlockById(blocks, draggedId);
 	if (!withoutDragged.removed) return blocks;
-	return wrapTargetInColumns(withoutDragged.blocks, targetId, withoutDragged.removed, side);
+	return insertColumnForTarget(withoutDragged.blocks, targetId, withoutDragged.removed, side);
 }
 
 function insertBlockIntoEditorTree(
@@ -287,7 +262,7 @@ function insertExternalBlockByDropIntent(
 	intent: DropIntent,
 ): Block[] {
 	if (intent.position === "left" || intent.position === "right") {
-		return wrapTargetInColumns(blocks, targetBlockId, cloneBlock(draggedBlock), intent.position);
+		return insertColumnForTarget(blocks, targetBlockId, cloneBlock(draggedBlock), intent.position);
 	}
 
 	return insertBlockIntoEditorTree(blocks, draggedBlock, intent.targetParentBlockId, intent.targetIndex);
@@ -729,9 +704,6 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 					pageId={pageId}
 					position={slashMenu.position}
 					filter={slashMenu.filter}
-					onFilterChange={(nextFilter) =>
-						setSlashMenu(slashMenu ? { ...slashMenu, filter: nextFilter } : null)
-					}
 					onSelect={(item) => {
 						const currentBlocks = flushPendingDrafts("shortcut");
 						blocksRef.current = currentBlocks;
@@ -748,15 +720,24 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 							return;
 						}
 						if (item.kind === "inline") {
+							const trigger = slashMenu;
 							// Emoji / color open their own picker at the caret instead of
-							// inserting text: strip the "/emoji"|"/color" trigger, then open.
-							if (item.id === "inline:emoji" || item.id === "inline:color") {
-								const trigger = slashMenu;
+							// inserting text: strip the "/emoji"|"/color …" trigger, then open.
+							if (item.id === "inline:emoji") {
 								handleSlashInlineSelect("", currentBlocks);
-								if (trigger && item.id === "inline:emoji") {
-									setEmojiMenu({ blockId: trigger.blockId, position: trigger.position, filter: "" });
+								if (trigger) setEmojiMenu({ blockId: trigger.blockId, position: trigger.position, filter: "" });
+								return;
+							}
+							// "/color gray" / "/background gray" apply the named color directly; the bare
+							// command opens the picker. Same picker + handler; mode picks the target field.
+							if (item.id === "inline:color" || item.id === "inline:background") {
+								const mode = item.id === "inline:background" ? "background" : "text";
+								const color = resolveColorName(parseSlashQuery(trigger?.filter ?? "").arg);
+								handleSlashInlineSelect("", currentBlocks);
+								if (color && trigger) {
+									handleColorSelect(color, trigger.blockId, mode);
 								} else if (trigger) {
-									setColorMenu({ blockId: trigger.blockId, position: trigger.position });
+									setColorMenu({ blockId: trigger.blockId, position: trigger.position, mode });
 								}
 								return;
 							}
@@ -1124,7 +1105,8 @@ function getBlockSpacing(type: Block["type"]): { pt: string; pb: string; handleT
 		// Embeds read as native page content — the most air above.
 		case "database_inline":
 		case "database_full_page":
-		case "graph_view": return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
+		case "graph_view":
+		case "draw":      return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
 		// Boxed blocks: medium.
 		case "callout":
 		case "quote":     return { pt: "pt-2",   pb: "pb-1",   handleTop: "top-3" };
@@ -1281,7 +1263,8 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 	const isEmbedBlock =
 		block.type === "database_inline" ||
 		block.type === "database_full_page" ||
-		block.type === "graph_view";
+		block.type === "graph_view" ||
+		block.type === "draw";
 	const shellChrome = isEmbedBlock ? "" : "rounded-md";
 
 	return (
@@ -1292,7 +1275,14 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 			data-selected={isSelected ? "true" : undefined}
 			data-block-type={block.type}
 			className={`group/block relative transition-colors transition-opacity ${shellChrome} ${pt} ${pb} ${isDragged ? "opacity-40" : ""} ${isSelected ? "bg-[var(--osio-accent-subtle)]" : ""}`}
-			onContextMenu={(e) => onContextMenu(e, block.id)}
+			// stopPropagation: the DEEPEST block owns its context menu. Without it
+			// the event bubbles to enclosing container articles (column_list,
+			// toggle, callout) whose handler runs later and RETARGETS the menu —
+			// coloring a block inside a column then tinted the whole row.
+			onContextMenu={(e) => {
+				e.stopPropagation();
+				onContextMenu(e, block.id);
+			}}
 			onPointerEnter={alignHandle}
 			onDragOver={handleDragOver}
 			onDragLeave={handleDragLeave}
@@ -1358,6 +1348,20 @@ interface EditableBlockProps {
 	renderBlockEditor: (props: SurfaceBlockEditorProps) => React.ReactNode;
 }
 
+/** Keys the block wrapper forwards for VOID blocks (divider, media, …) whose
+ * focus fallback is the wrapper itself — without this, arrow navigation dies
+ * on them (invisible caret, arrows scroll the page instead of moving on). */
+const VOID_NAV_KEYS = new Set([
+	"ArrowUp",
+	"ArrowDown",
+	"ArrowLeft",
+	"ArrowRight",
+	"Backspace",
+	"Delete",
+	"Enter",
+	"Escape",
+]);
+
 const EditableBlockBase: React.FC<EditableBlockProps> = ({
 	pageId,
 	block,
@@ -1394,6 +1398,15 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 	);
 	const handleChange = useCallback((text: string) => onChange(block.id, text), [block.id, onChange]);
 	const handleKey = useCallback((e: React.KeyboardEvent) => onKeyDown(e, block.id, parentBlockId), [block.id, onKeyDown, parentBlockId]);
+	// Void blocks (divider, media, …) focus the wrapper itself (blockDomFocus
+	// fallback). Keys from inner editors bubble through with a different
+	// target and are already handled — forward only the wrapper's own keys so
+	// the caret keeps travelling instead of dying on the block.
+	const handleVoidNavKey = useCallback((e: React.KeyboardEvent) => {
+		if (e.target !== e.currentTarget || e.defaultPrevented) return;
+		if (!VOID_NAV_KEYS.has(e.key)) return;
+		handleKey(e);
+	}, [handleKey]);
 	const handlePaste = useCallback((e: React.ClipboardEvent) => onPaste(e, block.id), [block.id, onPaste]);
 	const blockElementRef = useRef<HTMLDivElement | null>(null);
 	const refCb = useCallback((el: HTMLDivElement | null) => {
@@ -1423,12 +1436,21 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 		if (!block.children?.length) return null;
 
 		if (block.type === "column_list") {
-			const columns = block.children;
+			const columns = flattenColumns(block.children);
 			return (
-				<div className="flex items-stretch gap-0 rounded-md">
+				<div className="flex items-start gap-0 rounded-md">
 					{columns.map((column, index) => (
 						<React.Fragment key={column.id}>
-							<div className="min-w-0 px-1" style={{ flexGrow: normalizeColumnRatio(column, columns.length), flexBasis: 0 }}>
+							{/* Per-COLUMN surface style: each column carries its own colors,
+							    independent of its siblings and of the list. */}
+							<div
+								className="min-w-0 rounded-md px-1"
+								style={{
+									flexGrow: normalizeColumnRatio(column, columns.length),
+									flexBasis: 0,
+									...getBlockSurfaceStyle(column),
+								}}
+							>
 								<BlockTree
 									blocks={column.children ?? EMPTY_BLOCKS}
 									pageId={pageId}
@@ -1468,6 +1490,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 									leftColumn={column}
 									rightColumn={columns[index + 1]}
 									columnCount={columns.length}
+									sourceKey={sourceKey}
 								/>
 							) : null}
 						</React.Fragment>
@@ -1511,7 +1534,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 	}, [block.children, block.id, block.type, bulletDepth, draggedBlockId, focusBlock, isHighlighted, moveBlock, moveBlockAcrossTree, numberedDepth, onBeforeStructuralEdit, onChange, onContextMenu, onDeleteBlock, onKeyDown, onPaste, onRequestSlashMenu, onUpdateBlock, pageId, registerRef, renderBlockEditor, rootBlocks, selectedBlockIds, setDraggedBlockId, source, sourceKey, updateContent]);
 
 	return (
-		<div data-block-id={block.id} data-block-type={block.type} ref={refCb} className="-mx-1 rounded-md px-1" style={getBlockSurfaceStyle(block)}>
+		<div data-block-id={block.id} data-block-type={block.type} ref={refCb} onKeyDown={handleVoidNavKey} className="-mx-1 rounded-md px-1 focus:outline-none focus:ring-1 focus:ring-[var(--osio-accent)]" style={getBlockSurfaceStyle(block)}>
 			{renderBlockEditor({
 				pageId,
 				block: editorBlock,
@@ -1566,6 +1589,7 @@ interface ColumnResizeHandleProps {
 	leftColumn: Block;
 	rightColumn: Block;
 	columnCount: number;
+	sourceKey: string;
 }
 
 const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
@@ -1575,6 +1599,7 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
 	leftColumn,
 	rightColumn,
 	columnCount,
+	sourceKey,
 }) => {
 	const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
 		event.preventDefault();
@@ -1612,16 +1637,19 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
 			if (frame) cancelAnimationFrame(frame);
 			document.body.style.cursor = "";
 			document.body.style.userSelect = "";
-			// Persist the final ratios ONCE — a single re-render that matches the DOM
-			// the drag already painted, so there is no jump on release.
-			updateContent(updateColumnRatiosInTree(rootBlocks, columnListId, leftColumn.id, rightColumn.id, latestLeft, pairTotal - latestLeft));
+			// Persist the final ratios ONCE, against the FRESHEST tree. The memoized
+			// shell freezes its `rootBlocks` prop (drag-only, ignored by the comparator),
+			// so that stale snapshot may not even contain this column_list → the ratio
+			// update no-ops and the width snaps back. surfaceRegistry is the live tree.
+			const freshRoot = surfaceRegistry.get(sourceKey)?.getContent() ?? rootBlocks;
+			updateContent(updateColumnRatiosInTree(freshRoot, columnListId, leftColumn.id, rightColumn.id, latestLeft, pairTotal - latestLeft));
 		};
 
 		document.body.style.cursor = "col-resize";
 		document.body.style.userSelect = "none";
 		globalThis.addEventListener("pointermove", handlePointerMove);
 		globalThis.addEventListener("pointerup", handlePointerUp, { once: true });
-	}, [columnCount, columnListId, leftColumn, rightColumn, rootBlocks, updateContent]);
+	}, [columnCount, columnListId, leftColumn, rightColumn, rootBlocks, sourceKey, updateContent]);
 
 	return (
 		<div
@@ -1629,10 +1657,10 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
 			aria-orientation="vertical"
 			title="Drag to resize columns"
 			data-column-resize-handle
-			className="group/resize flex w-3 shrink-0 cursor-col-resize touch-none items-stretch justify-center"
+			className="group/resize flex w-6 shrink-0 self-stretch cursor-col-resize touch-none items-stretch justify-center"
 			onPointerDown={handlePointerDown}
 		>
-			<div className="w-px rounded-full bg-[var(--osio-border-default)] transition-colors group-hover/resize:bg-[var(--osio-accent)]" />
+			<div className="w-px rounded-full bg-transparent transition-colors group-hover/resize:bg-[var(--osio-accent)]" />
 		</div>
 	);
 };

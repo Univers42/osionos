@@ -10,10 +10,15 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { Profiler, StrictMode } from "react";
+import { lazy, Profiler, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { MotionConfig } from "motion/react";
 import App from "./App.tsx";
+
+// Public published-page view (/p/:token) — a standalone read-only render mounted
+// BEFORE the app + its auth so an unauthenticated visitor never boots the editor.
+const LazyPublicPageView = lazy(() => import("@/pages/public/PublicPageView").then((m) => ({ default: m.PublicPageView })));
+const isPublicRoute = globalThis.location?.pathname.startsWith("/p/") ?? false;
 import { recordReactCommit } from '@/shared/lib/perf/measure';
 // Database (object-database) theme + leaflet styles ship with the lazy
 // DatabaseBlock chunk (perf: off the render-blocking entry CSS), not here.
@@ -50,7 +55,11 @@ if (root) {
       <MotionConfig reducedMotion="user">
         {/* Profiler only in dev: it wraps the whole tree and fires onRender on
             every commit — pure overhead (TBT) in production builds. */}
-        {import.meta.env.DEV ? (
+        {isPublicRoute ? (
+          <Suspense fallback={null}>
+            <LazyPublicPageView />
+          </Suspense>
+        ) : import.meta.env.DEV ? (
           <Profiler id="App" onRender={recordReactCommit}>
             <App />
           </Profiler>

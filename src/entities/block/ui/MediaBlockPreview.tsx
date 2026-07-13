@@ -86,15 +86,32 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
   }
 
   if (block.type === "image") {
-    const circle = block.mediaShape === "circle";
+    if (block.mediaShape === "circle") {
+      return (
+        <div style={mediaWidthStyle(block)}>
+          <img
+            src={resolved.url}
+            alt={block.mediaAlt ?? label}
+            className="mx-auto block aspect-square w-full rounded-full border border-[var(--osio-border-soft)] object-cover shadow-[var(--osio-shadow-cell)]"
+          />
+        </div>
+      );
+    }
+    // An explicit ratio crops to a fixed box; "original"/unset keeps the natural
+    // shape but caps height so a tall image never dominates the page.
+    const aspect =
+      block.mediaAspect && block.mediaAspect !== "original" ? block.mediaAspect : undefined;
     return (
       <div style={mediaWidthStyle(block)}>
         <img
           src={resolved.url}
           alt={block.mediaAlt ?? label}
+          loading="lazy"
+          decoding="async"
+          style={aspect ? { aspectRatio: aspect } : undefined}
           className={
-            circle
-              ? "mx-auto block aspect-square w-full rounded-full border border-[var(--osio-border-soft)] object-cover shadow-[var(--osio-shadow-cell)]"
+            aspect
+              ? "block h-full w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
               : "block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
           }
         />

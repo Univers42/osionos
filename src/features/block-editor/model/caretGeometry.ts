@@ -47,50 +47,54 @@ export function caretRect(range: Range, affinity: CaretAffinity = "first"): DOMR
 }
 
 /**
- * Top of the block's first visual line and bottom of its last, in viewport
- * coords. A Range over the block's contents yields one client rect per wrapped
- * line — content boxes that exclude padding, so they align with the caret rect.
- * `empty` flags a block with no content rects (an empty single-line block), for
- * which any caret is on both the first and last line. `null` = not laid out.
+ * The block's visual lines as merged vertical bands, in viewport coords — one
+ * band per wrapped line. A Range over the block's contents yields one client
+ * rect per inline fragment; fragments that overlap vertically (>1px, so
+ * tightly stacked lines never fuse) belong to the same line. Tall inline
+ * atoms (page chips, emoji images) overlap their line's text rects and merge
+ * into its band, so edge detection is immune to their extra height. `null` =
+ * not laid out; `[]` = a block with no content rects (empty single-line
+ * block), for which any caret is on both the first and last line.
  */
-export function visualLineBounds(
+export function visualLineBands(
   blockEl: Element,
-): { top: number; bottom: number; empty: boolean } | null {
+): { top: number; bottom: number }[] | null {
   const probe = document.createRange();
   probe.selectNodeContents(blockEl);
-  const rects = probe.getClientRects();
+  const rects = Array.from(probe.getClientRects())
+    .filter((rect) => rect.height > 0 || rect.width > 0)
+    .sort((a, b) => a.top - b.top);
   if (rects.length === 0) {
-    const box = blockEl.getClientRects();
-    if (box.length === 0) return null;
-    return { top: box[0].top, bottom: box[box.length - 1].bottom, empty: true };
+    return blockEl.getClientRects().length === 0 ? null : [];
   }
-  let top = rects[0].top;
-  let bottom = rects[0].bottom;
-  for (let i = 1; i < rects.length; i += 1) {
-    if (rects[i].top < top) top = rects[i].top;
-    if (rects[i].bottom > bottom) bottom = rects[i].bottom;
+  const bands: { top: number; bottom: number }[] = [];
+  for (const rect of rects) {
+    const last = bands[bands.length - 1];
+    if (last && rect.top < last.bottom - 1) {
+      if (rect.bottom > last.bottom) last.bottom = rect.bottom;
+    } else {
+      bands.push({ top: rect.top, bottom: rect.bottom });
+    }
   }
-  return { top, bottom, empty: false };
+  return bands;
 }
 
 /**
  * Whether the collapsed caret sits on the block's first ("first") or last
  * ("last") *visual* line — the gate for leaving the block in one arrow press (a
- * single-line block always qualifies). Conservative on failure: an unmeasurable
- * caret or a not-laid-out block returns `false` (do the native in-block move),
- * so navigation NEVER spuriously jumps mid-block.
+ * single-line block always qualifies). The caret belongs to the edge line when
+ * its center falls inside that line's band. Conservative on failure: an
+ * unmeasurable caret or a not-laid-out block returns `false` (do the native
+ * in-block move), so navigation NEVER spuriously jumps mid-block.
  */
 export function caretOnEdgeLine(blockEl: Element, range: Range, edge: CaretAffinity): boolean {
   const caret = caretRect(range, edge);
-  const bounds = visualLineBounds(blockEl);
-  if (!caret || !bounds) return false;
-  if (bounds.empty) return true;
-  const lineHeight =
-    caret.height || Number.parseFloat(getComputedStyle(blockEl).lineHeight) || 20;
-  const epsilon = Math.max(lineHeight * 0.5, 2);
-  return edge === "first"
-    ? caret.top <= bounds.top + epsilon
-    : caret.bottom >= bounds.bottom - epsilon;
+  const bands = visualLineBands(blockEl);
+  if (!caret || bands === null) return false;
+  if (bands.length === 0) return true;
+  const band = edge === "first" ? bands[0] : bands[bands.length - 1];
+  const centerY = (caret.top + caret.bottom) / 2;
+  return centerY >= band.top - 2 && centerY <= band.bottom + 2;
 }
 
 /**

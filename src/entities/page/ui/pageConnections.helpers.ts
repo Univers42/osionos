@@ -47,3 +47,10 @@ export function backlinkRefs(pageId: string, all: readonly PageEntry[]): PageRef
     )
     .map(toRef);
 }
+
+/** Union two ref lists by id (relation backlinks ∪ inline [[page]] backlinks). */
+export function mergeRefs(primary: readonly PageRef[], extra: readonly PageRef[]): PageRef[] {
+  const byId = new Map(primary.map((ref) => [ref.id, ref]));
+  for (const ref of extra) if (!byId.has(ref.id)) byId.set(ref.id, ref);
+  return [...byId.values()];
+}

@@ -32,13 +32,16 @@ function sameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
+// Hoisted: one formatter for every divider instead of a fresh Intl instance per call.
+const DAY_FORMAT = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+
 function dayLabel(when: Date): string {
   const now = new Date();
   if (sameDay(when, now)) return 'Today';
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
   if (sameDay(when, yesterday)) return 'Yesterday';
-  return new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(when);
+  return DAY_FORMAT.format(when);
 }
 
 /**

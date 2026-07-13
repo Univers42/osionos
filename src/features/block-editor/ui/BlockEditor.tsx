@@ -19,7 +19,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Check, Code, Copy, Eye, Hash, Moon, Sun } from "lucide-react";
+import { Braces, Check, ChevronDown, Code, Copy, Eye, Hash, Moon, Sun } from "lucide-react";
 import { EquationView } from "@/shared/ui/EquationView";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
@@ -30,6 +30,7 @@ import {
   calloutDisplayIcon,
   calloutSurface,
   resolveCalloutType,
+  DRAW_BLOCK_DEFAULT_HEIGHT,
   type Block,
 } from "@/entities/block";
 
@@ -42,6 +43,8 @@ import { ToggleBlockEditor } from "./ToggleBlockEditor";
 import { BlockCollapseToggle } from "./BlockCollapseToggle";
 import { CalloutTypePicker } from "./CalloutTypePicker";
 import { BlockListCollapse } from "./BlockListCollapse";
+import { isSqlRunEnabled } from "@/shared/config/featureFlags";
+import { SqlRunButton } from "@/features/sql-runner/ui/SqlRunButton";
 import { CodeGutter } from "@/entities/block/ui/CodeGutter";
 import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
@@ -53,6 +56,11 @@ import { TableBlockEditor } from "./table/TableBlockEditor";
 // cell that holds it, so the worker only spins up once the cell is in view).
 const GraphViewBlock = lazy(() =>
   import("@/widgets/graph-explorer/GraphEngineExplorer").then((m) => ({ default: m.GraphEngineExplorer })),
+);
+
+// The embedded /draw canvas — lazy, same boundary (pulls the draw-engine + roughjs).
+const DrawBlockCanvas = lazy(() =>
+  import("@/widgets/draw-canvas/ui/DrawBlockCanvas").then((m) => ({ default: m.DrawBlockCanvas })),
 );
 
 // The Home "view launcher" (home_views block) — lazy, same boundary discipline.
@@ -331,19 +339,19 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   const codeBlockHeader = useMemo(
     () => (
       <div className="flex items-center gap-2 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
-        <div className="flex shrink-0 items-center gap-2.5">
-          <span aria-hidden className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-            <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
-            <span className="h-3 w-3 rounded-full bg-[#28c840]" />
-          </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <Braces size={15} aria-hidden className="text-[var(--osio-accent)]" />
           <div ref={langPickerRef} className="relative">
             <button
               type="button"
               onClick={() => setShowLangPicker((v) => !v)}
-              className="rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide text-[var(--osio-code-fg-muted)] transition-colors hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
+              aria-haspopup="listbox"
+              aria-expanded={showLangPicker}
+              title="Change language"
+              className="inline-flex items-center gap-1 rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] py-1 pl-2 pr-1.5 font-mono text-[11px] font-medium tracking-wide text-[var(--osio-code-fg)] transition-[background-color,transform] duration-150 hover:bg-[var(--osio-code-btn-hover)] active:scale-95"
             >
               {block.language || "plaintext"}
+              <ChevronDown size={11} aria-hidden className="text-[var(--osio-code-fg-muted)]" />
             </button>
             {showLangPicker && (
               <div className="absolute top-full left-0 mt-1.5 w-48 overflow-hidden rounded-lg border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-xl z-[var(--osio-z-popover)] osio-code-card">
@@ -371,7 +379,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                       ].join(" ")}
                     >
                       {language}
-                      {language === (block.language || "plaintext") && <Check size={12} className="text-[#3fb950]" />}
+                      {language === (block.language || "plaintext") && <Check size={12} className="text-[var(--osio-success)]" />}
                     </button>
                   ))}
                 </div>
@@ -379,6 +387,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             )}
           </div>
         </div>
+        <span aria-hidden className="h-4 w-px shrink-0 bg-[var(--osio-code-border)]" />
         <input
           value={block.fileName ?? ""}
           onChange={(event) => commitBlockUpdate(block.id, { fileName: event.target.value })}
@@ -430,8 +439,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             type="button"
             title="Copy code"
             className={[
-              "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-colors hover:bg-[var(--osio-code-btn-hover)]",
-              copiedCode ? "text-[#3fb950]" : "text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]",
+              "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-[color,background-color,transform] duration-150 hover:bg-[var(--osio-code-btn-hover)] active:scale-95",
+              copiedCode ? "text-[var(--osio-success)]" : "text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]",
             ].join(" ")}
             onClick={handleCopyCode}
           >
@@ -715,12 +724,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           {codeBlockHeader}
           <div ref={codeBodyRef} className="overflow-hidden rounded-b-xl">
             {isRenderable && codeView === "preview" ? (
-              <div style={codeHeightPx ? { height: codeHeightPx, overflow: "auto" } : undefined}>
-                <MermaidDiagram
-                  chart={block.content}
-                  className="overflow-x-auto bg-white p-4"
-                />
-              </div>
+              <MermaidDiagram
+                chart={block.content}
+                codeTheme={block.codeTheme ?? "dark"}
+              />
             ) : (
               <div
                 className="relative"
@@ -772,6 +779,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               </div>
             )}
           </div>
+          {isSqlRunEnabled() && block.language === "sql" && (
+            <SqlRunButton block={block} onUpdateBlock={commitBlockUpdate} />
+          )}
           <div
             role="separator" aria-label="Resize code block" aria-orientation="horizontal"
             className="absolute bottom-1 right-1 h-3.5 w-3.5 cursor-ns-resize rounded-sm opacity-0 transition-opacity group-hover/code:opacity-100 z-[1] bg-[linear-gradient(135deg,transparent_50%,var(--osio-code-fg-muted)_50%,var(--osio-code-fg-muted)_60%,transparent_60%,transparent_72%,var(--osio-code-fg-muted)_72%,var(--osio-code-fg-muted)_82%,transparent_82%)]"
@@ -1031,6 +1041,26 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         >
           <Suspense fallback={null}>
             <GraphViewBlock />
+          </Suspense>
+        </div>
+      );
+
+    case "draw":
+      return (
+        <div // NOSONAR - keyboard navigation wrapper for non-editable block
+          onKeyDown={(e) => {
+            // Only the wrapper's own keys — the canvas owns its hotkeys
+            // (tools, Delete, ⌘Z) and must not have them stolen.
+            if (e.target !== e.currentTarget) return;
+            onKeyDown(e);
+          }}
+          tabIndex={-1}
+          aria-label="Drawing block"
+          className="relative my-0 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
+          style={{ height: block.drawHeight ?? DRAW_BLOCK_DEFAULT_HEIGHT }}
+        >
+          <Suspense fallback={null}>
+            <DrawBlockCanvas block={block} pageId={pageId} onUpdateBlock={commitBlockUpdate} />
           </Suspense>
         </div>
       );

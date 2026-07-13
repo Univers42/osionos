@@ -73,6 +73,20 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
     return () => document.removeEventListener("pointerdown", dismissOnOutsidePress, true);
   }, [hasSelection, store]);
 
+  // Same dismissal for the settings panel: it has no backdrop, and panes stay
+  // mounted in the background — without this, a forgotten open panel lingered
+  // while the user moved on to other pages.
+  useEffect(() => {
+    if (!settingsOpen) return undefined;
+    const dismissOnOutsidePress = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target || rootRef.current?.contains(target)) return;
+      setSettingsOpen(false);
+    };
+    document.addEventListener("pointerdown", dismissOnOutsidePress, true);
+    return () => document.removeEventListener("pointerdown", dismissOnOutsidePress, true);
+  }, [settingsOpen]);
+
   const layoutMode = block.layoutMode === "full_page" ? "full_page" : "inline";
   const modeClass = layoutMode === "full_page" ? "osionos-layout-block--full-page" : "osionos-layout-block--inline";
   const setLayoutMode = useCallback((mode: "inline" | "full_page") => {

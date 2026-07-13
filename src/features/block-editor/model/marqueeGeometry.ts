@@ -46,6 +46,7 @@ export const EMBED_BLOCK_TYPES = [
   'database_inline',
   'database_full_page',
   'graph_view',
+  'draw',
   'home_views',
   'table_block',
   'image',

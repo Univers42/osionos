@@ -75,10 +75,14 @@ export const WorkspaceRecordPeek: React.FC<{ pageId: string; onClose: () => void
   );
 };
 
+// Stable empty: a fresh `[]` from a zustand-v5 selector loops getSnapshot while the
+// workspace list is absent/unhydrated (same trap stableDefault() exists for).
+const EMPTY_WORKSPACE_PAGES: never[] = [];
+
 /** Build the templates controller over the live page store (templates are real osionos_pages). */
 function useWorkspaceTemplatesController(): ObjectDatabaseTemplatesController | undefined {
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
-  const wsPages = usePageStore((s) => (workspaceId ? s.pages[workspaceId] ?? [] : []));
+  const wsPages = usePageStore((s) => (workspaceId ? s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES : EMPTY_WORKSPACE_PAGES));
   const list = React.useMemo(
     () =>
       wsPages
@@ -127,8 +131,8 @@ export const WorkspaceDatabaseBlock: React.FC<WorkspaceDatabaseBlockProps> = ({
   return (
     <div
       className={[
-        "osionos-database-block w-full min-w-0 overflow-auto",
-        mode === "full" ? "osionos-database-block--full h-full" : "osionos-database-block--inline my-2",
+        "osionos-database-block w-full min-w-0",
+        mode === "full" ? "osionos-database-block--full h-full min-h-0 overflow-hidden" : "osionos-database-block--inline my-2 overflow-auto",
       ].join(" ")}
       data-database-id={databaseId}
       data-database-view-id={initialViewId}

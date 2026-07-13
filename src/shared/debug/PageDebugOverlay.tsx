@@ -42,10 +42,18 @@ const CHIP: React.CSSProperties = {
 
 const SCAN_TARGETS = "[data-block-id], .osionos-layout-cell";
 
+// scrollWidth/clientWidth are integer-rounded, so an auto-height block that fits
+// can still report a 1–3px delta under fractional display scaling / web-font
+// metrics — a false "overflow" (the block visibly fits with room to spare). Real
+// overflow (clipped text, a too-wide image/code/table) is tens–hundreds of px, so
+// this tolerance kills the sub-pixel phantoms without missing anything meaningful.
+const OVERFLOW_TOLERANCE_PX = 4;
+
 function scanOverflow() {
   for (const el of document.querySelectorAll<HTMLElement>(SCAN_TARGETS)) {
     const overflowing =
-      el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1;
+      el.scrollWidth - el.clientWidth > OVERFLOW_TOLERANCE_PX ||
+      el.scrollHeight - el.clientHeight > OVERFLOW_TOLERANCE_PX;
     if (overflowing) el.setAttribute("data-debug-overflowing", "");
     else el.removeAttribute("data-debug-overflowing");
   }

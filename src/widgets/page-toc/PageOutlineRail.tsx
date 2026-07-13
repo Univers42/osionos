@@ -102,6 +102,7 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
   return (
     <div
       ref={rootRef}
+      data-osio-toc
       className={styles.rail}
       data-open={open || undefined}
       onMouseEnter={() => setOpen(true)}

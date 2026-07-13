@@ -32,6 +32,8 @@
       ],
       "@osionos/graph-engine": ["./packages/graph-engine/src/index.ts"],
       "@osionos/graph-engine/*": ["./packages/graph-engine/src/*"],
+      "@osionos/draw-engine": ["./packages/draw-engine/src/index.ts"],
+      "@osionos/draw-engine/*": ["./packages/draw-engine/src/*"],
       "@/*": ["./src/*"]
     }
   },

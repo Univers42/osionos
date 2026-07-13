@@ -77,6 +77,12 @@ export function useChannelReceipts(
 
   useEffect(() => {
     if (!channelId || !latestMessageId) return;
-    void markSeen(channelId, latestMessageId).catch(() => undefined);
+    // Coalesced: this fired one POST per incoming message in an active channel.
+    // The seen-mark is an idempotent high-water id, so a trailing debounce sends
+    // one write per burst; a superseded timer is simply replaced by the newer id.
+    const timer = globalThis.setTimeout(() => {
+      void markSeen(channelId, latestMessageId).catch(() => undefined);
+    }, 1200);
+    return () => globalThis.clearTimeout(timer);
   }, [channelId, latestMessageId]);
 }

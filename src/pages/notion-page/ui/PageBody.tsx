@@ -13,7 +13,7 @@
 import React, { useEffect, useRef } from 'react';
 import { PlaygroundPageEditor } from '@/features/block-editor';
 import { isPerfEnabled } from '@/shared/lib/perf/measure';
-import { resolvePageConfig, usePageConfigStore } from '@/shared/config/pageConfigStore';
+import { usePageConfigStore } from '@/shared/config/pageConfigStore';
 import { useUserStore } from '@/features/auth';
 import { RawModeView } from '@/features/raw-mode';
 
@@ -33,7 +33,10 @@ export const PageBody: React.FC<PageBodyProps> = ({ pageId, locked = false }) =>
   // render is illegal under react-hooks/refs (and invisible to React).
   useEffect(() => { renderCountRef.current += 1; });
   const userId = useUserStore((state) => state.activeUserId) || 'anonymous';
-  const rawMode = usePageConfigStore((state) => resolvePageConfig(state.configs[`${userId}:${pageId}`]).rawMode);
+  // Read the raw field, not resolvePageConfig(...): the resolver rebuilds a full
+  // config object (+ CSS tokens) inside the selector on EVERY config-store change
+  // — editing page A re-ran it for every mounted page. Default matches (false).
+  const rawMode = usePageConfigStore((state) => state.configs[`${userId}:${pageId}`]?.rawMode ?? false);
 
   useEffect(() => () => {
     if (isPerfEnabled()) {

@@ -7,6 +7,7 @@
  */
 
 import type { SpriteMode } from "../render/nodeShape";
+import { lighten, luminance, mix, normalizeRgb, rgb, rgba } from "./shade";
 import {
   AURORA_BANDS,
   AURORA_BG_BOTTOM,
@@ -56,8 +57,6 @@ export interface SceneTheme {
   dimAlpha: number;
 }
 
-type Rgb = [number, number, number];
-
 export const DARK_THEME: SceneTheme = {
   mode: "dark",
   bgTop: AURORA_BG_TOP,
@@ -105,9 +104,13 @@ export function resolveSceneTheme(root: HTMLElement): SceneTheme {
   const bgBottom = read("--osio-graph-bg-1", AURORA_BG_BOTTOM);
   const bgRgb = normalizeRgb(scratch, bgBottom);
   const mode: SpriteMode = luminance(bgRgb) > 0.5 ? "light" : "dark";
-  const bands = [1, 2, 3, 4].map((i, idx) =>
-    read(`--osio-graph-aurora-${i}`, AURORA_BANDS[idx]),
-  );
+  // Aurora bands. NO palette defines `--osio-graph-aurora-*` (checked: zero occurrences),
+  // so a hardcoded warm fallback would wash a cold Nord / neutral Mono field in terracotta
+  // now that the background actually PAINTS these. Derive them instead from hues every
+  // palette does define — its own accent + note — so the aurora is correct for each palette
+  // (and stays correct for palettes added later). An explicit token still wins if added.
+  const derived = [rgb(sel), rgb(note), rgb(mix(sel, note, 0.5)), rgb(lighten(sel, 0.25))];
+  const bands = [1, 2, 3, 4].map((i, idx) => read(`--osio-graph-aurora-${i}`, derived[idx]));
 
   return {
     mode,
@@ -140,40 +143,4 @@ export function resolveSceneTheme(root: HTMLElement): SceneTheme {
   };
 }
 
-/** Relative luminance (0..1) of an sRGB color — picks light vs dark materials. */
-function luminance([r, g, b]: Rgb): number {
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-}
-
-function rgb([r, g, b]: Rgb): string {
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
-function rgba([r, g, b]: Rgb, alpha: number): string {
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-/** Normalize any CSS color string to [r,g,b] via the canvas color parser. */
-function normalizeRgb(ctx: CanvasRenderingContext2D | null, color: string): Rgb {
-  let resolved = color;
-  if (ctx) {
-    ctx.fillStyle = "#000000"; // guard: invalid input leaves this in place
-    ctx.fillStyle = color;
-    resolved = ctx.fillStyle;
-  }
-  if (resolved.startsWith("#")) {
-    const hex = resolved.slice(1);
-    const full = hex.length === 3 ? [...hex].map((c) => c + c).join("") : hex;
-    return [
-      Number.parseInt(full.slice(0, 2), 16),
-      Number.parseInt(full.slice(2, 4), 16),
-      Number.parseInt(full.slice(4, 6), 16),
-    ];
-  }
-  const match = /rgba?\(([^)]+)\)/.exec(resolved);
-  if (match) {
-    const parts = match[1].split(",").map((part) => Number.parseInt(part.trim(), 10));
-    return [parts[0] || 0, parts[1] || 0, parts[2] || 0];
-  }
-  return [148, 163, 184];
-}
+// Color parsing + tone math live in `./shade` — shared with the sprite materials.

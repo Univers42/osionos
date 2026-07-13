@@ -21,6 +21,7 @@ import {
   findBlockInTree,
 } from "@/entities/block";
 import { createDefaultTableBlock } from "@/entities/block/model/tableBlocks";
+import { createDefaultDrawBlock } from "@/entities/block/model/drawBlocks";
 import type { SlashMenuState } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
 import { focusEditableBlock } from "@/features/block-editor/model/blockDomFocus";
 import { createViewShowcaseLayoutContent } from "@/widgets/database-view/model/databaseViewShowcase";
@@ -149,6 +150,12 @@ export function useSlashSelect({
 
       if (selectedType === "table_block") {
         const newBlock = createDefaultTableBlock();
+        insertBlock(pageId, blockId, newBlock);
+        return;
+      }
+
+      if (selectedType === "draw") {
+        const newBlock = createDefaultDrawBlock();
         insertBlock(pageId, blockId, newBlock);
         return;
       }

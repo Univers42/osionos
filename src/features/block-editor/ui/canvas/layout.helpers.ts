@@ -134,6 +134,7 @@ export function layoutCellHasHeavyBlocks(blocks: Block[] | undefined): boolean {
     nestedBlock.type === "database_inline" ||
     nestedBlock.type === "database_full_page" ||
     nestedBlock.type === "graph_view" ||
+    nestedBlock.type === "draw" ||
     layoutCellHasHeavyBlocks(nestedBlock.children)
   )));
 }

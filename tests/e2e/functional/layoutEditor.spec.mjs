@@ -368,23 +368,30 @@ test.describe("layout editor", () => {
     await expect.poll(async () => Number.parseInt((await readCellGrid(cell)).rowStart, 10)).toBeGreaterThan(5);
   });
 
-  test("cell inspector docks to the viewport edge and closes from the canvas", async ({ page, baseURL }) => {
+  test("cell inspector docks to the pane's left edge as a pure overlay and closes from the canvas", async ({ page, baseURL }) => {
     await createInlineLayout(page, baseURL);
     const cell = await addLayoutCell(page);
+    const layoutBlock = page.locator(".osionos-layout-block").first();
+    const rectOf = (node) => {
+      const rect = node.getBoundingClientRect();
+      return { left: Math.round(rect.left), right: Math.round(rect.right) };
+    };
+    const blockRectBefore = await layoutBlock.evaluate(rectOf);
     await cell.click();
 
     const inspector = page.locator(".osionos-layout-cell-inspector");
-    const layoutBlock = page.locator(".osionos-layout-block").first();
     await expect(inspector).toBeVisible();
-    await expect.poll(() => inspector.evaluate((node) => {
-      const rect = node.getBoundingClientRect();
-      return Math.round(window.innerWidth - rect.right);
-    })).toBe(0);
-    await expect.poll(async () => {
-      const blockRight = await layoutBlock.evaluate((node) => node.getBoundingClientRect().right);
-      const panelLeft = await inspector.evaluate((node) => node.getBoundingClientRect().left);
-      return Math.round(panelLeft - blockRight);
-    }).toBeGreaterThanOrEqual(12);
+    // `.osionos-page` has container-type (layout containment), so the fixed
+    // panel docks to the PAGE PANE's left edge — beside the sidebar, over the
+    // content — not to the viewport edge.
+    const pageLeft = await page
+      .locator(".osionos-page")
+      .first()
+      .evaluate((node) => Math.round(node.getBoundingClientRect().left));
+    await expect.poll(() => inspector.evaluate((node) => Math.round(node.getBoundingClientRect().left))).toBe(pageLeft);
+    // Pure overlay: opening the panel must not displace the layout block.
+    const blockRectAfter = await layoutBlock.evaluate(rectOf);
+    expect(blockRectAfter).toEqual(blockRectBefore);
 
     await page.getByRole("textbox", { name: "Page title" }).click();
     await expect(inspector).toBeHidden();

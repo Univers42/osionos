@@ -147,9 +147,11 @@
   --osionos-layout-panel-gap: 16px;
 }
 
-/* The settings/inspector panels are pure overlays (fixed, LEFT-docked, above
-   everything) — they never displace the layout or the page content, and they
-   never cover the cell being edited (content lives right of the sidebar). */
+/* The settings/inspector panels are overlays docked INSIDE the layout shell
+   (absolute, LEFT-docked) — they never displace the layout or the page
+   content. They must stay scoped to the block that owns them: viewport-fixed
+   docking covered the app sidebar and, because background panes stay mounted,
+   an open panel survived tab switches and blocked every other page. */
 
 .osionos-layout-shell {
   position: relative;
@@ -173,7 +175,7 @@
 }
 
 .osionos-layout-settings-panel {
-  position: fixed;
+  position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
@@ -182,11 +184,11 @@
   align-content: start;
   gap: 10px;
   width: min(var(--osionos-layout-panel-width, 260px), calc(100vw - 24px));
+  max-height: 100%;
   overflow: auto;
   padding: 48px 12px 12px;
   border: 1px solid var(--osio-border-default);
-  border-left: 0;
-  border-radius: 0;
+  border-radius: var(--osio-radius-lg);
   background: var(--osio-bg-surface);
   box-shadow: var(--osio-shadow-menu);
   font-size: var(--osio-font-size-xs);
@@ -194,7 +196,7 @@
 }
 
 .osionos-layout-cell-inspector {
-  position: fixed;
+  position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
@@ -203,12 +205,11 @@
   align-content: start;
   gap: 10px;
   width: min(var(--osionos-layout-panel-width, 304px), calc(100vw - 24px));
-  max-height: none;
+  max-height: 100%;
   overflow: auto;
   padding: 12px;
   border: 1px solid var(--osio-border-default);
-  border-left: 0;
-  border-radius: 0;
+  border-radius: var(--osio-radius-lg);
   background: var(--osio-bg-surface);
   box-shadow: var(--osio-shadow-modal);
   font-size: var(--osio-font-size-xs);
@@ -1023,7 +1024,7 @@ body[data-pane-resizing] .osionos-layout-cell {
 
 @media (max-width: 768px) {
   .osionos-layout-settings-panel {
-    position: fixed;
+    position: absolute;
     left: 12px;
     right: 12px;
     top: auto;
@@ -1036,7 +1037,7 @@ body[data-pane-resizing] .osionos-layout-cell {
   }
 
   .osionos-layout-cell-inspector {
-    position: fixed;
+    position: absolute;
     left: 12px;
     right: 12px;
     top: auto;

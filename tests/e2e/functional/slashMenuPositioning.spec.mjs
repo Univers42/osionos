@@ -10,9 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// The slash-command menu: anchored right above the "/", with a focused search
-// bar as its first line, first item pre-selected, full arrow navigation, and
-// Escape returning focus to the block.
+// The slash-command menu: anchored right above the "/", the caret STAYS in the
+// block so you type the query inline right after the "/", first item
+// pre-selected, full arrow navigation, and Escape returning focus to the block.
 
 import { test, expect } from "@playwright/test";
 
@@ -24,7 +24,7 @@ import {
 } from "../../browser/core/app.mjs";
 
 test.describe("slash-command menu positioning & interaction", () => {
-  test("opens right above the /, search bar focused, first item selected", async ({ page }) => {
+  test("opens right above the /, caret stays in the block, first item selected", async ({ page }) => {
     await openFreshPage(page, "/");
     const editor = await activateFirstEditor(page);
     await editor.click();
@@ -51,11 +51,11 @@ test.describe("slash-command menu positioning & interaction", () => {
     // Left edge tracks the caret / block start, not drifted to some other x.
     expect(Math.abs(box.x - blockBox.x)).toBeLessThan(40);
 
-    // The search field is focused (the panel's "first line"). Focus settles over
-    // a few frames — the sticky guard out-lasts the editor's bounded block-focus
-    // retry loop — so poll rather than sampling one instant.
+    // The caret STAYS in the editable block (role=textbox) — the panel grabs no
+    // focus, so keystrokes keep flowing into the "/" line and drive the filter.
+    // Focus settles over a few frames, so poll rather than sampling one instant.
     await page.waitForFunction(
-      () => document.activeElement?.getAttribute("data-testid") === "slash-command-search",
+      () => document.activeElement?.getAttribute("role") === "textbox",
       null,
       { timeout: 3000 },
     );
@@ -73,7 +73,7 @@ test.describe("slash-command menu positioning & interaction", () => {
     const menu = slashMenu(page);
     await expect(menu).toBeVisible();
 
-    // Typing goes into the focused search bar and filters to matching blocks.
+    // Typing goes inline into the block after the "/" and filters to matches.
     await page.keyboard.type("head");
     const labels = await menu
       .locator('[data-testid="slash-command-entry"]')
@@ -94,6 +94,39 @@ test.describe("slash-command menu positioning & interaction", () => {
     await expect(menu).toBeHidden();
   });
 
+  test("a space + argument keeps the menu matching (/color gray), arrows stay live", async ({ page }) => {
+    await openFreshPage(page, "/");
+    const editor = await activateFirstEditor(page);
+    await editor.click();
+    await page.keyboard.type("/color");
+
+    const menu = slashMenu(page);
+    await expect(menu).toBeVisible();
+    // "Text color" is the exact-alias match — top of the list.
+    const options = menu.locator('[role="option"]');
+    await expect(options.first()).toHaveAttribute("data-command-label", "Text color");
+
+    // A space + argument must NOT empty the list (the old bug: "color gray"
+    // matched nothing and the panel looked shut down). Match keys off "color".
+    await page.keyboard.type(" gray");
+    await expect(menu).toBeVisible();
+    await expect(options.first()).toHaveAttribute("data-command-label", "Text color");
+    // The caret is still in the block, so navigation is live while writing.
+    await expect(options.first()).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("ranks the exact label match first (/page surfaces Page on top)", async ({ page }) => {
+    await openFreshPage(page, "/");
+    const editor = await activateFirstEditor(page);
+    await editor.click();
+    await page.keyboard.type("/page");
+
+    const menu = slashMenu(page);
+    await expect(menu).toBeVisible();
+    // Exact label "Page" outranks incidental alias hits like "…same page layout".
+    await expect(menu.locator('[role="option"]').first()).toHaveAttribute("data-command-label", "Page");
+  });
+
   test("Escape closes the menu and returns focus to the block", async ({ page }) => {
     await openFreshPage(page, "/");
     const editor = await activateFirstEditor(page);
@@ -103,7 +136,7 @@ test.describe("slash-command menu positioning & interaction", () => {
 
     await page.keyboard.press("Escape");
     await expect(slashMenu(page)).toBeHidden();
-    // Focus returns to the editable block (async — the input unmounts first).
+    // Focus returns to the editable block (async — settles over a few frames).
     await page.waitForFunction(
       () => document.activeElement?.getAttribute("role") === "textbox",
       null,

@@ -259,10 +259,14 @@ const quotaSafeStorage: StateStorage = {
   setItem: (name, value) => {
     const store = globalThis.localStorage;
     if (!store) return;
-    const attempts = [value, ...[3, 1, 0].map((limit) => capVersionsInPersistedValue(value, limit))];
-    for (const candidate of attempts) {
+    // Lazy fallbacks: capVersionsInPersistedValue is a full JSON.parse+stringify of
+    // the whole config blob (multi-MB with version/translation snapshots). Building
+    // all three candidates EAGERLY made every successful write — the ~1.8s version
+    // autosave while typing — pay 3 extra full serializations for nothing. Now the
+    // happy path costs one setItem; capped candidates exist only after a quota throw.
+    for (const limit of [null, 3, 1, 0] as const) {
       try {
-        store.setItem(name, candidate);
+        store.setItem(name, limit === null ? value : capVersionsInPersistedValue(value, limit));
         return;
       } catch {
         // over quota — fall through to a leaner candidate

@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MoveVertical, Trash2 } from 'lucide-react';
+import { LayoutDashboard, MoveVertical, Trash2 } from 'lucide-react';
 import {
   COVER_PICKER_TABS,
   IconImage,
@@ -19,6 +19,7 @@ import {
   resolveCollectionMediaAsset,
 } from '@/shared/lib/markengine/uiCollectionAssets';
 import { CoverAssetPicker } from './CoverAssetPicker';
+import { CoverMediaElement } from './CoverMediaElement';
 import { DEFAULT_COVER_POSITION } from './coverPositionMath';
 import { useCoverReposition } from './useCoverReposition';
 
@@ -33,6 +34,8 @@ interface PageCoverProps {
   onChangeCoverPosition?: (position: number) => void;
   /** Remove the cover entirely. */
   onRemoveCover: () => void;
+  /** Turn this page into a header canvas (glass cards over the cover). Hidden when absent. */
+  onCustomizeHeader?: () => void;
   disabled?: boolean;
 }
 
@@ -46,6 +49,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
   onChangeCover,
   onChangeCoverPosition,
   onRemoveCover,
+  onCustomizeHeader,
   disabled = false,
 }) => {
   const [showPicker, setShowPicker] = useState(false);
@@ -105,25 +109,14 @@ export const PageCover: React.FC<PageCoverProps> = ({
         className="osionos-page-cover-media"
         data-repositioning={repos.active ? '' : undefined}
       >
-        {isUrl ? (
-          <img
-            src={coverSrc}
-            alt=""
-            data-testid="page-cover-image"
-            className="osionos-page-cover-img"
-            style={{ objectPosition: `center ${repos.position}%` }}
-            draggable={false}
-            onPointerDown={repos.handlers.onPointerDown}
-            onPointerMove={repos.handlers.onPointerMove}
-            onPointerUp={repos.handlers.onPointerUp}
-          />
-        ) : (
-          <div
-            data-testid="page-cover-gradient"
-            className="osionos-page-cover-gradient"
-            style={{ background: cover }}
-          />
-        )}
+        <CoverMediaElement
+          cover={cover}
+          src={coverSrc}
+          isGradient={isGradient}
+          position={repos.position}
+          attachMedia={repos.attachMedia}
+          handlers={repos.handlers}
+        />
       </div>
 
       {/* While repositioning: a drag hint + Save / Cancel */}
@@ -159,6 +152,17 @@ export const PageCover: React.FC<PageCoverProps> = ({
           >
             <MoveVertical size={14} />
             Reposition
+          </button>
+        )}
+        {onCustomizeHeader && (
+          <button
+            type="button"
+            data-testid="page-cover-customize-header"
+            className="osionos-page-cover-btn"
+            onClick={onCustomizeHeader}
+          >
+            <LayoutDashboard size={14} />
+            Customize header
           </button>
         )}
         <button
