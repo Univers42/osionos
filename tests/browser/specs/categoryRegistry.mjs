@@ -14,6 +14,7 @@ import { expect } from "@playwright/test";
 
 import {
   activateFirstEditor,
+  blockLocatorForEditor,
   clearAndType,
   createBlockViaSlash,
   createCodeBlock,
@@ -22,6 +23,7 @@ import {
   getCodeTextarea,
   getEditors,
   openFreshPage,
+  parentBlockIdForEditor,
   pressEnter,
   pressTab,
 } from "../core/app.mjs";
@@ -73,9 +75,11 @@ export const categoryRegistryScenarios = [
       await createBlockViaSlash(page, "callout", "Callout");
       const parent = getEditors(page).first();
       await clearAndType(parent, "Parent");
-      const before = await editorLeft(parent);
       await pressEnter(parent);
-      expect(await editorLeft(getEditors(page).nth(1))).toBeGreaterThan(before + 8);
+      // Callout is a FLAT container, so a nested child shares its parent's left edge —
+      // assert the nesting structurally rather than via a visual indent.
+      const parentId = await blockLocatorForEditor(parent).getAttribute("data-block-id");
+      expect(await parentBlockIdForEditor(getEditors(page).nth(1))).toBe(parentId);
     },
   ),
   defineScenario(

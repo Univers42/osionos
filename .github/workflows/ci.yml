@@ -142,14 +142,27 @@ jobs:
           SONAR_HOST_URL: https://sonarcloud.io
         run: make sonar
 
+  # The E2E suite is 421 tests. A single ubuntu-latest runner (4 vCPU) chews through it at
+  # ~6 tests/min, i.e. ~70 min — it never fit the old 30-min single job (it was killed at
+  # test ~174). It is split across 6 shards so each runs ~70 tests in ~12 min.
+  # `test-gate` below is the single required check: it fails unless EVERY shard succeeded,
+  # so a shard that silently doesn't run can't be mistaken for a pass.
   test:
-    name: Browser tests
+    name: Browser tests (shard ${{ matrix.shard }}/6)
     needs: quality
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     env:
       CI: "1"
-      TEST_WORKERS: 3
+      # 2, not 3: on a 4-vCPU runner the Vite dev server + N Chromium workers contend for the
+      # same cores. 3 workers starved each test (measured median 26.5s against the 30s test
+      # timeout — a coin flip). 2 workers keeps throughput and restores real headroom.
+      TEST_WORKERS: 2
+      PLAYWRIGHT_SHARD: ${{ matrix.shard }}/6
 
     steps:
       - name: Checkout repository
@@ -167,8 +180,22 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-shard-${{ matrix.shard }}
           path: |
             playwright-report
             test-results
           if-no-files-found: ignore
+
+  # Single required status for the whole sharded suite. `needs.test.result` is the AGGREGATE
+  # of the matrix: it is only 'success' when all 6 shards succeeded. A skipped or cancelled
+  # shard is therefore a failure here, not a silent pass.
+  test-gate:
+    name: Browser tests
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every shard to have succeeded
+        run: |
+          echo "shard matrix result: ${{ needs.test.result }}"
+          test "${{ needs.test.result }}" = "success"

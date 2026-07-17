@@ -135,8 +135,13 @@ test.describe("layout editor (canvas v2)", () => {
     const secondBox = await cells.nth(1).boundingBox();
     if (!stageBox || !firstBox || !secondBox) throw new Error("Could not resolve marquee boxes");
 
-    // Sweep from the empty right side across both cells.
-    await page.mouse.move(stageBox.x + stageBox.width - 8, firstBox.y - 4);
+    // Sweep from the empty right side across both cells. Canvas V2 cells sit
+    // flush with the stage's own top edge (no padding, unlike the legacy CSS
+    // grid) — starting 4px ABOVE the first cell lands outside the stage
+    // element entirely, so the drag never reaches CanvasStage's
+    // onPointerDownCapture and no marquee ever starts. Start just inside the
+    // stage/cell's top edge instead; the rectangle still spans both cells.
+    await page.mouse.move(stageBox.x + stageBox.width - 8, firstBox.y + 4);
     await page.mouse.down();
     await page.mouse.move(firstBox.x + 8, secondBox.y + secondBox.height - 8, { steps: 6 });
     await page.mouse.up();
@@ -203,6 +208,11 @@ test.describe("layout editor (canvas v2)", () => {
     await settings.getByRole("button", { name: "Close layout settings" }).click();
 
     await selectCellBody(page, cell);
+    // Canvas V2's floating selection toolbar "replaces the side inspector"
+    // (CanvasSelectionToolbar.tsx) — selecting a cell only shows the compact
+    // toolbar; the cell inspector itself is an on-demand panel behind its
+    // "More options" button, not shown automatically on selection like legacy.
+    await page.getByRole("button", { name: "More options" }).click();
     const inspector = page.locator(".osionos-layout-cell-inspector");
     await expect(inspector).toBeVisible();
     await expect(inspector.locator(".osionos-layout-control-row", { hasText: "Column span" }).locator("input")).toHaveAttribute("max", "24");

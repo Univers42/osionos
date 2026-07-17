@@ -115,7 +115,10 @@ export function sanitizeUrl(value: string): string {
   if (!schemeMatch) return trimmed;
 
   const scheme = schemeMatch[1].toLowerCase();
-  if (scheme === "http" || scheme === "https" || scheme === "mailto" || scheme === "tel") {
+  // "page:" is osionos's own internal page-link scheme (see
+  // INTERNAL_PAGE_LINK_PREFIX in EditableContent.tsx) — a closed, app-minted
+  // vocabulary (a page id), not executable/arbitrary like javascript: etc.
+  if (scheme === "http" || scheme === "https" || scheme === "mailto" || scheme === "tel" || scheme === "page") {
     return trimmed;
   }
 

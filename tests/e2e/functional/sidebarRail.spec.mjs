@@ -41,7 +41,9 @@ test.describe("activity rail sidebar", () => {
 
     await dragHandleTo(page, 6);
     await expect(rail(page)).toBeVisible();
-    await expect(explorer(page)).toHaveCount(0);
+    // The Explorer panel stays MOUNTED (crossfading layer, never unmounted —
+    // ActivitySidebar.tsx) so it's `toBeHidden()`, not absent from the DOM.
+    await expect(explorer(page)).toBeHidden();
 
     // Clicking a rail icon expands to that panel.
     await page.getByRole("tab", { name: "Search" }).click();
@@ -56,7 +58,7 @@ test.describe("activity rail sidebar", () => {
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await rail(page).waitFor();
-    await expect(explorer(page)).toHaveCount(0); // still rail-only
+    await expect(explorer(page)).toBeHidden(); // still rail-only (mounted, hidden layer)
   });
 
   test("dragging the rail edge fully left hides the sidebar; the trigger reopens it", async ({ page, baseURL }) => {

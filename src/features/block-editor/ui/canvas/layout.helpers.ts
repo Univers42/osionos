@@ -495,10 +495,22 @@ export function resizeCursorForEdge(edge: LayoutResizeEdge): string {
 
 export function resizeEdgeFromPoint(rect: DOMRect, clientX: number, clientY: number): LayoutResizeEdge | null {
   const edgeSize = 12;
-  const onLeft = clientX - rect.left <= edgeSize;
-  const onRight = rect.right - clientX <= edgeSize;
-  const onTop = clientY - rect.top <= edgeSize;
-  const onBottom = rect.bottom - clientY <= edgeSize;
+  // Each `rect.side - point` distance must be bounded on BOTH sides (`Math.abs`,
+  // not a one-sided `<= edgeSize`): a point far outside the rect makes the raw
+  // subtraction strongly negative, which is *always* `<= edgeSize` too — so a
+  // click anywhere above-and/or-left of the cell (however distant) was
+  // misread as grabbing its top/left resize handle. This matters beyond typos:
+  // a portalled overlay opened from inside a cell (the slash-command menu) is
+  // a REACT descendant of the cell's `onPointerDownCapture`, so a click deep
+  // inside that overlay — which can render anywhere on the page, nowhere near
+  // the cell's own screen position — still reaches this check. Each edge also
+  // requires the point to fall within the rect's OTHER axis (+/- edgeSize),
+  // so a point merely aligned with an edge's infinite line, but far outside
+  // the cell's span on the other axis, no longer counts as "on" that edge.
+  const onLeft = Math.abs(clientX - rect.left) <= edgeSize && clientY >= rect.top - edgeSize && clientY <= rect.bottom + edgeSize;
+  const onRight = Math.abs(rect.right - clientX) <= edgeSize && clientY >= rect.top - edgeSize && clientY <= rect.bottom + edgeSize;
+  const onTop = Math.abs(clientY - rect.top) <= edgeSize && clientX >= rect.left - edgeSize && clientX <= rect.right + edgeSize;
+  const onBottom = Math.abs(rect.bottom - clientY) <= edgeSize && clientX >= rect.left - edgeSize && clientX <= rect.right + edgeSize;
 
   if (onTop && onLeft) return "top-left";
   if (onTop && onRight) return "top-right";

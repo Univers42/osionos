@@ -67,7 +67,13 @@ import {
 } from "./playgroundBlockEditor.helpers";import { inlineIconInsertText } from "./inlineIconInsert";
 import { matchInternalCopy } from "./blockClipboard";
 import { useBlockContextMenu } from "./useBlockContextMenu";
-import { focusEditableBlock, selectionPaneRoot, type CaretPlacement } from "./blockDomFocus";
+import {
+  commitEditableBlockText,
+  focusEditableBlock,
+  refocusBlockIfLost,
+  selectionPaneRoot,
+  type CaretPlacement,
+} from "./blockDomFocus";
 import {
   clearBlockDraft,
   clearBlockDraftsForSource,
@@ -1042,7 +1048,17 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         ...(detection.type === "toggle" ? { collapsed: false } : {}),
         headingLevel: detection.headingLevel,
       });
-      repositionCursor(blockId, detection.remainingContent);
+      // The store now says `remainingContent`, but the live node still shows the
+      // marker until React commits. Make the DOM authoritative in THIS tick so a
+      // keystroke arriving before that commit cannot read the marker back into the
+      // draft (the stranded "Heading#" / "[]Todo item"), then re-focus ONLY if the
+      // conversion remounted the node — re-placing a caret that never moved is what
+      // scrambled fast typing into "eadingH".
+      const pane = selectionPaneRoot();
+      if (!commitEditableBlockText(blockId, detection.remainingContent, pane)) {
+        repositionCursor(blockId, detection.remainingContent);
+      }
+      refocusBlockIfLost(blockId, "end", pane);
     },
     [pageId, changeBlockType, updateBlock, focusBlock],
   );
@@ -1103,11 +1119,13 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       if (!detection) return false;
 
       e.preventDefault();
+      // No focusBlock() here: applyMarkdownDetection already owns the caret, and a
+      // second async focus() would re-place it at offset 0 after the user's next
+      // keystrokes ("eadingH"). refocusBlockIfLost covers the remount case.
       applyMarkdownDetection(blockId, detection);
-      focusBlock(blockId);
       return true;
     },
-    [applyMarkdownDetection, focusBlock],
+    [applyMarkdownDetection],
   );
 
   // Enter also finishes a code fence. The space shortcut above needs a trailing
@@ -1857,6 +1875,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   } = useBlockContextMenu({
     pageId,
     content,
+    sourceKey,
     updatePageContent: updatePageContentWithHistory,
     focusBlock,
   });

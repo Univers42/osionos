@@ -96,8 +96,13 @@ export function useAutomationDispatcher(): void {
       // The free-form canvas / layout grid owns its own keymap (nudge/resize/undo
       // per block) — and so does any ARIA `application` region (the /draw canvas):
       // that role is the declaration "keyboard handled inside".
+      // A modal dialog owns it too: this listener is on CAPTURE and runCommand()
+      // calls stopImmediatePropagation(), so without this guard an Escape typed
+      // inside an open modal is eaten by the background "clear-selection" binding
+      // and the modal can never be dismissed with Escape (Modal.tsx's own handler
+      // never runs). The dialog on top owns the keyboard.
       const target = event.target;
-      if (target instanceof Element && target.closest('.osionos-layout-grid, [role="application"]')) return;
+      if (target instanceof Element && target.closest('.osionos-layout-grid, [role="application"], [role="dialog"]')) return;
 
       // Arm a chord whose first step this is. Deliberately NOT exclusive: "mod+k"
       // still runs Search below, so adding the chord costs no existing binding.

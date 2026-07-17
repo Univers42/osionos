@@ -138,6 +138,15 @@ function useLayoutDismissAndUndo({
       if (!target) return;
       if (layoutRootRef.current?.contains(target)) return;
       if (target.closest(".osionos-layout-cell-inspector")) return;
+      // The slash-command menu (and its siblings — page/emoji/color pickers)
+      // portal to document.body, so they are never inside layoutRootRef even
+      // when opened from a cell's own editor. Deselecting the cell here
+      // unmounts its inspector mid-click (a `selectedCell && …` conditional in
+      // this component), which tears down and remounts DOM around the menu
+      // before the click's "click" phase fires — so choosing a slash command
+      // from inside a selected cell silently no-ops. Treat these portaled,
+      // per-editor menus as "inside" the layout, same as the cell inspector.
+      if (target.closest('[data-testid="slash-command-menu"]')) return;
       selectCell(null);
       clearCollision();
     };

@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import process from "node:process";
+import { expect } from "@playwright/test";
 
 /** Create a new workspace page via whichever affordance the current UI offers
  *  (client-side — no reload, so in-memory app state survives). Waits for the
@@ -82,7 +83,7 @@ export async function editorHtml(editor) {
   return editor.evaluate((node) => node.innerHTML);
 }
 
-export async function clearAndType(editor, text) {
+export async function clearAndType(editor, text, options = {}) {
   const currentText = (await editor.textContent()) ?? "";
   await editor.click();
   if (currentText.trim().length > 0) {
@@ -93,7 +94,12 @@ export async function clearAndType(editor, text) {
     }
   }
   if (text) {
-    await editor.page().keyboard.type(text);
+    // Optional per-key `delay` (ms): a markdown-shortcut trigger (e.g. "- ") that
+    // converts the block needs a beat to commit to React state before the next
+    // key lands — exactly like a human typing — or a fast-follow keystroke can
+    // race the conversion's own DOM/content sync. Default stays instantaneous
+    // for the many callers that aren't typing across a shortcut boundary.
+    await editor.page().keyboard.type(text, options.delay ? { delay: options.delay } : undefined);
   }
 }
 
@@ -297,7 +303,9 @@ export function inlineColorPalette(page, kind) {
 }
 
 export function mediaBlockPicker(page) {
-  return page.getByTestId("media-block-picker");
+  // The media picker is now the MediaEmbedDialog modal (role="dialog") — there is
+  // no "media-block-picker" testid anymore (see MediaEmbedDialog.tsx / Modal.tsx).
+  return page.getByRole("dialog");
 }
 
 export function pageCoverImage(page) {
@@ -411,6 +419,19 @@ export function blockLocatorForEditor(editor) {
   return editor.locator("xpath=ancestor::*[@data-block-id][1]");
 }
 
+/**
+ * The `data-block-id` of the block that CONTAINS this editor's block, or null at the root.
+ *
+ * Asserts nesting structurally. A visual left-edge delta is not a valid proxy for it: the
+ * callout is a deliberately FLAT container (BlockEditorSurface.tsx `getNestedTreeClassName`),
+ * so a genuinely nested callout child shares its parent's left edge.
+ */
+export async function parentBlockIdForEditor(editor) {
+  return blockLocatorForEditor(editor)
+    .locator("xpath=ancestor::*[@data-block-id][1]")
+    .getAttribute("data-block-id");
+}
+
 export async function editorLeft(editor) {
   const box = await editor.boundingBox();
   if (!box) {
@@ -461,7 +482,10 @@ export async function createBlockViaSlash(page, slashCommand, label, editorIndex
 
 export async function createCallout(page) {
   await createBlockViaSlash(page, "callout", "Callout");
-  await page.getByRole("button", { name: "Change callout icon" }).waitFor();
+  // The callout icon toggle is now "Change callout type" (semantic-type redesign,
+  // src/features/block-editor/ui/BlockEditor.tsx) — the old "Change callout icon"
+  // aria-label no longer exists.
+  await page.getByRole("button", { name: "Change callout type" }).waitFor();
 }
 
 export async function createQuote(page) {
@@ -481,10 +505,39 @@ export async function createCodeBlock(page) {
   await getCodeTextarea(page).waitFor();
 }
 
+/** Deterministic, offline-safe fixture URL for embedding a media asset via the
+ *  "Link" tab (no network fetch, no upload — see embedMediaViaLink). */
+function mediaFixtureUrl(kind, index = 0) {
+  const ext = { image: "png", video: "mp4", audio: "mp3", file: "pdf" }[kind] ?? "bin";
+  return `https://example.com/fixtures/${kind}-${index}.${ext}`;
+}
+
+/** Embed a media asset through the current MediaEmbedDialog contract
+ *  (src/features/block-editor/ui/MediaEmbedDialog.tsx): a modal with Upload/Link/
+ *  Unsplash/Giphy tabs — there is no static local gallery to "pick" from anymore,
+ *  so the Link tab (deterministic, offline) is the only tab that never depends on
+ *  network fetches or a real file. */
+export async function embedMediaViaLink(page, kind, url = mediaFixtureUrl(kind)) {
+  await mediaBlockPicker(page).waitFor();
+  await page.getByRole("tab", { name: "Link" }).click();
+  await page.getByPlaceholder(`Paste the ${kind} link…`).fill(url);
+  await page.getByRole("button", { name: /^Embed /i }).click();
+  await expect(mediaBlockPicker(page)).toHaveCount(0);
+}
+
 export async function createMediaBlock(page, slashCommand) {
   await createBlockViaSlash(page, slashCommand, capitalize(slashCommand));
-  await page.getByRole("button", { name: /^Close$/ }).waitFor();
-  await pickFirstAssetFromVisiblePicker(page);
+  // Scoped to the media block itself: the sidebar has its own "Add file"
+  // buttons (Private/Shared sections) with the identical accessible name.
+  await page
+    .getByTestId("media-block-editor")
+    .getByRole("button", { name: new RegExp(`^Add ${slashCommand}$`, "i") })
+    .click();
+  await embedMediaViaLink(page, slashCommand);
+  // Reveal the settings bar ("Change <kind>") the same way a real user would:
+  // click the just-inserted preview (MediaBlockEditor shows it on focus/pointerdown).
+  await page.getByTestId("media-block-editor").click();
+  await page.getByRole("button", { name: new RegExp(`^Change ${slashCommand}$`, "i") }).waitFor();
 }
 
 export async function pickFirstAssetFromVisiblePicker(page) {
@@ -505,7 +558,7 @@ export async function pickAssetFromVisiblePicker(page, selectableIndex = 0) {
       ':not([title="Inline code"])',
       ':not([title="Open slash menu"])',
       ':not([title="Click to change icon"])',
-      ':not([title="Change callout icon"])',
+      ':not([title="Change callout type"])',
       ':not([title="Change page icon"])',
       ':not([title="New page"])',
       ':not([title="Close sidebar"])',
@@ -517,6 +570,13 @@ export async function pickAssetFromVisiblePicker(page, selectableIndex = 0) {
       ':not([data-testid="block-drag-handle"])',
     ].join(""),
   );
+
+  // The Icons/GIFs tabs are lazy (React.lazy + Suspense) AND virtualized
+  // (react-virtual measures the scroll container via ResizeObserver on first
+  // mount, VirtualRows.tsx) — right after switching tabs there can be a frame
+  // with zero rendered rows before it settles. Wait for the real paint instead
+  // of a one-shot count() (never a sleep).
+  await pickerButtons.first().waitFor({ state: "attached" }).catch(() => undefined);
 
   const count = await pickerButtons.count();
   for (let index = 0; index < count; index += 1) {

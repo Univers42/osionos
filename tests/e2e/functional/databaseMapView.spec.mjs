@@ -51,9 +51,17 @@ async function isUnconfigured(page) {
 test("a city column renders as select + offers a Map view that plots the city", async ({ page }) => {
   await mockBridge(page);
   await page.goto("/");
+  // The sidebar loads EXPANDED (Explorer panel) by default — the rail icon
+  // column only becomes visible/actionable once collapsed (ActivitySidebar.tsx
+  // crossfade: `visibility:hidden` while sidebarMode==='panel'). Collapse first.
+  await page.getByRole("button", { name: "Toggle sidebar" }).click();
   const rail = page.locator('[aria-label="Databases"]').first();
   await rail.waitFor({ timeout: 20_000 });
   await rail.click();
+  // DatabasesPanel is React.lazy + loads its catalog async — wait for it to MOUNT
+  // and leave "loading" so the offline guard below reads a SETTLED status.
+  await page.getByLabel("Search databases and tables").waitFor({ timeout: 20_000 });
+  await expect(page.getByText(/Connecting to your databases/)).toHaveCount(0);
   test.skip(await isUnconfigured(page), "offline build (VITE_API_URL unset) — run online to exercise this");
 
   // Open the mount, then its table.

@@ -125,12 +125,19 @@ test.describe("layout editor", () => {
   test("home renders an editable cross-database dashboard", async ({ page, baseURL }) => {
     await page.goto(baseURL, { waitUntil: "domcontentloaded" });
 
+    // Home was redesigned from a full-page layout canvas to a flat NDS-section
+    // stack (greeting heading + titled database sections) driven by the
+    // "Home variant" property — see createHomeDashboardPage/createHomeLayoutContent
+    // in src/widgets/{page-renderer/ui/MainContent.tsx,database-view/model/databaseViewCatalog.ts}.
+    // The old `.osionos-page--layout-canvas`/16-cell/v-proj-dashboard assertions
+    // now belong to the `/layout` "Layout full page" command, covered by the
+    // "full-page layout command" test below.
     await expect(page.getByRole("textbox", { name: "Page title" })).toHaveText("Workspace command center");
-    await expect(page.locator(".osionos-page--layout-canvas")).toBeVisible();
-    await expect(page.locator(".osionos-layout-toolbar")).toBeVisible();
-    await expect(page.locator(".osionos-layout-cell")).toHaveCount(16);
-    await expect(page.locator('.osionos-database-block[data-database-view-id="v-proj-dashboard"]')).toBeVisible();
-    await expect(page.locator('.osionos-database-block[data-database-view-id="v-prod-table"]')).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Home variant" })).toHaveValue("Dashboard");
+    await expect(page.locator('[data-block-type="heading_1"]').first()).toBeVisible();
+    await expect(page.locator('[data-block-type="heading_2"]', { hasText: "Recently visited" }).first()).toBeVisible();
+    await expect(page.locator('.osionos-database-block[data-database-view-id="v-home-recents-gallery"]')).toBeVisible();
+    await expect(page.locator('[role="textbox"][aria-multiline="true"]').first()).toBeVisible();
   });
 
   test("slash commands inside a layout cell use the real block editor surface", async ({ page, baseURL }) => {
@@ -163,13 +170,27 @@ test.describe("layout editor", () => {
     await expect(cell.locator('[role="textbox"][aria-multiline="true"]').first()).toHaveText("Outside");
   });
 
-  test("view slash command inserts a known database view", async ({ page, baseURL }) => {
+  test("database slash command inserts an inline database block", async ({ page, baseURL }) => {
+    // ponytail (src/features/slash-commands/model/slashMenuCatalog.tsx:286-290):
+    // the slash menu now only offers to CREATE a fresh, empty database
+    // (database_inline / database_full_page) — the old "/view <db> <view>"
+    // command that referenced a pre-existing KNOWN view (kind: "database-view",
+    // e.g. label "View: Tasks · Board" / "v-tasks-board") was dropped from the
+    // catalog entirely; useSlashSelect still handles that kind, but nothing in
+    // the menu produces it anymore, so it is unreachable from the UI. This test
+    // now exercises the current, reachable equivalent: the generic "/database"
+    // command, asserting the same user-visible outcome (a slash command
+    // inserts a real database block) against createInlineDatabase()'s
+    // `${databaseId}-table` view id shape (src/store/useDatabaseStore.ts).
     await openFreshPage(page, baseURL);
     const editor = await activateFirstEditor(page);
-    await openSlashMenuFromEditor(editor, "/view tasks board");
-    await selectLayoutCommand(page, "View: Tasks · Board");
+    await openSlashMenuFromEditor(editor, "/database inline");
+    // The catalog label is "Database - Inline" (from @univers42/ui-collection's
+    // SLASH_ITEMS) — "Inline database" is only the internal SLASH_DESCRIPTIONS
+    // entry, not the rendered/clickable label.
+    await selectLayoutCommand(page, "Database - Inline");
 
-    await expect(page.locator('.osionos-database-block[data-database-view-id="v-tasks-board"]')).toBeVisible();
+    await expect(page.locator('.osionos-database-block[data-database-view-id$="-table"]')).toBeVisible();
   });
 
   test("dragging one cell handle onto another swaps their grid positions", async ({ page, baseURL }) => {
@@ -381,14 +402,12 @@ test.describe("layout editor", () => {
 
     const inspector = page.locator(".osionos-layout-cell-inspector");
     await expect(inspector).toBeVisible();
-    // `.osionos-page` has container-type (layout containment), so the fixed
-    // panel docks to the PAGE PANE's left edge — beside the sidebar, over the
-    // content — not to the viewport edge.
-    const pageLeft = await page
-      .locator(".osionos-page")
-      .first()
-      .evaluate((node) => Math.round(node.getBoundingClientRect().left));
-    await expect.poll(() => inspector.evaluate((node) => Math.round(node.getBoundingClientRect().left))).toBe(pageLeft);
+    // The inspector is `position: absolute; left: 0` inside `.osionos-layout-shell`
+    // (`position: relative`) — its containing block is the OWNING LAYOUT BLOCK,
+    // not `.osionos-page` (notionPage.css:156-217). For an inline layout, the
+    // block sits inset within the page's centered content column, so the panel
+    // docks to the BLOCK's left edge (absolute-in-shell), not the page pane's.
+    await expect.poll(() => inspector.evaluate((node) => Math.round(node.getBoundingClientRect().left))).toBe(blockRectBefore.left);
     // Pure overlay: opening the panel must not displace the layout block.
     const blockRectAfter = await layoutBlock.evaluate(rectOf);
     expect(blockRectAfter).toEqual(blockRectBefore);
@@ -421,9 +440,19 @@ test.describe("layout editor", () => {
     await expect(page.locator(".osionos-layout-cell")).toHaveCount(16);
 
     await expect.poll(() => page.evaluate(() => {
-      const rawPages = localStorage.getItem("pg:pages");
-      if (!rawPages) return false;
-      const pages = Object.values(JSON.parse(rawPages)).flat();
+      // Pages cache is split per-workspace under `osio:pages:<workspaceId>`
+      // (src/store/pageStore.helpers.ts loadSplitPagesCache/workspaceCacheKey).
+      // The old single "pg:pages" blob is now a LEGACY key, migrated once and
+      // then removed — a fresh profile never populates it, so this must read
+      // the current per-workspace keys instead.
+      const prefix = "osio:pages:";
+      const pages = [];
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+        if (!key || !key.startsWith(prefix)) continue;
+        const parsed = JSON.parse(localStorage.getItem(key) ?? "[]");
+        if (Array.isArray(parsed)) pages.push(...parsed);
+      }
       const sourcePage = pages.find((entry) => entry.title === "Untitled");
       return Boolean(sourcePage?.content?.some((block) => String(block.content).includes("[[page:")));
     })).toBe(true);

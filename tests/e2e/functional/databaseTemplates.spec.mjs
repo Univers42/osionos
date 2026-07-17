@@ -32,9 +32,13 @@ async function openDatabaseHome(page) {
   await page.locator('[aria-label="Add view"]').first().waitFor({ timeout: 20_000 });
 }
 
-/** The database as a single full-screen TAB (Files Gallery) — stable for editing flows. */
+/** The database as a single full-screen TAB (Files Gallery) — stable for editing flows.
+ *  The folder rail (and its "Open as page" button) now lives in the Explorer
+ *  sidebar's Gallery mode, not directly on the ?home=workspace surface (moved by
+ *  commit 73da097 — see FilesPanel.tsx / ExplorerViewSwitch.tsx). */
 async function openDatabaseTab(page) {
   await page.goto("/?home=workspace");
+  await page.getByRole("button", { name: "Gallery" }).click();
   await page.getByRole("button", { name: /Open as page/ }).first().click();
   await page.locator('[aria-label="Add view"]').first().waitFor({ timeout: 20_000 });
 }
@@ -127,7 +131,11 @@ test.describe("database-templates", () => {
     await page.locator("[data-tab-id]").filter({ hasText: "Files Gallery" }).first().click();
     await page.locator('[aria-label="Add view"]').first().waitFor({ timeout: 20_000 });
     await openTemplatesDropdown(page);
-    await page.getByRole("button", { name: "Weekly Report" }).first().click();
+    // exact: true — the template's own OPEN TAB (still around from authoring it
+    // above) carries a "Close Weekly Report" button; a substring match resolves
+    // both, and .first() picked that close button (DOM-earlier than the dropdown
+    // portal), closing the tab instead of instantiating from the template row.
+    await page.getByRole("button", { name: "Weekly Report", exact: true }).first().click();
 
     // The instance shows the placeholder prompt as a ghost; single-click fills it.
     const fillBlock = page.locator(".osionos-page [data-placeholder-block]").first();

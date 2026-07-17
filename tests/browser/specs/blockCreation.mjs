@@ -206,7 +206,11 @@ export const blockCreationScenarios = [
       await openFreshPage(page, appUrl);
       const editor = await activateFirstEditor(page);
       await openSlashMenuFromEditor(editor, "---");
-      const dividerBlock = page.getByRole("button", { name: /Divider block/i });
+      // The divider block is a `role="separator"` div, not a button — the old 1px
+      // <button> (~1px hit area, never revealed the drag handle on hover) was
+      // redesigned to a comfortable hover target selected/deleted via the shell's
+      // drag handle (src/features/block-editor/ui/BlockEditor.tsx:924-938).
+      const dividerBlock = page.getByRole("separator", { name: /Divider block/i });
       await expect(dividerBlock).toBeVisible();
       await expect(dividerBlock.locator("hr")).toHaveCount(1);
     },

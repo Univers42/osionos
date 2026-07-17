@@ -80,14 +80,22 @@ test.describe("chart-and-dashboard-views", () => {
 
     // First widget: embed an existing view of this database.
     await page.getByRole("button", { name: /Add your first widget/ }).click();
-    await expect(page.getByText("Existing views")).toBeVisible();
-    const existing = page.locator('div:has(> button) >> text="Existing views"');
+    // exact: true — the empty-dashboard copy just above ("Mix views, numbers,
+    // and charts — from this database or any other.") contains "this database"
+    // as a substring, colliding with the AddWidgetPicker section label (renamed
+    // "Existing views" → "This database") once the picker's label is a plain
+    // substring match.
+    await expect(page.getByText("This database", { exact: true })).toBeVisible();
+    const existing = page.locator('div:has(> button) >> text="This database"');
     void existing; // section label asserted above; pick the first view row:
-    await page.locator('button:below(:text("Existing views"))').first().click();
+    await page.locator('button:below(:text("This database"))').first().click();
     await expect(page.getByText(/1\/12 widgets/)).toBeVisible();
 
     // Second widget: create a NEW chart view inline.
-    await page.getByRole("button", { name: /Add widget/ }).click();
+    // .first(): once the first widget lands, "Add widget" also matches the
+    // per-row hover button and the bottom dashed new-row button — the topmost,
+    // general toolbar one is DOM-first (see analyticsDashboards.spec.mjs).
+    await page.getByRole("button", { name: /Add widget/ }).first().click();
     await page.getByText("New view").waitFor();
     await page.locator('button:below(:text("New view"))', { hasText: "Chart" }).first().click();
     await expect(page.getByText(/2\/12 widgets/)).toBeVisible();

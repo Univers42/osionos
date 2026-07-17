@@ -140,6 +140,12 @@ export const Modal: React.FC<ModalProps> = ({
 
   return createPortal(
     <div
+      // Marks the whole modal surface (backdrop + dialog). A modal portals to
+      // document.body, so to any outside-click handler on the page beneath it its
+      // clicks look like "outside" clicks — including the backdrop mousedown that
+      // dismisses the modal, which re-mounts those handlers mid-dispatch and is then
+      // delivered to them. Outside-click handlers skip targets inside this marker.
+      data-modal-overlay=""
       className="fixed inset-0 z-[var(--osio-z-modal)] flex items-center justify-center bg-[var(--osio-overlay)] px-4 py-6 animate-[osio-overlay-in_var(--osio-dur-base)_var(--osio-ease-standard)]"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();

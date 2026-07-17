@@ -25,6 +25,25 @@ function parsePositiveInt(value: string | undefined): number | undefined {
   return parsed;
 }
 
+/**
+ * `PLAYWRIGHT_SHARD` is "<current>/<total>" (e.g. "2/4"). CI splits the suite across parallel
+ * jobs with it; unset (the local default) means "run everything in one pass".
+ */
+function parseShard(value: string | undefined): { current: number; total: number } | undefined {
+  const match = /^(\d+)\/(\d+)$/.exec((value ?? "").trim());
+  if (!match) {
+    return undefined;
+  }
+
+  const current = Number.parseInt(match[1], 10);
+  const total = Number.parseInt(match[2], 10);
+  if (current < 1 || total < 1 || current > total) {
+    return undefined;
+  }
+
+  return { current, total };
+}
+
 const testPort = parsePositiveInt(process.env.PLAYWRIGHT_PORT) ?? 3004;
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${testPort}`;
 const configuredWorkers = parsePositiveInt(process.env.TEST_WORKERS);
@@ -40,6 +59,7 @@ export default defineConfig({
     timeout: 10_000,
   },
   workers: configuredWorkers ?? 1,
+  shard: parseShard(process.env.PLAYWRIGHT_SHARD),
   outputDir: "test-results/playwright",
   reporter: [
     ["list"],
