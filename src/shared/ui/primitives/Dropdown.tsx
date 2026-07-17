@@ -137,7 +137,14 @@ export function Dropdown<T extends string>({
     if (!open) return undefined;
     const frame = requestAnimationFrame(() => {
       updatePosition();
-      optionRefs.current[activeIndex]?.focus();
+      // preventScroll: updatePosition() only queues the fixed-position style (the
+      // DOM still has last render's — on first open, the unpositioned `{opacity:0}`
+      // default), so a plain .focus() here can make the browser scroll the still
+      // statically-flowed portal into view. That scroll is caught by the
+      // document-capture "scroll closes the menu" handler below, self-closing the
+      // menu it just opened (flaky: depends on whether the page is tall enough to
+      // need the scroll).
+      optionRefs.current[activeIndex]?.focus({ preventScroll: true });
     });
 
     const handlePointerDown = (event: PointerEvent) => {
@@ -165,7 +172,7 @@ export function Dropdown<T extends string>({
 
   useEffect(() => {
     if (!open) return;
-    optionRefs.current[activeIndex]?.focus();
+    optionRefs.current[activeIndex]?.focus({ preventScroll: true });
   }, [activeIndex, open]);
 
   const handleTriggerKeyDown = useCallback(

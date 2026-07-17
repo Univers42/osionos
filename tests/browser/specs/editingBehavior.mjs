@@ -24,6 +24,7 @@ import {
   getEditors,
   openSlashMenuFromEditor,
   openFreshPage,
+  parentBlockIdForEditor,
   pressEnter,
   pressTab,
   waitForRenderStability,
@@ -32,6 +33,16 @@ import { defineScenario } from "../core/scenario.mjs";
 
 function todoCheckboxes(page) {
   return page.getByTestId("todo-checkbox");
+}
+
+// The divider is a void `role="separator"` block (BlockEditor.tsx:924-938) — it
+// carries no tabIndex/onKeyDown of its own, so Backspace/Delete cannot be
+// pressed straight into it. Selection (and therefore deletion) goes through the
+// shared drag-handle click, same as any other block
+// (BlockEditorSurface.tsx:589-600 selects; :607-621 deletes the selection on
+// Backspace/Delete) — mirrors contextMenu.mjs's local `dragHandle` helper.
+function dividerDragHandle(page) {
+  return page.getByRole("button", { name: /Drag to reorder block/i }).first();
 }
 
 async function createBulletedListItem(page, text) {
@@ -214,11 +225,14 @@ export const editingBehaviorScenarios = [
       await createBlockViaSlash(page, "callout", "Callout");
       const callout = getEditors(page).first();
       await clearAndType(callout, "Callout");
-      const before = await editorLeft(callout);
       await pressEnter(callout);
       const child = getEditors(page).nth(1);
       await child.waitFor();
-      expect(await editorLeft(child)).toBeGreaterThan(before + 8);
+      // The callout is a FLAT container — a nested child shares its parent's left edge
+      // (see containersAndPaste "flat callout, no indent"). So assert the nesting itself:
+      // the child's block must live INSIDE the callout's block.
+      const calloutId = await blockLocatorForEditor(callout).getAttribute("data-block-id");
+      expect(await parentBlockIdForEditor(child)).toBe(calloutId);
       await expect.poll(async () => editorHasFocus(child)).toBe(true);
     },
   ),
@@ -343,9 +357,11 @@ export const editingBehaviorScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createDivider(page);
-      await page.getByRole("button", { name: /Divider block/i }).click();
+      const handle = dividerDragHandle(page);
+      await handle.hover();
+      await handle.click();
       await page.keyboard.press("Backspace");
-      await expect(page.getByRole("button", { name: /Divider block/i })).toHaveCount(0);
+      await expect(page.getByRole("separator", { name: /Divider block/i })).toHaveCount(0);
     },
   ),
   defineScenario(
@@ -355,9 +371,11 @@ export const editingBehaviorScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createDivider(page);
-      await page.getByRole("button", { name: /Divider block/i }).click();
+      const handle = dividerDragHandle(page);
+      await handle.hover();
+      await handle.click();
       await page.keyboard.press("Delete");
-      await expect(page.getByRole("button", { name: /Divider block/i })).toHaveCount(0);
+      await expect(page.getByRole("separator", { name: /Divider block/i })).toHaveCount(0);
     },
   ),
 ];

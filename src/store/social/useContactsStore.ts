@@ -13,6 +13,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import { API_BASE } from '@/shared/api/client';
 import {
   createConnection,
   listConnections,
@@ -55,6 +56,11 @@ export const useContactsStore = create<ContactsStore>()(
       loading: false,
       error: null,
       hydrate: async () => {
+        // No bridge configured (offline/local-only build): every other settings
+        // store no-ops silently in this case (trySettingsGet's `!API_BASE` guard).
+        // This mount-time hydrate should match — not surface a scary "Connections
+        // unavailable" error toast for a normal offline first-load.
+        if (!API_BASE) return;
         set({ loading: true, error: null });
         try {
           const edges = await listConnections();

@@ -204,7 +204,14 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     <div
       ref={ref}
       data-testid="slash-command-menu"
-      className="fixed z-[var(--osio-z-popover)] flex w-[264px] flex-col overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] shadow-[var(--osio-shadow-menu)]"
+      // z-index above the layout canvas's escalated stack (notionPage.css):
+      // the cell inspector/settings panels sit at `--osio-z-popover + 20/21`,
+      // and `.osionos-layout-grid[data-canvas-active]` rises to `+ 24` so a
+      // selected cell's own resize handles clear its own inspector — typing
+      // "/" inside that same cell opens this menu at the caret, so it must
+      // stay the topmost, clickable layer above ALL of that, never obscured
+      // by a passive side panel or by the active grid itself.
+      className="fixed z-[calc(var(--osio-z-popover)+26)] flex w-[264px] flex-col overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] shadow-[var(--osio-shadow-menu)]"
       style={menuStyle}
     >
       {/* Status echo of the command + arg you're typing after the "/" (the caret

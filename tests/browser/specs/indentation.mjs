@@ -267,7 +267,9 @@ export const indentationScenarios = [
       await selectSlashMenuEntry(page, "^Callout$");
       await pressTab(child);
       expect(await editorLeft(child)).toBeGreaterThan(before + 8);
-      await expect(page.getByRole("button", { name: "Change callout icon" })).toBeVisible();
+      // Callout icon toggle renamed to "Change callout type" (semantic-type redesign,
+      // src/features/block-editor/ui/BlockEditor.tsx) — no more "Change callout icon".
+      await expect(page.getByRole("button", { name: "Change callout type" })).toBeVisible();
     },
   ),
   defineScenario(

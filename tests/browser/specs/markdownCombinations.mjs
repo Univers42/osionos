@@ -216,7 +216,12 @@ export const markdownCombinationScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       const editor = await activateFirstEditor(page);
-      await clearAndType(editor, "- Parent item");
+      // "- " is a markdown-shortcut trigger (-> bulleted_list): the conversion needs
+      // a beat to commit to React state before the next key, exactly like every
+      // other block-conversion-then-type case in this file (see makeContainerHeading
+      // above) — a delay-less type can race the conversion's DOM/content sync and
+      // wipe the just-typed text (flaky "second block never appears" timeout).
+      await clearAndType(editor, "- Parent item", { delay: 20 });
       await pressEnter(editor);
       await pressTab(getEditors(page).nth(1));
       await clearAndType(getEditors(page).nth(1), "Nested child");

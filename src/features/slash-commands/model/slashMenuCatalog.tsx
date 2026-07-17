@@ -107,6 +107,13 @@ const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.filter(
       SLASH_DESCRIPTIONS[item.type] ??
       item.keywords?.slice(0, 3).join(" · ") ??
       "Block option";
+    // The collection already ships search keywords per block ("h1"/"title" for
+    // heading_1, …). They were only ever read for the description, so `/h1` matched
+    // nothing — scoreSlashCommand() searches label + aliases. Feed them in.
+    const aliases = [
+      ...(item.keywords ?? []),
+      ...(SLASH_ALIASES[item.type as BlockType] ?? []),
+    ];
 
     if (MEDIA_PICKER_TYPES.has(item.type as MediaBlockType)) {
       return {
@@ -114,7 +121,7 @@ const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.filter(
         kind: "media-picker",
         section: item.section,
         label: normalizedLabel,
-        aliases: SLASH_ALIASES[item.type as BlockType],
+        aliases,
         icon: item.icon,
         description,
         mediaKind: item.type as MediaBlockType,
@@ -126,7 +133,7 @@ const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.filter(
       kind: "block",
       section: item.section,
       label: normalizedLabel,
-      aliases: SLASH_ALIASES[item.type],
+      aliases,
       icon: item.icon,
       description,
       blockType: item.type,

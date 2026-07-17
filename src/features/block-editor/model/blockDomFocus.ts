@@ -150,6 +150,61 @@ function placeCaret(target: HTMLElement, placement: CaretPlacement) {
   selection.addRange(range);
 }
 
+/**
+ * Make the live contenteditable authoritative for `blockId` RIGHT NOW, caret at
+ * the end of `text`.
+ *
+ * A markdown-shortcut conversion ("# " -> heading) rewrites the block's content
+ * in the store, but that only reaches the DOM on React's NEXT commit. Every
+ * keystroke dispatched inside that window lands in the still-marker-bearing node
+ * and is read back into the draft — which is how the marker got stranded
+ * ("Heading#", "[]Todo item") and, once stranded, broke every later slash command
+ * on that block (the text no longer ends with "/"). Writing the node in the SAME
+ * tick as the conversion closes the window; the snapshot can never be stale
+ * because no keystroke can interleave inside one event handler.
+ *
+ * Returns false when the block has no contenteditable yet (not rendered, or a
+ * void/textarea block) — the caller then falls back to the async focus path.
+ */
+export function commitEditableBlockText(
+  blockId: string,
+  text: string,
+  root: ParentNode = document,
+): boolean {
+  const editable = root.querySelector<HTMLElement>(
+    `[data-block-id="${blockId}"] [contenteditable="true"]`,
+  );
+  if (!editable) return false;
+
+  if (editable.textContent !== text) editable.textContent = text;
+  placeCaret(editable, "end");
+  return true;
+}
+
+/**
+ * Focus `blockId` only if the caret is NOT already inside it — deferred one frame,
+ * so the check sees the post-commit DOM.
+ *
+ * The unconditional `focusEditableBlock` re-places the caret from a rAF/timeout
+ * retry loop. When a conversion REUSES the same contenteditable node (paragraph ->
+ * heading), focus was never lost, so that deferred placement fires AFTER the user's
+ * next keystrokes and snaps the caret back to offset 0 — the typed text comes out
+ * scrambled ("eadingH"). Conversions that genuinely remount the node (paragraph ->
+ * code/divider) DO lose focus, and those still get focused here.
+ */
+export function refocusBlockIfLost(
+  blockId: string,
+  placement: CaretPlacement = "end",
+  root: ParentNode = document,
+) {
+  requestAnimationFrame(() => {
+    const block = root.querySelector(`[data-block-id="${blockId}"]`);
+    const active = document.activeElement;
+    if (block && active && block.contains(active)) return; // caret is already home — don't stomp it
+    focusEditableBlock(blockId, placement, root);
+  });
+}
+
 export function focusEditableBlock(
   blockId: string,
   placement: CaretPlacement = "start",

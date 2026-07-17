@@ -136,10 +136,15 @@ function bumpPageRevision(
 
 
 /** Tabs snapshot titles/icons at open time — refresh them on every title/icon write.
- *  Dynamic import: the layout store is widget-side; a static import here would be a
- *  store ↔ widget module cycle at init. */
+ *  `patch` only carries the keys that were ACTUALLY part of the incoming page patch
+ *  (checked via `in`, not `!== undefined`) — a title/icon can be legitimately cleared
+ *  to `undefined` (e.g. "Remove icon"), which must still refresh the tab snapshot;
+ *  comparing against `undefined` made a clear indistinguishable from "untouched" and
+ *  left the tab (and the pane's `activePage` fallback derived from it) stuck on the
+ *  stale icon forever. Dynamic import: the layout store is widget-side; a static
+ *  import here would be a store ↔ widget module cycle at init. */
 function notifyTabsOfPagePatch(pageId: string, patch: { title?: string; icon?: string }): void {
-  if (patch.title === undefined && patch.icon === undefined) return;
+  if (!("title" in patch) && !("icon" in patch)) return;
   void import("@/widgets/workspace-grid/model/workspaceLayout")
     .then((m) => m.useWorkspaceLayout.getState().updateTabsForPage(pageId, patch))
     .catch(() => undefined);
@@ -414,7 +419,10 @@ export const usePageStore = create<PageStore>((set, get) => ({
       };
     }));
     if (typeof patch !== "function") {
-      notifyTabsOfPagePatch(pageId, { title: patch.title, icon: patch.icon ?? undefined });
+      const tabPatch: { title?: string; icon?: string } = {};
+      if ("title" in patch) tabPatch.title = patch.title;
+      if ("icon" in patch) tabPatch.icon = patch.icon;
+      notifyTabsOfPagePatch(pageId, tabPatch);
     }
   },
 

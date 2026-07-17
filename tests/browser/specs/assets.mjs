@@ -18,11 +18,12 @@ import {
   clearAndType,
   createCallout,
   createMediaBlock,
+  embedMediaViaLink,
   getEditors,
   mediaBlockPicker,
   openFreshPage,
-  pickAssetFromVisiblePicker,
   pickFirstAssetFromVisiblePicker,
+  selectSlashMenuEntry,
   selectText,
   toolbarButton,
 } from "../core/app.mjs";
@@ -60,15 +61,25 @@ async function openPageIconPicker(page) {
   return iconButton;
 }
 
+// Callout icons redesigned into a semantic type menu (CalloutTypePicker.tsx):
+// the toggle button is now "Change callout type" and opens a menu of presets +
+// a "Custom emoji…" item — THAT opens the full asset picker (with "Remove icon").
+// Reopening after a close is therefore a two-step click, not one; call
+// openCalloutIconPicker(page) again rather than re-clicking a captured button.
 async function openCalloutIconPicker(page) {
-  const button = page.getByRole("button", { name: "Change callout icon" });
-  await button.click();
+  const toggle = page.getByRole("button", { name: "Change callout type" });
+  await toggle.click();
+  await page.getByRole("menuitem", { name: "Custom emoji…" }).click();
   await expect(removeIconButton(page)).toBeVisible();
-  return button;
+  return toggle;
 }
 
+// "Add cover" now opens a picker first (PageHeader.tsx wires it to
+// actions.toggleCoverPicker, not an instant default assignment) — pick the
+// first tile to actually assign a cover.
 async function addPageCover(page) {
   await addCoverButton(page).click();
+  await pickCoverTile(page, 0);
   await expect(changeCoverButton(page)).toBeVisible();
   await expect(page.locator(".osionos-page-cover")).toHaveCount(1);
 }
@@ -78,6 +89,16 @@ async function openCoverPicker(page) {
   await button.click();
   await expect(page.getByTestId("page-cover-picker")).toBeVisible();
   return button;
+}
+
+// The cover picker (CoverAssetPicker.tsx, 2026-07-12 redesign) is a tabbed
+// gallery/Unsplash/video/URL/upload/library UI, not the generic title-attribute
+// asset grid pickAssetFromVisiblePicker expects — its tiles carry
+// data-testid="cover-picker-item" instead (coverPickerTiles.tsx CoverTile).
+async function pickCoverTile(page, index = 0) {
+  const tile = page.getByTestId("cover-picker-item").nth(index);
+  await tile.waitFor();
+  await tile.click();
 }
 
 export const assetScenarios = [
@@ -234,7 +255,7 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createCallout(page);
-      await expect(page.getByRole("button", { name: "Change callout icon" })).toContainText("💡");
+      await expect(page.getByRole("button", { name: "Change callout type" })).toContainText("💡");
     },
   ),
   defineScenario(
@@ -268,7 +289,7 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createCallout(page);
-      const button = page.getByRole("button", { name: "Change callout icon" });
+      const button = page.getByRole("button", { name: "Change callout type" });
       const previousMarkup = await button.innerHTML();
       await openCalloutIconPicker(page);
       await page.getByRole("button", { name: /^Icons$/ }).click();
@@ -283,9 +304,9 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createCallout(page);
-      const button = await openCalloutIconPicker(page);
+      await openCalloutIconPicker(page);
       await page.keyboard.press("Escape");
-      await button.click();
+      await openCalloutIconPicker(page);
       await expect(removeIconButton(page)).toBeVisible();
     },
   ),
@@ -296,24 +317,29 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createCallout(page);
-      const button = await openCalloutIconPicker(page);
+      await openCalloutIconPicker(page);
       await pickFirstAssetFromVisiblePicker(page);
-      await button.click();
+      await openCalloutIconPicker(page);
       await expect(removeIconButton(page)).toBeVisible();
     },
   ),
   defineScenario(
     "12. Emojis, Icons & Media",
     "Callout icons",
-    "Remove icon resets the callout icon back to the default light bulb",
+    "Remove icon resets the callout icon back to the default Note type",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createCallout(page);
-      const button = await openCalloutIconPicker(page);
+      const button = page.getByRole("button", { name: "Change callout type" });
+      await openCalloutIconPicker(page);
       await pickFirstAssetFromVisiblePicker(page);
-      await button.click();
+      await openCalloutIconPicker(page);
       await removeIconButton(page).click();
-      await expect(button).toContainText("💡");
+      // CalloutTypePicker.tsx's custom-emoji "Remove icon" resets to the Note
+      // preset (📝) — the semantic system's neutral default — not the block's
+      // creation-time light bulb (which only useSlashSelect.ts's plain "Callout"
+      // command sets).
+      await expect(button).toContainText("📝");
     },
   ),
   defineScenario(
@@ -335,7 +361,7 @@ export const assetScenarios = [
       const previousCover = await page.getByTestId("page-cover-media").innerHTML();
       for (let selectableIndex = 0; selectableIndex < 8; selectableIndex += 1) {
         await openCoverPicker(page);
-        await pickAssetFromVisiblePicker(page, selectableIndex);
+        await pickCoverTile(page, selectableIndex);
         if ((await page.getByTestId("page-cover-media").innerHTML()) !== previousCover) {
           return;
         }
@@ -412,7 +438,7 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createMediaBlock(page, "image");
-      await expect(page.locator('button:has-text("Change image")')).toBeVisible();
+      await expect(page.getByRole("button", { name: "Change image" })).toBeVisible();
       await expect(getEditors(page)).toHaveCount(1);
     },
   ),
@@ -423,7 +449,7 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createMediaBlock(page, "image");
-      await expect(page.locator('button:has-text("Change image")')).toBeVisible();
+      await expect(page.getByRole("button", { name: "Change image" })).toBeVisible();
       await expect(page.locator("img").first()).toBeVisible();
     },
   ),
@@ -434,7 +460,7 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createMediaBlock(page, "video");
-      await expect(page.locator('button:has-text("Change video")')).toBeVisible();
+      await expect(page.getByRole("button", { name: "Change video" })).toBeVisible();
       await expect(page.locator("video")).toHaveCount(1);
     },
   ),
@@ -445,7 +471,7 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createMediaBlock(page, "audio");
-      await expect(page.locator('button:has-text("Change audio")')).toBeVisible();
+      await expect(page.getByRole("button", { name: "Change audio" })).toBeVisible();
       await expect(page.locator("audio")).toHaveCount(1);
     },
   ),
@@ -456,7 +482,7 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createMediaBlock(page, "file");
-      await expect(page.locator('button:has-text("Change file")')).toBeVisible();
+      await expect(page.getByRole("button", { name: "Change file" })).toBeVisible();
       await expect(page.getByRole("link", { name: /Open/i })).toHaveCount(1);
     },
   ),
@@ -473,10 +499,17 @@ export const assetScenarios = [
       const secondEditor = getEditors(page).nth(1);
       await secondEditor.click();
       await page.keyboard.type("/image");
-      await page.getByRole("button", { name: /^Image$/i }).click();
-      await pickFirstAssetFromVisiblePicker(page);
+      // A slash entry's accessible name is "Image <description>", not bare "Image" —
+      // use the shared entry helper (data-testid + hasText) the rest of the suite uses.
+      await selectSlashMenuEntry(page, "Image");
+      await page
+        .getByTestId("media-block-editor")
+        .getByRole("button", { name: /^Add image$/i })
+        .click();
+      await embedMediaViaLink(page, "image");
       await expect(getEditors(page).first()).toHaveText("Paragraph before image");
-      await expect(page.locator('button:has-text("Change image")')).toBeVisible();
+      await page.getByTestId("media-block-editor").click();
+      await expect(page.getByRole("button", { name: "Change image" })).toBeVisible();
     },
   ),
   defineScenario(
@@ -488,9 +521,12 @@ export const assetScenarios = [
       await createMediaBlock(page, "image");
       const image = page.locator("img").first();
       const previousSrc = await image.getAttribute("src");
-      await page.locator('button:has-text("Change image")').click();
-      await pickAssetFromVisiblePicker(page, 1);
-      await expect(page.locator('button:has-text("Change image")')).toBeVisible();
+      await page.getByRole("button", { name: "Change image" }).click();
+      await embedMediaViaLink(page, "image", "https://example.com/fixtures/image-1.png");
+      // Picking an asset closes the settings bar by design (MediaBlockEditor.tsx
+      // handleSelect → setShowSettings(false)); click the block to bring it back.
+      await page.getByTestId("media-block-editor").click();
+      await expect(page.getByRole("button", { name: "Change image" })).toBeVisible();
       expect(await page.locator("img").first().getAttribute("src")).not.toBe(previousSrc);
     },
   ),
@@ -501,11 +537,11 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createMediaBlock(page, "image");
-      await page.locator('button:has-text("Change image")').click();
+      await page.getByRole("button", { name: "Change image" }).click();
       await expect(mediaBlockPicker(page)).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(mediaBlockPicker(page)).toHaveCount(0);
-      await expect(page.locator('button:has-text("Change image")')).toBeVisible();
+      await expect(page.getByRole("button", { name: "Change image" })).toBeVisible();
     },
   ),
   defineScenario(
@@ -515,11 +551,14 @@ export const assetScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createMediaBlock(page, "image");
-      await page.locator('button:has-text("Change image")').click();
+      await page.getByRole("button", { name: "Change image" }).click();
       await expect(mediaBlockPicker(page)).toBeVisible();
-      await clickOutside(page);
+      // The media picker is a full-viewport Modal now (Modal.tsx) — the generic
+      // clickOutside() helper targets app-shell, which the modal backdrop covers.
+      // Click the modal's own backdrop instead (a corner far from the centered dialog).
+      await page.mouse.click(4, 4);
       await expect(mediaBlockPicker(page)).toHaveCount(0);
-      await expect(page.locator('button:has-text("Change image")')).toBeVisible();
+      await expect(page.getByRole("button", { name: "Change image" })).toBeVisible();
     },
   ),
   defineScenario(

@@ -32,9 +32,19 @@ const FULL_LIST = [
 
 async function openPanel(page) {
   await page.goto("/");
+  // The sidebar loads EXPANDED (Explorer panel) by default — the rail icon
+  // column only becomes visible/actionable once collapsed (ActivitySidebar.tsx
+  // crossfade: `visibility:hidden` while sidebarMode==='panel'). Collapse first.
+  await page.getByRole("button", { name: "Toggle sidebar" }).click();
   const railIcon = page.locator('[aria-label="Databases"]').first();
   await railIcon.waitFor({ timeout: 20_000 });
   await railIcon.click();
+  // DatabasesPanel is React.lazy + loads its catalog async. Wait for it to MOUNT
+  // and leave the "loading" state, so the offline/online branch below is read
+  // from a SETTLED status (an immediate .count() raced the lazy mount → the
+  // guard read 0 and fell through into the online-only assertions).
+  await page.getByLabel("Search databases and tables").waitFor({ timeout: 20_000 });
+  await expect(page.getByText(/Connecting to your databases/)).toHaveCount(0);
 }
 
 /** True when the build is offline (no bridge) → the panel can't reach the registry. */

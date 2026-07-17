@@ -33,8 +33,11 @@ function virtualBlockId(seed, index) {
 
 async function openVirtualizedEditorPage(page, appUrl, blockCount = 90) {
   await page.goto(appUrl, { waitUntil: "domcontentloaded" });
+  // main.tsx loads the perf harness via a dev-only *dynamic* import (`void import(...)`,
+  // kept out of the prod bundle on purpose) — it lands a tick or two after
+  // domcontentloaded, so wait for the global instead of racing it.
+  await page.waitForFunction(() => typeof globalThis.__perfSeedPage === "function");
   const seed = await page.evaluate((count) => {
-    if (!globalThis.__perfSeedPage) throw new Error("Perf seed helper is not exposed");
     const seeded = globalThis.__perfSeedPage(count);
     return { ...seeded, blockIdPrefix: `perf-block-${count}-` };
   }, blockCount);

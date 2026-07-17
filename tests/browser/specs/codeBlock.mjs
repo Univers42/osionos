@@ -211,8 +211,14 @@ export const codeBlockScenarios = [
       await page.locator('button[title="Show preview"]').click();
       await waitForRenderStability(page);
 
+      // MermaidDiagram no longer takes a className prop (it owns its full visual
+      // surface, incl. an explicit bg-[--osio-code-bg] on its own inner "frame").
+      // The slot BlockEditor renders it into — MermaidDiagram's un-classed outer
+      // <div> (the resize handle's parent's parent) — must stay uncolored so it
+      // never layers a second, stuck highlight color between the code-card
+      // surface and the diagram's own frame.
       const bg = await page.evaluate(() => {
-        const wrapper = document.querySelector(".rounded-b-md.overflow-x-auto");
+        const wrapper = document.querySelector(".cursor-ns-resize")?.parentElement?.parentElement;
         return wrapper ? globalThis.getComputedStyle(wrapper).backgroundColor : null;
       });
       expect(bg).toBe("rgba(0, 0, 0, 0)");
@@ -365,10 +371,12 @@ export const codeBlockScenarios = [
       await page.mouse.down();
       await page.mouse.move(cx, cy + 100, { steps: 10 });
 
+      // MermaidDiagram's own frame div (the handle's direct parent) carries the
+      // live inline height (its local paneHeight state, not a ".rounded-md"/".p-0"
+      // wrapper — that structure predates the mermaid pan/zoom/resize redesign).
       const wrapperHeightDuringDrag = await page.evaluate(() => {
         const handleEl = document.querySelector(".cursor-ns-resize");
-        const body = handleEl?.closest(".rounded-md")?.querySelector(".p-0");
-        return body?.firstElementChild?.style?.height ?? "";
+        return (handleEl?.parentElement)?.style?.height ?? "";
       });
 
       await page.mouse.up();
@@ -492,32 +500,36 @@ export const codeBlockScenarios = [
 
       // Focus the textarea and press End to move cursor to the end of the long line.
       // This scrolls the textarea horizontally and fires the scroll event synchronously.
-      // The sync listener then sets code.scrollLeft = ta.scrollLeft.
+      // The sync listener then sets hl.scrollLeft = ta.scrollLeft. hl (codeHighlightRef,
+      // ta.previousElementSibling) is the actual overflow-auto scroll container in BOTH
+      // axes — the inner <code> carries no overflow of its own (no hljs theme CSS is
+      // loaded, only language grammars), so it never scrolls; matches the sibling
+      // vertical-sync test's use of ta.previousElementSibling.
       await page.locator('textarea[placeholder="Code…"]').focus();
       await page.keyboard.press("Home"); // ensure cursor is at start first
       await page.keyboard.press("End");  // move to end → scrolls right
 
-      // Wait until BOTH ta and code have scrolled horizontally.
+      // Wait until BOTH ta and hl have scrolled horizontally.
       await page.waitForFunction(
         () => {
           const ta = document.querySelector('textarea[placeholder="Code…"]');
-          const code = ta?.parentElement?.querySelector("code");
-          return (ta?.scrollLeft ?? 0) > 0 && code instanceof HTMLElement && code.scrollLeft > 0;
+          const hl = ta?.previousElementSibling;
+          return (ta?.scrollLeft ?? 0) > 0 && hl instanceof HTMLElement && hl.scrollLeft > 0;
         },
         null,
         { timeout: 5000 },
       );
 
-      const { taLeft, codeLeft } = await page.evaluate(() => {
+      const { taLeft, hlLeft } = await page.evaluate(() => {
         const ta = document.querySelector('textarea[placeholder="Code…"]');
-        const code = ta?.parentElement?.querySelector("code");
+        const hl = ta?.previousElementSibling;
         return {
           taLeft: ta?.scrollLeft ?? 0,
-          codeLeft: (code instanceof HTMLElement) ? code.scrollLeft : -1,
+          hlLeft: (hl instanceof HTMLElement) ? hl.scrollLeft : -1,
         };
       });
       expect(taLeft).toBeGreaterThan(0);
-      expect(codeLeft).toBe(taLeft);
+      expect(hlLeft).toBe(taLeft);
     },
   ),
 
@@ -739,7 +751,14 @@ export const codeBlockScenarios = [
       await editor.click();
       await page.keyboard.type("```");
       await page.keyboard.press("Enter");
-      await expect(page.locator('[data-block-type="code"]')).toHaveCount(1);
+      // Scoped to the <article> wrapper (DraggablePlaygroundBlock): every block
+      // stamps data-block-type on BOTH its outer <article> AND the nested
+      // EditableBlock <div> (src/features/block-editor/ui/BlockEditorSurface.tsx:
+      // 1275 and :1536, added together in 8b3e77a) — an unscoped attribute
+      // selector always double-counts one block. Every other spec in this suite
+      // (e.g. automationShortcuts.mjs, inlineToolbar.mjs) already scopes to
+      // `article[data-block-type=...]` for exactly this reason.
+      await expect(page.locator('article[data-block-type="code"]')).toHaveCount(1);
       await getCodeTextarea(page).waitFor({ state: "visible", timeout: 10_000 });
     },
   ),
@@ -753,7 +772,7 @@ export const codeBlockScenarios = [
       await editor.click();
       await page.keyboard.type("```bash");
       await page.keyboard.press("Enter");
-      await expect(page.locator('[data-block-type="code"]')).toHaveCount(1);
+      await expect(page.locator('article[data-block-type="code"]')).toHaveCount(1);
       await getCodeTextarea(page).waitFor({ state: "visible", timeout: 10_000 });
       await expect(page.getByRole("button", { name: "bash", exact: true })).toBeVisible();
     },

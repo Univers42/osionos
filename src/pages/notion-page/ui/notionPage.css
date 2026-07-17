@@ -163,7 +163,14 @@
   position: absolute;
   left: 0;
   top: 12px;
-  z-index: var(--osio-z-raised);
+  /* Above `.osionos-layout-grid[data-canvas-active="true"]` (--osio-z-popover
+     + 24, below): the tab pokes 6px into the grid's left edge, and Canvas V2
+     auto-selects a cell the instant it's created (canvasReducer "addCell" sets
+     selectedIds), so the grid escalates to +24 immediately, not only during an
+     explicit interaction. Its (invisible, opacity:0) corner resize-hit
+     hit-targets then out-rank this permanent chrome button and swallow its
+     clicks. The button must always win — it is never meant to be coverable. */
+  z-index: calc(var(--osio-z-popover) + 25);
   width: 20px;
   height: 44px;
   transform: translateX(-14px);
@@ -389,6 +396,21 @@
   opacity: 0.28;
 }
 
+.osionos-layout-grid[data-canvas-active="true"] {
+  /* `isolation: isolate` above gives the grid its OWN stacking context for its
+     cells, but the grid itself has no explicit z-index, so — per normal CSS
+     stacking rules — it paints BELOW any positioned sibling that has one, no
+     matter how high a z-index its cells set internally (z-index is
+     hierarchical: a descendant can never out-rank a sibling of its own
+     containing stacking context). The cell inspector/settings panels
+     (siblings in .osionos-layout-shell, --osio-z-popover + 20/21) can
+     therefore sit on top of — and swallow clicks meant for — a selected
+     cell's own resize handles or a slash menu opened from inside it. Give the
+     grid an explicit z-index only while a cell is selected/interacting so it
+     (and everything inside it) can compete for the front on equal terms. */
+  z-index: calc(var(--osio-z-popover) + 24);
+}
+
 .osionos-layout-grid[data-layout-interacting="true"] {
   cursor: grabbing;
 }
@@ -575,6 +597,15 @@ body[data-pane-resizing] .osionos-layout-cell {
   overflow-y: auto;
 }
 
+/* A fixed-height cell must let overflowing content SCROLL, not squeeze: flex
+   items default to flex-shrink:1, so without this a tall child shrinks to fit
+   the bounded editor instead of overflowing it (scrollHeight never exceeds
+   clientHeight and the overflow-y:auto above never engages). */
+.osionos-layout-cell[data-layout-sizing="fixed"] .osionos-layout-cell-editor > *,
+.osionos-layout-cell[data-layout-cell-resizing="true"] .osionos-layout-cell-editor > * {
+  flex-shrink: 0;
+}
+
 .osionos-layout-cell[data-layout-sizing="auto-height"] .osionos-layout-cell-editor,
 .osionos-layout-cell[data-layout-sizing="auto"] .osionos-layout-cell-editor,
 .osionos-layout-cell[data-layout-sizing="auto-width"] .osionos-layout-cell-editor {
@@ -672,7 +703,11 @@ body[data-pane-resizing] .osionos-layout-cell {
   left: -34px;
   right: 8px;
   top: 0;
-  z-index: calc(var(--osio-z-raised) + 1);
+  /* Above .osionos-layout-resize-hit (--osio-z-popover + 22): the bar's
+     rightmost controls (cell menu, drag grip) sit in the same corner as the
+     invisible resize hit-targets, so its buttons must win the pointer-event
+     hit-test there or clicks on them land on the resize handle instead. */
+  z-index: calc(var(--osio-z-popover) + 23);
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) auto auto;
   align-items: center;
@@ -805,7 +840,12 @@ body[data-pane-resizing] .osionos-layout-cell {
 
 .osionos-layout-resize-hit {
   position: absolute;
-  z-index: calc(var(--osio-z-raised) + 2);
+  /* Above the cell inspector/settings panels (--osio-z-popover + 20/21):
+     the inspector is a "pure overlay" that can visually cover the SAME
+     selected cell it edits, and its resize handles must stay grabbable
+     underneath — an invisible (opacity:0) hit target, so raising it above
+     the panel changes no visible rendering. */
+  z-index: calc(var(--osio-z-popover) + 22);
   border: 0;
   background: transparent;
   opacity: 0;

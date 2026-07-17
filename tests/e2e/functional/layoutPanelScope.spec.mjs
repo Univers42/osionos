@@ -49,6 +49,12 @@ test("layout settings panel stays scoped to its block and dismisses outside", as
 
   await page.getByRole("button", { name: "Layout settings" }).click();
   await expect(panel).toBeVisible();
+  // The panel slides in via a 140ms CSS animation (osionos-layout-panel-slide-in,
+  // notionPage.css) starting from translateX(-100%); `toBeVisible` resolves as
+  // soon as it mounts, mid-animation, so a boundingBox() read here would race
+  // the slide and catch it near its off-canvas starting position. Wait for the
+  // animation to actually finish before measuring geometry.
+  await panel.evaluate((node) => Promise.all(node.getAnimations().map((animation) => animation.finished)));
 
   // Scoped, not viewport-fixed: the panel is contained by its layout block
   // (small slack for the border/close-tab overhang), so it can never cover

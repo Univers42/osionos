@@ -212,6 +212,22 @@ export function clearBlockDraftsForSource(sourceKey: string) {
   }
 }
 
+/**
+ * Non-hook, point-in-time read of a block's EFFECTIVE text: the pending draft
+ * if one is dirty, else the committed content. Callers that need the text a
+ * user is currently looking at (e.g. deciding whether a "Copy text" menu item
+ * should render) must read this instead of the raw committed `content` —
+ * otherwise a still-typing block reads as empty, and the item appears/shifts
+ * the menu the instant the draft commits (e.g. on blur), possibly mid-click.
+ */
+export function getBlockDraftContent(
+  sourceKey: string,
+  blockId: string,
+  committedContent: string,
+): string {
+  return getDraftSnapshot(sourceKey, blockId, committedContent);
+}
+
 export function useBlockDraftContent(
   sourceKey: string,
   blockId: string,

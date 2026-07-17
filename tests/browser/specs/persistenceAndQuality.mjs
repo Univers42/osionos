@@ -70,14 +70,32 @@ async function openPageFromSidebar(page, title) {
   }
 }
 
+// The page cache moved from one flat "pg:pages" key to a per-workspace split
+// (src/store/pageStore.helpers.ts: PAGE_CACHE_WORKSPACE_PREFIX = "osio:pages:") —
+// flushScheduledPagesCachePersist actively DELETES the legacy flat key on every
+// persist, so polling it directly never observes a write again. Concatenate every
+// "osio:pages:*" entry instead, mirroring the app's own loadSplitPagesCache scan.
 async function waitForPagesCacheToContain(page, value) {
   await expect
     .poll(async () =>
-      page.evaluate(() => localStorage.getItem("pg:pages") ?? ""),
+      page.evaluate(() => {
+        let combined = "";
+        for (let index = 0; index < localStorage.length; index += 1) {
+          const key = localStorage.key(index);
+          if (key?.startsWith("osio:pages:")) combined += localStorage.getItem(key) ?? "";
+        }
+        return combined;
+      }),
     )
     .toContain(value);
 }
 
+// Every goto/reload below waits on "domcontentloaded", never "networkidle": the
+// app's realtime client keeps retrying a WebSocket against the unreachable
+// offline BaaS, so the network is never idle — "networkidle" reliably times out
+// under load. Each call site already waits on a concrete locator right after
+// navigating (openPageFromSidebar / waitForSidebarReady), matching the same
+// domcontentloaded contract the rest of the suite's openFreshPage() uses.
 export const persistenceAndQualityScenarios = [
   defineScenario(
     "29. Local persistence",
@@ -85,7 +103,12 @@ export const persistenceAndQualityScenarios = [
     "edits on an offline seeded page survive refresh and remain editable afterwards",
     async ({ page, appUrl }) => {
       const token = `persist-${Date.now().toString(36)}`;
-      await page.goto(appUrl, { waitUntil: "networkidle" });
+      // "networkidle" never fires here: the app's realtime client keeps retrying a
+      // WebSocket against the unreachable offline BaaS, so the network is never
+      // idle. Every call site below already waits on a concrete locator right
+      // after navigating (openPageFromSidebar / waitForSidebarReady) — match the
+      // domcontentloaded contract the rest of the suite's openFreshPage() uses.
+      await page.goto(appUrl, { waitUntil: "domcontentloaded" });
       await page.evaluate(() => {
         localStorage.setItem(
           "pg:pages",
@@ -114,14 +137,15 @@ export const persistenceAndQualityScenarios = [
         );
         localStorage.setItem("pg:recents", "[]");
       });
-      await page.goto(appUrl, { waitUntil: "networkidle" });
+      await page.goto(appUrl, { waitUntil: "domcontentloaded" });
       await openPageFromSidebar(page, "Getting Started");
       const editor = await activateFirstEditor(page);
       await focusEditorEnd(editor);
       await page.keyboard.type(` ${token}`);
       await waitForPagesCacheToContain(page, token);
 
-      await page.reload({ waitUntil: "networkidle" });
+      // Same "networkidle" hazard as above — the next line waits on a real locator.
+      await page.reload({ waitUntil: "domcontentloaded" });
       await openPageFromSidebar(page, "Getting Started");
       await expect(getEditors(page).first()).toContainText(token);
 
@@ -138,7 +162,7 @@ export const persistenceAndQualityScenarios = [
       const title = `Local persistence ${Date.now().toString(36)}`;
       const body = `Body ${Date.now().toString(36)}`;
 
-      await page.goto(appUrl, { waitUntil: "networkidle" });
+      await page.goto(appUrl, { waitUntil: "domcontentloaded" });
       await waitForSidebarReady(page);
       await sidebarNewPageButton(page).click();
       await pageTitleEditor(page).waitFor();
@@ -148,7 +172,8 @@ export const persistenceAndQualityScenarios = [
       await waitForPagesCacheToContain(page, title);
       await waitForPagesCacheToContain(page, body);
 
-      await page.reload({ waitUntil: "networkidle" });
+      // Same "networkidle" hazard as above — the next line waits on a real locator.
+      await page.reload({ waitUntil: "domcontentloaded" });
       await openPageFromSidebar(page, title);
       await expect(pageTitleEditor(page)).toContainText(title);
       await expect(getEditors(page).first()).toContainText(body);

@@ -1321,7 +1321,18 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         skipDeleteFlush = !!offsets && offsets.start === offsets.end && offsets.start > 0;
       }
 
-      if (!skipDeleteFlush && (e.key.length !== 1 || e.metaKey || e.ctrlKey || e.altKey)) {
+      // SPACE is printable, so the length!==1 test below would batch it with
+      // ordinary typing — but it is also the markdown-shortcut trigger, and the
+      // parent's keydown handlers convert the block on it. With the marker's own
+      // onChange still sitting in the rAF queue, that queued change fired AFTER
+      // the conversion and re-set the draft to the marker ("#"), resurrecting it
+      // into the freshly-cleared block — the "Heading#" / "[]Todo item" stranded
+      // marker, and the reason later slash commands broke on that block. Flushing
+      // here means the parent sees the marker as committed text and its own
+      // rebase-to-"" is the last word. One flush per word, not per keystroke.
+      const isShortcutTriggerKey = e.key === " ";
+
+      if (!skipDeleteFlush && (isShortcutTriggerKey || e.key.length !== 1 || e.metaKey || e.ctrlKey || e.altKey)) {
         flushPendingChange(canonicalSourceRef.current);
       }
 

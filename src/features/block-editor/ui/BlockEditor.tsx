@@ -243,8 +243,11 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     const hl = codeHighlightRef.current;
     if (!ta || !hl) return;
     const sync = () => {
-      const code = hl.querySelector("code");
-      if (code) (code as HTMLElement).scrollLeft = ta.scrollLeft;
+      // hl (codeHighlightRef) carries `overflow-auto` and is the real scroll
+      // container in both axes — the inner <code> has no overflow of its own
+      // (no hljs theme CSS is loaded, only the language grammars), so setting
+      // scrollLeft there was a no-op. Target hl on both axes, like scrollTop.
+      hl.scrollLeft = ta.scrollLeft;
       hl.scrollTop = ta.scrollTop;
       // Keep the (pinned) line-number gutter aligned with vertical scroll.
       const gutter = codeGutterRef.current;
@@ -782,11 +785,19 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           {isSqlRunEnabled() && block.language === "sql" && (
             <SqlRunButton block={block} onUpdateBlock={commitBlockUpdate} />
           )}
-          <div
-            role="separator" aria-label="Resize code block" aria-orientation="horizontal"
-            className="absolute bottom-1 right-1 h-3.5 w-3.5 cursor-ns-resize rounded-sm opacity-0 transition-opacity group-hover/code:opacity-100 z-[1] bg-[linear-gradient(135deg,transparent_50%,var(--osio-code-fg-muted)_50%,var(--osio-code-fg-muted)_60%,transparent_60%,transparent_72%,var(--osio-code-fg-muted)_72%,var(--osio-code-fg-muted)_82%,transparent_82%)]"
-            onPointerDown={handleResizePointerDown}
-          />
+          {/* This handle drives codeHeightPx, which only the source-mode textarea/
+              highlight branch above ever applies — MermaidDiagram (preview branch)
+              owns its own independent pane-height resize handle. Rendering both at
+              once for a renderable-preview block put two .cursor-ns-resize hit
+              targets on screen, one of them a dead no-op. Render this one only when
+              it actually does something. */}
+          {!(isRenderable && codeView === "preview") && (
+            <div
+              role="separator" aria-label="Resize code block" aria-orientation="horizontal"
+              className="absolute bottom-1 right-1 h-3.5 w-3.5 cursor-ns-resize rounded-sm opacity-0 transition-opacity group-hover/code:opacity-100 z-[1] bg-[linear-gradient(135deg,transparent_50%,var(--osio-code-fg-muted)_50%,var(--osio-code-fg-muted)_60%,transparent_60%,transparent_72%,var(--osio-code-fg-muted)_72%,var(--osio-code-fg-muted)_82%,transparent_82%)]"
+              onPointerDown={handleResizePointerDown}
+            />
+          )}
         </div>
       );
 

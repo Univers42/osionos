@@ -101,11 +101,22 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
     [block.id, pageId, updateBlock],
   );
 
+  // Dismiss the settings bar on a click/Escape OUTSIDE the block — but stay armed
+  // only while this block's own embed dialog is CLOSED. MediaEmbedDialog portals to
+  // document.body, so every click inside it (and the Escape that closes it) reads as
+  // "outside" to editorRef and would tear down the very settings bar the user opened
+  // the picker from — the picker would close onto a block with no Change-asset
+  // affordance. While `showEmbed` is up, the dialog owns the interaction.
   useEffect(() => {
-    if (!showSettings) return undefined;
+    if (!showSettings || showEmbed) return undefined;
 
     const handleMouseDown = (event: MouseEvent) => {
       if (editorRef.current?.contains(event.target as Node)) return;
+      const target = event.target;
+      // A modal surface is never "outside": the backdrop mousedown that closes the
+      // embed dialog re-mounts this listener mid-dispatch and then reaches it, which
+      // would tear the settings bar down along with the dialog.
+      if (target instanceof Element && target.closest("[data-modal-overlay]")) return;
       setShowSettings(false);
     };
 
@@ -120,7 +131,7 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
       document.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [showSettings]);
+  }, [showSettings, showEmbed]);
 
   return (
     <div

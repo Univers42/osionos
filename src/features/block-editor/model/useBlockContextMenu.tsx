@@ -38,6 +38,7 @@ import {
   ensureReadableTextColor,
 } from "./blockColors";
 import { copyBlocks } from "./blockClipboard";
+import { getBlockDraftContent } from "./blockDraftStore";
 import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
 import {
   BLOCK_TRANSFORM_OPTIONS,
@@ -56,6 +57,7 @@ import {
 interface UseBlockContextMenuOptions {
   pageId: string;
   content: Block[];
+  sourceKey: string;
   updatePageContent: (pageId: string, blocks: Block[]) => void;
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
 }
@@ -193,6 +195,7 @@ function createTableContextMenuSections(
 export function useBlockContextMenu({
   pageId,
   content,
+  sourceKey,
   updatePageContent,
   focusBlock,
 }: Readonly<UseBlockContextMenuOptions>) {
@@ -205,6 +208,21 @@ export function useBlockContextMenu({
     if (!contextMenu) return null;
     return findBlockLocation(content, contextMenu.blockId);
   }, [content, contextMenu]);
+
+  // The EFFECTIVE text for the block under the menu: the live draft if the user
+  // just typed and hasn't blurred/idled yet, else the committed content. Reading
+  // the raw (committed-only) `blockLocation.block.content` here is what used to
+  // make "Copy text" appear or not appear based on commit timing rather than on
+  // what the user actually sees — and since the commit can be triggered BY the
+  // click itself (mousedown blurs the still-focused block), the menu could
+  // reflow an item into existence mid-click, under the cursor, stealing the
+  // click meant for whatever button used to be at that position (Duplicate,
+  // Delete, ...). Resolving the draft up front keeps the menu's layout stable
+  // across the whole click.
+  const effectiveBlockContent = useMemo(() => {
+    if (!blockLocation) return "";
+    return getBlockDraftContent(sourceKey, blockLocation.block.id, blockLocation.block.content);
+  }, [blockLocation, sourceKey]);
 
   const activeContextMenu = useMemo(() => {
     if (!contextMenu || !blockLocation) return null;
@@ -312,10 +330,10 @@ export function useBlockContextMenu({
   }, [closeContextMenu, content, contextMenu]);
 
   const handleCopyText = useCallback(() => {
-    if (!blockLocation?.block.content.trim()) return;
-    navigator.clipboard?.writeText(blockLocation.block.content).catch(() => undefined);
+    if (!effectiveBlockContent.trim()) return;
+    navigator.clipboard?.writeText(effectiveBlockContent).catch(() => undefined);
     closeContextMenu();
-  }, [blockLocation, closeContextMenu]);
+  }, [closeContextMenu, effectiveBlockContent]);
 
   const handleCopyLink = useCallback(() => {
     if (!contextMenu) return;
@@ -495,13 +513,6 @@ export function useBlockContextMenu({
           onClick: handleUnavailable,
           subItems: [
             {
-              icon: <span className="font-semibold text-[var(--osio-block-tint-red-fg)]">A</span>,
-              label: "Red text",
-              shortcut: "Ctrl+⇧+H",
-              active: blockLocation.block.textColor === "var(--osio-block-tint-red-fg)",
-              onClick: () => handleSetBlockStyle({ textColor: "var(--osio-block-tint-red-fg)" }),
-            },
-            {
               icon: "Text",
               label: "Text color",
               disabled: true,
@@ -594,7 +605,7 @@ export function useBlockContextMenu({
         label: "Copy block",
         onClick: handleCopyBlock,
       },
-      ...(blockLocation.block.content.trim()
+      ...(effectiveBlockContent.trim()
         ? [
             {
               icon: <Copy size={15} />,
@@ -678,6 +689,7 @@ export function useBlockContextMenu({
   }, [
     blockLocation,
     colorProfiles,
+    effectiveBlockContent,
     handleChangeType,
     handleCopyBlock,
     handleCopyText,

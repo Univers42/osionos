@@ -43,6 +43,8 @@ services:
       NODE_ENV: test
       TEST_WORKERS: ${TEST_WORKERS:-1}
       TEST_FILTER: ${TEST_FILTER:-}
+      # "<current>/<total>" (e.g. "2/4") — CI splits the suite across parallel jobs. Empty = all.
+      PLAYWRIGHT_SHARD: ${PLAYWRIGHT_SHARD:-}
       VITE_API_URL: ${VITE_API_URL:-}
       VITE_BAAS_ENABLED: ${VITE_BAAS_ENABLED:-false}
       VITE_BAAS_URL: ${VITE_BAAS_URL:-}

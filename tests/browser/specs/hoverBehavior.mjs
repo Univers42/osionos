@@ -59,7 +59,10 @@ export const hoverBehaviorScenarios = [
       await expect.poll(() => handleOpacity(childAHandle)).toBeLessThan(0.5);
       await expect.poll(() => handleOpacity(calloutHandle)).toBeLessThan(0.5);
 
-      const icon = calloutBlock.locator('button[aria-label="Change callout icon"]');
+      // Renamed from "Change callout icon" to "Change callout type" when the
+      // button grew from a plain emoji-picker trigger into the full
+      // CalloutTypePicker (src/features/block-editor/ui/BlockEditor.tsx:843).
+      const icon = calloutBlock.locator('button[aria-label="Change callout type"]');
       await icon.hover();
       await expect.poll(() => handleOpacity(calloutHandle)).toBeCloseTo(1, 1);
       await expect.poll(() => handleOpacity(childAHandle)).toBeLessThan(0.5);
@@ -229,7 +232,7 @@ export const hoverBehaviorScenarios = [
   defineScenario(
     "6. Hover Isolation",
     "column_list visual",
-    "column_list hover shows only one dashed border — the flex wrapper has no border of its own",
+    "column_list hover leaves the inner flex row borderless — it carries no border of its own",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createBlockViaSlash(page, "column", "2 columns");
@@ -239,18 +242,27 @@ export const hoverBehaviorScenarios = [
         .first();
       await columnListBlock.hover();
 
-      const flexBorderStyle = await columnListBlock.evaluate((article) => {
-        const flexDiv = article.querySelector(".flex.items-stretch");
-        return flexDiv ? getComputedStyle(flexDiv).borderStyle : "NOT_FOUND";
+      // The bordered-box column_list ("de86a7e", 2026-06-02: "borderless like
+      // Notion; the flex row + resize handles carry the structure") replaced
+      // `items-stretch` with `items-start` on the flex row
+      // (BlockEditorSurface.tsx:1441) — same assertion (no border of its own),
+      // current class name.
+      // Assert on border-WIDTH, not border-style: Tailwind's preflight sets
+      // `border-style: solid` globally with `border-width: 0`, so `borderStyle`
+      // is "solid" even on an element that paints no border. Width is the
+      // property that actually encodes "carries no border of its own".
+      const flexBorderWidth = await columnListBlock.evaluate((article) => {
+        const flexDiv = article.querySelector(".flex.items-start");
+        return flexDiv ? getComputedStyle(flexDiv).borderWidth : "NOT_FOUND";
       });
-      expect(flexBorderStyle).toBe("none");
+      expect(flexBorderWidth).toBe("0px");
     },
   ),
 
   defineScenario(
     "6. Hover Isolation",
     "column_list visual",
-    "column_list outer wrapper has no background at rest — article background appears only on hover",
+    "column_list has no background at rest or on hover — background painting was removed project-wide",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       await createBlockViaSlash(page, "column", "2 columns");
@@ -259,22 +271,21 @@ export const hoverBehaviorScenarios = [
         .locator('[data-testid="draggable-block"][data-block-type="column_list"]')
         .first();
 
-      const outerWrapperBg = await columnListBlock.evaluate((article) => {
-        const wrapper = article.querySelector("[class*='border-dashed']");
-        return wrapper ? getComputedStyle(wrapper).backgroundColor : null;
-      });
-      expect(outerWrapperBg).toBe("rgba(0, 0, 0, 0)");
+      // The dashed-bordered/backgrounded outer wrapper this test originally
+      // targeted no longer exists: column_list dropped it entirely
+      // (BlockEditor.tsx:687-696, "No outer box, so columns don't nest borders/
+      // offset"). And separately, EVERY block's shared shell — not just
+      // column_list's — stopped painting a hover background at all
+      // (BlockEditorSurface.tsx:1258-1262: "Hover and edit-focus deliberately
+      // paint NO background — a hover/focus box on every block reads as noise").
+      // Current, real contract: transparent at rest AND transparent on hover.
+      const readBg = () =>
+        columnListBlock.evaluate((article) => getComputedStyle(article).backgroundColor);
+
+      expect(await readBg()).toBe("rgba(0, 0, 0, 0)");
 
       await columnListBlock.hover();
-      await expect
-        .poll(() =>
-          columnListBlock.evaluate((article) => {
-            const cs = getComputedStyle(article);
-            const subtle = cs.getPropertyValue("--osio-bg-subtle").trim();
-            return subtle ? cs.backgroundColor : "rgba(0, 0, 0, 0)";
-          }),
-        )
-        .not.toBe("rgba(0, 0, 0, 0)");
+      await expect.poll(readBg).toBe("rgba(0, 0, 0, 0)");
     },
   ),
 ];

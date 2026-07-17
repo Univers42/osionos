@@ -287,9 +287,14 @@ async function verifyBlockCount(page, minBlocks = 3) {
   return count >= minBlocks;
 }
 
-/** Check that at least one heading is rendered (h1/h2/h3 roles). */
+/** Check that at least one heading block is rendered. Heading blocks are live
+ *  editable [role="textbox"] divs (see EditableContent.tsx), never semantic
+ *  <h1>/<h2>/<h3> tags — the block type lives in data-block-type, the same
+ *  convention every other spec in this suite already keys off. */
 async function verifyHeadingPresent(page) {
-  const headings = await page.locator("h1, h2, h3").count();
+  const headings = await page
+    .locator('[data-block-type="heading_1"], [data-block-type="heading_2"], [data-block-type="heading_3"]')
+    .count();
   return headings > 0;
 }
 
