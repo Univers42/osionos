@@ -145,6 +145,10 @@ export function hasInlineChildren(node: InlineNode): node is WrapperNode {
     case "code_rich":
     case "link":
     case "highlight":
+    case "subscript":
+    case "superscript":
+    case "kbd":
+    case "spoiler":
       return true;
     default:
       return false;
@@ -396,6 +400,14 @@ function serializeInlineNode(node: InlineNode): string {
       return "\n";
     case "highlight":
       return `[mark]${serializeInlineNodes(node.children)}[/mark]`;
+    case "subscript":
+      return `~${serializeInlineNodes(node.children)}~`;
+    case "superscript":
+      return `^${serializeInlineNodes(node.children)}^`;
+    case "kbd":
+      return `<kbd>${serializeInlineNodes(node.children)}</kbd>`;
+    case "spoiler":
+      return `||${serializeInlineNodes(node.children)}||`;
     case "math_inline":
       return `$${node.value}$`;
     case "footnote_ref":

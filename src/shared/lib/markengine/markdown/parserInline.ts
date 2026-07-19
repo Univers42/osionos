@@ -40,11 +40,15 @@ function appendTextRun(nodes: InlineNode[], value: string): void {
   }
 }
 
+// Every dispatch first-char is ASCII, so a 128-slot table answers "can this
+// char start a match?" without materializing a single-char string per char —
+// the plain-prose fast path scans on charCodes alone.
 function findTextRunEnd(text: string, pos: number): number {
   let cursor = pos + 1;
-  while (cursor < text.length) {
-    const char = text[cursor];
-    if (char === '\n' || INLINE_DISPATCH[char]) break;
+  const length = text.length;
+  while (cursor < length) {
+    const code = text.charCodeAt(cursor);
+    if (code === 10 || (code < 128 && DISPATCH_CODES[code] === 1)) break;
     cursor++;
   }
   return cursor;
@@ -54,27 +58,28 @@ export function parseInline(text: string): InlineNode[] {
   if (!text) return [];
   const nodes: InlineNode[] = [];
   let pos = 0;
-  while (pos < text.length) {
-    if (text[pos] === '\n') {
+  const length = text.length;
+  while (pos < length) {
+    const code = text.charCodeAt(pos);
+    if (code === 10) {
       handleNewline(nodes, text, pos);
       pos++;
       continue;
     }
 
-    const matchers = INLINE_DISPATCH[text[pos]];
-    if (!matchers) {
+    if (code >= 128 || DISPATCH_CODES[code] === 0) {
       const end = findTextRunEnd(text, pos);
       appendTextRun(nodes, text.slice(pos, end));
       pos = end;
       continue;
     }
 
-    const result = tryMatchInline(text, pos, matchers);
+    const result = tryMatchInline(text, pos, INLINE_DISPATCH[text[pos]]);
     if (result) {
       if (result.start > pos) {
-        nodes.push({ type: 'text', value: text.slice(pos, result.start) });
+        appendTextRun(nodes, text.slice(pos, result.start));
       }
-      nodes.push(result.node);
+      if (result.node) nodes.push(result.node);
       pos = result.end;
     } else {
       appendChar(nodes, text[pos]);
@@ -85,4 +90,9 @@ export function parseInline(text: string): InlineNode[] {
 }
 
 const INLINE_DISPATCH: Record<string, InlineMatcher[]> = createInlineDispatch(parseInline);
+
+const DISPATCH_CODES = new Uint8Array(128);
+for (const key of Object.keys(INLINE_DISPATCH)) {
+  DISPATCH_CODES[key.charCodeAt(0)] = 1;
+}
 

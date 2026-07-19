@@ -150,6 +150,14 @@ function renderInlineNodeToHtml(node: InlineNode, options: ResolvedInlineHtmlOpt
       return renderImage(node);
     case "highlight":
       return `<mark>${renderChildren(node.children, options)}</mark>`;
+    case "subscript":
+      return `<sub>${renderChildren(node.children, options)}</sub>`;
+    case "superscript":
+      return `<sup>${renderChildren(node.children, options)}</sup>`;
+    case "kbd":
+      return `<kbd>${renderChildren(node.children, options)}</kbd>`;
+    case "spoiler":
+      return `<span class="${options.classPrefix}-spoiler" data-inline-type="spoiler">${renderChildren(node.children, options)}</span>`;
     case "math_inline":
       return renderInlineMath(node, options);
     case "emoji":

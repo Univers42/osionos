@@ -238,6 +238,15 @@ export {
   type InlineTextEditCommand,
   type InlineTextEditResult,
 } from "./inlineTextEditing";
+/**
+ * Autoformat inline markdown sugar as the user types (e.g. closing a `**` run).
+ *
+ * @example
+ * ```ts
+ * import { autoformatInlineMarkdown } from "markengine";
+ * const result = autoformatInlineMarkdown("**bold**", 8);
+ * ```
+ */
 export {
   autoformatInlineMarkdown,
   type InlineAutoformatResult,
@@ -370,5 +379,11 @@ export { bareUrlToLinkSource, hostnameFromUrl, isSingleBareUrl } from "./markdow
 /**
  * Editor live-render gate predicate: true when a source contains a bare-URL shape, so a
  * scheme-less `www.…` autolinks while typing (the char-class gate omits `.`/`/`).
+ *
+ * @example
+ * ```ts
+ * import { containsBareUrlShape } from "markengine";
+ * const shouldRerender = containsBareUrlShape("visit www.example.com now");
+ * ```
  */
 export { containsBareUrlShape } from "./markdown/parserInlineMatchers";

@@ -34,21 +34,33 @@ export function isSetextHeading(ctx: ParseContext): boolean {
 
 export function parseFencedCode(ctx: ParseContext): BlockNode {
   const openLine = advance(ctx).trimStart();
-  const fence = openLine.startsWith('```') ? '```' : '~~~';
-  const info = openLine.slice(fence.length).trim();
+  const fenceChar = openLine[0] as '`' | '~';
+  let fenceLength = 0;
+  while (openLine[fenceLength] === fenceChar) fenceLength += 1;
+  const info = openLine.slice(fenceLength).trim();
   const lang = info.split(/\s/)[0] || '';
   const meta = info.slice(lang.length).trim() || undefined;
   const lines: string[] = [];
   while (ctx.pos < ctx.lines.length) {
-    const line = ctx.lines[ctx.pos];
-    if (line.trimStart().startsWith(fence) && line.trimStart().slice(fence.length).trim() === '') {
-      advance(ctx);
-      break;
+    const line = ctx.lines[ctx.pos].trimStart();
+    // CommonMark: the closing fence uses the same char, is at least as long as
+    // the opener, and carries no info text — so a 4-backtick fence can show a
+    // 3-backtick block verbatim inside it.
+    if (line[0] === fenceChar) {
+      let closeLength = 0;
+      while (line[closeLength] === fenceChar) closeLength += 1;
+      if (closeLength >= fenceLength && line.slice(closeLength).trim() === '') {
+        advance(ctx);
+        break;
+      }
     }
     lines.push(advance(ctx));
   }
 
-  return { type: 'code_block', lang, meta, value: lines.join('\n') };
+  const value = lines.join('\n');
+  // GitHub's ```math fence is display math, not code.
+  if (lang === 'math') return { type: 'math_block', value };
+  return { type: 'code_block', lang, meta, value };
 }
 
 export function parseMathBlock(ctx: ParseContext): BlockNode {
@@ -127,8 +139,26 @@ export function isTableStart(ctx: ParseContext): boolean {
 function parseTableRow(line: string): string[] {
   let row = line.trim();
   if (row.startsWith('|')) row = row.slice(1);
-  if (row.endsWith('|')) row = row.slice(0, -1);
-  return row.split('|').map(c => c.trim());
+  if (row.endsWith('|') && !row.endsWith('\\|')) row = row.slice(0, -1);
+  // Split on unescaped pipes only — `\|` stays inside its cell as a literal `|`.
+  const cells: string[] = [];
+  let cell = '';
+  for (let i = 0; i < row.length; i++) {
+    const ch = row[i];
+    if (ch === '\\' && row[i + 1] === '|') {
+      cell += '|';
+      i += 1;
+      continue;
+    }
+    if (ch === '|') {
+      cells.push(cell.trim());
+      cell = '';
+      continue;
+    }
+    cell += ch;
+  }
+  cells.push(cell.trim());
+  return cells;
 }
 
 function parseAlignments(line: string): TableAlign[] {
@@ -171,13 +201,22 @@ function isParagraphBreak(ctx: ParseContext, trimmed: string): boolean {
   if (/^#{1,6}\s/.test(trimmed)) return true;
   if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) return true;
   if (trimmed.startsWith('$$')) return true;
+  if (trimmed.startsWith('<!--')) return true;
   if (/^>\s/.test(trimmed) || trimmed === '>') return true;
   if (/^[-*+]\s+/.test(trimmed)) return true;
+  if (/^:\s+/.test(trimmed)) return true;
   if (/^\d{1,9}[.)]\s+/.test(trimmed)) return true;
   if (/^\[\^([^\]]+)\]:\s/.test(trimmed)) return true;
   if (isTableStart(ctx)) return true;
   if (/^<([a-zA-Z])/.test(trimmed) && isHtmlBlockTag(trimmed)) return true;
   return false;
+}
+
+/** The line after this one opens a `: definition` — leave it as the def term. */
+function nextLineStartsDefinition(ctx: ParseContext, linesCollected: number): boolean {
+  if (linesCollected === 0) return false;
+  const next = ctx.lines[ctx.pos + 1];
+  return next !== undefined && /^:\s+/.test(next.trimStart());
 }
 
 function isSetextBreak(ctx: ParseContext, linesCollected: number): boolean {
@@ -196,6 +235,7 @@ export function parseParagraph(ctx: ParseContext): BlockNode {
     const trimmed = line.trim();
     if (isParagraphBreak(ctx, trimmed)) break;
     if (isSetextBreak(ctx, lines.length)) break;
+    if (nextLineStartsDefinition(ctx, lines.length)) break;
     lines.push(trimmed);
     advance(ctx);
   }

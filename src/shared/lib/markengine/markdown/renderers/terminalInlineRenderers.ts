@@ -63,6 +63,14 @@ export function renderInline(node: InlineNode, ctx: RenderCtx): string {
       return '\n' + ind(ctx);
     case 'highlight':
       return `${c(ctx, C.highlight)}${renderInlines(node.children, ctx)}${reset(ctx)}`;
+    case 'subscript':
+      return `~${renderInlines(node.children, ctx)}`;
+    case 'superscript':
+      return `^${renderInlines(node.children, ctx)}`;
+    case 'kbd':
+      return `${c(ctx, C.code + C.codeBg)}[${renderInlines(node.children, ctx)}]${reset(ctx)}`;
+    case 'spoiler':
+      return `${c(ctx, DIM)}${renderInlines(node.children, ctx)}${reset(ctx)}`;
     case 'math_inline':
       return `${c(ctx, C.math)}${node.value}${reset(ctx)}`;
     case 'footnote_ref':
@@ -81,6 +89,7 @@ export function renderInlinesPlain(nodes: InlineNode[]): string {
       case 'text': return n.value;
       case 'bold': case 'italic': case 'bold_italic': case 'strikethrough':
       case 'underline': case 'highlight': case 'text_color': case 'background_color': case 'code_rich':
+      case 'subscript': case 'superscript': case 'kbd': case 'spoiler':
         return renderInlinesPlain(n.children);
       case 'code': return n.value;
       case 'link': return renderInlinesPlain(n.children);
