@@ -22,12 +22,21 @@ import { findClosingBracket } from "./parserInlineUtils";
 import { hostnameFromUrl } from "./urlSugar";
 import { normalizeInlineLinkHref } from "../inlineLinks";
 
+// CommonMark: every ASCII punctuation character is backslash-escapable.
+const ESCAPABLE_PUNCTUATION = /[!-/:-@[-`{-~]/;
+
 // A bare URL not already wrapped in `[]()` or `<>` — its href is the full URL,
 // its visible label is the hostname (so it renders blue, not the "pure url").
 // Trailing sentence punctuation is left outside the link. Two forms: fully
 // schemed (`https://…`) and scheme-less `www.…` (normalized to https below).
 export const BARE_URL_RE = /^https?:\/\/[^\s<>()[\]]+[^\s<>()[\].,;:!?'"]/;
 export const BARE_WWW_RE = /^www\.[^\s<>()[\]]+[^\s<>()[\].,;:!?'"]/i;
+
+// Sticky twins for the hot matcher path — matching at an offset without the
+// `text.slice(pos)` allocation the anchored forms would force on every h/w char.
+const BARE_URL_STICKY = /https?:\/\/[^\s<>()[\]]+[^\s<>()[\].,;:!?'"]/y;
+const BARE_WWW_STICKY = /www\.[^\s<>()[\]]+[^\s<>()[\].,;:!?'"]/iy;
+const EMOJI_STICKY = /:([a-zA-Z0-9_+-]+):/y;
 
 // Non-anchored twin of the two bare-URL matchers (leading `^` dropped) so the editor's
 // live-render gate can ask "does this source contain a bare-URL shape anywhere?" — a
@@ -44,11 +53,16 @@ export function containsBareUrlShape(text: string): boolean {
   return BARE_URL_SHAPE_RE.test(text);
 }
 
+function execSticky(re: RegExp, text: string, pos: number): RegExpExecArray | null {
+  re.lastIndex = pos;
+  return re.exec(text);
+}
+
 function matchBareUrl(text: string, pos: number): InlineMatchResult | null {
   // Only at a boundary: never mid-word (e.g. "ahttps://") or after url-ish chars.
   if (pos > 0 && /[\w@/.-]/.test(text[pos - 1])) return null;
-  const slice = text.slice(pos);
-  const match = BARE_URL_RE.exec(slice) ?? BARE_WWW_RE.exec(slice);
+  const match =
+    execSticky(BARE_URL_STICKY, text, pos) ?? execSticky(BARE_WWW_STICKY, text, pos);
   if (!match) return null;
   const raw = match[0];
   // Autolink only once the URL is followed by something (space/punctuation/text),
@@ -93,6 +107,73 @@ function matchReversedLink(
   };
 }
 
+// Hoisted node factories for the `[` tag forms (shared by the composite matcher).
+const makeTextColor = (color: string, children: InlineNode[]): InlineNode => ({
+  type: "text_color",
+  color,
+  children,
+});
+const makeBackgroundColor = (color: string, children: InlineNode[]): InlineNode => ({
+  type: "background_color",
+  color,
+  children,
+});
+const makeCodeRich = (children: InlineNode[]): InlineNode => ({ type: "code_rich", children });
+const makeBold = (children: InlineNode[]): InlineNode => ({ type: "bold", children });
+const makeItalic = (children: InlineNode[]): InlineNode => ({ type: "italic", children });
+const makeStrikethrough = (children: InlineNode[]): InlineNode => ({
+  type: "strikethrough",
+  children,
+});
+const makeUnderline = (children: InlineNode[]): InlineNode => ({ type: "underline", children });
+const makeHighlight = (children: InlineNode[]): InlineNode => ({ type: "highlight", children });
+
+const PAGE_LINK_STICKY = /\[\[page:([^\]]+)\]\]/y;
+
+function matchPageLink(text: string, pos: number): InlineMatchResult | null {
+  const match = execSticky(PAGE_LINK_STICKY, text, pos);
+  if (!match) return null;
+  return {
+    start: pos,
+    end: pos + match[0].length,
+    node: { type: "internal_link", pageId: match[1] },
+  };
+}
+
+function matchStandardLink(
+  text: string,
+  pos: number,
+  parseInline: InlineParser,
+): InlineMatchResult | null {
+  const labelClose = findClosingBracket(text, pos);
+  if (labelClose === -1 || text[labelClose + 1] !== "(") return null;
+  const parenClose = findDestinationClose(text, labelClose + 2);
+  if (parenClose === -1) return null;
+  const label = text.slice(pos + 1, labelClose);
+  const inside = text.slice(labelClose + 2, parenClose).trim();
+  const titleMatch = /^(.*?)\s+"([^"]*)"$/.exec(inside);
+  const href = normalizeInlineLinkHref(titleMatch ? titleMatch[1] : inside);
+  const title = titleMatch ? titleMatch[2] : undefined;
+  return {
+    start: pos,
+    end: parenClose + 1,
+    node: { type: "link", href, title, children: parseInline(label) },
+  };
+}
+
+function matchFootnoteRef(text: string, pos: number): InlineMatchResult | null {
+  if (text[pos + 1] !== "^") return null;
+  const close = text.indexOf("]", pos + 2);
+  if (close === -1 || text[close + 1] === "(") return null;
+  const label = text.slice(pos + 2, close);
+  if (!label || /\s/.test(label)) return null;
+  return {
+    start: pos,
+    end: close + 1,
+    node: { type: "footnote_ref", label },
+  };
+}
+
 type InlineMatcherSpec = {
   firstChars: readonly string[];
   matcher: InlineMatcher;
@@ -105,31 +186,6 @@ function defineMatcher(
   return { firstChars, matcher };
 }
 
-/** Emphasis delimiters that STACK ("*"/"**"/"***"), so a run length is meaningful. */
-const STACKING_DELIMITERS = new Set(["*", "_"]);
-
-/**
- * CommonMark: an opening delimiter RUN longer than the delimiter being matched does
- * not open here — the surplus stays OUTSIDE the span as literal text ("***foo**" is
- * `*<strong>foo</strong>`, not `<strong>*foo</strong>`).
- *
- * Without this, "**" happily opened at the FIRST star of "***hello**" and swallowed
- * the third star into the content -> bold("*hello"). Live, that made "***bold
- * italic***" impossible to ever close: the stray "*" was stranded inside the mark and
- * the user's last "*" landed outside it. Refusing here lets the parser emit the extra
- * "*" as text and re-match the clean "**" one char later.
- *
- * Scoped to "*"/"_": "~~", "==" and backticks do not stack, and a run guard there
- * would wrongly reject things like a ``double-backtick`` code span.
- */
-function opensOverlongRun(text: string, pos: number, open: string): boolean {
-  const delim = open[0];
-  if (!STACKING_DELIMITERS.has(delim) || open !== delim.repeat(open.length)) return false;
-  let runEnd = pos;
-  while (runEnd < text.length && text[runEnd] === delim) runEnd += 1;
-  return runEnd - pos > open.length;
-}
-
 function matchDelimited(
   text: string,
   pos: number,
@@ -139,7 +195,6 @@ function matchDelimited(
   factory: (children: InlineNode[]) => InlineNode,
 ): InlineMatchResult | null {
   if (!text.startsWith(open, pos)) return null;
-  if (opensOverlongRun(text, pos, open)) return null;
   const start = pos + open.length;
   const end = text.indexOf(close, start);
   if (end === -1 || end === start) return null;
@@ -149,6 +204,332 @@ function matchDelimited(
     end: end + close.length,
     node: factory(parseInline(inner)),
   };
+}
+
+/**
+ * Pandoc-style tight span (`~sub~` / `^sup^`): single-char delimiter, the inner
+ * text may not contain whitespace or the delimiter, so prose like "x ~ y" and
+ * "5 ^ 2" stays literal.
+ */
+function matchTightDelimited(
+  text: string,
+  pos: number,
+  delim: string,
+  parseInline: InlineParser,
+  factory: (children: InlineNode[]) => InlineNode,
+): InlineMatchResult | null {
+  if (text[pos] !== delim || text[pos + 1] === delim) return null;
+  let cursor = pos + 1;
+  while (cursor < text.length) {
+    const ch = text[cursor];
+    if (ch === delim) break;
+    if (ch === " " || ch === "\t" || ch === "\n") return null;
+    cursor += 1;
+  }
+  if (cursor >= text.length || cursor === pos + 1) return null;
+  return {
+    start: pos,
+    end: cursor + 1,
+    node: factory(parseInline(text.slice(pos + 1, cursor))),
+  };
+}
+
+// Paired inline HTML tags with a direct AST meaning — the HTML-fallback forms
+// (`<sub>`, `<kbd>`, `<mark>`, `<u>`…) parse into the same nodes as their
+// markdown sugar, so they render styled instead of leaking literal tags.
+const INLINE_HTML_TAG_TO_NODE: Record<string, (children: InlineNode[]) => InlineNode> = {
+  sub: (children) => ({ type: "subscript", children }),
+  sup: (children) => ({ type: "superscript", children }),
+  kbd: (children) => ({ type: "kbd", children }),
+  mark: (children) => ({ type: "highlight", children }),
+  ins: (children) => ({ type: "underline", children }),
+  u: (children) => ({ type: "underline", children }),
+  b: (children) => ({ type: "bold", children }),
+  strong: (children) => ({ type: "bold", children }),
+  i: (children) => ({ type: "italic", children }),
+  em: (children) => ({ type: "italic", children }),
+  del: (children) => ({ type: "strikethrough", children }),
+  s: (children) => ({ type: "strikethrough", children }),
+  strike: (children) => ({ type: "strikethrough", children }),
+};
+
+const INLINE_HTML_OPEN_RE = /^<([a-zA-Z]+)>/;
+
+function matchInlineHtmlTag(
+  text: string,
+  pos: number,
+  parseInline: InlineParser,
+): InlineMatchResult | null {
+  const open = INLINE_HTML_OPEN_RE.exec(text.slice(pos, pos + 12));
+  if (!open) return null;
+  const tag = open[1].toLowerCase();
+  const factory = INLINE_HTML_TAG_TO_NODE[tag];
+  if (!factory) return null;
+  const closeTag = `</${tag}>`;
+  const close = text.toLowerCase().indexOf(closeTag, pos + open[0].length);
+  if (close === -1) return null;
+  const inner = text.slice(pos + open[0].length, close);
+  return {
+    start: pos,
+    end: close + closeTag.length,
+    node: factory(parseInline(inner)),
+  };
+}
+
+/** `<!-- … -->` consumes silently — comments never reach the rendered output. */
+function matchInlineComment(text: string, pos: number): InlineMatchResult | null {
+  if (!text.startsWith("<!--", pos)) return null;
+  const close = text.indexOf("-->", pos + 4);
+  if (close === -1) return null;
+  return { start: pos, end: close + 3, node: null };
+}
+
+// ─── Reference links ──────────────────────────────────────────────────────────
+//
+// `[text][label]`, collapsed `[text][]`, shortcut `[text]`, and `![alt][label]`
+// resolve against the document's `[label]: url "title"` definitions. The parser
+// collects definitions before block parsing and scopes them here for the
+// duration of one `parse()` call (parsing is synchronous, so a module slot is
+// safe and keeps the matcher signature unchanged).
+
+export interface InlineRefDefinition {
+  href: string;
+  title?: string;
+}
+
+let activeRefDefinitions: Map<string, InlineRefDefinition> | null = null;
+
+export function setInlineRefDefinitions(
+  definitions: Map<string, InlineRefDefinition> | null,
+): void {
+  activeRefDefinitions = definitions;
+}
+
+export function normalizeRefLabel(label: string): string {
+  return label.trim().toLowerCase().replaceAll(/\s+/g, " ");
+}
+
+function lookupRefDefinition(label: string): InlineRefDefinition | null {
+  if (!activeRefDefinitions) return null;
+  return activeRefDefinitions.get(normalizeRefLabel(label)) ?? null;
+}
+
+function matchReferenceLink(
+  text: string,
+  pos: number,
+  parseInline: InlineParser,
+): InlineMatchResult | null {
+  if (text[pos] !== "[" || !activeRefDefinitions) return null;
+  const labelClose = findClosingBracket(text, pos);
+  if (labelClose === -1) return null;
+  if (text[labelClose + 1] === "(") return null; // inline `[text](url)` wins
+  const textPart = text.slice(pos + 1, labelClose);
+  let refLabel = textPart;
+  let end = labelClose + 1;
+  if (text[labelClose + 1] === "[") {
+    const refClose = text.indexOf("]", labelClose + 2);
+    if (refClose === -1) return null;
+    const explicit = text.slice(labelClose + 2, refClose);
+    if (explicit) refLabel = explicit; // `[text][]` collapses to the text
+    end = refClose + 1;
+  }
+  const definition = lookupRefDefinition(refLabel);
+  if (!definition) return null;
+  return {
+    start: pos,
+    end,
+    node: {
+      type: "link",
+      href: definition.href,
+      title: definition.title,
+      children: parseInline(textPart),
+    },
+  };
+}
+
+function matchReferenceImage(
+  text: string,
+  pos: number,
+): InlineMatchResult | null {
+  if (text[pos] !== "!" || text[pos + 1] !== "[" || !activeRefDefinitions) return null;
+  const altClose = findClosingBracket(text, pos + 1);
+  if (altClose === -1) return null;
+  if (text[altClose + 1] === "(") return null; // inline `![alt](src)` wins
+  const alt = text.slice(pos + 2, altClose);
+  let refLabel = alt;
+  let end = altClose + 1;
+  if (text[altClose + 1] === "[") {
+    const refClose = text.indexOf("]", altClose + 2);
+    if (refClose === -1) return null;
+    const explicit = text.slice(altClose + 2, refClose);
+    if (explicit) refLabel = explicit;
+    end = refClose + 1;
+  }
+  const definition = lookupRefDefinition(refLabel);
+  if (!definition) return null;
+  return {
+    start: pos,
+    end,
+    node: { type: "image", src: definition.href, alt, title: definition.title },
+  };
+}
+
+// ─── Stacked emphasis (* and _) ───────────────────────────────────────────────
+//
+// * and _ are the only delimiters whose RUN LENGTH means something ("*", "**",
+// "***", "****"…), and whose runs may close in parts ("***a** b*"). One resolver
+// handles every combination; the dialect keeps the editor's mark mapping:
+//   1 → italic · 2 → bold ("*") / underline ("_") · 3 → bold_italic ·
+//   4+ → nested pairs, italic innermost when odd (so "****x****" is bold-in-bold
+//   and "*****x*****" renders bold italic — no 4th style exists).
+// An overlong opener leaves its surplus OUTSIDE the span as literal text
+// ("***foo**" → *<strong>foo</strong>), matching CommonMark and the editor's
+// pinned intermediate typing states.
+
+type StackingMarker = "*" | "_";
+
+const CODE_BACKSLASH = 92;
+const CODE_BACKTICK = 96;
+
+function runLengthAt(text: string, pos: number, ch: string): number {
+  let end = pos;
+  while (end < text.length && text[end] === ch) end += 1;
+  return end - pos;
+}
+
+function runLengthAtCode(text: string, pos: number, code: number): number {
+  let end = pos;
+  while (end < text.length && text.charCodeAt(end) === code) end += 1;
+  return end - pos;
+}
+
+/** Out-of-range charCodeAt yields NaN — every comparison below stays false, so
+ *  callers treat "before start"/"past end" explicitly where it matters. */
+function isWhitespaceCode(code: number): boolean {
+  return code === 32 || code === 9 || code === 10 || code === 13;
+}
+
+function isBoundaryCode(code: number): boolean {
+  return Number.isNaN(code) || isWhitespaceCode(code);
+}
+
+function isWordCode(code: number): boolean {
+  return (
+    (code >= 97 && code <= 122) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 48 && code <= 57) ||
+    code === 95
+  );
+}
+
+function wrapEmphasis(
+  marker: StackingMarker,
+  take: number,
+  children: InlineNode[],
+): InlineNode {
+  if (take === 1) return { type: "italic", children };
+  if (take === 2)
+    return marker === "*"
+      ? { type: "bold", children }
+      : { type: "underline", children };
+  if (take === 3) return { type: "bold_italic", children };
+  let node: InlineNode =
+    take % 2 === 1
+      ? { type: "italic", children }
+      : wrapEmphasis(marker, 2, children);
+  for (let pairs = Math.floor(take / 2) - (take % 2 === 1 ? 0 : 1); pairs > 0; pairs -= 1) {
+    node = wrapEmphasis(marker, 2, [node]);
+  }
+  return node;
+}
+
+interface EmphasisSegment {
+  content: string;
+  take: number;
+}
+
+/** Skip a balanced backtick code span during the closer scan (code binds tighter). */
+function skipCodeSpan(text: string, cursor: number): number {
+  const ticks = runLengthAt(text, cursor, "`");
+  const close = text.indexOf("`".repeat(ticks), cursor + ticks);
+  return close === -1 ? cursor + ticks : close + ticks;
+}
+
+function matchStackedEmphasis(
+  text: string,
+  pos: number,
+  parseInline: InlineParser,
+): InlineMatchResult | null {
+  const markerCode = text.charCodeAt(pos);
+  const marker = text[pos] as StackingMarker;
+  const isStar = markerCode === 42;
+  if (pos > 0 && text.charCodeAt(pos - 1) === markerCode) return null; // run interior
+  const openLen = runLengthAtCode(text, pos, markerCode);
+  const length = text.length;
+  if (pos + openLen >= length) return null;
+  if (isWhitespaceCode(text.charCodeAt(pos + openLen))) return null; // opener can't precede space
+  if (!isStar && pos > 0 && isWordCode(text.charCodeAt(pos - 1))) return null; // no intraword _
+
+  const segments: EmphasisSegment[] = [];
+  let remaining = openLen;
+  let segStart = pos + openLen;
+  let cursor = segStart;
+  let matchEnd = -1;
+  let depth = 0;
+
+  while (cursor < length && remaining > 0) {
+    const code = text.charCodeAt(cursor);
+    if (code === CODE_BACKSLASH) {
+      cursor += 2;
+      continue;
+    }
+    if (code === CODE_BACKTICK) {
+      cursor = skipCodeSpan(text, cursor);
+      continue;
+    }
+    if (code !== markerCode) {
+      cursor += 1;
+      continue;
+    }
+
+    const runLen = runLengthAtCode(text, cursor, markerCode);
+    const before = text.charCodeAt(cursor - 1);
+    const after = text.charCodeAt(cursor + runLen); // NaN past the end
+    const canClose = !isWhitespaceCode(before) && (isStar || !isWordCode(after));
+    const canOpen = !isBoundaryCode(after) && (isStar || !isWordCode(before));
+
+    if (canClose && cursor > segStart && depth > 0) {
+      depth -= 1; // pairs with an inner opener; stays in the content
+      cursor += runLen;
+      continue;
+    }
+    if (canClose && cursor > segStart) {
+      const take = remaining < runLen ? remaining : runLen;
+      segments.push({ content: text.slice(segStart, cursor), take });
+      remaining -= take;
+      cursor += take; // surplus closer marks stay in the stream
+      matchEnd = cursor;
+      segStart = cursor;
+      continue;
+    }
+    if (canOpen) depth += 1;
+    cursor += runLen;
+  }
+
+  if (segments.length === 0 || segments[0].content.length === 0) return null;
+
+  let node: InlineNode | null = null;
+  let consumed = 0;
+  for (const segment of segments) {
+    const children = node
+      ? [node, ...parseInline(segment.content)]
+      : parseInline(segment.content);
+    node = wrapEmphasis(marker, segment.take, children);
+    consumed += segment.take;
+  }
+
+  // Surplus opener marks stay OUTSIDE as literal text via the start offset.
+  return { start: pos + (openLen - consumed), end: matchEnd, node };
 }
 
 function matchTaggedInlineColor(
@@ -270,22 +651,6 @@ function findMatchingTaggedClose(
     return bracketEnd === -1 ? -1 : bracketEnd + 1;
   }
 
-function findSingleEmphasisClose(
-  text: string,
-  pos: number,
-  marker: "*" | "_",
-): number {
-  for (let i = pos + 1; i < text.length; i++) {
-    if (text[i] !== marker) continue;
-
-    // Single emphasis must not bind to a delimiter that belongs to a run.
-    if (text[i - 1] === marker || text[i + 1] === marker) continue;
-
-    return i;
-  }
-  return -1;
-}
-
 function findDestinationClose(text: string, start: number): number {
   let depth = 0;
   for (let cursor = start; cursor < text.length; cursor++) {
@@ -312,7 +677,8 @@ export function createInlineDispatch(
     defineMatcher(["\\"], (text, pos) => {
       if (text[pos] !== "\\" || pos + 1 >= text.length) return null;
       const next = text[pos + 1];
-      if ("\\`*_{}[]()#+-.!|~$=".includes(next)) {
+      // CommonMark: any ASCII punctuation character can be backslash-escaped.
+      if (ESCAPABLE_PUNCTUATION.test(next)) {
         return {
           start: pos,
           end: pos + 2,
@@ -354,6 +720,7 @@ export function createInlineDispatch(
         node: { type: "math_inline", value: text.slice(pos + 1, close) },
       };
     }),
+    defineMatcher(["!"], matchReferenceImage),
     defineMatcher(["!"], (text, pos) => {
       if (text[pos] !== "!" || text[pos + 1] !== "[") return null;
       const altClose = findClosingBracket(text, pos + 1);
@@ -371,98 +738,51 @@ export function createInlineDispatch(
         node: { type: "image", src, alt, title },
       };
     }),
-    defineMatcher(["["], (text, pos) =>
-      matchTaggedInlineColor(text, pos, "color", parseInline, (color, children) => ({
-        type: "text_color",
-        color,
-        children,
-      })),
-    ),
-    defineMatcher(["["], (text, pos) =>
-      matchTaggedInlineColor(text, pos, "bg", parseInline, (color, children) => ({
-        type: "background_color",
-        color,
-        children,
-      })),
-    ),
-    defineMatcher(["["], (text, pos) =>
-      matchTaggedInlineChildren(text, pos, "code", parseInline, (children) => ({
-        type: "code_rich",
-        children,
-      })),
-    ),
-    defineMatcher(["["], (text, pos) =>
-      matchTaggedInlineChildren(text, pos, "b", parseInline, (children) => ({
-        type: "bold",
-        children,
-      })),
-    ),
-    defineMatcher(["["], (text, pos) =>
-      matchTaggedInlineChildren(text, pos, "i", parseInline, (children) => ({
-        type: "italic",
-        children,
-      })),
-    ),
-    defineMatcher(["["], (text, pos) =>
-      matchTaggedInlineChildren(text, pos, "s", parseInline, (children) => ({
-        type: "strikethrough",
-        children,
-      })),
-    ),
-    defineMatcher(["["], (text, pos) =>
-      matchTaggedInlineChildren(text, pos, "u", parseInline, (children) => ({
-        type: "underline",
-        children,
-      })),
-    ),
-    defineMatcher(["["], (text, pos) =>
-      matchTaggedInlineChildren(text, pos, "mark", parseInline, (children) => ({
-        type: "highlight",
-        children,
-      })),
-    ),
+    // One `[` matcher, dispatched on the SECOND char so a bracket tries only
+    // the 1-2 tag forms it could possibly be (was: 12 matchers probed in turn).
+    // Priority is unchanged: tag forms → [[page:]] → [text](url) → [^fn] → ref.
     defineMatcher(["["], (text, pos) => {
-      if (text[pos] !== "[" || text[pos + 1] !== "[") return null;
-      const match = /^\[\[page:([^\]]+)\]\]/.exec(text.slice(pos));
-      if (!match) return null;
-      return {
-        start: pos,
-        end: pos + match[0].length,
-        node: { type: "internal_link", pageId: match[1] },
-      };
-    }),
-    defineMatcher(["["], (text, pos) => {
-      if (text[pos] !== "[") return null;
-      const labelClose = findClosingBracket(text, pos);
-      if (labelClose === -1 || text[labelClose + 1] !== "(") return null;
-      const parenClose = findDestinationClose(text, labelClose + 2);
-      if (parenClose === -1) return null;
-      const label = text.slice(pos + 1, labelClose);
-      const inside = text.slice(labelClose + 2, parenClose).trim();
-      const titleMatch = /^(.*?)\s+"([^"]*)"$/.exec(inside);
-      const href = normalizeInlineLinkHref(titleMatch ? titleMatch[1] : inside);
-      const title = titleMatch ? titleMatch[2] : undefined;
-      return {
-        start: pos,
-        end: parenClose + 1,
-        node: { type: "link", href, title, children: parseInline(label) },
-      };
-    }),
-    defineMatcher(["["], (text, pos) => {
-      if (text[pos] !== "[" || text[pos + 1] !== "^") return null;
-      const close = text.indexOf("]", pos + 2);
-      if (close === -1 || text[close + 1] === "(") return null;
-      const label = text.slice(pos + 2, close);
-      if (!label || /\s/.test(label)) return null;
-      return {
-        start: pos,
-        end: close + 1,
-        node: { type: "footnote_ref", label },
-      };
+      const second = text.charCodeAt(pos + 1);
+      let tagged: InlineMatchResult | null = null;
+      switch (second) {
+        case 99: // c → [color=…] / [code]
+          tagged =
+            matchTaggedInlineColor(text, pos, "color", parseInline, makeTextColor) ??
+            matchTaggedInlineChildren(text, pos, "code", parseInline, makeCodeRich);
+          break;
+        case 98: // b → [bg=…] / [b]
+          tagged =
+            matchTaggedInlineColor(text, pos, "bg", parseInline, makeBackgroundColor) ??
+            matchTaggedInlineChildren(text, pos, "b", parseInline, makeBold);
+          break;
+        case 105: // i
+          tagged = matchTaggedInlineChildren(text, pos, "i", parseInline, makeItalic);
+          break;
+        case 115: // s
+          tagged = matchTaggedInlineChildren(text, pos, "s", parseInline, makeStrikethrough);
+          break;
+        case 117: // u
+          tagged = matchTaggedInlineChildren(text, pos, "u", parseInline, makeUnderline);
+          break;
+        case 109: // m → [mark]
+          tagged = matchTaggedInlineChildren(text, pos, "mark", parseInline, makeHighlight);
+          break;
+        case 91: // [ → [[page:id]]
+          tagged = matchPageLink(text, pos);
+          break;
+        default:
+          break;
+      }
+      return (
+        tagged ??
+        matchStandardLink(text, pos, parseInline) ??
+        matchFootnoteRef(text, pos) ??
+        matchReferenceLink(text, pos, parseInline)
+      );
     }),
     defineMatcher([":"], (text, pos) => {
       if (text[pos] !== ":") return null;
-      const match = /^:([a-zA-Z0-9_+-]+):/.exec(text.slice(pos));
+      const match = execSticky(EMOJI_STICKY, text, pos);
       if (!match) return null;
       const name = match[1];
       const emoji = EMOJI_MAP[name];
@@ -480,54 +800,32 @@ export function createInlineDispatch(
       })),
     ),
     defineMatcher(["*", "_"], (text, pos) =>
-      matchDelimited(text, pos, "***", "***", parseInline, (children) => ({
-        type: "bold_italic",
-        children,
-      })) ??
-      matchDelimited(text, pos, "___", "___", parseInline, (children) => ({
-        type: "bold_italic",
-        children,
-      })),
-    ),
-    defineMatcher(["*"], (text, pos) =>
-      matchDelimited(text, pos, "**", "**", parseInline, (children) => ({
-        type: "bold",
-        children,
-      })),
-    ),
-    defineMatcher(["_"], (text, pos) =>
-      matchDelimited(text, pos, "__", "__", parseInline, (children) => ({
-        type: "underline",
-        children,
-      })),
+      matchStackedEmphasis(text, pos, parseInline),
     ),
     defineMatcher(["~"], (text, pos) =>
       matchDelimited(text, pos, "~~", "~~", parseInline, (children) => ({
         type: "strikethrough",
         children,
+      })) ?? matchTightDelimited(text, pos, "~", parseInline, (children) => ({
+        type: "subscript",
+        children,
       })),
     ),
-    defineMatcher(["*", "_"], (text, pos) => {
-      const marker = text[pos];
-      if (marker !== "*" && marker !== "_") return null;
-      if (pos > 0 && text[pos - 1] === marker) return null; // part of an existing run
-      if (text[pos + 1] === marker) return null; // double = bold, not italic
-      const close = findSingleEmphasisClose(text, pos, marker);
-      if (close === -1 || close === pos + 1) return null;
-      if (marker === "_") {
-        if (pos > 0 && /\w/.test(text[pos - 1])) return null;
-        if (close + 1 < text.length && /\w/.test(text[close + 1])) return null;
-      }
-      const inner = text.slice(pos + 1, close);
-      return {
-        start: pos,
-        end: close + 1,
-        node: { type: "italic", children: parseInline(inner) },
-      };
-    }),
+    defineMatcher(["^"], (text, pos) =>
+      matchTightDelimited(text, pos, "^", parseInline, (children) => ({
+        type: "superscript",
+        children,
+      })),
+    ),
+    defineMatcher(["|"], (text, pos) =>
+      matchDelimited(text, pos, "||", "||", parseInline, (children) => ({
+        type: "spoiler",
+        children,
+      })),
+    ),
+    defineMatcher(["<"], matchInlineComment),
     defineMatcher(["<"], (text, pos) => {
-      const chunk = text.slice(pos);
-      const br = /^<br\s*\/?>/i.exec(chunk);
+      const br = /^<br\s*\/?>/i.exec(text.slice(pos, pos + 8));
       if (!br) return null;
       return {
         start: pos,
@@ -535,6 +833,7 @@ export function createInlineDispatch(
         node: { type: "line_break" },
       };
     }),
+    defineMatcher(["<"], (text, pos) => matchInlineHtmlTag(text, pos, parseInline)),
     defineMatcher(["<"], (text, pos) => {
       if (text[pos] !== "<") return null;
       const close = text.indexOf(">", pos + 1);

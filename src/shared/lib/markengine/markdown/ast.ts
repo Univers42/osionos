@@ -40,6 +40,10 @@ export type InlineNode =
   | { type: 'image'; src: string; alt: string; title?: string }
   | { type: 'line_break' }
   | { type: 'highlight'; children: InlineNode[] }
+  | { type: 'subscript'; children: InlineNode[] }
+  | { type: 'superscript'; children: InlineNode[] }
+  | { type: 'kbd'; children: InlineNode[] }
+  | { type: 'spoiler'; children: InlineNode[] }
   | { type: 'math_inline'; value: string }
   | { type: 'footnote_ref'; label: string }
   | { type: 'internal_link'; pageId: string }
@@ -64,7 +68,8 @@ export type BlockNode =
   | { type: 'html_block'; value: string }
   | { type: 'footnote_def'; label: string; children: BlockNode[] }
   | { type: 'definition_list'; items: DefinitionItem[] }
-  | { type: 'toggle'; summary: InlineNode[]; children: BlockNode[]; level?: 1 | 2 | 3 | 4 | 5 | 6 };
+  | { type: 'toggle'; summary: InlineNode[]; children: BlockNode[]; level?: 1 | 2 | 3 | 4 | 5 | 6 }
+  | { type: 'front_matter'; value: string };
 
 export interface ListItemNode {
   type: 'list_item';
@@ -104,7 +109,8 @@ export function isInlineNode(node: unknown): node is InlineNode {
   return isTypedRecord(node) && [
     'text', 'bold', 'italic', 'bold_italic', 'strikethrough', 'underline',
     'text_color', 'background_color', 'code_rich',
-    'code', 'link', 'image', 'line_break', 'highlight', 'math_inline',
+    'code', 'link', 'image', 'line_break', 'highlight',
+    'subscript', 'superscript', 'kbd', 'spoiler', 'math_inline',
     'footnote_ref', 'internal_link', 'emoji',
   ].includes(node.type);
 }
@@ -114,6 +120,6 @@ export function isBlockNode(node: unknown): node is BlockNode {
     'document', 'paragraph', 'heading', 'blockquote', 'code_block',
     'ordered_list', 'unordered_list', 'task_list', 'list_item',
     'thematic_break', 'table', 'callout', 'math_block', 'html_block',
-    'footnote_def', 'definition_list', 'toggle',
+    'footnote_def', 'definition_list', 'toggle', 'front_matter',
   ].includes(node.type);
 }

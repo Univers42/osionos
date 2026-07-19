@@ -119,6 +119,25 @@ function astToBlocks(node: BlockNode): Block[] {
     }
     case "math_block":
       return [{ id: crypto.randomUUID(), type: "equation", content: node.value }];
+    case "front_matter":
+      return []; // metadata, not content — no editor block
+    case "definition_list":
+      // The editor has no definition-list block: keep the source lines as
+      // paragraphs so nothing is lost and the markdown round-trips.
+      return node.items.flatMap((item): Block[] => [
+        {
+          id: crypto.randomUUID(),
+          type: "paragraph",
+          content: inlineToMarkdown(item.term),
+        },
+        ...item.definitions.map(
+          (definition): Block => ({
+            id: crypto.randomUUID(),
+            type: "paragraph",
+            content: `: ${inlineToMarkdown(definition)}`,
+          }),
+        ),
+      ]);
     case "table": {
       const header = node.head.cells.map((cell) =>
         inlineToMarkdown(cell.children),
@@ -282,6 +301,8 @@ function blockToMarkdown(node: BlockNode): string {
     }
     case "math_block":
       return `$$\n${node.value}\n$$`;
+    case "front_matter":
+      return `---\n${node.value}\n---`;
     case "html_block":
       return node.value;
     case "footnote_def":
@@ -328,6 +349,14 @@ function inlineToMarkdown(nodes: InlineNode[]): string {
           return `__${inlineToMarkdown(n.children)}__`;
         case "highlight":
           return `==${inlineToMarkdown(n.children)}==`;
+        case "subscript":
+          return `~${inlineToMarkdown(n.children)}~`;
+        case "superscript":
+          return `^${inlineToMarkdown(n.children)}^`;
+        case "kbd":
+          return `<kbd>${inlineToMarkdown(n.children)}</kbd>`;
+        case "spoiler":
+          return `||${inlineToMarkdown(n.children)}||`;
         case "text_color":
           return `[color=${n.color}]${inlineToMarkdown(n.children)}[/color]`;
         case "background_color":

@@ -16,7 +16,8 @@ import type { InlineNode } from './ast';
 export interface InlineMatchResult {
   start: number;
   end: number;
-  node: InlineNode;
+  /** null = consume the span but emit nothing (e.g. an HTML comment). */
+  node: InlineNode | null;
 }
 
 export type InlineMatcher = (text: string, pos: number) => InlineMatchResult | null;

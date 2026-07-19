@@ -275,6 +275,38 @@ export function renderInlineNode(
         ...renderInlines(node.children, o),
       );
 
+    case "subscript":
+      return React.createElement(
+        "sub",
+        { key },
+        ...renderInlines(node.children, o),
+      );
+
+    case "superscript":
+      return React.createElement(
+        "sup",
+        { key },
+        ...renderInlines(node.children, o),
+      );
+
+    case "kbd":
+      return React.createElement(
+        "kbd",
+        { key },
+        ...renderInlines(node.children, o),
+      );
+
+    case "spoiler":
+      return React.createElement(
+        "span",
+        {
+          key,
+          className: `${o.classPrefix}-spoiler`,
+          "data-inline-type": "spoiler",
+        },
+        ...renderInlines(node.children, o),
+      );
+
     case "math_inline": {
       if (o.mathRenderer) {
         return o.mathRenderer(node.value, false);

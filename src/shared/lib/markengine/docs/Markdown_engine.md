@@ -102,6 +102,49 @@ const next = incrementalParse("# Title\n\nA *fast* engine.", parsed, {
 });
 ```
 
+## Syntax coverage (rich `markdown/` engine)
+
+The canonical `markdown/` parser covers CommonMark + GFM plus the common
+extended-syntax additions. `tests/parity-reference-syntax.test.cjs` is the
+executable version of this list.
+
+**Inline** — emphasis in every combination (`*` `**` `***` and 4+ runs, which
+nest — there is no 4th style; partial closes pair like CommonMark:
+`***a** b*` → *em(strong(a) b)*; surplus opener marks stay outside as literal
+text); strikethrough `~~x~~`; highlight `==x==` / `<mark>`; subscript `~x~` /
+`<sub>`; superscript `^x^` / `<sup>`; `<kbd>`; spoiler `||x||`; inline code
+(multi-backtick, binds tighter than emphasis); math `$x$`; links (inline with
+title, angle autolinks, mailto, bare-URL-on-space with hostname label,
+reversed `(text)[url]` sugar, reference `[text][label]` / collapsed `[text][]`
+/ `![alt][label]`); images (+ `data:image/*`); footnote refs `[^1]`; emoji
+`:name:`; `[[page:id]]` internal links; `[color=]`/`[bg=]`/`[code]`/`[b]`…
+editor tags; hard breaks (two-space, backslash, `<br>`); backslash escapes for
+all ASCII punctuation; paired inline HTML (`<b>` `<i>` `<em>` `<strong>`
+`<del>` `<s>` `<u>` `<ins>`) maps to the same nodes as the sugar; HTML
+comments vanish.
+
+**Block** — ATX headings (trailing `#`s, `{#custom-id}`), setext headings,
+paragraphs, blockquotes (nested, with full blocks inside), GitHub alerts /
+callouts `> [!NOTE]`, toggles (`> [toggle]`, `#>`), fenced code (backtick or
+tilde, close fence ≥ open length so 4-backtick fences nest 3-backtick
+content), indented code, `$$` and ```` ```math ```` math blocks, HTML blocks,
+`<!-- -->` comment blocks (silent), tables (alignment, `\|` cell escapes),
+ordered (`.` and `)`, arbitrary start) / unordered / task lists with nesting,
+thematic breaks, footnote definitions, definition lists (`Term` + `: def`),
+YAML/TOML front matter (`---`/`+++` at the top; renders nothing), and
+link-reference definitions (collected document-wide, lines dropped — which
+also makes the `[//]: # (comment)` idiom invisible).
+
+### Dialect pins (deliberate deviations)
+
+- `__x__` is **underline**, not bold — the editor's only underline sugar;
+  `___x___` is still bold+italic. Pinned by `tests/canvas/inline-mark-stacking.test.ts`.
+- Bare URLs autolink **on space** with a hostname label (typing a URL never
+  collapses under the caret).
+- Wikilinks are the `[[page:id]]` form only; generic `[[Name]]` is not parsed.
+- Mentions (`@user`), issue refs (`#123`), and Pandoc attributes are left to
+  the app layer.
+
 ## Design Direction
 
 The next steps for the engine are:
