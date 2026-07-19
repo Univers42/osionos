@@ -22,8 +22,9 @@ import { containsBareUrlShape } from "./markdown/parserInlineMatchers";
 
 // The char-class trigger deliberately excludes `.` and `/` (they abound in prose), so a
 // bare scheme-less URL (`www.foo.com`) never matched — its live autolink re-render is
-// gated below via containsBareUrlShape instead.
-const INLINE_SOURCE_NORMALIZATION_PATTERN = /[[\]_*~`:$!<\\=]/;
+// gated below via containsBareUrlShape instead. `^` and `|` are in the class so the
+// ^sup^ / ||spoiler|| sugar re-renders while typing.
+const INLINE_SOURCE_NORMALIZATION_PATTERN = /[[\]_*~`:$!<\\=^|]/;
 
 interface DomReadResult {
   nodes: InlineNode[];
@@ -255,6 +256,22 @@ function applyElementFormatting(
 
   if (formatting.highlight) {
     currentNodes = [{ type: "highlight", children: currentNodes }];
+  }
+
+  if (formatting.subscript) {
+    currentNodes = [{ type: "subscript", children: currentNodes }];
+  }
+
+  if (formatting.superscript) {
+    currentNodes = [{ type: "superscript", children: currentNodes }];
+  }
+
+  if (formatting.kbd) {
+    currentNodes = [{ type: "kbd", children: currentNodes }];
+  }
+
+  if (formatting.spoiler) {
+    currentNodes = [{ type: "spoiler", children: currentNodes }];
   }
 
   if (formatting.textColor) {

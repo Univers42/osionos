@@ -18,6 +18,10 @@ export interface ElementFormattingState {
   strikethrough: boolean;
   underline: boolean;
   highlight: boolean;
+  subscript: boolean;
+  superscript: boolean;
+  kbd: boolean;
+  spoiler: boolean;
   textColor: string | null;
   backgroundColor: string | null;
   linkHref: string | null;
@@ -34,6 +38,10 @@ type FormattingKind =
   | "strikethrough"
   | "underline"
   | "highlight"
+  | "subscript"
+  | "superscript"
+  | "kbd"
+  | "spoiler"
   | "textColor"
   | "backgroundColor"
   | "link"
@@ -63,6 +71,10 @@ export function getElementFormattingState(
     strikethrough: isStrikeElement(element),
     underline: isUnderlineElement(element),
     highlight: isHighlightElement(element),
+    subscript: element.tagName === "SUB",
+    superscript: element.tagName === "SUP",
+    kbd: element.tagName === "KBD",
+    spoiler: element.dataset.inlineType === "spoiler",
     textColor: getTextColor(element),
     backgroundColor: getBackgroundColor(element),
     linkHref: getLinkHref(element),
@@ -95,6 +107,12 @@ export function isCanonicalInlineElement(
       return hasOnlyFormatting(formatting, ["underline"]);
     case "MARK":
       return hasOnlyFormatting(formatting, ["highlight"]);
+    case "SUB":
+      return hasOnlyFormatting(formatting, ["subscript"]);
+    case "SUP":
+      return hasOnlyFormatting(formatting, ["superscript"]);
+    case "KBD":
+      return hasOnlyFormatting(formatting, ["kbd"]);
     case "CODE":
       return (
         element.dataset.inlineType === "code" &&
@@ -117,6 +135,10 @@ export function isCanonicalInlineElement(
         formatting.backgroundColor
       ) {
         return hasOnlyFormatting(formatting, ["backgroundColor"]);
+      }
+
+      if (element.dataset.inlineType === "spoiler") {
+        return hasOnlyFormatting(formatting, ["spoiler"]);
       }
 
       return false;
@@ -155,6 +177,22 @@ function getActiveFormattingKinds(formatting: ElementFormattingState) {
 
   if (formatting.highlight) {
     activeKinds.push("highlight");
+  }
+
+  if (formatting.subscript) {
+    activeKinds.push("subscript");
+  }
+
+  if (formatting.superscript) {
+    activeKinds.push("superscript");
+  }
+
+  if (formatting.kbd) {
+    activeKinds.push("kbd");
+  }
+
+  if (formatting.spoiler) {
+    activeKinds.push("spoiler");
   }
 
   if (formatting.textColor) {

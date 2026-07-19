@@ -41,6 +41,17 @@ export type {
  */
 export { isBlockNode, isInlineNode } from "./markdown/ast";
 /**
+ * Canonical (bracket-form) serializer for inline AST nodes — the editor's
+ * stored source format; `serialize(parse(x))` is a fixed point.
+ *
+ * @example
+ * ```ts
+ * import { parseInline, serializeInlineNodes } from "markengine";
+ * const canonical = serializeInlineNodes(parseInline("**bold**"));
+ * ```
+ */
+export { serializeInlineNodes } from "./inlineAst";
+/**
  * Rich Markdown parser entry points.
  *
  * @example
@@ -251,6 +262,27 @@ export {
   autoformatInlineMarkdown,
   type InlineAutoformatResult,
 } from "./inlineAutoformat";
+/**
+ * True when the caret is midway through closing a longer delimiter run
+ * ("***bold italic*") — the editor holds its live restyle on these states.
+ *
+ * @example
+ * ```ts
+ * import { isMidDelimiterRun } from "markengine";
+ * const hold = isMidDelimiterRun("***bold italic*", 15);
+ * ```
+ */
+export { isMidDelimiterRun } from "./inlineAutoformat";
+/**
+ * Final chars of every inline closing delimiter — the editor's keystroke gate.
+ *
+ * @example
+ * ```ts
+ * import { INLINE_CLOSING_DELIMITERS } from "markengine";
+ * const mayAutoformat = INLINE_CLOSING_DELIMITERS.has(typedChar);
+ * ```
+ */
+export { INLINE_CLOSING_DELIMITERS } from "./inlineAutoformat";
 /**
  * Mutable inline document handle for AST-backed editor integrations.
  *

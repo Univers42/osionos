@@ -177,6 +177,40 @@ function skipHtmlCommentBlock(ctx: ParseContext): void {
   }
 }
 
+const CONTAINER_OPEN_RE = /^:::\s*([A-Za-z][A-Za-z0-9_-]*)\s*(.*)$/;
+
+/**
+ * Pandoc-style fenced div: `:::name [params]` … bare `:::` closes. Containers
+ * nest — an inner `:::name` opener deepens, each bare `:::` closes one level.
+ * The editor's column layout serializes as `:::columns` / `:::column <ratio>`.
+ */
+function parseContainer(
+  ctx: ParseContext,
+  parseFn: ParseBlocksFn,
+): BlockNode {
+  const open = CONTAINER_OPEN_RE.exec(advance(ctx).trimStart());
+  const kind = open?.[1].toLowerCase() ?? "div";
+  const params = open?.[2].trim() || undefined;
+  const innerLines: string[] = [];
+  let depth = 1;
+  while (ctx.pos < ctx.lines.length) {
+    const line = ctx.lines[ctx.pos];
+    const trimmed = line.trimStart();
+    if (CONTAINER_OPEN_RE.test(trimmed)) depth += 1;
+    else if (/^:::\s*$/.test(trimmed)) {
+      depth -= 1;
+      if (depth === 0) {
+        advance(ctx);
+        break;
+      }
+    }
+    innerLines.push(line);
+    advance(ctx);
+  }
+  const innerCtx: ParseContext = { lines: innerLines, pos: 0 };
+  return { type: "container", kind, params, children: parseFn(innerCtx, 0) };
+}
+
 const DEFINITION_MARKER_RE = /^:\s+/;
 
 function startsDefinitionList(ctx: ParseContext, trimmed: string): boolean {
@@ -279,6 +313,9 @@ function parseNextBlock(ctx: ParseContext, indent: number): BlockNode | null {
     skipHtmlCommentBlock(ctx);
     return null;
   }
+  if (trimmed.startsWith(":::") && CONTAINER_OPEN_RE.test(trimmed)) {
+    return parseContainer(ctx, parseBlocks);
+  }
   if (isThematicBreak(trimmed)) {
     advance(ctx);
     return { type: "thematic_break" };
@@ -299,8 +336,13 @@ function parseNextBlock(ctx: ParseContext, indent: number): BlockNode | null {
 function parseBlocks(ctx: ParseContext, indent: number): BlockNode[] {
   const blocks: BlockNode[] = [];
   while (ctx.pos < ctx.lines.length) {
+    const before = ctx.pos;
     const node = parseNextBlock(ctx, indent);
     if (node) blocks.push(node);
+    // Hard progress guarantee: no parser may return without consuming input.
+    // This can only trip on a parser bug — degrade to skipping one line
+    // instead of looping forever on it.
+    if (ctx.pos === before) advance(ctx);
   }
   return blocks;
 }

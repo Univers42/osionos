@@ -380,6 +380,18 @@ function renderBlock(
       );
     }
 
+    case "container":
+      return React.createElement(
+        "div",
+        {
+          key,
+          className: `${o.classPrefix}-container ${o.classPrefix}-container-${node.kind}`,
+          "data-params": node.params || undefined,
+          "data-block-state": blockState,
+        },
+        ...node.children.map((c, i) => renderBlock(c, o, modeState, i)),
+      );
+
     default:
       return React.createElement(React.Fragment, { key });
   }

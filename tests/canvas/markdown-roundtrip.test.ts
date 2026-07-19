@@ -102,3 +102,100 @@ test("table survives with its cell data", () => {
   assert.equal(out.type, "table_block");
   assert.deepEqual(out.tableData, [["A", "B", "C"], ["1", "2", "3"]]);
 });
+
+test("image block survives with asset, alt and caption", () => {
+  const out = roundTrip(
+    make({ type: "image", asset: "https://a.io/x.png", mediaAlt: "An x", content: "The caption" }),
+  );
+  assert.equal(out.type, "image");
+  assert.equal(out.asset, "https://a.io/x.png");
+  assert.equal(out.mediaAlt, "An x");
+  assert.equal(out.content, "The caption");
+});
+
+test("video, audio and file blocks survive with their asset", () => {
+  const video = roundTrip(make({ type: "video", asset: "https://a.io/v.mp4", content: "Clip" }));
+  assert.equal(video.type, "video");
+  assert.equal(video.asset, "https://a.io/v.mp4");
+  assert.equal(video.content, "Clip");
+
+  const audio = roundTrip(make({ type: "audio", asset: "https://a.io/a.mp3" }));
+  assert.equal(audio.type, "audio");
+  assert.equal(audio.asset, "https://a.io/a.mp3");
+
+  const file = roundTrip(make({ type: "file", asset: "https://a.io/f.pdf", fileName: "spec.pdf" }));
+  assert.equal(file.type, "file");
+  assert.equal(file.asset, "https://a.io/f.pdf");
+  assert.equal(file.fileName, "spec.pdf");
+});
+
+test("a drawing keeps its scene JSON and canvas height", () => {
+  const scene = '{"strokes":[1,2]}';
+  const out = roundTrip(make({ type: "draw", content: scene, drawHeight: 512 }));
+  assert.equal(out.type, "draw");
+  assert.equal(out.content, scene);
+  assert.equal(out.drawHeight, 512);
+});
+
+test("button survives with label, href and variant", () => {
+  const out = roundTrip(
+    make({ type: "button", buttonLabel: "Go", buttonHref: "page://abc", buttonVariant: "secondary" }),
+  );
+  assert.equal(out.type, "button");
+  assert.equal(out.buttonLabel, "Go");
+  assert.equal(out.buttonHref, "page://abc");
+  assert.equal(out.buttonVariant, "secondary");
+});
+
+test("database, graph and home embeds survive with their config", () => {
+  const inline = roundTrip(
+    make({ type: "database_inline", databaseId: "db1", viewId: "v2", recordLimit: 25 }),
+  );
+  assert.equal(inline.type, "database_inline");
+  assert.equal(inline.databaseId, "db1");
+  assert.equal(inline.viewId, "v2");
+  assert.equal(inline.recordLimit, 25);
+
+  const fullPage = roundTrip(make({ type: "database_full_page", databaseId: "db9" }));
+  assert.equal(fullPage.type, "database_full_page");
+  assert.equal(fullPage.databaseId, "db9");
+
+  assert.equal(roundTrip(make({ type: "graph_view" })).type, "graph_view");
+  assert.equal(roundTrip(make({ type: "home_views" })).type, "home_views");
+});
+
+test("a column layout round-trips as :::columns / :::column containers", () => {
+  const out = roundTrip(
+    make({
+      type: "column_list",
+      children: [
+        make({
+          type: "column",
+          widthRatio: 0.4,
+          children: [make({ type: "paragraph", content: "Left cell" })],
+        }),
+        make({
+          type: "column",
+          widthRatio: 0.6,
+          children: [make({ type: "heading_2", content: "Right title" })],
+        }),
+      ],
+    }),
+  );
+  assert.equal(out.type, "column_list");
+  assert.equal(out.children?.length, 2);
+  const [left, right] = out.children ?? [];
+  assert.equal(left.type, "column");
+  assert.equal(left.widthRatio, 0.4);
+  assert.equal(left.children?.[0].content, "Left cell");
+  assert.equal(right.type, "column");
+  assert.equal(right.widthRatio, 0.6);
+  assert.equal(right.children?.[0].type, "heading_2");
+});
+
+test("a malformed osi* fence stays a visible code block, never data loss", () => {
+  const parsed = parseMarkdownToBlocks("```osibutton\nnot json at all\n```");
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].type, "code");
+  assert.equal(parsed[0].content, "not json at all");
+});

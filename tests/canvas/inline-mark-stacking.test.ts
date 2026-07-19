@@ -72,9 +72,45 @@ test("code spans bind tighter than emphasis while typing", () => {
   assert.equal(canon("*em `code*` still*"), "[i]em `code*` still[/i]");
 });
 
-test("sub/sup/kbd/spoiler round-trip through the canonical source form", () => {
+test("sub/kbd/spoiler round-trip through the canonical source form", () => {
   assert.equal(canon("H~2~O"), "H~2~O");
   assert.equal(canon("x^2^"), "x^2^");
   assert.equal(canon("<kbd>Ctrl</kbd>"), "<kbd>Ctrl</kbd>");
   assert.equal(canon("||secret||"), "||secret||");
+});
+
+/** The editor's live keystroke loop: append a char, let autoformat canonicalize.
+ *  This is the exact source state machine EditableContent drives per input. */
+function typeThrough(text: string): string {
+  let source = "";
+  for (const ch of text) {
+    source += ch;
+    const result = autoformatInlineMarkdown(source, source.length);
+    if (result) source = result.source;
+  }
+  return source;
+}
+
+test("typing each combination char-by-char converges to canonical marks", () => {
+  assert.equal(typeThrough("*i*"), "[i]i[/i]");
+  assert.equal(typeThrough("**bold**"), "[b]bold[/b]");
+  assert.equal(typeThrough("__under__"), "[u]under[/u]");
+  assert.equal(typeThrough("***bold italic***"), "[b][i]bold italic[/i][/b]");
+  assert.equal(typeThrough("___both___"), "[b][i]both[/i][/b]");
+  assert.equal(typeThrough("****quad****"), "[b][b]quad[/b][/b]");
+  assert.equal(typeThrough("**_x_**"), "[b][i]x[/i][/b]");
+  assert.equal(typeThrough("~~strike~~"), "[s]strike[/s]");
+  assert.equal(typeThrough("==mark=="), "[mark]mark[/mark]");
+  assert.equal(typeThrough("H~2~O"), "H~2~O");
+  assert.equal(typeThrough("x^2^"), "x^2^");
+  assert.equal(typeThrough("||sec||"), "||sec||");
+  assert.equal(typeThrough("<kbd>K</kbd>"), "<kbd>K</kbd>");
+});
+
+test("mid-run states hold raw — autoformat never fires on a partial close", () => {
+  // "***bold italic*" parses as "**"+italic; firing there scrambles later stars.
+  assert.equal(autoformatInlineMarkdown("***bold italic*", 15), null);
+  assert.equal(autoformatInlineMarkdown("***bold italic**", 16), null);
+  assert.equal(autoformatInlineMarkdown("___both__", 9), null);
+  assert.equal(autoformatInlineMarkdown("~~strike~", 9), null);
 });

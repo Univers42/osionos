@@ -44,6 +44,8 @@ import {
   autoformatInlineMarkdown,
   getInlineEditorSelectionOffsets,
   getInlineEditorSelectionSnapshot,
+  INLINE_CLOSING_DELIMITERS,
+  isMidDelimiterRun,
   normalizeInlineLinkHref,
   parseInlineMarkdown,
   readInlineEditorDomState,
@@ -100,8 +102,9 @@ const MAX_INLINE_COLOR_RECENTS = 7;
 const LIGHT_THEME_DEFAULT_INLINE_COLOR = "var(--osio-fg-default)";
 const DARK_THEME_DEFAULT_INLINE_COLOR = "var(--osio-fg-default)";
 
-/** Closing delimiters that can complete an inline markdown style pair. */
-const INLINE_CLOSERS = new Set(["*", "_", "`", "~", "="]);
+/** Closing delimiters that can complete an inline markdown style pair —
+ *  shared with autoformat so the gate and the rule can never drift. */
+const INLINE_CLOSERS = INLINE_CLOSING_DELIMITERS;
 
 /** The collapsed caret range inside `root`, or null (a text selection / no caret). */
 function caretRangeInRoot(root: HTMLElement): Range | null {
@@ -1015,7 +1018,15 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         // are tag-free the difference is benign text-node fragmentation that renders
         // identically — skip the teardown and let the cheap serialize + rAF-batched
         // onChange carry it, so plain-text editing stays smooth.
-        if (parsedHtml.includes("<") || root.innerHTML.includes("<")) {
+        //
+        // Mid-run hold: "***bold italic*" parses as "**" + italic — restyling that
+        // partial pair would drop the caret inside the <em> and the remaining stars
+        // would type INTO the mark. Keep the raw text until the whole run closes
+        // (autoformat then canonicalizes it in one step).
+        const holdRestyle =
+          caret !== null &&
+          isMidDelimiterRun(normalizedSource, inlineSourceCaretOffset(root, caret));
+        if (!holdRestyle && (parsedHtml.includes("<") || root.innerHTML.includes("<"))) {
           root.innerHTML = parsedHtml;
           if (selectionOffsets) {
             setInlineEditorSelectionOffsets(root, selectionOffsets);

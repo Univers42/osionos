@@ -17,10 +17,56 @@ import type { Block } from "@/entities/block";
 //   toggle   -> "> [>] summary"     (children indented 2 spaces)
 //   callout  -> "> [!icon] title"   (children prefixed "> ")
 //   quote    -> "> text"            (children prefixed "> ")
+//   image    -> "![alt](asset "caption")"
+//   video    -> <video src="…"></video>     audio -> <audio src="…"></audio>
+//   file     -> <object data="…" title="name"></object>
+//   draw     -> ```osidraw h=<px> fence     app embeds -> ```osi* JSON fences
+//   columns  -> ":::columns" / ":::column <ratio>" containers
 // This keeps the raw-mode round-trip (serialize -> parse) lossless for block
 // type, content, list/checkbox state, code language, headings 1-6, toggle
-// heading level, equations and tables. Pure view state (collapsed) has no
-// markdown form and is not emitted.
+// heading level, equations, tables, media, drawings, buttons, database/graph/
+// home embeds and column layouts. Pure view state (collapsed) has no markdown
+// form and is not emitted.
+
+const escapeAttr = (value: string) => value.replaceAll('"', "&quot;");
+
+/** JSON fence for an app block: only the block's own config keys, pretty-printed. */
+function appFence(lang: string, config: Record<string, unknown>): string {
+  const entries = Object.entries(config).filter(([, value]) => value !== undefined);
+  return `\`\`\`${lang}\n${JSON.stringify(Object.fromEntries(entries), null, 2)}\n\`\`\``;
+}
+
+function mediaBlockToMarkdown(block: Block): string {
+  const asset = typeof block.asset === "string" ? block.asset : "";
+  const caption = block.content ?? "";
+  switch (block.type) {
+    case "image": {
+      const title = caption ? ` "${caption.replaceAll('"', "'")}"` : "";
+      return `![${block.mediaAlt ?? ""}](${asset}${title})`;
+    }
+    case "video":
+      return `<video src="${escapeAttr(asset)}"${caption ? ` data-caption="${escapeAttr(caption)}"` : ""}></video>`;
+    case "audio":
+      return `<audio src="${escapeAttr(asset)}"${caption ? ` data-caption="${escapeAttr(caption)}"` : ""}></audio>`;
+    default: {
+      const title = block.fileName ?? caption;
+      return `<object data="${escapeAttr(asset)}"${title ? ` title="${escapeAttr(title)}"` : ""}></object>`;
+    }
+  }
+}
+
+function columnContainerToMarkdown(block: Block, depth: number): string {
+  const opener =
+    block.type === "column" && typeof block.widthRatio === "number"
+      ? `:::column ${block.widthRatio}`
+      : block.type === "column"
+        ? ":::column"
+        : ":::columns";
+  const body = (block.children ?? [])
+    .map((child) => blockToMarkdown(child, depth + 1))
+    .join("\n\n");
+  return body ? `${opener}\n${body}\n:::` : `${opener}\n:::`;
+}
 
 function tableBlockToMarkdown(block: Block): string {
   const rows = block.tableData ?? [];
@@ -94,7 +140,46 @@ export function blockToMarkdown(block: Block, depth = 0): string {
     case "table_block": return tableBlockToMarkdown(block);
     // A drawing's content is an .osidraw JSON blob — fence it so it never leaks
     // raw into markdown exports or the clipboard (and can round-trip back).
-    case "draw": line = content ? `\`\`\`osidraw\n${content}\n\`\`\`` : "*[drawing]*"; break;
+    case "draw":
+      line = content
+        ? `\`\`\`osidraw${block.drawHeight ? ` h=${block.drawHeight}` : ""}\n${content}\n\`\`\``
+        : "*[drawing]*";
+      break;
+    case "image": case "video": case "audio": case "file":
+      line = mediaBlockToMarkdown(block);
+      break;
+    case "button":
+      return appFence("osibutton", {
+        buttonLabel: block.buttonLabel,
+        buttonHref: block.buttonHref,
+        buttonVariant: block.buttonVariant,
+        content: content || undefined,
+      });
+    case "database_inline":
+      return appFence("osidb", {
+        databaseId: block.databaseId,
+        viewId: block.viewId,
+        recordLimit: block.recordLimit,
+      });
+    case "database_full_page":
+      return appFence("osidb-page", {
+        databaseId: block.databaseId,
+        viewId: block.viewId,
+      });
+    case "graph_view":
+      return appFence("osigraph", {});
+    case "home_views":
+      return appFence("osihome", {});
+    case "layout":
+      return appFence("osilayout", {
+        layoutMode: block.layoutMode,
+        layoutRole: block.layoutRole,
+        layoutConfig: block.layoutConfig,
+        layoutCells: block.layoutCells,
+        schemaVersion: block.schemaVersion,
+      });
+    case "column_list": case "column":
+      return columnContainerToMarkdown(block, depth);
     // default: paragraph and any other type keep `content` as-is.
   }
   const children = childMarkdown(block, depth);

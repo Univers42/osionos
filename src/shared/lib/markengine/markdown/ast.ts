@@ -69,7 +69,8 @@ export type BlockNode =
   | { type: 'footnote_def'; label: string; children: BlockNode[] }
   | { type: 'definition_list'; items: DefinitionItem[] }
   | { type: 'toggle'; summary: InlineNode[]; children: BlockNode[]; level?: 1 | 2 | 3 | 4 | 5 | 6 }
-  | { type: 'front_matter'; value: string };
+  | { type: 'front_matter'; value: string }
+  | { type: 'container'; kind: string; params?: string; children: BlockNode[] };
 
 export interface ListItemNode {
   type: 'list_item';
@@ -120,6 +121,6 @@ export function isBlockNode(node: unknown): node is BlockNode {
     'document', 'paragraph', 'heading', 'blockquote', 'code_block',
     'ordered_list', 'unordered_list', 'task_list', 'list_item',
     'thematic_break', 'table', 'callout', 'math_block', 'html_block',
-    'footnote_def', 'definition_list', 'toggle', 'front_matter',
+    'footnote_def', 'definition_list', 'toggle', 'front_matter', 'container',
   ].includes(node.type);
 }

@@ -39,6 +39,7 @@ function loadMarkengine() {
     TextDecoder,
     URL,
     URLSearchParams,
+    crypto: globalThis.crypto,
   });
   return module.exports;
 }

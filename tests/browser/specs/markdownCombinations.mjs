@@ -211,6 +211,108 @@ export const markdownCombinationScenarios = [
   ),
   defineScenario(
     CONTAINER,
+    "Emphasis typing",
+    '"***bold italic***" types through — never converts to a divider',
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await editor.click();
+      // Regression: the third "*" used to instantly convert the block to a
+      // divider, destroying the emphasis mid-typing.
+      await page.keyboard.type("***bold italic***", { delay: 15 });
+      await waitForRenderStability(page);
+
+      const blockType = await page.evaluate(
+        () => document.querySelector("[data-block-id]")?.dataset.blockType,
+      );
+      expect(blockType).toBe("paragraph");
+      const html = await getEditors(page).first().evaluate((node) => node.innerHTML);
+      expect(html).toContain("<strong>");
+      expect(html).toContain("<em");
+      await expect(getEditors(page).first()).toContainText("bold italic");
+    },
+  ),
+  defineScenario(
+    CONTAINER,
+    "Emphasis typing",
+    '"___both___" and "__under__" survive typing (bold-italic / underline)',
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await editor.click();
+      await page.keyboard.type("___both___", { delay: 15 });
+      await waitForRenderStability(page);
+      const firstHtml = await getEditors(page).first().evaluate((node) => node.innerHTML);
+      expect(firstHtml).toContain("<strong>");
+      expect(firstHtml).toContain("<em");
+
+      await pressEnter(getEditors(page).first());
+      await page.keyboard.type("__under__", { delay: 15 });
+      await waitForRenderStability(page);
+      const secondHtml = await getEditors(page).nth(1).evaluate((node) => node.innerHTML);
+      expect(secondHtml).toContain("<u>");
+      const blockTypes = await page.evaluate(() =>
+        [...document.querySelectorAll("[data-block-id]")].map((node) => node.dataset.blockType),
+      );
+      expect(blockTypes).toEqual(["paragraph", "paragraph"]);
+    },
+  ),
+  defineScenario(
+    CONTAINER,
+    "Emphasis typing",
+    '"---" still converts to a divider instantly',
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await editor.click();
+      await page.keyboard.type("---", { delay: 20 });
+      await waitForRenderStability(page);
+      const blockTypes = await page.evaluate(() =>
+        [...document.querySelectorAll("[data-block-id]")].map((node) => node.dataset.blockType),
+      );
+      expect(blockTypes).toContain("divider");
+    },
+  ),
+  defineScenario(
+    CONTAINER,
+    "Emphasis typing",
+    '"*** " (space commit) still yields a star divider',
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await editor.click();
+      await page.keyboard.type("*** ", { delay: 20 });
+      await waitForRenderStability(page);
+      const blockTypes = await page.evaluate(() =>
+        [...document.querySelectorAll("[data-block-id]")].map((node) => node.dataset.blockType),
+      );
+      expect(blockTypes).toContain("divider");
+    },
+  ),
+  defineScenario(
+    CONTAINER,
+    "Emphasis typing",
+    "sub, sup, spoiler and kbd render live from their typed syntax",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      const editor = await activateFirstEditor(page);
+      await editor.click();
+      await page.keyboard.type("H~2~O and x^2^ and ||secret|| and <kbd>K</kbd>", { delay: 15 });
+      await waitForRenderStability(page);
+
+      const html = await getEditors(page).first().evaluate((node) => node.innerHTML);
+      expect(html).toContain("<sub>");
+      expect(html).toContain("<sup>");
+      expect(html).toContain('data-inline-type="spoiler"');
+      expect(html).toContain("<kbd>");
+      const blockType = await page.evaluate(
+        () => document.querySelector("[data-block-id]")?.dataset.blockType,
+      );
+      expect(blockType).toBe("paragraph");
+    },
+  ),
+  defineScenario(
+    CONTAINER,
     "Collapsible list",
     "a bulleted item with a nested child collapses and re-expands",
     async ({ page, appUrl }) => {
