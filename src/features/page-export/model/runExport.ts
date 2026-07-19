@@ -19,12 +19,13 @@ import type { NotionState } from "@notion-db/contract-types";
 import { buildExportFiles } from "./buildExportFiles";
 import { collectExportPages } from "./collectPages";
 import { sanitizeFileName } from "./exportPaths";
+import { captureExportTheme } from "./exportTheme";
 import type { ExportOptions } from "./exportTypes";
 import { buildZip } from "./zipWriter";
 
 const MIME: Record<string, string> = {
   ".md": "text/markdown", ".csv": "text/csv", ".html": "text/html",
-  ".pdf": "application/pdf", ".zip": "application/zip",
+  ".pdf": "application/pdf", ".zip": "application/zip", ".json": "application/json",
 };
 
 function downloadBlob(name: string, bytes: Uint8Array) {
@@ -64,7 +65,11 @@ export async function runPageExport(input: RunExportInput): Promise<{ fileName: 
     // No database plane available (offline harness) — blocks degrade to text.
   }
 
-  const files = await buildExportFiles({ pages, options: input.options, dbState });
+  // Styled HTML mirrors the user's live theme; every other path skips the DOM.
+  const theme = input.options.format === "html" && input.options.styling !== "raw"
+    ? captureExportTheme()
+    : null;
+  const files = await buildExportFiles({ pages, options: input.options, dbState, theme });
   const rootName = sanitizeFileName(pages[0]?.title ?? "Export");
   if (files.length === 1) {
     const only = files[0]!;

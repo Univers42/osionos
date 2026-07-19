@@ -14,7 +14,7 @@ import React, { useState } from "react";
 
 import { useUserStore } from "@/features/auth";
 import { Modal, Toggle, useToastStore } from "@/shared/ui/primitives";
-import { DEFAULT_EXPORT_OPTIONS, type ExportContent, type ExportDbViews, type ExportFormat, type ExportOptions } from "../model/exportTypes";
+import { DEFAULT_EXPORT_OPTIONS, type ExportContent, type ExportDbViews, type ExportFormat, type ExportOptions, type ExportStyling } from "../model/exportTypes";
 import { runPageExport } from "../model/runExport";
 import { ExportSelectRow } from "./ExportSelectRow";
 
@@ -29,6 +29,12 @@ const FORMAT_OPTIONS: ReadonlyArray<{ value: ExportFormat; label: string }> = [
   { value: "markdown", label: "Markdown & CSV" },
   { value: "html", label: "HTML" },
   { value: "pdf", label: "PDF" },
+  { value: "json", label: "JSON" },
+];
+
+const STYLE_OPTIONS: ReadonlyArray<{ value: ExportStyling; label: string }> = [
+  { value: "styled", label: "Styled" },
+  { value: "raw", label: "Raw" },
 ];
 
 const VIEW_OPTIONS: ReadonlyArray<{ value: ExportDbViews; label: string }> = [
@@ -90,6 +96,12 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ open, pageId, worksp
           value={options.format}
           options={FORMAT_OPTIONS}
           onChange={(format) => patch({ format })}
+        />
+        <ExportSelectRow
+          label="Style"
+          value={options.styling}
+          options={STYLE_OPTIONS}
+          onChange={(styling) => patch({ styling })}
         />
         <ExportSelectRow
           label="Database views"

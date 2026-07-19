@@ -39,7 +39,7 @@ async function fetchImageBytes(src: string): Promise<{ bytes: Uint8Array; png: b
 export async function renderPagePdf(
   title: string,
   blocks: Block[],
-  options: Pick<ExportOptions, "content">,
+  options: Pick<ExportOptions, "content"> & { styling?: ExportOptions["styling"] },
   resolveDatabase: (block: Block) => ExportDatabase | null,
 ): Promise<Uint8Array> {
   const { PDFDocument, StandardFonts } = await import("pdf-lib");
@@ -104,10 +104,19 @@ export async function renderPagePdf(
     }
   };
 
-  drawWrapped({ text: pdfText(title || "Untitled"), size: 26, bold: true, indent: 0, gapBefore: 0 });
+  // "raw" flattens all typography to plain body text (mono kept for code —
+  // it is semantic, not decorative); "styled" keeps sizes and weights.
+  const raw = options.styling === "raw";
+  const neutral = (line: PdfLine): PdfLine =>
+    line.imageSrc ? line : { ...line, size: line.mono ? 9.5 : 11, bold: false };
+
+  drawWrapped(raw
+    ? { text: pdfText(title || "Untitled"), size: 11, indent: 0, gapBefore: 0 }
+    : { text: pdfText(title || "Untitled"), size: 26, bold: true, indent: 0, gapBefore: 0 });
   for (const line of flattenBlocksToPdfLines(blocks, options, resolveDatabase)) {
-    if (line.imageSrc) await drawImage(line);
-    else drawWrapped(line);
+    const shaped = raw ? neutral(line) : line;
+    if (shaped.imageSrc) await drawImage(shaped);
+    else drawWrapped(shaped);
   }
   return doc.save();
 }

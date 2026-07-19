@@ -17,7 +17,7 @@
 import type { Block } from "@/entities/block";
 import { isDatabaseBlock } from "./databaseExportSource";
 import { inlineTagsToHtml } from "./inlineDialect";
-import type { ExportOptions } from "./exportTypes";
+import type { ExportOptions, ExportTheme } from "./exportTypes";
 
 const MEDIA_TYPES = new Set(["image", "video", "audio", "file"]);
 
@@ -142,22 +142,41 @@ const DOC_CSS = [
   "img{max-width:100%;border-radius:6px}hr{border:0;border-top:1px solid #d6d3d1}",
 ].join("");
 
-/** Full standalone HTML document for one page. */
+/** Later-wins overrides mapping the captured editor theme onto DOC_CSS. */
+export function themeCss(theme: ExportTheme): string {
+  return [
+    `body{background:${theme.bg};color:${theme.fg};font-family:${theme.fontSans}}`,
+    `a{color:${theme.accent}}`,
+    `pre,aside.callout{background:${theme.codeBg}}`,
+    `pre,code{color:${theme.codeFg};font-family:${theme.fontMono}}`,
+    `blockquote{border-left-color:${theme.border};color:${theme.fgMuted}}`,
+    `td,th{border-color:${theme.border}}hr{border-top-color:${theme.border}}`,
+  ].join("");
+}
+
+/**
+ * Full standalone HTML document for one page. styling "styled" (default)
+ * embeds the document CSS — themed with the live editor tokens when a
+ * captured `theme` is provided; "raw" emits bare semantic HTML, no styles.
+ */
 export function exportPageHtml(
   title: string,
   blocks: Block[],
-  options: Pick<ExportOptions, "content">,
+  options: Pick<ExportOptions, "content"> & { styling?: ExportOptions["styling"] },
   databaseHtml: (block: Block) => string | null,
+  theme?: ExportTheme | null,
 ): string {
   const safeTitle = escapeHtml(title || "Untitled");
   const body = renderBlocksHtml(blocks, options, databaseHtml);
+  const style = options.styling === "raw"
+    ? ""
+    : `\n<style>${DOC_CSS}${theme ? themeCss(theme) : ""}</style>`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${safeTitle}</title>
-<style>${DOC_CSS}</style>
+<title>${safeTitle}</title>${style}
 </head>
 <body>
 <h1>${safeTitle}</h1>

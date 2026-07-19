@@ -19,9 +19,10 @@ import type { NotionState } from "@notion-db/contract-types";
 import { resolveDatabaseExport } from "./databaseExportSource";
 import { toCsv } from "./exportCsv";
 import { databaseTableHtml, exportPageHtml } from "./exportHtml";
+import { cleanPageJson, rawPageJson } from "./exportJson";
 import { exportPageMarkdown } from "./exportMarkdown";
 import { createNameAllocator, pageDirectory, sanitizeFileName } from "./exportPaths";
-import type { ExportFile, ExportOptions, ExportPageNode } from "./exportTypes";
+import type { ExportFile, ExportOptions, ExportPageNode, ExportTheme } from "./exportTypes";
 
 const encoder = new TextEncoder();
 
@@ -30,9 +31,11 @@ export interface BuildInput {
   options: ExportOptions;
   /** Object-database state; null exports database blocks as plain titles. */
   dbState: NotionState | null;
+  /** Live editor theme snapshot (styled HTML only); null/absent = defaults. */
+  theme?: ExportTheme | null;
 }
 
-export async function buildExportFiles({ pages, options, dbState }: BuildInput): Promise<ExportFile[]> {
+export async function buildExportFiles({ pages, options, dbState, theme }: BuildInput): Promise<ExportFile[]> {
   const files: ExportFile[] = [];
   const allocate = createNameAllocator();
   const useFolders = options.includeSubpages && options.createFolders;
@@ -57,8 +60,13 @@ export async function buildExportFiles({ pages, options, dbState }: BuildInput):
       const html = exportPageHtml(page.title, page.blocks, options, (block) => {
         const db = resolveDb(block);
         return db ? databaseTableHtml(db.title, db.columns, db.rows) : null;
-      });
+      }, theme);
       files.push({ path: allocate(dir, base, ".html"), bytes: encoder.encode(html) });
+    } else if (options.format === "json") {
+      const json = options.styling === "raw"
+        ? rawPageJson(page.title, page.blocks)
+        : cleanPageJson(page.title, page.blocks, options, resolveDb);
+      files.push({ path: allocate(dir, base, ".json"), bytes: encoder.encode(json) });
     } else {
       const { renderPagePdf } = await import("./exportPdf");
       const bytes = await renderPagePdf(page.title, page.blocks, options, resolveDb);
