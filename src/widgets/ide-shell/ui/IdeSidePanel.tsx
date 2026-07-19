@@ -13,7 +13,8 @@
 import React from "react";
 
 import type { IdePanel } from "@/features/ide/model/ideModeStore";
-import { IdeFileTree } from "@/features/ide/ui/IdeFileTree";
+import { IdeExplorerPanel } from "@/features/ide/ui/IdeExplorerPanel";
+import { IdeSearchPanel } from "@/features/ide/ui/IdeSearchPanel";
 
 const TITLES: Record<IdePanel, string> = {
   explorer: "Explorer",
@@ -24,29 +25,37 @@ const TITLES: Record<IdePanel, string> = {
 };
 
 /** The resizable left panel body — its content follows the active activity-bar
- *  panel. P0 wires the Explorer (read-only file tree); Search/SCM/Run/Problems
- *  are placeholders that later phases (P1/P5/P6) fill in place. */
+ *  panel. Explorer + Search are live; SCM/Run/Problems are placeholders that the
+ *  sandbox / git / language-server phases fill in place. The Explorer owns its
+ *  own header (project name + toolbar), so it renders without the shared title. */
 export const IdeSidePanel: React.FC<{ panel: IdePanel }> = ({ panel }) => {
+  if (panel === "explorer") {
+    return (
+      <aside aria-label="Explorer" className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-[var(--osio-code-border)] bg-[var(--osio-code-bg)]">
+        <IdeExplorerPanel />
+      </aside>
+    );
+  }
+
   return (
     <aside
       aria-label={TITLES[panel]}
       className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-[var(--osio-code-border)] bg-[var(--osio-code-bg)]"
     >
-      <div className="flex h-8 shrink-0 items-center px-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
-        {TITLES[panel]}
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto">
-        {panel === "explorer" ? (
-          <IdeFileTree />
-        ) : (
+      {panel === "search" ? (
+        <IdeSearchPanel />
+      ) : (
+        <>
+          <div className="flex h-8 shrink-0 items-center px-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
+            {TITLES[panel]}
+          </div>
           <p className="px-3 py-6 text-center text-[11px] leading-5 text-[var(--osio-code-fg-muted)]">
-            {panel === "search" && "Global search arrives in the next step."}
             {panel === "scm" && "Source control arrives with the sandbox + git."}
             {panel === "run" && "Run and debug arrives with the sandbox shell."}
             {panel === "problems" && "Diagnostics arrive with the language servers."}
           </p>
-        )}
-      </div>
+        </>
+      )}
     </aside>
   );
 };

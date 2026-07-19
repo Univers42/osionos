@@ -11,20 +11,35 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { ChevronDown, ChevronRight, FileCode2 } from "lucide-react";
 
 import { usePageStore } from "@/store/usePageStore";
-import { useUserStore } from "@/features/auth";
 import { buildIdeFileTree, type IdeTreeNode } from "../model/ideFileTree";
-import { languageForFileName } from "../model/ideLanguages";
+import type { IdeCreateRequest, IdeFileOps } from "../model/useIdeFileOps";
+import { IdeTreeContext, type IdeTreeContextValue } from "./ideTreeContext";
+import { IdeTreeRow } from "./IdeTreeRow";
+import { IdeInlineInput } from "./IdeInlineInput";
 
-/** Read-only file explorer over the workspace's folder + code pages. Clicking a
- *  file opens it in the active pane through the normal page-open path; P1 layers
- *  create/rename/delete/drag on top of this same tree. */
-export const IdeFileTree: React.FC = () => {
-  const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
-  const pages = usePageStore((s) => s.pages[workspaceId]) ?? EMPTY;
-  const openPage = usePageStore((s) => s.openPage);
+const EMPTY: never[] = [];
+const DRAG_MIME = "application/x-osio-ide-page";
+
+interface Props {
+  ops: IdeFileOps;
+  create: IdeCreateRequest | null;
+  renamingId: string | null;
+  onStartCreate: (parentId: string | null, kind: "code" | "folder") => void;
+  onSubmitCreate: (name: string) => void;
+  onCancelCreate: () => void;
+  onStartRename: (id: string) => void;
+  onSubmitRename: (id: string, name: string) => void;
+  onCancelRename: () => void;
+}
+
+/** The file explorer tree over the workspace's folder + code pages. Provides the
+ *  tree context (ops + interaction state) that recursive rows consume; a bare
+ *  drop zone below the roots moves a dragged entry to the workspace root. */
+export const IdeFileTree: React.FC<Props> = (props) => {
+  const { ops } = props;
+  const pages = usePageStore((s) => s.pages[ops.workspaceId]) ?? EMPTY;
   const activeId = usePageStore((s) => s.activePage?.id ?? null);
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
 
@@ -39,89 +54,65 @@ export const IdeFileTree: React.FC = () => {
     });
   }, []);
 
-  const onOpenFile = React.useCallback(
+  const openFile = React.useCallback(
     (node: IdeTreeNode) => {
-      openPage({ id: node.page._id, workspaceId, kind: "page", title: node.page.title });
+      usePageStore.getState().openPage({ id: node.page._id, workspaceId: ops.workspaceId, kind: "page", title: node.page.title });
     },
-    [openPage, workspaceId],
+    [ops.workspaceId],
   );
 
-  if (tree.length === 0) {
-    return (
-      <p className="px-3 py-6 text-center text-[11px] leading-5 text-[var(--osio-code-fg-muted)]">
-        No code files yet. Create one from the sidebar (New code file) to start a project.
-      </p>
-    );
-  }
+  // Creating inside a folder must reveal that folder so the inline input shows.
+  React.useEffect(() => {
+    const parentId = props.create?.parentId;
+    if (parentId) setExpanded((prev) => (prev.has(parentId) ? prev : new Set(prev).add(parentId)));
+  }, [props.create]);
 
-  return (
-    <div role="tree" className="py-1 text-[13px] text-[var(--osio-code-fg)]">
-      {tree.map((node) => (
-        <IdeTreeRow
-          key={node.page._id}
-          node={node}
-          depth={0}
-          expanded={expanded}
-          activeId={activeId}
-          onToggle={toggle}
-          onOpenFile={onOpenFile}
-        />
-      ))}
-    </div>
+  const ctx: IdeTreeContextValue = React.useMemo(
+    () => ({
+      ops,
+      activeId,
+      expanded,
+      toggle,
+      openFile,
+      renamingId: props.renamingId,
+      startRename: props.onStartRename,
+      submitRename: props.onSubmitRename,
+      cancelRename: props.onCancelRename,
+      create: props.create,
+      startCreate: props.onStartCreate,
+      submitCreate: props.onSubmitCreate,
+      cancelCreate: props.onCancelCreate,
+    }),
+    [ops, activeId, expanded, toggle, openFile, props],
   );
-};
-
-const EMPTY: never[] = [];
-
-interface RowProps {
-  node: IdeTreeNode;
-  depth: number;
-  expanded: Set<string>;
-  activeId: string | null;
-  onToggle: (id: string) => void;
-  onOpenFile: (node: IdeTreeNode) => void;
-}
-
-const IdeTreeRow: React.FC<RowProps> = ({ node, depth, expanded, activeId, onToggle, onOpenFile }) => {
-  const isOpen = expanded.has(node.page._id);
-  const isActive = activeId === node.page._id;
-  const accent = node.isFolder ? undefined : languageForFileName(node.page.title).accent;
-  const pad = 8 + depth * 12;
 
   return (
-    <>
-      <button
-        type="button"
-        role="treeitem"
-        aria-expanded={node.isFolder ? isOpen : undefined}
-        onClick={() => (node.isFolder ? onToggle(node.page._id) : onOpenFile(node))}
-        style={{ paddingLeft: pad }}
-        className={
-          "flex w-full items-center gap-1.5 py-[3px] pr-2 text-left " +
-          (isActive
-            ? "bg-[var(--osio-code-active-line,rgba(127,127,127,0.14))] text-[var(--osio-code-fg)]"
-            : "hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.10))]")
-        }
+    <IdeTreeContext.Provider value={ctx}>
+      <div
+        role="tree"
+        className="min-h-full py-1"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          const dragged = event.dataTransfer.getData(DRAG_MIME);
+          if (dragged) ops.move(dragged, null);
+        }}
       >
-        {node.isFolder ? (
-          isOpen ? <ChevronDown size={14} className="shrink-0 opacity-70" /> : <ChevronRight size={14} className="shrink-0 opacity-70" />
-        ) : (
-          <FileCode2 size={13} className="shrink-0" style={{ color: accent }} />
-        )}
-        <span className="truncate">{node.page.title || "Untitled"}</span>
-      </button>
-      {node.isFolder && isOpen &&
-        node.children.map((child) => (
-          <IdeTreeRow
-            key={child.page._id}
-            node={child}
-            depth={depth + 1}
-            expanded={expanded}
-            activeId={activeId}
-            onToggle={onToggle}
-            onOpenFile={onOpenFile}
+        {props.create && props.create.parentId === null && (
+          <IdeInlineInput
+            depth={0}
+            placeholder={props.create.kind === "folder" ? "folder name" : "file name"}
+            onSubmit={props.onSubmitCreate}
+            onCancel={props.onCancelCreate}
           />
-        ))}
-    </>
+        )}
+        {tree.length === 0 && !props.create ? (
+          <p className="px-3 py-6 text-center text-[11px] leading-5 text-[var(--osio-code-fg-muted)]">
+            No code files yet. Use New File above to start a project.
+          </p>
+        ) : (
+          tree.map((node) => <IdeTreeRow key={node.page._id} node={node} depth={0} />)
+        )}
+      </div>
+    </IdeTreeContext.Provider>
   );
 };
