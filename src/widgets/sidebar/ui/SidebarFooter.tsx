@@ -21,9 +21,13 @@ import {
   X,
 } from "lucide-react";
 
+import { PanelsTopLeft } from "lucide-react";
+
 import { SidebarNavItem } from "./SidebarNavItem";
 import { isIdeEnabled } from "@/shared/config/featureFlags";
 import { useDevMode } from "@/shared/config/useDevMode";
+import { useIdeModeStore } from "@/features/ide/model/ideModeStore";
+import { useUserStore } from "@/features/auth";
 
 interface SidebarFooterProps {
   onOpenSettings?: () => void;
@@ -51,6 +55,11 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   const dev = useDevMode((s) => s.dev);
   const toggleDev = useDevMode((s) => s.toggle);
   const ideOn = isIdeEnabled();
+  // IDE Workspace: flip the whole content region into the dedicated VS Code
+  // layout for this workspace (per-workspace, persisted). Gated by the same flag.
+  const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
+  const ideModeOn = useIdeModeStore((s) => (workspaceId ? s.byWorkspace[workspaceId] === true : false));
+  const toggleIdeMode = useIdeModeStore((s) => s.toggleIdeMode);
   return (
     <>
       <div
@@ -102,6 +111,26 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
                 }
               >
                 {dev ? "On" : "Off"}
+              </span>
+            }
+          />
+        )}
+        {ideOn && workspaceId && (
+          <SidebarNavItem
+            icon={<PanelsTopLeft size={16} />}
+            label="IDE Workspace"
+            active={ideModeOn}
+            onClick={() => toggleIdeMode(workspaceId)}
+            rightElement={
+              <span
+                className={
+                  "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide " +
+                  (ideModeOn
+                    ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg,#fff)]"
+                    : "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-subtle)]")
+                }
+              >
+                {ideModeOn ? "On" : "Off"}
               </span>
             }
           />
