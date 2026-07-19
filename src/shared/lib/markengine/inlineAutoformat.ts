@@ -49,16 +49,57 @@ const STYLED_TYPES = new Set<InlineNode["type"]>([
   "highlight",
   "code",
   "code_rich",
+  "subscript",
+  "superscript",
+  "spoiler",
+  "kbd",
 ]);
 
-/** The final char of every inline closing delimiter this rule handles. */
-const CLOSING_DELIMITERS = new Set(["*", "_", "`", "~", "="]);
+/** The final char of every inline closing delimiter this rule handles
+ *  ("^" closes ^sup^, "|" closes ||spoiler||, ">" closes </kbd> etc.).
+ *  Exported so the editor's keystroke gate and this rule can never drift. */
+export const INLINE_CLOSING_DELIMITERS: ReadonlySet<string> = new Set([
+  "*",
+  "_",
+  "`",
+  "~",
+  "=",
+  "^",
+  "|",
+  ">",
+]);
 
 /**
  * If a markdown style pair just closed at `caret`, return the canonicalized
  * source + caret; otherwise null (no transform). `caret` is a source-string
  * offset (== DOM plain-text offset in the common no-preceding-styled-span case).
  */
+/**
+ * Mid-run shape: a text node ending in a stacking delimiter right before a
+ * styled last node — "***bold italic*" parses as "**" + italic("bold italic")
+ * with two more stars still to come. Acting on that state (autoformatting it,
+ * or restyling the live DOM from it) canonicalizes the partial pair and
+ * scrambles the remaining keystrokes; both paths stay raw until the whole run
+ * closes.
+ */
+function isMidRunShape(nodes: InlineNode[]): boolean {
+  const last = nodes[nodes.length - 1];
+  if (!last || !STYLED_TYPES.has(last.type)) return false;
+  const previous = nodes[nodes.length - 2];
+  if (previous?.type !== "text") return false;
+  const tail = previous.value[previous.value.length - 1];
+  return tail === "*" || tail === "_" || tail === "~";
+}
+
+/**
+ * True when the caret sits midway through closing a longer delimiter run —
+ * the editor holds its live restyle on these states (see isMidRunShape).
+ */
+export function isMidDelimiterRun(source: string, caret: number): boolean {
+  if (caret <= 0 || caret > source.length) return false;
+  return isMidRunShape(parseInline(source.slice(0, caret)));
+}
+
 export function autoformatInlineMarkdown(
   source: string,
   caret: number,
@@ -67,13 +108,14 @@ export function autoformatInlineMarkdown(
 
   const left = source.slice(0, caret);
   const lastChar = left[left.length - 1];
-  if (!lastChar || !CLOSING_DELIMITERS.has(lastChar)) return null;
+  if (!lastChar || !INLINE_CLOSING_DELIMITERS.has(lastChar)) return null;
 
   const nodes = parseInline(left);
   if (nodes.length === 0) return null;
 
   const last = nodes[nodes.length - 1];
   if (!STYLED_TYPES.has(last.type)) return null;
+  if (isMidRunShape(nodes)) return null;
 
   // A pair closed at the caret. Canonicalize the whole left side (idempotent for
   // parts that were already bracketed) and land the caret at the end of the now

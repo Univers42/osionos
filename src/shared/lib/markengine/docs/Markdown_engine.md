@@ -135,6 +135,25 @@ YAML/TOML front matter (`---`/`+++` at the top; renders nothing), and
 link-reference definitions (collected document-wide, lines dropped — which
 also makes the `[//]: # (comment)` idiom invisible).
 
+**App blocks (Notion-system dialect)** — every editor block type now has a
+markengine-native serialized form, so raw-mode, export, and clipboard are
+lossless end to end: media as HTML blocks (`![alt](asset "caption")` image
+paragraphs, `<video src>`/`<audio src>`/`<object data title>`), drawings as
+```` ```osidraw h=<px> ```` fences (scene JSON body), buttons and app embeds as
+```` ```osibutton / ```osidb / ```osidb-page / ```osigraph / ```osihome /
+```osilayout ```` fences carrying their config as JSON (malformed JSON stays a
+visible code block — never data loss), and column layouts as Pandoc-style
+containers: `:::columns` wrapping `:::column <widthRatio>` blocks, closed by
+bare `:::`. Unknown container kinds flatten to their children; foreign HTML
+blocks become `html` code blocks instead of vanishing.
+
+**Reliability** — the block parser carries a hard progress guarantee (a parser
+returning without consuming input degrades to skipping one line instead of
+looping forever), and `tests/fuzz-reliability.test.cjs` pins it: 400 seeded
+fuzz documents through parse + every renderer without a throw, canonical
+inline serialization converges to a fixed point, and the editor's char-by-char
+autoformat loop always terminates.
+
 ### Dialect pins (deliberate deviations)
 
 - `__x__` is **underline**, not bold — the editor's only underline sugar;

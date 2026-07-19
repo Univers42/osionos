@@ -41,6 +41,143 @@ export function parseMarkdownToBlocks(markdown: string): Block[] {
   return ast.flatMap((node) => astToBlocks(node));
 }
 
+// ─── App-block dialect ────────────────────────────────────────────────────────
+//
+// Blocks with no textual markdown form round-trip through markengine-native
+// syntax: media as HTML blocks (`<video src>`), drawings and app embeds as
+// fenced code with an `osi*` language carrying their config as JSON, and
+// column layouts as `:::columns` / `:::column <ratio>` containers.
+
+const APP_FENCE_TO_BLOCK: Record<string, BlockType> = {
+  osibutton: "button",
+  osidb: "database_inline",
+  "osidb-page": "database_full_page",
+  osigraph: "graph_view",
+  osihome: "home_views",
+  osilayout: "layout",
+};
+
+function safeJsonRecord(value: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/** `osi*` fenced blocks → their app block; null keeps the fence a code block. */
+function appBlockFromFence(
+  node: Extract<BlockNode, { type: "code_block" }>,
+): Block | null {
+  if (node.lang === "osidraw") {
+    const height = /(?:^|\s)h=(\d+)\b/.exec(node.meta ?? "")?.[1];
+    return {
+      id: crypto.randomUUID(),
+      type: "draw",
+      content: node.value,
+      ...(height ? { drawHeight: Number(height) } : {}),
+    };
+  }
+  const type = APP_FENCE_TO_BLOCK[node.lang];
+  if (!type) return null;
+  const config = safeJsonRecord(node.value);
+  if (!config) return null; // malformed JSON stays a visible code block
+  const { id: _id, type: _type, children: _children, content, ...rest } = config;
+  return {
+    id: crypto.randomUUID(),
+    type,
+    content: typeof content === "string" ? content : "",
+    ...rest,
+  };
+}
+
+const HTML_VIDEO_RE = /^<video\s+src="([^"]*)"(?:\s+data-caption="([^"]*)")?\s*>\s*<\/video>$/;
+const HTML_AUDIO_RE = /^<audio\s+src="([^"]*)"(?:\s+data-caption="([^"]*)")?\s*>\s*<\/audio>$/;
+const HTML_OBJECT_RE = /^<object\s+data="([^"]*)"(?:\s+title="([^"]*)")?\s*>\s*<\/object>$/;
+
+/** Our own serialized media HTML → media blocks; anything else stays raw. */
+function mediaBlockFromHtml(value: string): Block | null {
+  const trimmed = value.trim();
+  const video = HTML_VIDEO_RE.exec(trimmed);
+  if (video) {
+    return {
+      id: crypto.randomUUID(),
+      type: "video",
+      content: video[2] ?? "",
+      asset: video[1],
+    };
+  }
+  const audio = HTML_AUDIO_RE.exec(trimmed);
+  if (audio) {
+    return {
+      id: crypto.randomUUID(),
+      type: "audio",
+      content: audio[2] ?? "",
+      asset: audio[1],
+    };
+  }
+  const object = HTML_OBJECT_RE.exec(trimmed);
+  if (object) {
+    return {
+      id: crypto.randomUUID(),
+      type: "file",
+      content: object[2] ?? "",
+      asset: object[1],
+      ...(object[2] ? { fileName: object[2] } : {}),
+    };
+  }
+  return null;
+}
+
+/** A paragraph that is exactly one image is an image BLOCK (Notion semantics). */
+function imageBlockFromParagraph(
+  node: Extract<BlockNode, { type: "paragraph" }>,
+): Block | null {
+  if (node.children.length !== 1) return null;
+  const [only] = node.children;
+  if (only.type !== "image") return null;
+  return {
+    id: crypto.randomUUID(),
+    type: "image",
+    content: only.title ?? "",
+    asset: only.src,
+    ...(only.alt ? { mediaAlt: only.alt } : {}),
+  };
+}
+
+function containerToBlocks(
+  node: Extract<BlockNode, { type: "container" }>,
+): Block[] {
+  if (node.kind === "columns") {
+    return [
+      {
+        id: crypto.randomUUID(),
+        type: "column_list",
+        content: "",
+        children: node.children.flatMap((child) => astToBlocks(child)),
+      },
+    ];
+  }
+  if (node.kind === "column") {
+    const ratio = Number.parseFloat(node.params ?? "");
+    return [
+      {
+        id: crypto.randomUUID(),
+        type: "column",
+        content: "",
+        ...(Number.isFinite(ratio) ? { widthRatio: ratio } : {}),
+        children: node.children.flatMap((child) => astToBlocks(child)),
+      },
+    ];
+  }
+  // Unknown container kinds flatten to their children — nothing is lost.
+  return node.children.flatMap((child) => astToBlocks(child));
+}
+
 function astToBlocks(node: BlockNode): Block[] {
   switch (node.type) {
     case "document":
@@ -56,7 +193,9 @@ function astToBlocks(node: BlockNode): Block[] {
         },
       ];
     }
-    case "paragraph":
+    case "paragraph": {
+      const image = imageBlockFromParagraph(node);
+      if (image) return [image];
       return [
         {
           id: crypto.randomUUID(),
@@ -64,6 +203,7 @@ function astToBlocks(node: BlockNode): Block[] {
           content: inlineToMarkdown(node.children),
         },
       ];
+    }
     case "thematic_break":
       return [{ id: crypto.randomUUID(), type: "divider", content: "" }];
     case "blockquote":
@@ -74,7 +214,9 @@ function astToBlocks(node: BlockNode): Block[] {
           content: node.children.map((c) => blockToMarkdown(c)).join("\n"),
         },
       ];
-    case "code_block":
+    case "code_block": {
+      const appBlock = appBlockFromFence(node);
+      if (appBlock) return [appBlock];
       return [
         {
           id: crypto.randomUUID(),
@@ -83,6 +225,22 @@ function astToBlocks(node: BlockNode): Block[] {
           language: node.lang || "plaintext",
         },
       ];
+    }
+    case "html_block": {
+      const media = mediaBlockFromHtml(node.value);
+      if (media) return [media];
+      // Foreign HTML keeps its source visible instead of vanishing.
+      return [
+        {
+          id: crypto.randomUUID(),
+          type: "code",
+          content: node.value,
+          language: "html",
+        },
+      ];
+    }
+    case "container":
+      return containerToBlocks(node);
     case "unordered_list":
       return node.children.map((item) =>
         listItemToBlock("bulleted_list", item),
@@ -321,6 +479,11 @@ function blockToMarkdown(node: BlockNode): string {
       const summary = inlineToMarkdown(node.summary);
       const body = node.children.map((child) => blockToMarkdown(child)).join("\n");
       return body ? `> [toggle] ${summary}\n${body}` : `> [toggle] ${summary}`;
+    }
+    case "container": {
+      const opener = node.params ? `:::${node.kind} ${node.params}` : `:::${node.kind}`;
+      const body = node.children.map((child) => blockToMarkdown(child)).join("\n\n");
+      return body ? `${opener}\n${body}\n:::` : `${opener}\n:::`;
     }
     default:
       return "";

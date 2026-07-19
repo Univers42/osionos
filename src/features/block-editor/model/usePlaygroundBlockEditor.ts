@@ -149,9 +149,13 @@ function parsePipeTable(text: string): Partial<Block> | null {
 
 function shouldTryMarkdownShortcut(text: string): boolean {
   const trimmed = text.trimEnd();
+  // Only DASH runs convert to a divider instantly: "***"/"___" are the start of
+  // "***bold italic***" / "___underline___", so converting them on the third
+  // keystroke destroyed the emphasis mid-typing. Star/underscore dividers still
+  // work — commit them with a trailing space ("*** ") or the space key.
   return (
     text.endsWith(" ") ||
-    /^[-*_]{3,}$/.test(trimmed) ||
+    /^-{3,}$/.test(trimmed) ||
     trimmed.startsWith("```") ||
     trimmed === "$$"
   );

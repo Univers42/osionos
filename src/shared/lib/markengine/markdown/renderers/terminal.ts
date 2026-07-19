@@ -166,6 +166,10 @@ function renderBlock(node: BlockNode, ctx: RenderCtx): string {
       return `${prefix}${c(ctx, BOLD)}▸${reset(ctx)} ${summary}\n${body}`;
     }
 
+    case 'container':
+      // Terminal output is one column — containers flatten to their children.
+      return node.children.map(ch => renderBlock(ch, ctx)).join('');
+
     default:
       return '';
   }

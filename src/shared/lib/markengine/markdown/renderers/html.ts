@@ -173,6 +173,13 @@ function renderBlock(
       return `<details${blockStateAttr}>\n<summary>${summary}</summary>\n${body}\n</details>`;
     }
 
+    case "container": {
+      const cls = `${o.classPrefix}-container ${o.classPrefix}-container-${esc(node.kind)}`;
+      const params = node.params ? ` data-params="${esc(node.params)}"` : "";
+      const body = renderChildBlocks(node.children, o, modeState);
+      return `<div class="${cls}"${params}${blockStateAttr}>\n${body}\n</div>`;
+    }
+
     default:
       return "";
   }

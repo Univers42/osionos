@@ -19,9 +19,19 @@ import type { ParseContext } from './parserBlockContext';
 import { advance } from './parserBlockContext';
 
 export function isThematicBreak(line: string): boolean {
-  const stripped = line.replaceAll(/\s/g, '');
-  if (stripped.length < 3) return false;
-  return /^-{3,}$/.test(stripped) || /^\*{3,}$/.test(stripped) || /^_{3,}$/.test(stripped);
+  // Single charCode pass (this runs on every block line): 3+ of one marker
+  // char (- * _), whitespace anywhere between, nothing else.
+  let marker = 0;
+  let count = 0;
+  for (let i = 0; i < line.length; i++) {
+    const code = line.charCodeAt(i);
+    if (code === 32 || code === 9 || code === 13) continue; // space, tab, CR
+    if (code !== 45 && code !== 42 && code !== 95) return false; // - * _
+    if (marker === 0) marker = code;
+    else if (code !== marker) return false;
+    count += 1;
+  }
+  return count >= 3;
 }
 
 export function isSetextHeading(ctx: ParseContext): boolean {
@@ -202,6 +212,7 @@ function isParagraphBreak(ctx: ParseContext, trimmed: string): boolean {
   if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) return true;
   if (trimmed.startsWith('$$')) return true;
   if (trimmed.startsWith('<!--')) return true;
+  if (trimmed.startsWith(':::')) return true;
   if (/^>\s/.test(trimmed) || trimmed === '>') return true;
   if (/^[-*+]\s+/.test(trimmed)) return true;
   if (/^:\s+/.test(trimmed)) return true;
@@ -238,6 +249,13 @@ export function parseParagraph(ctx: ParseContext): BlockNode {
     if (nextLineStartsDefinition(ctx, lines.length)) break;
     lines.push(trimmed);
     advance(ctx);
+  }
+
+  // Progress guarantee: a line that trips a break condition yet matched no
+  // block parser (e.g. a stray bare ":::") is consumed as literal text —
+  // returning without advancing would loop the block parser forever.
+  if (lines.length === 0 && ctx.pos < ctx.lines.length) {
+    lines.push(advance(ctx).trim());
   }
 
   const text = lines.join('\n');

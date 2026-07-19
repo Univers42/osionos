@@ -59,8 +59,14 @@ function execSticky(re: RegExp, text: string, pos: number): RegExpExecArray | nu
 }
 
 function matchBareUrl(text: string, pos: number): InlineMatchResult | null {
-  // Only at a boundary: never mid-word (e.g. "ahttps://") or after url-ish chars.
-  if (pos > 0 && /[\w@/.-]/.test(text[pos - 1])) return null;
+  // Only at a boundary: never mid-word (e.g. "ahttps://") or after url-ish
+  // chars — charCode test, this gate runs on every h/w in prose.
+  if (pos > 0) {
+    const prev = text.charCodeAt(pos - 1);
+    if (isWordCode(prev) || prev === 64 || prev === 47 || prev === 46 || prev === 45) {
+      return null;
+    }
+  }
   const match =
     execSticky(BARE_URL_STICKY, text, pos) ?? execSticky(BARE_WWW_STICKY, text, pos);
   if (!match) return null;
@@ -140,6 +146,14 @@ function matchPageLink(text: string, pos: number): InlineMatchResult | null {
   };
 }
 
+/** `url "title"` split — the regex only runs when a trailing quote exists. */
+function splitDestinationTitle(inside: string): { target: string; title?: string } {
+  if (inside.charCodeAt(inside.length - 1) !== 34) return { target: inside };
+  const match = /^(.*?)\s+"([^"]*)"$/.exec(inside);
+  if (!match) return { target: inside };
+  return { target: match[1], title: match[2] };
+}
+
 function matchStandardLink(
   text: string,
   pos: number,
@@ -150,14 +164,18 @@ function matchStandardLink(
   const parenClose = findDestinationClose(text, labelClose + 2);
   if (parenClose === -1) return null;
   const label = text.slice(pos + 1, labelClose);
-  const inside = text.slice(labelClose + 2, parenClose).trim();
-  const titleMatch = /^(.*?)\s+"([^"]*)"$/.exec(inside);
-  const href = normalizeInlineLinkHref(titleMatch ? titleMatch[1] : inside);
-  const title = titleMatch ? titleMatch[2] : undefined;
+  const { target, title } = splitDestinationTitle(
+    text.slice(labelClose + 2, parenClose).trim(),
+  );
   return {
     start: pos,
     end: parenClose + 1,
-    node: { type: "link", href, title, children: parseInline(label) },
+    node: {
+      type: "link",
+      href: normalizeInlineLinkHref(target),
+      title,
+      children: parseInline(label),
+    },
   };
 }
 
@@ -255,23 +273,32 @@ const INLINE_HTML_TAG_TO_NODE: Record<string, (children: InlineNode[]) => Inline
 
 const INLINE_HTML_OPEN_RE = /^<([a-zA-Z]+)>/;
 
+// Per-tag case-insensitive close-tag finders ("g" + lastIndex = an allocation-free
+// case-insensitive indexOf; the naive text.toLowerCase() copied the whole string
+// on every candidate "<").
+const INLINE_HTML_CLOSE_RE: Record<string, RegExp> = Object.fromEntries(
+  Object.keys(INLINE_HTML_TAG_TO_NODE).map((tag) => [tag, new RegExp(`</${tag}>`, "gi")]),
+);
+
 function matchInlineHtmlTag(
   text: string,
   pos: number,
   parseInline: InlineParser,
 ): InlineMatchResult | null {
+  if (!isWordCode(text.charCodeAt(pos + 1))) return null; // "<" + letter only
   const open = INLINE_HTML_OPEN_RE.exec(text.slice(pos, pos + 12));
   if (!open) return null;
   const tag = open[1].toLowerCase();
   const factory = INLINE_HTML_TAG_TO_NODE[tag];
   if (!factory) return null;
-  const closeTag = `</${tag}>`;
-  const close = text.toLowerCase().indexOf(closeTag, pos + open[0].length);
-  if (close === -1) return null;
-  const inner = text.slice(pos + open[0].length, close);
+  const closeRe = INLINE_HTML_CLOSE_RE[tag];
+  closeRe.lastIndex = pos + open[0].length;
+  const close = closeRe.exec(text);
+  if (!close) return null;
+  const inner = text.slice(pos + open[0].length, close.index);
   return {
     start: pos,
-    end: close + closeTag.length,
+    end: close.index + close[0].length,
     node: factory(parseInline(inner)),
   };
 }
@@ -470,7 +497,11 @@ function matchStackedEmphasis(
   if (isWhitespaceCode(text.charCodeAt(pos + openLen))) return null; // opener can't precede space
   if (!isStar && pos > 0 && isWordCode(text.charCodeAt(pos - 1))) return null; // no intraword _
 
-  const segments: EmphasisSegment[] = [];
+  // Zero-alloc fast path for the dominant single-close case; `extraSegments`
+  // only materializes when a run closes in parts ("***a** b*").
+  let firstContent: string | null = null;
+  let firstTake = 0;
+  let extraSegments: EmphasisSegment[] | null = null;
   let remaining = openLen;
   let segStart = pos + openLen;
   let cursor = segStart;
@@ -478,19 +509,23 @@ function matchStackedEmphasis(
   let depth = 0;
 
   while (cursor < length && remaining > 0) {
-    const code = text.charCodeAt(cursor);
-    if (code === CODE_BACKSLASH) {
-      cursor += 2;
+    // Native scans between marker candidates — an escape or a backtick before
+    // the next marker is handled first, then the candidate run is classified.
+    const next = text.indexOf(marker, cursor);
+    if (next === -1) break;
+    // Whichever interruption comes FIRST wins — a backslash inside a code
+    // span is not an escape, and vice versa.
+    const escape = text.indexOf("\\", cursor);
+    const backtick = text.indexOf("`", cursor);
+    if (escape !== -1 && escape < next && (backtick === -1 || escape < backtick)) {
+      cursor = escape + 2; // the escaped char may BE the marker — skip both
       continue;
     }
-    if (code === CODE_BACKTICK) {
-      cursor = skipCodeSpan(text, cursor);
+    if (backtick !== -1 && backtick < next) {
+      cursor = skipCodeSpan(text, backtick); // code binds tighter
       continue;
     }
-    if (code !== markerCode) {
-      cursor += 1;
-      continue;
-    }
+    cursor = next;
 
     const runLen = runLengthAtCode(text, cursor, markerCode);
     const before = text.charCodeAt(cursor - 1);
@@ -505,7 +540,13 @@ function matchStackedEmphasis(
     }
     if (canClose && cursor > segStart) {
       const take = remaining < runLen ? remaining : runLen;
-      segments.push({ content: text.slice(segStart, cursor), take });
+      const content = text.slice(segStart, cursor);
+      if (firstContent === null) {
+        firstContent = content;
+        firstTake = take;
+      } else {
+        (extraSegments ??= []).push({ content, take });
+      }
       remaining -= take;
       cursor += take; // surplus closer marks stay in the stream
       matchEnd = cursor;
@@ -516,16 +557,18 @@ function matchStackedEmphasis(
     cursor += runLen;
   }
 
-  if (segments.length === 0 || segments[0].content.length === 0) return null;
+  if (firstContent === null || firstContent.length === 0) return null;
 
-  let node: InlineNode | null = null;
-  let consumed = 0;
-  for (const segment of segments) {
-    const children = node
-      ? [node, ...parseInline(segment.content)]
-      : parseInline(segment.content);
-    node = wrapEmphasis(marker, segment.take, children);
-    consumed += segment.take;
+  let node = wrapEmphasis(marker, firstTake, parseInline(firstContent));
+  let consumed = firstTake;
+  if (extraSegments) {
+    for (const segment of extraSegments) {
+      node = wrapEmphasis(marker, segment.take, [
+        node,
+        ...parseInline(segment.content),
+      ]);
+      consumed += segment.take;
+    }
   }
 
   // Surplus opener marks stay OUTSIDE as literal text via the start offset.
@@ -695,15 +738,22 @@ export function createInlineDispatch(
         ticks++;
         i++;
       }
-      const closePattern = "`".repeat(ticks);
+      const closePattern = ticks === 1 ? "`" : "`".repeat(ticks);
       const closeIdx = text.indexOf(closePattern, i);
       if (closeIdx === -1) return null;
       if (closeIdx + ticks < text.length && text[closeIdx + ticks] === "`")
         return null;
-      const value = text
-        .slice(i, closeIdx)
-        .replaceAll("\n", " ")
-        .replace(/^ (.+) $/, "$1");
+      let value = text.slice(i, closeIdx);
+      if (value.includes("\n")) value = value.replaceAll("\n", " ");
+      // CommonMark strips ONE framing space pair (charCode fast path — this
+      // runs for every code span).
+      if (
+        value.length > 2 &&
+        value.charCodeAt(0) === 32 &&
+        value.charCodeAt(value.length - 1) === 32
+      ) {
+        value = value.slice(1, -1);
+      }
       return {
         start: pos,
         end: closeIdx + ticks,
@@ -728,10 +778,9 @@ export function createInlineDispatch(
       const parenClose = findDestinationClose(text, altClose + 2);
       if (parenClose === -1) return null;
       const alt = text.slice(pos + 2, altClose);
-      const inside = text.slice(altClose + 2, parenClose).trim();
-      const titleMatch = /^(.*?)\s+"([^"]*)"$/.exec(inside);
-      const src = titleMatch ? titleMatch[1] : inside;
-      const title = titleMatch ? titleMatch[2] : undefined;
+      const { target: src, title } = splitDestinationTitle(
+        text.slice(altClose + 2, parenClose).trim(),
+      );
       return {
         start: pos,
         end: parenClose + 1,

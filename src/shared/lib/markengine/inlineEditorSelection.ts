@@ -173,7 +173,8 @@ function isInlineFormatElement(element: Element): boolean {
   const tag = element.tagName;
   if (
     tag === "STRONG" || tag === "EM" || tag === "DEL" ||
-    tag === "U" || tag === "MARK" || tag === "CODE" || tag === "A"
+    tag === "U" || tag === "MARK" || tag === "CODE" || tag === "A" ||
+    tag === "SUB" || tag === "SUP" || tag === "KBD"
   ) {
     return true;
   }
