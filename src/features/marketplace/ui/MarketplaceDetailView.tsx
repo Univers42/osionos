@@ -82,7 +82,7 @@ export const MarketplaceDetailView: React.FC<Props> = ({ app, subPages }) => {
         <MarketplaceInfoRail app={app} />
       </div>
       {template ? (
-        <HeaderDesigner open={designing} onClose={() => setDesigning(false)} databaseId={dbId} template={template} sample={app} bindKeys={bindKeys} />
+        <HeaderDesigner open={designing} onClose={() => setDesigning(false)} scopes={[{ key: dbId, label: "This database" }]} template={template} sample={app} bindKeys={bindKeys} />
       ) : null}
     </div>
   );
