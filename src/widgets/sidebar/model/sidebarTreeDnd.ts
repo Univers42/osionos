@@ -45,14 +45,47 @@ interface SidebarTreeDndState {
   bumpCollapse: () => void;
 }
 
-export const useSidebarTreeDnd = create<SidebarTreeDndState>((set) => ({
+/**
+ * A finished drag MUST reset the store no matter which handler consumed the
+ * drop. Per-element `onDragEnd` cleanup is not enough: when the drop mutation
+ * unmounts the drag SOURCE (a tab moved/split into another pane removes its
+ * TabButton), the browser's `dragend` fires on a detached node and React never
+ * delivers it — `dragKind` wedges "on", every pane keeps its transparent
+ * drop-capture overlay mounted, and the whole workspace stops accepting
+ * clicks/edits until a reload. One-shot window-level capture listeners are the
+ * cleanup path that survives source unmount. The reset is deferred a tick so
+ * bubble-phase drop handlers still read the live drag state first.
+ */
+let dragSafetyArmed = false;
+function armDragEndSafety(endDrag: () => void): void {
+  // Non-browser runtime (node test/SSR): no window events, nothing to arm.
+  if (typeof globalThis.addEventListener !== "function") return;
+  if (dragSafetyArmed) return;
+  dragSafetyArmed = true;
+  const finish = () => {
+    dragSafetyArmed = false;
+    globalThis.removeEventListener("drop", finish, true);
+    globalThis.removeEventListener("dragend", finish, true);
+    setTimeout(endDrag, 0);
+  };
+  globalThis.addEventListener("drop", finish, true);
+  globalThis.addEventListener("dragend", finish, true);
+}
+
+export const useSidebarTreeDnd = create<SidebarTreeDndState>((set, get) => ({
   draggingId: null,
   dragKind: null,
   dropTargetId: null,
   dropMode: null,
   collapseToken: 0,
-  beginDrag: (id) => set({ draggingId: id, dragKind: "page", dropTargetId: null, dropMode: null }),
-  beginTabDrag: () => set({ dragKind: "tab", dropTargetId: null, dropMode: null }),
+  beginDrag: (id) => {
+    armDragEndSafety(() => get().endDrag());
+    set({ draggingId: id, dragKind: "page", dropTargetId: null, dropMode: null });
+  },
+  beginTabDrag: () => {
+    armDragEndSafety(() => get().endDrag());
+    set({ dragKind: "tab", dropTargetId: null, dropMode: null });
+  },
   endDrag: () => set({ draggingId: null, dragKind: null, dropTargetId: null, dropMode: null }),
   setDropTarget: (dropTargetId, dropMode) => set({ dropTargetId, dropMode }),
   bumpCollapse: () => set((state) => ({ collapseToken: state.collapseToken + 1 })),
