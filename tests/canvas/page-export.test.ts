@@ -221,7 +221,7 @@ const PAGES: ExportPageNode[] = [
   { id: "grand", title: "Child", blocks: [], chain: ["Root Page", "Child"] },
 ];
 const OPTS = (over: Partial<ExportOptions>): ExportOptions => ({
-  format: "markdown", dbViews: "current", content: "everything",
+  format: "markdown", styling: "styled", dbViews: "current", content: "everything",
   includeSubpages: true, createFolders: true, ...over,
 });
 
@@ -293,4 +293,78 @@ test("markdown export translates stored bracket marks", () => {
   const md = exportPageMarkdown("T", [block({ type: "paragraph", content: "hello [b]bold[/b]" })],
     { content: "everything" }, () => null);
   assert.ok(md.includes("hello **bold**"), md);
+});
+
+/* ── styling axis: styled (corrected) vs raw (lossless) ──────────────── */
+
+test("markdown raw keeps the editor dialect verbatim", () => {
+  const blocks = [block({ type: "paragraph", content: "hello [b]bold[/b]" })];
+  const styled = exportPageMarkdown("T", blocks, { content: "everything", styling: "styled" }, () => null);
+  assert.ok(styled.includes("hello **bold**"));
+  const raw = exportPageMarkdown("T", blocks, { content: "everything", styling: "raw" }, () => null);
+  assert.ok(raw.includes("hello [b]bold[/b]"), raw);
+});
+
+test("html raw omits styles; styled embeds the captured theme", () => {
+  const blocks = [block({ type: "paragraph", content: "x" })];
+  const raw = exportPageHtml("T", blocks, { content: "everything", styling: "raw" }, () => null);
+  assert.ok(!raw.includes("<style>"), "raw html carries no style block");
+  assert.ok(raw.includes("<p>x</p>"), "semantic body intact");
+
+  const styled = exportPageHtml("T", blocks, { content: "everything", styling: "styled" }, () => null, {
+    bg: "#101010", fg: "#fafafa", fgMuted: "#999999", accent: "#cc785c",
+    border: "#333333", codeBg: "#1c1c1c", codeFg: "#eeeeee",
+    fontSans: "Inter, sans-serif", fontMono: "JetBrains Mono, monospace",
+  });
+  assert.ok(styled.includes("<style>"));
+  assert.ok(styled.includes("background:#101010"), "theme background applied");
+  assert.ok(styled.includes("font-family:Inter, sans-serif"), "theme font applied");
+});
+
+test("json raw is the stored tree verbatim under an importable envelope", async () => {
+  const files = await buildExportFiles({
+    pages: [PAGES[0]!],
+    options: OPTS({ format: "json", styling: "raw", includeSubpages: false }),
+    dbState: DB_STATE,
+  });
+  assert.equal(files.length, 1);
+  assert.ok(files[0]!.path.endsWith("Root Page.json"));
+  const payload = JSON.parse(text(files[0]!.bytes)) as Record<string, unknown>;
+  assert.equal(payload.schema, "osionos.page.raw.v1");
+  assert.equal(payload.title, "Root Page");
+  assert.deepEqual(payload.content, RICH_BLOCKS, "blocks kept verbatim (round-trippable)");
+});
+
+test("json clean corrects inline text, resolves databases, drops internals", async () => {
+  const pages: ExportPageNode[] = [{
+    id: "p", title: "P", chain: [], blocks: [
+      block({ type: "paragraph", content: "hi [b]b[/b]" }),
+      block({ type: "to_do", content: "task", checked: true } as Partial<Block> as Block),
+      block({ type: "image", content: "url:https://x.dev/pic.png" }),
+      block({ type: "database_inline", databaseId: "db1", viewId: "v_board" } as Partial<Block> as Block),
+    ],
+  }];
+  const files = await buildExportFiles({
+    pages, options: OPTS({ format: "json", includeSubpages: false }), dbState: DB_STATE,
+  });
+  const payload = JSON.parse(text(files[0]!.bytes)) as {
+    schema: string;
+    blocks: Array<Record<string, unknown>>;
+  };
+  assert.equal(payload.schema, "osionos.page.clean.v1");
+  const [para, todo, img, db] = payload.blocks;
+  assert.deepEqual(para, { type: "paragraph", text: "hi **b**" }, "no ids, corrected text");
+  assert.equal(todo!.checked, true);
+  assert.equal(img!.src, "https://x.dev/pic.png");
+  assert.equal(db!.type, "database");
+  assert.deepEqual(db!.columns, ["Name", "Status"], "database resolved via block view");
+});
+
+test("pdf raw still renders valid bytes", async () => {
+  const files = await buildExportFiles({
+    pages: [PAGES[1]!],
+    options: OPTS({ format: "pdf", styling: "raw", includeSubpages: false }),
+    dbState: null,
+  });
+  assert.equal(text(files[0]!.bytes.slice(0, 5)), "%PDF-");
 });

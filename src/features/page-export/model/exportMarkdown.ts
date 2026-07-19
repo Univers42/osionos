@@ -38,13 +38,16 @@ function paragraph(content: string): Block {
 /**
  * Clone + rewrite a block tree for export. `databaseRef` returns the markdown
  * line for a database block (e.g. a link to its CSV) or null to drop it.
+ * styling "raw" keeps the editor's bracket inline dialect verbatim (lossless,
+ * re-importable); "styled" (default) corrects it to standard markdown.
  */
 export function transformBlocksForExport(
   blocks: Block[],
-  options: Pick<ExportOptions, "content">,
+  options: Pick<ExportOptions, "content"> & { styling?: ExportOptions["styling"] },
   databaseRef: (block: Block) => string | null,
 ): Block[] {
   const excludeFiles = options.content === "no_files";
+  const keepDialect = options.styling === "raw";
   const out: Block[] = [];
   for (const block of blocks) {
     if (MEDIA_TYPES.has(block.type)) {
@@ -63,8 +66,8 @@ export function transformBlocksForExport(
       ? transformBlocksForExport(block.children, options, databaseRef)
       : undefined;
     // Code/equation bodies are verbatim; everything else translates the
-    // editor's bracket inline dialect to standard markdown.
-    const content = block.type === "code" || block.type === "equation"
+    // editor's bracket inline dialect to standard markdown (unless raw).
+    const content = keepDialect || block.type === "code" || block.type === "equation"
       ? block.content
       : inlineToMarkdown(block.content ?? "");
     out.push({ ...block, content, children });
@@ -76,7 +79,7 @@ export function transformBlocksForExport(
 export function exportPageMarkdown(
   title: string,
   blocks: Block[],
-  options: Pick<ExportOptions, "content">,
+  options: Pick<ExportOptions, "content"> & { styling?: ExportOptions["styling"] },
   databaseRef: (block: Block) => string | null,
 ): string {
   const body = serializeBlocksToMarkdown(transformBlocksForExport(blocks, options, databaseRef));

@@ -45,7 +45,6 @@ import {
 } from "@/shared/lib/auth/pageAccess";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import { MovePageModal } from "./MovePageModal";
-import { ExportDialog } from "@/features/page-export/ui/ExportDialog";
 import { PAGE_DEBUG_TOOLS, usePageDebugStore } from "@/shared/debug/pageDebugStore";
 import { getAllDescendantIds } from "@/store/pageStore.helpers";
 import type { PageEntry } from "@/entities/page";
@@ -55,6 +54,14 @@ import styles from "./PageOptionsMenu.module.scss";
 const EMPTY_WORKSPACE_PAGES: PageEntry[] = [];
 const MENU_MARGIN = 12;
 const MENU_GAP = 6;
+
+// Lazy: the whole export machinery (serializers, zip, dialog) loads only when
+// the user actually opens Export — it has no place in the sidebar warm chunk.
+const ExportDialog = React.lazy(() =>
+  import("@/features/page-export/ui/ExportDialog").then((module) => ({
+    default: module.ExportDialog,
+  })),
+);
 
 type MenuPosition = {
   top: number;
@@ -422,12 +429,14 @@ export const PageOptionsMenu: React.FC<Props> = ({
         )}
 
       {isExportOpen && workspaceId ? (
-        <ExportDialog
-          open
-          pageId={pageId}
-          workspaceId={workspaceId}
-          onClose={() => setIsExportOpen(false)}
-        />
+        <React.Suspense fallback={null}>
+          <ExportDialog
+            open
+            pageId={pageId}
+            workspaceId={workspaceId}
+            onClose={() => setIsExportOpen(false)}
+          />
+        </React.Suspense>
       ) : null}
 
       {confirmationMode &&
