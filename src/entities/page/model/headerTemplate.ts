@@ -84,3 +84,22 @@ export interface HeaderTemplate {
   layout: HeaderLayout;
   regions: HeaderRegion[];
 }
+
+/**
+ * Starter template mirroring the classic header (icon beside title) — the
+ * editing seed for the header customizer. Every slot is then rebindable,
+ * reorderable, or removable like any designed header.
+ */
+export function classicHeaderTemplate(): HeaderTemplate {
+  return {
+    id: "classic",
+    version: 1,
+    layout: "media_aside",
+    regions: [
+      { id: "aside", kind: "aside", slots: [{ id: "media", kind: "media", bind: "icon" }] },
+      { id: "main", kind: "main", slots: [{ id: "title", kind: "title", bind: "title" }] },
+      { id: "meta", kind: "meta", slots: [] },
+      { id: "actions", kind: "actions", slots: [] },
+    ],
+  };
+}

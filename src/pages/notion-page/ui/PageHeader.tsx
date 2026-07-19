@@ -27,6 +27,7 @@ import {
   type ActivePage,
   type PageEntry,
 } from "@/entities/page";
+import { classicHeaderTemplate } from "@/entities/page/model/headerTemplate";
 import { usePageHeaderActions } from "./usePageHeaderActions";
 import { usePageProperties } from "./usePageProperties";
 import { patchActivePageMetadata } from "./notionPageMeta";
@@ -36,6 +37,13 @@ import { TemplateEditBanner } from "./TemplateEditBanner";
 import { useResolvedHeaderTemplate } from "../model/useResolvedHeaderTemplate";
 
 const EMPTY_MESSAGES: RealtimeMessage[] = [];
+
+// Lazy: the header customizer (designer UI + store) loads only when opened.
+const HeaderDesigner = React.lazy(() =>
+  import("@/features/template-designer/ui/HeaderDesigner").then((module) => ({
+    default: module.HeaderDesigner,
+  })),
+);
 
 interface Props {
   pageId: string;
@@ -58,6 +66,8 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
   const properties = usePageProperties(pageId, locked);
   const headerTemplate = useResolvedHeaderTemplate(page);
   const commentCount = useRealtimeMessagesStore((s) => (s.messagesByThread[`page:${pageId}:comments`] ?? EMPTY_MESSAGES).length);
+  const [customizerOpen, setCustomizerOpen] = React.useState(false);
+  const openCustomizer = React.useCallback(() => setCustomizerOpen(true), []);
 
   const title = page?.title ?? activePage?.title ?? "";
   const icon = page?.icon ?? activePage?.icon;
@@ -83,15 +93,47 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
 
   const templateBanner = page?.isTemplate ? <TemplateEditBanner page={page} /> : null;
 
+  // The customizer edits a scoped HeaderTemplate — data, not page content: the
+  // draft starts from the resolved template (or the classic-header starter) and
+  // saves to this page, its database, or globally. Shared by both branches.
+  const customizer = customizerOpen && page ? (
+    <React.Suspense fallback={null}>
+      <HeaderDesigner
+        open
+        onClose={() => setCustomizerOpen(false)}
+        scopes={[
+          { key: `page:${pageId}`, label: "This page" },
+          ...(page.databaseId ? [{ key: page.databaseId, label: "This database" }] : []),
+          { key: "global", label: "All pages" },
+        ]}
+        template={headerTemplate ?? classicHeaderTemplate()}
+        sample={page}
+        bindKeys={["title", "icon", "cover", ...(page.properties ?? []).map((p) => p.key)]}
+      />
+    </React.Suspense>
+  ) : null;
+
   if (headerTemplate && page) {
     return (
       <>
         {templateBanner}
+        {hasCover && (
+          <PageCover
+            cover={cover}
+            position={page.coverPosition ?? activePage?.coverPosition}
+            onChangeCover={actions.changeCover}
+            onChangeCoverPosition={actions.changeCoverPosition}
+            onRemoveCover={actions.removeCover}
+            onCustomizeHeader={openCustomizer}
+            disabled={locked}
+          />
+        )}
         <div className={`osionos-page-header ${hasCover ? "osionos-page-header--with-cover" : "osionos-page-header--no-cover"}`}>
           <PageComments pageId={pageId} open={commentsOpen} onClose={onCloseComments} />
           <TemplateHeader template={headerTemplate} page={page} />
           {page.workspaceId ? <PageConnections pageId={pageId} workspaceId={page.workspaceId} /> : null}
         </div>
+        {customizer}
       </>
     );
   }
@@ -106,7 +148,7 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
           onChangeCover={actions.changeCover}
           onChangeCoverPosition={actions.changeCoverPosition}
           onRemoveCover={actions.removeCover}
-          onCustomizeHeader={hasHeaderCanvasLayout || headerBand ? undefined : actions.customizeHeader}
+          onCustomizeHeader={hasHeaderCanvasLayout || headerBand ? undefined : openCustomizer}
           disabled={locked}
         />
       )}
@@ -130,7 +172,7 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
             </button>
           )}
           {!locked && !hasHeaderCanvasLayout && (
-            <button type="button" className="osionos-page-toolbar-btn" onClick={actions.customizeHeader}>
+            <button type="button" className="osionos-page-toolbar-btn" onClick={headerBand ? actions.customizeHeader : openCustomizer}>
               <LayoutDashboard size={14} />
               {customizeLabel}
             </button>
@@ -161,6 +203,7 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
         />
         {page?.workspaceId ? <PageConnections pageId={pageId} workspaceId={page.workspaceId} /> : null}
       </div>
+      {customizer}
     </>
   );
 };

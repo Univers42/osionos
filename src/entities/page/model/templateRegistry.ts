@@ -35,6 +35,35 @@ export function resolveHeaderTemplate(databaseId?: string | null): HeaderTemplat
   return headerByDatabase.get(databaseId) ?? null;
 }
 
+/**
+ * Override scope keys for a page, most specific first: this page → its
+ * database → everywhere. The database scope is the BARE database id so every
+ * pre-scope saved template keeps resolving with zero migration.
+ */
+export function headerScopeKeys(pageId?: string | null, databaseId?: string | null): string[] {
+  const keys: string[] = [];
+  if (pageId) keys.push(`page:${pageId}`);
+  if (databaseId) keys.push(databaseId);
+  keys.push("global");
+  return keys;
+}
+
+/**
+ * Scoped template resolution, most specific wins: page override → database
+ * override → built-in database preset → global override → null (classic
+ * header). The preset outranks "global" so a workspace-wide custom header
+ * never flattens purpose-built record headers (e.g. marketplace apps).
+ */
+export function resolveHeaderTemplateScoped(
+  overrides: Record<string, HeaderTemplate>,
+  pageId?: string | null,
+  databaseId?: string | null,
+): HeaderTemplate | null {
+  if (pageId && overrides[`page:${pageId}`]) return overrides[`page:${pageId}`] ?? null;
+  if (databaseId && overrides[databaseId]) return overrides[databaseId] ?? null;
+  return resolveHeaderTemplate(databaseId) ?? overrides.global ?? null;
+}
+
 export function resolveRecordTemplate(databaseId?: string | null): RecordTemplate | null {
   if (!databaseId) return null;
   return recordByDatabase.get(databaseId) ?? null;

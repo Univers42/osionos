@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 
 import { Modal } from "@/shared/ui/primitives/Modal";
 import { Button } from "@/shared/ui/atoms/Button";
@@ -20,12 +20,19 @@ import { TemplateHeader } from "@/pages/notion-page/ui/TemplateHeader";
 
 import { useHeaderDesigner } from "../model/useHeaderDesigner";
 import { useHeaderTemplateStore } from "../model/headerTemplateStore";
-import { SlotEditor } from "./SlotEditor";
+import { SELECT, SlotEditor } from "./SlotEditor";
+
+export interface HeaderScope {
+  /** Override-store key this scope writes ("page:<id>", a database id, "global"). */
+  key: string;
+  label: string;
+}
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  databaseId: string;
+  /** Where "Save" may write, most specific first — the first is preselected. */
+  scopes: ReadonlyArray<HeaderScope>;
   template: HeaderTemplate;
   /** A record used to render the live preview. */
   sample: PageEntry;
@@ -33,20 +40,39 @@ interface Props {
   bindKeys: string[];
 }
 
-/** Visual, drag-and-drop header designer: rearrange/rebind slots with a live preview, then save. */
-export const HeaderDesigner: React.FC<Props> = ({ open, onClose, databaseId, template, sample, bindKeys }) => {
+/** Visual, drag-and-drop header customizer: rearrange/rebind slots with a live
+ *  preview, pick the scope (this page / database / everywhere), save or reset. */
+export const HeaderDesigner: React.FC<Props> = ({ open, onClose, scopes, template, sample, bindKeys }) => {
   const { draft, moveSlot, updateSlot, addSlot, removeSlot } = useHeaderDesigner(template);
   const setOverride = useHeaderTemplateStore((s) => s.setOverride);
+  const clearOverride = useHeaderTemplateStore((s) => s.clearOverride);
+  const overrides = useHeaderTemplateStore((s) => s.overrides);
+  const [scopeKey, setScopeKey] = useState(scopes[0]?.key ?? "global");
   const drag = useRef<{ r: number; i: number } | null>(null);
 
   const save = () => {
-    setOverride(databaseId, draft);
+    setOverride(scopeKey, draft);
+    onClose();
+  };
+  const reset = () => {
+    clearOverride(scopeKey);
     onClose();
   };
 
   return (
-    <Modal open={open} onClose={onClose} size="xl" title="Design header">
+    <Modal open={open} onClose={onClose} size="xl" title="Customize header">
       <div className="flex flex-col gap-4 p-4">
+        {scopes.length > 1 ? (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-[var(--osio-fg-muted)]">Apply to</span>
+            <select aria-label="Apply to" className={SELECT} value={scopeKey} onChange={(e) => setScopeKey(e.target.value)}>
+              {scopes.map((scope) => (
+                <option key={scope.key} value={scope.key}>{scope.label}</option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
         <div className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-page)] p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">Live preview</p>
           <TemplateHeader template={draft} page={sample} />
@@ -93,8 +119,11 @@ export const HeaderDesigner: React.FC<Props> = ({ open, onClose, databaseId, tem
         </div>
 
         <div className="flex items-center justify-between">
-          <p className="text-xs text-[var(--osio-fg-subtle)]">Drag slots to reorder or move between regions. Saved to this device.</p>
+          <p className="text-xs text-[var(--osio-fg-subtle)]">Drag slots to reorder or move between regions. Applies instantly, synced to your workspace.</p>
           <div className="flex gap-2">
+            {overrides[scopeKey] ? (
+              <Button tone="ghost" onClick={reset}>Reset to default</Button>
+            ) : null}
             <Button tone="ghost" onClick={onClose}>Cancel</Button>
             <Button tone="primary" onClick={save}>Save header</Button>
           </div>

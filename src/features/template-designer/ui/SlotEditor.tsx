@@ -17,7 +17,7 @@ import type { HeaderSlot, HeaderSlotKind, HeaderTone } from "@/entities/page/mod
 
 const KINDS: HeaderSlotKind[] = ["media", "title", "author", "link", "stat", "rating", "text", "badge", "action"];
 const TONES: HeaderTone[] = ["default", "primary", "danger", "ghost"];
-const SELECT = "rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-1.5 py-1 text-xs text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--osio-accent)]";
+export const SELECT = "rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-1.5 py-1 text-xs text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--osio-accent)]";
 
 interface Props {
   slot: HeaderSlot;
