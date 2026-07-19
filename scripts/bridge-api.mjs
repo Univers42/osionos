@@ -23,6 +23,7 @@ import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordSubitemNoteB
 import { publishRealtime } from './bridge-social-core.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
+import { createIdeSandboxHandler } from './bridge-ide-sandbox.mjs';
 import { createConnectorHandler } from './bridge-connector.mjs';
 import { createOAuthHandler } from './bridge-oauth.mjs';
 import { createChatHandler } from './bridge-chat.mjs';
@@ -3220,6 +3221,7 @@ async function handleBridgeRequest(request, response, context) {
 	// chat/profile/feed (WS-B).
 	if (await context.social.agent(url, request, response, context.config)) return;
 	if (await context.social.runner(url, request, response, context.config)) return;
+	if (await context.social.ideSandbox(url, request, response, context.config)) return;
 	if (await context.social.connector(url, request, response, context.config)) return;
 		if (await context.social.oauth(url, request, response, context.config)) return;
 	if (await handlePermsRoute(request, response, url, context.fetchImpl)) return;
@@ -3269,6 +3271,7 @@ export function createBridgeServer(options = {}) {
 	const social = options.social ?? {
 		agent: createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		ideSandbox: createIdeSandboxHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
 		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
 		rtc: createRtcTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
