@@ -56,7 +56,13 @@ const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab }) 
   const jwt = useUserStore((s) => s.activePageJwt() ?? "");
 
   useEffect(() => {
-    if (!page && jwt) fetchPageContent(tab.pageId, jwt);
+    // Fetch on missing PAGE *or* missing CONTENT: the bulk /api/pages/all hydrate
+    // now ships metadata only, so a page can be present with content===undefined
+    // (unloaded). Without this, a background/split pane renders a blank editor and
+    // a stray click would write [] over the real server content. Guard on
+    // `=== undefined` (unloaded), never a length check — a genuinely empty page
+    // has content===[] and must not fetch-loop.
+    if (jwt && (!page || page.content === undefined)) fetchPageContent(tab.pageId, jwt);
   }, [page, jwt, tab.pageId, fetchPageContent]);
 
   if (!page) return <LoadingPane />;
