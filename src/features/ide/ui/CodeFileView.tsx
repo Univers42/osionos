@@ -22,6 +22,8 @@ import { codeBlockOf, createCodeFileBlock } from "../model/codeFile";
 import { languageById, languageForFileName } from "../model/ideLanguages";
 import { useCodeRunner } from "../model/useCodeRunner";
 import { canFormat, formatCode } from "../model/formatCode";
+import { pathForPage } from "../model/idePaths";
+import { useIdeModeStore } from "../model/ideModeStore";
 import { baseEditorExtensions } from "./codeMirrorSetup";
 import { RunConsole } from "./RunConsole";
 
@@ -45,6 +47,8 @@ interface StatusInfo {
 export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   const page = usePageStore((s) => s.pageById(pageId));
   const jwt = useUserStore((s) => s.activePageJwt() ?? "");
+  const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
+  const isIdeMode = useIdeModeStore((s) => s.isIdeMode(workspaceId));
   const block = codeBlockOf(page);
   const contentLoaded = Array.isArray(page?.content);
 
@@ -68,6 +72,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   const hostRef = React.useRef<HTMLDivElement | null>(null);
   const viewRef = React.useRef<EditorView | null>(null);
   const langCompartmentRef = React.useRef<Compartment | null>(null);
+  const lspCompartmentRef = React.useRef<Compartment | null>(null);
   const [status, setStatus] = React.useState<StatusInfo>({ line: 1, col: 1, lines: 1 });
   const runner = useCodeRunner();
   const [showConsole, setShowConsole] = React.useState(false);
@@ -118,6 +123,8 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     const initialText = codeBlockOf(usePageStore.getState().pageById(pageId))?.content ?? "";
     const langCompartment = new Compartment();
     langCompartmentRef.current = langCompartment;
+    const lspCompartment = new Compartment();
+    lspCompartmentRef.current = lspCompartment;
 
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
     let pending: string | null = null;
@@ -134,6 +141,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
         doc: initialText,
         extensions: [
           langCompartment.of([]),
+          lspCompartment.of([]), // LSP wired in only in IDE mode (effect below)
           // Editor-scoped keymaps (zero conflict with the global automations
           // dispatcher): Cmd/Ctrl+Enter runs, Cmd/Ctrl+Alt+L formats.
           Prec.highest(keymap.of([
@@ -179,6 +187,29 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
       active = false;
     };
   }, [lang]);
+
+  // Wire the language server ONLY in IDE mode (keeps @codemirror/lsp-client out
+  // of the base editor chunk — dynamic import). Reconfigures on file/lang change;
+  // the URI matches the materialized on-disk path so cross-file resolution works.
+  React.useEffect(() => {
+    let active = true;
+    const clear = () => {
+      const view = viewRef.current;
+      const compartment = lspCompartmentRef.current;
+      if (view && compartment) view.dispatch({ effects: compartment.reconfigure([]) });
+    };
+    if (!isIdeMode || !workspaceId || !blockId) { clear(); return; }
+    void import("../model/lspClient").then(({ lspExtensionFor, lspServerFor }) => {
+      if (!active) return;
+      if (!lspServerFor(languageId)) { clear(); return; }
+      const rel = pathForPage(pageId, (id) => usePageStore.getState().pageById(id));
+      const ext = lspExtensionFor(languageId, `file:///workspace/${rel}`, workspaceId);
+      const view = viewRef.current;
+      const compartment = lspCompartmentRef.current;
+      if (active && view && compartment && ext) view.dispatch({ effects: compartment.reconfigure(ext) });
+    });
+    return () => { active = false; };
+  }, [pageId, blockId, languageId, isIdeMode, workspaceId]);
 
   if (!contentLoaded || !blockId) return <LoadingPane />;
 

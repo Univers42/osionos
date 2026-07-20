@@ -123,9 +123,19 @@ export function createDockerClient(env = process.env) {
       const inspect = await call("GET", `/exec/${execId}/json`);
       return { output: started.text ?? "", exitCode: inspect.body?.ExitCode ?? null };
     },
-    /** Attach a hijacked bidirectional exec stream (PTY / LSP relay). Resolves a
-     *  duplex socket: write = process stdin, data = process stdout. The socket
-     *  proxy passes the upgrade through; the caller bridges it to a WS.
+    /** Resize a running exec's PTY (TIOCSWINSZ), so a wide browser terminal and
+     *  the in-container shell agree on geometry — vim/htop and >80-col line
+     *  editing render correctly. Best-effort: geometry only, never fatal. */
+    async resizeExec(execId, cols, rows) {
+      const w = Math.max(1, Math.min(500, Number(cols) | 0));
+      const h = Math.max(1, Math.min(300, Number(rows) | 0));
+      if (!/^[a-f0-9]+$/.test(String(execId))) return;
+      await call("POST", `/exec/${execId}/resize?w=${w}&h=${h}`).catch(() => {});
+    },
+    /** Attach a hijacked bidirectional exec stream (PTY / LSP relay). Resolves
+     *  `{ stream, execId }`: write = process stdin, data = process stdout; the
+     *  execId lets the caller resizeExec the PTY. The socket proxy passes the
+     *  upgrade through; the caller bridges it to a WS.
      *  ponytail: exercised only against a live sandbox — no unit test, the relay
      *  glue is trivial and the exec engine is covered by runExec's live test. */
     attachExec(name, execSpec) {
@@ -146,7 +156,7 @@ export function createDockerClient(env = process.env) {
                 host, port, method: "POST", path: `/exec/${execId}/start`,
                 headers: { "content-type": "application/json", "content-length": startBody.length, Connection: "Upgrade", Upgrade: "tcp" },
               });
-              startReq.on("upgrade", (_res, socket) => resolve(socket));
+              startReq.on("upgrade", (_res, socket) => resolve({ stream: socket, execId }));
               startReq.on("error", reject);
               startReq.end(startBody);
             });

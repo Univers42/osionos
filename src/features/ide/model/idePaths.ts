@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import type { PageEntry } from "@/entities/page";
 import type { IdeTreeNode } from "./ideFileTree";
 import { codeBlockOf } from "./codeFile";
 
@@ -17,6 +18,23 @@ import { codeBlockOf } from "./codeFile";
 export interface IdeFlatFile {
   path: string;
   content: string;
+}
+
+/** Workspace-relative path for a single page, walking its folder ancestors with
+ *  the SAME sanitized segments collectTreeFiles produces — so an LSP document
+ *  URI (P5) matches what materialize (P4) writes to disk, and the open buffer
+ *  shadows the on-disk file for cross-file resolution. `resolve` is a page-by-id
+ *  lookup (usePageStore.pageById). */
+export function pathForPage(pageId: string, resolve: (id: string) => PageEntry | undefined): string {
+  const segments: string[] = [];
+  const seen = new Set<string>();
+  let cur = resolve(pageId);
+  while (cur && !seen.has(cur._id) && !cur.archivedAt && (cur.surface === "code" || cur.surface === "folder")) {
+    seen.add(cur._id);
+    segments.unshift(sanitizeSegment(cur.title || "untitled"));
+    cur = cur.parentPageId ? resolve(cur.parentPageId) : undefined;
+  }
+  return segments.join("/");
 }
 
 /**

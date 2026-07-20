@@ -13,8 +13,13 @@
 import React from "react";
 import { SquareTerminal, X } from "lucide-react";
 
-/** The collapsible bottom strip (terminal / output). P0 renders the frame and a
- *  placeholder; P3 mounts the real xterm.js terminal here over the sandbox PTY. */
+// Lazy so xterm.js (~250KB) loads only when the terminal panel first opens.
+const IdeTerminal = React.lazy(() =>
+  import("@/features/ide/ui/IdeTerminal").then((m) => ({ default: m.IdeTerminal })),
+);
+
+/** The collapsible bottom strip: a real xterm.js terminal over the sandbox PTY
+ *  (P3), or the "sandbox off" hint when the transport is unavailable. */
 export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   return (
     <section
@@ -35,9 +40,15 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
           <X size={13} />
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-[12px] leading-5 text-[var(--osio-code-fg-muted)]">
-        A real interactive shell attaches here once the workspace sandbox is enabled.
-      </div>
+      <React.Suspense
+        fallback={
+          <div className="min-h-0 flex-1 px-3 py-2 font-mono text-[12px] leading-5 text-[var(--osio-code-fg-muted)]">
+            Starting terminal…
+          </div>
+        }
+      >
+        <IdeTerminal />
+      </React.Suspense>
     </section>
   );
 };
