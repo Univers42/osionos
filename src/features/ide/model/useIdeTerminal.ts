@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Terminal } from "@xterm/xterm";
 
 import { API_BASE, getActivePageJwt } from "@/shared/api/client";
+import { useTerminalRunBus } from "./terminalRunBus";
 
 export type IdeTerminalStatus = "connecting" | "open" | "closed" | "unavailable";
 
@@ -50,7 +51,15 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string): IdeT
       if (ws.readyState === WebSocket.OPEN) ws.send(`\x1b_osio-resize:${term.cols},${term.rows}\x1b\\`);
     };
 
-    ws.onopen = () => { setWsStatus("open"); sendResize(); term.focus(); };
+    // Drain a parked "Run this file" request into the PTY stdin (a newline
+    // submits it) — so `input()` reads from the real terminal, not a closed pipe.
+    const runPending = () => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      const cmd = useTerminalRunBus.getState().drain();
+      if (cmd) ws.send(cmd.endsWith("\n") ? cmd : cmd + "\n");
+    };
+
+    ws.onopen = () => { setWsStatus("open"); sendResize(); term.focus(); runPending(); };
     ws.onmessage = (ev) => {
       if (typeof ev.data === "string") term.write(ev.data);
       else term.write(new Uint8Array(ev.data as ArrayBuffer));
@@ -60,10 +69,13 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string): IdeT
 
     const dataSub = term.onData((d) => { if (ws.readyState === WebSocket.OPEN) ws.send(d); });
     const resizeSub = term.onResize(() => sendResize());
+    // A Run requested while the terminal is already connected fires immediately.
+    const runSub = useTerminalRunBus.subscribe((s, prev) => { if (s.seq !== prev.seq) runPending(); });
 
     return () => {
       dataSub.dispose();
       resizeSub.dispose();
+      runSub();
       try { ws.close(); } catch { /* already closed */ }
     };
   }, [term, url]);
