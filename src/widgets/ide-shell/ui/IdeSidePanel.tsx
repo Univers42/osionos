@@ -17,6 +17,7 @@ import { IdeExplorerPanel } from "@/features/ide/ui/IdeExplorerPanel";
 import { IdeSearchPanel } from "@/features/ide/ui/IdeSearchPanel";
 import { IdeSourceControl } from "@/features/ide/ui/IdeSourceControl";
 import { IdeProblemsPanel } from "@/features/ide/ui/IdeProblemsPanel";
+import { IdeRunPanel } from "@/features/ide/ui/IdeRunPanel";
 
 const TITLES: Record<IdePanel, string> = {
   explorer: "Explorer",
@@ -27,9 +28,9 @@ const TITLES: Record<IdePanel, string> = {
 };
 
 /** The resizable left panel body — its content follows the active activity-bar
- *  panel. Explorer + Search are live; SCM/Run/Problems are placeholders that the
- *  sandbox / git / language-server phases fill in place. The Explorer owns its
- *  own header (project name + toolbar), so it renders without the shared title. */
+ *  panel. Explorer/Search/SCM/Run/Problems are all live (Run streams the code
+ *  runner; full DAP debugging lands with the sandbox shell). The Explorer owns
+ *  its own header (project name + toolbar), so it renders without the shared title. */
 export const IdeSidePanel: React.FC<{ panel: IdePanel }> = ({ panel }) => {
   if (panel === "explorer") {
     return (
@@ -53,9 +54,11 @@ export const IdeSidePanel: React.FC<{ panel: IdePanel }> = ({ panel }) => {
         <IdeSourceControl />
       ) : panel === "problems" ? (
         <IdeProblemsPanel />
+      ) : panel === "run" ? (
+        <IdeRunPanel />
       ) : (
         <p className="px-3 py-6 text-center text-[11px] leading-5 text-[var(--osio-code-fg-muted)]">
-          Run and debug arrives with the sandbox shell.
+          {TITLES[panel]} is not available yet.
         </p>
       )}
     </aside>
