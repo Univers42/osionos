@@ -54,15 +54,17 @@ export function parseRipgrepJson(output) {
   return results;
 }
 
-/** Auth + identity + a running sandbox, or throw a {status} error. */
+/** Auth + identity + a running sandbox, or throw a {status} error. Rate-limit is
+ *  charged BEFORE the shared-daemon inspect, so a flood is rejected locally with
+ *  429 and never load-amplifies onto the docker daemon (review finding). */
 async function resolveSandbox(request, payload, env, config, verifySession) {
   const session = verifySession(bearerToken(request), config);
   const identity = requireSandboxIdentity(session, payload?.workspaceId);
+  takeToken(`ide-ops:${identity.userId}`, { capacity: 60, refillPerSec: 1 });
   const names = { ...identity, ...deriveNames(identity.userId, identity.workspaceId) };
   const docker = createDockerClient(env);
   const info = await docker.inspect(names.containerName);
   if (!info?.State?.Running) throw Object.assign(new Error('No running sandbox. Open the workspace first.'), { status: 409 });
-  takeToken(`ide-ops:${identity.userId}`, { capacity: 60, refillPerSec: 1 });
   return { docker, names };
 }
 

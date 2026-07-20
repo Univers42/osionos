@@ -23,6 +23,12 @@
 import { handshake, encodeFrame, createFrameDecoder } from './ide-ws.mjs';
 import { createDockerClient } from './ide-docker.mjs';
 import { requireSandboxIdentity, deriveNames, buildShellExecSpec } from './ide-sandbox-spec.mjs';
+import { takeToken } from './bridge-ratelimit.mjs';
+
+// Each live exec pins two bridge FDs + a spawned process; cap churn AND
+// simultaneous streams per user so one tenant can't exhaust the shared bridge.
+const MAX_CONCURRENT_EXEC = 6;
+const activeExecByUser = new Map();
 
 // The only language servers we relay to (P5). Adding one = one line here + the
 // server installed in the sandbox image. Command is server-fixed, never client.
@@ -48,12 +54,18 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
 
     if (env.OSIONOS_IDE_SANDBOX !== '1' || !env.OSIONOS_IDE_DOCKER_HOST) { socket.destroy(); return true; }
 
-    let names;
+    let userId, names;
     try {
       const session = verifySession(url.searchParams.get('token'), config);
       const identity = requireSandboxIdentity(session, url.searchParams.get('workspaceId'));
-      names = deriveNames(identity.userId, identity.workspaceId);
+      userId = identity.userId;
+      names = deriveNames(userId, identity.workspaceId);
     } catch { socket.destroy(); return true; }
+
+    // Throttle open-churn, then bound simultaneous streams per user.
+    try { takeToken(`ide-exec:${userId}`, { capacity: 8, refillPerSec: 0.5 }); }
+    catch { socket.destroy(); return true; }
+    if ((activeExecByUser.get(userId) ?? 0) >= MAX_CONCURRENT_EXEC) { socket.destroy(); return true; }
 
     if (!handshake(request, socket)) return true;
 
@@ -61,11 +73,27 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     try { spec = isPty ? buildShellExecSpec() : lspExecSpec(url.searchParams.get('lang')); }
     catch { socket.write(encodeFrame('unsupported', 1)); socket.destroy(); return true; }
 
+    activeExecByUser.set(userId, (activeExecByUser.get(userId) ?? 0) + 1);
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      const next = (activeExecByUser.get(userId) ?? 1) - 1;
+      if (next <= 0) activeExecByUser.delete(userId); else activeExecByUser.set(userId, next);
+    };
+    socket.once('close', release); // covers a close during the pending attach
+
     const docker = createDockerClient(env);
     docker.attachExec(names.containerName, spec).then((duplex) => {
       const decode = createFrameDecoder();
-      duplex.on('data', (chunk) => { if (!socket.destroyed) socket.write(encodeFrame(chunk, 2)); });
-      duplex.on('close', () => socket.destroyed || socket.end(encodeFrame('', 8)));
+      // Backpressure: pause the container stream when the client stops draining,
+      // so a slow/zero-window reader can't hoard unbounded bytes in the bridge.
+      duplex.on('data', (chunk) => {
+        if (socket.destroyed) return;
+        if (!socket.write(encodeFrame(chunk, 2))) duplex.pause();
+      });
+      socket.on('drain', () => duplex.resume());
+      duplex.on('close', () => { if (!socket.destroyed) socket.end(encodeFrame('', 8)); });
       duplex.on('error', () => socket.destroy());
       socket.on('data', (chunk) => {
         let messages;
@@ -77,7 +105,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
       });
       socket.on('close', () => duplex.destroy());
       socket.on('error', () => duplex.destroy());
-    }).catch(() => socket.destroy());
+    }).catch(() => { release(); socket.destroy(); });
     return true;
   };
 }
