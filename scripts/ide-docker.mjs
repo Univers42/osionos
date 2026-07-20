@@ -18,6 +18,11 @@
 
 import http from "node:http";
 
+// Hard cap on any single docker API response we buffer. git/search downstream
+// caps apply AFTER the buffer exists, so this bounds a hostile `git log -p` /
+// broad search from OOMing the shared bridge (review finding).
+const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+
 /** One JSON request to the docker API via the socket-proxy. Resolves
  *  { status, body } — the caller decides what a status means (404 is normal
  *  for "container absent"). */
@@ -31,13 +36,22 @@ function dockerRequest({ host, port }, method, path, body) {
       }, timeout: 20_000 },
       (res) => {
         const chunks = [];
-        res.on("data", (c) => chunks.push(c));
-        res.on("end", () => {
+        let size = 0;
+        let truncated = false;
+        res.on("data", (c) => {
+          if (truncated) return;
+          size += c.length;
+          if (size > MAX_RESPONSE_BYTES) { truncated = true; req.destroy(); return; }
+          chunks.push(c);
+        });
+        const finish = () => {
           const text = Buffer.concat(chunks).toString("utf8");
           let json = null;
-          try { json = text ? JSON.parse(text) : null; } catch { /* non-json */ }
+          try { json = text ? JSON.parse(text) : null; } catch { /* non-json / truncated */ }
           resolve({ status: res.statusCode ?? 0, body: json, text });
-        });
+        };
+        res.on("end", finish);
+        res.on("close", () => { if (truncated) finish(); });
       },
     );
     req.on("timeout", () => req.destroy(new Error("docker request timeout")));
