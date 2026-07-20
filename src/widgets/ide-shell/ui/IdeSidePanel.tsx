@@ -16,6 +16,7 @@ import type { IdePanel } from "@/features/ide/model/ideModeStore";
 import { IdeExplorerPanel } from "@/features/ide/ui/IdeExplorerPanel";
 import { IdeSearchPanel } from "@/features/ide/ui/IdeSearchPanel";
 import { IdeSourceControl } from "@/features/ide/ui/IdeSourceControl";
+import { IdeProblemsPanel } from "@/features/ide/ui/IdeProblemsPanel";
 
 const TITLES: Record<IdePanel, string> = {
   explorer: "Explorer",
@@ -50,10 +51,11 @@ export const IdeSidePanel: React.FC<{ panel: IdePanel }> = ({ panel }) => {
         <IdeSearchPanel />
       ) : panel === "scm" ? (
         <IdeSourceControl />
+      ) : panel === "problems" ? (
+        <IdeProblemsPanel />
       ) : (
         <p className="px-3 py-6 text-center text-[11px] leading-5 text-[var(--osio-code-fg-muted)]">
-          {panel === "run" && "Run and debug arrives with the sandbox shell."}
-          {panel === "problems" && "Diagnostics arrive with the language servers."}
+          Run and debug arrives with the sandbox shell.
         </p>
       )}
     </aside>

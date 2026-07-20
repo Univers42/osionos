@@ -30,6 +30,11 @@ import { takeToken } from './bridge-ratelimit.mjs';
 const MAX_CONCURRENT_EXEC = 6;
 const activeExecByUser = new Map();
 
+// APC-wrapped PTY-resize control frame (see the socket 'data' handler). The
+// ESC _ … ESC \ envelope can't be produced by ordinary typing, so it never
+// collides with keystrokes bound for stdin.
+const RESIZE_MAGIC = Buffer.from('\x1b_osio-resize:');
+
 // The only language servers we relay to (P5). Adding one = one line here + the
 // server installed in the sandbox image. Command is server-fixed, never client.
 const LSP_SERVERS = {
@@ -84,7 +89,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     socket.once('close', release); // covers a close during the pending attach
 
     const docker = createDockerClient(env);
-    docker.attachExec(names.containerName, spec).then((duplex) => {
+    docker.attachExec(names.containerName, spec).then(({ stream: duplex, execId }) => {
       const decode = createFrameDecoder();
       // Backpressure: pause the container stream when the client stops draining,
       // so a slow/zero-window reader can't hoard unbounded bytes in the bridge.
@@ -100,7 +105,18 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
         try { messages = decode(chunk); } catch { socket.destroy(); return; }
         for (const m of messages) {
           if (m.opcode === 8) { duplex.end(); return; } // client close
-          if (m.opcode === 1 || m.opcode === 2) duplex.write(m.data);
+          if (m.opcode !== 1 && m.opcode !== 2) continue;
+          // Out-of-band PTY resize (an APC-wrapped control frame the browser
+          // sends on fit): `ESC _ osio-resize:COLS,ROWS ESC \`. Kept off stdin so
+          // vim/htop and >80-col line editing track the real terminal geometry.
+          // ponytail: a paste containing this exact 20-byte magic would trigger a
+          // harmless spurious resize — acceptable ceiling.
+          if (isPty && m.data.length < 48 && m.data.slice(0, RESIZE_MAGIC.length).equals(RESIZE_MAGIC)) {
+            const [c, r] = m.data.slice(RESIZE_MAGIC.length).toString('latin1').replace(/\x1b\\$/, '').split(',');
+            docker.resizeExec(execId, c, r);
+            continue;
+          }
+          duplex.write(m.data);
         }
       });
       socket.on('close', () => duplex.destroy());
