@@ -18,15 +18,22 @@ import { frameLsp, createLspFramer } from "./lspFraming";
 import { useDiagnosticsStore, type IdeDiagnostic } from "./diagnosticsStore";
 
 // CodeMirror languageId → sandbox LSP server key (bridge LSP_SERVERS). Only these
-// have a server installed in the sandbox image; anything else → no LSP.
+// have a server installed in the sandbox image; anything else → no LSP. clangd
+// serves both C and C++.
 const LSP_SERVER: Record<string, string> = {
   typescript: "typescript", tsx: "typescript", javascript: "typescript", jsx: "typescript",
   python: "python",
+  go: "go",
+  rust: "rust",
+  c: "clangd", cpp: "clangd",
 };
 // CodeMirror languageId → the LSP `languageId` the server expects on didOpen.
 const LSP_DOC_LANG: Record<string, string> = {
   typescript: "typescript", tsx: "typescriptreact", javascript: "javascript", jsx: "javascriptreact",
   python: "python",
+  go: "go",
+  rust: "rust",
+  c: "c", cpp: "cpp",
 };
 
 /** The sandbox LSP server key for a CodeMirror language, or null if none. */
