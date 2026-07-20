@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 
 import {
   requireSandboxIdentity, deriveNames, buildContainerSpec, buildGitExecSpec, buildShellExecSpec,
+  buildSearchExecSpec, buildWriteExecSpec,
 } from "../../scripts/ide-sandbox-spec.mjs";
 
 const U = "11111111-1111-4111-8111-111111111111";
@@ -71,4 +72,31 @@ test("git exec: fixed argv, PAT only here — never the shell (devil #9,#13)", (
   const shell = buildShellExecSpec();
   assert.deepEqual(shell.Cmd, ["/bin/bash", "-l"]);
   assert.ok(!shell.Env.some((e) => e.startsWith("GIT_PAT")));
+});
+
+test("git subcommand allowlist blocks config (PAT-persist defeat) + junk", () => {
+  assert.ok(buildGitExecSpec(["git", "status", "--porcelain"]).Tty);
+  assert.deepEqual(buildGitExecSpec(["git", "push", "origin", "main"], "p").Env, ["GIT_PAT=p"]);
+  // `git config credential.helper store` would defeat condition 13 — denied.
+  assert.throws(() => buildGitExecSpec(["git", "config", "credential.helper", "store"]), /not allowed/);
+  assert.throws(() => buildGitExecSpec(["git", "gc"]), /not allowed/);
+  assert.throws(() => buildGitExecSpec(["git"]), /subcommand/);
+});
+
+test("search argv: query is an argv item after `--` (no flag injection)", () => {
+  const spec = buildSearchExecSpec("-x; rm -rf", 50);
+  // the query sits after `--`, so ripgrep treats a leading `-` as a literal.
+  const dashDash = spec.Cmd.indexOf("--");
+  assert.ok(dashDash !== -1 && spec.Cmd[dashDash + 1] === "-x; rm -rf");
+  assert.throws(() => buildSearchExecSpec(""), /invalid search/);
+  assert.throws(() => buildSearchExecSpec("x".repeat(600)), /invalid search/);
+});
+
+test("write path: no traversal, no absolute; path + content are argv items", () => {
+  const spec = buildWriteExecSpec("src/main.py", "cHJpbnQoMSk=");
+  assert.equal(spec.Cmd[4], "src/main.py");
+  assert.equal(spec.Cmd[5], "cHJpbnQoMSk=");
+  assert.throws(() => buildWriteExecSpec("../etc/passwd"), /invalid write/);
+  assert.throws(() => buildWriteExecSpec("/etc/passwd"), /invalid write/);
+  assert.throws(() => buildWriteExecSpec(""), /invalid write/);
 });

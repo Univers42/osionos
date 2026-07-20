@@ -99,8 +99,8 @@ export function createDockerClient(env = process.env) {
       const res = await call("GET", `/containers/json?all=true&filters=${filters}`);
       return res.status === 200 && Array.isArray(res.body) ? res.body : [];
     },
-    /** Run a non-interactive exec (git op / probe) on a SERVER-derived container
-     *  name and collect its output. Interactive PTY attach is P3's WS path. */
+    /** Run a non-interactive exec (git op / search / probe) on a SERVER-derived
+     *  container name and collect its output. Powers git (P6) + search (P7). */
     async runExec(name, execSpec) {
       const created = await call("POST", `/containers/${name}/exec`, execSpec);
       if (created.status >= 300) throw new Error(`exec create failed (${created.status})`);
@@ -108,6 +108,39 @@ export function createDockerClient(env = process.env) {
       const started = await call("POST", `/exec/${execId}/start`, { Detach: false, Tty: Boolean(execSpec.Tty) });
       const inspect = await call("GET", `/exec/${execId}/json`);
       return { output: started.text ?? "", exitCode: inspect.body?.ExitCode ?? null };
+    },
+    /** Attach a hijacked bidirectional exec stream (PTY / LSP relay). Resolves a
+     *  duplex socket: write = process stdin, data = process stdout. The socket
+     *  proxy passes the upgrade through; the caller bridges it to a WS.
+     *  ponytail: exercised only against a live sandbox — no unit test, the relay
+     *  glue is trivial and the exec engine is covered by runExec's live test. */
+    attachExec(name, execSpec) {
+      return new Promise((resolve, reject) => {
+        const body = Buffer.from(JSON.stringify(execSpec));
+        const createReq = http.request(
+          { host, port, method: "POST", path: `/containers/${name}/exec`,
+            headers: { "content-type": "application/json", "content-length": body.length } },
+          (res) => {
+            const chunks = [];
+            res.on("data", (c) => chunks.push(c));
+            res.on("end", () => {
+              let execId;
+              try { execId = JSON.parse(Buffer.concat(chunks).toString()).Id; } catch { return reject(new Error("exec create parse")); }
+              if (!execId) return reject(new Error("exec create failed"));
+              const startBody = Buffer.from(JSON.stringify({ Detach: false, Tty: Boolean(execSpec.Tty) }));
+              const startReq = http.request({
+                host, port, method: "POST", path: `/exec/${execId}/start`,
+                headers: { "content-type": "application/json", "content-length": startBody.length, Connection: "Upgrade", Upgrade: "tcp" },
+              });
+              startReq.on("upgrade", (_res, socket) => resolve(socket));
+              startReq.on("error", reject);
+              startReq.end(startBody);
+            });
+          },
+        );
+        createReq.on("error", reject);
+        createReq.end(body);
+      });
     },
   };
 }

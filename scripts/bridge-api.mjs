@@ -24,6 +24,8 @@ import { publishRealtime } from './bridge-social-core.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
 import { createIdeSandboxHandler } from './bridge-ide-sandbox.mjs';
+import { createIdeOpsHandler } from './bridge-ide-ops.mjs';
+import { createIdeExecUpgradeHandler } from './bridge-ide-exec.mjs';
 import { createConnectorHandler } from './bridge-connector.mjs';
 import { createOAuthHandler } from './bridge-oauth.mjs';
 import { createChatHandler } from './bridge-chat.mjs';
@@ -3222,6 +3224,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.agent(url, request, response, context.config)) return;
 	if (await context.social.runner(url, request, response, context.config)) return;
 	if (await context.social.ideSandbox(url, request, response, context.config)) return;
+	if (await context.social.ideOps(url, request, response, context.config)) return;
 	if (await context.social.connector(url, request, response, context.config)) return;
 		if (await context.social.oauth(url, request, response, context.config)) return;
 	if (await handlePermsRoute(request, response, url, context.fetchImpl)) return;
@@ -3272,6 +3275,7 @@ export function createBridgeServer(options = {}) {
 		agent: createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		ideSandbox: createIdeSandboxHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
+		ideOps: createIdeOpsHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
 		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
 		rtc: createRtcTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
@@ -3304,7 +3308,7 @@ export function createBridgeServer(options = {}) {
 		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 	};
-	return createServer(async (request, response) => {
+	const server = createServer(async (request, response) => {
 		let responseConfig = requestOriginConfig(config, request);
 		try {
 			await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl, social });
@@ -3312,6 +3316,14 @@ export function createBridgeServer(options = {}) {
 			if (!response.headersSent) errorJson(response, error, responseConfig);
 		}
 	});
+	// The IDE PTY (P3) / LSP (P5) WS relays own their own upgrade paths; every
+	// other upgrade is refused (the bridge does no other WS — realtime is Kong).
+	const ideExecUpgrade = createIdeExecUpgradeHandler({ config, verifySession: verifyAppSessionToken, env: process.env });
+	server.on('upgrade', (request, socket) => {
+		try { if (!ideExecUpgrade(request, socket)) socket.destroy(); }
+		catch { socket.destroy(); }
+	});
+	return server;
 }
 
 export function startBridgeServer(config = configFromEnv()) {

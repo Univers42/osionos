@@ -92,19 +92,72 @@ export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, vol
   };
 }
 
-/** A per-git-operation exec spec: fixed argv, GIT_PAT injected ONLY here (never
- *  the shell / never persisted), run as the coder user in /workspace. */
+// The only git subcommands the source-control UI issues. `config` is DENIED so a
+// caller can never set credential.helper=store and defeat the per-op PAT guard
+// (condition 13); arbitrary subcommands are refused.
+const GIT_SUBCOMMANDS = new Set([
+  "status", "add", "reset", "restore", "commit", "push", "pull", "fetch",
+  "clone", "checkout", "switch", "branch", "log", "diff", "show", "stash",
+  "init", "remote", "rev-parse", "ls-files",
+]);
+
+/** A per-git-operation exec spec: a validated argv (fixed `git`, allowlisted
+ *  subcommand, arguments passed as ARGV items so nothing is shell-interpolated),
+ *  GIT_PAT injected ONLY here (never the shell / never persisted), run as coder
+ *  in /workspace. Tty collects clean output (no stream-mux header). */
 export function buildGitExecSpec(argv, gitPat) {
-  if (!Array.isArray(argv) || argv[0] !== "git") {
-    throw Object.assign(new Error("git exec argv must start with git"), { status: 400 });
+  if (!Array.isArray(argv) || argv[0] !== "git" || typeof argv[1] !== "string") {
+    throw Object.assign(new Error("git exec argv must start with git <subcommand>"), { status: 400 });
+  }
+  if (!GIT_SUBCOMMANDS.has(argv[1])) {
+    throw Object.assign(new Error(`git subcommand not allowed: ${argv[1]}`), { status: 400 });
+  }
+  if (argv.some((a) => typeof a !== "string")) {
+    throw Object.assign(new Error("git argv must be strings"), { status: 400 });
   }
   return {
     User: "10001:10001",
     WorkingDir: "/workspace",
     AttachStdout: true,
     AttachStderr: true,
+    Tty: true,
     Env: gitPat ? [`GIT_PAT=${gitPat}`] : [],
     Cmd: argv,
+  };
+}
+
+/** A search exec spec: ripgrep with fixed flags; the query + optional path are
+ *  ARGV items (never shell). `--` stops flag parsing so a query starting with
+ *  `-` can't inject a ripgrep flag. */
+export function buildSearchExecSpec(query, maxCount = 200) {
+  if (typeof query !== "string" || query.length === 0 || query.length > 512) {
+    throw Object.assign(new Error("invalid search query"), { status: 400 });
+  }
+  return {
+    User: "10001:10001",
+    WorkingDir: "/workspace",
+    AttachStdout: true,
+    AttachStderr: false,
+    Tty: true,
+    Cmd: ["rg", "--json", "--max-count", String(maxCount), "--", query, "."],
+  };
+}
+
+/** A file-write exec spec (materialize / editor→container). Path AND base64
+ *  content are ARGV items (never shell-interpolated); the script makes the
+ *  parent dir then decodes stdin-free (avoids an exec hijack for stdin).
+ *  ponytail: base64-in-argv caps at ARG_MAX (~MB) — fine for code files. */
+export function buildWriteExecSpec(relPath, contentBase64 = "") {
+  if (typeof relPath !== "string" || relPath.includes("..") || relPath.startsWith("/") || relPath.length === 0) {
+    throw Object.assign(new Error("invalid write path"), { status: 400 });
+  }
+  return {
+    User: "10001:10001",
+    WorkingDir: "/workspace",
+    AttachStdout: true,
+    AttachStderr: true,
+    Tty: true,
+    Cmd: ["sh", "-c", 'mkdir -p "$(dirname "$1")" && printf %s "$2" | base64 -d > "$1"', "sh", relPath, contentBase64],
   };
 }
 
