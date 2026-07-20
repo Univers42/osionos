@@ -396,7 +396,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   }
 
   function refreshTree(workspaceId: string) {
-    if (workspaceId) void fetchPages(workspaceId, jwt);
+    if (workspaceId) void fetchPages(workspaceId, jwt, true);
   }
 
   function createAgentPage() {

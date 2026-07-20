@@ -66,6 +66,11 @@ export class SceneState {
   /** Bumped on any change that affects cluster aggregates (positions, visibility,
    *  fills, graph) so the overview-blob cache recomputes only when needed. */
   private mutVersion = 0;
+
+  /** Monotonic mutation counter — lets pollers (minimap) skip work when nothing changed. */
+  get version(): number {
+    return this.mutVersion;
+  }
   private clusterCache: { version: number; blobs: ClusterBlob[] } | null = null;
 
   setGraph(model: GraphModel, tagColors?: Map<string, string>): void {

@@ -30,10 +30,16 @@ export function Minimap({ engine }: { engine: GraphEngine | null }): ReactElemen
 
     let raf = 0;
     let last = 0;
+    let lastSignature = "";
     const draw = (time: number): void => {
       raf = requestAnimationFrame(draw);
       if (time - last < FRAME_MS) return;
       last = time;
+      // A settled graph with a parked camera polls to the same signature — skip
+      // the snapshot + clear + per-dot redraw entirely until something moves.
+      const signature = engine.getMinimapSignature();
+      if (signature === lastSignature) return;
+      lastSignature = signature;
       const data = engine.getMinimapData();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, MINI_W, MINI_H);
@@ -43,8 +49,8 @@ export function Minimap({ engine }: { engine: GraphEngine | null }): ReactElemen
       ctx.fillStyle = "rgba(229, 231, 245, 0.6)";
       for (let i = 0; i < data.count; i += stride) {
         if (data.visible[i] === 0) continue;
-        const point = worldToScreen(cam, data.x[i], data.y[i]);
-        ctx.fillRect(point.x, point.y, 1.4, 1.4);
+        // Inlined world→screen: an object per dot (up to MAX_DOTS/frame) is pure GC churn.
+        ctx.fillRect(data.x[i] * cam.scale + cam.x, data.y[i] * cam.scale + cam.y, 1.4, 1.4);
       }
       const rect = visibleWorldRect(data.camera, data.width, data.height);
       const topLeft = worldToScreen(cam, rect.minX, rect.minY);
