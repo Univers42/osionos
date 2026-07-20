@@ -16,6 +16,7 @@ import { WorkspaceGrid } from "@/widgets/workspace-grid";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { useIdeModeStore } from "@/features/ide/model/ideModeStore";
+import { useIdeFsSync } from "@/features/ide/model/useIdeFsSync";
 import { buildIdeFileTree, flattenIdeTree } from "@/features/ide/model/ideFileTree";
 import { IdeActivityBar } from "./IdeActivityBar";
 import { IdeSidePanel } from "./IdeSidePanel";
@@ -39,6 +40,11 @@ export const IdeShell: React.FC = () => {
   const bottomOpen = useIdeModeStore((s) => s.bottomOpen);
   const toggleBottom = useIdeModeStore((s) => s.toggleBottom);
   const setIdeMode = useIdeModeStore((s) => s.setIdeMode);
+  const inIdeMode = useIdeModeStore((s) => s.isIdeMode(workspaceId));
+
+  // Live writeback: shell/git-created files → pages, edits/deletes tracked; also
+  // materializes the tree into the sandbox on attach. No-op without a sandbox.
+  useIdeFsSync(workspaceId, inIdeMode);
 
   const fileCount = React.useMemo(
     () => flattenIdeTree(buildIdeFileTree(pages)).filter((node) => !node.isFolder).length,

@@ -175,3 +175,18 @@ export function buildShellExecSpec() {
     Cmd: ["/bin/bash", "-l"],
   };
 }
+
+/** The fs-watcher exec spec (P4 writeback): runs the in-image fs-agent, which
+ *  streams one JSON line per /workspace change (ignore set applied in-container).
+ *  FIXED argv, no GIT_PAT. Tty:true so stdout arrives unmultiplexed (line-clean)
+ *  — the consumer tolerates the CR the TTY adds and skips non-JSON lines. */
+export function buildFsAgentExecSpec() {
+  return {
+    User: "10001:10001",
+    WorkingDir: "/workspace",
+    AttachStdout: true,
+    AttachStderr: false,
+    Tty: true,
+    Cmd: ["node", "/usr/local/lib/osio-fs-agent.mjs"],
+  };
+}
