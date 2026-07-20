@@ -12,6 +12,7 @@
 
 import React from "react";
 import { LayoutDashboard, MessageSquare } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { AssetRenderer } from "@univers42/ui-collection";
 
 import { usePageStore } from "@/store/usePageStore";
@@ -25,7 +26,6 @@ import {
   PagePropertiesPanel,
   PageTitle,
   type ActivePage,
-  type PageEntry,
 } from "@/entities/page";
 import { classicHeaderTemplate } from "@/entities/page/model/headerTemplate";
 import { usePageHeaderActions } from "./usePageHeaderActions";
@@ -47,7 +47,6 @@ const HeaderDesigner = React.lazy(() =>
 
 interface Props {
   pageId: string;
-  page: PageEntry | undefined;
   activePage: ActivePage | null;
   locked: boolean;
   commentsOpen: boolean;
@@ -56,33 +55,60 @@ interface Props {
 }
 
 /** Cover + icon + toolbar + title + properties + connections (the page head, above the body). */
-export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, commentsOpen, onToggleComments, onCloseComments }) => {
+export const PageHeader: React.FC<Props> = ({ pageId, activePage, locked, commentsOpen, onToggleComments, onCloseComments }) => {
   const updatePageTitle = usePageStore((s) => s.updatePageTitle);
+  // Narrow subscription: the page object gets a new identity on every content
+  // commit (typing), but the head reads only metadata — all reference-stable
+  // across commits, which spread the page and replace `content` alone — plus
+  // the first block's layout flags. The full object is selected separately
+  // below, only while a consumer that binds arbitrary fields is mounted.
+  const head = usePageStore(
+    useShallow((s) => {
+      const p = s.pageById(pageId);
+      const first = p?.content?.[0];
+      const hasHeaderBand = first?.type === "layout" && first?.layoutRole === "header";
+      return {
+        pageExists: !!p,
+        title: p?.title,
+        icon: p?.icon,
+        cover: p?.cover,
+        coverPosition: p?.coverPosition,
+        workspaceId: p?.workspaceId,
+        databaseId: p?.databaseId ?? null,
+        isTemplate: !!p?.isTemplate,
+        properties: p?.properties,
+        // Full-page canvas pages own their whole layout → hide the header button there.
+        hasHeaderCanvasLayout: p?.content?.length === 1 &&
+          first?.type === "layout" &&
+          first?.layoutMode === "full_page",
+        hasHeaderBand,
+        headerBandEditing: hasHeaderBand && first?.layoutConfig?.preview === false,
+      };
+    }),
+  );
   const actions = usePageHeaderActions(pageId, locked);
   // Destructured: `coverPickerOpen` is plain state and `coverPickerRef` is
   // only PASSED as a JSX ref — reading them through the hook's bag makes the
   // react-hooks/refs analyzer treat both as render-time ref reads.
   const { coverPickerOpen, coverPickerRef } = actions;
   const properties = usePageProperties(pageId, locked);
-  const headerTemplate = useResolvedHeaderTemplate(page);
+  const headerTemplate = useResolvedHeaderTemplate(head.pageExists ? pageId : null, head.databaseId);
   const commentCount = useRealtimeMessagesStore((s) => (s.messagesByThread[`page:${pageId}:comments`] ?? EMPTY_MESSAGES).length);
   const [customizerOpen, setCustomizerOpen] = React.useState(false);
   const openCustomizer = React.useCallback(() => setCustomizerOpen(true), []);
 
-  const title = page?.title ?? activePage?.title ?? "";
-  const icon = page?.icon ?? activePage?.icon;
-  const cover = page?.cover ?? activePage?.cover;
+  // TemplateHeader slots and the HeaderDesigner sample bind arbitrary page
+  // fields, so they need the full object — subscribe to it only while one of
+  // them is mounted; the common classic-header case stays on the narrow tuple.
+  const needsFullPage = !!headerTemplate || customizerOpen;
+  const page = usePageStore((s) => (needsFullPage ? s.pageById(pageId) : undefined));
+
+  const title = head.title ?? activePage?.title ?? "";
+  const icon = head.icon ?? activePage?.icon;
+  const cover = head.cover ?? activePage?.cover;
   const hasCover = !!cover;
-  // Full-page canvas pages own their whole layout → hide the header button there.
-  const hasHeaderCanvasLayout = page?.content?.length === 1 &&
-    page.content[0]?.type === "layout" &&
-    page.content[0]?.layoutMode === "full_page";
   // Header BAND state drives the button label: none → add, preview → edit, editing → done.
-  const headerBand = page?.content?.[0]?.type === "layout" && page.content[0]?.layoutRole === "header"
-    ? page.content[0]
-    : null;
-  const headerBandEditing = !!headerBand && headerBand.layoutConfig?.preview === false;
-  const customizeLabel = headerBandEditing ? "Done editing header" : "Customize header";
+  const customizeLabel = head.headerBandEditing ? "Done editing header" : "Customize header";
   const hasIcon = !!icon;
 
   function changeTitle(newTitle: string) {
@@ -91,7 +117,7 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
     patchActivePageMetadata(pageId, { title: newTitle });
   }
 
-  const templateBanner = page?.isTemplate ? <TemplateEditBanner page={page} /> : null;
+  const templateBanner = head.isTemplate ? <TemplateEditBanner pageId={pageId} /> : null;
 
   // The customizer edits a scoped HeaderTemplate — data, not page content: the
   // draft starts from the resolved template (or the classic-header starter) and
@@ -144,11 +170,11 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
       {hasCover && (
         <PageCover
           cover={cover}
-          position={page?.coverPosition ?? activePage?.coverPosition}
+          position={head.coverPosition ?? activePage?.coverPosition}
           onChangeCover={actions.changeCover}
           onChangeCoverPosition={actions.changeCoverPosition}
           onRemoveCover={actions.removeCover}
-          onCustomizeHeader={hasHeaderCanvasLayout || headerBand ? undefined : openCustomizer}
+          onCustomizeHeader={head.hasHeaderCanvasLayout || head.hasHeaderBand ? undefined : openCustomizer}
           disabled={locked}
         />
       )}
@@ -171,8 +197,8 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
               Add cover
             </button>
           )}
-          {!locked && !hasHeaderCanvasLayout && (
-            <button type="button" className="osionos-page-toolbar-btn" onClick={headerBand ? actions.customizeHeader : openCustomizer}>
+          {!locked && !head.hasHeaderCanvasLayout && (
+            <button type="button" className="osionos-page-toolbar-btn" onClick={head.hasHeaderBand ? actions.customizeHeader : openCustomizer}>
               <LayoutDashboard size={14} />
               {customizeLabel}
             </button>
@@ -194,14 +220,14 @@ export const PageHeader: React.FC<Props> = ({ pageId, page, activePage, locked, 
         <PageTitle title={title} onChangeTitle={changeTitle} readOnly={locked} />
         <PagePropertiesPanel
           pageId={pageId}
-          workspaceId={page?.workspaceId ?? ""}
-          properties={page?.properties ?? []}
+          workspaceId={head.workspaceId ?? ""}
+          properties={head.properties ?? []}
           editable={!locked}
           onChangeValue={properties.onChangeValue}
           onAddProperty={properties.onAddProperty}
           onRemoveProperty={properties.onRemoveProperty}
         />
-        {page?.workspaceId ? <PageConnections pageId={pageId} workspaceId={page.workspaceId} /> : null}
+        {head.workspaceId ? <PageConnections pageId={pageId} workspaceId={head.workspaceId} /> : null}
       </div>
       {customizer}
     </>

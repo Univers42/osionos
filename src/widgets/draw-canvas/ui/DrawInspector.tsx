@@ -17,6 +17,7 @@
  * any element, align/distribute for a multi-selection.
  */
 
+import { memo } from "react";
 import {
   AlignCenterHorizontal,
   AlignCenterVertical,
@@ -84,7 +85,7 @@ const PANEL_STYLE: React.CSSProperties = {
   overflowY: "auto",
 };
 
-export function DrawInspector({ style, selectedCount, onApply, engine }: InspectorProps) {
+function DrawInspectorImpl({ style, selectedCount, onApply, engine }: InspectorProps) {
   const hasText = selectedCount > 0 && !!engine?.getSelectedElements().some((element) => element.type === "text");
   return (
     <aside aria-label="Style inspector" style={PANEL_STYLE}>
@@ -177,3 +178,7 @@ export function DrawInspector({ style, selectedCount, onApply, engine }: Inspect
     </aside>
   );
 }
+
+/** Memoised: `style` keeps its identity between selection syncs and the handlers
+ *  are useCallback'd, so camera-driven host re-renders skip the whole panel. */
+export const DrawInspector = memo(DrawInspectorImpl);

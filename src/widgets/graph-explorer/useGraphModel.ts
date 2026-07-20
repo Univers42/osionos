@@ -53,7 +53,8 @@ export interface GraphData {
   model: GraphModel;
   baasMode: boolean;
   setBaasModel: Dispatch<SetStateAction<GraphModel | null>>;
-  state: NotionState;
+  /** Local object-database state — null in BaaS mode, where it is never read. */
+  state: NotionState | null;
   updatePageProperty: (recordId: string, propertyId: string, value: unknown) => void;
   viewerId: string | null;
   /** "workspace" = active workspace only (default); "all" = every workspace the user owns. */
@@ -69,7 +70,6 @@ export interface GraphData {
 }
 
 export function useGraphModel(): GraphData {
-  const state = useKnownDatabaseStateStore((store) => store.state);
   const updatePageProperty = useKnownDatabaseStateStore((store) => store.updatePageProperty);
   const viewerId = useUserStore((store) => store.activeUserId) || null;
   const activeWorkspaceId = useUserStore((store) => store.activeWorkspace()?._id ?? null);
@@ -82,13 +82,14 @@ export function useGraphModel(): GraphData {
   // it does NOT depend on the (often-unset) edges DB config. "all-data" scope spans
   // every workspace; the local synthetic path is kept only for the ?graphBench probe.
   const baasMode = BENCH_COUNT === 0 && Boolean(viewerId) && Boolean(activeWorkspaceId);
+  // In BaaS mode the bridge graph is authoritative and the local model is discarded
+  // — select null so object-database edits don't re-render the explorer + console
+  // for a model that would only be derived into the void.
+  const state = useKnownDatabaseStateStore((store) => (baasMode ? null : store.state));
   const localModel = useMemo(
     () => {
       if (BENCH_COUNT > 0) return buildSyntheticModel(BENCH_COUNT);
-      // In BaaS mode the bridge graph is authoritative and this model is discarded
-      // — skip deriving it (a full walk of the known-database state on every state
-      // change while the graph is open) instead of computing it into the void.
-      if (baasMode) return EMPTY;
+      if (baasMode || !state) return EMPTY;
       return deriveGraph(state, { source: GRAPH_SOURCE, tagConfig: deriveTagConfig(state) });
     },
     [state, baasMode],

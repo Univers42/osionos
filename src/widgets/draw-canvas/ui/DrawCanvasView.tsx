@@ -20,7 +20,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  type Camera,
   DEFAULT_ELEMENT_STYLE,
   DrawCanvas,
   type DrawElement,
@@ -30,6 +29,7 @@ import {
   type TextEditRequest,
 } from "@osionos/draw-engine";
 import { usePageStore } from "@/store/usePageStore";
+import { useCameraHud } from "../model/useCameraHud";
 import { useDrawContextMenu } from "../model/useDrawContextMenu";
 import { getDrawBinding } from "../model/drawHandoff";
 import { useResolvedDrawChrome } from "../model/useResolvedDrawChrome";
@@ -60,13 +60,12 @@ function cursorForTool(tool: DrawTool): string {
 export function DrawCanvasView() {
   const { theme, ink } = useResolvedDrawChrome();
   const [engine, setEngine] = useState<DrawEngine | null>(null);
-  const [zoom, setZoom] = useState(100);
   const [tool, setTool] = useState<DrawTool>("select");
   const [selectedCount, setSelectedCount] = useState(0);
   const [activeStyle, setActiveStyle] = useState<DrawElementStyle>(DEFAULT_ELEMENT_STYLE);
   const [textEdit, setTextEdit] = useState<TextEditRequest | null>(null);
   const [toolLocked, setToolLocked] = useState(false);
-  const [contentVisible, setContentVisible] = useState(true);
+  const { zoom, contentVisible, onCameraChange } = useCameraHud(engine);
 
   const syncStyle = useCallback((source: DrawEngine | null) => {
     if (!source) return;
@@ -109,13 +108,6 @@ export function DrawCanvasView() {
     setEngine(next);
     syncStyle(next);
   }, [binding, syncStyle]);
-  const onCameraChange = useCallback(
-    (camera: Camera) => {
-      setZoom(Math.round(camera.scale * 100));
-      setContentVisible(engine?.contentInView() ?? true);
-    },
-    [engine],
-  );
   const onToolChange = useCallback((next: DrawTool) => setTool(next), []);
   const onSelectionChange = useCallback((ids: string[]) => {
     setSelectedCount(ids.length);

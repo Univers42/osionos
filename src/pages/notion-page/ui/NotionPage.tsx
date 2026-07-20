@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import React, { Suspense, useEffect, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import type { ActivePage } from "@/entities/page";
 import { usePageStore } from "@/store/usePageStore";
@@ -54,7 +55,24 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
     }
   }, []);
 
-  const page = usePageStore((s) => s.pageById(pageId));
+  // Narrow shell tuple: the page object gets a new identity on every content
+  // commit (typing), but this shell only branches on the workspace id, the
+  // cover, and the first block's layout flags — subscribe to exactly those so
+  // a commit inside PageBody doesn't re-render the header stack per pane.
+  const shell = usePageStore(
+    useShallow((s) => {
+      const page = s.pageById(pageId);
+      const first = page?.content?.[0];
+      return {
+        workspaceId: page?.workspaceId,
+        cover: page?.cover,
+        soleBlock: page?.content?.length === 1,
+        firstType: first?.type,
+        firstLayoutMode: first?.layoutMode,
+        firstLayoutRole: first?.layoutRole,
+      };
+    }),
+  );
   // Panes pass their own activePageRef, so they must NOT subscribe to the global
   // activePage — otherwise focusing any one pane re-renders ALL open panes' editors
   // (the pane-level React.memo can't stop a store subscription inside it). Only the
@@ -85,18 +103,18 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
     return () => globalThis.removeEventListener("osionos:add-page-comment", handleAddPageComment);
   }, [pageId]);
 
-  const hasFullPageLayout = page?.content?.length === 1 &&
-    page.content[0]?.type === "layout" &&
-    page.content[0]?.layoutMode === "full_page";
+  const hasFullPageLayout = shell.soleBlock &&
+    shell.firstType === "layout" &&
+    shell.firstLayoutMode === "full_page";
   // Header canvas: cover + full-page layout = the cover becomes a full-bleed
   // backdrop behind the top of the canvas (glass cells float over it). The
   // toggle IS the cover — remove it to get a plain canvas again.
-  const hasHeaderCanvas = hasFullPageLayout && !!(page?.cover ?? activePage?.cover);
+  const hasHeaderCanvas = hasFullPageLayout && !!(shell.cover ?? activePage?.cover);
   // Header BAND: a layoutRole="header" canvas as the first block — the cover
   // backdrops only that band; the rest of the page flows normally below it.
-  const hasHeaderBand = page?.content?.[0]?.type === "layout" &&
-    page.content[0]?.layoutRole === "header" &&
-    !!(page?.cover ?? activePage?.cover);
+  const hasHeaderBand = shell.firstType === "layout" &&
+    shell.firstLayoutRole === "header" &&
+    !!(shell.cover ?? activePage?.cover);
 
   const pageStyle: React.CSSProperties & {
     "--page-font-family": string;
@@ -135,12 +153,11 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
       <PageHeaderBar
         key={pageId}
         pageId={pageId}
-        workspaceId={page?.workspaceId ?? activePage?.workspaceId ?? ""}
+        workspaceId={shell.workspaceId ?? activePage?.workspaceId ?? ""}
       />
 
       <PageHeader
         pageId={pageId}
-        page={page}
         activePage={activePage}
         locked={pageConfig.locked}
         commentsOpen={commentsOpen}

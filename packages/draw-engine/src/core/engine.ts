@@ -6,12 +6,12 @@
  * pure cores it composes are node-tested separately.
  */
 
-import { type Camera, IDENTITY, screenToWorld, worldToScreen } from "./camera/transform";
+import { type Camera, IDENTITY, screenToWorld, type WorldBounds, worldToScreen } from "./camera/transform";
 import { fitBounds, panBy, visibleWorldRect, zoomAt } from "./camera/controls";
 import { type DrawTheme, LIGHT_THEME, paintBackground, paintGrid, TEXT_LINE_HEIGHT } from "./render/paint";
 import { type OverlayTheme, paintMarquee, paintMultiSelectionBox, paintSelectionOverlay } from "./render/overlay";
 import { type Arrowhead, bumpVersion, createElement, DEFAULT_ELEMENT_STYLE, type DrawElement, type DrawElementStyle, newElementId } from "./scene/element";
-import { hitTest, sceneBounds } from "./scene/geometry";
+import { elementBounds, hitTest, sceneBounds } from "./scene/geometry";
 import { Scene } from "./scene/scene";
 import { bindableAt, isBindableElement, isLinearElement, refreshBindings } from "./scene/binding";
 import { rectFromDrag } from "./interaction/shapeDrag";
@@ -75,7 +75,7 @@ type Interaction =
   | { mode: "freedraw"; id: string; start: { x: number; y: number } }
   | { mode: "erase" }
   | { mode: "pan"; lastX: number; lastY: number }
-  | { mode: "move"; ids: string[]; start: { x: number; y: number }; origins: Map<string, { x: number; y: number }> }
+  | { mode: "move"; ids: string[]; start: { x: number; y: number }; origins: Map<string, { x: number; y: number }>; staticBounds: WorldBounds[] }
   | { mode: "resize"; id: string; handle: HandleKind; ratio: number | null }
   | { mode: "rotate"; id: string }
   | { mode: "marquee"; start: { x: number; y: number }; current: { x: number; y: number }; base: Set<string> };
@@ -687,7 +687,17 @@ export class DrawEngine {
     for (const element of this.getSelectedElements()) {
       if (!element.locked) origins.set(element.id, { x: element.x, y: element.y });
     }
-    this.interaction = { mode: "move", ids: [...origins.keys()], start: world, origins };
+    // Snap targets are computed ONCE per gesture, not per pointermove — the
+    // statics stand still during the drag, and rebuilding every bounds at
+    // pointer rate was the hot allocation. (A connector bound to the moving
+    // selection does follow it live; its snap target staying at the
+    // gesture-start position is an accepted approximation.)
+    const moving = new Set(origins.keys());
+    const staticBounds = this.scene
+      .ordered()
+      .filter((element) => !moving.has(element.id) && !(element.containerId && moving.has(element.containerId)))
+      .map((element) => elementBounds(element));
+    this.interaction = { mode: "move", ids: [...origins.keys()], start: world, origins, staticBounds };
     this.requestDraw();
   }
 
@@ -742,7 +752,6 @@ export class DrawEngine {
         let dy = world.y - it.start.y;
         this.snapGuides = [];
         if (!bypassSnap) {
-          const moving = new Set(it.ids);
           const movingElements = it.ids
             .map((id) => this.scene.get(id))
             .filter((element): element is DrawElement => !!element)
@@ -751,13 +760,8 @@ export class DrawEngine {
               return { ...element, x: origin.x + dx, y: origin.y + dy };
             });
           const bounds = sceneBounds(movingElements);
-          const statics = this.scene
-            .ordered()
-            .filter((element) => !moving.has(element.id) && !(element.containerId && moving.has(element.containerId)))
-            .map((element) => sceneBounds([element]))
-            .filter((b): b is NonNullable<typeof b> => !!b);
           if (bounds) {
-            const snap = snapMove(bounds, statics, SNAP_PX / this.camera.scale);
+            const snap = snapMove(bounds, it.staticBounds, SNAP_PX / this.camera.scale);
             dx += snap.dx;
             dy += snap.dy;
             this.snapGuides = snap.guides;
@@ -1161,5 +1165,9 @@ export class DrawEngine {
     this.disposed = true;
     if (this.rafId) cancelAnimationFrame(this.rafId);
     this.rafId = 0;
+    // Drop the backing store now — a detached canvas held by any stray reference
+    // otherwise keeps its full pixel buffer (~23 MB at 1600×900 @2x) alive.
+    this.canvas.width = 0;
+    this.canvas.height = 0;
   }
 }

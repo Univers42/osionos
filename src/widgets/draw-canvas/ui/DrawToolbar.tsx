@@ -15,6 +15,7 @@
  * an aria-label + hotkey hint; the active tool is `aria-pressed`.
  */
 
+import { memo } from "react";
 import {
   ArrowRight,
   Circle,
@@ -79,7 +80,7 @@ function buttonStyle(active: boolean): React.CSSProperties {
   };
 }
 
-export function DrawToolbar({
+function DrawToolbarImpl({
   active,
   onSelect,
   toolLocked,
@@ -123,3 +124,7 @@ export function DrawToolbar({
     </div>
   );
 }
+
+/** Memoised: the hosts re-render on every rAF-coalesced camera flush, but the
+ *  toolbar only changes with the active tool / lock (handlers are useCallback'd). */
+export const DrawToolbar = memo(DrawToolbarImpl);

@@ -26,6 +26,9 @@ export interface LayoutInitMessage {
   seedY: Float32Array | null;
   /** Per-node database/mount group id for visual clustering (optional). */
   nodeGroups?: Uint8Array | null;
+  /** Starting sim heat (default 1). The bridge scales it by the fraction of nodes
+   *  without a preserved position, so unchanged graphs settle almost instantly. */
+  initialAlpha?: number;
 }
 export interface LayoutPinMessage { t: "pin"; index: number; x: number; y: number }
 export interface LayoutUnpinMessage { t: "unpin"; index: number }
@@ -97,6 +100,7 @@ export class LayoutEngine {
       seedX: message.seedX,
       seedY: message.seedY,
       nodeGroups: message.nodeGroups,
+      initialAlpha: message.initialAlpha,
     });
     if (message.count === 0) {
       this.emit({ t: "settled" });

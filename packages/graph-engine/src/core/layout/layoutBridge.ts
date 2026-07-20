@@ -30,6 +30,8 @@ export class LayoutController {
   private idToIndex = new Map<NodeId, number>();
   private lastX: Float32Array | null = null;
   private lastY: Float32Array | null = null;
+  /** Link count of the last init — with `idList` this identifies the topology. */
+  private lastLinkCount = -1;
 
   constructor(private readonly options: LayoutControllerOptions) {
     this.params = options.params ?? DEFAULT_LAYOUT_PARAMS;
@@ -47,8 +49,29 @@ export class LayoutController {
   /** (Re)build the layout from a model, preserving positions of surviving nodes. */
   rebuild(model: GraphModel): void {
     const snapshot = this.snapshotPositions();
+    const previousIds = this.idList;
+    const previousLinkCount = this.lastLinkCount;
     this.idList = model.nodes.map((node) => node.id);
     this.idToIndex = new Map(this.idList.map((id, index) => [id, index]));
+
+    const links: LayoutLink[] = [];
+    for (const edge of model.edges) {
+      const source = this.idToIndex.get(edge.source);
+      const target = this.idToIndex.get(edge.target);
+      if (source !== undefined && target !== undefined) {
+        links.push({ source, target, strength: edge.strength });
+      }
+    }
+    this.lastLinkCount = links.length;
+
+    // Same node ids in the same order and the same link count = unchanged topology:
+    // skip the init entirely (a fresh sim + settle burn for nothing). Label/colour
+    // changes still reach the canvas through scene.setGraph; live positions stay valid.
+    const sameTopology =
+      previousLinkCount === links.length &&
+      previousIds.length === this.idList.length &&
+      this.idList.every((id, index) => id === previousIds[index]);
+    if (sameTopology) return;
 
     const nodeGroups = new Uint8Array(this.idList.length);
     const sourceIndex = new Map<string, number>();
@@ -70,29 +93,29 @@ export class LayoutController {
     const localCount = centers ? new Int32Array(groups) : null;
 
     const seeds = seedPositions(this.idList.length, this.options.width, this.options.height);
+    let missing = 0;
     for (let i = 0; i < this.idList.length; i += 1) {
       const previous = snapshot.get(this.idList[i]);
       if (previous) {
         seeds.x[i] = previous.x;
         seeds.y[i] = previous.y;
-      } else if (centers && localCount) {
-        const c = centers[nodeGroups[i]];
-        const li = localCount[nodeGroups[i]];
-        localCount[nodeGroups[i]] = li + 1;
-        const r = 8 * Math.sqrt(li + 1);
-        seeds.x[i] = c.x + Math.cos(li * GOLDEN_ANGLE) * r;
-        seeds.y[i] = c.y + Math.sin(li * GOLDEN_ANGLE) * r;
+      } else {
+        missing += 1;
+        if (centers && localCount) {
+          const c = centers[nodeGroups[i]];
+          const li = localCount[nodeGroups[i]];
+          localCount[nodeGroups[i]] = li + 1;
+          const r = 8 * Math.sqrt(li + 1);
+          seeds.x[i] = c.x + Math.cos(li * GOLDEN_ANGLE) * r;
+          seeds.y[i] = c.y + Math.sin(li * GOLDEN_ANGLE) * r;
+        }
       }
     }
 
-    const links: LayoutLink[] = [];
-    for (const edge of model.edges) {
-      const source = this.idToIndex.get(edge.source);
-      const target = this.idToIndex.get(edge.target);
-      if (source !== undefined && target !== undefined) {
-        links.push({ source, target, strength: edge.strength });
-      }
-    }
+    // Preserved positions need almost no settling — heat the sim by the fraction of
+    // genuinely NEW nodes, so a mostly-unchanged graph re-settles in a handful of
+    // ticks instead of the full alpha=1 burn (~70 ticks of churn + low-res redraws).
+    const missFraction = this.idList.length === 0 ? 1 : missing / this.idList.length;
 
     this.send({
       t: "init",
@@ -104,6 +127,7 @@ export class LayoutController {
       seedX: seeds.x,
       seedY: seeds.y,
       nodeGroups,
+      initialAlpha: Math.max(0.03, missFraction),
     });
 
     this.lastX = seeds.x.slice();

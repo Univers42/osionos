@@ -19,6 +19,13 @@
  * operation. Text edits within a single block are handled by the browser's
  * native contenteditable undo and are NOT captured here.
  *
+ * Snapshots hold the tree by REFERENCE, not a deep copy: every mutation path
+ * (the editor tree ops and the store helpers) builds a new tree immutably —
+ * cloneBlocks copies or spread updaters — so a captured tree is never mutated
+ * afterward and snapshots share unchanged block objects. Deep-cloning here
+ * cost a full page copy per structural edit, retained MAX_HISTORY times per
+ * editor surface (and LayoutBlockEditor mounts one surface per layout cell).
+ *
  * Usage:
  *   const { pushSnapshot, undo, redo } = useBlockHistory(pageId);
  *   // Before any structural operation:
@@ -30,7 +37,7 @@ import { useCallback, useRef } from "react";
 import type { Block } from "@/entities/block";
 
 /** Maximum number of undo steps to keep per page. */
-const MAX_HISTORY = 50;
+const MAX_HISTORY = 25;
 
 interface CursorPosition {
   blockId: string;
@@ -91,7 +98,7 @@ export function useBlockHistory(
   const pushSnapshot = useCallback((content: Block[]) => {
     const h = historyRef.current;
     h.undoStack.push({
-      content: structuredClone(content),
+      content,
       cursor: captureCursor(),
     });
     if (h.undoStack.length > MAX_HISTORY) {
@@ -110,7 +117,7 @@ export function useBlockHistory(
       if (h.undoStack.length === 0) return false;
 
       h.redoStack.push({
-        content: structuredClone(currentContent),
+        content: currentContent,
         cursor: captureCursor(),
       });
       const previous = h.undoStack.pop()!;
@@ -136,7 +143,7 @@ export function useBlockHistory(
       if (h.redoStack.length === 0) return false;
 
       h.undoStack.push({
-        content: structuredClone(currentContent),
+        content: currentContent,
         cursor: captureCursor(),
       });
       const next = h.redoStack.pop()!;

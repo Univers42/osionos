@@ -102,9 +102,19 @@ function uniqueSessionWorkspaces(sessions: UserSessions) {
 
 async function seedEmptyOnlineWorkspaces(sessions: UserSessions, jwt: string) {
   const uniqueWorkspaces = uniqueSessionWorkspaces(sessions);
-  await Promise.all(
-    uniqueWorkspaces.map((workspace) => usePageStore.getState().fetchPages(workspace._id, jwt)),
+  // usePageSync's hydrate is the canonical pull for every accessible workspace; don't
+  // duplicate it. Read the store (hydrate populates it) and only fetch workspaces that
+  // still look empty — either genuinely empty (need a server-confirmed pull before we seed)
+  // or not yet hydrated. fetchPages' TTL de-thrashes any overlap with a concurrent
+  // sidebar/files-panel mount and with seedOnlinePages' own per-workspace re-check.
+  const emptyWorkspaces = uniqueWorkspaces.filter(
+    (workspace) => (usePageStore.getState().pages[workspace._id] ?? []).length === 0,
   );
+  if (emptyWorkspaces.length > 0) {
+    await Promise.all(
+      emptyWorkspaces.map((workspace) => usePageStore.getState().fetchPages(workspace._id, jwt)),
+    );
+  }
 
   const pages = usePageStore.getState().pages;
   const anyEmpty = uniqueWorkspaces.some(
