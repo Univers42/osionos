@@ -25,6 +25,7 @@ import { canFormat, formatCode } from "../model/formatCode";
 import { pathForPage } from "../model/idePaths";
 import { useIdeModeStore } from "../model/ideModeStore";
 import { ideFsWrite } from "../model/ideFsClient";
+import { useTerminalRunBus } from "../model/terminalRunBus";
 import { baseEditorExtensions } from "./codeMirrorSetup";
 import { RunConsole } from "./RunConsole";
 
@@ -82,9 +83,25 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   const runNow = React.useCallback(() => {
     const view = viewRef.current;
     if (!view) return;
+    const source = view.state.doc.toString();
+    const wsId = useUserStore.getState().activeWorkspace()?._id ?? "";
+    // In IDE Workspace mode, run in the sandbox's REAL interactive PTY so
+    // stdin/input() work (the one-shot runner has no stdin → input() gets EOF).
+    // Otherwise fall back to that stateless runner (quick, non-interactive).
+    if (wsId && useIdeModeStore.getState().isIdeMode(wsId) && lang.runnable && lang.runCmd) {
+      const relPath = pathForPage(pageId, (id) => usePageStore.getState().pageById(id));
+      const shellPath = `'/workspace/${relPath.replace(/'/g, "'\\''")}'`;
+      const command = lang.runCmd.replaceAll("{file}", shellPath);
+      useIdeModeStore.getState().setBottomOpen(true); // reveal/connect the terminal
+      // Write the latest text FIRST, then dispatch the run — so a fast PTY never
+      // executes a stale file. If the terminal is still connecting, the bus keeps
+      // the request until it opens; if already open, the subscribe fires it.
+      void ideFsWrite(wsId, relPath, source).then(() => useTerminalRunBus.getState().requestRun(command));
+      return;
+    }
     setShowConsole(true);
-    runner.run(lang.id, view.state.doc.toString());
-  }, [runner, lang.id]);
+    runner.run(lang.id, source);
+  }, [runner, lang.id, lang.runnable, lang.runCmd, pageId]);
   const runRef = React.useRef(runNow);
   // Keep the ref current in an effect (not during render — the repo forbids ref
   // writes in render); the built-once keymap calls runRef.current().

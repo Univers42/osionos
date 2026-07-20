@@ -29,6 +29,7 @@ interface IdeModeState {
   toggleIdeMode: (workspaceId: string) => void;
   setPanel: (panel: IdePanel) => void;
   toggleBottom: () => void;
+  setBottomOpen: (open: boolean) => void;
 }
 
 /**
@@ -61,6 +62,7 @@ export const useIdeModeStore = create<IdeModeState>()(
       },
       setPanel: (panel) => set({ activePanel: panel }),
       toggleBottom: () => set((state) => ({ bottomOpen: !state.bottomOpen })),
+      setBottomOpen: (open) => set({ bottomOpen: open }),
     }),
     { name: "osio.ide.mode" },
   ),
