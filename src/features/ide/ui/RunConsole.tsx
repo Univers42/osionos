@@ -24,7 +24,8 @@ interface Props {
   onClose: () => void;
 }
 
-const streamClass: Record<RunLine["stream"], string> = {
+/** Per-stream text colour for a run-output line. Shared with the Run panel. */
+export const streamClass: Record<RunLine["stream"], string> = {
   stdout: "text-[var(--osio-code-fg)]",
   stderr: "text-[var(--osio-danger,#ff6b6b)]",
   system: "text-[var(--osio-code-fg-muted)]",
