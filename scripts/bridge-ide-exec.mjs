@@ -22,7 +22,7 @@
 
 import { handshake, encodeFrame, createFrameDecoder } from './ide-ws.mjs';
 import { createDockerClient } from './ide-docker.mjs';
-import { requireSandboxIdentity, deriveNames, buildShellExecSpec } from './ide-sandbox-spec.mjs';
+import { requireSandboxIdentity, deriveNames, buildShellExecSpec, buildFsAgentExecSpec } from './ide-sandbox-spec.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 
 // Each live exec pins two bridge FDs + a spawned process; cap churn AND
@@ -55,7 +55,8 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     const url = new URL(request.url, 'http://ide.local');
     const isPty = url.pathname === '/api/ide/pty';
     const isLsp = url.pathname === '/api/ide/lsp';
-    if (!isPty && !isLsp) return false;
+    const isFsync = url.pathname === '/api/ide/fsync';
+    if (!isPty && !isLsp && !isFsync) return false;
 
     if (env.OSIONOS_IDE_SANDBOX !== '1' || !env.OSIONOS_IDE_DOCKER_HOST) { socket.destroy(); return true; }
 
@@ -75,8 +76,11 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     if (!handshake(request, socket)) return true;
 
     let spec;
-    try { spec = isPty ? buildShellExecSpec() : lspExecSpec(url.searchParams.get('lang')); }
-    catch { socket.write(encodeFrame('unsupported', 1)); socket.destroy(); return true; }
+    try {
+      if (isPty) spec = buildShellExecSpec();
+      else if (isFsync) spec = buildFsAgentExecSpec();
+      else spec = lspExecSpec(url.searchParams.get('lang'));
+    } catch { socket.write(encodeFrame('unsupported', 1)); socket.destroy(); return true; }
 
     activeExecByUser.set(userId, (activeExecByUser.get(userId) ?? 0) + 1);
     let released = false;

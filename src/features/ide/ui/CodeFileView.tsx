@@ -24,6 +24,7 @@ import { useCodeRunner } from "../model/useCodeRunner";
 import { canFormat, formatCode } from "../model/formatCode";
 import { pathForPage } from "../model/idePaths";
 import { useIdeModeStore } from "../model/ideModeStore";
+import { ideFsWrite } from "../model/ideFsClient";
 import { baseEditorExtensions } from "./codeMirrorSetup";
 import { RunConsole } from "./RunConsole";
 
@@ -131,8 +132,15 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     const flush = () => {
       saveTimer = null;
       if (pending == null) return;
-      usePageStore.getState().updateBlock(pageId, blockId, { content: pending });
+      const content = pending;
       pending = null;
+      usePageStore.getState().updateBlock(pageId, blockId, { content });
+      // Mirror to the sandbox so the shell/LSP see the latest edit (IDE mode
+      // only). ideFsWrite records the echo hash → no writeback loop.
+      const wsId = useUserStore.getState().activeWorkspace()?._id ?? "";
+      if (wsId && useIdeModeStore.getState().isIdeMode(wsId)) {
+        void ideFsWrite(wsId, pathForPage(pageId, (id) => usePageStore.getState().pageById(id)), content);
+      }
     };
 
     const view = new EditorView({
