@@ -58,6 +58,7 @@ export function createIdeSandboxHandler({ config, verifySession, env = process.e
     const spec = buildContainerSpec({
       userId: names.userId, workspaceId: names.workspaceId, image,
       sandboxNet: SANDBOX_NET, volumeName: names.volumeName,
+      diskSize: env.OSIONOS_IDE_STORAGE_QUOTA || "", // xfs+pquota only; off by default
     });
     await docker.create(names.containerName, spec);
     await docker.start(names.containerName);

@@ -53,7 +53,11 @@ const PROXY_URL = "http://ide-egress:8080";
 /** The fixed container-create body. Hardening (conditions 5,14,15) is baked in;
  *  the ONLY inputs are the validated identity + server config. GIT_PAT is NOT in
  *  the container env — it is injected per git op via exec (condition 13). */
-export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, volumeName, memoryBytes = 1073741824, nanoCpus = 1_000_000_000, pidsLimit = 512, diskSize = "2G" }) {
+export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, volumeName, memoryBytes = 1073741824, nanoCpus = 1_000_000_000, pidsLimit = 512, diskSize = "" }) {
+  // Per-container block quota. overlay2 StorageOpt.size ONLY works over xfs+pquota
+  // (NOT ext4-prjquota), so it's opt-in via OSIONOS_IDE_STORAGE_QUOTA — omitted by
+  // default. The host is already blast-bounded by the docker-ide loopback data-root.
+  const storageOpt = diskSize ? { StorageOpt: { size: diskSize } } : {};
   return {
     Image: image,
     User: "10001:10001",
@@ -86,7 +90,7 @@ export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, vol
         { Name: "nproc", Soft: pidsLimit, Hard: pidsLimit },
         { Name: "nofile", Soft: 4096, Hard: 4096 },
       ],
-      StorageOpt: { size: diskSize }, // block quota (needs pquota-capable data-root)
+      ...storageOpt, // per-container block quota, only when xfs+pquota is available
       RestartPolicy: { Name: "no" },
     },
   };

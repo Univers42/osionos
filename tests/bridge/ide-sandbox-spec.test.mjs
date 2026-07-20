@@ -53,9 +53,12 @@ test("container spec: hardening baked, no user params, no PAT (devil #8,#14)", (
   assert.equal(spec.HostConfig.Mounts[0].Source, volumeName);
   assert.equal(spec.HostConfig.Binds, undefined);
   assert.equal(spec.HostConfig.Privileged, undefined);
-  // core dumps off; quota + caps present.
+  // core dumps off; caps present.
   assert.ok(spec.HostConfig.Ulimits.some((u) => u.Name === "core" && u.Hard === 0));
-  assert.equal(spec.HostConfig.StorageOpt.size, "2G");
+  // block quota is opt-in (xfs+pquota only) — omitted by default, applied when asked.
+  assert.equal(spec.HostConfig.StorageOpt, undefined);
+  const quota = buildContainerSpec({ userId: U, workspaceId: W, image: "x", sandboxNet: "n", volumeName, diskSize: "2G" });
+  assert.equal(quota.HostConfig.StorageOpt.size, "2G");
   assert.ok(spec.HostConfig.PidsLimit > 0 && spec.HostConfig.Memory > 0 && spec.HostConfig.NanoCpus > 0);
   // NO GIT_PAT in the long-lived container env (condition 13).
   assert.ok(!spec.Env.some((e) => e.startsWith("GIT_PAT")));
