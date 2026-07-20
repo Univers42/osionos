@@ -40,6 +40,10 @@ const RESIZE_MAGIC = Buffer.from('\x1b_osio-resize:');
 const LSP_SERVERS = {
   typescript: ['typescript-language-server', '--stdio'],
   python: ['pyright-langserver', '--stdio'],
+  // gopls / rust-analyzer / clangd all speak LSP over stdio with no flag.
+  go: ['gopls'],
+  rust: ['rust-analyzer'],
+  clangd: ['clangd'],
 };
 
 function lspExecSpec(lang) {

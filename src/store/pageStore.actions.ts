@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import { api, ApiError } from "@/shared/api/client";
+import { notifyCreateFailure } from "./pageCreateFeedback";
 import { pageApiJwtFromSessionToken } from "@/features/auth/model/userStore.helpers";
 import {
   canDeletePage,
@@ -234,7 +235,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
   ): Promise<PageEntry | null> => {
     const context = getCurrentPageAccessContext();
     if (!context?.workspaceIds.includes(workspaceId)) {
-      return null;
+      return notifyCreateFailure("You don't have access to this workspace.");
     }
     const targetVisibility = options.visibility ?? getTargetWorkspaceMoveVisibility(
       workspaceId,
@@ -281,8 +282,13 @@ export function createAddPage(set: SetFn, get: GetFn) {
         }));
         savePagesCache(get().pages, workspaceId);
         return pageWithTimestamp;
-      } catch {
-        return null;
+      } catch (err) {
+        return notifyCreateFailure(
+          err instanceof ApiError
+            ? err.message
+            : "The server rejected the request. Check your connection and try again.",
+          err,
+        );
       }
     }
     const newPage: PageEntry = {

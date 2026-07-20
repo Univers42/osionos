@@ -23,7 +23,7 @@ import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordSubitemNoteB
 import { publishRealtime } from './bridge-social-core.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
-import { createIdeSandboxHandler } from './bridge-ide-sandbox.mjs';
+import { createIdeSandboxHandler, reapExpiredSandboxes } from './bridge-ide-sandbox.mjs';
 import { createIdeOpsHandler } from './bridge-ide-ops.mjs';
 import { createIdeExecUpgradeHandler } from './bridge-ide-exec.mjs';
 import { createConnectorHandler } from './bridge-connector.mjs';
@@ -3366,6 +3366,18 @@ export function startBridgeServer(config = configFromEnv()) {
 	server.listen(config.port, '0.0.0.0', () => {
 		console.info(`[osionos-bridge] listening on 0.0.0.0:${config.port}`);
 	});
+	// Max-lifetime IDE sandbox reaper (#16). reapExpiredSandboxes self-gates (a
+	// no-op unless OSIONOS_IDE_SANDBOX=1 + OSIONOS_IDE_DOCKER_HOST are set), so
+	// it is safe to always schedule. unref() so it never keeps the process alive;
+	// errors are logged, not thrown (a transient docker-ide outage must not crash
+	// the bridge). Wired here in the runtime entry, not in createBridgeServer, so
+	// unit-test-constructed servers do not spawn a background interval.
+	const reapIntervalMs = Number(process.env.OSIONOS_IDE_REAP_INTERVAL_MS) || 15 * 60 * 1000;
+	setInterval(() => {
+		reapExpiredSandboxes(process.env)
+			.then((n) => { if (n > 0) console.info(`[osionos-bridge] reaped ${n} expired IDE sandbox(es)`); })
+			.catch((error) => console.warn('[osionos-bridge] sandbox reap failed:', error?.message ?? error));
+	}, reapIntervalMs).unref();
 	return server;
 }
 
