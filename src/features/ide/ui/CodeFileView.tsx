@@ -26,6 +26,7 @@ import { pathForPage } from "../model/idePaths";
 import { useIdeModeStore } from "../model/ideModeStore";
 import { ideFsWrite } from "../model/ideFsClient";
 import { recordSyncedHash } from "../model/ideSyncEngine";
+import { useIdeRevealBus } from "../model/ideRevealBus";
 import { useIdeSyncConflicts } from "../model/ideSyncConflicts";
 import { useTerminalRunBus } from "../model/terminalRunBus";
 import { baseEditorExtensions } from "./codeMirrorSetup";
@@ -231,6 +232,21 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
       active = false;
     };
   }, [lang]);
+
+  // Consume a pending "reveal line:col" request (Problems/Search click) once
+  // THIS page's editor exists — the bus holds it across the lazy load.
+  const pendingReveal = useIdeRevealBus((s) => s.pending);
+  React.useEffect(() => {
+    const view = viewRef.current;
+    if (!view || pendingReveal?.pageId !== pageId) return;
+    const reveal = useIdeRevealBus.getState().consume(pageId);
+    if (!reveal) return;
+    const doc = view.state.doc;
+    const lineInfo = doc.line(Math.max(1, Math.min(reveal.line, doc.lines)));
+    const pos = Math.min(lineInfo.from + Math.max(0, reveal.col - 1), lineInfo.to);
+    view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: "center" }) });
+    view.focus();
+  }, [pendingReveal, pageId, blockId]);
 
   // Wire the language server ONLY in IDE mode (keeps @codemirror/lsp-client out
   // of the base editor chunk — dynamic import). Reconfigures on file/lang change;

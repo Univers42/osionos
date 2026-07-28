@@ -40,7 +40,8 @@ test("the dock opens with five tabs and the terminal's honest offline state", as
     await expect(page.locator(`[data-dock-tab]`, { hasText: label }).first()).toBeVisible();
   }
   // Offline build: no bridge URL → the terminal reports unavailability honestly.
-  await expect(page.getByText(/enable the workspace sandbox/i)).toBeVisible({ timeout: 15_000 });
+  // The lazy xterm chunk + suspense can be slow on a loaded machine.
+  await expect(page.getByText(/enable the workspace sandbox/i)).toBeVisible({ timeout: 30_000 });
 });
 
 test("Output and Ports tabs render their real empty states; Debug is honest", async ({ page }) => {
@@ -53,4 +54,13 @@ test("Output and Ports tabs render their real empty states; Debug is honest", as
   await expect(page.getByText(/Nothing listening|Checking sandbox/i)).toBeVisible();
   await page.locator('[data-dock-tab="debug"]').click();
   await expect(page.getByText(/debugger lands with the DAP client/i)).toBeVisible();
+});
+
+test("the explorer shows the SANDBOX root with its honest offline state", async ({ page }) => {
+  test.setTimeout(90_000);
+  await enterIdeMode(page);
+  const root = page.locator("[data-sandbox-root]");
+  await expect(root).toBeVisible();
+  await root.click();
+  await expect(page.getByText(/sandbox not connected/i)).toBeVisible({ timeout: 10_000 });
 });

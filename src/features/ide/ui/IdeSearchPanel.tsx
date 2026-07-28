@@ -18,6 +18,7 @@ import { buildVPath } from "../vfs/vpath";
 import { createPageProvider, resolveFacadePath } from "../vfs/pageProvider";
 import { searchVfs, type VfsSearchMatch } from "../vfs/vfsSearch";
 import { pageStoreFacade } from "../model/pageStoreFacade";
+import { useIdeRevealBus } from "../model/ideRevealBus";
 
 const EMPTY: never[] = [];
 
@@ -93,7 +94,10 @@ export const IdeSearchPanel: React.FC = () => {
               <button
                 key={`${file.relPath}-${index}`}
                 type="button"
-                onClick={() => openPage({ id: file.pageId, workspaceId, kind: "page", title: file.title })}
+                onClick={() => {
+                  useIdeRevealBus.getState().request({ pageId: file.pageId, line: match.lineNumber, col: 1 });
+                  openPage({ id: file.pageId, workspaceId, kind: "page", title: file.title });
+                }}
                 className="flex w-full items-baseline gap-2 rounded px-2 py-0.5 text-left hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.10))]"
               >
                 <span className="w-8 shrink-0 text-right font-mono text-[var(--osio-code-fg-muted)]">{match.lineNumber}</span>
