@@ -31,6 +31,27 @@ export function parsePortsOutput(output: string): SandboxPort[] {
   return [...byPort.values()].sort((a, b) => a.port - b.port);
 }
 
+/** Mint the preview cookie (HttpOnly, path-scoped) and open the forwarded port
+ *  in a new tab. The tunnel rides the exec channel — no new network path. */
+export async function openPortPreview(workspaceId: string, port: number): Promise<boolean> {
+  const { API_BASE, getActivePageJwt } = await import("@/shared/api/client");
+  const jwt = getActivePageJwt();
+  if (!API_BASE || !jwt || !workspaceId) return false;
+  try {
+    const response = await fetch(`${API_BASE}/api/ide/preview/session`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+      body: JSON.stringify({ workspaceId }),
+    });
+    if (!response.ok) return false;
+    window.open(`${API_BASE}/api/ide/preview/${encodeURIComponent(workspaceId)}/${port}/`, "_blank", "noopener");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Ask the bridge for the sandbox's listening TCP ports. Empty on any failure —
  *  the panel renders the honest empty state instead of throwing. The api client
  *  is imported LAZILY so this module stays pure for the node test runner. */
