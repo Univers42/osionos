@@ -31,7 +31,7 @@ import { bearerToken, readJsonBody } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createDockerClient } from './ide-docker.mjs';
 import { requireSandboxIdentity, deriveNames, buildContainerSpec } from './ide-sandbox-spec.mjs';
-import { hasActiveExec } from './bridge-ide-exec.mjs';
+import { containerHasActivity, disposeSessionsFor } from './ide-term-sessions.mjs';
 
 const BODY_LIMIT = 8 * 1024;
 const SANDBOX_NET = 'osio-ide-sandbox-net';
@@ -47,24 +47,29 @@ function jsonReply(response, status, body, config) {
   response.end(JSON.stringify(body));
 }
 
-export function createIdeSandboxHandler({ config, verifySession, env = process.env }) {
+/** Ensure the per-(user,workspace) sandbox container exists and runs — shared
+ *  by the /api/ide/session handler AND the PTY attach path (opening a terminal
+ *  auto-provisions; the product no longer depends on an operator having run
+ *  the container by hand — ADR-002 §3). */
+export async function ensureSandbox(env, names) {
   const image = env.OSIONOS_IDE_SANDBOX_IMAGE || 'osionos-ide-sandbox:latest';
+  const docker = createDockerClient(env);
+  const existing = await docker.inspect(names.containerName);
+  if (existing?.State?.Running) return { status: 'running', reused: true };
+  if (existing) { await docker.remove(names.containerName); } // dead → recreate clean
+  await docker.ensureVolume(names.volumeName);
+  const spec = buildContainerSpec({
+    userId: names.userId, workspaceId: names.workspaceId, image,
+    sandboxNet: SANDBOX_NET, volumeName: names.volumeName,
+    diskSize: env.OSIONOS_IDE_STORAGE_QUOTA || "", // xfs+pquota only; off by default
+  });
+  await docker.create(names.containerName, spec);
+  await docker.start(names.containerName);
+  return { status: 'running', reused: false };
+}
 
-  async function ensureContainer(names) {
-    const docker = createDockerClient(env);
-    const existing = await docker.inspect(names.containerName);
-    if (existing?.State?.Running) return { status: 'running', reused: true };
-    if (existing) { await docker.remove(names.containerName); } // dead → recreate clean
-    await docker.ensureVolume(names.volumeName);
-    const spec = buildContainerSpec({
-      userId: names.userId, workspaceId: names.workspaceId, image,
-      sandboxNet: SANDBOX_NET, volumeName: names.volumeName,
-      diskSize: env.OSIONOS_IDE_STORAGE_QUOTA || "", // xfs+pquota only; off by default
-    });
-    await docker.create(names.containerName, spec);
-    await docker.start(names.containerName);
-    return { status: 'running', reused: false };
-  }
+export function createIdeSandboxHandler({ config, verifySession, env = process.env }) {
+  const ensureContainer = (names) => ensureSandbox(env, names);
 
   return async function handleIdeSandboxRoute(url, request, response, requestConfig = config) {
     if (url.pathname !== '/api/ide/session') return false;
@@ -113,6 +118,7 @@ export function createIdeSandboxHandler({ config, verifySession, env = process.e
     const docker = createDockerClient(env);
     try {
       if (method === 'DELETE') {
+        disposeSessionsFor(`${identity.userId}|${names.containerName}`);
         await docker.stop(names.containerName);
         jsonReply(response, 200, { ok: true, status: 'stopped' }, requestConfig);
         return true;
@@ -149,7 +155,10 @@ export function shouldReapSandbox({ running, createdSec }, now, softMs, hardMs, 
  *  Wired by the bridge on an interval. */
 export async function reapExpiredSandboxes(env = process.env, maxLifetimeMs = 4 * 60 * 60 * 1000, now = Date.now(), opts = {}) {
   if (env.OSIONOS_IDE_SANDBOX !== '1' || !env.OSIONOS_IDE_DOCKER_HOST) return 0;
-  const { isActive = hasActiveExec, hardMaxMs = maxLifetimeMs * 3 } = opts;
+  const {
+    isActive = (name) => containerHasActivity(name, 30 * 60 * 1000, now),
+    hardMaxMs = maxLifetimeMs * 3,
+  } = opts;
   const docker = createDockerClient(env);
   const managed = await docker.listManaged();
   let reaped = 0;

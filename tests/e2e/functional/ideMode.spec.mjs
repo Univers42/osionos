@@ -32,6 +32,7 @@ async function enterIdeMode(page) {
 }
 
 test("the flag is a hard gate: no IDE affordance when osio.ide is off", async ({ page }) => {
+  test.setTimeout(90_000); // first navigation pays the cold Vite compile
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: /Settings/i }).first().waitFor({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: /IDE Workspace/i })).toHaveCount(0);
@@ -39,6 +40,7 @@ test("the flag is a hard gate: no IDE affordance when osio.ide is off", async ({
 });
 
 test("enter IDE mode, create a code file, switch panels, and exit", async ({ page }) => {
+  test.setTimeout(90_000);
   await bootWithFlag(page);
   await enterIdeMode(page);
   const shell = page.locator("[data-osio-ide-shell]");

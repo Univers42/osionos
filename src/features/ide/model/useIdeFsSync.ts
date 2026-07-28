@@ -18,6 +18,7 @@ import { ideWsProtocols } from "./useIdeTerminal";
 import { sanitizeSegment } from "./idePaths";
 import { parseFsEvent, isEchoHash, sha16, type FsEvent } from "./ideFsEcho";
 import { publishFsEvent } from "./ideFsEvents";
+import { ideOutput } from "./ideOutputBus";
 import { decideInboundWrite, recordSyncedHash, clearSyncedHash, syncedHashOf } from "./ideSyncEngine";
 import { useIdeSyncConflicts } from "./ideSyncConflicts";
 import { materializeWorkspace } from "./materialize";
@@ -66,6 +67,7 @@ export async function applyFsEvent(evt: FsEvent, workspaceId: string): Promise<v
 
   if (evt.event === "ready") {
     const { written, failed } = await materializeWorkspace(workspaceId, usePageStore.getState().pages[workspaceId] ?? []);
+    ideOutput("fs-sync", `sandbox attached — materialized ${written} files${failed > 0 ? `, ${failed} FAILED` : ""}`);
     if (failed > 0) console.warn(`[ide] materialize: ${failed} of ${written + failed} files failed to reach the sandbox`);
     return;
   }
@@ -119,6 +121,7 @@ export async function applyFsEvent(evt: FsEvent, workspaceId: string): Promise<v
       relPath, pageId: entry.id, theirs,
       theirsHash: evt.hash ?? (await sha16(theirs)), atMs: Date.now(),
     });
+    ideOutput("sync", `CONFLICT: ${relPath} changed on both sides — open the file to resolve`);
   }
 }
 
@@ -160,6 +163,7 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
         if (disposed) return;
         const delayMs = [1000, 4000, 15000][Math.min(attempt, 2)];
         attempt += 1;
+        ideOutput("fs-sync", `disconnected — reconnecting in ${delayMs / 1000}s`);
         console.warn(`[ide] fs sync disconnected — reconnecting in ${delayMs / 1000}s`);
         timer = setTimeout(connect, delayMs);
       };
