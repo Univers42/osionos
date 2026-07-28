@@ -27,18 +27,20 @@ import { handshake, encodeFrame, closeFrame, createFrameDecoder } from './ide-ws
 import { createDockerClient } from './ide-docker.mjs';
 import { requireSandboxIdentity, deriveNames, buildShellExecSpec, buildFsAgentExecSpec } from './ide-sandbox-spec.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import {
+  bumpContainerSockets, containerHasActivity, getOrCreateSession, attachClient, detachClient, writeStdin,
+} from './ide-term-sessions.mjs';
+import { ensureSandbox } from './bridge-ide-sandbox.mjs';
 
-// Each live exec pins two bridge FDs + a spawned process; cap churn AND
-// simultaneous streams per user so one tenant can't exhaust the shared bridge.
+// Each live socket pins bridge FDs; cap churn AND simultaneous streams per
+// user so one tenant can't exhaust the shared bridge. (PTY SESSIONS outlive
+// sockets — the caps count sockets, the reaper counts session activity.)
 const MAX_CONCURRENT_EXEC = 6;
 const activeExecByUser = new Map();
-// Per-container live-stream counts — the reaper's activity signal, so an
-// in-use sandbox is never guillotined by the max-lifetime sweep.
-const activeExecByContainer = new Map();
 
-/** Whether any PTY/LSP/fsync stream is currently attached to this container. */
+/** Whether this container has live sockets or recent session activity. */
 export function hasActiveExec(containerName) {
-  return (activeExecByContainer.get(containerName) ?? 0) > 0;
+  return containerHasActivity(containerName, 0);
 }
 
 // APC-wrapped PTY-resize control frame: `ESC _ osio-resize:COLS,ROWS ESC \`.
@@ -152,19 +154,57 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     } catch { socket.end(closeFrame(4008, 'unsupported language server')); return true; }
 
     activeExecByUser.set(userId, (activeExecByUser.get(userId) ?? 0) + 1);
-    activeExecByContainer.set(names.containerName, (activeExecByContainer.get(names.containerName) ?? 0) + 1);
+    bumpContainerSockets(names.containerName, 1);
     let released = false;
     const release = () => {
       if (released) return;
       released = true;
       const nextUser = (activeExecByUser.get(userId) ?? 1) - 1;
       if (nextUser <= 0) activeExecByUser.delete(userId); else activeExecByUser.set(userId, nextUser);
-      const nextBox = (activeExecByContainer.get(names.containerName) ?? 1) - 1;
-      if (nextBox <= 0) activeExecByContainer.delete(names.containerName); else activeExecByContainer.set(names.containerName, nextBox);
+      bumpContainerSockets(names.containerName, -1);
     };
     socket.once('close', release); // covers a close during the pending attach
 
     const docker = createDockerClient(env);
+
+    if (isPty) {
+      // Bridge-owned session (ADR-002): ensure the sandbox, find-or-spawn the
+      // shell, attach this socket as one of its clients. A reload reattaches
+      // to the SAME shell and receives the replay ring first.
+      const termId = /^\d{1,2}$/.test(url.searchParams.get('term') ?? '') ? url.searchParams.get('term') : '0';
+      const sessionKey = `${userId}|${names.containerName}|${termId}`;
+      (async () => {
+        await ensureSandbox(env, names);
+        return getOrCreateSession({
+          key: sessionKey,
+          containerName: names.containerName,
+          spawn: () => docker.attachExec(names.containerName, spec),
+        });
+      })().then((session) => {
+        const client = {
+          sendBinary: (chunk) => (socket.destroyed ? true : socket.write(encodeFrame(chunk, 2))),
+          sendClose: (code, reason) => { if (!socket.destroyed) socket.end(closeFrame(code, reason)); },
+          onDrain: (fn) => socket.on('drain', fn),
+        };
+        attachClient(session, client);
+        const decode = createFrameDecoder();
+        socket.on('data', (chunk) => {
+          let messages;
+          try { messages = decode(chunk); } catch { socket.end(closeFrame(4013, 'message too large')); return; }
+          for (const m of messages) {
+            if (m.opcode === 8) { detachClient(session, client); socket.destroy(); return; } // detach ≠ kill
+            if (m.opcode !== 1 && m.opcode !== 2) continue;
+            const resize = parseResizeFrame(m.data);
+            if (resize) { docker.resizeExec(session.execId, resize.cols, resize.rows); continue; }
+            writeStdin(session, m.data);
+          }
+        });
+        socket.on('close', () => detachClient(session, client));
+        socket.on('error', () => detachClient(session, client));
+      }).catch(() => { release(); if (!socket.destroyed) socket.end(closeFrame(4004, 'sandbox unavailable')); });
+      return true;
+    }
+
     docker.attachExec(names.containerName, spec).then(({ stream: duplex, execId }) => {
       const decode = createFrameDecoder();
       // LSP is Tty:false — strip docker's 8-byte mux headers (see the demux
@@ -188,13 +228,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
         for (const m of messages) {
           if (m.opcode === 8) { duplex.end(); return; } // client close
           if (m.opcode !== 1 && m.opcode !== 2) continue;
-          // Out-of-band PTY resize — a strict full-frame match, so pasted bytes
-          // that merely START with the magic go to stdin like any other input.
-          if (isPty) {
-            const resize = parseResizeFrame(m.data);
-            if (resize) { docker.resizeExec(execId, resize.cols, resize.rows); continue; }
-          }
-          duplex.write(m.data);
+          duplex.write(m.data); // LSP/fsync: per-connection, no resize channel
         }
       });
       socket.on('close', () => duplex.destroy());

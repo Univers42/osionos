@@ -231,6 +231,16 @@ export function buildWriteExecSpec(relPath, contentBase64 = "") {
   return buildFsOpSpec("write", { path: relPath, contentBase64 });
 }
 
+/** Listening-ports probe for the dock's Ports tab: fixed argv, parse-friendly
+ *  output (`ss -tln`, netstat fallback), stderr dropped. List-only — the
+ *  sandbox net is internal, so "forwarding" is a later session-proxy feature. */
+export function buildPortsExecSpec() {
+  return {
+    ...FS_OP_COMMON,
+    Cmd: ["sh", "-c", "ss -tln 2>/dev/null || netstat -tln 2>/dev/null || echo VFSERR:UNSUP"],
+  };
+}
+
 /** An interactive-shell exec spec — a FIXED argv, no GIT_PAT, TTY on. The
  *  container is resolved by the derived name at the call site, never a client id. */
 export function buildShellExecSpec() {
