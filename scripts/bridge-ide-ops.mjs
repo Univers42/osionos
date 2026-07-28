@@ -23,7 +23,7 @@ import { bearerToken, readJsonBody } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createDockerClient } from './ide-docker.mjs';
 import {
-  requireSandboxIdentity, deriveNames, buildGitExecSpec, buildSearchExecSpec, buildWriteExecSpec,
+  requireSandboxIdentity, deriveNames, buildGitExecSpec, buildSearchExecSpec, buildWriteExecSpec, buildFsOpSpec,
 } from './ide-sandbox-spec.mjs';
 
 const BODY_LIMIT = 1024 * 1024; // editor writes carry (base64) file content
@@ -100,6 +100,14 @@ export function createIdeOpsHandler({ config, verifySession, env = process.env }
         const spec = buildSearchExecSpec(String(payload.query ?? ''), 200);
         const { output } = await ctx.docker.runExec(ctx.names.containerName, spec);
         reply(response, 200, { ok: true, results: parseRipgrepJson(String(output)) }, requestConfig);
+      } else if (typeof payload.op === 'string') {
+        // VFS exec ops (read/list/stat/mkdir/delete/rename/write-with-base64):
+        // the bridge builds the server-derived spec and returns the RAW exec
+        // result — parsing and the error taxonomy live client-side where they
+        // are unit-tested. Legacy writes (no `op`, raw `content`) stay below.
+        const spec = buildFsOpSpec(payload.op, payload);
+        const { output, exitCode } = await ctx.docker.runExec(ctx.names.containerName, spec);
+        reply(response, 200, { ok: exitCode === 0, exitCode, output: String(output).slice(0, 1024 * 1024) }, requestConfig);
       } else {
         const content = typeof payload.content === 'string' ? payload.content : '';
         const spec = buildWriteExecSpec(String(payload.path ?? ''), Buffer.from(content).toString('base64'));

@@ -16,7 +16,17 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
+// The bridge's REAL spec builders (.mjs) — the sandbox target below executes
+// them through a real local sh, so the exact scripts a live sandbox runs are
+// conformance-proven without a running stack.
+import { buildFsOpSpec } from "../../scripts/ide-sandbox-spec.mjs";
+import { createSandboxProvider } from "../../src/features/ide/vfs/sandboxProvider.ts";
+import type { FsOpTransport } from "../../src/features/ide/vfs/sandboxFsOps.ts";
 import { parseVPath, joinV, buildVPath } from "../../src/features/ide/vfs/vpath.ts";
 import { isFsError } from "../../src/features/ide/vfs/errors.ts";
 import { collectBytes, textToBytes, bytesToText } from "../../src/features/ide/vfs/bytes.ts";
@@ -28,21 +38,26 @@ import { sanitizeSegment } from "../../src/features/ide/model/idePaths.ts";
 import type { FsProvider } from "../../src/features/ide/vfs/types.ts";
 
 function memFacade(): PageFacade {
-  const pages = new Map<string, PageFacadeEntry & { archived: boolean }>();
+  const pages = new Map<string, PageFacadeEntry & { archived: boolean; content: string }>();
   let nextId = 1;
+  const sizeOf = (content: string) => new TextEncoder().encode(content).length;
   return {
     list: () => [...pages.values()].filter((p) => !p.archived),
+    async readContent(id) {
+      return pages.get(id)?.content ?? "";
+    },
     async create(input) {
+      const content = input.content ?? "";
       const entry = {
-        id: `p${nextId++}`, title: input.title, parentId: input.parentId,
-        kind: input.kind, content: input.content ?? "", mtimeMs: Date.now(), archived: false,
+        id: `p${nextId++}`, title: input.title, parentId: input.parentId, kind: input.kind,
+        content, sizeBytes: sizeOf(content), mtimeMs: Date.now(), archived: false,
       };
       pages.set(entry.id, entry);
       return entry;
     },
     async writeContent(id, content) {
       const page = pages.get(id);
-      if (page) { page.content = content; page.mtimeMs = Date.now(); }
+      if (page) { page.content = content; page.sizeBytes = sizeOf(content); page.mtimeMs = Date.now(); }
     },
     async rename(id, title) {
       const page = pages.get(id);
@@ -64,10 +79,30 @@ function memFacade(): PageFacade {
   };
 }
 
+/** Execute a built exec spec via the local sh — same argv a live sandbox runs. */
+function localShTransport(cwd: string): FsOpTransport {
+  return (op, params) =>
+    new Promise((resolve) => {
+      let spec: { Cmd: string[] };
+      try {
+        spec = buildFsOpSpec(op, params) as { Cmd: string[] };
+      } catch (error) {
+        resolve({ exitCode: 1, output: `VFSERR:${(error as Error).message}` });
+        return;
+      }
+      const [cmd, ...args] = spec.Cmd;
+      execFile(cmd, args, { cwd, maxBuffer: 8 * 1024 * 1024 }, (error, stdout) => {
+        const exitCode = error ? (typeof error.code === "number" ? error.code : 1) : 0;
+        resolve({ exitCode, output: String(stdout) });
+      });
+    });
+}
+
 const TARGETS: { name: string; make: () => FsProvider }[] = [
   { name: "mem", make: () => createMemProvider("mem") },
   { name: "overlay(mem,mem)", make: () => createOverlayProvider("overlay", createMemProvider("mem"), createMemProvider("mem")) },
   { name: "page-backed", make: () => createPageProvider("osionos", memFacade()) },
+  { name: "sandbox(sh)", make: () => createSandboxProvider("sandbox", localShTransport(mkdtempSync(join(tmpdir(), "vfs-")))) },
 ];
 
 const root = (p: FsProvider) => buildVPath(p.scheme, "t", []);
