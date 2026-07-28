@@ -23,13 +23,16 @@ export type PageFacadeEntry = {
   title: string;
   parentId: string | null;
   kind: "file" | "dir";
-  content: string;
+  /** null = content not loaded yet (lazy pages) — stat loads on demand. */
+  sizeBytes: number | null;
   mtimeMs: number;
 };
 
 export type PageFacade = {
   /** Every live (non-archived) IDE page in the workspace. */
   list(): PageFacadeEntry[];
+  /** Load (or return cached) file content — lazy pages never load eagerly. */
+  readContent(id: string): Promise<string>;
   create(input: { title: string; parentId: string | null; kind: "file" | "dir"; content?: string }): Promise<PageFacadeEntry>;
   writeContent(id: string, content: string): Promise<void>;
   rename(id: string, title: string): Promise<void>;
@@ -93,10 +96,9 @@ export function createPageProvider(scheme: string, facade: PageFacade): FsProvid
       if (path.segments.length === 0) return { kind: "dir", sizeBytes: 0, mtimeMs: null, readOnly: false };
       const entry = resolveEntry(path);
       if (!entry) throw fsError("NotFound", path.uri);
-      return {
-        kind: entry.kind, mtimeMs: entry.mtimeMs, readOnly: false,
-        sizeBytes: entry.kind === "file" ? textToBytes(entry.content).length : 0,
-      };
+      const sizeBytes = entry.kind !== "file" ? 0
+        : entry.sizeBytes ?? textToBytes(await facade.readContent(entry.id)).length;
+      return { kind: entry.kind, mtimeMs: entry.mtimeMs, readOnly: false, sizeBytes };
     },
     async list(path) {
       let parentId: string | null = null;
@@ -120,7 +122,7 @@ export function createPageProvider(scheme: string, facade: PageFacade): FsProvid
       const entry = resolveEntry(path);
       if (!entry) throw fsError("NotFound", path.uri);
       if (entry.kind !== "file") throw fsError("IsADirectory", path.uri);
-      return bytesToStream(textToBytes(entry.content), opts?.offset ?? 0, opts?.length);
+      return bytesToStream(textToBytes(await facade.readContent(entry.id)), opts?.offset ?? 0, opts?.length);
     },
     async write(path, data, opts) {
       const { parentId, name } = resolveParent(path);

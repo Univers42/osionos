@@ -99,7 +99,9 @@ test("write path: no traversal, no absolute; path + content are argv items", () 
   const spec = buildWriteExecSpec("src/main.py", "cHJpbnQoMSk=");
   assert.equal(spec.Cmd[4], "src/main.py");
   assert.equal(spec.Cmd[5], "cHJpbnQoMSk=");
-  assert.throws(() => buildWriteExecSpec("../etc/passwd"), /invalid write/);
-  assert.throws(() => buildWriteExecSpec("/etc/passwd"), /invalid write/);
-  assert.throws(() => buildWriteExecSpec(""), /invalid write/);
+  // The rejection CONTRACT (traversal/absolute/empty → status-400 throw) is
+  // the assertion; the message wording consolidated into assertRelPath.
+  assert.throws(() => buildWriteExecSpec("../etc/passwd"), /invalid.*path/);
+  assert.throws(() => buildWriteExecSpec("/etc/passwd"), /invalid.*path/);
+  assert.throws(() => buildWriteExecSpec(""), /invalid.*path/);
 });

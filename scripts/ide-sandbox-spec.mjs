@@ -147,22 +147,88 @@ export function buildSearchExecSpec(query, maxCount = 200) {
   };
 }
 
-/** A file-write exec spec (materialize / editor→container). Path AND base64
- *  content are ARGV items (never shell-interpolated); the script makes the
- *  parent dir then decodes stdin-free (avoids an exec hijack for stdin).
- *  ponytail: base64-in-argv caps at ARG_MAX (~MB) — fine for code files. */
+/** Validate a workspace-relative path used by the fs ops. Beyond traversal,
+ *  newline/tab/CR are refused because the op outputs are line/field-parsed —
+ *  the VFS surfaces that as an honest Unsupported, never silent mangling. */
+export function assertRelPath(relPath) {
+  if (typeof relPath !== "string" || relPath.includes("..") || relPath.startsWith("/")) {
+    throw Object.assign(new Error("invalid path"), { status: 400 });
+  }
+  if (/[\n\r\t\0]/.test(relPath)) {
+    throw Object.assign(new Error("unrepresentable path character"), { status: 400 });
+  }
+}
+
+const FS_OP_COMMON = { User: "10001:10001", WorkingDir: "/workspace", AttachStdout: true, AttachStderr: false, Tty: true };
+const READ_CAP_BYTES = 512 * 1024;
+
+// Portable sh snippets (busybox AND debian coreutils — the conformance corpus
+// executes them through the REAL local sh in tests). Failures print one
+// VFSERR:<tag> token the client maps into the FsError taxonomy; every path is
+// prefixed "./" so a name starting with "-" can never read as an option.
+const FS_OP_SCRIPTS = {
+  read: `f="./$1"; if [ ! -e "$f" ]; then echo VFSERR:ENOENT; exit 1; fi
+if [ -d "$f" ]; then echo VFSERR:EISDIR; exit 1; fi
+s=$(wc -c < "$f"); if [ "$s" -gt ${READ_CAP_BYTES} ]; then echo VFSERR:E2BIG; exit 1; fi
+tail -c +$(($2 + 1)) "$f" | head -c "$3" | base64 | tr -d '\\n'`,
+  stat: `f="./$1"; if [ ! -e "$f" ]; then echo VFSERR:ENOENT; exit 1; fi
+if [ -d "$f" ]; then k=dir; s=0; else k=file; s=$(wc -c < "$f"); fi
+printf '%s|%s|%s' "$k" "$s" "$(date -r "$f" +%s 2>/dev/null || echo 0)"`,
+  list: `f="./$1"; if [ ! -e "$f" ]; then echo VFSERR:ENOENT; exit 1; fi
+if [ ! -d "$f" ]; then echo VFSERR:ENOTDIR; exit 1; fi
+ls -1A -p "$f"`,
+  mkdir: `f="./$1"; if [ -e "$f" ]; then echo VFSERR:EEXIST; exit 1; fi
+d=$(dirname "$f"); if [ ! -d "$d" ]; then echo VFSERR:ENOPARENT; exit 1; fi
+mkdir "$f"`,
+  delete: `f="./$1"; if [ ! -e "$f" ] && [ ! -L "$f" ]; then echo VFSERR:ENOENT; exit 1; fi
+if [ -d "$f" ] && [ "$2" != 1 ]; then rmdir "$f" 2>/dev/null || { echo VFSERR:ENOTEMPTY; exit 1; }; else rm -rf "$f"; fi`,
+  rename: `a="./$1"; b="./$2"; if [ ! -e "$a" ]; then echo VFSERR:ENOENT; exit 1; fi
+d=$(dirname "$b"); if [ ! -d "$d" ]; then echo VFSERR:ENOPARENT; exit 1; fi
+if [ -e "$b" ]; then
+  if [ "$3" != 1 ]; then echo VFSERR:EEXIST; exit 1; fi
+  if [ -d "$b" ] || [ -d "$a" ]; then echo VFSERR:EEXIST; exit 1; fi
+fi
+mv "$a" "$b"`,
+  write: `f="./$1"; d=$(dirname "$f"); mkdir -p "$d" || { echo VFSERR:EIO; exit 1; }
+if [ -d "$f" ]; then echo VFSERR:EISDIR; exit 1; fi
+t="$f.vfstmp$$"; printf %s "$2" | base64 -d > "$t" && mv "$t" "$f"`,
+};
+
+/** One exec spec per VFS op (ADR-001 second slice — closes the write-only
+ *  sandbox hole). Everything client-influenced rides ARGV items; numbers are
+ *  validated integers; outputs are parsed client-side (bridge stays dumb). */
+export function buildFsOpSpec(op, params = {}) {
+  const script = FS_OP_SCRIPTS[op];
+  if (!script) throw Object.assign(new Error(`unknown fs op: ${String(op)}`), { status: 400 });
+  assertRelPath(params.path ?? "");
+  const args = [params.path ?? ""];
+  if (op === "read") {
+    const offset = Number.isInteger(params.offset) && params.offset > 0 ? params.offset : 0;
+    const length = Number.isInteger(params.length) && params.length >= 0 ? params.length : READ_CAP_BYTES;
+    args.push(String(offset), String(length));
+  } else if (op === "delete") {
+    args.push(params.recursive ? "1" : "");
+  } else if (op === "rename") {
+    assertRelPath(params.to ?? "");
+    if (!params.to) throw Object.assign(new Error("rename needs a target"), { status: 400 });
+    args.push(params.to, params.overwrite ? "1" : "");
+  } else if (op === "write") {
+    if (typeof params.contentBase64 !== "string") throw Object.assign(new Error("write needs base64 content"), { status: 400 });
+    args.push(params.contentBase64);
+  }
+  if (!params.path && op !== "list" && op !== "stat") {
+    throw Object.assign(new Error("missing path"), { status: 400 });
+  }
+  return { ...FS_OP_COMMON, Cmd: ["sh", "-c", script, "sh", ...args] };
+}
+
+/** A file-write exec spec (materialize / editor→container) — the legacy shape,
+ *  now atomic (temp + mv, no partial-write window) via buildFsOpSpec. */
 export function buildWriteExecSpec(relPath, contentBase64 = "") {
-  if (typeof relPath !== "string" || relPath.includes("..") || relPath.startsWith("/") || relPath.length === 0) {
+  if (typeof relPath !== "string" || relPath.length === 0) {
     throw Object.assign(new Error("invalid write path"), { status: 400 });
   }
-  return {
-    User: "10001:10001",
-    WorkingDir: "/workspace",
-    AttachStdout: true,
-    AttachStderr: true,
-    Tty: true,
-    Cmd: ["sh", "-c", 'mkdir -p "$(dirname "$1")" && printf %s "$2" | base64 -d > "$1"', "sh", relPath, contentBase64],
-  };
+  return buildFsOpSpec("write", { path: relPath, contentBase64 });
 }
 
 /** An interactive-shell exec spec — a FIXED argv, no GIT_PAT, TTY on. The
