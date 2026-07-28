@@ -14,6 +14,7 @@ import { useEffect } from "react";
 
 import type { PageEntry } from "@/entities/page";
 import { API_BASE, getActivePageJwt } from "@/shared/api/client";
+import { ideWsProtocols } from "./useIdeTerminal";
 import { usePageStore } from "@/store/usePageStore";
 import { codeBlockOf, createCodeFileBlock } from "./codeFile";
 import { buildIdeFileTree, flattenIdeTree } from "./ideFileTree";
@@ -83,7 +84,8 @@ async function applyFsEvent(evt: FsEvent, workspaceId: string): Promise<void> {
   const jwt = getActivePageJwt() ?? "";
 
   if (evt.event === "ready") {
-    await materializeWorkspace(workspaceId, store.pages[workspaceId] ?? []);
+    const { written, failed } = await materializeWorkspace(workspaceId, store.pages[workspaceId] ?? []);
+    if (failed > 0) console.warn(`[ide] materialize: ${failed} of ${written + failed} files failed to reach the sandbox`);
     return;
   }
 
@@ -117,30 +119,52 @@ async function applyFsEvent(evt: FsEvent, workspaceId: string): Promise<void> {
  * archive, external edits update the block. The ignore set (in-container) keeps
  * `pip install` from flooding the store; hash echo-suppression keeps our own
  * editor→container writes from looping back. On "ready" it materializes the tree
- * into the fresh sandbox. Mounted once by IdeShell while in IDE mode.
+ * into the fresh sandbox. Mounted once by IdeShell while in IDE mode. A dropped
+ * socket auto-reconnects (1s→4s→15s backoff) — a silent sync death left the
+ * shell running with no writeback and no indication.
  * ponytail: applyFsEvent is store-coupled glue, exercised live (Part E), not unit
  * tested — the correctness pivots (ignore set, echo hash) are tested elsewhere.
  */
 export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
   useEffect(() => {
     if (!enabled || !workspaceId || !API_BASE) return;
-    const jwt = getActivePageJwt() ?? "";
-    if (!jwt) return;
-    const wsBase = API_BASE.replace(/^http/, "ws"); // http→ws, https→wss
-    const ws = new WebSocket(`${wsBase}/api/ide/fsync?token=${encodeURIComponent(jwt)}&workspaceId=${encodeURIComponent(workspaceId)}`);
-    ws.binaryType = "arraybuffer";
+    let disposed = false;
+    let ws: WebSocket | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let attempt = 0;
 
-    let buffer = "";
-    ws.onmessage = (ev) => {
-      buffer += typeof ev.data === "string" ? ev.data : new TextDecoder().decode(ev.data);
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) {
-        const evt = parseFsEvent(line);
-        if (evt) void applyFsEvent(evt, workspaceId);
-      }
+    const connect = () => {
+      const jwt = getActivePageJwt() ?? "";
+      if (disposed || !jwt) return;
+      const wsBase = API_BASE.replace(/^http/, "ws"); // http→ws, https→wss
+      ws = new WebSocket(`${wsBase}/api/ide/fsync?workspaceId=${encodeURIComponent(workspaceId)}`, ideWsProtocols(jwt));
+      ws.binaryType = "arraybuffer";
+
+      let buffer = "";
+      ws.onopen = () => { attempt = 0; };
+      ws.onmessage = (ev) => {
+        buffer += typeof ev.data === "string" ? ev.data : new TextDecoder().decode(ev.data);
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const evt = parseFsEvent(line);
+          if (evt) void applyFsEvent(evt, workspaceId);
+        }
+      };
+      ws.onclose = () => {
+        if (disposed) return;
+        const delayMs = [1000, 4000, 15000][Math.min(attempt, 2)];
+        attempt += 1;
+        console.warn(`[ide] fs sync disconnected — reconnecting in ${delayMs / 1000}s`);
+        timer = setTimeout(connect, delayMs);
+      };
     };
 
-    return () => { try { ws.close(); } catch { /* already closed */ } };
+    connect();
+    return () => {
+      disposed = true;
+      if (timer) clearTimeout(timer);
+      try { ws?.close(); } catch { /* already closed */ }
+    };
   }, [workspaceId, enabled]);
 }

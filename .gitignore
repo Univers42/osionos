@@ -192,3 +192,5 @@ prompts
 test-results/
 .vercel
 .env*
+# The e2e-baseline mode file carries no secrets and must ship (vite --mode test).
+!.env.test

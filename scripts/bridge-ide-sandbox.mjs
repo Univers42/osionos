@@ -31,6 +31,7 @@ import { bearerToken, readJsonBody } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createDockerClient } from './ide-docker.mjs';
 import { requireSandboxIdentity, deriveNames, buildContainerSpec } from './ide-sandbox-spec.mjs';
+import { hasActiveExec } from './bridge-ide-exec.mjs';
 
 const BODY_LIMIT = 8 * 1024;
 const SANDBOX_NET = 'osio-ide-sandbox-net';
@@ -130,21 +131,33 @@ export function createIdeSandboxHandler({ config, verifySession, env = process.e
   };
 }
 
-/** Max-lifetime reaper — stop any managed sandbox running longer than the cap,
- *  so a box can never live forever (#16). Volumes persist across the reap; work
- *  is re-materialized on next open (P4). True idle-based reap (activity signal)
- *  lands with the P3 exec/WS layer that can bump a lastActivityAt. Wired by the
- *  bridge on an interval. */
-export async function reapExpiredSandboxes(env = process.env, maxLifetimeMs = 4 * 60 * 60 * 1000, now = Date.now()) {
+/** Reap decision for one managed sandbox. Pure + exported for tests: past the
+ *  soft lifetime an IDLE box is stopped; a box with live PTY/LSP/fsync streams
+ *  survives until the hard cap, so the sweep never guillotines a terminal in
+ *  active use. */
+export function shouldReapSandbox({ running, createdSec }, now, softMs, hardMs, active) {
+  if (!running) return false;
+  const ageMs = now - createdSec * 1000;
+  if (ageMs <= softMs) return false;
+  return !active || ageMs > hardMs;
+}
+
+/** Activity-aware reaper — stop managed sandboxes past their lifetime (#16).
+ *  Activity = live exec streams tracked by the exec relay (hasActiveExec); a
+ *  bridge restart empties that registry, degrading to age-only — accepted.
+ *  Volumes persist across the reap; work re-materializes on next open (P4).
+ *  Wired by the bridge on an interval. */
+export async function reapExpiredSandboxes(env = process.env, maxLifetimeMs = 4 * 60 * 60 * 1000, now = Date.now(), opts = {}) {
   if (env.OSIONOS_IDE_SANDBOX !== '1' || !env.OSIONOS_IDE_DOCKER_HOST) return 0;
+  const { isActive = hasActiveExec, hardMaxMs = maxLifetimeMs * 3 } = opts;
   const docker = createDockerClient(env);
   const managed = await docker.listManaged();
   let reaped = 0;
   for (const container of managed) {
-    if (container.State !== 'running') continue;
-    const ageMs = now - Number(container.Created ?? 0) * 1000;
-    if (ageMs > maxLifetimeMs) {
-      await docker.stop((container.Names?.[0] || '').replace(/^\//, '')).catch(() => {});
+    const name = (container.Names?.[0] || '').replace(/^\//, '');
+    const snapshot = { running: container.State === 'running', createdSec: Number(container.Created ?? 0) };
+    if (shouldReapSandbox(snapshot, now, maxLifetimeMs, hardMaxMs, isActive(name))) {
+      await docker.stop(name).catch(() => {});
       reaped += 1;
     }
   }

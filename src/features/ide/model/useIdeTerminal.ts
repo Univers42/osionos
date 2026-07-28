@@ -18,13 +18,18 @@ import { useTerminalRunBus } from "./terminalRunBus";
 
 export type IdeTerminalStatus = "connecting" | "open" | "closed" | "unavailable";
 
-/** Bridge WS URL for the sandbox PTY (P3). Same origin/JWT as useIdeGit; the
- *  bridge upgrades /api/ide/pty when OSIONOS_IDE_SANDBOX is enabled. */
+/** Bridge WS URL for the sandbox PTY (P3). The JWT rides the WS subprotocol
+ *  (see ideWsProtocols), NOT the URL — query strings land in access logs. */
 function ptyUrl(workspaceId: string, jwt: string): string | null {
   if (!API_BASE || !workspaceId || !jwt) return null;
   const wsBase = API_BASE.replace(/^http/, "ws"); // http→ws, https→wss
-  const q = new URLSearchParams({ token: jwt, workspaceId });
-  return `${wsBase}/api/ide/pty?${q.toString()}`;
+  return `${wsBase}/api/ide/pty?workspaceId=${encodeURIComponent(workspaceId)}`;
+}
+
+/** Subprotocol pair every IDE WS uses: the app protocol + the auth token. The
+ *  bridge selects and echoes "osio-ide.v1"; app-session tokens are header-safe. */
+export function ideWsProtocols(jwt: string): string[] {
+  return ["osio-ide.v1", `osio-token.${jwt}`];
 }
 
 /**
@@ -44,7 +49,7 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string): IdeT
 
   useEffect(() => {
     if (!term || !url) return;
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(url, ideWsProtocols(getActivePageJwt() ?? ""));
     ws.binaryType = "arraybuffer";
 
     const sendResize = () => {
@@ -64,7 +69,11 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string): IdeT
       if (typeof ev.data === "string") term.write(ev.data);
       else term.write(new Uint8Array(ev.data as ArrayBuffer));
     };
-    ws.onclose = () => { setWsStatus("closed"); term.write("\r\n\x1b[2m[connection closed]\x1b[0m\r\n"); };
+    ws.onclose = (ev) => {
+      setWsStatus("closed");
+      const why = ev.reason || (ev.code === 1000 ? "connection closed" : `connection closed (${ev.code})`);
+      term.write(`\r\n\x1b[2m[terminal: ${why}]\x1b[0m\r\n`);
+    };
     ws.onerror = () => setWsStatus("closed");
 
     const dataSub = term.onData((d) => { if (ws.readyState === WebSocket.OPEN) ws.send(d); });
