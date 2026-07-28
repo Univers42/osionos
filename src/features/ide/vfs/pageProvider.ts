@@ -44,27 +44,37 @@ export type PageFacade = {
   toSegment(title: string): string;
 };
 
+/** Children of a parent page, deterministically ordered (title, then id). */
+export function facadeChildren(facade: PageFacade, parentId: string | null): PageFacadeEntry[] {
+  return facade.list()
+    .filter((page) => page.parentId === parentId)
+    .sort((a, b) => (a.title < b.title ? -1 : a.title > b.title ? 1 : a.id < b.id ? -1 : 1));
+}
+
+function facadeChildByName(facade: PageFacade, parentId: string | null, name: string): PageFacadeEntry | undefined {
+  return facadeChildren(facade, parentId).find((page) => facade.toSegment(page.title) === name);
+}
+
+/** Resolve sanitized path segments to the page entry — the ONE walk the
+ *  provider, the fsync engine and the search panel all share. */
+export function resolveFacadePath(facade: PageFacade, segments: readonly string[]): PageFacadeEntry | undefined {
+  let parentId: string | null = null;
+  let found: PageFacadeEntry | undefined;
+  for (const segment of segments) {
+    found = facadeChildByName(facade, parentId, segment);
+    if (!found) return undefined;
+    parentId = found.id;
+  }
+  return found;
+}
+
 /** The page-backed provider: the workspace-default mount (ADR-001 addendum) —
  *  offline-capable, ACL'd, synced, presented POSIX-style. */
 export function createPageProvider(scheme: string, facade: PageFacade): FsProvider {
-  const childrenOf = (parentId: string | null): PageFacadeEntry[] =>
-    facade.list()
-      .filter((page) => page.parentId === parentId)
-      .sort((a, b) => (a.title < b.title ? -1 : a.title > b.title ? 1 : a.id < b.id ? -1 : 1));
-
+  const childrenOf = (parentId: string | null): PageFacadeEntry[] => facadeChildren(facade, parentId);
   const childByName = (parentId: string | null, name: string): PageFacadeEntry | undefined =>
-    childrenOf(parentId).find((page) => facade.toSegment(page.title) === name);
-
-  const resolveEntry = (path: VPath): PageFacadeEntry | undefined => {
-    let parentId: string | null = null;
-    let found: PageFacadeEntry | undefined;
-    for (const segment of path.segments) {
-      found = childByName(parentId, segment);
-      if (!found) return undefined;
-      parentId = found.id;
-    }
-    return found;
-  };
+    facadeChildByName(facade, parentId, name);
+  const resolveEntry = (path: VPath): PageFacadeEntry | undefined => resolveFacadePath(facade, path.segments);
 
   const resolveParent = (path: VPath): { parentId: string | null; name: string } => {
     if (path.segments.length === 0) throw fsError("IsADirectory", path.uri, "the mount root");

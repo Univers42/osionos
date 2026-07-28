@@ -12,18 +12,25 @@
 
 import { fsError } from "./errors";
 import { collectBytes, bytesToStream } from "./bytes";
-import type { VPath } from "./vpath";
+import { buildVPath, type VPath } from "./vpath";
 import type { FsProvider } from "./types";
 import {
   outputOrThrow, parseListOutput, parseStatOutput, bytesToBase64, base64ToBytes,
   type FsOpTransport,
 } from "./sandboxFsOps";
 
+/** Generic change feed a host may inject (production: the fsync socket's event
+ *  bus) — kept structural so the vfs layer never imports app modules. */
+export type SandboxEventFeed = {
+  subscribe(listener: (event: { event: string; path: string }) => void): () => void;
+};
+
 /** The sandbox:// provider — the remote POSIX tree behind the bridge exec ops
  *  (ADR-001: closes the write-only hole). The transport is injected: production
  *  = the bridge fetch; the conformance corpus = the SAME specs through a real
- *  local sh — so the semantics are proven without a live stack. */
-export function createSandboxProvider(scheme: string, transport: FsOpTransport): FsProvider {
+ *  local sh — so the semantics are proven without a live stack. With an event
+ *  feed injected, watch() is native (one fsync socket, many watchers). */
+export function createSandboxProvider(scheme: string, transport: FsOpTransport, events?: SandboxEventFeed): FsProvider {
   const rel = (path: VPath): string => {
     for (const segment of path.segments) {
       if (/[\n\r\t\0]/.test(segment)) {
@@ -38,8 +45,9 @@ export function createSandboxProvider(scheme: string, transport: FsOpTransport):
     capabilities() {
       return {
         caseSensitivity: "sensitive", symlinks: true, hardlinks: false, atomicRename: true,
-        watch: "none", maxNameBytes: 255, maxPathBytes: 4096, unicodeForm: "opaque-bytes",
-        streamingReads: true, permissionsModel: "posix", sparse: false, xattrs: false,
+        watch: events ? "native" : "none", maxNameBytes: 255, maxPathBytes: 4096,
+        unicodeForm: "opaque-bytes", streamingReads: true, permissionsModel: "posix",
+        sparse: false, xattrs: false,
       };
     },
     async stat(path) {
@@ -77,9 +85,25 @@ export function createSandboxProvider(scheme: string, transport: FsOpTransport):
       const result = await transport("rename", { path: rel(from), to: rel(to), overwrite: opts?.overwrite === true });
       outputOrThrow(result, from.uri);
     },
-    async watch(_path, _onEvent, signal) {
+    async watch(path, onEvent, signal) {
+      const unsubscribe = events?.subscribe((raw) => {
+        if (raw.event !== "write" && raw.event !== "delete") return;
+        const segments = raw.path.split("/").filter(Boolean);
+        const prefix = path.segments;
+        if (segments.length < prefix.length) return;
+        if (!prefix.every((name, i) => segments[i] === name)) return;
+        try {
+          onEvent({
+            type: raw.event === "delete" ? "delete" : "write",
+            path: buildVPath(scheme, path.authority, segments),
+            coalesced: 1,
+          });
+        } catch {
+          /* unrepresentable agent path — dropped, the fsync engine handles it */
+        }
+      });
       return new Promise<void>((resolve) => {
-        signal.addEventListener("abort", () => resolve(), { once: true });
+        signal.addEventListener("abort", () => { unsubscribe?.(); resolve(); }, { once: true });
       });
     },
     async close() {

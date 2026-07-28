@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/19 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/19 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/07/28 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,20 +14,60 @@ import React from "react";
 
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
-import { searchCodeFiles } from "../model/browserSearch";
+import { buildVPath } from "../vfs/vpath";
+import { createPageProvider, resolveFacadePath } from "../vfs/pageProvider";
+import { searchVfs, type VfsSearchMatch } from "../vfs/vfsSearch";
+import { pageStoreFacade } from "../model/pageStoreFacade";
 
 const EMPTY: never[] = [];
 
-/** Global search across the workspace's loaded code files (client-side grep over
- *  the page store). Clicking a result opens the file; P7 adds a container-backed
- *  ripgrep + line jump for the on-disk tree. */
+type FileGroup = { relPath: string; pageId: string; title: string; matches: VfsSearchMatch[] };
+
+/** Group flat VFS matches by file and resolve each back to its page id through
+ *  the SAME facade walk the provider uses. */
+function groupMatches(workspaceId: string, matches: VfsSearchMatch[]): FileGroup[] {
+  const facade = pageStoreFacade(workspaceId);
+  const groups = new Map<string, FileGroup>();
+  for (const match of matches) {
+    let group = groups.get(match.relPath);
+    if (!group) {
+      const entry = resolveFacadePath(facade, match.relPath.split("/"));
+      if (!entry) continue;
+      group = { relPath: match.relPath, pageId: entry.id, title: entry.title, matches: [] };
+      groups.set(match.relPath, group);
+    }
+    group.matches.push(match);
+  }
+  return [...groups.values()];
+}
+
+/** Global search — now a VFS walk over the workspace mount (osionos://), so the
+ *  SAME panel works over any future mount (sandbox://, host file://). Clicking
+ *  a result opens the file; line jump lands with the dock work. */
 export const IdeSearchPanel: React.FC = () => {
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const pages = usePageStore((s) => s.pages[workspaceId]) ?? EMPTY;
   const openPage = usePageStore((s) => s.openPage);
   const [query, setQuery] = React.useState("");
+  const [results, setResults] = React.useState<FileGroup[]>([]);
 
-  const results = React.useMemo(() => searchCodeFiles(pages, query), [pages, query]);
+  React.useEffect(() => {
+    if (query.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+    let stale = false;
+    const timer = setTimeout(async () => {
+      const provider = createPageProvider("osionos", pageStoreFacade(workspaceId));
+      const matches = await searchVfs(provider, buildVPath("osionos", workspaceId, []), query);
+      if (!stale) setResults(groupMatches(workspaceId, matches));
+    }, 250);
+    return () => {
+      stale = true;
+      clearTimeout(timer);
+    };
+  }, [workspaceId, query, pages]);
+
   const totalMatches = results.reduce((sum, file) => sum + file.matches.length, 0);
 
   return (
@@ -47,11 +87,11 @@ export const IdeSearchPanel: React.FC = () => {
           </p>
         )}
         {results.map((file) => (
-          <div key={file.pageId} className="mb-1">
-            <div className="truncate px-2 py-0.5 font-semibold text-[var(--osio-code-fg-muted)]">{file.title}</div>
+          <div key={file.relPath} className="mb-1">
+            <div className="truncate px-2 py-0.5 font-semibold text-[var(--osio-code-fg-muted)]" title={file.relPath}>{file.title}</div>
             {file.matches.map((match, index) => (
               <button
-                key={`${file.pageId}-${index}`}
+                key={`${file.relPath}-${index}`}
                 type="button"
                 onClick={() => openPage({ id: file.pageId, workspaceId, kind: "page", title: file.title })}
                 className="flex w-full items-baseline gap-2 rounded px-2 py-0.5 text-left hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.10))]"

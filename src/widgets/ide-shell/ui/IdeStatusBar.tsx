@@ -11,7 +11,9 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { GitBranch, SquareTerminal } from "lucide-react";
+import { GitBranch, GitCompareArrows, SquareTerminal } from "lucide-react";
+
+import { useIdeSyncConflicts, conflictCount } from "@/features/ide/model/ideSyncConflicts";
 
 interface Props {
   fileCount: number;
@@ -21,9 +23,18 @@ interface Props {
 /** The bottom status bar spanning the shell — mode, project size, and a terminal
  *  toggle. Branch / language / diagnostics slots fill as later phases land. */
 export const IdeStatusBar: React.FC<Props> = ({ fileCount, onToggleTerminal }) => {
+  const conflicts = useIdeSyncConflicts((s) => conflictCount(s.byPageId));
   return (
     <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 font-mono text-[11px] text-[var(--osio-code-fg-muted)]">
       <span className="inline-flex items-center gap-1 text-[var(--osio-accent)]">IDE</span>
+      {conflicts > 0 && (
+        <span
+          className="inline-flex items-center gap-1 text-[var(--osio-warning,#d97706)]"
+          title="Open a conflicted file to resolve (keep mine / take sandbox)"
+        >
+          <GitCompareArrows size={12} /> {conflicts} sync {conflicts === 1 ? "conflict" : "conflicts"}
+        </span>
+      )}
       <button
         type="button"
         onClick={onToggleTerminal}
