@@ -24,7 +24,7 @@ import { publishRealtime } from './bridge-social-core.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
 import { createIdeSandboxHandler, reapExpiredSandboxes } from './bridge-ide-sandbox.mjs';
-import { createIdeOpsHandler } from './bridge-ide-ops.mjs';
+import { createIdeOpsHandler, createIdePreviewHandler } from './bridge-ide-ops.mjs';
 import { createIdeExecUpgradeHandler } from './bridge-ide-exec.mjs';
 import { createConnectorHandler } from './bridge-connector.mjs';
 import { createOAuthHandler } from './bridge-oauth.mjs';
@@ -3259,6 +3259,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.agent(url, request, response, context.config)) return;
 	if (await context.social.runner(url, request, response, context.config)) return;
 	if (await context.social.ideSandbox(url, request, response, context.config)) return;
+	if (await context.social.idePreview(url, request, response, context.config)) return;
 	if (await context.social.ideOps(url, request, response, context.config)) return;
 	if (await context.social.connector(url, request, response, context.config)) return;
 		if (await context.social.oauth(url, request, response, context.config)) return;
@@ -3311,6 +3312,7 @@ export function createBridgeServer(options = {}) {
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		ideSandbox: createIdeSandboxHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
 		ideOps: createIdeOpsHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
+		idePreview: createIdePreviewHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
 		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
 		rtc: createRtcTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),

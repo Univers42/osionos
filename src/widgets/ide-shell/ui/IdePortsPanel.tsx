@@ -12,8 +12,10 @@
 
 import React from "react";
 
+import { ExternalLink } from "lucide-react";
+
 import { useUserStore } from "@/features/auth";
-import { fetchSandboxPorts, type SandboxPort } from "@/features/ide/model/idePorts";
+import { fetchSandboxPorts, openPortPreview, type SandboxPort } from "@/features/ide/model/idePorts";
 
 const POLL_MS = 5000;
 
@@ -45,14 +47,22 @@ export const IdePortsPanel: React.FC = () => {
         </p>
       )}
       {(ports ?? []).map((entry) => (
-        <div key={entry.port} className="flex items-baseline gap-3">
+        <div key={entry.port} className="flex items-center gap-3">
           <span className="w-14 shrink-0 text-right font-semibold text-[var(--osio-accent)]">{entry.port}</span>
-          <span className="truncate text-[var(--osio-code-fg-muted)]">{entry.address}</span>
+          <span className="min-w-0 flex-1 truncate text-[var(--osio-code-fg-muted)]">{entry.address}</span>
+          <button
+            type="button"
+            title={`Open a preview of port ${entry.port}`}
+            onClick={() => void openPortPreview(workspaceId, entry.port)}
+            className="inline-flex shrink-0 items-center gap-1 rounded border border-[var(--osio-code-border)] px-1.5 py-0.5 text-[11px] text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
+          >
+            <ExternalLink size={11} /> Open
+          </button>
         </div>
       ))}
       {(ports?.length ?? 0) > 0 && (
         <p className="mt-3 text-[11px] text-[var(--osio-code-fg-muted)]">
-          List-only for now — the sandbox network is isolated; port forwarding lands with the session proxy.
+          Preview rides the isolated exec channel: GET-only, 2 MiB cap, no websockets yet — live-reload dev servers render but do not hot-update.
         </p>
       )}
     </div>

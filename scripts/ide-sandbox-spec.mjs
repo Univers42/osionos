@@ -232,12 +232,59 @@ export function buildWriteExecSpec(relPath, contentBase64 = "") {
 }
 
 /** Listening-ports probe for the dock's Ports tab: fixed argv, parse-friendly
- *  output (`ss -tln`, netstat fallback), stderr dropped. List-only — the
- *  sandbox net is internal, so "forwarding" is a later session-proxy feature. */
+ *  output (`ss -tln`, netstat fallback), stderr dropped. */
 export function buildPortsExecSpec() {
   return {
     ...FS_OP_COMMON,
     Cmd: ["sh", "-c", "ss -tln 2>/dev/null || netstat -tln 2>/dev/null || echo VFSERR:UNSUP"],
+  };
+}
+
+// The in-sandbox preview tunnel agent, passed INLINE via `node -e` (argv item —
+// no shell, no image rebuild/re-seed needed; moves into the image at the next
+// scheduled rebuild). One u32-length-prefixed JSON frame per request/response;
+// GET/HEAD only, 2 MiB body cap, base64 bodies. Port forwarding thus rides the
+// EXISTING exec channel — no new network path, every isolation invariant kept.
+const TUNNEL_AGENT_SOURCE = `
+const http = require("node:http");
+const port = Number(process.argv[process.argv.length - 1]);
+let buf = Buffer.alloc(0);
+const send = (o) => { const b = Buffer.from(JSON.stringify(o)); const h = Buffer.alloc(4); h.writeUInt32BE(b.length, 0); process.stdout.write(h); process.stdout.write(b); };
+const handle = (m) => {
+  const req = http.request({ host: "127.0.0.1", port, path: m.path, method: m.method, headers: m.headers }, (res) => {
+    const chunks = []; let total = 0;
+    res.on("data", (c) => { total += c.length; if (total <= 2097152) chunks.push(c); });
+    res.on("end", () => { const body = Buffer.concat(chunks); send({ id: m.id, status: res.statusCode || 502, headers: { "content-type": String(res.headers["content-type"] || "") }, body: total <= 2097152 ? body.toString("base64") : "", truncated: total > 2097152 }); });
+  });
+  req.on("error", (e) => send({ id: m.id, status: 502, headers: {}, body: Buffer.from("preview upstream error: " + e.message).toString("base64"), truncated: false }));
+  req.end();
+};
+process.stdin.on("data", (c) => {
+  buf = Buffer.concat([buf, c]);
+  for (;;) {
+    if (buf.length < 4) return;
+    const n = buf.readUInt32BE(0);
+    if (buf.length < 4 + n) return;
+    let m; try { m = JSON.parse(buf.subarray(4, 4 + n).toString()); } catch { m = null; }
+    buf = buf.subarray(4 + n);
+    if (m && typeof m.id === "number" && typeof m.path === "string") handle(m);
+  }
+});
+`;
+
+/** The preview tunnel exec: Tty OFF (binary frames must arrive untouched — the
+ *  bridge strips docker's mux headers), stdin attached, fixed argv. */
+export function buildPortTunnelExecSpec(port) {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw Object.assign(new Error("invalid preview port"), { status: 400 });
+  }
+  return {
+    User: "10001:10001",
+    WorkingDir: "/workspace",
+    AttachStdin: true,
+    AttachStdout: true,
+    AttachStderr: false,
+    Cmd: ["node", "-e", TUNNEL_AGENT_SOURCE, "tunnel", String(port)],
   };
 }
 
