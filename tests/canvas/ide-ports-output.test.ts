@@ -52,3 +52,13 @@ test("output bus appends with channel, caps history, clears", () => {
   useIdeOutputBus.getState().clear();
   assert.equal(useIdeOutputBus.getState().lines.length, 0);
 });
+
+test("reveal bus: one slot, survives until the RIGHT page consumes", async () => {
+  const { useIdeRevealBus } = await import("../../src/features/ide/model/ideRevealBus.ts");
+  const bus = useIdeRevealBus.getState();
+  bus.request({ pageId: "p1", line: 12, col: 3 });
+  assert.equal(useIdeRevealBus.getState().consume("other"), null, "wrong page never drains the slot");
+  const hit = useIdeRevealBus.getState().consume("p1");
+  assert.deepEqual({ pageId: hit?.pageId, line: hit?.line, col: hit?.col }, { pageId: "p1", line: 12, col: 3 });
+  assert.equal(useIdeRevealBus.getState().consume("p1"), null, "consumed once");
+});

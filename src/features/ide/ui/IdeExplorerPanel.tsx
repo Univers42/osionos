@@ -16,6 +16,7 @@ import { Download, FilePlus, FolderPlus, Upload } from "lucide-react";
 import { useUserStore } from "@/features/auth";
 import { useIdeFileOps, type IdeCreateRequest } from "../model/useIdeFileOps";
 import { IdeFileTree } from "./IdeFileTree";
+import { IdeSandboxTree } from "./IdeSandboxTree";
 
 /** The Explorer panel: a toolbar (new file/folder, import folder, export zip)
  *  over the interactive file tree. Owns the transient create/rename state and
@@ -95,6 +96,7 @@ export const IdeExplorerPanel: React.FC = () => {
           onCancelRename={() => setRenamingId(null)}
         />
       </div>
+      <IdeSandboxTree />
       <input
         ref={importRef}
         type="file"

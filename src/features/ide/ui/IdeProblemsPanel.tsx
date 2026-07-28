@@ -18,6 +18,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { buildIdeFileTree, flattenIdeTree } from "@/features/ide/model/ideFileTree";
 import { pathForPage } from "@/features/ide/model/idePaths";
 import { useDiagnosticsStore, type IdeDiagnostic } from "@/features/ide/model/diagnosticsStore";
+import { useIdeRevealBus } from "@/features/ide/model/ideRevealBus";
 
 const EMPTY: never[] = [];
 const URI_PREFIX = "file:///workspace/";
@@ -58,9 +59,11 @@ export const IdeProblemsPanel: React.FC = () => {
   );
 
   const open = React.useCallback(
-    (rel: string) => {
+    (rel: string, at?: { line: number; character: number }) => {
       const target = pageByPath.get(rel);
-      if (target) usePageStore.getState().openPage({ id: target.id, workspaceId, kind: "page", title: target.title });
+      if (!target) return;
+      if (at) useIdeRevealBus.getState().request({ pageId: target.id, line: at.line + 1, col: at.character + 1 });
+      usePageStore.getState().openPage({ id: target.id, workspaceId, kind: "page", title: target.title });
     },
     [pageByPath, workspaceId],
   );
@@ -89,7 +92,7 @@ export const IdeProblemsPanel: React.FC = () => {
               <button
                 key={`${group.uri}:${i}`}
                 type="button"
-                onClick={() => open(group.rel)}
+                onClick={() => open(group.rel, { line: d.line, character: d.character })}
                 title={d.message}
                 className="flex w-full items-start gap-1.5 py-0.5 pl-6 pr-3 text-left hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))]"
               >
