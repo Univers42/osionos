@@ -44,11 +44,11 @@ export function ideWsProtocols(jwt: string): string[] {
  * on the SAME bridge-owned session (replay first); deliberate closes (shell
  * exit, auth/gate) stay closed with the reason printed.
  */
-export function useIdeTerminal(term: Terminal | null, workspaceId: string): IdeTerminalStatus {
+export function useIdeTerminal(term: Terminal | null, workspaceId: string, termId = "0"): IdeTerminalStatus {
   // "connecting" until a WS callback moves it; "unavailable" is derived (no
   // synchronous setState in the effect — that trips react-hooks/set-state-in-effect).
   const [wsStatus, setWsStatus] = useState<IdeTerminalStatus>("connecting");
-  const url = useMemo(() => (term ? ptyUrl(workspaceId, getActivePageJwt() ?? "") : null), [term, workspaceId]);
+  const url = useMemo(() => (term ? ptyUrl(workspaceId, getActivePageJwt() ?? "", termId) : null), [term, workspaceId, termId]);
 
   useEffect(() => {
     if (!term || !url) return;

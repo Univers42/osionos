@@ -11,8 +11,9 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { X } from "lucide-react";
+import { Columns2, Plus, X } from "lucide-react";
 
+import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
 import { useIdeSyncConflicts, conflictCount } from "@/features/ide/model/ideSyncConflicts";
 import { IdeOutputPanel } from "./IdeOutputPanel";
 import { IdePortsPanel } from "./IdePortsPanel";
@@ -38,6 +39,8 @@ const TABS: { id: DockTab; label: string }[] = [
 export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [tab, setTab] = React.useState<DockTab>("terminal");
   const conflicts = useIdeSyncConflicts((s) => conflictCount(s.byPageId));
+  const primaryTerm = useIdeDockStore((s) => s.primary);
+  const secondaryTerm = useIdeDockStore((s) => s.secondary);
 
   return (
     <section
@@ -63,6 +66,28 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
           </button>
         ))}
         <span className="flex-1" />
+        {tab === "terminal" && (
+          <>
+            <button
+              type="button"
+              title="New terminal (fresh session)"
+              aria-label="New terminal"
+              onClick={() => useIdeDockStore.getState().newTerminal()}
+              className="flex h-5 w-5 items-center justify-center rounded hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] hover:text-[var(--osio-code-fg)]"
+            >
+              <Plus size={13} />
+            </button>
+            <button
+              type="button"
+              title={secondaryTerm ? "Close split" : "Split terminal"}
+              aria-label={secondaryTerm ? "Close split" : "Split terminal"}
+              onClick={() => (secondaryTerm ? useIdeDockStore.getState().closeSecondary() : useIdeDockStore.getState().splitTerminal())}
+              className="flex h-5 w-5 items-center justify-center rounded hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] hover:text-[var(--osio-code-fg)]"
+            >
+              <Columns2 size={13} />
+            </button>
+          </>
+        )}
         <button
           type="button"
           title="Hide panel"
@@ -73,8 +98,9 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
           <X size={13} />
         </button>
       </div>
-      {/* Terminal never unmounts once opened — the PTY socket and scrollback live on. */}
-      <div className={tab === "terminal" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+      {/* Terminals never unmount once opened — the PTY sockets and scrollback live on.
+          Keyed by session id: New Terminal remounts onto a FRESH bridge session. */}
+      <div className={tab === "terminal" ? "flex min-h-0 flex-1" : "hidden"}>
         <React.Suspense
           fallback={
             <div className="min-h-0 flex-1 px-3 py-2 font-mono text-[12px] leading-5 text-[var(--osio-code-fg-muted)]">
@@ -82,7 +108,14 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
             </div>
           }
         >
-          <IdeTerminal />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <IdeTerminal key={primaryTerm} termId={primaryTerm} />
+          </div>
+          {secondaryTerm && (
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col border-l border-[var(--osio-code-border)]">
+              <IdeTerminal key={secondaryTerm} termId={secondaryTerm} />
+            </div>
+          )}
         </React.Suspense>
       </div>
       {tab === "problems" && <IdeProblemsPanel />}

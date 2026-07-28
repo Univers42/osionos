@@ -21,7 +21,7 @@ import { useIdeTerminal } from "@/features/ide/model/useIdeTerminal";
 /** xterm.js terminal over the sandbox PTY (P3). Lazy-loaded from IdeBottomStrip
  *  so xterm never lands in the warm IDE chunk — it loads on first terminal open.
  *  The transport (WS + resize) is useIdeTerminal; this file owns the emulator. */
-export const IdeTerminal: React.FC = () => {
+export const IdeTerminal: React.FC<{ termId?: string }> = ({ termId = "0" }) => {
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const hostRef = React.useRef<HTMLDivElement>(null);
   const fitRef = React.useRef<FitAddon | null>(null);
@@ -52,7 +52,7 @@ export const IdeTerminal: React.FC = () => {
     return () => ro.disconnect();
   }, [term]);
 
-  const status = useIdeTerminal(term, workspaceId);
+  const status = useIdeTerminal(term, workspaceId, termId);
 
   return (
     <div className="relative min-h-0 flex-1">
