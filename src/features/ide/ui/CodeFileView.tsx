@@ -25,6 +25,8 @@ import { canFormat, formatCode } from "../model/formatCode";
 import { pathForPage } from "../model/idePaths";
 import { useIdeModeStore } from "../model/ideModeStore";
 import { ideFsWrite } from "../model/ideFsClient";
+import { recordSyncedHash } from "../model/ideSyncEngine";
+import { useIdeSyncConflicts } from "../model/ideSyncConflicts";
 import { useTerminalRunBus } from "../model/terminalRunBus";
 import { baseEditorExtensions } from "./codeMirrorSetup";
 import { RunConsole } from "./RunConsole";
@@ -78,6 +80,23 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   const [status, setStatus] = React.useState<StatusInfo>({ line: 1, col: 1, lines: 1 });
   const runner = useCodeRunner();
   const [showConsole, setShowConsole] = React.useState(false);
+
+  // Surfaced sandbox divergence (ADR-001 §7): the page kept YOUR content; this
+  // banner offers the two one-click resolutions. Never silent last-writer-wins.
+  const conflict = useIdeSyncConflicts((s) => s.byPageId[pageId]);
+  const resolveKeepMine = React.useCallback(() => {
+    if (!conflict) return;
+    const mine = viewRef.current?.state.doc.toString() ?? "";
+    void ideFsWrite(workspaceId, conflict.relPath, mine); // pushes ours + re-records the agreed state
+    useIdeSyncConflicts.getState().resolve(pageId);
+  }, [conflict, workspaceId, pageId]);
+  const resolveTakeSandbox = React.useCallback(() => {
+    if (!conflict) return;
+    const view = viewRef.current;
+    if (view) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: conflict.theirs } });
+    recordSyncedHash(workspaceId, conflict.relPath, conflict.theirsHash); // sandbox already holds it
+    useIdeSyncConflicts.getState().resolve(pageId);
+  }, [conflict, workspaceId, pageId]);
   // Run the CURRENT editor text. A ref keeps the CodeMirror keymap (built once)
   // calling the latest closure without rebuilding the editor.
   const runNow = React.useCallback(() => {
@@ -240,6 +259,27 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
 
   return (
     <div data-code-theme="dark" data-osio-ide className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
+      {conflict && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1.5 text-[12px] text-[var(--osio-warning,#d97706)]">
+          <span className="min-w-0 flex-1 truncate">
+            The sandbox version of this file differs from your edits.
+          </span>
+          <button
+            type="button"
+            onClick={resolveKeepMine}
+            className="shrink-0 rounded border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
+          >
+            Keep mine
+          </button>
+          <button
+            type="button"
+            onClick={resolveTakeSandbox}
+            className="shrink-0 rounded border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
+          >
+            Take sandbox
+          </button>
+        </div>
+      )}
       <div ref={hostRef} className="min-h-0 flex-1 overflow-hidden" />
       {showConsole && (
         <div className="h-56 shrink-0 overflow-hidden">

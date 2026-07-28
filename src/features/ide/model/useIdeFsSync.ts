@@ -6,38 +6,27 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/20 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/20 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/07/28 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import { useEffect } from "react";
 
-import type { PageEntry } from "@/entities/page";
 import { API_BASE, getActivePageJwt } from "@/shared/api/client";
+import { resolveFacadePath } from "../vfs/pageProvider";
 import { ideWsProtocols } from "./useIdeTerminal";
-import { usePageStore } from "@/store/usePageStore";
-import { codeBlockOf, createCodeFileBlock } from "./codeFile";
-import { buildIdeFileTree, flattenIdeTree } from "./ideFileTree";
-import { pathForPage, sanitizeSegment } from "./idePaths";
-import { parseFsEvent, isEchoHash, type FsEvent } from "./ideFsEcho";
+import { sanitizeSegment } from "./idePaths";
+import { parseFsEvent, isEchoHash, sha16, type FsEvent } from "./ideFsEcho";
+import { publishFsEvent } from "./ideFsEvents";
+import { decideInboundWrite, recordSyncedHash, clearSyncedHash, syncedHashOf } from "./ideSyncEngine";
+import { useIdeSyncConflicts } from "./ideSyncConflicts";
 import { materializeWorkspace } from "./materialize";
-
-const resolve = (id: string) => usePageStore.getState().pageById(id);
-
-/** relPath → { pageId, isFolder } for every live IDE page, keyed by the SAME
- *  sanitized path materialize/collectTreeFiles produce (so container paths line
- *  up with page paths). */
-function buildRelPathIndex(pages: PageEntry[]): Map<string, { pageId: string; isFolder: boolean }> {
-  const map = new Map<string, { pageId: string; isFolder: boolean }>();
-  for (const node of flattenIdeTree(buildIdeFileTree(pages))) {
-    map.set(pathForPage(node.page._id, resolve), { pageId: node.page._id, isFolder: node.isFolder });
-  }
-  return map;
-}
+import { pageStoreFacade } from "./pageStoreFacade";
+import { usePageStore } from "@/store/usePageStore";
 
 /** Normalize a container path to the sanitized segment form pages use. */
-function sanitizeRel(path: string): string {
-  return path.split("/").filter(Boolean).map(sanitizeSegment).join("/");
+function sanitizeRel(path: string): string[] {
+  return path.split("/").filter(Boolean).map(sanitizeSegment);
 }
 
 function decodeBase64(b64: string): string {
@@ -47,83 +36,97 @@ function decodeBase64(b64: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-/** Create a code page for `rel`, materializing any missing folder ancestors as
- *  folder pages first (reuses the ordinary page-store addPage, so it rides the
- *  outbox/ACL/sync like any other page). */
-async function createFileWithAncestors(
-  rel: string,
+/** Create the page for `segments`, materializing missing ancestor folders —
+ *  all through the SAME facade the osionos:// provider uses. */
+async function createWithAncestors(
+  facade: ReturnType<typeof pageStoreFacade>,
+  segments: string[],
   content: string,
-  workspaceId: string,
-  jwt: string,
-  index: Map<string, { pageId: string; isFolder: boolean }>,
 ): Promise<void> {
-  const store = usePageStore.getState();
-  const segments = rel.split("/").filter(Boolean);
-  if (segments.length === 0) return;
-  let parentId: string | undefined;
-  for (let i = 0; i < segments.length - 1; i++) {
-    const folderPath = segments.slice(0, i + 1).join("/");
-    const found = index.get(folderPath);
-    if (found?.isFolder) { parentId = found.pageId; continue; }
-    const page = await store.addPage(workspaceId, segments[i], jwt, parentId, { surface: "folder" });
-    if (!page) return;
-    parentId = page._id;
-    index.set(folderPath, { pageId: page._id, isFolder: true });
+  let parentId: string | null = null;
+  for (let depth = 0; depth < segments.length - 1; depth++) {
+    const existing = resolveFacadePath(facade, segments.slice(0, depth + 1));
+    if (existing?.kind === "dir") {
+      parentId = existing.id;
+      continue;
+    }
+    if (existing) return; // a FILE occupies the folder path — never overwrite
+    const created = await facade.create({ title: segments[depth], parentId, kind: "dir" });
+    parentId = created.id;
   }
-  const leaf = segments[segments.length - 1];
-  const page = await store.addPage(workspaceId, leaf, jwt, parentId, {
-    surface: "code",
-    content: [createCodeFileBlock(leaf, content)],
-  });
-  if (page) index.set(rel, { pageId: page._id, isFolder: false });
+  await facade.create({ title: segments[segments.length - 1], parentId, kind: "file", content });
 }
 
-/** Apply one fs-agent event to the canonical page store. */
-async function applyFsEvent(evt: FsEvent, workspaceId: string): Promise<void> {
-  const store = usePageStore.getState();
-  const jwt = getActivePageJwt() ?? "";
+/** Apply one fs-agent event to the canonical page store — through the VFS
+ *  facade + the three-way sync engine. Conflicts are SURFACED (the page keeps
+ *  the local content; the sandbox version is held for one-click resolution),
+ *  never silently last-writer-wins. */
+export async function applyFsEvent(evt: FsEvent, workspaceId: string): Promise<void> {
+  const facade = pageStoreFacade(workspaceId);
 
   if (evt.event === "ready") {
-    const { written, failed } = await materializeWorkspace(workspaceId, store.pages[workspaceId] ?? []);
+    const { written, failed } = await materializeWorkspace(workspaceId, usePageStore.getState().pages[workspaceId] ?? []);
     if (failed > 0) console.warn(`[ide] materialize: ${failed} of ${written + failed} files failed to reach the sandbox`);
     return;
   }
 
-  const rel = sanitizeRel(evt.path);
-  if (!rel) return;
+  const segments = sanitizeRel(evt.path);
+  if (segments.length === 0) return;
+  const relPath = segments.join("/");
 
   if (evt.event === "delete") {
-    const found = buildRelPathIndex(store.pages[workspaceId] ?? []).get(rel);
-    if (found) store.archivePage(found.pageId, workspaceId, jwt);
+    const entry = resolveFacadePath(facade, segments);
+    if (entry) await facade.archive(entry.id);
+    clearSyncedHash(workspaceId, relPath);
     return;
   }
 
-  if (evt.event === "write") {
-    if (evt.hash && isEchoHash(evt.hash)) return; // our own write echoing back
-    if (evt.content == null) return; // binary/oversized — fs-agent sent no content
-    const content = decodeBase64(evt.content);
-    const index = buildRelPathIndex(store.pages[workspaceId] ?? []);
-    const found = index.get(rel);
-    if (found && !found.isFolder) {
-      const block = codeBlockOf(store.pageById(found.pageId));
-      if (block && block.content !== content) store.updateBlock(found.pageId, block.id, { content });
-    } else if (!found) {
-      await createFileWithAncestors(rel, content, workspaceId, jwt, index);
-    }
+  if (evt.event !== "write" || evt.content == null) return; // binary/oversized — no content
+  const theirs = decodeBase64(evt.content);
+  const entry = resolveFacadePath(facade, segments);
+  const localContent = entry && entry.kind === "file" ? await facade.readContent(entry.id) : entry ? "" : null;
+
+  const decision = decideInboundWrite({
+    inboundHash: evt.hash ?? null,
+    isEcho: isEchoHash,
+    localContent,
+    localHash: localContent === null ? null : await sha16(localContent),
+    inboundContent: theirs,
+    lastSyncedHash: syncedHashOf(workspaceId, relPath),
+  });
+
+  if (decision.action === "echo") {
+    // Our own write confirmed by the agent — this IS the new agreed state.
+    if (evt.hash) recordSyncedHash(workspaceId, relPath, evt.hash);
+    return;
+  }
+  if (decision.action === "ignore") {
+    recordSyncedHash(workspaceId, relPath, evt.hash ?? (await sha16(theirs)));
+    return;
+  }
+  if (decision.action === "create") {
+    await createWithAncestors(facade, segments, theirs);
+    recordSyncedHash(workspaceId, relPath, evt.hash ?? (await sha16(theirs)));
+    return;
+  }
+  if (decision.action === "apply") {
+    if (entry && entry.kind === "file") await facade.writeContent(entry.id, theirs);
+    recordSyncedHash(workspaceId, relPath, evt.hash ?? (await sha16(theirs)));
+    return;
+  }
+  if (entry) {
+    useIdeSyncConflicts.getState().report({
+      relPath, pageId: entry.id, theirs,
+      theirsHash: evt.hash ?? (await sha16(theirs)), atMs: Date.now(),
+    });
   }
 }
 
 /**
- * Live writeback (P4): streams the in-sandbox fs-agent's events and maps them to
- * page CRUD — shell-created files (git pull, codegen) become pages, deletions
- * archive, external edits update the block. The ignore set (in-container) keeps
- * `pip install` from flooding the store; hash echo-suppression keeps our own
- * editor→container writes from looping back. On "ready" it materializes the tree
- * into the fresh sandbox. Mounted once by IdeShell while in IDE mode. A dropped
- * socket auto-reconnects (1s→4s→15s backoff) — a silent sync death left the
- * shell running with no writeback and no indication.
- * ponytail: applyFsEvent is store-coupled glue, exercised live (Part E), not unit
- * tested — the correctness pivots (ignore set, echo hash) are tested elsewhere.
+ * Live writeback (P4): streams the in-sandbox fs-agent's events, PUBLISHES them
+ * on the per-workspace bus (the sandbox:// provider's watch() rides the same
+ * socket), and maps them onto the page mount via the sync engine. On "ready"
+ * it materializes the tree. Auto-reconnects with 1s/4s/15s backoff.
  */
 export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
   useEffect(() => {
@@ -148,7 +151,9 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
         buffer = lines.pop() ?? "";
         for (const line of lines) {
           const evt = parseFsEvent(line);
-          if (evt) void applyFsEvent(evt, workspaceId);
+          if (!evt) continue;
+          publishFsEvent(workspaceId, evt);
+          void applyFsEvent(evt, workspaceId);
         }
       };
       ws.onclose = () => {
