@@ -35,7 +35,7 @@ async function enterIdeMode(page) {
 test("the dock opens with five tabs and the terminal's honest offline state", async ({ page }) => {
   test.setTimeout(90_000); // first navigation pays the cold Vite compile of the IDE chunk
   await enterIdeMode(page);
-  await page.getByRole("button", { name: /^Terminal$/ }).click(); // status-bar toggle
+  await page.locator("[data-osio-ide-shell]").getByRole("button", { name: /^Terminal$/ }).click(); // status-bar toggle
   for (const label of ["Terminal", "Problems", "Output", "Debug Console", "Ports"]) {
     await expect(page.locator(`[data-dock-tab]`, { hasText: label }).first()).toBeVisible();
   }
@@ -47,7 +47,7 @@ test("the dock opens with five tabs and the terminal's honest offline state", as
 test("Output and Ports tabs render their real empty states; Debug is honest", async ({ page }) => {
   test.setTimeout(90_000);
   await enterIdeMode(page);
-  await page.getByRole("button", { name: /^Terminal$/ }).click();
+  await page.locator("[data-osio-ide-shell]").getByRole("button", { name: /^Terminal$/ }).click();
   await page.locator('[data-dock-tab="output"]').click();
   await expect(page.getByText(/No output yet/i)).toBeVisible();
   await page.locator('[data-dock-tab="ports"]').click();
@@ -63,4 +63,47 @@ test("the explorer shows the SANDBOX root with its honest offline state", async 
   await expect(root).toBeVisible();
   await root.click();
   await expect(page.getByText(/sandbox not connected/i)).toBeVisible({ timeout: 10_000 });
+});
+
+test("Ctrl+J toggles the dock inside the IDE shell", async ({ page }) => {
+  test.setTimeout(90_000);
+  await enterIdeMode(page);
+  await page.keyboard.press("Control+KeyJ");
+  await expect(page.locator('[data-dock-tab="terminal"]')).toBeVisible();
+  await page.keyboard.press("Control+KeyJ");
+  await expect(page.locator('[data-dock-tab="terminal"]')).toHaveCount(0);
+});
+
+test("the top-bar Terminal menu enters IDE mode with the dock open", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.addInitScript(() => {
+    try { localStorage.setItem("osio.ide", "1"); } catch { /* ignore */ }
+  });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const menubar = page.getByRole("navigation", { name: "Application menu" });
+  await menubar.getByRole("button", { name: "Terminal" }).click();
+  const items = ["New Terminal", "Split Terminal", "New Terminal Window", "Run Task", "Run Build Task",
+    "Run Active File", "Run Selected Test", "Configure Tasks", "Configure Default Build Task"];
+  for (const label of items) {
+    // Accelerator hints ride the accessible name ("New Terminal ⌃`") — match
+    // by prefix and take the first (list order disambiguates New Terminal vs
+    // New Terminal Window).
+    await expect(page.getByRole("menuitem", { name: label }).first()).toBeVisible();
+  }
+  await page.getByRole("menuitem", { name: "New Terminal" }).filter({ hasNotText: "Window" }).click();
+  await expect(page.locator("[data-osio-ide-shell]")).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-dock-tab="terminal"]')).toBeVisible();
+});
+
+test("Run Build Task with nothing configured creates + opens tasks.json", async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.addInitScript(() => {
+    try { localStorage.setItem("osio.ide", "1"); } catch { /* ignore */ }
+  });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const menubar = page.getByRole("navigation", { name: "Application menu" });
+  await menubar.getByRole("button", { name: "Terminal" }).click();
+  await page.getByRole("menuitem", { name: "Run Build Task", exact: true }).click();
+  // No tasks configured → the config file is created from the template and opened.
+  await expect(page.getByText("tasks.json").first()).toBeVisible({ timeout: 20_000 });
 });

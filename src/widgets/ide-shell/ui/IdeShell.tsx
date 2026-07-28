@@ -46,11 +46,11 @@ export const IdeShell: React.FC = () => {
   // materializes the tree into the sandbox on attach. No-op without a sandbox.
   useIdeFsSync(workspaceId, inIdeMode);
 
-  // Ctrl+` toggles the terminal strip (the VS Code chord) — terminal-first use
-  // shouldn't require the status-bar button.
+  // Ctrl+` and Ctrl+J toggle the dock (both VS Code chords) — terminal-first
+  // use shouldn't require the status-bar button.
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && !e.metaKey && !e.altKey && e.key === "`") {
+      if (e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "`" || e.key.toLowerCase() === "j")) {
         e.preventDefault();
         toggleBottom();
       }

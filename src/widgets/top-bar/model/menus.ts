@@ -11,7 +11,10 @@
 /* ************************************************************************** */
 
 import { useUserStore } from "@/features/auth";
-import { isDrawEnabled, isQuickCaptureEnabled } from "@/shared/config/featureFlags";
+import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
+import { useIdeModeStore } from "@/features/ide/model/ideModeStore";
+import { openOrCreateTasksFile, runActiveFile, runDefaultTask } from "@/features/ide/model/ideTasks";
+import { isDrawEnabled, isIdeEnabled, isQuickCaptureEnabled } from "@/shared/config/featureFlags";
 import { useQuickCapture } from "@/features/quick-capture/model/useQuickCapture";
 import { applyTheme, persistThemeMode } from "@/shared/config/theme";
 import { useUIStore } from "@/shared/config/uiStore";
@@ -45,6 +48,22 @@ export interface MenuContext {
 }
 
 const DOCS_URL = "https://github.com/Univers42/osionos";
+
+/** Terminal menu entry point: flips the workspace into IDE mode with the dock
+ *  open — the VS Code muscle-memory path (Terminal → New Terminal) from the
+ *  ordinary workspace chrome. */
+function openIdeTerminal(mode: "new" | "split"): void {
+  const workspace = useUserStore.getState().activeWorkspace();
+  if (!workspace) return;
+  const modeState = useIdeModeStore.getState();
+  const dock = useIdeDockStore.getState();
+  if (mode === "split") dock.splitTerminal();
+  // "New" bumps to a FRESH session only when a terminal is already showing —
+  // the first open reattaches to the existing bridge session (the whole point).
+  else if (modeState.isIdeMode(workspace._id) && modeState.bottomOpen) dock.newTerminal();
+  modeState.setIdeMode(workspace._id, true);
+  modeState.setBottomOpen(true);
+}
 
 /**
  * Build the menubar groups. Every item dispatches to an existing store action or
@@ -124,6 +143,25 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
           : []),
       ],
     },
+    ...(isIdeEnabled()
+      ? [{
+          id: "terminal", label: "Terminal", items: [
+            { id: "term.new", label: "New Terminal", accelerator: "⌃`", run: () => openIdeTerminal("new") },
+            { id: "term.split", label: "Split Terminal", run: () => openIdeTerminal("split") },
+            {
+              id: "term.window", label: "New Terminal Window",
+              run: () => useToastStore.getState().push({ kind: "info", title: "New Terminal Window", description: "Detached windows land with the desktop shell — use Split Terminal meanwhile." }),
+              separatorAfter: true,
+            },
+            { id: "term.run-task", label: "Run Task", run: () => void runDefaultTask() },
+            { id: "term.run-build", label: "Run Build Task", run: () => void runDefaultTask("build") },
+            { id: "term.run-active", label: "Run Active File", run: () => void runActiveFile() },
+            { id: "term.run-test", label: "Run Selected Test", run: () => void runDefaultTask("test"), separatorAfter: true },
+            { id: "term.configure", label: "Configure Tasks", run: () => void openOrCreateTasksFile() },
+            { id: "term.configure-build", label: "Configure Default Build Task", run: () => void openOrCreateTasksFile() },
+          ],
+        }]
+      : []),
     {
       id: "help", label: "Help", items: [
         { id: "help.docs", label: "Documentation", run: () => { globalThis.open(DOCS_URL, "_blank", "noopener"); } },
