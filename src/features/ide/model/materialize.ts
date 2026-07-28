@@ -26,12 +26,17 @@ const MAX_MATERIALIZE_FILES = 500;
  * ponytail: capped at 500 files; parallelize with a small pool only if open-time
  * materialize proves slow on large workspaces.
  */
-export async function materializeWorkspace(workspaceId: string, pages: PageEntry[]): Promise<number> {
-  if (!workspaceId) return 0;
+export async function materializeWorkspace(
+  workspaceId: string,
+  pages: PageEntry[],
+): Promise<{ written: number; failed: number }> {
+  if (!workspaceId) return { written: 0, failed: 0 };
   const files = collectTreeFiles(buildIdeFileTree(pages)).slice(0, MAX_MATERIALIZE_FILES);
   let written = 0;
+  let failed = 0;
   for (const file of files) {
     if (await ideFsWrite(workspaceId, file.path, file.content)) written += 1;
+    else failed += 1;
   }
-  return written;
+  return { written, failed };
 }

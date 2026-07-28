@@ -45,6 +45,13 @@ test("ops double-gate: env unset → 404 (route hidden)", async () => {
   assert.equal(res.statusCode, 404);
 });
 
+test("ops double-gate beats method check: env unset + GET → 404, never a route-disclosing 405", async () => {
+  const handler = createIdeOpsHandler({ config: CONFIG, verifySession: () => { throw new Error("nope"); }, env: {} });
+  const res = fakeRes();
+  assert.equal(await handler(new URL("http://x/api/ide/git"), { method: "GET", headers: {} }, res, CONFIG), true);
+  assert.equal(res.statusCode, 404);
+});
+
 test("ops rejects non-POST + disowns foreign paths", async () => {
   const handler = createIdeOpsHandler({ config: CONFIG, verifySession: () => ({ userId: "u", workspaceIds: [] }), env: { OSIONOS_IDE_SANDBOX: "1", OSIONOS_IDE_DOCKER_HOST: "p:2375" } });
   const res = fakeRes();

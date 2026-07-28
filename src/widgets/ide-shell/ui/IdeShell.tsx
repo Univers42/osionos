@@ -46,6 +46,19 @@ export const IdeShell: React.FC = () => {
   // materializes the tree into the sandbox on attach. No-op without a sandbox.
   useIdeFsSync(workspaceId, inIdeMode);
 
+  // Ctrl+` toggles the terminal strip (the VS Code chord) — terminal-first use
+  // shouldn't require the status-bar button.
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && !e.metaKey && !e.altKey && e.key === "`") {
+        e.preventDefault();
+        toggleBottom();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleBottom]);
+
   const fileCount = React.useMemo(
     () => flattenIdeTree(buildIdeFileTree(pages)).filter((node) => !node.isFolder).length,
     [pages],

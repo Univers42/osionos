@@ -57,10 +57,10 @@ export function parseRipgrepJson(output) {
 /** Auth + identity + a running sandbox, or throw a {status} error. Rate-limit is
  *  charged BEFORE the shared-daemon inspect, so a flood is rejected locally with
  *  429 and never load-amplifies onto the docker daemon (review finding). */
-async function resolveSandbox(request, payload, env, config, verifySession) {
+async function resolveSandbox(request, payload, env, config, verifySession, bucket = { id: 'ide-ops', capacity: 60, refillPerSec: 1 }) {
   const session = verifySession(bearerToken(request), config);
   const identity = requireSandboxIdentity(session, payload?.workspaceId);
-  takeToken(`ide-ops:${identity.userId}`, { capacity: 60, refillPerSec: 1 });
+  takeToken(`${bucket.id}:${identity.userId}`, { capacity: bucket.capacity, refillPerSec: bucket.refillPerSec });
   const names = { ...identity, ...deriveNames(identity.userId, identity.workspaceId) };
   const docker = createDockerClient(env);
   const info = await docker.inspect(names.containerName);
@@ -73,15 +73,22 @@ export function createIdeOpsHandler({ config, verifySession, env = process.env }
 
   return async function handleIdeOpsRoute(url, request, response, requestConfig = config) {
     if (!routes.has(url.pathname)) return false;
-    if ((request.method || 'GET').toUpperCase() !== 'POST') { reply(response, 405, { ok: false }, requestConfig); return true; }
+    // Gate BEFORE method: a disabled IDE answers 404 to every verb — a 405 first
+    // would disclose the route's existence with the feature off.
     if (env.OSIONOS_IDE_SANDBOX !== '1' || !env.OSIONOS_IDE_DOCKER_HOST) { reply(response, 404, { ok: false, message: 'IDE sandbox is not enabled.' }, requestConfig); return true; }
+    if ((request.method || 'GET').toUpperCase() !== 'POST') { reply(response, 405, { ok: false }, requestConfig); return true; }
 
     let payload;
     try { payload = await readJsonBody(request, BODY_LIMIT); }
     catch (error) { reply(response, error?.status ?? 400, { ok: false, message: 'Invalid body.' }, requestConfig); return true; }
 
+    // Editor writes (materialize floods) get a wider bucket than git/search —
+    // a 500-file workspace must materialize in seconds, not 429 after 60.
+    const bucket = url.pathname === '/api/ide/fs'
+      ? { id: 'ide-fs', capacity: 120, refillPerSec: 20 }
+      : { id: 'ide-ops', capacity: 60, refillPerSec: 1 };
     let ctx;
-    try { ctx = await resolveSandbox(request, payload, env, requestConfig, verifySession); }
+    try { ctx = await resolveSandbox(request, payload, env, requestConfig, verifySession, bucket); }
     catch (error) { reply(response, error?.status ?? 401, { ok: false, message: error?.message ?? 'Unauthorized.' }, requestConfig); return true; }
 
     try {

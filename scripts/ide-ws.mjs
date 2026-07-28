@@ -29,8 +29,10 @@ export function acceptKey(secWebSocketKey) {
   return crypto.createHash("sha1").update(secWebSocketKey + GUID).digest("base64");
 }
 
-/** Complete the HTTP upgrade on a raw socket. Returns true if it was a WS upgrade. */
-export function handshake(request, socket) {
+/** Complete the HTTP upgrade on a raw socket. Returns true if it was a WS upgrade.
+ *  When the client offered a subprotocol we selected (auth rides one), it MUST be
+ *  echoed or the browser aborts the connection. */
+export function handshake(request, socket, { protocol } = {}) {
   const key = request.headers["sec-websocket-key"];
   if (!key || (request.headers.upgrade || "").toLowerCase() !== "websocket") {
     socket.destroy();
@@ -39,9 +41,20 @@ export function handshake(request, socket) {
   socket.write(
     "HTTP/1.1 101 Switching Protocols\r\n" +
       "Upgrade: websocket\r\nConnection: Upgrade\r\n" +
+      (protocol ? `Sec-WebSocket-Protocol: ${protocol}\r\n` : "") +
       `Sec-WebSocket-Accept: ${acceptKey(key)}\r\n\r\n`,
   );
   return true;
+}
+
+/** RFC6455 close frame with a status code + UTF-8 reason — the failure taxonomy
+ *  the frontend renders verbatim (4001 auth, 4004 no-sandbox, 4008 bad lang, …). */
+export function closeFrame(code, reason = "") {
+  const text = Buffer.from(String(reason));
+  const payload = Buffer.alloc(2 + text.length);
+  payload.writeUInt16BE(code, 0);
+  text.copy(payload, 2);
+  return encodeFrame(payload, 8);
 }
 
 /** Encode one server→client frame (unmasked). opcode 1=text, 2=binary, 8=close. */

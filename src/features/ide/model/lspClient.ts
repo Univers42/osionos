@@ -15,6 +15,7 @@ import { LSPClient, languageServerSupport, type Transport } from "@codemirror/ls
 
 import { API_BASE, getActivePageJwt } from "@/shared/api/client";
 import { frameLsp, createLspFramer } from "./lspFraming";
+import { ideWsProtocols } from "./useIdeTerminal";
 import { useDiagnosticsStore, type IdeDiagnostic } from "./diagnosticsStore";
 
 // CodeMirror languageId → sandbox LSP server key (bridge LSP_SERVERS). Only these
@@ -64,8 +65,8 @@ function mapDiagnostic(uri: string, d: RawDiagnostic): IdeDiagnostic {
 function connect(serverLang: string, workspaceId: string): { transport: Transport; ws: WebSocket } {
   const jwt = getActivePageJwt() ?? "";
   const wsBase = (API_BASE || "").replace(/^http/, "ws"); // http→ws, https→wss
-  const url = `${wsBase}/api/ide/lsp?token=${encodeURIComponent(jwt)}&workspaceId=${encodeURIComponent(workspaceId)}&lang=${serverLang}`;
-  const ws = new WebSocket(url);
+  const url = `${wsBase}/api/ide/lsp?workspaceId=${encodeURIComponent(workspaceId)}&lang=${serverLang}`;
+  const ws = new WebSocket(url, ideWsProtocols(jwt));
   ws.binaryType = "arraybuffer";
   const subs = new Set<(m: string) => void>();
   const framer = createLspFramer();

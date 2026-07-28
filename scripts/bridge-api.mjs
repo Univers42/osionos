@@ -3353,7 +3353,12 @@ export function createBridgeServer(options = {}) {
 	});
 	// The IDE PTY (P3) / LSP (P5) WS relays own their own upgrade paths; every
 	// other upgrade is refused (the bridge does no other WS — realtime is Kong).
-	const ideExecUpgrade = createIdeExecUpgradeHandler({ config, verifySession: verifyAppSessionToken, env: process.env });
+	const ideExecUpgrade = createIdeExecUpgradeHandler({
+		config, verifySession: verifyAppSessionToken, env: process.env,
+		// Same origin allowlist as the REST CORS layer: an origin is allowed iff
+		// requestOriginConfig echoes it back as the allowedOrigin.
+		allowOrigin: (origin) => requestOriginConfig(config, { headers: { origin } }).allowedOrigin === origin,
+	});
 	server.on('upgrade', (request, socket) => {
 		try { if (!ideExecUpgrade(request, socket)) socket.destroy(); }
 		catch { socket.destroy(); }
