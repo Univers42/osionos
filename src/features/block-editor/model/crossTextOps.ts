@@ -16,7 +16,7 @@ import {
   serializeInlineNodes,
   splitNodesAtOffset,
   type InlineNode,
-} from "@/shared/lib/markengine";
+} from "@osionos/markdown-engine";
 
 export interface CrossTextPoint {
   blockId: string;

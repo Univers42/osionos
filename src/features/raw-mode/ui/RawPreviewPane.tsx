@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useMemo, useRef } from "react";
-import { parseMarkdownToBlocks } from "@/shared/lib/markengine/blocks";
+import { parseMarkdownToBlocks } from "@osionos/markdown-engine/blocks";
 import { ReadOnlyBlock } from "@/entities/block/ui";
 import type { Block } from "@/entities/block";
 import { reconcileBlocks } from "../model/reconcileBlocks";

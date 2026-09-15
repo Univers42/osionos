@@ -23,7 +23,7 @@
 import type {
   MarkEngineBlock,
   MarkEngineBlockType,
-} from '@/shared/lib/markengine/blockContract';
+} from '@osionos/markdown-engine/blocks';
 import type { Block, BlockType } from './types';
 
 /** `never` (a compile error below) if the engine emits a type the app lacks. */

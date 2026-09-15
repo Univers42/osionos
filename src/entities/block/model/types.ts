@@ -66,7 +66,7 @@ import type {
   TableBlockLayoutMode,
   TableBlockPadding,
   TableBlockTextAlign,
-} from '@/shared/lib/markengine/tableConfig';
+} from '@osionos/markdown-engine/tables';
 
 export type {
   TableBlockConfig,

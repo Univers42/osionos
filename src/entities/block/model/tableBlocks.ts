@@ -15,7 +15,7 @@ import {
   getDefaultTableConfig,
   getTableColumnCount,
   normalizeTableData,
-} from "@/shared/lib/markengine/tableConfig";
+} from "@osionos/markdown-engine/tables";
 
 /**
  * Table normalization lives in markengine — parsing a markdown table is where
@@ -32,7 +32,7 @@ export {
   getTableColumnCount,
   normalizeTableData,
   resolveTableConfig,
-} from "@/shared/lib/markengine/tableConfig";
+} from "@osionos/markdown-engine/tables";
 
 export function createDefaultTableBlock(overrides: Partial<Block> = {}): Block {
   return {

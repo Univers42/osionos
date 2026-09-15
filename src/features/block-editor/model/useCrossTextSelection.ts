@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import type { Block } from "@/entities/block/model/types";
-import { getInlineEditorOffsetsForRange } from "@/shared/lib/markengine/dom";
+import { getInlineEditorOffsetsForRange } from "@osionos/markdown-engine/dom";
 
 import { useBlockSelection } from "./blockSelectionStore";
 import { focusEditableBlock } from "./blockDomFocus";

@@ -17,6 +17,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { defineConfig, loadEnv } from 'vite';
 
+// Single source of truth for where the markdown engine lives on disk. Relocating
+// it (e.g. into packages/ as a submodule) is a one-line change here plus the
+// mirrored paths in tsconfig.json — no source file imports the physical path.
+const MARKDOWN_ENGINE_ROOT = 'src/shared/lib/markengine';
+
 // Dependency-free bundle analyzer: with ANALYZE=1, emit a per-chunk module-size
 // breakdown to build/stats-chunks.json so we can see what inflates the warm
 // entry chunk. Inert (and excluded from the served bundle) without the flag.
@@ -98,6 +103,43 @@ export default defineConfig(({ mode }) => {
         {
           find: /^@osionos\/draw-engine\//,
           replacement: `${path.resolve(root, 'packages/draw-engine/src')}/`,
+        },
+        // markdown-engine subpaths. These MUST stay above the '@' catch-all
+        // below: that entry is a bare STRING, which Vite prefix-matches, so it
+        // would rewrite '@osionos/markdown-engine' to '<root>/srcosionos/...'.
+        // tsc resolves by longest-pattern-wins and would stay green while the
+        // bundle broke — keep this order, and mirror it in tsconfig.json.
+        {
+          find: /^@osionos\/markdown-engine$/,
+          replacement: path.resolve(root, MARKDOWN_ENGINE_ROOT, 'index.ts'),
+        },
+        {
+          find: /^@osionos\/markdown-engine\/blocks$/,
+          replacement: path.resolve(root, MARKDOWN_ENGINE_ROOT, 'blocks.ts'),
+        },
+        {
+          find: /^@osionos\/markdown-engine\/inline$/,
+          replacement: path.resolve(root, MARKDOWN_ENGINE_ROOT, 'inline.ts'),
+        },
+        {
+          find: /^@osionos\/markdown-engine\/dom$/,
+          replacement: path.resolve(root, MARKDOWN_ENGINE_ROOT, 'dom.ts'),
+        },
+        {
+          find: /^@osionos\/markdown-engine\/react$/,
+          replacement: path.resolve(root, MARKDOWN_ENGINE_ROOT, 'react.tsx'),
+        },
+        {
+          find: /^@osionos\/markdown-engine\/tables$/,
+          replacement: path.resolve(root, MARKDOWN_ENGINE_ROOT, 'tableConfig.ts'),
+        },
+        {
+          find: /^@osionos\/markdown-engine\/terminal$/,
+          replacement: path.resolve(root, MARKDOWN_ENGINE_ROOT, 'terminal.ts'),
+        },
+        {
+          find: /^@osionos\/markdown-engine\//,
+          replacement: `${path.resolve(root, MARKDOWN_ENGINE_ROOT)}/`,
         },
         {
           find: '@',

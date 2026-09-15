@@ -13,7 +13,7 @@
 import React, { useState } from 'react';
 import { Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react';
 
-import { renderInlineToReact } from '@/shared/lib/markengine/react';
+import { renderInlineToReact } from '@osionos/markdown-engine/react';
 import type { ChatMessage } from '@/shared/chat/messageApi';
 
 import { MessageAttachments } from './attachments/MessageAttachments';

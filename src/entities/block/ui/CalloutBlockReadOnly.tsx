@@ -15,7 +15,7 @@ import type { Block } from "@/entities/block";
 import { calloutDisplayIcon, calloutSurface, resolveCalloutType } from "@/entities/block";
 import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { IconValueView } from "@/shared/ui";
-import { parseInlineMarkdown } from "@/shared/lib/markengine";
+import { parseInlineMarkdown } from "@osionos/markdown-engine";
 import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
 import { ReadOnlyBlock } from "./ReadOnlyBlock";
 

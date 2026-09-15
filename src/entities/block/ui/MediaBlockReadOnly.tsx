@@ -26,7 +26,7 @@ import React from "react";
 
 import type { Block } from "@/entities/block";
 import { MediaBlockPreview } from "./MediaBlockPreview";
-import { parseInlineMarkdown } from "@/shared/lib/markengine";
+import { parseInlineMarkdown } from "@osionos/markdown-engine";
 import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
 
 interface MediaBlockReadOnlyProps {
