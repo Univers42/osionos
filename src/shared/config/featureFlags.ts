@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { createFeatureFlags } from "@osionos/feature-flags";
+
 export type FeatureFlagName =
   | "osio.canvas.v2"
   | "osio.profile.template"
@@ -29,14 +31,15 @@ export type FeatureFlagName =
   | "osio.draw"
   | "osio.ide";
 
+/**
+ * Resolution (URL -> localStorage -> env -> fallback) lives in @osionos/feature-flags.
+ * This module keeps only what is osionos-specific: the flag union above and the named
+ * accessors below, which carry each flag's default and the reason for it.
+ */
+const flags = createFeatureFlags<FeatureFlagName>();
+
 export function isFeatureFlagEnabled(name: FeatureFlagName, fallback = false): boolean {
-  const urlValue = readUrlFlag(name);
-  if (urlValue !== null) return flagValueToBoolean(urlValue, fallback);
-  const storedValue = readStoredFlag(name);
-  if (storedValue !== null) return flagValueToBoolean(storedValue, fallback);
-  const envValue = import.meta.env[envKeyForFlag(name)];
-  if (typeof envValue === "string") return flagValueToBoolean(envValue, fallback);
-  return fallback;
+  return flags.isEnabled(name, fallback);
 }
 
 /** Canvas V2 (free-frame builder) is the default canvas. The legacy V1 grid
@@ -173,30 +176,4 @@ export function isDrawEnabled(): boolean {
  *  must both be set, so the flag alone can never open an execution path. */
 export function isIdeEnabled(): boolean {
   return isFeatureFlagEnabled("osio.ide", false);
-}
-
-function readUrlFlag(name: FeatureFlagName): string | null {
-  if (globalThis.window === undefined) return null;
-  const searchParams = new URLSearchParams(globalThis.window.location.search);
-  const hashParams = new URLSearchParams(globalThis.window.location.hash.replace(/^#/, ""));
-  return searchParams.get(name) ?? hashParams.get(name) ?? searchParams.get(envKeyForFlag(name)) ?? hashParams.get(envKeyForFlag(name));
-}
-
-function readStoredFlag(name: FeatureFlagName): string | null {
-  if (globalThis.window === undefined) return null;
-  try {
-    return globalThis.window.localStorage.getItem(name) ?? globalThis.window.localStorage.getItem(envKeyForFlag(name));
-  } catch {
-    return null;
-  }
-}
-
-function envKeyForFlag(name: FeatureFlagName): string {
-  return `VITE_${name.toUpperCase().replaceAll(".", "_")}`;
-}
-
-function flagValueToBoolean(value: string, fallback: boolean): boolean {
-  if (["1", "true", "on", "yes"].includes(value.toLowerCase())) return true;
-  if (["0", "false", "off", "no"].includes(value.toLowerCase())) return false;
-  return fallback;
 }

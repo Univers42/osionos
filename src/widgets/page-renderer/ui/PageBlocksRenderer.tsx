@@ -21,7 +21,7 @@ import {
   ROOT_BLOCK_VIRTUALIZATION_THRESHOLD,
 } from "@/entities/block/model/blockVirtualization";
 import { usePageStore } from "@/store/usePageStore";
-import { mark, measure } from "@/shared/lib/perf/measure";
+import { mark, measure } from "@osionos/perf-probe";
 
 const INTERNAL_PAGE_LINK_PREFIX = "page://";
 

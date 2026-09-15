@@ -35,7 +35,7 @@ import {
   canReadPage,
   usePageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
-import { isPerfEnabled } from "@/shared/lib/perf/measure";
+import { isPerfEnabled } from "@osionos/perf-probe";
 import { useUserStore } from "@/features/auth";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { chatTab } from "@/widgets/workspace-grid/model/layoutPersist";

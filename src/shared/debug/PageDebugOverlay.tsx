@@ -23,7 +23,7 @@ import {
   getReactCommitDurations,
   startEventTimingCapture,
   usedJSHeapSize,
-} from "@/shared/lib/perf/measure";
+} from "@osionos/perf-probe";
 
 const CHIP: React.CSSProperties = {
   position: "fixed",

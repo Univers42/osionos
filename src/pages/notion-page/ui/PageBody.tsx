@@ -12,7 +12,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { PlaygroundPageEditor } from '@/features/block-editor';
-import { isPerfEnabled } from '@/shared/lib/perf/measure';
+import { isPerfEnabled } from '@osionos/perf-probe';
 import { usePageConfigStore } from '@/shared/config/pageConfigStore';
 import { useUserStore } from '@/features/auth';
 import { RawModeView } from '@/features/raw-mode';

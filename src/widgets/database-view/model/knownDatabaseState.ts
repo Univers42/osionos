@@ -23,7 +23,7 @@ import type {
 
 import seedState from "@/shared/notion-database-sys/src/store/dbms/mongodb/_notion_state.json";
 import { defaultStatusSchema } from "@/shared/notion-database-sys/src/store/slices/statusDefaults";
-import { timed } from "@/shared/lib/perf/measure";
+import { timed } from "@osionos/perf-probe";
 import { applyWikiSeed } from "./wikiSeed";
 import { applyHomeDemoSeed } from "./homeDemoSeed";
 import { applyGradesSeed } from "./gradesSeed";

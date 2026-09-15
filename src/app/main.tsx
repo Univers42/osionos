@@ -19,7 +19,7 @@ import App from "./App.tsx";
 // BEFORE the app + its auth so an unauthenticated visitor never boots the editor.
 const LazyPublicPageView = lazy(() => import("@/pages/public/PublicPageView").then((m) => ({ default: m.PublicPageView })));
 const isPublicRoute = globalThis.location?.pathname.startsWith("/p/") ?? false;
-import { recordReactCommit } from '@/shared/lib/perf/measure';
+import { recordReactCommit } from '@osionos/perf-probe';
 // Database (object-database) theme + leaflet styles ship with the lazy
 // DatabaseBlock chunk (perf: off the render-blocking entry CSS), not here.
 import './styles/_graphical-chart.scss';
