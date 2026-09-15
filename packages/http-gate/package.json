@@ -1,0 +1,29 @@
+{
+  "name": "@osionos/http-gate",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "JSON-over-HTTP client with request hygiene — bounded concurrency and in-flight GET de-duplication — plus a Server-Sent Events reader. Resolves nothing from ambient state: the host supplies the base URL and per-call tokens. Zero runtime dependencies.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./react": "./src/react.ts"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0"
+  }
+}

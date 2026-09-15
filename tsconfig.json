@@ -45,6 +45,8 @@
       "@osionos/outbox-ledger": ["./packages/outbox-ledger/src/index.ts"],
       "@osionos/perf-probe": ["./packages/perf-probe/src/index.ts"],
       "@osionos/feature-flags": ["./packages/feature-flags/src/index.ts"],
+      "@osionos/http-gate": ["./packages/http-gate/src/index.ts"],
+      "@osionos/http-gate/react": ["./packages/http-gate/src/react.ts"],
       "@/*": ["./src/*"]
     }
   },

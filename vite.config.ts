@@ -154,6 +154,14 @@ export default defineConfig(({ mode }) => {
           replacement: path.resolve(root, 'packages/feature-flags/src/index.ts'),
         },
         {
+          find: /^@osionos\/http-gate$/,
+          replacement: path.resolve(root, 'packages/http-gate/src/index.ts'),
+        },
+        {
+          find: /^@osionos\/http-gate\/react$/,
+          replacement: path.resolve(root, 'packages/http-gate/src/react.ts'),
+        },
+        {
           find: '@',
           replacement: path.resolve(root, 'src'),
         },

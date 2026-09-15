@@ -43,6 +43,8 @@ const EXTRA_ALIASES = {
   "@osionos/outbox-ledger": new URL("../../packages/outbox-ledger/src/index.ts", import.meta.url).href,
   "@osionos/perf-probe": new URL("../../packages/perf-probe/src/index.ts", import.meta.url).href,
   "@osionos/feature-flags": new URL("../../packages/feature-flags/src/index.ts", import.meta.url).href,
+  "@osionos/http-gate": new URL("../../packages/http-gate/src/index.ts", import.meta.url).href,
+  "@osionos/http-gate/react": new URL("../../packages/http-gate/src/react.ts", import.meta.url).href,
 };
 
 export async function resolve(specifier, context, nextResolve) {
