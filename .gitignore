@@ -192,3 +192,7 @@ prompts
 test-results/
 .vercel
 .env*
+
+# Crash dumps (a vite build OOM here drops a multi-GB core in the repo root)
+core
+core.*
