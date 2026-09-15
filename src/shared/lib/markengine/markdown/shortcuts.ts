@@ -12,7 +12,7 @@
 
 // Markdown shortcuts — inline parsing and block conversion
 import type { BlockType, Block } from "@/entities/block";
-import { createTableBlockFromData } from "../../../../entities/block/model/tableBlocks";
+import { createTableBlockFromData } from "../tableConfig";
 import type { BlockNode, InlineNode } from "./ast";
 import {
   renderInlineNodesToHtml,
