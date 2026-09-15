@@ -20,7 +20,7 @@ import { useUserStore } from '@/features/auth';
 import { useWorkspaceOnboarding } from '@/features/workspace-onboarding/model/useWorkspaceOnboarding';
 import {
   COLLECTION_ROLE_BADGES,
-} from '@/shared/lib/markengine/uiCollectionAssets';
+} from '@/shared/ui/assets/uiCollectionAssets';
 import { LazySettingsCenter } from '@/features/settings/LazySettingsCenter';
 
 interface Props {

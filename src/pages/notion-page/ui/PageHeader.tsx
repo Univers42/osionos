@@ -15,7 +15,7 @@ import { LayoutDashboard, MessageSquare } from "lucide-react";
 import { AssetRenderer } from "@univers42/ui-collection";
 
 import { usePageStore } from "@/store/usePageStore";
-import { IconImage, getCollectionEmojiValue } from "@/shared/lib/markengine/uiCollectionAssets";
+import { IconImage, getCollectionEmojiValue } from "@/shared/ui/assets/uiCollectionAssets";
 import { useRealtimeMessagesStore, type RealtimeMessage } from "@/services/realtime-messages";
 import {
   CoverAssetPicker,

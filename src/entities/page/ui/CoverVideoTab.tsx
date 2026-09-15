@@ -13,7 +13,7 @@
 import React, { useEffect, useState } from "react";
 import { Film, Link } from "lucide-react";
 
-import type { CoverPickerAsset } from "@/shared/lib/markengine/uiCollectionAssets";
+import type { CoverPickerAsset } from "@/shared/ui/assets/uiCollectionAssets";
 import { loadCoverGallery } from "@/shared/lib/media/coverGallery";
 import { CoverTile, normalizeExternalUrl } from "./coverPickerTiles";
 

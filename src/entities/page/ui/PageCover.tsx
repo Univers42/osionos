@@ -17,7 +17,7 @@ import {
   IconImage,
   normalizeMediaSource,
   resolveCollectionMediaAsset,
-} from '@/shared/lib/markengine/uiCollectionAssets';
+} from '@/shared/ui/assets/uiCollectionAssets';
 import { CoverAssetPicker } from './CoverAssetPicker';
 import { CoverMediaElement } from './CoverMediaElement';
 import { DEFAULT_COVER_POSITION } from './coverPositionMath';

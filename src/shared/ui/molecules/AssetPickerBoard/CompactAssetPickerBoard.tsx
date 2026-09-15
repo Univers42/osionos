@@ -21,7 +21,7 @@ import {
 import {
   PAGE_ICON_PICKER_BOARD_PROPS,
   PAGE_ICON_PICKER_TABS,
-} from '@/shared/lib/markengine/uiCollectionAssets';
+} from '@/shared/ui/assets/uiCollectionAssets';
 
 interface CompactAssetPickerBoardProps {
   value?: string;

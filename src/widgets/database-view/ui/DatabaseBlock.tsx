@@ -25,7 +25,7 @@ import {
   COVER_PICKER_TABS,
   normalizeMediaSource,
   resolveCollectionMediaAsset,
-} from '@/shared/lib/markengine/uiCollectionAssets';
+} from '@/shared/ui/assets/uiCollectionAssets';
 import { useUserStore } from '@/features/auth';
 import {
   DEFAULT_OBJECT_DATABASE_ID,

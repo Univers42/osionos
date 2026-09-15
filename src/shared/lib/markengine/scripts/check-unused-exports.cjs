@@ -20,7 +20,6 @@ const allowedPublicFacadeFiles = new Set([
   "markdown/parserBlockHelpers.ts",
   "markdown/parserBlockNested.ts",
   "markdown/renderers/terminalHelpers.ts",
-  "uiCollectionAssets.ts",
   "vite.config.ts",
 ]);
 

@@ -14,7 +14,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { Image, Link, Upload } from "lucide-react";
 
 import { useUserStore } from "@/features/auth";
-import type { CoverPickerAsset } from "@/shared/lib/markengine/uiCollectionAssets";
+import type { CoverPickerAsset } from "@/shared/ui/assets/uiCollectionAssets";
 import { useAssetLibraryStore, type AccountAsset } from "@/shared/config/assetLibraryStore";
 import { CoverGalleryTab } from "./CoverGalleryTab";
 import { CoverLibraryTab } from "./CoverLibraryTab";
