@@ -41,14 +41,17 @@ export interface TableBlockConfig {
 
 /**
  * The table fields a parsed markdown table contributes to a host block.
- * Structurally assignable to the host's `Pick<Block, "content"|"tableData"|"tableConfig">`,
- * which is why the host needs no cast.
+ *
+ * Carries an index signature so it stays assignable to a host `Partial<Block>`
+ * whose block model is open-ended — an interface without one is rejected by
+ * TypeScript even when every named field matches.
  */
-export interface TableBlockSeed {
+export type TableBlockSeed = {
   content: string;
   tableData: string[][];
   tableConfig: TableBlockConfig;
-}
+  [key: string]: unknown;
+};
 
 export const DEFAULT_TABLE_DATA: string[][] = [
   ["", "", ""],

@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 // Markdown shortcuts — block detection and shortcut map
-import type { Block, BlockType } from '@/entities/block';
+import type { MarkEngineBlock as Block, MarkEngineBlockType as BlockType } from './blockContract';
 
 export interface BlockDetection {
   type: BlockType;
