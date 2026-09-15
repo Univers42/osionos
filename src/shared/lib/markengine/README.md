@@ -56,7 +56,8 @@ The inline editor pipeline is intentionally split into small modules:
 - [inlineAst.ts](inlineAst.ts) owns AST splitting, normalization, serialization, and structural equality helpers.
 - [inlineEditorDom.ts](inlineEditorDom.ts) converts `contentEditable` DOM back into canonical inline source.
 - [inlineEditorDomFormatting.ts](inlineEditorDomFormatting.ts) isolates DOM formatting detection and canonical-element checks.
-- [inlineTextStyles.ts](inlineTextStyles.ts) centralizes inline color normalization and UI-facing color presets.
+- [inlineColorTokens.ts](inlineColorTokens.ts) centralizes inline color normalization. UI-facing color
+  presets live in the host app (they depend on the host's component kit), not in this engine.
 - [markdown/renderers/inlineStyleHelpers.ts](markdown/renderers/inlineStyleHelpers.ts) shares inline style semantics across HTML, inline HTML, and React renderers.
 
 This split keeps the editor responsibilities separate:
