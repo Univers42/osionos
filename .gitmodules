@@ -5,3 +5,7 @@
 [submodule "src/shared/notion-database-sys"]
 	path = src/shared/notion-database-sys
 	url = git@github.com:Univers42/notion-database-sys.git
+[submodule "packages/markdown-engine"]
+	path = packages/markdown-engine
+	url = git@github.com:Univers42/markdown-engine.git
+	branch = main
