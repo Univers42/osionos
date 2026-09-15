@@ -43,6 +43,8 @@
       "@osionos/markdown-engine/terminal": ["./packages/markdown-engine/terminal.ts"],
       "@osionos/markdown-engine/*": ["./packages/markdown-engine/*"],
       "@osionos/outbox-ledger": ["./packages/outbox-ledger/src/index.ts"],
+      "@osionos/perf-probe": ["./packages/perf-probe/src/index.ts"],
+      "@osionos/feature-flags": ["./packages/feature-flags/src/index.ts"],
       "@/*": ["./src/*"]
     }
   },
@@ -52,6 +54,13 @@
     "src/shared/notion-database-sys/playground",
     "src/shared/notion-database-sys/examples",
     "src/shared/notion-database-sys/vendor",
-    "src/shared/notion-database-sys/src/vite.config.ts"
+    "src/shared/notion-database-sys/src/vite.config.ts",
+    "packages/*/tests",
+    "packages/*/bench",
+    "packages/*/scripts",
+    "packages/*/playground",
+    "packages/*/dist",
+    "packages/*/coverage",
+    "packages/*/node_modules"
   ]
 }

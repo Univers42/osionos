@@ -64,7 +64,7 @@ import {
   canReadPage,
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
-import { timed } from "@/shared/lib/perf/measure";
+import { timed } from "@osionos/perf-probe";
 
 // Re-export types so existing imports from this module still work
 export type { PageEntry, ActivePageKind, ActivePage } from "@/entities/page";

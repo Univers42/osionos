@@ -16,7 +16,7 @@ import type { ActivePage } from "@/entities/page";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { pageConfigKey, resolvePageConfig, usePageConfigStore } from "@/shared/config/pageConfigStore";
-import { isPerfEnabled } from "@/shared/lib/perf/measure";
+import { isPerfEnabled } from "@osionos/perf-probe";
 import { initRealtimeMessagesBridge } from "@/services/realtime-messages";
 import { PageHeaderBar } from "@/entities/page";
 import { PageBody } from "./PageBody";

@@ -15,7 +15,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useUserStore, WorkspaceSwitcher } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { useUIStore } from "@/shared/config/uiStore";
-import { isPerfEnabled, recordRender } from "@/shared/lib/perf/measure";
+import { isPerfEnabled, recordRender } from "@osionos/perf-probe";
 import { ChannelList } from "@/widgets/channel-list";
 import { DmList } from "@/widgets/dm-list";
 import { SidebarTopNav } from "./SidebarTopNav";

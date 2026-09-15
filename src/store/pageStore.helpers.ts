@@ -13,7 +13,7 @@
 import type { Block, BlockType } from "@/entities/block";
 import type { SeedPage } from "../data/seedPages";
 import type { ActivePage, PageEntry, PageIndexEntry } from "@/entities/page";
-import { timed } from "@/shared/lib/perf/measure";
+import { timed } from "@osionos/perf-probe";
 
 const RECENTS_KEY = "pg:recents";
 const ACTIVE_PAGE_KEY = "pg:activePage";

@@ -28,7 +28,7 @@ import {
   resetPerfMetrics,
   startEventTimingCapture,
   usedJSHeapSize,
-} from "./measure";
+} from "@osionos/perf-probe";
 
 const PERF_PAGE_ID_PREFIX = "perf-page-";
 const PERF_BLOCK_ID_PREFIX = "perf-block-";

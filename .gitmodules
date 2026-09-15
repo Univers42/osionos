@@ -13,3 +13,11 @@
 	path = packages/outbox-ledger
 	url = git@github.com:Univers42/outbox-ledger.git
 	branch = main
+[submodule "packages/perf-probe"]
+	path = packages/perf-probe
+	url = git@github.com:Univers42/perf-probe.git
+	branch = main
+[submodule "packages/feature-flags"]
+	path = packages/feature-flags
+	url = git@github.com:Univers42/feature-flags.git
+	branch = main

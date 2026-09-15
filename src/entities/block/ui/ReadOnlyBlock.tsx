@@ -38,7 +38,7 @@ import { LayoutBlockReadOnly } from "./LayoutBlockReadOnly";
 import { BoundFieldReadOnly } from "./BoundFieldReadOnly";
 import { DeferredMount } from "./DeferredMount";
 import { renderInlineToReact } from '@osionos/markdown-engine/react';
-import { timed } from '@/shared/lib/perf/measure';
+import { timed } from '@osionos/perf-probe';
 import { InternalPageLink } from "@/entities/page";
 import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
 import { usePageStore } from "@/store/usePageStore";

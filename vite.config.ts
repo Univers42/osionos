@@ -146,6 +146,14 @@ export default defineConfig(({ mode }) => {
           replacement: path.resolve(root, 'packages/outbox-ledger/src/index.ts'),
         },
         {
+          find: /^@osionos\/perf-probe$/,
+          replacement: path.resolve(root, 'packages/perf-probe/src/index.ts'),
+        },
+        {
+          find: /^@osionos\/feature-flags$/,
+          replacement: path.resolve(root, 'packages/feature-flags/src/index.ts'),
+        },
+        {
           find: '@',
           replacement: path.resolve(root, 'src'),
         },
