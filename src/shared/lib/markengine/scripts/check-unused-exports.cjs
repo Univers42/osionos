@@ -14,7 +14,6 @@ const { execFileSync } = require("node:child_process");
 
 const allowedPublicFacadeFiles = new Set([
   "index.ts",
-  "inlineTextStyles.ts",
   "markdown.ts",
   "markdown/index.ts",
   "markdown/parserBlockHelpers.ts",

@@ -63,7 +63,7 @@ import {
   getInlineColorOption,
   normalizeInlineColorToken,
   type InlineColorOption,
-} from "@/shared/lib/markengine/inlineTextStyles";
+} from "@/shared/ui/assets/inlineTextStyles";
 import { usePageStore } from "@/store/usePageStore";
 import {
   canReadPage,

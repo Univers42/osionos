@@ -14,8 +14,8 @@ import {
   DEFAULT_COLOR_PRESETS,
   type ColorPickerPreset,
 } from '@univers42/ui-collection';
-import { normalizeHexColor, normalizeInlineColorToken } from './inlineColorTokens';
-export { normalizeInlineColorToken } from './inlineColorTokens';
+import { normalizeHexColor, normalizeInlineColorToken } from '@/shared/lib/markengine/inlineColorTokens';
+export { normalizeInlineColorToken } from '@/shared/lib/markengine/inlineColorTokens';
 
 export interface InlineColorOption extends ColorPickerPreset {
   id: string;
