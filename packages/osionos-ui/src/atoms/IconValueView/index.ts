@@ -1,1 +1,0 @@
-export { IconValueView } from "./IconValueView";

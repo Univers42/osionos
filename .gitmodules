@@ -25,3 +25,7 @@
 	path = packages/http-gate
 	url = git@github.com:Univers42/http-gate.git
 	branch = main
+[submodule "packages/osionos-ui"]
+	path = packages/osionos-ui
+	url = git@github.com:Univers42/osionos-ui.git
+	branch = main
