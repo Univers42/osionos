@@ -1,7 +1,7 @@
 import type { Block } from "@/entities/block";
 // Narrow import (the parser only) — the markengine barrel also pulls the JSX React
 // renderers, which we don't need here and which the node test loader can't strip.
-import { parseMarkdownToBlocks } from "@/shared/lib/markengine/markdown/shortcuts";
+import { parseMarkdownToBlocks } from "@/shared/lib/markengine/blocks";
 import { serializeBlocksToMarkdown } from "./pageMarkdownSerialize";
 
 /** Lossless internal block payload MIME (for a future cross-tab clipboard write). */

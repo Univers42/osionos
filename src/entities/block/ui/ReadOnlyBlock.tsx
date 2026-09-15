@@ -37,7 +37,7 @@ import { TableBlockReadOnly } from "./TableBlockReadOnly";
 import { LayoutBlockReadOnly } from "./LayoutBlockReadOnly";
 import { BoundFieldReadOnly } from "./BoundFieldReadOnly";
 import { DeferredMount } from "./DeferredMount";
-import { renderInlineToReact } from '@/shared/lib/markengine';
+import { renderInlineToReact } from '@/shared/lib/markengine/react';
 import { timed } from '@/shared/lib/perf/measure';
 import { InternalPageLink } from "@/entities/page";
 import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";

@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import {
+import type {
   BlockNode,
   BlockRange,
   DocumentNode,

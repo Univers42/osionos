@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import { api } from "@/shared/api/client";
-import { parseMarkdownToBlocks } from "@/shared/lib/markengine";
+import { parseMarkdownToBlocks } from "@/shared/lib/markengine/blocks";
 import type { Block } from "@/entities/block";
 import type { PageEntry } from "@/entities/page";
 import type { PageConfig } from "@/shared/config/pageConfigStore";

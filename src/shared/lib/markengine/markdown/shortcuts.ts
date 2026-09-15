@@ -14,23 +14,14 @@
 import type { MarkEngineBlock as Block, MarkEngineBlockType as BlockType } from "../blockContract";
 import { createTableBlockFromData } from "../tableConfig";
 import type { BlockNode, InlineNode } from "./ast";
-import {
-  renderInlineNodesToHtml,
-  type InlineHtmlOptions,
-} from "./renderers/inlineHtml";
-import { parse, parseInline } from "./parser";
+import { parse } from "./parser";
 
 export type { BlockDetection } from "./shortcutsDetect";
 export { BLOCK_SHORTCUTS, detectBlockType } from "./shortcutsDetect";
 
-export function parseInlineMarkdown(
-  text: string,
-  options: InlineHtmlOptions = {},
-): string {
-  // Use the full parser's inline engine → convert to HTML
-  const nodes = parseInline(text);
-  return renderInlineNodesToHtml(nodes, options);
-}
+// Re-exported for source compatibility; the implementation is block-free and
+// lives on the engine's root entry point.
+export { parseInlineMarkdown } from "./inlineMarkdown";
 
 /**
  * Convert a full markdown string into an array of Notion-style blocks.
