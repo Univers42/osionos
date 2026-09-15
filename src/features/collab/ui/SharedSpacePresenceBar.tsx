@@ -23,7 +23,7 @@ import { Paperclip } from 'lucide-react';
 
 import { useUserStore } from '@/features/auth';
 import { usePageStore } from '@/store/usePageStore';
-import { useToastStore } from '@/shared/ui/primitives/useToastStore';
+import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { isSharedCollabEnabled } from '@/shared/config/featureFlags';
 import type { Workspace } from '@/entities/user/model/types';
 import { useCollabStore } from '../store/useCollabStore';

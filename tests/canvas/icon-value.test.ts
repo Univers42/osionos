@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseIconValue, serializeIconValue } from "../../src/shared/lib/iconValue/iconValue.ts";
+import { parseIconValue, serializeIconValue } from "../../packages/osionos-ui/src/shared/iconValue.ts";
 
 test("bare emoji parses as an emoji", () => {
   const v = parseIconValue("🚀");

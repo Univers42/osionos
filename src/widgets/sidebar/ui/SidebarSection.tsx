@@ -10,5 +10,5 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-export { SidebarSection } from "@/shared/ui/molecules/SidebarSection";
-export type { SidebarSectionProps } from "@/shared/ui/molecules/SidebarSection";
+export { SidebarSection } from "@osionos/ui/molecules/SidebarSection";
+export type { SidebarSectionProps } from "@osionos/ui/molecules/SidebarSection";

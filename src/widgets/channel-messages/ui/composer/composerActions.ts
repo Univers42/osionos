@@ -24,7 +24,7 @@ import type { MediaBlockType } from '@/entities/block';
 import { fetchLinkPreview } from '@/shared/chat/attachmentApi';
 import { fetchGifFile, type GifItem } from '@/shared/chat/giphyApi';
 import type { Attachment } from '@/shared/chat/messageApi';
-import { useToastStore } from '@/shared/ui/primitives/useToastStore';
+import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { caretAnchor, type useComposerDraft } from '../../model/useComposerDraft';
 import type { VoiceResult } from '../../model/useVoiceRecorder';
 

@@ -20,7 +20,7 @@
 
 import React from "react";
 import { Plus } from "lucide-react";
-import { IconValueView } from "@/shared/ui/atoms/IconValueView";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useUserStore } from "@/features/auth";
 import { type PageEntry } from "@/store/usePageStore";
 import { createSubItem, listSubItems, openNotePage, openRecordNote, parseLiveRecordRef } from "../model/recordSubItems";

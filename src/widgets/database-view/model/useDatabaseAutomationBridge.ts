@@ -24,7 +24,7 @@ import { useEffect } from 'react';
 // exists for. Both symbols live in side-effect-free leaf modules.
 import { AUTOMATION_FIRED_EVENT } from '@/shared/notion-database-sys/src/lib/automations/automationRunner';
 import { setAutomationWebhookTransport } from '@/shared/notion-database-sys/src/lib/automations/webhookTransport';
-import { useToastStore } from '@/shared/ui/primitives/useToastStore';
+import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { api, API_BASE, getActivePageJwt } from '@/shared/api/client';
 
 interface AutomationFiredDetail {

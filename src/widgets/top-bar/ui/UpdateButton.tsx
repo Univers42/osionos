@@ -12,9 +12,9 @@
 
 import React, { useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { cx } from "@/shared/ui/shared/classNames";
+import { cx } from "@osionos/ui/shared/classNames";
 import { useUserStore } from "@/features/auth";
-import { useToastStore } from "@/shared/ui/primitives/useToastStore";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { usePageStore } from "@/store/usePageStore";
 import { rebuildServerUp, runHostRebuild } from "../model/rebuild";
 

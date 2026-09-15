@@ -20,7 +20,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Pause, Square, Trash2 } from 'lucide-react';
 
-import { useToastStore } from '@/shared/ui/primitives/useToastStore';
+import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { useVoiceRecorder, type VoiceResult } from '../../model/useVoiceRecorder';
 import { VoicePreview } from './VoicePreview';
 import { WaveBars } from './WaveBars';

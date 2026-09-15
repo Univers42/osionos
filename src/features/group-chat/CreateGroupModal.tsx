@@ -20,7 +20,7 @@ import React, { useState } from 'react';
 
 import type { ChatChannel } from '@/shared/chat/channelApi';
 import { Button, EmojiPicker, IconValueView, Input } from '@/shared/ui';
-import { Modal } from '@/shared/ui/primitives/Modal';
+import { Modal } from '@osionos/ui/primitives/Modal';
 import { PeoplePickerList } from '@/shared/people/PeoplePickerList';
 import { genId } from '@/widgets/workspace-grid/model/layoutTree';
 import { useWorkspaceLayout } from '@/widgets/workspace-grid/model/workspaceLayout';

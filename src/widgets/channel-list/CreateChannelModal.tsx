@@ -22,7 +22,7 @@ import { Hash, Lock, Video, Volume2 } from 'lucide-react';
 
 import { createChannel, type ChatChannel } from '@/shared/chat/channelApi';
 import { Button, Input } from '@/shared/ui';
-import { Modal } from '@/shared/ui/primitives/Modal';
+import { Modal } from '@osionos/ui/primitives/Modal';
 import { useUserStore } from '@/features/auth';
 import { genId } from '@/widgets/workspace-grid/model/layoutTree';
 import { useWorkspaceLayout } from '@/widgets/workspace-grid/model/workspaceLayout';

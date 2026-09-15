@@ -11,9 +11,9 @@
 /* ************************************************************************** */
 
 import React, { useEffect, useMemo, useState } from "react";
-import { EMOJI_ITEMS, filterEmojiItems, type EmojiItem } from "@/shared/ui/molecules/EmojiPicker/emojiSearch";
-import { loadEmojiCatalog, type EmojiCatalog } from "@/shared/ui/molecules/EmojiPicker/emojiCatalog";
-import { applyEmojiTone, EMOJI_SKIN_TONES } from "@/shared/lib/emoji/emojiTone";
+import { EMOJI_ITEMS, filterEmojiItems, type EmojiItem } from "../EmojiPicker/emojiSearch";
+import { loadEmojiCatalog, type EmojiCatalog } from "../EmojiPicker/emojiCatalog";
+import { applyEmojiTone, EMOJI_SKIN_TONES } from "../../shared/emojiTone";
 import { VirtualGrid, type GridSection } from "./VirtualRows";
 
 const TONE_STORAGE_KEY = "osio.emoji.tone";

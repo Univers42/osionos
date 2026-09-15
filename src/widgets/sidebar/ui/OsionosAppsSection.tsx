@@ -12,7 +12,7 @@
 
 import React, { useEffect, useMemo } from "react";
 
-import { IconValueView } from "@/shared/ui/atoms/IconValueView";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useInstalledApps } from "@/features/marketplace/model/useInstalledApps";
 import { installedTab } from "@/features/marketplace/model/installedAppLauncher";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";

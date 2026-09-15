@@ -22,7 +22,7 @@ import React, { useState } from 'react';
 
 import type { Community } from '@/shared/social/communityApi';
 import { Button, IconPicker, IconValueView, Input } from '@/shared/ui';
-import { Modal } from '@/shared/ui/primitives/Modal';
+import { Modal } from '@osionos/ui/primitives/Modal';
 import { useCreateCommunity } from './useCommunity';
 
 const AvatarTrigger: React.FC<{ avatar?: string; onChange: (value?: string) => void }> = ({

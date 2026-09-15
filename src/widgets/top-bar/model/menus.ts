@@ -15,8 +15,8 @@ import { isDrawEnabled, isQuickCaptureEnabled } from "@/shared/config/featureFla
 import { useQuickCapture } from "@/features/quick-capture/model/useQuickCapture";
 import { applyTheme, persistThemeMode } from "@/shared/config/theme";
 import { useUIStore } from "@/shared/config/uiStore";
-import { useToastStore } from "@/shared/ui/primitives/useToastStore";
-import type { SettingsTab } from "@/shared/ui/primitives/useSettingsSearchIndex";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
+import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
 import { usePageStore } from "@/store/usePageStore";
 import { clearDrawBinding } from "@/widgets/draw-canvas/model/drawHandoff";
 import { consoleTab, drawTab, homeTab, trashTab } from "@/widgets/workspace-grid/model/layoutPersist";

@@ -12,7 +12,7 @@
 
 import React, { useState } from "react";
 import { CalendarClock, CalendarPlus } from "lucide-react";
-import { cx } from "@/shared/ui/shared/classNames";
+import { cx } from "@osionos/ui/shared/classNames";
 
 /** Local YYYY-MM-DD for "today" (compared against the stored ISO date). */
 function todayKey(): string {

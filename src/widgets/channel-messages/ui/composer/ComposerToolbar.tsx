@@ -21,9 +21,9 @@ import React, { useRef, useState } from 'react';
 import { Image as ImageIcon, Mic, Paperclip, Smile } from 'lucide-react';
 
 import { giphyEnabled, type GifItem } from '@/shared/chat/giphyApi';
-import { EmojiTab } from '@/shared/ui/molecules/IconPicker/EmojiTab';
-import { Popover } from '@/shared/ui/primitives/Popover';
-import { useToastStore } from '@/shared/ui/primitives/useToastStore';
+import { EmojiTab } from '@osionos/ui/molecules/IconPicker/EmojiTab';
+import { Popover } from '@osionos/ui/primitives/Popover';
+import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { GifPicker } from './GifPicker';
 
 interface ComposerToolbarProps {

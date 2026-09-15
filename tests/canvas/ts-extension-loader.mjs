@@ -43,12 +43,27 @@ const EXTRA_ALIASES = {
   "@osionos/outbox-ledger": new URL("../../packages/outbox-ledger/src/index.ts", import.meta.url).href,
   "@osionos/perf-probe": new URL("../../packages/perf-probe/src/index.ts", import.meta.url).href,
   "@osionos/feature-flags": new URL("../../packages/feature-flags/src/index.ts", import.meta.url).href,
+  "@osionos/ui": new URL("../../packages/osionos-ui/src/index.ts", import.meta.url).href,
   "@osionos/http-gate": new URL("../../packages/http-gate/src/index.ts", import.meta.url).href,
   "@osionos/http-gate/react": new URL("../../packages/http-gate/src/react.ts", import.meta.url).href,
 };
 
+// Prefix aliases: "@osionos/ui/atoms/Button" -> packages/osionos-ui/src/atoms/Button.
+// Mirrors the trailing-slash regex entries in vite.config.ts.
+const PREFIX_ALIASES = [
+  ["@osionos/ui/", new URL("../../packages/osionos-ui/src/", import.meta.url).href],
+];
+
+function resolvePrefixAlias(specifier) {
+  for (const [prefix, base] of PREFIX_ALIASES) {
+    if (specifier.startsWith(prefix)) return `${base}${specifier.slice(prefix.length)}`;
+  }
+  return null;
+}
+
 export async function resolve(specifier, context, nextResolve) {
-  const engine = EXTRA_ALIASES[specifier] ?? resolveEngineSpecifier(specifier);
+  const engine =
+    EXTRA_ALIASES[specifier] ?? resolvePrefixAlias(specifier) ?? resolveEngineSpecifier(specifier);
   const target = engine
     ? engine
     : specifier.startsWith("@/")

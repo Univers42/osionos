@@ -12,7 +12,7 @@
 
 import React from "react";
 import { Minus, Square, X } from "lucide-react";
-import { cx } from "@/shared/ui/shared/classNames";
+import { cx } from "@osionos/ui/shared/classNames";
 import { isDesktop, windowControls } from "../model/desktop";
 
 const BASE = "inline-flex h-7 w-11 items-center justify-center text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none";

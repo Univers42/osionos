@@ -13,8 +13,8 @@
 import React, { useMemo, useRef, useState } from "react";
 
 import type { MediaBlockType } from "@/entities/block";
-import { Modal } from "@/shared/ui/primitives/Modal";
-import { MiniTabs } from "@/shared/ui/primitives/MiniTabs";
+import { Modal } from "@osionos/ui/primitives/Modal";
+import { MiniTabs } from "@osionos/ui/primitives/MiniTabs";
 import { Button } from "@/shared/ui";
 import { useUserStore } from "@/features/auth";
 import { useAssetLibraryStore } from "@/shared/config/assetLibraryStore";

@@ -10,5 +10,5 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-export { SidebarNavItem } from "@/shared/ui/molecules/SidebarNavItem";
-export type { SidebarNavItemProps } from "@/shared/ui/molecules/SidebarNavItem";
+export { SidebarNavItem } from "@osionos/ui/molecules/SidebarNavItem";
+export type { SidebarNavItemProps } from "@osionos/ui/molecules/SidebarNavItem";

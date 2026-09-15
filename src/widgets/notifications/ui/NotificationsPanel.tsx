@@ -20,7 +20,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { Check, UserPlus, X } from 'lucide-react';
 
-import { Button } from '@/shared/ui/atoms/Button';
+import { Button } from '@osionos/ui/atoms/Button';
 import { useContactsStore } from '@/store/social/useContactsStore';
 import type { ContactEdge } from '@/store/social/types';
 import { PushToggleRow } from './PushToggleRow';

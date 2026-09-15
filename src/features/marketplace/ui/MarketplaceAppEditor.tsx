@@ -12,8 +12,8 @@
 
 import React, { useState } from "react";
 
-import { Modal } from "@/shared/ui/primitives/Modal";
-import { Button } from "@/shared/ui/atoms/Button";
+import { Modal } from "@osionos/ui/primitives/Modal";
+import { Button } from "@osionos/ui/atoms/Button";
 import type { PageEntry, PagePropertyEntry } from "@/entities/page";
 
 import { APP_KEYS, readAppMeta } from "../model/appMeta";

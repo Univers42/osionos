@@ -17,7 +17,7 @@
  */
 
 import React from "react";
-import { Menu, MenuItem } from "@/shared/ui/primitives/Menu";
+import { Menu, MenuItem } from "@osionos/ui/primitives/Menu";
 
 interface RecordLimitButtonProps {
   value?: number;

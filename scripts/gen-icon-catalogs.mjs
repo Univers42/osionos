@@ -16,8 +16,8 @@
 //   https://unicode.org/Public/emoji/latest/emoji-test.txt   (full RGI emoji set)
 //   https://googlefonts.github.io/noto-emoji-animation/data/api.json (animated set)
 // Outputs (committed, lazy-loaded chunks — never edit by hand):
-//   src/shared/ui/molecules/EmojiPicker/emojiCatalog.generated.ts
-//   src/shared/ui/molecules/IconPicker/notoAnimated.generated.ts
+//   packages/osionos-ui/src/molecules/EmojiPicker/emojiCatalog.generated.ts
+//   packages/osionos-ui/src/molecules/IconPicker/notoAnimated.generated.ts
 
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -32,7 +32,7 @@ async function loadSource(localPath, url) {
   return res.text();
 }
 
-// Mirror of applyEmojiTone() in src/shared/lib/emoji/emojiTone.ts — keep in sync.
+// Mirror of applyEmojiTone() in packages/osionos-ui/src/shared/emojiTone.ts — keep in sync.
 function composeTone(codePoints, tone) {
   const rest = codePoints.slice(1);
   if (rest[0] === 0xfe0f) rest.shift();
@@ -113,7 +113,7 @@ async function main() {
     .map((e) => `${String.fromCodePoint(...e.codePoints)}|${e.name}|${e.group}|${e.tone}`)
     .join("\n");
   writeFileSync(
-    "src/shared/ui/molecules/EmojiPicker/emojiCatalog.generated.ts",
+    "packages/osionos-ui/src/molecules/EmojiPicker/emojiCatalog.generated.ts",
     `${fileHeader("emojiCatalog.generated.ts", `Full RGI emoji set (${entries.length} base emoji, Unicode ${/# Version: ([\d.]+)/.exec(emojiTest)?.[1] ?? "latest"}) from unicode.org emoji-test.txt,
  * CLDR palette order. One entry per line: glyph|name|groupIndex|toneCapable(0/1);
  * skin-tone variants are composed at runtime by applyEmojiTone(). Parsed by
@@ -126,7 +126,7 @@ export const EMOJI_CATALOG_DATA = \`${emojiLines}\`;
 
   const notoLines = buildNotoLines(notoJson, entries);
   writeFileSync(
-    "src/shared/ui/molecules/IconPicker/notoAnimated.generated.ts",
+    "packages/osionos-ui/src/molecules/IconPicker/notoAnimated.generated.ts",
     `${fileHeader("notoAnimated.generated.ts", `Google Noto animated-emoji index (${notoLines.split("\n").length} entries) from the
  * noto-emoji-animation project. One entry per line: codepoint|name, where codepoint
  * is the underscore-joined URL segment of the gstatic asset

@@ -25,7 +25,7 @@ import {
 import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { parseSlashQuery } from "@/features/slash-commands/model/slashMenuCatalog";
-import { resolveColorName } from "@/shared/ui/molecules/IconPicker/ColorSwatches";
+import { resolveColorName } from "@osionos/ui/molecules/IconPicker/ColorSwatches";
 import {
 	usePlaygroundBlockEditor,
 	type PlaygroundBlockEditorSource,

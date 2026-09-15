@@ -12,7 +12,7 @@
 
 import React, { useMemo, useState } from "react";
 import dynamicIconImports from "lucide-react/dynamicIconImports";
-import LucideGlyph from "@/shared/ui/atoms/IconValueView/LucideGlyph";
+import LucideGlyph from "../../atoms/IconValueView/LucideGlyph";
 import { VirtualGrid, type GridSection } from "./VirtualRows";
 
 const ALL_NAMES = Object.keys(dynamicIconImports as Record<string, unknown>);

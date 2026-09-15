@@ -23,7 +23,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { uploadAttachment } from '@/shared/chat/attachmentApi';
 import { compressImage, validateFile, type PreparedImage } from '@/shared/chat/mediaProcessing';
 import type { Attachment } from '@/shared/chat/messageApi';
-import { useToastStore } from '@/shared/ui/primitives/useToastStore';
+import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 
 export function useAttachmentUpload(channelId: string) {
   const [uploading, setUploading] = useState(false);

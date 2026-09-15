@@ -12,7 +12,7 @@
 
 import { useCallback } from "react";
 import { usePageStore } from "@/store/usePageStore";
-import { useToastStore } from "@/shared/ui/primitives/useToastStore";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { duplicateBlockInTree } from "../../model/blockContextMenu.helpers";
 
 export interface ImageBlockActions {

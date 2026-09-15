@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { parseIconValue } from "@/shared/lib/iconValue/iconValue";
+import { parseIconValue } from "@osionos/ui/shared/iconValue";
 
 /** UTF-8-safe base64 for arbitrary svg markup (btoa is Latin-1 only). */
 function svgToBase64(svg: string): string {

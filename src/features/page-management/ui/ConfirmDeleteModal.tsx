@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useState } from "react";
-import { ConfirmDialog } from "@/shared/ui/molecules/ConfirmDialog";
+import { ConfirmDialog } from "@osionos/ui/molecules/ConfirmDialog";
 
 type ConfirmActionVariant = "archive" | "delete";
 

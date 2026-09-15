@@ -12,7 +12,7 @@
 
 import React from "react";
 import { Briefcase, GraduationCap, Heart, type LucideIcon } from "lucide-react";
-import { Modal } from "@/shared/ui/primitives/Modal";
+import { Modal } from "@osionos/ui/primitives/Modal";
 import { useToastStore } from "@/shared/ui";
 import { createWorkspaceWithIntent, useWorkspaceOnboarding } from "../model/useWorkspaceOnboarding";
 import type { WorkspaceIntent } from "../model/starterKits";

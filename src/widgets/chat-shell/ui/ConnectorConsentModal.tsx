@@ -13,7 +13,7 @@
 import React from "react";
 import { ShieldCheck } from "lucide-react";
 
-import { Modal } from "@/shared/ui/primitives/Modal";
+import { Modal } from "@osionos/ui/primitives/Modal";
 import type { ConnectorDescriptor } from "@/features/connectors/model/connectorTypes";
 
 const SCOPE_LABELS: Record<string, string> = {

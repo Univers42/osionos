@@ -13,7 +13,7 @@
 import React, { useState } from "react";
 import { Check, Loader2, ShieldCheck, TriangleAlert } from "lucide-react";
 
-import { Modal } from "@/shared/ui/primitives/Modal";
+import { Modal } from "@osionos/ui/primitives/Modal";
 import { useConnectorStore } from "@/features/connectors/model/useConnectorStore";
 import { FUNCTIONAL_CONNECTORS } from "@/features/connectors/model/connectorRegistry";
 

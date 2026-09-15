@@ -19,7 +19,7 @@
 
 import { useEffect, useRef } from 'react';
 
-import { useToastStore } from '@/shared/ui/primitives/useToastStore';
+import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { useCollabStore } from '../store/useCollabStore';
 
 export function useSharedAnnounceToasts(active: boolean): void {

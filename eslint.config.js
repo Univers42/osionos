@@ -109,4 +109,58 @@ export default [
       ],
     },
   },
+  {
+    // Package-owned node tooling (token-contract checks and the like). These run
+    // under plain node, not in the browser bundle, so they need node globals.
+    files: ["packages/*/scripts/**/*.{mjs,cjs,js}"],
+    languageOptions: {
+      globals: { console: "readonly", process: "readonly" },
+    },
+  },
+  {
+    // Import firewall: @osionos/ui is a standalone repo consumed by alias. An
+    // "@/..." import resolves fine HERE and breaks the moment the package is
+    // built on its own, so it must fail in this repo, where it is introduced.
+    files: ["packages/osionos-ui/src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/*"],
+              message:
+                "@osionos/ui must not import host-app code (@/...). Move the shared piece into the package, or take it as a prop.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Import firewall: @osionos/http-gate is transport-only. It must resolve
+    // nothing from the app, and React must stay behind the ./react entry so the
+    // root barrel stays loadable by node --experimental-strip-types.
+    files: ["packages/http-gate/src/**/*.ts"],
+    ignores: ["packages/http-gate/src/react.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/*"],
+              message:
+                "@osionos/http-gate must not import host-app code (@/...). Take configuration as an argument instead.",
+            },
+            {
+              group: ["react", "react-dom", "react/*", "react-dom/*"],
+              message:
+                "Keep React in packages/http-gate/src/react.ts — the root entry must stay type-strippable.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];

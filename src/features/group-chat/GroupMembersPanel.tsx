@@ -21,8 +21,8 @@ import React, { useState } from 'react';
 import { Plus, ShieldCheck, Trash2 } from 'lucide-react';
 
 import { Button } from '@/shared/ui';
-import { ConfirmDialog } from '@/shared/ui/molecules/ConfirmDialog';
-import { Menu, MenuItem } from '@/shared/ui/primitives/Menu';
+import { ConfirmDialog } from '@osionos/ui/molecules/ConfirmDialog';
+import { Menu, MenuItem } from '@osionos/ui/primitives/Menu';
 import { PeoplePickerList } from '@/shared/people/PeoplePickerList';
 import { useGroupChannel } from './useGroupChannel';
 

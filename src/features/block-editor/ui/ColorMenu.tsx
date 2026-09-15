@@ -12,7 +12,7 @@
 
 import React, { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import { ColorSwatches } from "@/shared/ui/molecules/IconPicker/ColorSwatches";
+import { ColorSwatches } from "@osionos/ui/molecules/IconPicker/ColorSwatches";
 
 const MENU_MARGIN = 8;
 const MENU_GAP = 6;

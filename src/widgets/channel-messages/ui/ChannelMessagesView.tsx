@@ -30,7 +30,7 @@ import { useUserStore } from "@/features/auth";
 import type { ChatMessage } from "@/shared/chat/messageApi";
 import { initRealtimeMessagesBridge } from "@/services/realtime-messages";
 import { useUnreadStore } from "@/store/chat/useUnreadStore";
-import { useToastStore } from "@/shared/ui/primitives/useToastStore";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { postChannelRead } from "@/shared/chat/unreadApi";
 import { useChannelActions } from "../model/useChannelActions";
 import { useChannelHistory } from "../model/useChannelHistory";
