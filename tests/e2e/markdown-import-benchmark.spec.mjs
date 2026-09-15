@@ -48,7 +48,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // __dirname = .../apps/osionos/app/tests/e2e  → 2 levels up = apps/osionos/app/
 const APP_ROOT = resolve(__dirname, "../../");
-const MARKENGINE_ROOT = resolve(APP_ROOT, "src/shared/lib/markengine");
+const MARKENGINE_ROOT = resolve(APP_ROOT, "packages/markdown-engine");
 
 // ── Bridge config (read from env, same vars injected into track-binocle-osionos-bridge-1) ──
 const BRIDGE_URL = process.env.OSIONOS_BRIDGE_URL ?? "http://localhost:4000";

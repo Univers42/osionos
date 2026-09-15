@@ -14,7 +14,7 @@
  * Compile-time proof that markengine's block contract still fits this app.
  *
  * markengine declares its own vocabulary so it stays reusable (see
- * `shared/lib/markengine/blockContract.ts`). This file is the single seam where
+ * `packages/markdown-engine/blockContract.ts`). This file is the single seam where
  * the two are checked against each other: add a block type to the engine that
  * the app does not know, or change `Block`'s required fields, and THIS file
  * fails — one clear error instead of thirty scattered ones.

@@ -16,9 +16,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { autoformatInlineMarkdown } from "../../src/shared/lib/markengine/inlineAutoformat";
-import { serializeInlineNodes } from "../../src/shared/lib/markengine/inlineAst";
-import { parseInline } from "../../src/shared/lib/markengine/markdown/parserInline";
+import { autoformatInlineMarkdown } from "../../packages/markdown-engine/inlineAutoformat";
+import { serializeInlineNodes } from "../../packages/markdown-engine/inlineAst";
+import { parseInline } from "../../packages/markdown-engine/markdown/parserInline";
 
 const canon = (src: string) => serializeInlineNodes(parseInline(src));
 const auto = (src: string) => autoformatInlineMarkdown(src, src.length)?.source ?? null;

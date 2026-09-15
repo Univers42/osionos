@@ -18,9 +18,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 export default [
   {
     ignores: [
-      "src/shared/lib/markengine/**/*",
-      "src/shared/lib/markengine/dist/**/*",
-      "src/shared/lib/markengine/playground/public/dist/**/*",
+      "packages/markdown-engine/**/*",
       "src/shared/notion-database-sys/**/*",
       "src/shared/notion-database-sys/packages/**/*",
       "src/shared/notion-database-sys/playground/**/*",

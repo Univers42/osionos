@@ -15,8 +15,7 @@ cd "$(dirname "$0")/.."
 mapfile -d '' FILES < <(
   find src \
     \( -path 'src/app/styles' \
-       -o -path 'src/shared/notion-database-sys' \
-       -o -path 'src/shared/lib/markengine' \) -prune \
+       -o -path 'src/shared/notion-database-sys' \) -prune \
     -o -type f \( -name '*.css' -o -name '*.scss' \) -print0
 )
 

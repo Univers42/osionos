@@ -19,7 +19,7 @@ const SRC_BASE = new URL("../../src/", import.meta.url);
 // go through Vite, so without this any APP file that imports
 // "@osionos/markdown-engine" fails to resolve under node --test.
 const ENGINE_SPECIFIER = "@osionos/markdown-engine";
-const ENGINE_BASE = new URL("../../src/shared/lib/markengine/", import.meta.url);
+const ENGINE_BASE = new URL("../../packages/markdown-engine/", import.meta.url);
 const ENGINE_SUBPATHS = {
   "": "index.ts",
   "/blocks": "blocks.ts",
@@ -48,7 +48,7 @@ export async function resolve(specifier, context, nextResolve) {
       : specifier;
   if ((target.startsWith(".") || target.startsWith("file:")) && !hasKnownExtension(target)) {
     // Mirror Vite/tsconfig resolution: a bare specifier is a .ts/.tsx file, else a
-    // directory with an index.ts/.tsx (barrel imports like "@/shared/lib/markengine").
+    // directory with an index.ts/.tsx (barrel imports like "@/features/block-editor").
     for (const suffix of [".ts", ".tsx", "/index.ts", "/index.tsx"]) {
       try {
         return await nextResolve(`${target}${suffix}`, context);

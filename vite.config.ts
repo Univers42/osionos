@@ -20,7 +20,7 @@ import { defineConfig, loadEnv } from 'vite';
 // Single source of truth for where the markdown engine lives on disk. Relocating
 // it (e.g. into packages/ as a submodule) is a one-line change here plus the
 // mirrored paths in tsconfig.json — no source file imports the physical path.
-const MARKDOWN_ENGINE_ROOT = 'src/shared/lib/markengine';
+const MARKDOWN_ENGINE_ROOT = 'packages/markdown-engine';
 
 // Dependency-free bundle analyzer: with ANALYZE=1, emit a per-chunk module-size
 // breakdown to build/stats-chunks.json so we can see what inflates the warm

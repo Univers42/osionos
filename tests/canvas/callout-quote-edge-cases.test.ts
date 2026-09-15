@@ -20,8 +20,8 @@ import {
   resolveCalloutType,
 } from "../../src/entities/block/model/calloutTypes.ts";
 import { serializeBlocksToMarkdown } from "../../src/services/page-actions/pageMarkdownSerialize.ts";
-import { parseMarkdownToBlocks } from "../../src/shared/lib/markengine/markdown/shortcuts.ts";
-import { detectBlockType } from "../../src/shared/lib/markengine/shortcutsDetect.ts";
+import { parseMarkdownToBlocks } from "../../packages/markdown-engine/markdown/shortcuts.ts";
+import { detectBlockType } from "../../packages/markdown-engine/shortcutsDetect.ts";
 
 let seq = 0;
 const make = (block: Partial<Block> & { type: Block["type"] }): Block => ({
