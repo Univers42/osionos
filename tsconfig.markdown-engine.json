@@ -1,0 +1,10 @@
+{
+  "//": "Import firewall for the markdown engine (app-owned: it asserts the ENGINE does not import THIS app, so it lives here, not in the engine submodule). Extends the app config but clears `paths`, so any surviving '@/...' import fails module resolution with a hard tsc error — stronger than an eslint rule, because it cannot be disabled by a comment and it runs before the linter. Deliberately NOT named tsconfig.json: the engine already ships its own tsconfig.json for its standalone build (referenced by its package.json, Makefile and Dockerfile) and that file must stay untouched.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {}
+  },
+  "include": ["packages/markdown-engine/**/*.ts", "packages/markdown-engine/**/*.tsx"],
+  "exclude": ["packages/markdown-engine/bench", "packages/markdown-engine/tests", "packages/markdown-engine/scripts", "packages/markdown-engine/playground", "packages/markdown-engine/dist", "packages/markdown-engine/coverage", "packages/markdown-engine/vite.config.ts"]
+}
