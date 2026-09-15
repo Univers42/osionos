@@ -28,7 +28,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, savePagesCache } from "@/store/pageStore.helpers";
 import { api, getActivePageJwt } from "@/shared/api/client";
 import { getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
-import { loadLedger, saveLedger } from "@/shared/sync/outboxLedger";
+import { loadLedger, saveLedger } from "@osionos/outbox-ledger";
 import { PAGE_OUTBOX_KEY, pageStamp } from "./pageStamp";
 import type { PageEntry } from "@/entities/page";
 

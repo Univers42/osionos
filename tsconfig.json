@@ -42,6 +42,7 @@
       "@osionos/markdown-engine/tables": ["./packages/markdown-engine/tableConfig.ts"],
       "@osionos/markdown-engine/terminal": ["./packages/markdown-engine/terminal.ts"],
       "@osionos/markdown-engine/*": ["./packages/markdown-engine/*"],
+      "@osionos/outbox-ledger": ["./packages/outbox-ledger/src/index.ts"],
       "@/*": ["./src/*"]
     }
   },
