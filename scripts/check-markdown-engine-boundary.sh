@@ -19,7 +19,7 @@
 
 set -eu
 
-ENGINE_ROOT="${1:-src/shared/lib/markengine}"
+ENGINE_ROOT="${1:-packages/markdown-engine}"
 
 if [ ! -d "$ENGINE_ROOT" ]; then
 	printf 'check-markdown-engine-boundary: no engine at %s\n' "$ENGINE_ROOT" >&2

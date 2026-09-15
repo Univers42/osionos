@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyInlineFormatting } from "../../src/shared/lib/markengine/inlineFormatting.ts";
+import { applyInlineFormatting } from "../../packages/markdown-engine/inlineFormatting.ts";
 
 // Selection offsets are in rendered-text space (what the caret sees).
 const sel = (start: number, end: number) => ({ start, end });

@@ -15,7 +15,7 @@ import test from "node:test";
 
 import type { Block } from "../../src/entities/block/model/types.ts";
 import { serializeBlocksToMarkdown } from "../../src/services/page-actions/pageMarkdownSerialize.ts";
-import { parseMarkdownToBlocks } from "../../src/shared/lib/markengine/markdown/shortcuts.ts";
+import { parseMarkdownToBlocks } from "../../packages/markdown-engine/markdown/shortcuts.ts";
 
 let seq = 0;
 const make = (block: Partial<Block> & { type: Block["type"] }): Block => ({

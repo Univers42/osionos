@@ -14,7 +14,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { parseMarkdownToBlocks } from "../../src/shared/lib/markengine/markdown/shortcuts.ts";
+import { parseMarkdownToBlocks } from "../../packages/markdown-engine/markdown/shortcuts.ts";
 
 // Vendored copy of wiki/cybersecurity/auth-environment.md (the doc moved out
 // of the old monorepo docs/ path, which the test container never mounts).

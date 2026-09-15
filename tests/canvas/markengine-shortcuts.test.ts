@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { detectBlockType } from "../../src/shared/lib/markengine/shortcutsDetect.ts";
+import { detectBlockType } from "../../packages/markdown-engine/shortcutsDetect.ts";
 
 const HEADING_LEVELS = [1, 2, 3, 4, 5, 6] as const;
 const hashes = (level: number) => "#".repeat(level);
