@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { parseMarkdownToBlocks } from "@/shared/lib/markengine";
+import { parseMarkdownToBlocks } from "@/shared/lib/markengine/blocks";
 import { serializeBlocksToMarkdown } from "@/services/page-actions";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";

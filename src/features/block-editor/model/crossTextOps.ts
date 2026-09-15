@@ -8,17 +8,15 @@
 
 import type { Block } from "@/entities/block/model/types";
 import { findBlockInTree } from "@/entities/block/model/blockTreeUtils";
-// Deep imports (not the markengine barrel): the barrel drags in .tsx renderers,
-// which the node --test strip-types runner cannot load.
-import { parseInline } from "@/shared/lib/markengine/markdown/parserInline";
-import { parse } from "@/shared/lib/markengine/markdown/parser";
-import { renderHtml } from "@/shared/lib/markengine/markdown/renderers/html";
 import {
   getInlineNodesTextLength,
+  parse,
+  parseInline,
+  renderHtml,
   serializeInlineNodes,
   splitNodesAtOffset,
-} from "@/shared/lib/markengine/inlineAst";
-import type { InlineNode } from "@/shared/lib/markengine/markdown/ast";
+  type InlineNode,
+} from "@/shared/lib/markengine";
 
 export interface CrossTextPoint {
   blockId: string;

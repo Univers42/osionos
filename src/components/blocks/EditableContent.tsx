@@ -38,27 +38,29 @@ import {
   ColorPickerBoard,
   type ColorPickerPreset,
 } from "@univers42/ui-collection";
+import { parseInlineMarkdown } from "@/shared/lib/markengine";
 import {
   applyInlineFormatting,
-  areInlineEditorSelectionSnapshotsEqual,
   autoformatInlineMarkdown,
-  getInlineEditorSelectionOffsets,
-  getInlineEditorSelectionSnapshot,
   INLINE_CLOSING_DELIMITERS,
   isMidDelimiterRun,
   normalizeInlineLinkHref,
-  parseInlineMarkdown,
+  type InlineFormattingCommand,
+} from "@/shared/lib/markengine/inline";
+// `/dom` is the engine's contentEditable surface: selection snapshots, the
+// caret-escape that lands the caret OUTSIDE a freshly-closed markdown style pair
+// (so it never overflows), and the SOURCE-space caret offset that lets autoformat
+// fire on every inline style in a block — not only the first.
+import {
+  areInlineEditorSelectionSnapshotsEqual,
+  getInlineEditorSelectionOffsets,
+  getInlineEditorSelectionSnapshot,
+  inlineSourceCaretOffset,
   readInlineEditorDomState,
+  setInlineCaretAfterStyledBoundary,
   setInlineEditorSelectionOffsets,
   type InlineEditorSelectionSnapshot as SelectionSnapshot,
-  type InlineFormattingCommand,
-} from "@/shared/lib/markengine";
-// Direct paths (not the barrel): the caret-escape that lands the caret OUTSIDE a
-// freshly-closed markdown style pair (so it never overflows), and the SOURCE-space
-// caret offset that lets autoformat fire on every inline style in a block — not
-// only the first.
-import { setInlineCaretAfterStyledBoundary } from "@/shared/lib/markengine/inlineEditorSelection";
-import { inlineSourceCaretOffset } from "@/shared/lib/markengine/inlineEditorDom";
+} from "@/shared/lib/markengine/dom";
 import {
   getInlineColorOption,
   normalizeInlineColorToken,

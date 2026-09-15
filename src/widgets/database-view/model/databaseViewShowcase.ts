@@ -22,7 +22,7 @@
  */
 
 import type { Block, LayoutCell, LayoutMode } from "@/entities/block";
-import { InlineDocument } from "@/shared/lib/markengine";
+import { InlineDocument } from "@/shared/lib/markengine/inline";
 import { loadKnownDatabaseState } from "./knownDatabaseState";
 import {
   KNOWN_DATABASE_VIEWS,

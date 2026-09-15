@@ -21,7 +21,7 @@ import {
   resolveTableConfig,
 } from "@/entities/block/model/tableBlocks";
 import { InternalPageLink } from "@/entities/page";
-import { renderInlineToReact } from "@/shared/lib/markengine";
+import { renderInlineToReact } from "@/shared/lib/markengine/react";
 
 const MAX_AUTO_COLUMN_WIDTH = 420;
 
