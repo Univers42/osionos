@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 // Markdown shortcuts — inline parsing and block conversion
-import type { BlockType, Block } from "@/entities/block";
+import type { MarkEngineBlock as Block, MarkEngineBlockType as BlockType } from "../blockContract";
 import { createTableBlockFromData } from "../tableConfig";
 import type { BlockNode, InlineNode } from "./ast";
 import {
