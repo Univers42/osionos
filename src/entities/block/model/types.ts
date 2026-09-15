@@ -56,24 +56,24 @@ export type LayoutCellHorizontalConstraint = 'left' | 'stretch' | 'scale';
 export type LayoutCellVerticalConstraint = 'top' | 'stretch' | 'hug';
 export type LayoutCellPadding = 'compact' | 'comfortable' | 'spacious';
 export type LayoutCellFontSize = 'small' | 'base' | 'large';
-export type TableBlockLayoutMode = 'auto' | 'fit' | 'fixed';
-export type TableBlockPadding = 'compact' | 'normal' | 'comfortable';
-export type TableBlockTextAlign = 'left' | 'center' | 'right' | null;
+/**
+ * Table types are owned by markengine (it normalizes tables while parsing markdown)
+ * and re-exported here so host code keeps importing them from `@/entities/block`.
+ * Single definition, no drift.
+ */
+import type {
+  TableBlockConfig,
+  TableBlockLayoutMode,
+  TableBlockPadding,
+  TableBlockTextAlign,
+} from '@/shared/lib/markengine/tableConfig';
 
-export interface TableBlockConfig {
-  layoutMode?: TableBlockLayoutMode;
-  wrap?: boolean;
-  minColumnWidth?: number;
-  maxColumnWidth?: number;
-  cellPadding?: TableBlockPadding;
-  headerRow?: boolean;
-  headerColumn?: boolean;
-  showBorders?: boolean;
-  stripedRows?: boolean;
-  columnWidths?: Array<number | undefined>;
-  rowHeights?: Array<number | undefined>;
-  columnAlignments?: TableBlockTextAlign[];
-}
+export type {
+  TableBlockConfig,
+  TableBlockLayoutMode,
+  TableBlockPadding,
+  TableBlockTextAlign,
+};
 
 export interface LayoutConfig {
   columns: number;
