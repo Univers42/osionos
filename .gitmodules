@@ -21,3 +21,7 @@
 	path = packages/feature-flags
 	url = git@github.com:Univers42/feature-flags.git
 	branch = main
+[submodule "packages/http-gate"]
+	path = packages/http-gate
+	url = git@github.com:Univers42/http-gate.git
+	branch = main
