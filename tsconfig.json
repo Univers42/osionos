@@ -34,6 +34,14 @@
       "@osionos/graph-engine/*": ["./packages/graph-engine/src/*"],
       "@osionos/draw-engine": ["./packages/draw-engine/src/index.ts"],
       "@osionos/draw-engine/*": ["./packages/draw-engine/src/*"],
+      "@osionos/markdown-engine": ["./src/shared/lib/markengine/index.ts"],
+      "@osionos/markdown-engine/blocks": ["./src/shared/lib/markengine/blocks.ts"],
+      "@osionos/markdown-engine/inline": ["./src/shared/lib/markengine/inline.ts"],
+      "@osionos/markdown-engine/dom": ["./src/shared/lib/markengine/dom.ts"],
+      "@osionos/markdown-engine/react": ["./src/shared/lib/markengine/react.tsx"],
+      "@osionos/markdown-engine/tables": ["./src/shared/lib/markengine/tableConfig.ts"],
+      "@osionos/markdown-engine/terminal": ["./src/shared/lib/markengine/terminal.ts"],
+      "@osionos/markdown-engine/*": ["./src/shared/lib/markengine/*"],
       "@/*": ["./src/*"]
     }
   },

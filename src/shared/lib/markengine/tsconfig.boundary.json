@@ -1,0 +1,26 @@
+{
+  "//": "Import firewall for the markdown engine. Extends the app config but clears `paths`, so any surviving '@/...' import fails module resolution with a hard tsc error — stronger than an eslint rule, because it cannot be disabled by a comment and it runs before the linter. Deliberately NOT named tsconfig.json: the engine already ships its own tsconfig.json for its standalone build (referenced by its package.json, Makefile and Dockerfile) and that file must stay untouched.",
+  "extends": "../../../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {}
+  },
+  "include": [
+    "index.ts",
+    "blocks.ts",
+    "inline.ts",
+    "dom.ts",
+    "react.tsx",
+    "terminal.ts",
+    "markdown.ts",
+    "renderCore.ts",
+    "tableConfig.ts",
+    "blockContract.ts",
+    "inline*.ts",
+    "shortcuts*.ts",
+    "markdown/**/*.ts",
+    "markdown/**/*.tsx",
+    "src/**/*.ts"
+  ],
+  "exclude": ["bench", "tests", "scripts", "playground", "dist", "coverage", "vite.config.ts"]
+}

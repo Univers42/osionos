@@ -18,13 +18,13 @@ import React, {
   useCallback,
 } from "react";
 import { usePageStore } from "@/store/usePageStore";
-import { bareUrlToLinkSource, isSingleBareUrl } from "@/shared/lib/markengine";
-import { detectBlockType, parseMarkdownToBlocks } from "@/shared/lib/markengine/blocks";
+import { bareUrlToLinkSource, isSingleBareUrl } from "@osionos/markdown-engine";
+import { detectBlockType, parseMarkdownToBlocks } from "@osionos/markdown-engine/blocks";
 import {
   getInlineEditorSelectionOffsets,
   type InlineEditorSelectionOffsets,
-} from "@/shared/lib/markengine/dom";
-import { getCalloutIconForKind } from "@/shared/lib/markengine/terminal";
+} from "@osionos/markdown-engine/dom";
+import { getCalloutIconForKind } from "@osionos/markdown-engine/terminal";
 import { useSlashSelect, repositionCursor } from "@/features/slash-commands";
 import { createHeaderBandBlock } from "@/features/slash-commands/model/profileHeaderPreset";
 import { contentWithoutHeader, isRemovableHeader } from "@/entities/block/model/headerCanvas";

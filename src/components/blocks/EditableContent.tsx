@@ -38,7 +38,7 @@ import {
   ColorPickerBoard,
   type ColorPickerPreset,
 } from "@univers42/ui-collection";
-import { parseInlineMarkdown } from "@/shared/lib/markengine";
+import { parseInlineMarkdown } from "@osionos/markdown-engine";
 import {
   applyInlineFormatting,
   autoformatInlineMarkdown,
@@ -46,7 +46,7 @@ import {
   isMidDelimiterRun,
   normalizeInlineLinkHref,
   type InlineFormattingCommand,
-} from "@/shared/lib/markengine/inline";
+} from "@osionos/markdown-engine/inline";
 // `/dom` is the engine's contentEditable surface: selection snapshots, the
 // caret-escape that lands the caret OUTSIDE a freshly-closed markdown style pair
 // (so it never overflows), and the SOURCE-space caret offset that lets autoformat
@@ -60,7 +60,7 @@ import {
   setInlineCaretAfterStyledBoundary,
   setInlineEditorSelectionOffsets,
   type InlineEditorSelectionSnapshot as SelectionSnapshot,
-} from "@/shared/lib/markengine/dom";
+} from "@osionos/markdown-engine/dom";
 import {
   getInlineColorOption,
   normalizeInlineColorToken,

@@ -14,8 +14,8 @@ import {
   DEFAULT_COLOR_PRESETS,
   type ColorPickerPreset,
 } from '@univers42/ui-collection';
-import { normalizeHexColor, normalizeInlineColorToken } from '@/shared/lib/markengine/inlineColorTokens';
-export { normalizeInlineColorToken } from '@/shared/lib/markengine/inlineColorTokens';
+import { normalizeHexColor, normalizeInlineColorToken } from '@osionos/markdown-engine/inline';
+export { normalizeInlineColorToken } from '@osionos/markdown-engine/inline';
 
 export interface InlineColorOption extends ColorPickerPreset {
   id: string;
