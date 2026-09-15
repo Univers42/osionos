@@ -9,3 +9,7 @@
 	path = packages/markdown-engine
 	url = git@github.com:Univers42/markdown-engine.git
 	branch = main
+[submodule "packages/outbox-ledger"]
+	path = packages/outbox-ledger
+	url = git@github.com:Univers42/outbox-ledger.git
+	branch = main

@@ -39,8 +39,12 @@ function resolveEngineSpecifier(specifier) {
   return new URL(mapped, ENGINE_BASE).href;
 }
 
+const EXTRA_ALIASES = {
+  "@osionos/outbox-ledger": new URL("../../packages/outbox-ledger/src/index.ts", import.meta.url).href,
+};
+
 export async function resolve(specifier, context, nextResolve) {
-  const engine = resolveEngineSpecifier(specifier);
+  const engine = EXTRA_ALIASES[specifier] ?? resolveEngineSpecifier(specifier);
   const target = engine
     ? engine
     : specifier.startsWith("@/")

@@ -35,7 +35,7 @@ import { canEditPage, getCurrentPageAccessContext } from "@/shared/lib/auth/page
 import { buildDesiredPages, PAGE_OUTBOX_KEY } from "./pageStamp";
 import { publishPage } from "./pageOutbox";
 import { hydratePagesFromBaas } from "./hydratePages";
-import { computeSyncActions, loadLedger, saveLedger } from "@/shared/sync/outboxLedger";
+import { computeSyncActions, loadLedger, saveLedger } from "@osionos/outbox-ledger";
 
 const DEBOUNCE_MS = 800;
 /** First retry delay when the server pushes back; doubles up to MAX_RETRY_MS. */

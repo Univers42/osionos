@@ -12,7 +12,7 @@
 
 /**
  * Second-brain note sync ledger. This is now a thin BINDING over the shared,
- * engine-agnostic confirmed-sync primitive (`@/shared/sync/outboxLedger`): it
+ * engine-agnostic confirmed-sync primitive (`@osionos/outbox-ledger`): it
  * fixes the note localStorage key and re-exports the shared diff + types, so
  * note sync and page sync share ONE implementation. (This file previously
  * duplicated that primitive verbatim — the duplication the engine-agnostic
@@ -26,7 +26,7 @@ import {
   saveLedger as saveLedgerForKey,
   type SyncActions,
   type SyncLedger,
-} from "@/shared/sync/outboxLedger";
+} from "@osionos/outbox-ledger";
 
 const LEDGER_KEY = "osio-sb-synced-notes";
 

@@ -142,6 +142,10 @@ export default defineConfig(({ mode }) => {
           replacement: `${path.resolve(root, MARKDOWN_ENGINE_ROOT)}/`,
         },
         {
+          find: /^@osionos\/outbox-ledger$/,
+          replacement: path.resolve(root, 'packages/outbox-ledger/src/index.ts'),
+        },
+        {
           find: '@',
           replacement: path.resolve(root, 'src'),
         },
