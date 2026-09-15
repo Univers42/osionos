@@ -12,7 +12,7 @@
 
 import React, { lazy, Suspense, useRef, useState } from 'react';
 import { ChevronDown, PanelLeftClose, PenSquare } from 'lucide-react';
-import { IconValueView } from "@/shared/ui/atoms/IconValueView";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useUserStore } from '@/features/auth';
 
 // Lazy + deep path (NOT the auth barrel): the account-switcher popover (~37KB)

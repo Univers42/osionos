@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useState } from "react";
-import { cx } from "@/shared/ui/shared/classNames";
+import { cx } from "@osionos/ui/shared/classNames";
 import type { Comment } from "../api/commentsClient";
 
 interface Props {

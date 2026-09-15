@@ -13,7 +13,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import { Globe } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { IconValueView } from "@/shared/ui/atoms/IconValueView";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useUserStore } from "@/features/auth";
 import { useUIStore } from "@/shared/config/uiStore";
 import type { Workspace } from "@/entities/user/model/types";

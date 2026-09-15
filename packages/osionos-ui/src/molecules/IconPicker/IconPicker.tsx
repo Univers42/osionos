@@ -12,7 +12,7 @@
 
 import React, { Suspense, useEffect, useRef, useState } from "react";
 import { Smile, Shapes, Clapperboard, ImagePlus, Search } from "lucide-react";
-import { parseIconValue, serializeIconValue, type IconValue } from "@/shared/lib/iconValue/iconValue";
+import { parseIconValue, serializeIconValue, type IconValue } from "../../shared/iconValue";
 import { ColorSwatches } from "./ColorSwatches";
 import { EmojiTab } from "./EmojiTab";
 import { CustomTab } from "./CustomTab";

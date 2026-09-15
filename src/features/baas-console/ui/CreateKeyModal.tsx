@@ -12,7 +12,7 @@
 
 import React, { useState } from 'react';
 import { Copy } from 'lucide-react';
-import { Modal } from '@/shared/ui/primitives/Modal';
+import { Modal } from '@osionos/ui/primitives/Modal';
 import { Input } from '@/shared/ui';
 import { useTenantConsoleStore } from '../model/useTenantConsoleStore';
 import { ConsoleButton } from './consolePrimitives';

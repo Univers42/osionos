@@ -12,7 +12,7 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import { CaseSensitive, Regex, Replace, Settings2, WholeWord } from "lucide-react";
-import { cx } from "@/shared/ui/shared/classNames";
+import { cx } from "@osionos/ui/shared/classNames";
 import { usePageStore } from "@/store/usePageStore";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { pageEntryToTab } from "@/widgets/workspace-grid/model/pageToTab";

@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useRef, useState } from "react";
-import { Modal } from "@/shared/ui/primitives/Modal";
+import { Modal } from "@osionos/ui/primitives/Modal";
 import { useToastStore } from "@/shared/ui";
 import { usePageStore } from "@/store/usePageStore";
 import { captureToDailyNote } from "../model/dailyNote";

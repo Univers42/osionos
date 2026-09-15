@@ -18,8 +18,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, X } from 'lucide-react';
 
-import { Button } from '@/shared/ui/atoms/Button';
-import { MiniTabs } from '@/shared/ui/primitives/MiniTabs';
+import { Button } from '@osionos/ui/atoms/Button';
+import { MiniTabs } from '@osionos/ui/primitives/MiniTabs';
 import { useContactsStore } from '@/store/social/useContactsStore';
 import type { ContactEdge } from '@/store/social/types';
 

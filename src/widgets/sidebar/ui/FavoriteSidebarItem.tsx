@@ -13,7 +13,7 @@
 import React from "react";
 import { Star } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import { IconValueView } from "@/shared/ui/atoms/IconValueView";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { canReadPage, usePageAccessContext } from "@/shared/lib/auth/pageAccess";
 import type { ActivePage } from "@/entities/page";
 import { usePageStore } from "@/store/usePageStore";

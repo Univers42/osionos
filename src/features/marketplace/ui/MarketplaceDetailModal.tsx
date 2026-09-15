@@ -12,7 +12,7 @@
 
 import React from "react";
 
-import { Modal } from "@/shared/ui/primitives/Modal";
+import { Modal } from "@osionos/ui/primitives/Modal";
 
 import { useMarketplaceApp } from "../model/useMarketplaceApps";
 import { MarketplaceDetailView } from "./MarketplaceDetailView";

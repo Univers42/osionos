@@ -13,7 +13,7 @@
 import React, { useState } from "react";
 
 import { useUserStore } from "@/features/auth";
-import { Modal, Toggle, useToastStore } from "@/shared/ui/primitives";
+import { Modal, Toggle, useToastStore } from "@osionos/ui/primitives";
 import { DEFAULT_EXPORT_OPTIONS, type ExportContent, type ExportDbViews, type ExportFormat, type ExportOptions, type ExportStyling } from "../model/exportTypes";
 import { runPageExport } from "../model/runExport";
 import { ExportSelectRow } from "./ExportSelectRow";

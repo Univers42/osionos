@@ -21,7 +21,7 @@ import { useEffect } from 'react';
 
 import { subscribeTopic } from '@/services/realtime-messages/wsTransport';
 import { userTopic } from '@/services/realtime-messages/wsTopics';
-import { useToastStore } from '@/shared/ui/primitives/useToastStore';
+import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { fetchInbox, fetchNotifications, type NotificationType } from '@/shared/chat/notifyApi';
 import { useNotificationsStore } from './useNotificationsStore';
 

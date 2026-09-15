@@ -12,7 +12,7 @@
 
 import React, { useMemo } from "react";
 import { Bot } from "lucide-react";
-import { IconValueView } from "@/shared/ui/atoms/IconValueView";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import type { PageEntry } from "@/entities/page";

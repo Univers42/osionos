@@ -14,7 +14,7 @@ import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, MoreHorizontal, Plus, Settings, Users, X } from 'lucide-react';
 import { AssetRenderer } from '@univers42/ui-collection';
-import { IconValueView } from '@/shared/ui/atoms/IconValueView';
+import { IconValueView } from '@osionos/ui/atoms/IconValueView';
 import { useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
 import { useUserStore } from '@/features/auth';
 import { useWorkspaceOnboarding } from '@/features/workspace-onboarding/model/useWorkspaceOnboarding';

@@ -25,7 +25,7 @@ import {
   parseLiveDatabaseId,
 } from "@/shared/notion-database-sys/src/store/live/liveTypes";
 import { setLiveWriteNotifier } from "@/shared/notion-database-sys/src/store/live/liveNotice";
-import { useToastStore } from "@/shared/ui/primitives/useToastStore";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { useUserStore } from "@/features/auth/model/useUserStore";
 // Side effects: register the preset packs (composable — first non-null per
 // table wins) BEFORE the first adapter loads state: agency investigation

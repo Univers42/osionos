@@ -47,6 +47,8 @@
       "@osionos/feature-flags": ["./packages/feature-flags/src/index.ts"],
       "@osionos/http-gate": ["./packages/http-gate/src/index.ts"],
       "@osionos/http-gate/react": ["./packages/http-gate/src/react.ts"],
+      "@osionos/ui": ["./packages/osionos-ui/src/index.ts"],
+      "@osionos/ui/*": ["./packages/osionos-ui/src/*"],
       "@/*": ["./src/*"]
     }
   },

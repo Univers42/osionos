@@ -15,7 +15,7 @@
 import React from 'react';
 
 import { Input, SectionHeader } from '@/shared/ui';
-import { MiniTabs, type MiniTabItem } from '@/shared/ui/primitives';
+import { MiniTabs, type MiniTabItem } from '@osionos/ui/primitives';
 import { useCollabBrowse, type CollabFilter } from '../model/useCollabBrowse';
 import { CollabCard } from './CollabCard';
 import { JoinRequestsInbox } from './JoinRequestsInbox';

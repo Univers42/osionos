@@ -12,7 +12,7 @@
 
 import React from "react";
 import { CalendarClock, ListTodo } from "lucide-react";
-import { cx } from "@/shared/ui/shared/classNames";
+import { cx } from "@osionos/ui/shared/classNames";
 import { usePageStore } from "@/store/usePageStore";
 import { bucketOf, useMyTasks, type TaskBucket, type TaskItem } from "../model/useMyTasks";
 

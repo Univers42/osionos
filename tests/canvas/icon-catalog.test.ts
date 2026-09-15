@@ -5,15 +5,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyEmojiTone, EMOJI_SKIN_TONES } from "../../src/shared/lib/emoji/emojiTone.ts";
+import { applyEmojiTone, EMOJI_SKIN_TONES } from "../../packages/osionos-ui/src/shared/emojiTone.ts";
 import {
   EMOJI_CATALOG_DATA,
   EMOJI_CATALOG_GROUPS,
-} from "../../src/shared/ui/molecules/EmojiPicker/emojiCatalog.generated.ts";
+} from "../../packages/osionos-ui/src/molecules/EmojiPicker/emojiCatalog.generated.ts";
 import {
   NOTO_ANIMATED_BASE,
   NOTO_ANIMATED_DATA,
-} from "../../src/shared/ui/molecules/IconPicker/notoAnimated.generated.ts";
+} from "../../packages/osionos-ui/src/molecules/IconPicker/notoAnimated.generated.ts";
 
 test("applyEmojiTone: modifier inserted after the first code point", () => {
   assert.equal(EMOJI_SKIN_TONES.length, 5);

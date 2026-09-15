@@ -12,7 +12,7 @@
 
 import React from "react";
 import { Folder, X } from "lucide-react";
-import { IconValueView } from "@/shared/ui/atoms/IconValueView";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useSidebarTreeDnd } from "@/widgets/sidebar/model/sidebarTreeDnd";
 import type { WorkspaceTab } from "../model/layoutTree";
 import { TAB_DND_MIME } from "../model/paneDropZone";

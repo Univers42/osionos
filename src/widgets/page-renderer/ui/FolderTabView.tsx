@@ -12,7 +12,7 @@
 
 import React from "react";
 import { Folder, ChevronRight } from "lucide-react";
-import { IconValueView } from "@/shared/ui/atoms/IconValueView";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useShallow } from "zustand/react/shallow";
 import { usePageStore, type PageEntry } from "@/store/usePageStore";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";

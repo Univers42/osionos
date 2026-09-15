@@ -6,26 +6,19 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:26:52 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/11 01:02:15 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/09/15 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-export * from "./atoms/ErrorBoundary";
-export * from "./atoms/Button";
-export * from "./atoms/IconButton";
-export * from "./atoms/IconValueView";
-export * from "./atoms/Card";
-export * from "./atoms/Badge";
-export * from "./atoms/Input";
-export * from "./atoms/LoadingPane";
-export * from "./atoms/SectionHeader";
-export * from "./molecules/IconPicker";
-export * from "./molecules/CodeSyntaxHighlight";
+/**
+ * App-side facade over `@osionos/ui`.
+ *
+ * The generic kit (atoms, primitives, molecules, hooks) lives in the package.
+ * What stays here is what is osionos-specific and therefore cannot travel:
+ * the `@univers42/ui-collection` asset catalogs under `assets/`, and the
+ * components wired to this app's domain — `AssetPickerBoard` (configured from
+ * those catalogs) and `MediaAssetPicker` (typed on the block model).
+ */
+
+export * from "@osionos/ui";
 export * from "./molecules/AssetPickerBoard";
-export * from "./molecules/EmojiPicker";
-export * from "./molecules/MermaidDiagram";
-export * from "./molecules/ConfirmDialog";
-export * from "./molecules/SidebarNavItem";
-export * from "./molecules/SidebarSection";
-export * from "./hooks";
-export * from "./primitives";

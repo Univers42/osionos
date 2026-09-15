@@ -13,7 +13,7 @@
 import React from "react";
 import { Settings, Check } from "lucide-react";
 
-import { Button } from "@/shared/ui/atoms/Button";
+import { Button } from "@osionos/ui/atoms/Button";
 import type { PageEntry } from "@/entities/page";
 
 import { readAppMeta } from "../model/appMeta";

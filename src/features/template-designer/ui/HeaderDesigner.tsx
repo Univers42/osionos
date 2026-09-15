@@ -12,8 +12,8 @@
 
 import React, { useRef, useState } from "react";
 
-import { Modal } from "@/shared/ui/primitives/Modal";
-import { Button } from "@/shared/ui/atoms/Button";
+import { Modal } from "@osionos/ui/primitives/Modal";
+import { Button } from "@osionos/ui/atoms/Button";
 import type { PageEntry } from "@/entities/page";
 import type { HeaderTemplate } from "@/entities/page/model/headerTemplate";
 import { TemplateHeader } from "@/pages/notion-page/ui/TemplateHeader";

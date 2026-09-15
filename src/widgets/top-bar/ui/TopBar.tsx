@@ -13,7 +13,7 @@
 import React, { useMemo } from "react";
 import { PanelLeft } from "lucide-react";
 import { useUIStore } from "@/shared/config/uiStore";
-import type { SettingsTab } from "@/shared/ui/primitives/useSettingsSearchIndex";
+import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
 import { buildCommands } from "../model/commands";
 import { buildMenus } from "../model/menus";
 import { useTopBarHotkeys } from "../model/usePalette";

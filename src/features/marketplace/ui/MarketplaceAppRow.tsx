@@ -13,8 +13,8 @@
 import React from "react";
 import { Settings } from "lucide-react";
 
-import { IconValueView } from "@/shared/ui/atoms/IconValueView";
-import { Button } from "@/shared/ui/atoms/Button";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
+import { Button } from "@osionos/ui/atoms/Button";
 import type { PageEntry } from "@/entities/page";
 
 import { readAppMeta } from "../model/appMeta";

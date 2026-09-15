@@ -12,9 +12,9 @@
 
 import React from "react";
 
-import { IconValueView } from "@/shared/ui/atoms/IconValueView/IconValueView";
-import { Badge } from "@/shared/ui/atoms/Badge";
-import { Button } from "@/shared/ui/atoms/Button";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView/IconValueView";
+import { Badge } from "@osionos/ui/atoms/Badge";
+import { Button } from "@osionos/ui/atoms/Button";
 import type { PageEntry } from "@/entities/page";
 import type { HeaderSlot } from "@/entities/page/model/headerTemplate";
 

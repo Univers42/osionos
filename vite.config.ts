@@ -162,6 +162,14 @@ export default defineConfig(({ mode }) => {
           replacement: path.resolve(root, 'packages/http-gate/src/react.ts'),
         },
         {
+          find: /^@osionos\/ui$/,
+          replacement: path.resolve(root, 'packages/osionos-ui/src/index.ts'),
+        },
+        {
+          find: /^@osionos\/ui\//,
+          replacement: `${path.resolve(root, 'packages/osionos-ui/src')}/`,
+        },
+        {
           find: '@',
           replacement: path.resolve(root, 'src'),
         },

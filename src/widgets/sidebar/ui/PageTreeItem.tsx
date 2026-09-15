@@ -12,7 +12,7 @@
 
 import React, { useMemo, useState } from "react";
 import { BookOpen, ChevronRight, Folder, FolderOpen } from "lucide-react";
-import { IconValueView } from "@/shared/ui/atoms/IconValueView";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useShallow } from "zustand/react/shallow";
 import { usePageStore, type PageEntry } from "@/store/usePageStore";
 import { canReadPage, usePageAccessContext } from "@/shared/lib/auth/pageAccess";
@@ -24,7 +24,7 @@ import { PageContextMenu } from "@/features/page-management/context-menu/PageCon
 import { usePageContextClipboard } from "@/features/page-management/context-menu/clipboardStore";
 import type { MenuActionCtx } from "@/features/page-management/context-menu/types";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
-import { useToastStore } from "@/shared/ui/primitives";
+import { useToastStore } from "@osionos/ui/primitives";
 import { usePageRowDnd } from "./usePageRowDnd";
 import { useSidebarTreeDnd } from "../model/sidebarTreeDnd";
 import { useDevMode } from "@/shared/config/useDevMode";

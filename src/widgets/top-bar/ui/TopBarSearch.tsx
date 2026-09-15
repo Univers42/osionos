@@ -12,7 +12,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
-import { cx } from "@/shared/ui/shared/classNames";
+import { cx } from "@osionos/ui/shared/classNames";
 import { isUnifiedSearchEnabled } from "@/shared/config/featureFlags";
 import { ConnectButton } from "@/features/connections/ConnectButton";
 import type { PaletteCommand } from "../model/commands";

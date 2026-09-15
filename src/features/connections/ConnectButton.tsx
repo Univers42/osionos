@@ -22,7 +22,7 @@ import { Check, Clock, UserPlus, X } from 'lucide-react';
 
 import { ConnectNoteModal } from '@/features/connections/ConnectNoteModal';
 import { useConnections } from '@/features/connections/useConnections';
-import { Button } from '@/shared/ui/atoms/Button';
+import { Button } from '@osionos/ui/atoms/Button';
 
 interface ConnectButtonProps {
   userId: string;

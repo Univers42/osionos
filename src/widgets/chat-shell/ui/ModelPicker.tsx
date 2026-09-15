@@ -12,7 +12,7 @@
 
 import React, { useMemo } from "react";
 
-import { Dropdown } from "@/shared/ui/primitives/Dropdown";
+import { Dropdown } from "@osionos/ui/primitives/Dropdown";
 import { useConnectorStore } from "@/features/connectors/model/useConnectorStore";
 
 /** Encode/decode a picker value: "auto" or "<providerKey>:<modelId>". */

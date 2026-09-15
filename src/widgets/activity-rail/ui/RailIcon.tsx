@@ -12,8 +12,8 @@
 
 import React from "react";
 import type { LucideIcon } from "lucide-react";
-import { cx } from "@/shared/ui/shared/classNames";
-import { IconValueView } from "@/shared/ui/atoms/IconValueView";
+import { cx } from "@osionos/ui/shared/classNames";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 
 interface Props {
   label: string;

@@ -18,8 +18,8 @@
 
 import React, { useState } from 'react';
 
-import { Button } from '@/shared/ui/atoms/Button';
-import { Modal } from '@/shared/ui/primitives/Modal';
+import { Button } from '@osionos/ui/atoms/Button';
+import { Modal } from '@osionos/ui/primitives/Modal';
 
 interface NoteComposeModalProps {
   open: boolean;

@@ -12,7 +12,7 @@
 
 import React from "react";
 
-import { Badge } from "@/shared/ui/atoms/Badge";
+import { Badge } from "@osionos/ui/atoms/Badge";
 import type { PageEntry } from "@/entities/page";
 
 import { readAppMeta } from "../model/appMeta";

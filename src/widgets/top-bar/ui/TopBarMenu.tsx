@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useEffect, useRef, useState } from "react";
-import { cx } from "@/shared/ui/shared/classNames";
+import { cx } from "@osionos/ui/shared/classNames";
 import type { MenuGroup, MenuItem } from "../model/menus";
 import { MenuDropdown } from "./MenuDropdown";
 

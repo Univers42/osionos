@@ -15,7 +15,7 @@
 import React, { useState } from 'react';
 
 import { Badge, Button, Card } from '@/shared/ui';
-import { Modal } from '@/shared/ui/primitives';
+import { Modal } from '@osionos/ui/primitives';
 import type { CollabWorkspace } from '@/shared/social/collabApi';
 
 const VISIBILITY_LABEL: Record<CollabWorkspace['visibility'], string> = {

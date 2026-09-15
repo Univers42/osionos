@@ -13,7 +13,7 @@
 import React, { useEffect, useState } from "react";
 
 import type { PageEntry } from "@/entities/page";
-import { IconValueView } from "@/shared/ui/atoms/IconValueView";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { PageBlocksRenderer } from "@/widgets/page-renderer/ui/PageBlocksRenderer";
 import { loadPageById } from "./nodePreview";
 

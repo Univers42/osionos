@@ -12,7 +12,7 @@
 
 import React from "react";
 import { FilePlus, FileCode2, FolderPlus, ChevronsDownUp, RefreshCw } from "lucide-react";
-import { IconButton } from "@/shared/ui/atoms/IconButton";
+import { IconButton } from "@osionos/ui/atoms/IconButton";
 
 interface Props {
   onAddFile: () => void;

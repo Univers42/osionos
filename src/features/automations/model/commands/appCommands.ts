@@ -1,5 +1,5 @@
 import { useZenMode } from "@/shared/config/useZenMode";
-import { useToastStore } from "@/shared/ui/primitives/useToastStore";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { usePalette } from "@/widgets/top-bar/model/usePalette";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 

@@ -46,8 +46,8 @@ import {
 import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
-import type { SettingsTab } from "@/shared/ui/primitives/useSettingsSearchIndex";
-import { ToastViewport } from "@/shared/ui/primitives";
+import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
+import { ToastViewport } from "@osionos/ui/primitives";
 import { ShareHost } from "@/features/share/ShareHost";
 import { TopBar } from "@/widgets/top-bar";
 import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";

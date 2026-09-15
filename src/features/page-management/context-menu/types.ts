@@ -14,7 +14,7 @@ import type { ComponentType } from "react";
 import type { PageEntry } from "@/entities/page";
 import type { usePageStore } from "@/store/usePageStore";
 import type { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
-import type { useToastStore } from "@/shared/ui/primitives";
+import type { useToastStore } from "@osionos/ui/primitives";
 import type { usePageContextClipboard } from "./clipboardStore";
 
 /** Stable identifier for each context-menu action (one per registry entry). */

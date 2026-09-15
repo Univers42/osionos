@@ -12,7 +12,7 @@
 
 import React, { useRef, useState } from "react";
 import { SplitSquareHorizontal, SplitSquareVertical, X } from "lucide-react";
-import { IconButton } from "@/shared/ui/atoms/IconButton";
+import { IconButton } from "@osionos/ui/atoms/IconButton";
 import { useSidebarTreeDnd } from "@/widgets/sidebar/model/sidebarTreeDnd";
 import { usePageStore } from "@/store/usePageStore";
 import { useWorkspaceLayout } from "../model/workspaceLayout";
