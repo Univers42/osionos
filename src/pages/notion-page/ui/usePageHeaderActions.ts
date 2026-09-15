@@ -13,7 +13,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 
 import { usePageStore } from "@/store/usePageStore";
-import { randomUiCollectionEmoji } from "@/shared/lib/markengine/uiCollectionAssets";
+import { randomUiCollectionEmoji } from "@/shared/ui/assets/uiCollectionAssets";
 import { PROFILE_HEADER_COVER } from "@/features/slash-commands/model/profileHeaderPreset";
 import { patchActivePageMetadata } from "./notionPageMeta";
 

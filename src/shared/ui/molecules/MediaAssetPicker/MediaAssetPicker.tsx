@@ -18,7 +18,7 @@ import type { MediaBlockType } from "@/entities/block";
 import {
   SLASH_MEDIA_PICKER_BOARD_PROPS,
   getSlashMediaPickerTabs,
-} from "@/shared/lib/markengine/uiCollectionAssets";
+} from "@/shared/ui/assets/uiCollectionAssets";
 import {
   searchUnsplashPickerAssets,
   toMediaPickerAsset,

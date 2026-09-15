@@ -12,7 +12,7 @@
 
 import type { ReactNode } from "react";
 import type { Block, BlockType } from "@/entities/block";
-import { COLLECTION_SLASH_ITEMS } from "@/shared/lib/markengine/uiCollectionAssets";
+import { COLLECTION_SLASH_ITEMS } from "@/shared/ui/assets/uiCollectionAssets";
 
 export interface BlockContextMenuState {
   blockId: string;

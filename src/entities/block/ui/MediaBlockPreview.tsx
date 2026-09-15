@@ -24,7 +24,7 @@ import {
   getSlashMediaPickerTabs,
   type ResolvedCollectionMediaAsset,
   resolveCollectionMediaAsset,
-} from "@/shared/lib/markengine/uiCollectionAssets";
+} from "@/shared/ui/assets/uiCollectionAssets";
 
 interface MediaBlockPreviewProps {
   block: Block;

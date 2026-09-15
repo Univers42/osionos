@@ -24,7 +24,7 @@ import { usePageStore } from '@/store/usePageStore';
 import { useUIStore } from '@/shared/config/uiStore';
 import {
   getCollectionEmojiValue,
-} from '@/shared/lib/markengine/uiCollectionAssets';
+} from '@/shared/ui/assets/uiCollectionAssets';
 import { useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
 
 interface Props {

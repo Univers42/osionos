@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import { api } from "@/shared/api/client";
-import type { CoverPickerAsset } from "@/shared/lib/markengine/uiCollectionAssets";
+import type { CoverPickerAsset } from "@/shared/ui/assets/uiCollectionAssets";
 
 const ENV = import.meta.env as Record<string, string | undefined>;
 const DIRECT_ACCESS_KEY = (ENV.VITE_UNSPLASH_ACCESS_KEY ?? "").trim();

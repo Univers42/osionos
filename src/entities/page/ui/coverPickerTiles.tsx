@@ -16,7 +16,7 @@ import { Play } from "lucide-react";
 import {
   normalizeMediaSource,
   type CoverPickerAsset,
-} from "@/shared/lib/markengine/uiCollectionAssets";
+} from "@/shared/ui/assets/uiCollectionAssets";
 
 export function isGradientValue(value: string): boolean {
   return value.startsWith("linear-gradient") || value.startsWith("radial-gradient");

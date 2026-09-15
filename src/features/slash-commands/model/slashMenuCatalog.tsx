@@ -15,7 +15,7 @@ import {
   COLLECTION_SLASH_ITEMS,
   COLLECTION_SLASH_SECTION_LABELS,
   IconPage,
-} from "@/shared/lib/markengine/uiCollectionAssets";
+} from "@/shared/ui/assets/uiCollectionAssets";
 import type { BlockType, MediaBlockType } from "@/entities/block";
 import type {
   SlashCreatePageCommand,
