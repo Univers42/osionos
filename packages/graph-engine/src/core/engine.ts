@@ -123,6 +123,14 @@ export class GraphEngine {
     this.layout?.freeze();
   }
 
+  /** Cheap change signature over everything the minimap draws (scene data version +
+   *  camera + viewport). Pollers compare it and skip the redraw when it matches. */
+  getMinimapSignature(): string {
+    const cam = this.scene.getCamera();
+    const viewport = this.scene.getViewportSize();
+    return `${this.scene.stateVersion()}|${cam.x}|${cam.y}|${cam.scale}|${viewport.width}|${viewport.height}`;
+  }
+
   /** One-shot snapshot for the minimap overview (live position refs, no copy). */
   getMinimapData(): MinimapData {
     const positions = this.scene.getPositionsRef();

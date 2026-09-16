@@ -17,7 +17,7 @@
  * aggregate, and expand-on-demand (double-click) that merges a node's neighborhood.
  */
 
-import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePageStore } from "@/store/usePageStore";
 import { type GraphModel, type NodeId, emptyModel } from "@/features/second-brain/model/graphModel";
 import { mapGraphResponse } from "@/features/second-brain/baas/mapGraphResponse";
@@ -32,6 +32,16 @@ import { loadGraphSnapshot, saveGraphSnapshot } from "@/features/second-brain/sy
 
 const EMPTY = emptyModel();
 const RECONNECT_POLL_MS = 15_000;
+
+/** Cheap identity of a wire response (lengths + djb2 of the JSON) so identical
+ *  refetches — the common case for the 2.5s edit-refresh and the reconnect poll —
+ *  skip the remap, the engine rebuild, and the localStorage snapshot write. */
+function responseSignature(response: BaasGraphResponse): string {
+  const raw = JSON.stringify(response);
+  let hash = 5381;
+  for (let i = 0; i < raw.length; i += 1) hash = ((hash << 5) + hash + raw.charCodeAt(i)) | 0;
+  return `${response.nodes.length}:${response.edges.length}:${hash}`;
+}
 
 export interface BaasGraphState {
   model: GraphModel | null;
@@ -59,6 +69,7 @@ export function useBaasGraph(
   const [loadError, setLoadError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const lastApplied = useRef<string | null>(null);
 
   // Bootstrap the bounded overview, retrying transient failures; on persistent
   // failure render the last-good snapshot read-only (never a silent void).
@@ -67,9 +78,18 @@ export function useBaasGraph(
     let active = true;
     const options = { noteResources, viewerId };
     const apply = (response: BaasGraphResponse, fromCache: boolean): void => {
-      const mapped = mapGraphResponse(response, options);
-      setModel(mapped.model);
-      setGuarantee(mapped.guarantee);
+      // viewerId is part of the signature because the mapping depends on it —
+      // the same wire bytes map differently for a different viewer.
+      const signature = `${viewerId ?? ""}|${responseSignature(response)}`;
+      if (signature !== lastApplied.current) {
+        lastApplied.current = signature;
+        const mapped = mapGraphResponse(response, options);
+        setModel(mapped.model);
+        setGuarantee(mapped.guarantee);
+        if (!fromCache) saveGraphSnapshot(response);
+      }
+      // Status flags always update — an identical payload can still mean an
+      // offline→online transition (or vice versa).
       setOffline(fromCache);
       setLoadError(null);
       setLoading(false);
@@ -88,8 +108,7 @@ export function useBaasGraph(
         try {
           const response = await fetchCombinedOverview(workspaceId, scope);
           if (!active) return;
-          saveGraphSnapshot(response);
-          apply(response, false);
+          apply(response, false); // snapshot save happens inside, only when the data changed
           return;
         } catch (error) {
           if (!active) return;
@@ -114,7 +133,11 @@ export function useBaasGraph(
   useEffect(() => {
     if (!enabled) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const unsubscribe = usePageStore.subscribe(() => {
+    const unsubscribe = usePageStore.subscribe((state, previous) => {
+      // Only page edits matter; activePage / recents / loadingIds churn leaves
+      // `pages` and `pageRevisions` referentially unchanged (same skip as
+      // usePageSync) — without it every store write scheduled a full refetch.
+      if (state.pages === previous.pages && state.pageRevisions === previous.pageRevisions) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => setReloadKey((key) => key + 1), 2500);
     });

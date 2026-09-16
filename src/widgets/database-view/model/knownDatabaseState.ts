@@ -148,9 +148,12 @@ export function loadKnownDatabaseState(): NotionState {
 }
 
 export function persistKnownDatabaseState(state: NotionState): NotionState {
-  const nextState = cloneState(state);
-  scheduleKnownDatabaseStatePersist(nextState);
-  return nextState;
+  // No clone here: `state` is built immutably by every caller (zustand set
+  // replaces objects, never mutates), so recording the ref is safe until the
+  // debounced flush snapshots it. Cloning here ran structuredClone over the
+  // WHOLE NotionState synchronously on every cell edit.
+  scheduleKnownDatabaseStatePersist(state);
+  return state;
 }
 
 export function flushKnownDatabaseStatePersist() {
@@ -158,10 +161,14 @@ export function flushKnownDatabaseStatePersist() {
 
   if (!pendingKnownDatabaseState) return;
 
-  const nextState = pendingKnownDatabaseState;
+  const pendingState = pendingKnownDatabaseState;
   pendingKnownDatabaseState = null;
 
   if (globalThis.window !== undefined) {
+    // Snapshot once per debounced flush: the persisted copy (and the async
+    // server push below, which holds slices past this tick) must not alias
+    // the live store state the pending ref now points at.
+    const nextState = cloneState(pendingState);
     timed("persistKnownDatabaseState", () => {
       try {
         globalThis.localStorage.setItem(KNOWN_DATABASE_STATE_STORAGE_KEY, JSON.stringify(nextState));

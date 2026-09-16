@@ -15,7 +15,7 @@ import { Database } from "lucide-react";
 
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
-import type { PageEntry, PageRecurrenceEvery } from "@/entities/page";
+import type { PageRecurrenceEvery } from "@/entities/page";
 
 const RECURRENCE_OPTIONS: { value: PageRecurrenceEvery; label: string }[] = [
   { value: "none", label: "Don't duplicate" },
@@ -25,10 +25,12 @@ const RECURRENCE_OPTIONS: { value: PageRecurrenceEvery; label: string }[] = [
 ];
 
 /** Amber "You're editing a template" banner with the "Duplicate every…" recurrence control. */
-export const TemplateEditBanner: React.FC<{ page: PageEntry }> = ({ page }) => {
+export const TemplateEditBanner: React.FC<{ pageId: string }> = ({ pageId }) => {
   const patchTemplateRecurrence = usePageStore((s) => s.patchTemplateRecurrence);
   const dbName = useUserStore((s) => s.activeWorkspace()?.name) ?? "this database";
-  const every = page.recurrence?.every ?? "none";
+  // Primitive select (not the page object, whose identity churns per content
+  // commit) — the banner only needs the recurrence value.
+  const every = usePageStore((s) => s.pageById(pageId)?.recurrence?.every ?? "none");
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-[var(--osio-warning)] bg-[var(--osio-block-tint-yellow-bg)] px-4 py-2 text-sm text-[var(--osio-block-tint-yellow-fg)]">
@@ -37,7 +39,7 @@ export const TemplateEditBanner: React.FC<{ page: PageEntry }> = ({ page }) => {
       <select
         aria-label="Template recurrence"
         value={every}
-        onChange={(e) => patchTemplateRecurrence(page._id, { every: e.target.value as PageRecurrenceEvery })}
+        onChange={(e) => patchTemplateRecurrence(pageId, { every: e.target.value as PageRecurrenceEvery })}
         className="ml-auto rounded-md border border-[var(--osio-warning)] bg-[var(--osio-bg-surface)] px-2 py-1 text-xs text-[var(--osio-fg-default)]"
       >
         {RECURRENCE_OPTIONS.map((o) => (
