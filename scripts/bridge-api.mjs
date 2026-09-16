@@ -505,11 +505,27 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
  * api-key. Used by the data graph: the api-key resolves to the tenant + owner-scopes
  * the read to the seeded business records. 503 if the key/url aren't configured.
  */
+/** fetch the query-router, turning "the engine never answered" into a 503.
+ *  A timeout (our own AbortController) or a refused connection is an engine that is down,
+ *  not a bridge fault — surfaced raw it read as `500 This operation was aborted`, and the
+ *  database page rendered an engine that was merely offline as a crash. */
+async function queryRouterFetch(fetchImpl, url, options, timeoutMs) {
+	try {
+		return await fetchWithTimeout(fetchImpl, url, options, timeoutMs);
+	} catch (error) {
+		const aborted = error?.name === 'AbortError';
+		const unreachable = aborted || error instanceof TypeError;
+		if (!unreachable) throw error;
+		const reason = aborted ? `did not answer within ${timeoutMs} ms` : 'is not reachable';
+		throw Object.assign(new Error(`The database engine behind this workspace database ${reason} — it may be offline.`), { status: 503 });
+	}
+}
+
 async function baasQueryPost(config, fetchImpl, path, body, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
 	if (!config.queryRouterUrl || !config.baasApiKey) {
 		throw Object.assign(new Error('osionos query-router access is not configured.'), { status: 503 });
 	}
-	const response = await fetchWithTimeout(fetchImpl, `${config.queryRouterUrl}${path}`, {
+	const response = await queryRouterFetch(fetchImpl, `${config.queryRouterUrl}${path}`, {
 		method: 'POST',
 		headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Baas-Api-Key': config.baasApiKey },
 		body: JSON.stringify(body),
@@ -533,7 +549,7 @@ async function baasQueryGet(config, fetchImpl, path, timeoutMs = BAAS_FETCH_TIME
 	if (!config.queryRouterUrl || !config.baasApiKey) {
 		throw Object.assign(new Error('osionos query-router access is not configured.'), { status: 503 });
 	}
-	const response = await fetchWithTimeout(fetchImpl, `${config.queryRouterUrl}${path}`, {
+	const response = await queryRouterFetch(fetchImpl, `${config.queryRouterUrl}${path}`, {
 		method: 'GET',
 		headers: { Accept: 'application/json', 'X-Baas-Api-Key': config.baasApiKey },
 	}, timeoutMs);
