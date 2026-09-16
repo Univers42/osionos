@@ -107,8 +107,31 @@ export function DrawCanvas({
 
     let down = false;
     let spaceHeld = false;
+    // Coalesce pointermove to one engine step per animation frame: high-rate
+    // mice fire at 125–250 Hz, and each move in a drag runs snapping + a
+    // full-scene binding refresh — work that can only be seen once per painted
+    // frame anyway. The latest event wins; pointer-up flushes synchronously so
+    // the gesture commits at the true release position, and pointer-down drops
+    // any stale queued move so it can't leak into the next gesture.
+    let moveRaf = 0;
+    let pendingMove: PointerEvent | null = null;
+    const processMove = (event: PointerEvent) => {
+      const { x, y } = localPoint(event);
+      engine.movePointer(x, y, event.shiftKey, event.altKey);
+    };
+    const clearPendingMove = () => {
+      if (moveRaf) cancelAnimationFrame(moveRaf);
+      moveRaf = 0;
+      pendingMove = null;
+    };
+    const flushPendingMove = () => {
+      const queued = pendingMove;
+      clearPendingMove();
+      if (queued) processMove(queued);
+    };
     const onPointerDown = (event: PointerEvent) => {
       if (event.button === 2) return; // the contextmenu handler owns right-click
+      clearPendingMove();
       down = true;
       container.focus();
       const { x, y } = localPoint(event);
@@ -123,10 +146,17 @@ export function DrawCanvas({
     };
     const onPointerMove = (event: PointerEvent) => {
       if (!down) return;
-      const { x, y } = localPoint(event);
-      engine.movePointer(x, y, event.shiftKey, event.altKey);
+      pendingMove = event;
+      if (moveRaf) return;
+      moveRaf = requestAnimationFrame(() => {
+        moveRaf = 0;
+        const queued = pendingMove;
+        pendingMove = null;
+        if (queued && down) processMove(queued);
+      });
     };
     const onPointerUp = (event: PointerEvent) => {
+      flushPendingMove();
       down = false;
       engine.endPointer();
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
@@ -303,6 +333,7 @@ export function DrawCanvas({
 
     onReady?.(engine);
     return () => {
+      clearPendingMove();
       observer.disconnect();
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("pointerdown", onPointerDown);
@@ -314,6 +345,11 @@ export function DrawCanvas({
       container.removeEventListener("keyup", onKeyUp);
       container.removeEventListener("paste", onPaste);
       engine.destroy();
+      // Unhook the debug seam, or it pins the destroyed engine (scene, history
+      // snapshots, canvas backing store) for the rest of the session. Guarded:
+      // another mount may already have claimed the global.
+      const debugHost = globalThis as unknown as { __osioDrawEngine?: DrawEngine };
+      if (debugHost.__osioDrawEngine === engine) delete debugHost.__osioDrawEngine;
       engineRef.current = null;
     };
     // Engine is created once for the lifetime of the mount; prop syncs live in

@@ -22,6 +22,13 @@ import { codeBlockOf, createCodeFileBlock } from "../model/codeFile";
 import { languageById, languageForFileName } from "../model/ideLanguages";
 import { useCodeRunner } from "../model/useCodeRunner";
 import { canFormat, formatCode } from "../model/formatCode";
+import { pathForPage } from "../model/idePaths";
+import { useIdeModeStore } from "../model/ideModeStore";
+import { ideFsWrite } from "../model/ideFsClient";
+import { recordSyncedHash } from "../model/ideSyncEngine";
+import { useIdeRevealBus } from "../model/ideRevealBus";
+import { useIdeSyncConflicts } from "../model/ideSyncConflicts";
+import { useTerminalRunBus } from "../model/terminalRunBus";
 import { baseEditorExtensions } from "./codeMirrorSetup";
 import { RunConsole } from "./RunConsole";
 
@@ -45,6 +52,8 @@ interface StatusInfo {
 export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   const page = usePageStore((s) => s.pageById(pageId));
   const jwt = useUserStore((s) => s.activePageJwt() ?? "");
+  const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
+  const isIdeMode = useIdeModeStore((s) => s.isIdeMode(workspaceId));
   const block = codeBlockOf(page);
   const contentLoaded = Array.isArray(page?.content);
 
@@ -68,17 +77,51 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   const hostRef = React.useRef<HTMLDivElement | null>(null);
   const viewRef = React.useRef<EditorView | null>(null);
   const langCompartmentRef = React.useRef<Compartment | null>(null);
+  const lspCompartmentRef = React.useRef<Compartment | null>(null);
   const [status, setStatus] = React.useState<StatusInfo>({ line: 1, col: 1, lines: 1 });
   const runner = useCodeRunner();
   const [showConsole, setShowConsole] = React.useState(false);
+
+  // Surfaced sandbox divergence (ADR-001 §7): the page kept YOUR content; this
+  // banner offers the two one-click resolutions. Never silent last-writer-wins.
+  const conflict = useIdeSyncConflicts((s) => s.byPageId[pageId]);
+  const resolveKeepMine = React.useCallback(() => {
+    if (!conflict) return;
+    const mine = viewRef.current?.state.doc.toString() ?? "";
+    void ideFsWrite(workspaceId, conflict.relPath, mine); // pushes ours + re-records the agreed state
+    useIdeSyncConflicts.getState().resolve(pageId);
+  }, [conflict, workspaceId, pageId]);
+  const resolveTakeSandbox = React.useCallback(() => {
+    if (!conflict) return;
+    const view = viewRef.current;
+    if (view) view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: conflict.theirs } });
+    recordSyncedHash(workspaceId, conflict.relPath, conflict.theirsHash); // sandbox already holds it
+    useIdeSyncConflicts.getState().resolve(pageId);
+  }, [conflict, workspaceId, pageId]);
   // Run the CURRENT editor text. A ref keeps the CodeMirror keymap (built once)
   // calling the latest closure without rebuilding the editor.
   const runNow = React.useCallback(() => {
     const view = viewRef.current;
     if (!view) return;
+    const source = view.state.doc.toString();
+    const wsId = useUserStore.getState().activeWorkspace()?._id ?? "";
+    // In IDE Workspace mode, run in the sandbox's REAL interactive PTY so
+    // stdin/input() work (the one-shot runner has no stdin → input() gets EOF).
+    // Otherwise fall back to that stateless runner (quick, non-interactive).
+    if (wsId && useIdeModeStore.getState().isIdeMode(wsId) && lang.runnable && lang.runCmd) {
+      const relPath = pathForPage(pageId, (id) => usePageStore.getState().pageById(id));
+      const shellPath = `'/workspace/${relPath.replace(/'/g, "'\\''")}'`;
+      const command = lang.runCmd.replaceAll("{file}", shellPath);
+      useIdeModeStore.getState().setBottomOpen(true); // reveal/connect the terminal
+      // Write the latest text FIRST, then dispatch the run — so a fast PTY never
+      // executes a stale file. If the terminal is still connecting, the bus keeps
+      // the request until it opens; if already open, the subscribe fires it.
+      void ideFsWrite(wsId, relPath, source).then(() => useTerminalRunBus.getState().requestRun(command));
+      return;
+    }
     setShowConsole(true);
-    runner.run(lang.id, view.state.doc.toString());
-  }, [runner, lang.id]);
+    runner.run(lang.id, source);
+  }, [runner, lang.id, lang.runnable, lang.runCmd, pageId]);
   const runRef = React.useRef(runNow);
   // Keep the ref current in an effect (not during render — the repo forbids ref
   // writes in render); the built-once keymap calls runRef.current().
@@ -118,14 +161,23 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     const initialText = codeBlockOf(usePageStore.getState().pageById(pageId))?.content ?? "";
     const langCompartment = new Compartment();
     langCompartmentRef.current = langCompartment;
+    const lspCompartment = new Compartment();
+    lspCompartmentRef.current = lspCompartment;
 
     let saveTimer: ReturnType<typeof setTimeout> | null = null;
     let pending: string | null = null;
     const flush = () => {
       saveTimer = null;
       if (pending == null) return;
-      usePageStore.getState().updateBlock(pageId, blockId, { content: pending });
+      const content = pending;
       pending = null;
+      usePageStore.getState().updateBlock(pageId, blockId, { content });
+      // Mirror to the sandbox so the shell/LSP see the latest edit (IDE mode
+      // only). ideFsWrite records the echo hash → no writeback loop.
+      const wsId = useUserStore.getState().activeWorkspace()?._id ?? "";
+      if (wsId && useIdeModeStore.getState().isIdeMode(wsId)) {
+        void ideFsWrite(wsId, pathForPage(pageId, (id) => usePageStore.getState().pageById(id)), content);
+      }
     };
 
     const view = new EditorView({
@@ -134,6 +186,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
         doc: initialText,
         extensions: [
           langCompartment.of([]),
+          lspCompartment.of([]), // LSP wired in only in IDE mode (effect below)
           // Editor-scoped keymaps (zero conflict with the global automations
           // dispatcher): Cmd/Ctrl+Enter runs, Cmd/Ctrl+Alt+L formats.
           Prec.highest(keymap.of([
@@ -180,10 +233,69 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     };
   }, [lang]);
 
+  // Consume a pending "reveal line:col" request (Problems/Search click) once
+  // THIS page's editor exists — the bus holds it across the lazy load.
+  const pendingReveal = useIdeRevealBus((s) => s.pending);
+  React.useEffect(() => {
+    const view = viewRef.current;
+    if (!view || pendingReveal?.pageId !== pageId) return;
+    const reveal = useIdeRevealBus.getState().consume(pageId);
+    if (!reveal) return;
+    const doc = view.state.doc;
+    const lineInfo = doc.line(Math.max(1, Math.min(reveal.line, doc.lines)));
+    const pos = Math.min(lineInfo.from + Math.max(0, reveal.col - 1), lineInfo.to);
+    view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: "center" }) });
+    view.focus();
+  }, [pendingReveal, pageId, blockId]);
+
+  // Wire the language server ONLY in IDE mode (keeps @codemirror/lsp-client out
+  // of the base editor chunk — dynamic import). Reconfigures on file/lang change;
+  // the URI matches the materialized on-disk path so cross-file resolution works.
+  React.useEffect(() => {
+    let active = true;
+    const clear = () => {
+      const view = viewRef.current;
+      const compartment = lspCompartmentRef.current;
+      if (view && compartment) view.dispatch({ effects: compartment.reconfigure([]) });
+    };
+    if (!isIdeMode || !workspaceId || !blockId) { clear(); return; }
+    void import("../model/lspClient").then(({ lspExtensionFor, lspServerFor }) => {
+      if (!active) return;
+      if (!lspServerFor(languageId)) { clear(); return; }
+      const rel = pathForPage(pageId, (id) => usePageStore.getState().pageById(id));
+      const ext = lspExtensionFor(languageId, `file:///workspace/${rel}`, workspaceId);
+      const view = viewRef.current;
+      const compartment = lspCompartmentRef.current;
+      if (active && view && compartment && ext) view.dispatch({ effects: compartment.reconfigure(ext) });
+    });
+    return () => { active = false; };
+  }, [pageId, blockId, languageId, isIdeMode, workspaceId]);
+
   if (!contentLoaded || !blockId) return <LoadingPane />;
 
   return (
     <div data-code-theme="dark" data-osio-ide className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
+      {conflict && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1.5 text-[12px] text-[var(--osio-warning,#d97706)]">
+          <span className="min-w-0 flex-1 truncate">
+            The sandbox version of this file differs from your edits.
+          </span>
+          <button
+            type="button"
+            onClick={resolveKeepMine}
+            className="shrink-0 rounded border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
+          >
+            Keep mine
+          </button>
+          <button
+            type="button"
+            onClick={resolveTakeSandbox}
+            className="shrink-0 rounded border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
+          >
+            Take sandbox
+          </button>
+        </div>
+      )}
       <div ref={hostRef} className="min-h-0 flex-1 overflow-hidden" />
       {showConsole && (
         <div className="h-56 shrink-0 overflow-hidden">

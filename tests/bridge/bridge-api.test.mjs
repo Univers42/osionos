@@ -426,7 +426,12 @@ describe('osionos bridge receiver', () => {
 			const patchedText = await patchedResponse.text();
 			assert.equal(patchedResponse.status, 200, patchedText);
 			const patched = JSON.parse(patchedText);
-			assert.equal(patched.title, 'Pipeline Dashboard v2');
+			// The page PATCH now responds return=minimal-style {ok,updatedAt} instead
+			// of echoing the full row (the callers all ignore the body).
+			assert.equal(patched.ok, true);
+			assert.equal(typeof patched.updatedAt, 'string');
+			// Cascade still archives descendants — guards the return=minimal cascade fix
+			// (baasRest returns null on an empty body, so the guard can't depend on it).
 			assert.equal(pages.get(childPageId).archived_at, archivedAt);
 
 			const deletedResponse = await fetch(`${baseUrl}/api/pages/${pageId}`, { method: 'DELETE', headers });

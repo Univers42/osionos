@@ -15,6 +15,7 @@
  * engine's exporters, plus Reset. A plain button group — no portaled menu.
  */
 
+import { memo } from "react";
 import type { DrawEngine } from "@osionos/draw-engine";
 
 function download(filename: string, blob: Blob): void {
@@ -51,7 +52,7 @@ const BTN_STYLE: React.CSSProperties = {
   fontWeight: 600,
 };
 
-export function DrawActions({ engine }: { engine: DrawEngine | null }) {
+function DrawActionsImpl({ engine }: { engine: DrawEngine | null }) {
   const exportPng = async () => {
     const blob = await engine?.exportPng();
     if (blob) download("drawing.png", blob);
@@ -85,3 +86,7 @@ export function DrawActions({ engine }: { engine: DrawEngine | null }) {
     </div>
   );
 }
+
+/** Memoised: `engine` is stable after mount, so this never re-renders with the
+ *  host's per-frame camera flushes. */
+export const DrawActions = memo(DrawActionsImpl);

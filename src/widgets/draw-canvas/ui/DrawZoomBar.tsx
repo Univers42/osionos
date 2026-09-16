@@ -17,6 +17,7 @@
  * is needed.
  */
 
+import { memo } from "react";
 import { Focus, Maximize, ZoomIn, ZoomOut } from "lucide-react";
 import type { DrawEngine } from "@osionos/draw-engine";
 
@@ -49,7 +50,7 @@ const BTN_STYLE: React.CSSProperties = {
   fontWeight: 600,
 };
 
-export function DrawZoomBar({
+function DrawZoomBarImpl({
   engine,
   zoom,
   contentVisible,
@@ -97,3 +98,7 @@ export function DrawZoomBar({
     </div>
   );
 }
+
+/** Memoised: re-renders only when the rAF-coalesced zoom/visibility flush lands,
+ *  not on every unrelated host state change (selection, text edit, tool). */
+export const DrawZoomBar = memo(DrawZoomBarImpl);

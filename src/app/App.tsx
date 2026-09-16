@@ -32,7 +32,9 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPagePrune";
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
-import { LazyCanvasDebugRoute, LazyMainContent, LazyStyleGuideRoute } from "./lazyAppRegions";
+import { LazyCanvasDebugRoute, LazyIdeShell, LazyMainContent, LazyStyleGuideRoute } from "./lazyAppRegions";
+import { isIdeEnabled } from "@/shared/config/featureFlags";
+import { useIdeModeStore } from "@/features/ide/model/ideModeStore";
 import { applyStoredAppearance } from "@/shared/config/theme";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
@@ -100,9 +102,19 @@ function uniqueSessionWorkspaces(sessions: UserSessions) {
 
 async function seedEmptyOnlineWorkspaces(sessions: UserSessions, jwt: string) {
   const uniqueWorkspaces = uniqueSessionWorkspaces(sessions);
-  await Promise.all(
-    uniqueWorkspaces.map((workspace) => usePageStore.getState().fetchPages(workspace._id, jwt)),
+  // usePageSync's hydrate is the canonical pull for every accessible workspace; don't
+  // duplicate it. Read the store (hydrate populates it) and only fetch workspaces that
+  // still look empty — either genuinely empty (need a server-confirmed pull before we seed)
+  // or not yet hydrated. fetchPages' TTL de-thrashes any overlap with a concurrent
+  // sidebar/files-panel mount and with seedOnlinePages' own per-workspace re-check.
+  const emptyWorkspaces = uniqueWorkspaces.filter(
+    (workspace) => (usePageStore.getState().pages[workspace._id] ?? []).length === 0,
   );
+  if (emptyWorkspaces.length > 0) {
+    await Promise.all(
+      emptyWorkspaces.map((workspace) => usePageStore.getState().fetchPages(workspace._id, jwt)),
+    );
+  }
 
   const pages = usePageStore.getState().pages;
   const anyEmpty = uniqueWorkspaces.some(
@@ -194,6 +206,13 @@ const App: React.FC = () => {
   // Zen (focus) mode — Ctrl+K Ctrl+Z. Drives [data-zen] on the shell; global.css
   // hides every chrome region off it. Session-only: a reload always exits zen.
   const zen = useZenMode((s) => s.zen);
+
+  // Dedicated IDE layout: flip the content region into the VS Code-style shell
+  // when this workspace is in IDE mode (double-gated on the osio.ide flag, so a
+  // stock build never renders it and the normal grid is untouched).
+  const activeWorkspaceId = activeWorkspace?._id ?? "";
+  const ideModeOn = useIdeModeStore((s) => (activeWorkspaceId ? s.byWorkspace[activeWorkspaceId] === true : false));
+  const showIde = ideModeOn && isIdeEnabled();
 
   // Database automations → app services: notify events become toasts; webhook
   // actions route through the bridge's SSRF-guarded proxy endpoint.
@@ -341,9 +360,10 @@ const App: React.FC = () => {
         {/* Floating trigger for when sidebar is closed */}
         <SidebarTrigger />
 
-        {/* Content area */}
+        {/* Content area — the dedicated IDE shell when this workspace is in IDE
+            mode, otherwise the normal tabbed/splittable workspace grid. */}
         <main className="flex-1 flex min-w-0 overflow-hidden relative">
-          <LazyMainContent />
+          {showIde ? <LazyIdeShell /> : <LazyMainContent />}
         </main>
       </div>
 
