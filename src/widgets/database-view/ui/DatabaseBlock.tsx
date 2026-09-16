@@ -301,6 +301,11 @@ const OPEN_IN_LAYOUT = {
   },
 } as const;
 
+// Ref-identity sentinel for the record editor's content write-back: distinct
+// from any real content value (which can be a Block[] OR undefined), so the very
+// first content observation seeds the baseline instead of being read as a change.
+const CONTENT_UNSEEDED = Symbol('database-record-content-unseeded');
+
 const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, onClose, openIn }) => {
   const databasePage = state.pages[pageId];
   const database = databasePage ? state.databases[databasePage.databaseId] : null;
@@ -343,14 +348,29 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
     }
   }, [database, databasePage, osionosPage, pageId, state]);
 
-  const osionosContentKey = JSON.stringify(osionosPage?.content ?? []);
+  // Push the record editor's block edits back into the engine page. The block
+  // editor allocates a fresh `content` array ref on every edit, so reference
+  // inequality is a reliable O(1) divergence signal — this effect fires on every
+  // content commit (~every 250ms while typing in the record peek), where the old
+  // JSON.stringify of the whole block tree (per render AND per commit) sat.
+  const lastSyncedContentRef =
+    React.useRef<Block[] | undefined | typeof CONTENT_UNSEEDED>(CONTENT_UNSEEDED);
 
   React.useEffect(() => {
     if (!databasePage || !osionosPage) return;
-    if (osionosContentKey !== JSON.stringify(databasePage.content ?? [])) {
-      state.updatePageContent(pageId, (osionosPage.content ?? []) as DatabasePageContent);
+    const content = osionosPage.content;
+    // First observation is the engine→osionos seed (effect above), already in
+    // sync — record the baseline without echoing identical content back, which
+    // would bump the engine page's updatedAt/lastEditedBy on every peek open.
+    if (lastSyncedContentRef.current === CONTENT_UNSEEDED) {
+      lastSyncedContentRef.current = content;
+      return;
     }
-  }, [databasePage, osionosContentKey, osionosPage, pageId, state]);
+    if (content !== lastSyncedContentRef.current) {
+      state.updatePageContent(pageId, (content ?? []) as DatabasePageContent);
+      lastSyncedContentRef.current = content;
+    }
+  }, [databasePage, osionosPage, pageId, state]);
 
   // Icon/cover write-back: the record page header edits the OSIONOS entry
   // (patchPage) — mirror it into the engine page so gallery/board cards show

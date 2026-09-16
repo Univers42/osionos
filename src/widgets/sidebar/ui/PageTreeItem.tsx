@@ -47,7 +47,7 @@ interface Props {
  *   on the top/bottom edge keeps it at the same depth (sibling, blue line).
  * – Hovering a collapsed folder mid-drag springs it open after a short dwell.
  */
-export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth = 0, activeId }) => {
+const PageTreeItemImpl: React.FC<Props> = ({ pageId, workspaceId, jwt, depth = 0, activeId }) => {
   const [expanded, setExpanded] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -262,3 +262,7 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
     </>
   );
 };
+
+// Memoized: props (ids/jwt/depth) are stable across content commits, so the
+// always-visible tree skips reconciling every row on each 250ms typing commit.
+export const PageTreeItem = React.memo(PageTreeItemImpl);

@@ -262,7 +262,13 @@ class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   constructor(private readonly options: KnownDatabaseAdapterOptions = {}) {}
 
   async loadState(): Promise<NotionState> {
-    return applyAdapterOptions(cloneState(useKnownDatabaseStateStore.getState().state), this.options);
+    // Shallow container copy — NOT a ~600KB structuredClone per inline /database
+    // block on mount (a synchronous paint-block + a full retained copy each). The
+    // submodule store updates records strictly immutably (dbmsStoreActions/pageSlice/
+    // databaseSlice spread on write and copy arrays before splice), so instance
+    // stores can structurally SHARE record objects with the known store with no
+    // write leaking back. Turns the deep clone into three container spreads.
+    return applyAdapterOptions(shallowCloneState(useKnownDatabaseStateStore.getState().state), this.options);
   }
 
   async findPages(query: PageQuery): Promise<Page[]> {
@@ -652,6 +658,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function cloneState(state: NotionState): NotionState {
   return clone(state);
+}
+
+// Fresh top-level containers, shared record objects. Safe only because every
+// instance-store write is immutable (new record on write) — see loadState.
+function shallowCloneState(state: NotionState): NotionState {
+  return { ...state, databases: { ...state.databases }, pages: { ...state.pages }, views: { ...state.views } };
 }
 
 function clone<T>(value: T): T {

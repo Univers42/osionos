@@ -52,18 +52,33 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
 
     const scan = () => {
       const els = Array.from(body.querySelectorAll(HEADING_SELECTOR));
-      setHeadings(
-        els.map((el, i) => ({
-          id: el.getAttribute("data-block-id") || `h-${i}`,
-          text: (el.textContent || "").trim() || "Untitled",
-          level: levelOf(el),
-        })),
+      const next = els.map((el, i) => ({
+        id: el.getAttribute("data-block-id") || `h-${i}`,
+        text: (el.textContent || "").trim() || "Untitled",
+        level: levelOf(el),
+      }));
+      // Identity-stable when nothing outline-visible changed: plain typing in a
+      // paragraph must not re-render the rail nor rebuild the scroll-spy IO.
+      setHeadings((prev) =>
+        prev.length === next.length &&
+        prev.every((h, i) => h.id === next[i].id && h.text === next[i].text && h.level === next[i].level)
+          ? prev
+          : next,
       );
     };
     scan();
-    const mo = new MutationObserver(scan);
+    // rAF-coalesced: a typing burst mutates characterData many times per frame;
+    // one scan per frame is plenty for a table of contents.
+    let raf = 0;
+    const mo = new MutationObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(scan);
+    });
     mo.observe(body, { childList: true, subtree: true, characterData: true });
-    return () => mo.disconnect();
+    return () => {
+      cancelAnimationFrame(raf);
+      mo.disconnect();
+    };
   }, [pageId]);
 
   // Scroll-spy: highlight the heading currently in view.

@@ -284,14 +284,28 @@ function readResolvedThemeName(): ResolvedThemeName {
   return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 }
 
+// getComputedStyle forces a style flush; caching by theme+palette means one read
+// per theme/palette combo instead of one per EditableContent instance (a 50-block
+// page did 50 style recalcs in a single mount commit). Keyed by both axes so a
+// theme OR palette switch recomputes; the observer-driven resolvedTheme change
+// re-runs the consumer memo, which then hits the fresh key.
+const themeDefaultInlineColorCache = new Map<string, string>();
+
 function getThemeDefaultInlineColor(theme: ResolvedThemeName) {
   if (typeof document !== "undefined" && readResolvedThemeName() === theme) {
+    const palette = document.documentElement.getAttribute("data-palette") ?? "";
+    const cacheKey = `${theme}|${palette}`;
+    const cached = themeDefaultInlineColorCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
     const computedInk = normalizeInlineColorToken(
       getComputedStyle(document.documentElement)
         .getPropertyValue("--osio-fg-default")
         .trim(),
     );
     if (computedInk) {
+      themeDefaultInlineColorCache.set(cacheKey, computedInk);
       return computedInk;
     }
   }
@@ -301,36 +315,46 @@ function getThemeDefaultInlineColor(theme: ResolvedThemeName) {
     : LIGHT_THEME_DEFAULT_INLINE_COLOR;
 }
 
-function loadRecentInlineColors() {
+// Parsed once per session (shared read-only array), not per EditableContent mount
+// — a 50-block page did 50 identical localStorage.getItem + JSON.parse in one
+// commit. saveRecentInlineColors keeps this in lockstep on write.
+let recentInlineColorsCache: string[] | null = null;
+
+function loadRecentInlineColors(): string[] {
   if (globalThis.window === undefined) {
     return [];
+  }
+  if (recentInlineColorsCache !== null) {
+    return recentInlineColorsCache;
   }
 
   try {
     const stored = JSON.parse(
       globalThis.localStorage.getItem(INLINE_COLOR_RECENTS_STORAGE_KEY) ?? "[]",
     );
-    if (!Array.isArray(stored)) {
-      return [];
-    }
-
-    return stored
-      .map((value) =>
-        typeof value === "string" ? normalizeInlineColorToken(value) : null,
-      )
-      .filter((value, index, colors): value is string => {
-        return Boolean(value) && colors.indexOf(value) === index;
-      })
-      .slice(0, MAX_INLINE_COLOR_RECENTS);
+    recentInlineColorsCache = Array.isArray(stored)
+      ? stored
+          .map((value) =>
+            typeof value === "string" ? normalizeInlineColorToken(value) : null,
+          )
+          .filter((value, index, colors): value is string => {
+            return Boolean(value) && colors.indexOf(value) === index;
+          })
+          .slice(0, MAX_INLINE_COLOR_RECENTS)
+      : [];
   } catch {
-    return [];
+    recentInlineColorsCache = [];
   }
+  return recentInlineColorsCache;
 }
 
 function saveRecentInlineColors(colors: readonly string[]) {
   if (globalThis.window === undefined) {
     return;
   }
+  // Refresh the module cache so the next mount reads the new list without a
+  // localStorage round-trip (kept in sync even if the write below fails).
+  recentInlineColorsCache = [...colors];
 
   try {
     globalThis.localStorage.setItem(

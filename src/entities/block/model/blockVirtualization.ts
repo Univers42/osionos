@@ -13,7 +13,11 @@
 import type { Block, BlockType } from "@/entities/block";
 
 export const ROOT_BLOCK_VIRTUALIZATION_THRESHOLD = 60;
-export const ROOT_BLOCK_VIRTUALIZATION_OVERSCAN = 12;
+// Overscan halved (12 → 6): each extra row beyond the viewport is a live
+// contenteditable with its own observer + listeners, so 12 kept ~24 extra
+// mounted; 6 keeps ~12. The virtualizer's caret-survival path (scrollToIndex +
+// VIRTUAL_BLOCK_FOCUS_EVENT) still covers scroll-out editing.
+export const ROOT_BLOCK_VIRTUALIZATION_OVERSCAN = 6;
 
 export const BLOCK_HEIGHT_ESTIMATE_BY_TYPE: Record<BlockType, number> = {
   paragraph: 36,

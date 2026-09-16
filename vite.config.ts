@@ -116,7 +116,7 @@ export default defineConfig(({ mode }) => {
           // Split the big, stable vendors into their own chunks so they cache
           // across deploys and download in parallel with the app entry instead
           // of inflating it. react-dom dominates; keep the React runtime together.
-          manualChunks(id) {
+          manualChunks(id, meta) {
             // Peel the large NDS icon registries (~125KB of app data) out of the
             // warm entry so they download in parallel instead of inflating it.
             if (/notion-database-sys[/\\].*[/\\]iconRegistry[AB]?\.ts$/.test(id)) return 'vendor-icon-registry';
@@ -128,6 +128,14 @@ export default defineConfig(({ mode }) => {
             // stays fast and a lazily-loaded icon still pulls only its bucket.
             const lucideIcon = /[/\\]lucide-react[/\\]dist[/\\]esm[/\\]icons[/\\]([^/\\]+)\.js$/.exec(id);
             if (lucideIcon) {
+              // Statically-imported chrome icons must NOT enter the buckets:
+              // sharing a bucket with the dynamic icon-map set turns that whole
+              // bucket into a static dependency of the importer's chunk — ~50
+              // static icons spread over the 32 hash buckets made ALL of them
+              // (≈940KB, 43% of warm JS) modulepreload at boot. Icons with any
+              // static importer stay with their importers (tree-shaken, a few
+              // KB); only map-only icons are bucketed and stay truly lazy.
+              if (meta.getModuleInfo(id)?.importers.length) return undefined;
               const name = lucideIcon[1];
               let hash = 0;
               for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) | 0;

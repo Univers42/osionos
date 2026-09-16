@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { SplitSquareHorizontal, SplitSquareVertical, X } from "lucide-react";
 import { IconButton } from "@/shared/ui/atoms/IconButton";
 import { useSidebarTreeDnd } from "@/widgets/sidebar/model/sidebarTreeDnd";
@@ -40,6 +40,8 @@ export const TabStrip: React.FC<{ pane: PaneNode }> = ({ pane }) => {
   const endDrag = useSidebarTreeDnd((s) => s.endDrag);
   const listRef = useRef<HTMLDivElement>(null);
   const [hint, setHint] = useState<DropHint | null>(null);
+  const onSelectTab = useCallback((tabId: string) => setActiveTab(pane.id, tabId), [pane.id, setActiveTab]);
+  const onCloseTab = useCallback((tabId: string) => closeTab(pane.id, tabId), [pane.id, closeTab]);
 
   function computeHint(clientX: number): DropHint {
     const children = listRef.current
@@ -122,8 +124,8 @@ export const TabStrip: React.FC<{ pane: PaneNode }> = ({ pane }) => {
               paneId={pane.id}
               active={tab.tabId === pane.activeTabId}
               replaceTarget={hint?.replaceTabId === tab.tabId}
-              onSelect={() => setActiveTab(pane.id, tab.tabId)}
-              onClose={() => closeTab(pane.id, tab.tabId)}
+              onSelect={onSelectTab}
+              onClose={onCloseTab}
             />
           </React.Fragment>
         ))}

@@ -21,8 +21,8 @@ interface Props {
   tab: WorkspaceTab;
   paneId: string;
   active: boolean;
-  onSelect: () => void;
-  onClose: () => void;
+  onSelect: (tabId: string) => void;
+  onClose: (tabId: string) => void;
   /** Highlighted as the drop target that will be REPLACED by a dragged file. */
   replaceTarget?: boolean;
 }
@@ -30,7 +30,7 @@ interface Props {
 /** One onglet: draggable between panes, click to focus, × to close. The Home tab
  *  is a normal tab now — its variant picker (Dashboard / Second Brain / Database /
  *  Gallery) moved to the activity rail's Home button (RailHomeButton). */
-export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onClose, replaceTarget }) => {
+const TabButtonImpl: React.FC<Props> = ({ tab, paneId, active, onSelect, onClose, replaceTarget }) => {
   const beginTabDrag = useSidebarTreeDnd((s) => s.beginTabDrag);
   const endDrag = useSidebarTreeDnd((s) => s.endDrag);
   const title = tab.title || (tab.kind === "home" ? "Home" : "Untitled");
@@ -44,7 +44,7 @@ export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onCl
         beginTabDrag();
       }}
       onDragEnd={endDrag}
-      onClick={onSelect}
+      onClick={() => onSelect(tab.tabId)}
       title={title}
       data-tab-id={tab.tabId}
       className={[
@@ -64,7 +64,7 @@ export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onCl
         type="button"
         aria-label={`Close ${title}`}
         className="shrink-0 rounded-[var(--osio-radius-chip)] p-1 text-[var(--osio-fg-muted)] opacity-0 transition-[opacity,background-color,color] duration-[var(--osio-dur-fast)] group-hover/tab:opacity-100 focus-visible:opacity-100 hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--osio-focus-ring-color)]"
-        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        onClick={(e) => { e.stopPropagation(); onClose(tab.tabId); }}
         title="Close tab"
       >
         <X size={14} />
@@ -72,3 +72,7 @@ export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onCl
     </div>
   );
 };
+
+// Memoized: during a drag the strip re-renders on every dragover (drop-hint
+// state); stable tabId-keyed handlers let untouched onglets skip entirely.
+export const TabButton = React.memo(TabButtonImpl);

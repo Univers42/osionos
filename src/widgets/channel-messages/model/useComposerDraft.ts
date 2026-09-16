@@ -17,7 +17,7 @@
  * orchestrator reads `attachments` and passes them straight to actions.send().
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Attachment } from '@/shared/chat/messageApi';
 
@@ -42,6 +42,10 @@ export function caretAnchor(textarea: HTMLTextAreaElement): SlashAnchor {
   return { x: rect.left + 8, y: rect.top, top: rect.top };
 }
 
+/** Trailing debounce for draft persistence — one localStorage write per typing
+ * burst instead of one per keystroke (a synchronous write blocks the hot path). */
+const PERSIST_DEBOUNCE_MS = 400;
+
 export function useComposerDraft(storageKey?: string) {
   const [text, setText] = useState(() => readDraft(storageKey));
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -50,13 +54,39 @@ export function useComposerDraft(storageKey?: string) {
 
   // Persist the unsent text per channel so switching/reloading doesn't lose it.
   // Attachments stay ephemeral (their blob: previews die across a reload anyway).
+  // `text` changes every keystroke, so a synchronous localStorage write per change
+  // stutters typing — coalesce into one trailing write, flushed synchronously on
+  // teardown (unmount / channel switch) so a pending draft is never dropped.
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingDraft = useRef<{ key: string; text: string } | null>(null);
+
+  const flushDraft = useCallback(() => {
+    if (persistTimer.current !== null) {
+      clearTimeout(persistTimer.current);
+      persistTimer.current = null;
+    }
+    const pending = pendingDraft.current;
+    if (!pending) return;
+    pendingDraft.current = null;
+    try {
+      if (pending.text.trim()) localStorage.setItem(pending.key, pending.text);
+      else localStorage.removeItem(pending.key);
+    } catch { /* private mode / quota — best-effort */ }
+  }, []);
+
   useEffect(() => {
     if (!storageKey) return;
-    try {
-      if (text.trim()) localStorage.setItem(storageKey, text);
-      else localStorage.removeItem(storageKey);
-    } catch { /* private mode / quota — best-effort */ }
-  }, [text, storageKey]);
+    pendingDraft.current = { key: storageKey, text };
+    if (persistTimer.current !== null) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(flushDraft, PERSIST_DEBOUNCE_MS);
+  }, [text, storageKey, flushDraft]);
+
+  // Flush the pending write before the key changes and on unmount, so the
+  // debounce never drops the last keystrokes.
+  useEffect(() => {
+    if (!storageKey) return undefined;
+    return flushDraft;
+  }, [storageKey, flushDraft]);
 
   const addAttachment = useCallback((attachment: Attachment) => {
     setAttachments((current) => [...current, attachment]);
@@ -71,6 +101,9 @@ export function useComposerDraft(storageKey?: string) {
     setAttachments([]);
     setSlashAnchor(null);
     setSlashFilter('');
+    // Cancel any pending debounced write so it can't resurrect the cleared draft.
+    if (persistTimer.current !== null) { clearTimeout(persistTimer.current); persistTimer.current = null; }
+    pendingDraft.current = null;
     if (storageKey) { try { localStorage.removeItem(storageKey); } catch { /* ignore */ } }
   }, [storageKey]);
 

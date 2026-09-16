@@ -58,10 +58,16 @@ playground_mongo_port="${PLAYGROUND_MONGO_PORT:-27018}"
 
 case "${COMMAND}" in
   build)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh build "$@"
+    # The app outgrew Node's default ~2GiB heap in rollup's render phase —
+    # forward the cap (and ANALYZE for the stats plugin) into the container.
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps \
+      -e NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}" -e ANALYZE \
+      playground bash scripts/docker-run.sh build "$@"
     ;;
   build-offline)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh build-offline "$@"
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps \
+      -e NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}" \
+      playground bash scripts/docker-run.sh build-offline "$@"
     ;;
   preview)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --service-ports --no-deps playground bash scripts/docker-run.sh preview "$@"

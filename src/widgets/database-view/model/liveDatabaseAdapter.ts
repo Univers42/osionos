@@ -63,15 +63,38 @@ const liveAdapterCache = new Map<string, ObjectDatabaseAdapter>();
 const REVISIT_TTL_MS = 30_000;
 const stateCache = new Map<string, { state: unknown; at: number }>();
 
+/**
+ * Bound both revisit caches: without a cap, every distinct live table opened in
+ * a long SPA session pins a full loadState snapshot (pages from up to 2000 rows)
+ * + adapter for the whole page lifetime — unbounded growth on a constrained
+ * host. A Map preserves insertion order, so the first key is least-recently-used;
+ * re-set on access moves a key to the tail, and inserting past the cap evicts it.
+ */
+const REVISIT_CACHE_CAP = 8; // ~a handful of concurrently open DB tabs — plenty in practice
+
+function touchLruCache<V>(cache: Map<string, V>, key: string, value: V): void {
+  cache.delete(key); // re-set lands at the tail, marking `key` most-recently-used
+  if (cache.size >= REVISIT_CACHE_CAP) {
+    for (const oldest of cache.keys()) {
+      cache.delete(oldest); // evict the least-recently-used before inserting
+      break;
+    }
+  }
+  cache.set(key, value);
+}
+
 function withRevisitCache(adapter: ObjectDatabaseAdapter, databaseId: string): ObjectDatabaseAdapter {
   return new Proxy(adapter, {
     get(target, prop, receiver) {
       if (prop === "loadState") {
         return async () => {
           const hit = stateCache.get(databaseId);
-          if (hit && Date.now() - hit.at < REVISIT_TTL_MS) return hit.state;
+          if (hit && Date.now() - hit.at < REVISIT_TTL_MS) {
+            touchLruCache(stateCache, databaseId, hit); // mark MRU; keep `at` so TTL still gates
+            return hit.state;
+          }
           const state = await (target.loadState as () => Promise<unknown>)();
-          stateCache.set(databaseId, { state, at: Date.now() });
+          touchLruCache(stateCache, databaseId, { state, at: Date.now() });
           return state;
         };
       }
@@ -114,9 +137,12 @@ try {
  *  well-formed live id (callers fall through to the other database modes). */
 export function getLiveDatabaseAdapter(databaseId: string): ObjectDatabaseAdapter | null {
   const cached = liveAdapterCache.get(databaseId);
-  if (cached) return cached;
+  if (cached) {
+    touchLruCache(liveAdapterCache, databaseId, cached); // revisit — mark MRU
+    return cached;
+  }
   if (parseLiveDatabaseId(databaseId) === null) return null;
   const adapter = withRevisitCache(new LiveMountAdapter(databaseId), databaseId);
-  liveAdapterCache.set(databaseId, adapter);
+  touchLruCache(liveAdapterCache, databaseId, adapter);
   return adapter;
 }

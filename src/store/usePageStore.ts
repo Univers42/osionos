@@ -215,7 +215,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       const pages = { ...s.pages };
       delete pages[workspaceId];
       savePagesCache(pages, workspaceId);
-      return derivePageState(pages, s.pageIdsByWorkspace);
+      return derivePageState(pages, s.pageIdsByWorkspace, s.pagesIndex);
     });
   },
 
@@ -236,7 +236,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         );
         schedulePagesCachePersist(pages, page.workspaceId);
         return {
-          ...derivePageState(pages, s.pageIdsByWorkspace),
+          ...derivePageState(pages, s.pageIdsByWorkspace, s.pagesIndex),
           pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
         };
       });
@@ -256,7 +256,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       );
       schedulePagesCachePersist(pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...derivePageState(pages, s.pageIdsByWorkspace, s.pagesIndex),
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -275,7 +275,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       );
       schedulePagesCachePersist(pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...derivePageState(pages, s.pageIdsByWorkspace, s.pagesIndex),
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -294,7 +294,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       );
       schedulePagesCachePersist(pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...derivePageState(pages, s.pageIdsByWorkspace, s.pagesIndex),
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -315,7 +315,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       );
       savePagesCache(pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...derivePageState(pages, s.pageIdsByWorkspace, s.pagesIndex),
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -334,7 +334,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       );
       schedulePagesCachePersist(pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...derivePageState(pages, s.pageIdsByWorkspace, s.pagesIndex),
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -353,7 +353,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       );
       schedulePagesCachePersist(pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...derivePageState(pages, s.pageIdsByWorkspace, s.pagesIndex),
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -372,7 +372,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       );
       schedulePagesCachePersist(pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...derivePageState(pages, s.pageIdsByWorkspace, s.pagesIndex),
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -392,7 +392,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         );
         schedulePagesCachePersist(pages, page.workspaceId);
         return {
-          ...derivePageState(pages, s.pageIdsByWorkspace),
+          ...derivePageState(pages, s.pageIdsByWorkspace, s.pagesIndex),
           pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
         };
       });
@@ -414,7 +414,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       };
       schedulePagesCachePersist(pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...derivePageState(pages, s.pageIdsByWorkspace, s.pagesIndex),
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     }));
@@ -441,7 +441,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       );
       schedulePagesCachePersist(pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...derivePageState(pages, s.pageIdsByWorkspace, s.pagesIndex),
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });

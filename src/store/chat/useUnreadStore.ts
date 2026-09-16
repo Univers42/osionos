@@ -25,12 +25,21 @@ interface UnreadStore {
 
 const STORE_NAME = 'osionos:chat:unread';
 
+/** True when two count maps are value-identical — lets setCounts no-op the 60s
+ *  poll's fresh-object write so its ~5 subscribers don't re-render on no change. */
+function sameCounts(a: Record<string, number>, b: Record<string, number>): boolean {
+  const keys = Object.keys(a);
+  if (keys.length !== Object.keys(b).length) return false;
+  for (const key of keys) if (a[key] !== b[key]) return false;
+  return true;
+}
+
 export const useUnreadStore = create<UnreadStore>()(
   persist(
     (set, get) => ({
       counts: {},
       lastSeen: {},
-      setCounts: (counts) => set({ counts }),
+      setCounts: (counts) => set((state) => (sameCounts(state.counts, counts) ? state : { counts })),
       markSeen: (channelId) => {
         const counts = { ...get().counts };
         delete counts[channelId];

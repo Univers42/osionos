@@ -158,6 +158,7 @@ export function loadPagesCache(): Record<string, PageEntry[]> {
 export function derivePageState(
   pages: Record<string, PageEntry[]>,
   previousPageIdsByWorkspace: Record<string, string[]> = {},
+  previousPagesIndex: Record<string, PageIndexEntry> = {},
 ): PageDerivedState {
   const pageIdsByWorkspace: Record<string, string[]> = {};
   const pagesIndex: Record<string, PageIndexEntry> = {};
@@ -174,7 +175,28 @@ export function derivePageState(
       : pageIds;
   }
 
-  return { pages, pageIdsByWorkspace, pagesIndex };
+  // Content-only commits (typing) don't move pages between workspaces or
+  // reorder them — keep the previous pagesIndex IDENTITY then, so always-on
+  // subscribers (the sidebar tree) stop re-rendering ~4×/sec during bursts.
+  return {
+    pages,
+    pageIdsByWorkspace,
+    pagesIndex: samePagesIndex(previousPagesIndex, pagesIndex) ? previousPagesIndex : pagesIndex,
+  };
+}
+
+function samePagesIndex(
+  previous: Record<string, PageIndexEntry>,
+  next: Record<string, PageIndexEntry>,
+): boolean {
+  const nextIds = Object.keys(next);
+  if (Object.keys(previous).length !== nextIds.length) return false;
+  for (const id of nextIds) {
+    const a = previous[id];
+    const b = next[id];
+    if (!a || a.workspaceId !== b.workspaceId || a.index !== b.index) return false;
+  }
+  return true;
 }
 
 function areStringArraysEqual(left: readonly string[] | undefined, right: readonly string[]): left is string[] {
