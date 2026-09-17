@@ -259,11 +259,11 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
       if (view && compartment) view.dispatch({ effects: compartment.reconfigure([]) });
     };
     if (!isIdeMode || !workspaceId || !blockId) { clear(); return; }
-    void import("../model/lspClient").then(({ lspExtensionFor, lspServerFor }) => {
+    void import("../model/lspClient").then(async ({ lspExtensionFor, lspServerFor }) => {
       if (!active) return;
       if (!lspServerFor(languageId)) { clear(); return; }
       const rel = pathForPage(pageId, (id) => usePageStore.getState().pageById(id));
-      const ext = lspExtensionFor(languageId, `file:///workspace/${rel}`, workspaceId);
+      const ext = await lspExtensionFor(languageId, `file:///workspace/${rel}`, workspaceId);
       const view = viewRef.current;
       const compartment = lspCompartmentRef.current;
       if (active && view && compartment && ext) view.dispatch({ effects: compartment.reconfigure(ext) });

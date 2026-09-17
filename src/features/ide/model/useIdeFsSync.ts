@@ -23,6 +23,7 @@ import { decideInboundWrite, recordSyncedHash, clearSyncedHash, syncedHashOf } f
 import { useIdeSyncConflicts } from "./ideSyncConflicts";
 import { materializeWorkspace } from "./materialize";
 import { pageStoreFacade } from "./pageStoreFacade";
+import { createReconnectBackoff } from "./reconnectBackoff";
 import { usePageStore } from "@/store/usePageStore";
 
 /** Normalize a container path to the sanitized segment form pages use. */
@@ -129,7 +130,7 @@ export async function applyFsEvent(evt: FsEvent, workspaceId: string): Promise<v
  * Live writeback (P4): streams the in-sandbox fs-agent's events, PUBLISHES them
  * on the per-workspace bus (the sandbox:// provider's watch() rides the same
  * socket), and maps them onto the page mount via the sync engine. On "ready"
- * it materializes the tree. Auto-reconnects with 1s/4s/15s backoff.
+ * it materializes the tree. Auto-reconnects with 1s/4s/15s backoff (reconnectBackoff).
  */
 export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
   useEffect(() => {
@@ -137,7 +138,7 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
     let disposed = false;
     let ws: WebSocket | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let attempt = 0;
+    const backoff = createReconnectBackoff();
 
     const connect = () => {
       const jwt = getActivePageJwt() ?? "";
@@ -147,8 +148,8 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
       ws.binaryType = "arraybuffer";
 
       let buffer = "";
-      ws.onopen = () => { attempt = 0; };
       ws.onmessage = (ev) => {
+        backoff.delivered();
         buffer += typeof ev.data === "string" ? ev.data : new TextDecoder().decode(ev.data);
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
@@ -161,8 +162,7 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
       };
       ws.onclose = () => {
         if (disposed) return;
-        const delayMs = [1000, 4000, 15000][Math.min(attempt, 2)];
-        attempt += 1;
+        const delayMs = backoff.next();
         ideOutput("fs-sync", `disconnected — reconnecting in ${delayMs / 1000}s`);
         console.warn(`[ide] fs sync disconnected — reconnecting in ${delayMs / 1000}s`);
         timer = setTimeout(connect, delayMs);
