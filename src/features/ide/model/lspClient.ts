@@ -17,6 +17,7 @@ import { API_BASE, getActivePageJwt } from "@/shared/api/client";
 import { frameLsp, createLspFramer } from "./lspFraming";
 import { ideWsProtocols } from "./useIdeTerminal";
 import { useDiagnosticsStore, type IdeDiagnostic } from "./diagnosticsStore";
+import { LSP_REQUEST_TIMEOUT_MS, whenInitialized } from "./lspReady";
 
 // CodeMirror languageId → sandbox LSP server key (bridge LSP_SERVERS). Only these
 // have a server installed in the sandbox image; anything else → no LSP. clangd
@@ -90,19 +91,34 @@ function connect(serverLang: string, workspaceId: string): { transport: Transpor
   return { transport, ws };
 }
 
-// One LSPClient per (workspace, server). Evicted when its socket closes so the
-// next file open reconnects — a stopped/reaped sandbox self-heals.
-const clients = new Map<string, LSPClient>();
+// One connection per (workspace, server). Dropped when its socket closes or its server
+// never initializes, so the next file open dials again — a restarted sandbox self-heals.
+interface LspConnection {
+  client: LSPClient;
+  ws: WebSocket;
+  closed: Promise<void>;
+}
 
-function getClient(serverLang: string, workspaceId: string): LSPClient {
+const connections = new Map<string, LspConnection>();
+
+function dropConnection(key: string, conn: LspConnection): void {
+  if (connections.get(key) === conn) connections.delete(key);
+  conn.client.disconnect();
+  try { conn.ws.close(); } catch { /* already closed */ }
+}
+
+function getConnection(serverLang: string, workspaceId: string): { key: string; conn: LspConnection } {
   const key = `${workspaceId}::${serverLang}`;
-  const existing = clients.get(key);
-  if (existing) return existing;
+  const existing = connections.get(key);
+  if (existing) return { key, conn: existing };
   const { transport, ws } = connect(serverLang, workspaceId);
-  ws.addEventListener("close", () => clients.delete(key));
-  ws.addEventListener("error", () => clients.delete(key));
+  const closed = new Promise<void>((resolve) => {
+    ws.addEventListener("close", () => resolve());
+    ws.addEventListener("error", () => resolve());
+  });
   const client = new LSPClient({
     rootUri: "file:///workspace",
+    timeout: LSP_REQUEST_TIMEOUT_MS,
     notificationHandlers: {
       // Tap diagnostics for the Problems panel; return false so the built-in
       // lint extension still drives the in-editor gutter.
@@ -113,21 +129,29 @@ function getClient(serverLang: string, workspaceId: string): LSPClient {
       },
     },
   }).connect(transport);
-  clients.set(key, client);
-  return client;
+  const conn = { client, ws, closed };
+  connections.set(key, conn);
+  void closed.then(() => { if (connections.get(key) === conn) connections.delete(key); });
+  return { key, conn };
 }
 
 /**
  * The CodeMirror extension wiring a document to its language server (completion,
- * hover, diagnostics, goto). Returns null when the language has no server or the
- * bridge is unconfigured. Dynamically imported by CodeFileView so
+ * hover, diagnostics, goto), once that server has initialized. Resolves null when
+ * the language has no server, the bridge is unconfigured, or the server is not
+ * reachable (e.g. a stopped sandbox). Dynamically imported by CodeFileView so
  * @codemirror/lsp-client never lands in the base editor chunk.
  */
-export function lspExtensionFor(languageId: string, uri: string, workspaceId: string): Extension | null {
+export async function lspExtensionFor(languageId: string, uri: string, workspaceId: string): Promise<Extension | null> {
   const serverLang = lspServerFor(languageId);
   if (!serverLang || !API_BASE || !workspaceId) return null;
   try {
-    const client = getClient(serverLang, workspaceId);
+    const { key, conn } = getConnection(serverLang, workspaceId);
+    const client = await whenInitialized(conn.client, conn.closed);
+    if (!client) {
+      dropConnection(key, conn);
+      return null;
+    }
     return languageServerSupport(client, uri, LSP_DOC_LANG[languageId] ?? languageId);
   } catch {
     return null;
