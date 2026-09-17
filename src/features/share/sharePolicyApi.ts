@@ -14,6 +14,7 @@
  *  roles, policies CRUD and the central decide endpoint, all via /api/perms/*. */
 
 import { api } from '@/shared/api/client';
+import { permsBearer } from './shareApi';
 import type { EnginePolicyPayload, EnginePolicyRow, EngineRole } from './types';
 
 export interface DecideRequest {
@@ -32,27 +33,27 @@ export interface DecideResponse {
 
 /** All engine roles (id/name/description/metadata). */
 export async function fetchRoles(): Promise<EngineRole[]> {
-  const body = await api.get<{ roles: EngineRole[] }>('/api/perms/roles');
+  const body = await api.get<{ roles: EngineRole[] }>('/api/perms/roles', permsBearer());
   return body.roles ?? [];
 }
 
 /** Every resource policy, including ids (needed for deletes). */
 export async function fetchPolicies(): Promise<EnginePolicyRow[]> {
-  const body = await api.get<{ policies: EnginePolicyRow[] }>('/api/perms/policies');
+  const body = await api.get<{ policies: EnginePolicyRow[] }>('/api/perms/policies', permsBearer());
   return body.policies ?? [];
 }
 
 /** Create one policy row. */
 export async function createPolicy(payload: EnginePolicyPayload): Promise<EnginePolicyRow> {
-  return api.post<EnginePolicyRow>('/api/perms/policies', payload);
+  return api.post<EnginePolicyRow>('/api/perms/policies', payload, permsBearer());
 }
 
 /** Delete one policy row by id. */
 export async function deletePolicy(policyId: string): Promise<void> {
-  await api.delete<{ deleted: boolean }>(`/api/perms/policies/${encodeURIComponent(policyId)}`);
+  await api.delete<{ deleted: boolean }>(`/api/perms/policies/${encodeURIComponent(policyId)}`, permsBearer());
 }
 
 /** Central ABAC decision (the "View as" tester). */
 export async function decide(request: DecideRequest): Promise<DecideResponse> {
-  return api.post<DecideResponse>('/api/perms/decide', request);
+  return api.post<DecideResponse>('/api/perms/decide', request, permsBearer());
 }

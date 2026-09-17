@@ -38,7 +38,7 @@ import { createPublicHandler } from './bridge-public.mjs';
 import { createCollabHandler } from './bridge-collab.mjs';
 import { createCommunityHandler } from './bridge-communities.mjs';
 import { createFeedHandler } from './bridge-feed.mjs';
-import { handlePermsRoute } from './bridge-perms.mjs';
+import { createPermsHandler } from './bridge-perms.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
 import { createSocialHandler } from './bridge-social.mjs';
@@ -3279,7 +3279,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.ideOps(url, request, response, context.config)) return;
 	if (await context.social.connector(url, request, response, context.config)) return;
 		if (await context.social.oauth(url, request, response, context.config)) return;
-	if (await handlePermsRoute(request, response, url, context.fetchImpl)) return;
+	if (await context.social.perms(url, request, response, context.config)) return;
 	if (await context.social.rtc(url, request, response, context.config)) return;
 	if (await context.social.chat(url, request, response, context.config)) return;
 	if (await context.social.notify(url, request, response, context.config)) return;
@@ -3326,6 +3326,7 @@ export function createBridgeServer(options = {}) {
 	const social = options.social ?? {
 		agent: createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		perms: createPermsHandler({ verifySession: verifyAppSessionToken, requireWorkspaceAccess, fetchImpl }),
 		ideSandbox: createIdeSandboxHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
 		ideOps: createIdeOpsHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
 		idePreview: createIdePreviewHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
