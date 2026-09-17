@@ -6,108 +6,91 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/09/17 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 /**
  * Permission UX proxy for the osionos bridge (`/api/perms/*`).
  *
- * Standalone ES module: bridge-api.mjs (or any node:http server) wires it with
+ *     perms: createPermsHandler({ verifySession, requireWorkspaceAccess, fetchImpl })
+ *     if (await social.perms(url, request, response, config)) return;
  *
- *     import { handlePermsRoute } from './bridge-perms.mjs';
- *     // inside the request dispatcher, BEFORE the 404 fallthrough:
- *     if (await handlePermsRoute(request, response, url)) return;
- *
- * `handlePermsRoute(request, response, url, fetchImpl?) -> Promise<boolean>`
- * returns false (untouched response) when the path is not /api/perms/*.
- *
- * Routes served:
+ * Every route needs an app session (Authorization: Bearer <osionos_v1 token>).
  *   GET    /api/perms/people        → agency roster (.agency-people.env rows)
  *   GET    /api/perms/roles         → { roles:[{id,name,description,metadata}] }
  *   GET    /api/perms/policies      → { policies:[…incl. id] }
- *   POST   /api/perms/policies      → create resource policy (CreatePolicyDto)
- *   DELETE /api/perms/policies/:id  → delete resource policy
+ *   POST   /api/perms/policies      → create resource policy          (admin only)
+ *   DELETE /api/perms/policies/:id  → delete resource policy          (admin only)
  *   GET    /api/perms/bundle        → PolicyBundle (user_roles + policies)
  *   POST   /api/perms/decide        → ABAC decision {allow,reason,mode,mask?}
- *   GET    /api/perms/rules?workspaceId&resourceId → page AccessRule list
- *   POST   /api/perms/rules         → upsert an AbacEngine AccessRule object
- *   DELETE /api/perms/rules/:id     → delete a stored AccessRule
+ *   GET    /api/perms/rules?workspaceId&resourceId → AccessRules      (workspace `read`)
+ *   POST   /api/perms/rules         → upsert an AccessRule             (workspace `update`)
+ *   DELETE /api/perms/rules/:id     → delete an AccessRule             (workspace `update`)
+ * Workspace checks use the bridge's requireWorkspaceAccess (live membership, not the list
+ * frozen into the token at login). Rule ids are always minted here. Error bodies are
+ * generic; details go to the server log.
  *
- * Upstream: the mini-baas Kong `/permissions/v1` route (key-auth + the
- * permission-engine ServiceTokenGuard). Page AccessRules (normal, non-live
- * pages) are persisted in a local JSON store the AbacEngine shape, so the
- * notion-database-sys Mongo store can replace it without UI changes.
- *
- * Required env (each with its dev fallback):
- *   PERMS_KONG_URL        Kong proxy origin            (fallback AGENCY_KONG_URL,
- *                                                       default http://127.0.0.1:8002)
- *   PERMS_SERVICE_APIKEY  Kong key-auth `apikey` (service_role consumer key)
- *                                                      (fallback AGENCY_SERVICE_APIKEY)
- *   PERMS_SERVICE_TOKEN   permission-engine X-Service-Token
- *                                                      (fallback ADAPTER_REGISTRY_SERVICE_TOKEN)
- *   PERMS_TENANT_ID       X-Tenant-Id scope            (fallback AGENCY_TENANT_SLUG,
- *                                                       default "agency")
- *   PERMS_PEOPLE_ENV      roster file path             (default <repo>/tools/seeds/.agency-people.env)
- *   PERMS_RULES_FILE      AccessRule JSON store path   (default <app>/.perms-rules.json)
- *
- * Dev convenience: apps/grobase/.agency-tenant.env and apps/grobase/.env are
- * sourced (without overriding already-set vars) so a stock `make agency-all`
- * checkout needs zero configuration.
+ * Upstream: the mini-baas Kong `/permissions/v1` route, called with the bridge's SERVICE
+ * identity — hence the admin gate on writes. Settings (env first, then the dev files
+ * apps/grobase/.agency-tenant.env and apps/grobase/.env, read without touching
+ * process.env): PERMS_KONG_URL|AGENCY_KONG_URL, PERMS_SERVICE_APIKEY|AGENCY_SERVICE_APIKEY,
+ * PERMS_SERVICE_TOKEN|ADAPTER_REGISTRY_SERVICE_TOKEN, PERMS_TENANT_ID|AGENCY_TENANT_SLUG,
+ * PERMS_PEOPLE_ENV, PERMS_RULES_FILE, OSIONOS_ALLOWED_ORIGIN.
  */
 
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bearerToken, httpError } from './bridge-social-core.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
 const REPO_ROOT = resolve(APP_ROOT, '../../..');
+const ROUTE_PREFIX = '/api/perms/';
 const JSON_BODY_LIMIT = 64 * 1024;
-
-for (const file of [
-	resolve(REPO_ROOT, 'apps/grobase/.agency-tenant.env'),
-	resolve(REPO_ROOT, 'apps/grobase/.env'),
-]) {
-	if (!existsSync(file)) continue;
-	let text = '';
-	try { text = readFileSync(file, 'utf8'); } catch { continue; }
-	for (const rawLine of text.split(/\r?\n/)) {
-		const line = rawLine.trim();
-		if (!line || line.startsWith('#') || !line.includes('=')) continue;
-		const [key, ...rest] = line.split('=');
-		let value = rest.join('=').trim();
-		if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
-		if (key && process.env[key] === undefined) process.env[key] = value;
-	}
-}
-
-const CONFIG = {
-	kongUrl: (process.env.PERMS_KONG_URL || process.env.AGENCY_KONG_URL || 'http://127.0.0.1:8002').replace(/\/$/, ''),
-	serviceApikey: process.env.PERMS_SERVICE_APIKEY || process.env.AGENCY_SERVICE_APIKEY || '',
-	serviceToken: process.env.PERMS_SERVICE_TOKEN || process.env.ADAPTER_REGISTRY_SERVICE_TOKEN || '',
-	tenantId: process.env.PERMS_TENANT_ID || process.env.AGENCY_TENANT_SLUG || 'agency',
-	peopleEnv: process.env.PERMS_PEOPLE_ENV || resolve(REPO_ROOT, 'tools/seeds/.agency-people.env'),
-	rulesFile: process.env.PERMS_RULES_FILE || resolve(APP_ROOT, '.perms-rules.json'),
+const DEV_ENV_FILES = ['apps/grobase/.agency-tenant.env', 'apps/grobase/.env'];
+const PUBLIC_ERRORS = {
+	400: ['perms_bad_request', 'The request is invalid.'],
+	401: ['unauthorized', 'Sign in to manage permissions.'],
+	403: ['forbidden', 'You do not have permission to do that.'],
+	404: ['not_found', 'Not found.'],
+	413: ['payload_too_large', 'The request body is too large.'],
+	500: ['perms_internal_error', 'Something went wrong on the bridge.'],
+	502: ['perms_upstream_unreachable', 'The permission engine did not answer.'],
+	503: ['perms_unavailable', 'Permissions are not available right now.'],
 };
 
-/** CORS origin for browser callers (the app runs cross-origin on :3001). */
-const ALLOWED_ORIGIN = process.env.OSIONOS_ALLOWED_ORIGIN || 'https://localhost:3001';
-
-function corsHeaders() {
-	return {
-		'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-		'Access-Control-Allow-Credentials': 'true',
-		Vary: 'Origin',
-	};
+/** KEY=value pairs of the dev env files; the first file that defines a key wins. */
+function readDevEnvFiles() {
+	const values = {};
+	for (const file of DEV_ENV_FILES.map((rel) => resolve(REPO_ROOT, rel))) {
+		let text = '';
+		try { text = readFileSync(file, 'utf8'); } catch { continue; }
+		for (const line of text.split(/\r?\n/).map((raw) => raw.trim())) {
+			const eq = line.indexOf('=');
+			if (!line || line.startsWith('#') || eq < 1) continue;
+			const value = line.slice(eq + 1).trim().replace(/^(["'])(.*)\1$/, '$2');
+			values[line.slice(0, eq)] ??= value;
+		}
+	}
+	return values;
 }
 
-function sendJson(response, status, body) {
-	const payload = JSON.stringify(body);
-	response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...corsHeaders() });
-	response.end(payload);
-	return true;
+/** Upstream + storage settings: the process environment first, then the dev env files. */
+export function loadPermsSettings(env = process.env) {
+	const file = readDevEnvFiles();
+	const pick = (...keys) => keys.map((key) => env[key] ?? file[key]).find(Boolean) ?? '';
+	return {
+		kongUrl: (pick('PERMS_KONG_URL', 'AGENCY_KONG_URL') || 'http://127.0.0.1:8002').replace(/\/$/, ''),
+		serviceApikey: pick('PERMS_SERVICE_APIKEY', 'AGENCY_SERVICE_APIKEY'),
+		serviceToken: pick('PERMS_SERVICE_TOKEN', 'ADAPTER_REGISTRY_SERVICE_TOKEN'),
+		tenantId: pick('PERMS_TENANT_ID', 'AGENCY_TENANT_SLUG') || 'agency',
+		peopleEnv: pick('PERMS_PEOPLE_ENV') || resolve(REPO_ROOT, 'tools/seeds/.agency-people.env'),
+		rulesFile: pick('PERMS_RULES_FILE') || resolve(APP_ROOT, '.perms-rules.json'),
+		allowedOrigin: pick('OSIONOS_ALLOWED_ORIGIN') || 'https://localhost:3001',
+	};
 }
 
 function readJsonBody(request) {
@@ -116,51 +99,24 @@ function readJsonBody(request) {
 		const chunks = [];
 		request.on('data', (chunk) => {
 			size += chunk.length;
-			if (size > JSON_BODY_LIMIT) { rejectBody(new Error('payload too large')); request.destroy(); return; }
+			if (size > JSON_BODY_LIMIT) { rejectBody(httpError('payload too large', 413)); request.destroy(); return; }
 			chunks.push(chunk);
 		});
 		request.on('end', () => {
 			if (!chunks.length) { resolveBody({}); return; }
 			try { resolveBody(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
-			catch { rejectBody(new Error('invalid JSON body')); }
+			catch { rejectBody(httpError('invalid JSON body', 400)); }
 		});
 		request.on('error', rejectBody);
 	});
 }
 
-/** Proxy one request to the permission-engine through Kong (service identity). */
-async function proxyEngine(response, fetchImpl, method, path, body) {
-	if (!CONFIG.serviceApikey || !CONFIG.serviceToken) {
-		return sendJson(response, 503, { error: 'perms_not_configured', message: 'Set PERMS_SERVICE_APIKEY and PERMS_SERVICE_TOKEN (see bridge-perms.mjs header).' });
-	}
-	const headers = {
-		apikey: CONFIG.serviceApikey,
-		'X-Service-Token': CONFIG.serviceToken,
-		'X-Tenant-Id': CONFIG.tenantId,
-	};
-	if (body !== undefined) headers['Content-Type'] = 'application/json';
-	let upstream;
-	try {
-		upstream = await fetchImpl(`${CONFIG.kongUrl}/permissions/v1${path}`, {
-			method,
-			headers,
-			body: body === undefined ? undefined : JSON.stringify(body),
-			signal: AbortSignal.timeout(5000),
-		});
-	} catch (error) {
-		return sendJson(response, 502, { error: 'perms_upstream_unreachable', message: String(error?.message || error) });
-	}
-	const text = await upstream.text();
-	response.writeHead(upstream.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...corsHeaders() });
-	response.end(text || '{}');
-	return true;
-}
-
-/** Roster rows from .agency-people.env → [{id,email,name,role,department,clearance,region,wsRole}]. */
-function loadPeople() {
-	if (!existsSync(CONFIG.peopleEnv)) return [];
+/** Roster rows → [{id,email,name,role,department,clearance,region,wsRole}]. A path that is
+ *  not a regular file (docker creates a DIRECTORY for a missing bind source) is no roster. */
+function loadPeople(peopleEnv) {
+	if (!existsSync(peopleEnv) || !statSync(peopleEnv).isFile()) return [];
 	const people = [];
-	for (const rawLine of readFileSync(CONFIG.peopleEnv, 'utf8').split(/\r?\n/)) {
+	for (const rawLine of readFileSync(peopleEnv, 'utf8').split(/\r?\n/)) {
 		const match = /^AGENCY_PERSON_\d+=(.+)$/.exec(rawLine.trim());
 		if (!match) continue;
 		const [id, email, name, role, department, clearance, region, wsRole] = match[1].split('|');
@@ -169,91 +125,160 @@ function loadPeople() {
 	return people;
 }
 
-function loadRules() {
-	if (!existsSync(CONFIG.rulesFile)) return [];
+function loadRules(rulesFile) {
+	if (!existsSync(rulesFile)) return [];
 	try {
-		const parsed = JSON.parse(readFileSync(CONFIG.rulesFile, 'utf8'));
+		const parsed = JSON.parse(readFileSync(rulesFile, 'utf8'));
 		return Array.isArray(parsed) ? parsed : [];
 	} catch { return []; }
 }
 
-function saveRules(rules) {
-	writeFileSync(CONFIG.rulesFile, `${JSON.stringify(rules, null, '\t')}\n`, { mode: 0o600 });
+function saveRules(rulesFile, rules) {
+	writeFileSync(rulesFile, `${JSON.stringify(rules, null, '\t')}\n`, { mode: 0o600 });
 }
 
-/** Upsert an AbacEngine AccessRule object (same workspace/resource/target key). */
+/** Upsert an AccessRule keyed by (workspace, resource, type, target). A replacement keeps the
+ *  stored id; a new rule gets a server-minted one — a client `_id` is never trusted, or a
+ *  colliding id could later delete another workspace's rule. */
 function upsertRule(rules, input) {
 	const targetKey = (t) => `${t?.type ?? ''}:${t?.userId ?? ''}:${t?.role ?? ''}`;
 	const now = new Date().toISOString();
 	const rule = {
-		_id: typeof input._id === 'string' && input._id ? input._id : randomUUID(),
-		workspaceId: String(input.workspaceId ?? ''),
+		workspaceId: String(input.workspaceId),
 		resourceId: input.resourceId == null ? null : String(input.resourceId),
 		resourceType: String(input.resourceType ?? 'page'),
 		target: input.target ?? { type: 'workspace' },
 		permission: String(input.permission ?? 'no_access'),
 		explicit: input.explicit !== false,
-		createdAt: now,
 		updatedAt: now,
 	};
 	const index = rules.findIndex((existing) => existing.workspaceId === rule.workspaceId
 		&& String(existing.resourceId ?? '') === String(rule.resourceId ?? '')
 		&& existing.resourceType === rule.resourceType
 		&& targetKey(existing.target) === targetKey(rule.target));
-	if (index >= 0) rule.createdAt = rules[index].createdAt ?? now;
-	if (index >= 0) rules.splice(index, 1, rule); else rules.push(rule);
-	return rule;
+	const stored = index >= 0 ? rules[index] : null;
+	const saved = { _id: stored?._id ?? randomUUID(), ...rule, createdAt: stored?.createdAt ?? now };
+	if (stored) rules.splice(index, 1, saved); else rules.push(saved);
+	return saved;
 }
 
-/** Route handler: true = handled (response ended), false = not a perms route. */
-export async function handlePermsRoute(request, response, url, fetchImpl = fetch) {
-	const pathname = url?.pathname ?? '';
-	if (!pathname.startsWith('/api/perms/')) return false;
-	const method = (request.method || 'GET').toUpperCase();
-	const tail = pathname.slice('/api/perms/'.length).replace(/\/$/, '');
-	try {
-		if (method === 'GET' && tail === 'people') return sendJson(response, 200, { people: loadPeople() });
-		if (method === 'GET' && tail === 'roles') return proxyEngine(response, fetchImpl, 'GET', '/permissions/bundles/roles');
-		if (method === 'GET' && tail === 'policies') return proxyEngine(response, fetchImpl, 'GET', '/permissions/bundles/policies');
-		if (method === 'POST' && tail === 'policies') {
-			return proxyEngine(response, fetchImpl, 'POST', '/permissions/bundles/policies', await readJsonBody(request));
+/** The PermsHandler factory; see the module doc for routes and rules. */
+export function createPermsHandler({ verifySession, requireWorkspaceAccess, fetchImpl = fetch, settings = loadPermsSettings() }) {
+	const reply = (response, status, body) => {
+		response.writeHead(status, {
+			'Content-Type': 'application/json', 'Cache-Control': 'no-store',
+			'Access-Control-Allow-Origin': settings.allowedOrigin, 'Access-Control-Allow-Credentials': 'true', Vary: 'Origin',
+		});
+		response.end(JSON.stringify(body));
+		return true;
+	};
+	const fail = (response, status) => {
+		const [error, message] = PUBLIC_ERRORS[status] ?? PUBLIC_ERRORS[400];
+		return reply(response, PUBLIC_ERRORS[status] ? status : 400, { error, message });
+	};
+	const engine = createEngineProxy(settings, fetchImpl, reply, fail);
+	const rules = createRuleRoutes({ settings, requireWorkspaceAccess, fetchImpl, reply, fail });
+
+	return async function handlePerms(url, request, response, requestConfig) {
+		const pathname = url?.pathname ?? '';
+		if (!pathname.startsWith(ROUTE_PREFIX)) return false;
+		const method = (request.method || 'GET').toUpperCase();
+		const tail = pathname.slice(ROUTE_PREFIX.length).replace(/\/$/, '');
+		try {
+			const session = verifySession(bearerToken(request), requestConfig);
+			const ctx = { url, request, response, requestConfig, session, method, tail };
+			const handled = await (routeEngine(ctx, { engine, reply, fail, settings }) ?? rules(ctx));
+			return handled ?? fail(response, 404);
+		} catch (error) {
+			const status = Number(error?.status) || 500;
+			if (status >= 500) console.error('[bridge-perms]', method, pathname, error?.message || error);
+			return fail(response, status);
 		}
-		if (method === 'DELETE' && /^policies\/[0-9a-f-]{36}$/i.test(tail)) {
-			return proxyEngine(response, fetchImpl, 'DELETE', `/permissions/bundles/${tail}`);
+	};
+}
+
+/** Engine + roster routes; undefined when `tail` is not one of them. */
+function routeEngine(ctx, { engine, reply, fail, settings }) {
+	const { method, tail, response, request, session } = ctx;
+	if (method === 'GET' && tail === 'people') return reply(response, 200, { people: loadPeople(settings.peopleEnv) });
+	if (method === 'GET' && tail === 'roles') return engine(response, 'GET', '/permissions/bundles/roles');
+	if (method === 'GET' && tail === 'policies') return engine(response, 'GET', '/permissions/bundles/policies');
+	if (method === 'GET' && tail === 'bundle') return engine(response, 'GET', '/permissions/bundles/latest');
+	if (method === 'POST' && tail === 'decide') return readJsonBody(request).then((body) => engine(response, 'POST', '/permissions/decide', body));
+	const isPolicyWrite = (method === 'POST' && tail === 'policies') || (method === 'DELETE' && /^policies\/[0-9a-f-]{36}$/i.test(tail));
+	if (!isPolicyWrite) return undefined;
+	if (session.isAdmin !== true) return fail(response, 403);
+	if (method === 'DELETE') return engine(response, 'DELETE', `/permissions/bundles/${tail}`);
+	return readJsonBody(request).then((body) => engine(response, 'POST', '/permissions/bundles/policies', body));
+}
+
+/** Proxy one request to the permission engine through Kong, as the bridge's service identity.
+ *  The engine refusing THOSE credentials (401/403) is a server fault → 503, never the
+ *  caller's 401; an engine crash → 502; the engine's own validation errors pass through. */
+function createEngineProxy(settings, fetchImpl, reply, fail) {
+	return async (response, method, path, body) => {
+		if (!settings.serviceApikey || !settings.serviceToken) return fail(response, 503);
+		const headers = { apikey: settings.serviceApikey, 'X-Service-Token': settings.serviceToken, 'X-Tenant-Id': settings.tenantId };
+		if (body !== undefined) headers['Content-Type'] = 'application/json';
+		let upstream;
+		try {
+			upstream = await fetchImpl(`${settings.kongUrl}/permissions/v1${path}`, {
+				method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(5000),
+			});
+		} catch (error) {
+			console.error('[bridge-perms] engine unreachable:', error?.message || error);
+			return fail(response, 502);
 		}
-		if (method === 'GET' && tail === 'bundle') return proxyEngine(response, fetchImpl, 'GET', '/permissions/bundles/latest');
-		if (method === 'POST' && tail === 'decide') {
-			return proxyEngine(response, fetchImpl, 'POST', '/permissions/decide', await readJsonBody(request));
+		if (upstream.status === 401 || upstream.status === 403) {
+			console.error(`[bridge-perms] the engine refused the bridge's service credentials (${upstream.status})`);
+			return fail(response, 503);
 		}
+		if (upstream.status >= 500) return fail(response, 502);
+		const text = await upstream.text();
+		let parsed = {};
+		try { parsed = text ? JSON.parse(text) : {}; } catch { return fail(response, 502); }
+		return reply(response, upstream.status, parsed);
+	};
+}
+
+/** Share-rule routes; resolves undefined when `tail` is not a rules route. */
+function createRuleRoutes({ settings, requireWorkspaceAccess, fetchImpl, reply, fail }) {
+	const access = (ctx, workspaceId, permission) =>
+		requireWorkspaceAccess(ctx.request, workspaceId, permission, ctx.requestConfig, fetchImpl);
+	return async (ctx) => {
+		const { method, tail, url, response } = ctx;
 		if (method === 'GET' && tail === 'rules') {
-			const workspaceId = url.searchParams.get('workspaceId') ?? '';
+			const workspaceId = url.searchParams.get('workspaceId');
+			if (!workspaceId) return fail(response, 400);
+			await access(ctx, workspaceId, 'read');
 			const resourceId = url.searchParams.get('resourceId');
-			const rules = loadRules().filter((rule) => (!workspaceId || rule.workspaceId === workspaceId)
+			const found = loadRules(settings.rulesFile).filter((rule) => rule.workspaceId === workspaceId
 				&& (resourceId == null || String(rule.resourceId ?? '') === resourceId));
-			return sendJson(response, 200, { rules });
+			return reply(response, 200, { rules: found });
 		}
 		if (method === 'POST' && tail === 'rules') {
-			const body = await readJsonBody(request);
-			if (!body || typeof body !== 'object' || !body.workspaceId) {
-				return sendJson(response, 400, { error: 'invalid_rule', message: 'workspaceId is required' });
-			}
-			const rules = loadRules();
-			const rule = upsertRule(rules, body);
-			saveRules(rules);
-			return sendJson(response, 200, { rule });
+			const body = await readJsonBody(ctx.request);
+			if (!body || typeof body !== 'object' || typeof body.workspaceId !== 'string' || !body.workspaceId) return fail(response, 400);
+			await access(ctx, body.workspaceId, 'update');
+			const stored = loadRules(settings.rulesFile);
+			const rule = upsertRule(stored, body);
+			saveRules(settings.rulesFile, stored);
+			return reply(response, 200, { rule });
 		}
-		if (method === 'DELETE' && tail.startsWith('rules/')) {
-			const id = tail.slice('rules/'.length);
-			const rules = loadRules();
-			const next = rules.filter((rule) => rule._id !== id);
-			if (next.length === rules.length) return sendJson(response, 404, { error: 'rule_not_found' });
-			saveRules(next);
-			return sendJson(response, 200, { deleted: true });
+		if (method === 'DELETE' && tail.startsWith('rules/')) return deleteRule(ctx, decodeURIComponent(tail.slice('rules/'.length)));
+		return undefined;
+	};
+
+	async function deleteRule(ctx, id) {
+		const stored = loadRules(settings.rulesFile);
+		for (const rule of stored.filter((candidate) => candidate._id === id)) {
+			const allowed = await access(ctx, String(rule.workspaceId ?? ''), 'update').then(() => true, () => false);
+			if (!allowed) continue;
+			saveRules(settings.rulesFile, stored.filter((candidate) => candidate !== rule));
+			return reply(ctx.response, 200, { deleted: true });
 		}
-	} catch (error) {
-		return sendJson(response, error?.message === 'payload too large' ? 413 : 400, { error: 'perms_bad_request', message: String(error?.message || error) });
+		return fail(ctx.response, 404);
 	}
-	return sendJson(response, 404, { error: 'perms_route_not_found', message: `${method} ${pathname}` });
 }
 
-export const PERMS_ROUTE_PREFIX = '/api/perms/';
+export const PERMS_ROUTE_PREFIX = ROUTE_PREFIX;

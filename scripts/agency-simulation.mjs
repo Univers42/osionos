@@ -378,9 +378,10 @@ await step('5. analyst login + live transactions table (Erik’s notebook embed)
 
 /* 6 ── field masks: decide carries the amount mask; UI enforcement recorded */
 await step('6. analyst field mask — /api/perms/decide redacts transactions.amount', async () => {
+	apiTokens.erik = apiTokens.erik ?? (await bridgeLogin(erik.email, erik.password)).token;
 	const { ok, payload } = await fetchJson(`${bridgeUrl}/api/perms/decide`, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		headers: bearer(apiTokens.erik), // /api/perms/* requires an app session
 		body: JSON.stringify({ user: { id: erik.id }, resource_type: 'table', resource_name: 'transactions', op: 'list' }),
 	});
 	if (!ok || payload.allow !== true) throw new Error(`decide failed: ${JSON.stringify(payload).slice(0, 120)}`);

@@ -47,25 +47,68 @@ function jsonReply(response, status, body, config) {
   response.end(JSON.stringify(body));
 }
 
-/** Ensure the per-(user,workspace) sandbox container exists and runs — shared
- *  by the /api/ide/session handler AND the PTY attach path (opening a terminal
- *  auto-provisions; the product no longer depends on an operator having run
- *  the container by hand — ADR-002 §3). */
-export async function ensureSandbox(env, names) {
-  const image = env.OSIONOS_IDE_SANDBOX_IMAGE || 'osionos-ide-sandbox:latest';
-  const docker = createDockerClient(env);
+/** Reaper lifetimes (#16): past SOFT an idle box is stopped; past HARD any box is. */
+export const SANDBOX_SOFT_MAX_MS = 4 * 60 * 60 * 1000;
+export const SANDBOX_HARD_MAX_MS = 3 * SANDBOX_SOFT_MAX_MS;
+const HARD_CAP = 'SANDBOX_HARD_CAP';
+const provisioning = new Map(); // containerName → in-flight provision (one per box)
+
+/** True when a STOPPED container had run for the whole hard lifetime (the reaper's cap). */
+function stoppedAtHardCap(container, hardMaxMs) {
+  const created = Date.parse(container?.Created ?? '');
+  const finished = Date.parse(container?.State?.FinishedAt ?? '');
+  return Number.isFinite(created) && Number.isFinite(finished) && finished - created >= hardMaxMs;
+}
+
+/** Create the container, adopting one another process created first (409). */
+async function createOrAdopt(docker, names, env) {
+  const spec = buildContainerSpec({
+    userId: names.userId, workspaceId: names.workspaceId,
+    image: env.OSIONOS_IDE_SANDBOX_IMAGE || 'osionos-ide-sandbox:latest',
+    sandboxNet: SANDBOX_NET, volumeName: names.volumeName,
+    diskSize: env.OSIONOS_IDE_STORAGE_QUOTA || '', // xfs+pquota only; off by default
+  });
+  try { await docker.create(names.containerName, spec); } catch (error) { if (error?.status !== 409) throw error; }
+}
+
+/** One provision attempt: reuse a running box, else recreate it clean (volume kept).
+ *  A passive caller (LSP / fs-sync) never revives a box stopped at the hard cap. */
+async function provision(env, names, { passive, docker, hardMaxMs }) {
   const existing = await docker.inspect(names.containerName);
   if (existing?.State?.Running) return { status: 'running', reused: true };
-  if (existing) { await docker.remove(names.containerName); } // dead → recreate clean
+  if (existing) {
+    if (passive && stoppedAtHardCap(existing, hardMaxMs)) {
+      throw Object.assign(new Error('sandbox reached its lifetime cap; open a terminal to restart it'), { code: HARD_CAP });
+    }
+    const again = await docker.inspect(names.containerName);
+    if (again?.State?.Running) return { status: 'running', reused: true };
+    if (again) await docker.remove(names.containerName);
+  }
   await docker.ensureVolume(names.volumeName);
-  const spec = buildContainerSpec({
-    userId: names.userId, workspaceId: names.workspaceId, image,
-    sandboxNet: SANDBOX_NET, volumeName: names.volumeName,
-    diskSize: env.OSIONOS_IDE_STORAGE_QUOTA || "", // xfs+pquota only; off by default
-  });
-  await docker.create(names.containerName, spec);
+  await createOrAdopt(docker, names, env);
   await docker.start(names.containerName);
   return { status: 'running', reused: false };
+}
+
+/** Ensure the per-(user,workspace) sandbox container exists and runs. Shared by the
+ *  /api/ide/session handler and the PTY attach path (explicit user actions) and by the
+ *  LSP/fs-sync attach paths (`passive: true`), which the IDE opens together — so a box is
+ *  provisioned by ONE in-flight attempt per process; later callers join it. A terminal that
+ *  joins a passive attempt refused at the hard cap retries as itself. Invariant: one bridge
+ *  per sandbox daemon (a second process would race the force-remove).
+ *  @param opts `{ passive, docker, hardMaxMs }` — `docker` is injectable for tests. */
+export function ensureSandbox(env, names, opts = {}) {
+  const key = names.containerName;
+  const passive = opts.passive === true;
+  const pending = provisioning.get(key);
+  if (pending) {
+    return passive ? pending : pending.catch((error) => (error?.code === HARD_CAP ? ensureSandbox(env, names, opts) : Promise.reject(error)));
+  }
+  const attempt = provision(env, names, {
+    passive, docker: opts.docker ?? createDockerClient(env), hardMaxMs: opts.hardMaxMs ?? SANDBOX_HARD_MAX_MS,
+  }).finally(() => { if (provisioning.get(key) === attempt) provisioning.delete(key); });
+  provisioning.set(key, attempt);
+  return attempt;
 }
 
 export function createIdeSandboxHandler({ config, verifySession, env = process.env }) {
@@ -153,7 +196,7 @@ export function shouldReapSandbox({ running, createdSec }, now, softMs, hardMs, 
  *  bridge restart empties that registry, degrading to age-only — accepted.
  *  Volumes persist across the reap; work re-materializes on next open (P4).
  *  Wired by the bridge on an interval. */
-export async function reapExpiredSandboxes(env = process.env, maxLifetimeMs = 4 * 60 * 60 * 1000, now = Date.now(), opts = {}) {
+export async function reapExpiredSandboxes(env = process.env, maxLifetimeMs = SANDBOX_SOFT_MAX_MS, now = Date.now(), opts = {}) {
   if (env.OSIONOS_IDE_SANDBOX !== '1' || !env.OSIONOS_IDE_DOCKER_HOST) return 0;
   const {
     isActive = (name) => containerHasActivity(name, 30 * 60 * 1000, now),

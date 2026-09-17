@@ -92,7 +92,7 @@ export function createDockerClient(env = process.env) {
     },
     async create(name, spec) {
       const res = await call("POST", `/containers/create?name=${encodeURIComponent(name)}`, spec);
-      if (res.status >= 300) throw new Error(`create failed (${res.status}): ${res.text}`);
+      if (res.status >= 300) throw Object.assign(new Error(`create failed (${res.status}): ${res.text}`), { status: res.status });
       return res.body?.Id;
     },
     async start(name) {

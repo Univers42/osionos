@@ -205,7 +205,9 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
       return true;
     }
 
-    docker.attachExec(names.containerName, spec).then(({ stream: duplex, execId }) => {
+    // LSP/fs-sync may start a stopped box too (never one stopped at the hard cap — see
+    // ensureSandbox); a refusal lands in the catch below, which releases the stream cap.
+    ensureSandbox(env, names, { passive: true }).then(() => docker.attachExec(names.containerName, spec)).then(({ stream: duplex }) => {
       const decode = createFrameDecoder();
       // LSP is Tty:false — strip docker's 8-byte mux headers (see the demux
       // doc). PTY/fsync are Tty:true and arrive raw.
