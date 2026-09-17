@@ -28,22 +28,25 @@
  *   POST   /api/perms/rules         → upsert an AccessRule             (workspace `update`)
  *   DELETE /api/perms/rules/:id     → delete an AccessRule             (workspace `update`)
  * Workspace checks use the bridge's requireWorkspaceAccess (live membership, not the list
- * frozen into the token at login). Rule ids are always minted here. Error bodies are
- * generic; details go to the server log.
+ * frozen into the token at login). Rules live in public.osionos_share_rules
+ * (bridge-perms-rules.mjs); their ids are database-minted. Error bodies are generic; details
+ * go to the server log.
  *
  * Upstream: the mini-baas Kong `/permissions/v1` route, called with the bridge's SERVICE
- * identity — hence the admin gate on writes. Settings (env first, then the dev files
- * apps/grobase/.agency-tenant.env and apps/grobase/.env, read without touching
- * process.env): PERMS_KONG_URL|AGENCY_KONG_URL, PERMS_SERVICE_APIKEY|AGENCY_SERVICE_APIKEY,
- * PERMS_SERVICE_TOKEN|ADAPTER_REGISTRY_SERVICE_TOKEN, PERMS_TENANT_ID|AGENCY_TENANT_SLUG,
- * PERMS_PEOPLE_ENV, PERMS_RULES_FILE, OSIONOS_ALLOWED_ORIGIN.
+ * identity — hence the admin gate on writes. By default that is the bridge's own identity:
+ * the Kong apikey is the key every other BaaS call of the bridge uses (config.serviceKey) and
+ * the engine token is ADAPTER_REGISTRY_SERVICE_TOKEN. PERMS_SERVICE_APIKEY / AGENCY_SERVICE_APIKEY
+ * and PERMS_SERVICE_TOKEN are optional overrides — copies of those secrets went stale once.
+ * Other settings (env first, then the dev files apps/grobase/.agency-tenant.env and
+ * apps/grobase/.env, read without touching process.env): PERMS_KONG_URL|AGENCY_KONG_URL,
+ * PERMS_TENANT_ID|AGENCY_TENANT_SLUG, PERMS_PEOPLE_ENV, OSIONOS_ALLOWED_ORIGIN.
  */
 
-import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bearerToken, httpError } from './bridge-social-core.mjs';
+import { createShareRuleStore, normalizeShareRule } from './bridge-perms-rules.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -78,9 +81,9 @@ function readDevEnvFiles() {
 	return values;
 }
 
-/** Upstream + storage settings: the process environment first, then the dev env files. */
-export function loadPermsSettings(env = process.env) {
-	const file = readDevEnvFiles();
+/** Upstream settings: the process environment first, then the dev env files (injectable).
+ *  An empty serviceApikey means "use the bridge's own service key" at request time. */
+export function loadPermsSettings(env = process.env, file = readDevEnvFiles()) {
 	const pick = (...keys) => keys.map((key) => env[key] ?? file[key]).find(Boolean) ?? '';
 	return {
 		kongUrl: (pick('PERMS_KONG_URL', 'AGENCY_KONG_URL') || 'http://127.0.0.1:8002').replace(/\/$/, ''),
@@ -88,7 +91,6 @@ export function loadPermsSettings(env = process.env) {
 		serviceToken: pick('PERMS_SERVICE_TOKEN', 'ADAPTER_REGISTRY_SERVICE_TOKEN'),
 		tenantId: pick('PERMS_TENANT_ID', 'AGENCY_TENANT_SLUG') || 'agency',
 		peopleEnv: pick('PERMS_PEOPLE_ENV') || resolve(REPO_ROOT, 'tools/seeds/.agency-people.env'),
-		rulesFile: pick('PERMS_RULES_FILE') || resolve(APP_ROOT, '.perms-rules.json'),
 		allowedOrigin: pick('OSIONOS_ALLOWED_ORIGIN') || 'https://localhost:3001',
 	};
 }
@@ -125,45 +127,11 @@ function loadPeople(peopleEnv) {
 	return people;
 }
 
-function loadRules(rulesFile) {
-	if (!existsSync(rulesFile)) return [];
-	try {
-		const parsed = JSON.parse(readFileSync(rulesFile, 'utf8'));
-		return Array.isArray(parsed) ? parsed : [];
-	} catch { return []; }
-}
-
-function saveRules(rulesFile, rules) {
-	writeFileSync(rulesFile, `${JSON.stringify(rules, null, '\t')}\n`, { mode: 0o600 });
-}
-
-/** Upsert an AccessRule keyed by (workspace, resource, type, target). A replacement keeps the
- *  stored id; a new rule gets a server-minted one — a client `_id` is never trusted, or a
- *  colliding id could later delete another workspace's rule. */
-function upsertRule(rules, input) {
-	const targetKey = (t) => `${t?.type ?? ''}:${t?.userId ?? ''}:${t?.role ?? ''}`;
-	const now = new Date().toISOString();
-	const rule = {
-		workspaceId: String(input.workspaceId),
-		resourceId: input.resourceId == null ? null : String(input.resourceId),
-		resourceType: String(input.resourceType ?? 'page'),
-		target: input.target ?? { type: 'workspace' },
-		permission: String(input.permission ?? 'no_access'),
-		explicit: input.explicit !== false,
-		updatedAt: now,
-	};
-	const index = rules.findIndex((existing) => existing.workspaceId === rule.workspaceId
-		&& String(existing.resourceId ?? '') === String(rule.resourceId ?? '')
-		&& existing.resourceType === rule.resourceType
-		&& targetKey(existing.target) === targetKey(rule.target));
-	const stored = index >= 0 ? rules[index] : null;
-	const saved = { _id: stored?._id ?? randomUUID(), ...rule, createdAt: stored?.createdAt ?? now };
-	if (stored) rules.splice(index, 1, saved); else rules.push(saved);
-	return saved;
-}
-
 /** The PermsHandler factory; see the module doc for routes and rules. */
-export function createPermsHandler({ verifySession, requireWorkspaceAccess, fetchImpl = fetch, settings = loadPermsSettings() }) {
+export function createPermsHandler({
+	verifySession, requireWorkspaceAccess, fetchImpl = fetch,
+	settings = loadPermsSettings(), ruleStore = createShareRuleStore({ fetchImpl }),
+}) {
 	const reply = (response, status, body) => {
 		response.writeHead(status, {
 			'Content-Type': 'application/json', 'Cache-Control': 'no-store',
@@ -177,7 +145,7 @@ export function createPermsHandler({ verifySession, requireWorkspaceAccess, fetc
 		return reply(response, PUBLIC_ERRORS[status] ? status : 400, { error, message });
 	};
 	const engine = createEngineProxy(settings, fetchImpl, reply, fail);
-	const rules = createRuleRoutes({ settings, requireWorkspaceAccess, fetchImpl, reply, fail });
+	const rules = createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply, fail });
 
 	return async function handlePerms(url, request, response, requestConfig) {
 		const pathname = url?.pathname ?? '';
@@ -201,24 +169,25 @@ export function createPermsHandler({ verifySession, requireWorkspaceAccess, fetc
 function routeEngine(ctx, { engine, reply, fail, settings }) {
 	const { method, tail, response, request, session } = ctx;
 	if (method === 'GET' && tail === 'people') return reply(response, 200, { people: loadPeople(settings.peopleEnv) });
-	if (method === 'GET' && tail === 'roles') return engine(response, 'GET', '/permissions/bundles/roles');
-	if (method === 'GET' && tail === 'policies') return engine(response, 'GET', '/permissions/bundles/policies');
-	if (method === 'GET' && tail === 'bundle') return engine(response, 'GET', '/permissions/bundles/latest');
-	if (method === 'POST' && tail === 'decide') return readJsonBody(request).then((body) => engine(response, 'POST', '/permissions/decide', body));
+	if (method === 'GET' && tail === 'roles') return engine(ctx, 'GET', '/permissions/bundles/roles');
+	if (method === 'GET' && tail === 'policies') return engine(ctx, 'GET', '/permissions/bundles/policies');
+	if (method === 'GET' && tail === 'bundle') return engine(ctx, 'GET', '/permissions/bundles/latest');
+	if (method === 'POST' && tail === 'decide') return readJsonBody(request).then((body) => engine(ctx, 'POST', '/permissions/decide', body));
 	const isPolicyWrite = (method === 'POST' && tail === 'policies') || (method === 'DELETE' && /^policies\/[0-9a-f-]{36}$/i.test(tail));
 	if (!isPolicyWrite) return undefined;
 	if (session.isAdmin !== true) return fail(response, 403);
-	if (method === 'DELETE') return engine(response, 'DELETE', `/permissions/bundles/${tail}`);
-	return readJsonBody(request).then((body) => engine(response, 'POST', '/permissions/bundles/policies', body));
+	if (method === 'DELETE') return engine(ctx, 'DELETE', `/permissions/bundles/${tail}`);
+	return readJsonBody(request).then((body) => engine(ctx, 'POST', '/permissions/bundles/policies', body));
 }
 
 /** Proxy one request to the permission engine through Kong, as the bridge's service identity.
  *  The engine refusing THOSE credentials (401/403) is a server fault → 503, never the
  *  caller's 401; an engine crash → 502; the engine's own validation errors pass through. */
 function createEngineProxy(settings, fetchImpl, reply, fail) {
-	return async (response, method, path, body) => {
-		if (!settings.serviceApikey || !settings.serviceToken) return fail(response, 503);
-		const headers = { apikey: settings.serviceApikey, 'X-Service-Token': settings.serviceToken, 'X-Tenant-Id': settings.tenantId };
+	return async ({ response, requestConfig }, method, path, body) => {
+		const apikey = settings.serviceApikey || requestConfig?.serviceKey || '';
+		if (!apikey || !settings.serviceToken) return fail(response, 503);
+		const headers = { apikey, 'X-Service-Token': settings.serviceToken, 'X-Tenant-Id': settings.tenantId };
 		if (body !== undefined) headers['Content-Type'] = 'application/json';
 		let upstream;
 		try {
@@ -241,43 +210,35 @@ function createEngineProxy(settings, fetchImpl, reply, fail) {
 	};
 }
 
-/** Share-rule routes; resolves undefined when `tail` is not a rules route. */
-function createRuleRoutes({ settings, requireWorkspaceAccess, fetchImpl, reply, fail }) {
+/** Share-rule routes; resolves undefined when `tail` is not a rules route. A rule is validated
+ *  and rebuilt before any query; DELETE touches a rule only after its workspace passes
+ *  `update` (a rule the caller may not change reads as not found). */
+function createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply, fail }) {
 	const access = (ctx, workspaceId, permission) =>
 		requireWorkspaceAccess(ctx.request, workspaceId, permission, ctx.requestConfig, fetchImpl);
 	return async (ctx) => {
-		const { method, tail, url, response } = ctx;
+		const { method, tail, url, response, requestConfig } = ctx;
 		if (method === 'GET' && tail === 'rules') {
 			const workspaceId = url.searchParams.get('workspaceId');
 			if (!workspaceId) return fail(response, 400);
 			await access(ctx, workspaceId, 'read');
-			const resourceId = url.searchParams.get('resourceId');
-			const found = loadRules(settings.rulesFile).filter((rule) => rule.workspaceId === workspaceId
-				&& (resourceId == null || String(rule.resourceId ?? '') === resourceId));
-			return reply(response, 200, { rules: found });
+			return reply(response, 200, { rules: await ruleStore.list(requestConfig, workspaceId, url.searchParams.get('resourceId')) });
 		}
 		if (method === 'POST' && tail === 'rules') {
-			const body = await readJsonBody(ctx.request);
-			if (!body || typeof body !== 'object' || typeof body.workspaceId !== 'string' || !body.workspaceId) return fail(response, 400);
-			await access(ctx, body.workspaceId, 'update');
-			const stored = loadRules(settings.rulesFile);
-			const rule = upsertRule(stored, body);
-			saveRules(settings.rulesFile, stored);
-			return reply(response, 200, { rule });
+			const rule = normalizeShareRule(await readJsonBody(ctx.request));
+			await access(ctx, rule.workspace_id, 'update');
+			return reply(response, 200, { rule: await ruleStore.upsert(requestConfig, rule) });
 		}
 		if (method === 'DELETE' && tail.startsWith('rules/')) return deleteRule(ctx, decodeURIComponent(tail.slice('rules/'.length)));
 		return undefined;
 	};
 
 	async function deleteRule(ctx, id) {
-		const stored = loadRules(settings.rulesFile);
-		for (const rule of stored.filter((candidate) => candidate._id === id)) {
-			const allowed = await access(ctx, String(rule.workspaceId ?? ''), 'update').then(() => true, () => false);
-			if (!allowed) continue;
-			saveRules(settings.rulesFile, stored.filter((candidate) => candidate !== rule));
-			return reply(ctx.response, 200, { deleted: true });
-		}
-		return fail(ctx.response, 404);
+		const rule = await ruleStore.byId(ctx.requestConfig, id);
+		if (!rule) return fail(ctx.response, 404);
+		const allowed = await access(ctx, rule.workspaceId, 'update').then(() => true, () => false);
+		if (!allowed || !(await ruleStore.remove(ctx.requestConfig, id, rule.workspaceId))) return fail(ctx.response, 404);
+		return reply(ctx.response, 200, { deleted: true });
 	}
 }
 

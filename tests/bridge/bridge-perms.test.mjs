@@ -16,22 +16,54 @@
 // workspace list frozen into the token at login.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
-import { createPermsHandler } from "../../scripts/bridge-perms.mjs";
+import { createPermsHandler, loadPermsSettings } from "../../scripts/bridge-perms.mjs";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const WS_A = "22222222-2222-4222-8222-222222222222";
 const WS_B = "33333333-3333-4333-8333-333333333333";
 const LATE = "44444444-4444-4444-8444-444444444444"; // joined after login: not in the token
-const CONFIG = { appSessionSecret: "s" };
+const CONFIG = { appSessionSecret: "s", baasUrl: "http://kong.test", serviceKey: "bridge-service-key" };
 
-function setup({ isAdmin = false, access = {}, rules = [], people = "missing", secretUnset = false, upstreamDown = false, upstreamStatus = 200 } = {}) {
+/** In-memory stand-in for the PostgREST rule store (same interface and identity rules). */
+function memoryRuleStore(seed) {
+  const rows = seed.map((row) => ({ ...row }));
+  let minted = 0;
+  const identity = (r) => `${r.workspaceId}|${r.resourceType}|${r.resourceId ?? ""}|${JSON.stringify(r.target)}`;
+  return {
+    rows,
+    async list(_config, workspaceId, resourceId) {
+      return rows.filter((r) => r.workspaceId === workspaceId && (resourceId == null || (r.resourceId ?? "") === resourceId));
+    },
+    async upsert(_config, rule) {
+      const api = { workspaceId: rule.workspace_id, resourceId: rule.resource_id || null, resourceType: rule.resource_type,
+        target: rule.target, permission: rule.permission, explicit: rule.explicit };
+      const index = rows.findIndex((r) => identity(r) === identity(api));
+      if (index >= 0) { rows[index] = { ...rows[index], ...api }; return rows[index]; }
+      minted += 1;
+      const saved = { _id: `66666666-6666-4666-8666-${String(minted).padStart(12, "0")}`, ...api };
+      rows.push(saved);
+      return saved;
+    },
+    async byId(_config, id) { return rows.find((r) => r._id === id) ?? null; },
+    async remove(_config, id, workspaceId) {
+      const index = rows.findIndex((r) => r._id === id && r.workspaceId === workspaceId);
+      if (index < 0) return false;
+      rows.splice(index, 1);
+      return true;
+    },
+  };
+}
+
+function setup({
+  isAdmin = false, access = {}, rules = [], people = "missing", secretUnset = false,
+  upstreamDown = false, upstreamStatus = 200, serviceApikey = "svc-key",
+} = {}) {
   const dir = mkdtempSync(join(tmpdir(), "perms-"));
-  const rulesFile = join(dir, "rules.json");
-  writeFileSync(rulesFile, JSON.stringify(rules));
+  const ruleStore = memoryRuleStore(rules);
   const peopleEnv = join(dir, "people.env");
   if (people === "dir") mkdirSync(peopleEnv);
   if (people === "file") writeFileSync(peopleEnv, `AGENCY_PERSON_1=${USER}|a@b.c|Ann|analyst|intel|secret|eu|member\n`);
@@ -54,9 +86,10 @@ function setup({ isAdmin = false, access = {}, rules = [], people = "missing", s
       return new Response(JSON.stringify({ ok: upstreamStatus < 400, message: "Unauthorized", request_id: "kong-1" }), { status: upstreamStatus });
     },
     settings: {
-      kongUrl: "http://kong.test", serviceApikey: "svc-key", serviceToken: "svc-token", tenantId: "agency",
-      peopleEnv, rulesFile, allowedOrigin: "https://localhost:3001",
+      kongUrl: "http://kong.test", serviceApikey, serviceToken: "svc-token", tenantId: "agency",
+      peopleEnv, allowedOrigin: "https://localhost:3001",
     },
+    ruleStore,
   });
   const call = async (method, path, { token = "good", body } = {}) => {
     const request = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))]);
@@ -66,8 +99,8 @@ function setup({ isAdmin = false, access = {}, rules = [], people = "missing", s
     const handled = await handler(new URL(`http://bridge${path}`), request, res, CONFIG);
     return { handled, ...res };
   };
-  const storedRules = () => JSON.parse(readFileSync(rulesFile, "utf8"));
-  return { call, upstream, storedRules, rulesFile };
+  const storedRules = () => ruleStore.rows;
+  return { call, upstream, storedRules };
 }
 
 const ROUTES = [
@@ -177,7 +210,7 @@ test("a member added after login can write share rules", async () => {
 test("the server owns rule ids: a client _id is ignored, and cannot reach another workspace's rule", async () => {
   const victim = { _id: "shared-id", workspaceId: WS_B, resourceId: "p", resourceType: "page", target: { type: "workspace" } };
   const { call, storedRules } = setup({ access: { [WS_A]: ["read", "update"] }, rules: [victim] });
-  const created = await call("POST", "/api/perms/rules", { body: { _id: "shared-id", workspaceId: WS_A, resourceId: "p" } });
+  const created = await call("POST", "/api/perms/rules", { body: { _id: "shared-id", workspaceId: WS_A, resourceId: "p", target: { type: "workspace" } } });
   assert.equal(created.status, 200);
   assert.notEqual(created.body.rule._id, "shared-id");
   const del = await call("DELETE", "/api/perms/rules/shared-id");
@@ -210,4 +243,29 @@ test("a malformed body is a generic 400", async () => {
   const { call } = setup({ access: { [WS_A]: ["read", "update"] } });
   const res = await call("POST", "/api/perms/rules", { body: { resourceId: "p" } });
   assert.equal(res.status, 400);
+});
+
+// The engine credentials used to be COPIES in ./.env.local, and they went stale (Kong 401,
+// then "Missing verified identity envelope"). With the copies blank the proxy uses the
+// bridge's own service identity — the key every other BaaS call of the bridge uses.
+test("a blank PERMS_SERVICE_APIKEY uses the bridge's own service key", async () => {
+  const { call, upstream } = setup({ serviceApikey: "" });
+  assert.equal((await call("GET", "/api/perms/roles")).status, 200);
+  assert.equal(upstream[0].init.headers.apikey, CONFIG.serviceKey);
+});
+
+test("settings: blank copies fall through, an explicit PERMS_* override still wins", () => {
+  const blank = loadPermsSettings({ PERMS_SERVICE_APIKEY: "", PERMS_SERVICE_TOKEN: "", ADAPTER_REGISTRY_SERVICE_TOKEN: "registry-token" }, {});
+  assert.equal(blank.serviceApikey, "");
+  assert.equal(blank.serviceToken, "registry-token");
+  const explicit = loadPermsSettings({ PERMS_SERVICE_APIKEY: "override-key", PERMS_SERVICE_TOKEN: "override-token", ADAPTER_REGISTRY_SERVICE_TOKEN: "registry-token" }, {});
+  assert.equal(explicit.serviceApikey, "override-key");
+  assert.equal(explicit.serviceToken, "override-token");
+});
+
+test("an invalid rule is a 400 before any access check or write", async () => {
+  const { call, storedRules } = setup({ access: { [WS_A]: ["read", "update"] } });
+  const res = await call("POST", "/api/perms/rules", { body: { workspaceId: WS_A, permission: "owner" } });
+  assert.equal(res.status, 400);
+  assert.deepEqual(storedRules(), []);
 });
