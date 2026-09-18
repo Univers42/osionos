@@ -31,6 +31,24 @@ export function equalizeColumns(columns: Block[]): Block[] {
   return columns.map((column) => ({ ...column, widthRatio: ratio }));
 }
 
+/**
+ * Append `newBlock` as the LAST child of the column `columnId`, anywhere in the
+ * tree. Backs the per-column append zone (the Notion "continue writing at the
+ * bottom of this column" affordance) — insertBlockRelative can't serve it
+ * because an empty column has no sibling to anchor on.
+ */
+export function appendBlockToColumn(blocks: Block[], columnId: string, newBlock: Block): Block[] {
+  return blocks.map((block) => {
+    if (block.id === columnId && block.type === "column") {
+      return { ...block, children: [...(block.children ?? []), newBlock] };
+    }
+    if (block.children?.length) {
+      return { ...block, children: appendBlockToColumn(block.children, columnId, newBlock) };
+    }
+    return block;
+  });
+}
+
 function columnContainsBlock(column: Block, targetId: string): boolean {
   const walk = (list?: Block[]): boolean =>
     Array.isArray(list) && list.some((child) => child.id === targetId || walk(child.children));
