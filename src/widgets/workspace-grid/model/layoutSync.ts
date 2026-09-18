@@ -57,6 +57,10 @@ export function mirrorActiveTab(tab: WorkspaceTab | null): void {
 
   if (activePage.kind === "page") {
     const jwt = getActivePageJwt();
-    if (jwt && !store.pageById(activePage.id)) store.fetchPageContent(activePage.id, jwt);
+    // Fetch on missing page OR unloaded content (the bulk hydrate ships metadata
+    // only) — mirrors PaneContent's open-seam so the active page is never stranded
+    // with content===undefined.
+    const existing = store.pageById(activePage.id);
+    if (jwt && (!existing || existing.content === undefined)) store.fetchPageContent(activePage.id, jwt);
   }
 }

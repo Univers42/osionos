@@ -39,6 +39,13 @@ const StyleGuideRouteImpl = lazy(() =>
   })),
 );
 
+// The dedicated IDE layout (file tree + editor grid + terminal strip). Its own
+// chunk so the CodeMirror/IDE tree never touches the warm shell; loads only when
+// a workspace is flipped into IDE mode.
+const IdeShellImpl = lazy(() =>
+  import("@/widgets/ide-shell").then((module) => ({ default: module.IdeShell })),
+);
+
 // Warm the page-renderer SHELL (grid + panes) in parallel with the entry bundle
 // so it is ready by the time auth resolves -- removes the lazy-load waterfall
 // from LCP without putting the editor back on the critical path. Deep path so we
@@ -88,4 +95,8 @@ export function LazyCanvasDebugRoute() {
 
 export function LazyStyleGuideRoute() {
   return <Suspense fallback={contentFallback}>{<StyleGuideRouteImpl />}</Suspense>;
+}
+
+export function LazyIdeShell() {
+  return <Suspense fallback={contentFallback}>{<IdeShellImpl />}</Suspense>;
 }

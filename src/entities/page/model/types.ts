@@ -118,7 +118,7 @@ export interface PageStore {
   seeded: boolean; // true once seed data is loaded
   showTrash: boolean; // true when archived files view is active
 
-  fetchPages: (workspaceId: string, jwt: string) => Promise<void>;
+  fetchPages: (workspaceId: string, jwt: string, force?: boolean) => Promise<void>;
   /** Fetch full page data (with content) from API */
   fetchPageContent: (pageId: string, jwt: string) => Promise<void>;
   /** Load seed pages into the store (call once after user store init) */

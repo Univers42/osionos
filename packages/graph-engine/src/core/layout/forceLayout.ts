@@ -50,6 +50,9 @@ export interface ForceLayoutInit {
   seedY?: Float32Array | null;
   /** Per-node database/mount group id — drives per-database cluster forces. */
   nodeGroups?: Uint8Array | null;
+  /** Starting alpha (default 1 = full settle). Rebuilds that preserve most
+   *  positions pass a low value so the sim cools in a handful of ticks. */
+  initialAlpha?: number;
 }
 
 /** Alpha below which the layout is considered settled. */
@@ -143,7 +146,7 @@ export class ForceLayout {
       .force("charge", this.charge)
       .force("center", this.center)
       .force("collide", this.collide)
-      .alpha(1)
+      .alpha(init.initialAlpha ?? 1)
       .alphaDecay(0.06)
       .stop();
     if (this.groupX) this.sim.force("clusterX", this.groupX);

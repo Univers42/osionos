@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { LanguageSupport, StreamLanguage } from "@codemirror/language";
+import type { StreamParser } from "@codemirror/language";
 import type { Extension } from "@codemirror/state";
 
 /**
@@ -49,9 +49,15 @@ export interface IdeLanguage {
   formatterId?: "prettier" | "black" | "clang-format" | "gofmt" | "rustfmt" | "google-java-format" | "shfmt";
 }
 
-/** Wrap a legacy StreamLanguage mode as a CodeMirror language extension. */
+/** Wrap a legacy StreamLanguage mode as a CodeMirror language extension.
+ *  @codemirror/language resolves INSIDE the thunk: a module-scope value import
+ *  here rode the sidebar's languageForFileName() (file-dot color) into the
+ *  entry chunk and dragged the whole CodeMirror core into first paint. */
 function legacy(loadMode: () => Promise<unknown>): () => Promise<Extension> {
-  return () => loadMode().then((mode) => new LanguageSupport(StreamLanguage.define(mode as Parameters<typeof StreamLanguage.define>[0])));
+  return () =>
+    Promise.all([loadMode(), import("@codemirror/language")]).then(
+      ([mode, lang]) => new lang.LanguageSupport(lang.StreamLanguage.define(mode as StreamParser<unknown>)),
+    );
 }
 
 export const IDE_LANGUAGES: IdeLanguage[] = [

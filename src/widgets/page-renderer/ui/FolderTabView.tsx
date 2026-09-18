@@ -18,8 +18,9 @@ import { usePageStore, type PageEntry } from "@/store/usePageStore";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { pageEntryToTab } from "@/widgets/workspace-grid/model/pageToTab";
 import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
+import { selectFolderChildren, type FolderChild } from "./folderTabView.helpers";
 
-type FolderChild = Pick<PageEntry, "_id" | "title" | "icon" | "surface" | "databaseId" | "workspaceId">;
+const NO_PAGES: readonly PageEntry[] = [];
 
 function sortChildren(children: FolderChild[]): FolderChild[] {
   return [...children].sort((a, b) => {
@@ -33,11 +34,7 @@ function sortChildren(children: FolderChild[]): FolderChild[] {
 /** A folder "tab": a readable listing of its children — click one to open it here. */
 export const FolderTabView: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab, paneId }) => {
   const folder = usePageStore((s) => s.pageById(tab.pageId));
-  const children = usePageStore(useShallow((s) => (
-    (s.pages[tab.workspaceId] ?? [])
-      .filter((p) => p.parentPageId === tab.pageId && !p.archivedAt)
-      .map((p) => ({ _id: p._id, title: p.title, icon: p.icon, surface: p.surface, databaseId: p.databaseId, workspaceId: p.workspaceId }))
-  )));
+  const children = usePageStore(useShallow((s) => selectFolderChildren(s.pages[tab.workspaceId] ?? NO_PAGES, tab.pageId)));
   const openTab = useWorkspaceLayout((s) => s.openTab);
   const sorted = sortChildren(children);
 
