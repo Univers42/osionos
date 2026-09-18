@@ -33,6 +33,7 @@ import {
   isIndentable,
   isParentable,
   backspaceConvertsToParagraph,
+  continuesSameType,
   isHeadingBlock,
   acceptsHeadingLevel,
   isListBlock,
@@ -54,6 +55,8 @@ import {
   getAdjacentRenderedBlockId,
   clearVerticalGoalX,
 } from "./playgroundBlockEditor.helpers";
+import { plainTextOfInlineSource, sliceInlineSource } from "./crossTextOps";
+import { insertBlockRelative } from "./blockContextMenu.helpers";
 import { useBlockHistory } from "./useBlockHistory";
 import { isAutomationsEnabled } from "@/shared/config/featureFlags";
 import { getInlineMarkAtCaretEnd, placeCaretAfterInlineMark } from "./inlineMarkHelpers";
@@ -1740,6 +1743,58 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   );
 
   /** Try Enter-key actions (new block creation). Returns true if handled. */
+  /**
+   * Enter inside a NON-EMPTY block, by caret position (Notion parity). The old
+   * path always appended an empty block after and moved the caret into it, so:
+   *   - at offset 0 the block stayed put and only the CARET dropped below,
+   *     instead of the whole element being pushed down under a new empty line;
+   *   - mid-text nothing split at all — the tail stayed behind.
+   * Offsets are PLAIN-TEXT, while content carries inline markup, so the split
+   * goes through sliceInlineSource (markup-preserving) — never raw slice().
+   */
+  const handleEnterSplit = useCallback(
+    (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
+      if (e.key !== "Enter" || e.shiftKey || e.defaultPrevented) return false;
+      if (block.type === "code" || isEffectivelyEmpty(block.content ?? "")) return false;
+      const editorEl = e.currentTarget as HTMLElement | null;
+      const offsets = editorEl ? getInlineEditorSelectionOffsets(editorEl) : null;
+      if (!offsets || offsets.start !== offsets.end) return false;
+
+      const source = block.content ?? "";
+      const plainLength = plainTextOfInlineSource(source).length;
+      const caret = offsets.start;
+
+      // At the START: push THIS block (content, type and all) down under a new
+      // empty paragraph, leaving the caret where the user was typing.
+      if (caret === 0) {
+        e.preventDefault();
+        flushPendingBlockDraft(blockId, "structural");
+        const spacer: Block = { id: crypto.randomUUID(), type: "paragraph", content: "" };
+        const { blocks: next } = insertBlockRelative(contentRef.current, blockId, spacer, "before");
+        updatePageContent(pageId, next);
+        focusBlock(blockId);
+        repositionCursor(blockId, "");
+        return true;
+      }
+      // MID-text: keep the head here, carry the tail into the new block.
+      if (caret < plainLength) {
+        e.preventDefault();
+        flushPendingBlockDraft(blockId, "structural");
+        const head = sliceInlineSource(source, 0, caret);
+        const tail = sliceInlineSource(source, caret);
+        const nextType = continuesSameType(block.type) ? block.type : "paragraph";
+        const tailBlock: Block = { id: crypto.randomUUID(), type: nextType, content: tail };
+        updateBlock(pageId, blockId, { content: head });
+        insertBlock(pageId, blockId, tailBlock);
+        focusBlock(tailBlock.id);
+        repositionCursor(tailBlock.id, "");
+        return true;
+      }
+      return false; // at the end → the plain append path below
+    },
+    [pageId, flushPendingBlockDraft, updatePageContent, updateBlock, insertBlock, focusBlock],
+  );
+
   const handleEnterAction = useCallback(
     (e: React.KeyboardEvent, blockId: string, blockType: Block["type"]) => {
       if (e.key !== "Enter" || e.shiftKey) return false;
@@ -1815,6 +1870,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         handleContainerEnter(e, blockId, nextBlock);
 
       if (handled) return;
+      if (handleEnterSplit(e, blockId, nextBlock)) return;
       if (handleEnterAction(e, blockId, nextBlock.type)) return;
       if (handleStartBackspaceOutdent(e, blockId, nextBlock, parentBlockId, isEmpty)) return;
       if (handleStartBackspaceMerge(e, blockId, nextBlock, nextBlockIdx, nextContent, isEmpty)) return;
@@ -1836,6 +1892,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       handleEmptyListDelete,
       handleDividerDelete,
       handleContainerEnter,
+      handleEnterSplit,
       handleEnterAction,
       handleStartBackspaceOutdent,
       handleStartBackspaceMerge,
