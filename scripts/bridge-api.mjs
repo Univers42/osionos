@@ -721,8 +721,23 @@ function pageCreateRowFromPayload(payload, authContext) {
 	return row;
 }
 
+/** The client's own `updatedAt` when sane, else server now. The page store and
+ *  its localStorage cache stamp edits with the BROWSER clock, and hydrate's
+ *  last-write-wins compares those stamps against this column — stamping server
+ *  time here made LWW compare two different clocks, so any skew between the
+ *  browser host and this VM let a STALE server copy beat fresher local edits
+ *  on reload (measured data loss, not theory). Future-clamped to +5min so a
+ *  wildly-ahead client cannot wedge a page against all later edits. */
+function pageUpdatedAtFromPayload(payload) {
+	const claimed = typeof payload.updatedAt === 'string' ? Date.parse(payload.updatedAt) : NaN;
+	if (!Number.isFinite(claimed)) return new Date().toISOString();
+	const ceiling = Date.now() + 5 * 60 * 1000;
+	if (claimed > ceiling) return new Date().toISOString();
+	return new Date(claimed).toISOString();
+}
+
 function pageUpdateRowFromPayload(payload) {
-	const row = { updated_at: new Date().toISOString() };
+	const row = { updated_at: pageUpdatedAtFromPayload(payload) };
 	assignPayloadValue(row, payload, 'workspaceId', 'workspace_id', (value) => requireUuid(value, 'workspaceId'));
 	assignPayloadValue(row, payload, 'parentPageId', 'parent_page_id', (value) => optionalUuid(value, 'parentPageId') ?? null);
 	assignPayloadValue(row, payload, 'sortOrder', 'sort_order', (value) => typeof value === 'number' ? value : null);

@@ -27,13 +27,14 @@
 
 import { useEffect, useRef } from "react";
 import { usePageStore } from "@/store/usePageStore";
-import { derivePageState } from "@/store/pageStore.helpers";
+import { derivePageState, flushScheduledPagesCachePersist } from "@/store/pageStore.helpers";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useUserStore } from "@/features/auth";
 import { API_BASE } from "@/shared/api/client";
 import { canEditPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
+import { flushAllBlockDrafts } from "@/features/block-editor/model/blockDraftStore";
 import { buildDesiredPages, PAGE_OUTBOX_KEY } from "./pageStamp";
-import { publishPage } from "./pageOutbox";
+import { publishPage, publishPageKeepalive } from "./pageOutbox";
 import { hydratePagesFromBaas } from "./hydratePages";
 import { computeSyncActions, loadLedger, saveLedger } from "@osionos/outbox-ledger";
 
@@ -126,6 +127,33 @@ export function usePageSync(): void {
       timer = setTimeout(() => void flush(), DEBOUNCE_MS);
     };
 
+    // UNLOAD seam — a reload can land inside the editor's 250ms draft commit
+    // AND this outbox's 800ms debounce, so without this flush the last edits
+    // die in memory. Ordered: (1) commit every dirty draft into the page store,
+    // (2) force the store's localStorage cache to disk synchronously (its own
+    // pagehide listener would also run, but AFTER ours is not guaranteed —
+    // the explicit call is idempotent), (3) fire best-effort keepalive PATCHes
+    // for every page the ledger says is unsynced. The ledger is NOT advanced —
+    // nothing can confirm during unload — so the next session re-publishes
+    // idempotently; steps 1+2 alone already make the reload lossless locally.
+    const flushOnUnload = () => {
+      if (!hydratedRef.current) return; // pre-hydrate the ledger is empty — everything would spray
+      flushAllBlockDrafts("unmount");
+      flushScheduledPagesCachePersist();
+      const ledger = loadLedger(PAGE_OUTBOX_KEY);
+      const context = getCurrentPageAccessContext();
+      const { desired, payloads } = buildDesiredPages(
+        usePageStore.getState().pages,
+        (page) => !!context && canEditPage(page, context),
+      );
+      const { toPublish } = computeSyncActions(desired, ledger);
+      for (const id of toPublish) {
+        const page = payloads.get(id);
+        if (page) publishPageKeepalive(page);
+      }
+    };
+    globalThis.addEventListener("pagehide", flushOnUnload);
+
     // Only page edits matter; ignore activePage / recents / loadingIds churn (their
     // mutations leave `pages` and `pageRevisions` referentially unchanged).
     const unsubscribe = usePageStore.subscribe((state, previous) => {
@@ -137,6 +165,7 @@ export function usePageSync(): void {
       disposed = true;
       if (timer) clearTimeout(timer);
       clearRetry();
+      globalThis.removeEventListener("pagehide", flushOnUnload);
       unsubscribe();
     };
   }, []);

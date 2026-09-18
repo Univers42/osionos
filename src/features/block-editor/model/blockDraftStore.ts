@@ -181,6 +181,21 @@ export function flushAllBlockDraftsForSource(
   return committed;
 }
 
+/**
+ * Commit every dirty draft across EVERY registered editor source. The unload
+ * seam: a keystroke younger than the 250ms idle commit lives only in this
+ * module, so a reload without this flush loses it from the page store, the
+ * localStorage cache AND the server in one stroke. Returns whether anything
+ * was committed so the caller can chain the cache/network flushes.
+ */
+export function flushAllBlockDrafts(reason: BlockDraftCommitReason): boolean {
+  let committed = false;
+  for (const sourceKey of Array.from(draftCommitters.keys())) {
+    committed = flushAllBlockDraftsForSource(sourceKey, reason) || committed;
+  }
+  return committed;
+}
+
 export function rebaseBlockDraft(sourceKey: string, blockId: string, committedContent: string) {
   const key = draftKey(sourceKey, blockId);
   const entry = draftEntries.get(key);
