@@ -222,7 +222,21 @@ async function deleteConnection(deps, session, connectionId, response, config) {
 	return sendJson(response, 200, { ok: true, connectionId, deleted: true }, config);
 }
 
-/** GET/POST/DELETE /api/social/blocks + POST /api/social/reports. */
+/** osionos_user_reports row → the frontend Report shape (store/social/types.ts). */
+function reportEntry(row) {
+	return {
+		id: row.id,
+		subjectUserId: row.subject_user_id ?? undefined,
+		subjectKind: row.subject_kind ?? 'user',
+		subjectId: row.subject_id ?? undefined,
+		category: row.category ?? 'other',
+		details: row.details ?? undefined,
+		status: row.status ?? undefined,
+		createdAt: row.created_at ?? undefined,
+	};
+}
+
+/** GET/POST/DELETE /api/social/blocks + GET/POST /api/social/reports. */
 async function handleSocialOps(deps, session, request, url, response, config) {
 	const pathname = url.pathname;
 	const method = (request.method || 'GET').toUpperCase();
@@ -262,6 +276,11 @@ async function handleSocialOps(deps, session, request, url, response, config) {
 		await rest(config, deps.fetchImpl, `osionos_user_blocks?blocker_id=eq.${session.userId}&blocked_id=eq.${blockedId}`, { method: 'DELETE', prefer: 'return=minimal' });
 		return sendJson(response, 200, { ok: true, userId: blockedId, unblocked: true }, config);
 	}
+	if (pathname === '/api/social/reports' && method === 'GET') {
+		const rows = await rest(config, deps.fetchImpl, `osionos_user_reports?reporter_id=eq.${session.userId}&select=*&order=created_at.desc&limit=100`);
+		const reports = (Array.isArray(rows) ? rows : []).map(reportEntry);
+		return sendJson(response, 200, { ok: true, reports }, config);
+	}
 	if (pathname === '/api/social/reports' && method === 'POST') {
 		const payload = await readJsonBody(request);
 		const subjectKind = safeText(payload.subjectKind, 32) || 'user';
@@ -279,7 +298,7 @@ async function handleSocialOps(deps, session, request, url, response, config) {
 		});
 		const row = Array.isArray(rows) ? rows[0] : rows;
 		if (!row) throw httpError('Report failed.', 502);
-		return sendJson(response, 201, { ok: true, reportId: row.id }, config);
+		return sendJson(response, 201, { ok: true, reportId: row.id, report: reportEntry(row) }, config);
 	}
 	return sendJson(response, 404, { ok: false, message: 'Social route not found.' }, config);
 }
