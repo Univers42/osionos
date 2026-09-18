@@ -253,3 +253,39 @@ test("filled image keeps its drag handle at the top-left corner", async ({ page,
   expect(info.inlineTop, "leaf alignment must not touch media handles").toBe("");
   expect(info.offsetFromArticleTop, "handle must sit at the top edge").toBeLessThan(40);
 });
+
+test("Backspace at a heading's start strips the type, then merges upward", async ({ page, baseURL }) => {
+  await openFreshPage(page, baseURL);
+  const editor = await activateFirstEditor(page);
+  await editor.click();
+  await page.keyboard.type("first line");
+  await page.waitForTimeout(200);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(250);
+  await page.keyboard.type("## Section");
+  await page.waitForTimeout(350);
+
+  const headings = page.locator('article[data-block-type^="heading"]');
+  await expect(headings.first(), "'## ' should have made a heading").toBeVisible();
+
+  // Caret to the very start of the heading, then Backspace: type is stripped,
+  // the text survives as a paragraph.
+  await page.keyboard.press("Home");
+  await page.waitForTimeout(120);
+  await page.keyboard.press("Backspace");
+  await page.waitForTimeout(300);
+  expect(await headings.count(), "the heading type must be stripped").toBe(0);
+  const textNow = await page.locator(".osionos-page").first().textContent();
+  expect(textNow).toContain("Section");
+
+  // A second Backspace at start merges the paragraph into the block above.
+  await page.keyboard.press("Backspace");
+  await page.waitForTimeout(350);
+  const merged = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.osionos-page article[data-block-type="paragraph"]'))
+      .map((a) => (a.textContent ?? "").trim())
+      .filter(Boolean),
+  );
+  console.log("after merge:", JSON.stringify(merged));
+  expect(merged.some((t) => t.includes("first lineSection")), `blocks: ${JSON.stringify(merged)}`).toBe(true);
+});

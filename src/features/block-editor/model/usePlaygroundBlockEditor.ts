@@ -32,6 +32,7 @@ import { useUserStore } from "@/features/auth";
 import {
   isIndentable,
   isParentable,
+  backspaceConvertsToParagraph,
   isHeadingBlock,
   acceptsHeadingLevel,
   isListBlock,
@@ -1475,6 +1476,63 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     [pageId, outdentBlock, flushPendingBlockDraft],
   );
 
+  /**
+   * Backspace at offset 0 of a NON-EMPTY block (Notion parity). The empty case
+   * is handleEmptyBackspace; the indented case outdents first. What was missing
+   * is the ordinary one: on a typed block the first Backspace STRIPS THE TYPE
+   * (a heading becomes a paragraph, keeping its text), and on a plain paragraph
+   * the next one MERGES it into the block above with the caret at the junction.
+   * Without these two, Backspace at the start of a heading did nothing at all.
+   */
+  const handleStartBackspaceMerge = useCallback(
+    (
+      e: React.KeyboardEvent,
+      blockId: string,
+      block: Block,
+      blockIdx: number,
+      content: Block[],
+      isEmpty: boolean,
+    ): boolean => {
+      if (e.key !== "Backspace" || e.shiftKey || isEmpty || block.type === "code") return false;
+      const editorEl = e.currentTarget as HTMLElement | null;
+      const offsets = editorEl ? getInlineEditorSelectionOffsets(editorEl) : null;
+      if (!offsets || offsets.start !== 0 || offsets.end !== 0) return false;
+
+      // Strip the type first. Containers keep their type while they still hold
+      // children — flattening one would orphan its subtree.
+      const convertible =
+        isHeadingBlock(block.type) || isListBlock(block.type) || backspaceConvertsToParagraph(block.type);
+      if (block.type !== "paragraph" && convertible && !block.children?.length) {
+        e.preventDefault();
+        flushPendingBlockDraft(blockId, "structural");
+        changeBlockType(pageId, blockId, "paragraph");
+        focusBlock(blockId);
+        repositionCursor(blockId, "");
+        return true;
+      }
+      if (block.type !== "paragraph") return false;
+
+      // Merge into the previous sibling. Only into a plain text-bearing block
+      // with no children: merging into a container would swallow text into a
+      // summary line the user cannot see.
+      const previous = content[blockIdx - 1];
+      if (!previous || previous.children?.length) return false;
+      const mergeable =
+        previous.type === "paragraph" || isHeadingBlock(previous.type) || isListBlock(previous.type);
+      if (!mergeable) return false;
+
+      e.preventDefault();
+      flushPendingBlockDraft(blockId, "structural");
+      const prefix = previous.content ?? "";
+      updateBlock(pageId, previous.id, { content: prefix + (block.content ?? "") });
+      deleteBlock(pageId, blockId);
+      focusBlock(previous.id);
+      repositionCursor(previous.id, prefix); // caret sits exactly at the seam
+      return true;
+    },
+    [pageId, changeBlockType, updateBlock, deleteBlock, focusBlock, flushPendingBlockDraft],
+  );
+
   const handleArrowNavigation = useCallback(
     (e: React.KeyboardEvent, blockId: string, content: Block[]): boolean => {
       // While a caret popover (slash / page-selector / emoji) is open it OWNS
@@ -1759,6 +1817,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       if (handled) return;
       if (handleEnterAction(e, blockId, nextBlock.type)) return;
       if (handleStartBackspaceOutdent(e, blockId, nextBlock, parentBlockId, isEmpty)) return;
+      if (handleStartBackspaceMerge(e, blockId, nextBlock, nextBlockIdx, nextContent, isEmpty)) return;
       if (handleEmptyBackspace(e, blockId, nextBlock, nextBlockIdx, nextContent, parentBlockId, isEmptyForDeletion)) return;
       if (handleArrowNavigation(e, blockId, nextContent)) return;
       handleEscapeAction(e);
@@ -1779,6 +1838,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       handleContainerEnter,
       handleEnterAction,
       handleStartBackspaceOutdent,
+      handleStartBackspaceMerge,
       handleEmptyBackspace,
       handleArrowNavigation,
       handleEscapeAction,
