@@ -98,6 +98,36 @@ test("clicking below the last block appends once, then focuses", async ({ page, 
   expect(await page.locator(".osionos-page [data-block-id]").count()).toBe(before + 1);
 });
 
+test("each column has an append zone that adds a block to THAT column", async ({ page, baseURL }) => {
+  await openFreshPage(page, baseURL);
+  const editor = await activateFirstEditor(page);
+  await editor.click();
+  await page.keyboard.type("/2 columns");
+  await pickSlashEntry(page, "2 columns");
+  const zones = page.getByTestId("column-append-zone");
+  await zones.first().waitFor();
+  expect(await zones.count()).toBe(2);
+  // Type something in column 2 so its trailing block is non-empty, then use
+  // ITS zone: a new paragraph must land inside column 2, focused.
+  const colEditors = page.locator(
+    '[data-block-type="column_list"] [role="textbox"][aria-multiline="true"]',
+  );
+  await colEditors.nth(1).click();
+  await page.keyboard.type("right content");
+  await page.waitForTimeout(200);
+  await zones.nth(1).click({ force: true });
+  await page.waitForTimeout(250);
+  await page.keyboard.type("added below");
+  await page.waitForTimeout(150);
+  const columnTexts = await page
+    .locator('[data-block-type="column_list"] [data-block-type="column"], [data-block-type="column_list"]')
+    .first()
+    .textContent();
+  expect(columnTexts).toContain("added below");
+  const home = await caretHome(page);
+  expect(home.insideColumn, "new block must live inside the column").toBe(true);
+});
+
 test("google-images viewer URL is unwrapped to the real image", async ({ page, baseURL }) => {
   await openFreshPage(page, baseURL);
   const editor = await activateFirstEditor(page);
