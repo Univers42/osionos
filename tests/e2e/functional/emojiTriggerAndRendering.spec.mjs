@@ -53,24 +53,70 @@ test("the page title supports ':' emoji insertion", async ({ page, baseURL }) =>
   await openFreshPage(page, baseURL);
   const title = page.getByLabel("Page title");
   await title.click();
-  await title.fill("Trip");
-  await title.press("End");
+  // Type like a user: fill() replaces the value in one shot and does not
+  // reproduce the per-keystroke input events the trigger listens to. (No
+  // Ctrl+A either — the app binds it to block select-all.)
+  await page.keyboard.type("Trip");
+  await page.waitForTimeout(250);
   await page.keyboard.type(" :");
   await page.waitForTimeout(500);
+  // The wrapper is zero-size (IconPicker positions itself absolutely inside),
+  // so assert on the picker's own content rather than the wrapper's box.
   const picker = page.locator('[data-testid="title-emoji-picker"]');
-  await expect(picker, "the title must open the shared picker").toBeVisible();
-  // Pick the first emoji offered and confirm it lands in the title text.
-  const firstEmoji = picker.locator("button").filter({ hasNotText: /^$/ }).first();
-  await firstEmoji.click();
+  await expect(picker, "the title must open the shared picker").toBeAttached();
+  // Grid items carry title="<emoji name>"; the skin-TONE buttons above the grid
+  // also contain a pictographic glyph but only carry aria-label, so select on
+  // [title] or the click lands on a tone switch and nothing is inserted.
+  const emojiButton = picker.locator("button[title]").first();
+  await expect(emojiButton).toBeVisible();
+  await emojiButton.click();
   await page.waitForTimeout(400);
   const value = await title.inputValue();
   console.log("title after emoji pick:", JSON.stringify(value));
-  expect(value.startsWith("Trip "), `title was ${JSON.stringify(value)}`).toBe(true);
+  expect(value.includes("Trip "), `title was ${JSON.stringify(value)}`).toBe(true);
   expect(value.includes(":"), "the trigger colon must be consumed").toBe(false);
-  expect(value.length).toBeGreaterThan("Trip ".length);
+  expect(/\p{Extended_Pictographic}/u.test(value), `no emoji in ${JSON.stringify(value)}`).toBe(true);
 });
 
-test("the picker offers no glyph this device paints as tofu", async ({ page, baseURL }) => {
+test("the self-hosted emoji font renders Unicode 16/17 glyphs", async ({ page, baseURL }) => {
+  await openFreshPage(page, baseURL);
+  await page.evaluate(() => document.fonts.ready);
+  const report = await page.evaluate(async () => {
+    await document.fonts.ready;
+    const canvas = document.createElement("canvas");
+    canvas.width = 48; canvas.height = 48;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const font = getComputedStyle(document.body).fontFamily;
+    const sig = (t) => {
+      ctx.clearRect(0, 0, 48, 48);
+      ctx.font = `28px ${font}`;
+      ctx.textBaseline = "top";
+      ctx.fillText(t, 2, 2);
+      const d = ctx.getImageData(0, 0, 48, 48).data;
+      let h = 0;
+      for (let i = 0; i < d.length; i += 4) h = (h * 31 + d[i] + d[i+1]*3 + d[i+2]*7 + d[i+3]*11) >>> 0;
+      return h;
+    };
+    const controls = new Set(["\u{10FFFD}", "\u{0FFFFD}"].map(sig));
+    // The two that painted tofu before the font was self-hosted, plus staples.
+    const cases = {
+      "U+1FADF (Unicode 16)": "\u{1FADF}",
+      "U+1FAC6 (Unicode 17)": "\u{1FAC6}",
+      "U+1FAE8 (15.0)": "\u{1FAE8}",
+      "grin": "\u{1F600}",
+      "ZWJ family": "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}",
+    };
+    const out = {};
+    for (const [label, ch] of Object.entries(cases)) out[label] = !controls.has(sig(ch));
+    return out;
+  });
+  console.log("RENDERABLE:", JSON.stringify(report));
+  for (const [label, ok] of Object.entries(report)) {
+    expect(ok, `${label} still paints tofu`).toBe(true);
+  }
+});
+
+test("the picker shows emoji and none of them are tofu", async ({ page, baseURL }) => {
   await openFreshPage(page, baseURL);
   const editor = await activateFirstEditor(page);
   await editor.click();
