@@ -98,6 +98,26 @@ test("clicking below the last block appends once, then focuses", async ({ page, 
   expect(await page.locator(".osionos-page [data-block-id]").count()).toBe(before + 1);
 });
 
+test("google-images viewer URL is unwrapped to the real image", async ({ page, baseURL }) => {
+  await openFreshPage(page, baseURL);
+  const editor = await activateFirstEditor(page);
+  await editor.click();
+  await page.keyboard.type("/image");
+  await pickSlashEntry(page, "Image");
+  await page.waitForTimeout(300);
+  await page.getByText("Add an image", { exact: false }).first().click();
+  await page.getByText("Link", { exact: true }).first().click();
+  const dialogInput = page.locator('input[type="url"]');
+  await dialogInput.waitFor();
+  const wrapped = `https://www.google.com/imgres?q=x&imgurl=${encodeURIComponent(TINY_PNG)}&imgrefurl=y`;
+  await dialogInput.fill(wrapped);
+  await page.getByRole("button", { name: /embed image/i }).click();
+  await page.waitForTimeout(500);
+  const img = page.locator('[data-block-type="image"] img');
+  await expect(img.first()).toBeVisible();
+  expect(await img.first().getAttribute("src")).toBe(TINY_PNG);
+});
+
 test("filled image keeps its drag handle at the top-left corner", async ({ page, baseURL }) => {
   await openFreshPage(page, baseURL);
   const editor = await activateFirstEditor(page);

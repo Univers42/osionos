@@ -22,14 +22,9 @@ export function isGradientValue(value: string): boolean {
   return value.startsWith("linear-gradient") || value.startsWith("radial-gradient");
 }
 
-/** Accept http(s)/data/blob URLs, or upgrade a bare domain to https. */
-export function normalizeExternalUrl(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (/^(https?:|data:|blob:)/i.test(trimmed)) return trimmed;
-  if (/^[\w.-]+\.[a-z]{2,}/i.test(trimmed)) return `https://${trimmed}`;
-  return null;
-}
+/** Re-export of THE shared normalizer (scheme fixing + search-viewer
+ *  unwrapping) so existing cover-tab imports keep resolving from here. */
+export { normalizeExternalUrl } from "@/shared/lib/media/externalImageUrl";
 
 interface CoverTileProps {
   item: CoverPickerAsset;
