@@ -36,6 +36,7 @@ import { EmojiPicker } from "@/shared/ui";
 import { ColorMenu } from "./ColorMenu";
 import { getBlockSurfaceStyle } from "../model/blockColors";
 import { appendBlockToColumn, insertColumnForTarget } from "../model/columnLayout";
+import { insertBlockRelative } from "../model/blockContextMenu.helpers";
 import { VIRTUAL_BLOCK_FOCUS_EVENT } from "../model/blockDomFocus";
 import { commitBlockDraft, useBlockDraftContent } from "../model/blockDraftStore";
 import { useSurfaceMarquee } from "../model/useSurfaceMarquee";
@@ -588,6 +589,63 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	// Left-click the drag handle → single-select the whole block. Delegated off the
 	// handle's data-testid so no setter needs drilling through the block tree; the
 	// existing onContextMenu (right-click, on the <article>) is untouched.
+	// Notion-style GAP insertion: the free vertical space between components is
+	// itself a target — double-click there inserts a paragraph at that spot.
+	// The gap lives inside the articles' own padding, so the hit is resolved
+	// geometrically: the DEEPEST block article containing the point decides
+	// (top half → before it, bottom half → after it); a click below every
+	// x-overlapping article anchors after the last one. Content itself
+	// (editables, media, controls) is never hijacked — dblclick there keeps
+	// its native word-select. Container articles (column_list) defer to their
+	// x-filtered descendants so a gap inside a column inserts IN that column.
+	const handleGapDoubleClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+		if (compact || locked) return;
+		const target = event.target as Element | null;
+		if (target?.closest('[contenteditable="true"], input, textarea, button, a, img, video, audio, [data-testid="block-drag-handle"]')) return;
+		const root = selectionRootRef.current;
+		if (!root) return;
+		const x = event.clientX;
+		const y = event.clientY;
+		// A double-click INSIDE a column scopes anchoring to that column — a
+		// full-width root block above the split must never steal the anchor
+		// (that put the new block at page level instead of in the column).
+		const columnEl = target?.closest<HTMLElement>("[data-column-id]") ?? null;
+		const scope: ParentNode = columnEl ?? root;
+		const articles = Array.from(scope.querySelectorAll<HTMLElement>("article[data-draggable-block-id]")).filter((el) => {
+			const r = el.getBoundingClientRect();
+			return x >= r.left && x <= r.right;
+		});
+		let anchorId: string | null = null;
+		let position: "before" | "after" = "after";
+		for (const el of articles) {
+			const r = el.getBoundingClientRect();
+			const isContainer = el.dataset.blockType === "column_list";
+			if (r.bottom <= y && !isContainer) {
+				anchorId = el.dataset.draggableBlockId ?? null;
+				position = "after";
+			} else if (r.top <= y && y <= r.bottom && !isContainer) {
+				// DOM order puts descendants after ancestors, so the deepest
+				// containing article wins by ending the loop's last assignment.
+				anchorId = el.dataset.draggableBlockId ?? null;
+				position = y < r.top + r.height / 2 ? "before" : "after";
+			}
+		}
+		const newBlock: Block = { id: crypto.randomUUID(), type: "paragraph", content: "" };
+		if (anchorId) {
+			event.preventDefault();
+			const { blocks: nextBlocks } = insertBlockRelative(blocksRef.current, anchorId, newBlock, position);
+			updateContent(nextBlocks);
+			focusBlock(newBlock.id);
+			return;
+		}
+		// No anchorable sibling under the point — an EMPTY column. Append into it.
+		if (columnEl?.dataset.columnId) {
+			event.preventDefault();
+			updateContent(appendBlockToColumn(blocksRef.current, columnEl.dataset.columnId, newBlock));
+			focusBlock(newBlock.id);
+		}
+	}, [compact, locked, updateContent, focusBlock]);
+
 	const handleSurfaceClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
 		if (compact) return;
 		const handle = (event.target as Element | null)?.closest?.('[data-testid="block-drag-handle"]');
@@ -661,7 +719,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	}
 
 	return (
-		<div ref={selectionRootRef} className={`relative flex min-w-0 flex-col ${className}`} onClick={handleSurfaceClick}>
+		<div ref={selectionRootRef} className={`relative flex min-w-0 flex-col ${className}`} onClick={handleSurfaceClick} onDoubleClick={handleGapDoubleClick}>
 			<BlockTree
 				blocks={blocks}
 				pageId={pageId}
@@ -1499,6 +1557,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 							{/* Per-COLUMN surface style: each column carries its own colors,
 							    independent of its siblings and of the list. */}
 							<div
+								data-column-id={column.id}
 								className="min-w-0 rounded-md px-1"
 								style={{
 									flexGrow: normalizeColumnRatio(column, columns.length),
