@@ -76,7 +76,7 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
   }, [onChangeTitle, title]);
 
   return (
-    <div className="relative">
+    <div className="relative" data-emoji-filter={emojiFilter ?? "null"}>
       <textarea
         ref={ref}
         aria-label="Page title"
