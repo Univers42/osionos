@@ -289,3 +289,51 @@ test("Backspace at a heading's start strips the type, then merges upward", async
   console.log("after merge:", JSON.stringify(merged));
   expect(merged.some((t) => t.includes("first lineSection")), `blocks: ${JSON.stringify(merged)}`).toBe(true);
 });
+
+test("Enter at a block's start pushes the whole element down, caret stays put", async ({ page, baseURL }) => {
+  await openFreshPage(page, baseURL);
+  const editor = await activateFirstEditor(page);
+  await editor.click();
+  await page.keyboard.type("## My heading");
+  await page.waitForTimeout(350);
+  await expect(page.locator('article[data-block-type^="heading"]').first()).toBeVisible();
+
+  await page.keyboard.press("Home");
+  await page.waitForTimeout(120);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(350);
+
+  // The heading (type AND text) must have moved DOWN under a new empty block,
+  // and the caret must still be in the heading — typing continues its text.
+  await page.keyboard.type("X");
+  await page.waitForTimeout(250);
+  const blocks = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".osionos-page article[data-draggable-block-id]"))
+      .map((a) => ({ type: a.dataset.blockType, text: (a.textContent ?? "").trim() })),
+  );
+  console.log("enter-at-start:", JSON.stringify(blocks));
+  const headingIdx = blocks.findIndex((b) => (b.type ?? "").startsWith("heading"));
+  expect(headingIdx, "the heading must survive as a heading").toBeGreaterThan(-1);
+  expect(blocks[headingIdx].text, "caret must still be in the heading").toContain("XMy heading");
+  expect(headingIdx, "an empty block must sit above it").toBeGreaterThan(0);
+  expect(blocks[headingIdx - 1].text, "the block above must be empty").toBe("");
+});
+
+test("Enter mid-text splits the block and carries the tail", async ({ page, baseURL }) => {
+  await openFreshPage(page, baseURL);
+  const editor = await activateFirstEditor(page);
+  await editor.click();
+  await page.keyboard.type("HelloWorld");
+  await page.waitForTimeout(250);
+  for (let i = 0; i < 5; i += 1) await page.keyboard.press("ArrowLeft");
+  await page.waitForTimeout(120);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(350);
+  const texts = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".osionos-page article[data-draggable-block-id]"))
+      .map((a) => (a.textContent ?? "").trim()),
+  );
+  console.log("enter-mid-text:", JSON.stringify(texts));
+  expect(texts).toContain("Hello");
+  expect(texts).toContain("World");
+});
