@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { focusPageEditorStart } from '@/features/block-editor/model/blockDomFocus';
 import { applyEmojiInsert, matchEmojiTrigger } from '@/shared/lib/emoji/emojiTrigger';
 import { parseIconValue } from '@osionos/ui/shared/iconValue';
@@ -36,6 +36,7 @@ interface PageTitleProps {
  */
 export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, readOnly = false }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const [emojiFilter, setEmojiFilter] = useState<string | null>(null);
 
   useLayoutEffect(() => {
@@ -54,6 +55,18 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
     const match = matchEmojiTrigger(upToCaret);
     setEmojiFilter(match ? match.filter : null);
   }, [onChangeTitle, readOnly]);
+
+  // Close on a pointerdown OUTSIDE the title+picker. Deliberately not `onBlur`:
+  // clicking an emoji blurs the textarea, so a blur-close unmounted the picker
+  // before its click could land — the pick never registered.
+  useEffect(() => {
+    if (emojiFilter === null) return undefined;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!wrapRef.current?.contains(event.target as Node)) setEmojiFilter(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [emojiFilter]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape' && emojiFilter !== null) {
@@ -76,7 +89,7 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
   }, [onChangeTitle, title]);
 
   return (
-    <div className="relative" data-emoji-filter={emojiFilter ?? "null"}>
+    <div className="relative" ref={wrapRef}>
       <textarea
         ref={ref}
         aria-label="Page title"
@@ -91,7 +104,6 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
         aria-readonly={readOnly}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        onBlur={() => setEmojiFilter(null)}
       />
       {emojiFilter !== null && !readOnly ? (
         <div className="absolute left-0 top-full z-[var(--osio-z-popover)]" data-testid="title-emoji-picker">
