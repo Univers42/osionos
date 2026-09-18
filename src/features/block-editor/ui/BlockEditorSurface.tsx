@@ -406,6 +406,8 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
 	const selectionRootRef = useRef<HTMLDivElement | null>(null);
 	const blocksRef = useRef<Block[]>(blocks);
+	// Pointer-down position on the bottom append zone, to tell a click from a drag.
+	const appendZonePointer = useRef<{ x: number; y: number } | null>(null);
 	const highlightedRootBlockId = useMemo(() => getHighlightedRootBlockId(blocks, focusedBlockId), [blocks, focusedBlockId]);
 
 	// Block selection now lives in a store so the context menu + keyboard dispatcher share it.
@@ -688,10 +690,29 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 			/>
 
 			{compact ? null : (
+				// Notion parity: the WHOLE empty area below the last block continues
+				// writing on click — not just a thin hover strip. A click focuses the
+				// trailing empty paragraph when one exists (never stacks empties),
+				// else appends one. Pointer-travel guard: a marquee drag that ends
+				// here must not create a block, so only a near-stationary click acts.
 				<button
 					type="button"
-					className="group mt-1 flex items-center gap-2 px-1 py-2 text-sm text-[var(--osio-fg-subtle)] transition-colors hover:text-[var(--osio-fg-muted)]"
-					onClick={() => handleAddBlock(blocks)}
+					data-testid="editor-append-zone"
+					className="group mt-1 flex min-h-[20vh] flex-1 cursor-text items-start gap-2 px-1 py-2 text-left text-sm text-[var(--osio-fg-subtle)] transition-colors hover:text-[var(--osio-fg-muted)]"
+					onPointerDown={(event) => {
+						appendZonePointer.current = { x: event.clientX, y: event.clientY };
+					}}
+					onClick={(event) => {
+						const start = appendZonePointer.current;
+						appendZonePointer.current = null;
+						if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 5) return;
+						const last = blocksRef.current.at(-1);
+						if (last && last.type === "paragraph" && !(last.content ?? "").trim()) {
+							focusBlock(last.id);
+							return;
+						}
+						handleAddBlock(blocksRef.current);
+					}}
 				>
 					<Plus size={14} className="opacity-0 transition-opacity group-hover:opacity-100" />
 					<span className="opacity-0 transition-opacity group-hover:opacity-100">Add a block</span>
@@ -1086,6 +1107,27 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 // space ABOVE each block, less below but always present, so a block binds to what
 // follows it (a heading hugs its section; a paragraph hugs the next line). Values
 // stay on the 4pt scale; headings jump tiers (section breaks), lists cluster tight.
+/** Block types whose drag handle stays at the static top-left position: their
+ *  only contenteditable is a caption/footer, so leaf-alignment would sink the
+ *  handle to the card's bottom edge. */
+function isMediaHandleBlock(type: Block["type"]): boolean {
+	switch (type) {
+		case "image":
+		case "video":
+		case "audio":
+		case "file":
+		case "code":
+		case "equation":
+		case "database_inline":
+		case "database_full_page":
+		case "graph_view":
+		case "draw":
+			return true;
+		default:
+			return false;
+	}
+}
+
 function getBlockSpacing(type: Block["type"]): { pt: string; pb: string; handleTop: string } {
 	switch (type) {
 		// Headings: big space above (new section), tight below (bind to content).
@@ -1244,17 +1286,30 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		const article = articleRef.current;
 		const handle = handleRef.current;
 		if (!article || !handle) return;
+		// Media/embed blocks keep the static top-left fallback. Their only
+		// contenteditable is the CAPTION at the bottom of the card, so aligning
+		// to "the first editable leaf" dragged the handle to the bottom edge —
+		// the exact opposite of the Notion top-left-corner affordance. Clear any
+		// inline top a pre-conversion hover left behind (e.g. paragraph -> image
+		// keeps the same element), so the class fallback takes effect again.
+		if (isMediaHandleBlock(block.type)) {
+			handle.style.top = "";
+			return;
+		}
 		const leaf = article.querySelector<HTMLElement>(
 			`[data-block-id="${block.id}"] [contenteditable="true"]`,
 		);
-		if (!leaf) return; // media/embed blocks keep the static fallback
+		if (!leaf) return; // no editable leaf at all → static fallback
 		const styles = getComputedStyle(leaf);
 		let line = Number.parseFloat(styles.lineHeight);
 		if (Number.isNaN(line)) line = Number.parseFloat(styles.fontSize) * 1.5;
 		const leafTop = leaf.getBoundingClientRect().top - article.getBoundingClientRect().top;
 		const top = leafTop + (line - handle.offsetHeight) / 2;
 		handle.style.top = `${Math.max(0, Math.round(top))}px`;
-	}, [block.id]);
+		// block.type is a real dep: /image converts paragraph -> image UNDER THE
+		// SAME id, and a [block.id]-only closure kept aligning as a paragraph —
+		// to the caption editable at the card's bottom edge.
+	}, [block.id, block.type]);
 	// The block shell paints a background ONLY when the block is selected (left-click
 	// the drag handle → isSelected, the accent box + ring below). Hover and edit-focus
 	// deliberately paint NO background — a hover/focus box on every block reads as noise

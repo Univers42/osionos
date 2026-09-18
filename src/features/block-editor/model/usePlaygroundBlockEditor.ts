@@ -1227,7 +1227,11 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
   // Enter on an empty *indented* block walks it back out one level at a time
   // (Notion behaviour), for any indentable type. Only once it reaches the root
-  // do the list/to-do handlers below convert it to a paragraph.
+  // do the list/to-do handlers below convert it to a paragraph. A COLUMN child
+  // is exempt: in Notion, Enter inside a column always stays in the column —
+  // outdenting instead lifted the block out, tripped the one-column-collapse
+  // normalization (the whole split dissolved), and repositionCursor then
+  // targeted a block the re-render had just relocated: caret gone to <body>.
   const handleEmptyEnterOutdent = useCallback(
     (
       e: React.KeyboardEvent,
@@ -1238,6 +1242,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     ): boolean => {
       if (e.key !== "Enter" || e.shiftKey || !isEmpty || !parentBlockId) return false;
       if (!isIndentable(block.type)) return false;
+      if (findBlockInTree(contentRef.current, parentBlockId)?.type === "column") return false;
 
       e.preventDefault();
       flushPendingBlockDraft(blockId, "structural");
