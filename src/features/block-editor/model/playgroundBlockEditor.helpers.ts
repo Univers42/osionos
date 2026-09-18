@@ -82,12 +82,14 @@ export interface ColorMenuState {
 }
 
 /**
- * A `:` shortcut opens the emoji picker only once at least one name char follows
- * the colon (a bare `:` does nothing). The colon must start the line or sit after
- * whitespace / `(` so URLs (`http://`) and times (`10:30`) never trigger it. The
- * captured group is the search filter.
+ * Re-export of THE shared `:emoji` trigger rule (shared/lib/emoji) — the page
+ * title needs the same rule from `entities`, which cannot import a feature, so
+ * the rule lives in `shared` and both sides use it. A BARE colon now opens the
+ * picker (empty filter), including at the start of a block; the colon must
+ * still start the line or follow whitespace/bracket so `http://` and `10:30`
+ * never trigger it.
  */
-export const EMOJI_TRIGGER_RE = /(?:^|[\s(]):([a-z0-9_+-]+)$/i;
+export { EMOJI_TRIGGER_RE, applyEmojiInsert, matchEmojiTrigger } from "@/shared/lib/emoji/emojiTrigger";
 
 // A block can host the caret when it holds a real focus target that placeCaret
 // can move the SELECTION into. Parking focus on anything else (divider, media)

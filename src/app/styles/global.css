@@ -143,9 +143,9 @@
      Mono (code). Web faces load via @font-face (self-hosted, see fonts.css); the
      system stacks below are metric-matched fallbacks so missing faces degrade
      gracefully with no layout shift. */
-  --osio-font-family-sans: "Inter Variable", "Inter Fallback", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  --osio-font-family-serif: "Newsreader", Georgia, "Iowan Old Style", "Times New Roman", serif;
-  --osio-font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Consolas, Menlo, monospace;
+  --osio-font-family-sans: "Inter Variable", "Inter Fallback", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", "Twemoji Mozilla", emoji;
+  --osio-font-family-serif: "Newsreader", Georgia, "Iowan Old Style", "Times New Roman", serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", "Twemoji Mozilla", emoji;
+  --osio-font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Consolas, Menlo, monospace, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", "Twemoji Mozilla", emoji;
   --osio-font-size-xs: 12px;
   --osio-font-size-sm: 13px;
   --osio-font-size-base: 14px;
