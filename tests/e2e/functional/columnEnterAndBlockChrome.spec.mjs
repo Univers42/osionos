@@ -128,6 +128,72 @@ test("each column has an append zone that adds a block to THAT column", async ({
   expect(home.insideColumn, "new block must live inside the column").toBe(true);
 });
 
+test("double-click in the gap between two blocks inserts between them", async ({ page, baseURL }) => {
+  await openFreshPage(page, baseURL);
+  const editor = await activateFirstEditor(page);
+  await editor.click();
+  await page.keyboard.type("first");
+  await page.waitForTimeout(200);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(300);
+  await page.keyboard.type("second");
+  await page.waitForTimeout(250);
+
+  const first = page.locator('article[data-block-type="paragraph"]').filter({ hasText: "first" }).first();
+  const second = page.locator('article[data-block-type="paragraph"]').filter({ hasText: "second" }).first();
+  const r1 = await first.boundingBox();
+  const r2 = await second.boundingBox();
+  const gapY = (r1.y + r1.height + r2.y) / 2; // the boundary between the two
+  await page.mouse.dblclick(r1.x + r1.width / 2, gapY);
+  await page.waitForTimeout(250);
+  await page.keyboard.type("inserted");
+  await page.waitForTimeout(200);
+
+  const order = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".osionos-page article[data-draggable-block-id]"))
+      .map((a) => (a.textContent ?? "").trim())
+      .filter(Boolean),
+  );
+  console.log("block order:", JSON.stringify(order));
+  const iFirst = order.findIndex((t) => t.includes("first"));
+  const iIns = order.findIndex((t) => t.includes("inserted"));
+  const iSecond = order.findIndex((t) => t.includes("second"));
+  expect(iIns, `order was ${JSON.stringify(order)}`).toBeGreaterThan(iFirst);
+  expect(iIns, `order was ${JSON.stringify(order)}`).toBeLessThan(iSecond);
+});
+
+test("double-click in a column's gap inserts inside THAT column", async ({ page, baseURL }) => {
+  await openFreshPage(page, baseURL);
+  const editor = await activateFirstEditor(page);
+  await editor.click();
+  await page.keyboard.type("/2 columns");
+  await pickSlashEntry(page, "2 columns");
+  const colEditors = page.locator(
+    '[data-block-type="column_list"] [role="textbox"][aria-multiline="true"]',
+  );
+  await colEditors.first().click();
+  await page.keyboard.type("top line");
+  await page.waitForTimeout(200);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(300);
+  await page.keyboard.type("bottom line");
+  await page.waitForTimeout(250);
+
+  const top = page.locator('article[data-block-type="paragraph"]').filter({ hasText: "top line" }).first();
+  const bottom = page.locator('article[data-block-type="paragraph"]').filter({ hasText: "bottom line" }).first();
+  const r1 = await top.boundingBox();
+  const r2 = await bottom.boundingBox();
+  await page.mouse.dblclick(r1.x + r1.width / 2, (r1.y + r1.height + r2.y) / 2);
+  await page.waitForTimeout(250);
+  await page.keyboard.type("mid");
+  await page.waitForTimeout(200);
+
+  const home = await caretHome(page);
+  expect(home.insideColumn, "insert must land inside the column").toBe(true);
+  const colText = await page.locator('[data-block-type="column_list"]').first().textContent();
+  expect(colText).toContain("mid");
+});
+
 test("google-images viewer URL is unwrapped to the real image", async ({ page, baseURL }) => {
   await openFreshPage(page, baseURL);
   const editor = await activateFirstEditor(page);
