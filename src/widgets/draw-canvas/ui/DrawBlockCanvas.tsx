@@ -36,6 +36,7 @@ import { DRAW_BLOCK_DEFAULT_HEIGHT } from "@/entities/block";
 import { drawTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { setDrawBinding } from "../model/drawHandoff";
+import { useCameraHud } from "../model/useCameraHud";
 import { useDrawContextMenu } from "../model/useDrawContextMenu";
 import { useResolvedDrawChrome } from "../model/useResolvedDrawChrome";
 import { DrawContextMenu } from "./DrawContextMenu";
@@ -68,12 +69,11 @@ export function DrawBlockCanvas({ block, pageId, readOnly, onUpdateBlock }: Draw
   const { theme, ink } = useResolvedDrawChrome();
   const [engine, setEngine] = useState<DrawEngine | null>(null);
   const [tool, setTool] = useState<DrawTool>("select");
-  const [zoom, setZoom] = useState(100);
   const [selectedCount, setSelectedCount] = useState(0);
   const [activeStyle, setActiveStyle] = useState<DrawElementStyle>(DEFAULT_ELEMENT_STYLE);
   const [textEdit, setTextEdit] = useState<TextEditRequest | null>(null);
   const [toolLocked, setToolLocked] = useState(false);
-  const [contentVisible, setContentVisible] = useState(true);
+  const { zoom, contentVisible, onCameraChange } = useCameraHud(engine);
   const contextMenu = useDrawContextMenu(engine);
 
   const height = block.drawHeight ?? DRAW_BLOCK_DEFAULT_HEIGHT;
@@ -120,6 +120,8 @@ export function DrawBlockCanvas({ block, pageId, readOnly, onUpdateBlock }: Draw
     setToolLocked(engine.getToolLocked());
   }, [engine]);
 
+  const selectTool = useCallback((next: DrawTool) => engine?.setTool(next), [engine]);
+
   const onSelectionChange = useCallback((ids: string[]) => {
     setSelectedCount(ids.length);
     syncStyle(engine);
@@ -131,21 +133,31 @@ export function DrawBlockCanvas({ block, pageId, readOnly, onUpdateBlock }: Draw
   }, [engine, syncStyle]);
 
   // Drag the bottom edge to resize the canvas; persists as block.drawHeight.
-  const resizeRef = useRef<{ y: number; h: number } | null>(null);
+  // The sized wrapper is our PARENT div (BlockEditor owns the height style), so
+  // the drag writes that wrapper's style directly and commits to the store ONCE
+  // on release — a per-move save() ran the whole updateBlock pipeline (block-tree
+  // rebuild, revision bump, cache persist) at pointer rate.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const resizeRef = useRef<{ y: number; h: number; latest: number | null } | null>(null);
   const onResizeStart = useCallback((event: React.PointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    resizeRef.current = { y: event.clientY, h: height };
+    resizeRef.current = { y: event.clientY, h: height, latest: null };
     event.currentTarget.setPointerCapture(event.pointerId);
   }, [height]);
   const onResizeMove = useCallback((event: React.PointerEvent) => {
     const r = resizeRef.current;
     if (!r) return;
     const next = Math.max(MIN_HEIGHT, Math.round(r.h + (event.clientY - r.y)));
-    commitRef.current.save?.(commitRef.current.id, { drawHeight: next });
+    r.latest = next;
+    const wrapper = rootRef.current?.parentElement;
+    if (wrapper) wrapper.style.height = `${next}px`;
   }, []);
   const onResizeEnd = useCallback(() => {
+    const r = resizeRef.current;
     resizeRef.current = null;
+    // The commit re-renders the wrapper with the same height we already set.
+    if (r && r.latest !== null) commitRef.current.save?.(commitRef.current.id, { drawHeight: r.latest });
   }, []);
 
   // Expand: bind the singleton Draw tab to THIS block, then open it. The full app
@@ -158,6 +170,7 @@ export function DrawBlockCanvas({ block, pageId, readOnly, onUpdateBlock }: Draw
 
   return (
     <div
+      ref={rootRef}
       className="group/draw relative h-full w-full overflow-hidden"
       style={{ cursor: readOnly ? "default" : cursorForTool(tool) }}
     >
@@ -167,10 +180,7 @@ export function DrawBlockCanvas({ block, pageId, readOnly, onUpdateBlock }: Draw
           defaultStroke={ink}
           onReady={onReady}
           onSceneChange={onSceneChange}
-          onCameraChange={(camera) => {
-            setZoom(Math.round(camera.scale * 100));
-            setContentVisible(engine?.contentInView() ?? true);
-          }}
+          onCameraChange={onCameraChange}
           onToolChange={setTool}
           onSelectionChange={onSelectionChange}
           onRequestTextEdit={setTextEdit}
@@ -182,7 +192,7 @@ export function DrawBlockCanvas({ block, pageId, readOnly, onUpdateBlock }: Draw
 
       {!readOnly && (
         <>
-          <DrawToolbar active={tool} onSelect={(next) => engine?.setTool(next)} toolLocked={toolLocked} onToggleToolLock={toggleToolLock} />
+          <DrawToolbar active={tool} onSelect={selectTool} toolLocked={toolLocked} onToggleToolLock={toggleToolLock} />
           <DrawInspector style={activeStyle} selectedCount={selectedCount} onApply={applyStyle} engine={engine} />
           <DrawZoomBar engine={engine} zoom={zoom} contentVisible={contentVisible} />
           {textEdit && engine ? (

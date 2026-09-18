@@ -45,6 +45,8 @@ export class CanvasScene implements InteractionHost {
 
   private rafId: number | null = null;
   private dirty = true;
+  /** Timestamp of the last rendered frame — throttles the hover-only dash drift. */
+  private lastFxFrame = 0;
   /** While now < motionUntil the scene renders at reduced resolution (user pan / zoom / drag). */
   private motionUntil = 0;
   /** True while the worker streams layout positions; set per position message and
@@ -175,6 +177,9 @@ export class CanvasScene implements InteractionHost {
 
   getViewportSize(): { width: number; height: number } { return { width: this.cam.width, height: this.cam.height }; }
 
+  /** Monotonic scene-data version (graph / positions / visibility / colors). */
+  stateVersion(): number { return this.state.version; }
+
   /** Live position buffers (no copy) for the minimap overview. */
   getPositionsRef(): { x: Float32Array; y: Float32Array; count: number; visible: Uint8Array } {
     return { x: this.state.posX, y: this.state.posY, count: this.state.count, visible: this.state.visible };
@@ -227,11 +232,25 @@ export class CanvasScene implements InteractionHost {
   private frame(): void {
     this.rafId = null;
     const now = performance.now();
-    const animating = isRevealing(this.reveal, now) || this.fx.animating(now, this.reducedMotion);
+    const revealing = isRevealing(this.reveal, now);
+    const animating = revealing || this.fx.animating(now, this.reducedMotion);
     // Low-res during pan/zoom (and the reveal fly-in) and while the layout streams;
     // streaming ends crisp on `settled`, not via the 140ms timer. Hover-glow stays crisp.
-    const inMotion = isRevealing(this.reveal, now) || now < this.motionUntil || this.layoutStreaming;
+    const inMotion = revealing || now < this.motionUntil || this.layoutStreaming;
     if (!this.dirty && !animating && !inMotion && this.cam.dpr === this.cam.qualityDpr) return;
+    // When the ONLY driver is the hover fx (edge-dash drift / label fade), ~30fps reads
+    // identically — don't let a parked hover pin the full pipeline at display refresh.
+    if (
+      !this.dirty &&
+      !revealing &&
+      !inMotion &&
+      this.cam.dpr === this.cam.qualityDpr &&
+      now - this.lastFxFrame < 33
+    ) {
+      this.rafId = requestAnimationFrame(() => this.frame());
+      return;
+    }
+    this.lastFxFrame = now;
     this.dirty = false;
     const wantDpr = inMotion ? this.cam.interactiveDpr : this.cam.qualityDpr;
     if (this.cam.dpr !== wantDpr) this.applyBacking(wantDpr);

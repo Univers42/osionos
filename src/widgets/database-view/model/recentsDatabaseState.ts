@@ -27,6 +27,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 import type { PersistableObjectDatabaseAdapter } from "./knownDatabaseState";
+import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
 import { RECENTS_DB_ID, RECENTS_GALLERY_VIEW } from "./workspaceDatabaseConstants";
 
 const RECENT_TITLE = "home-recent-title";
@@ -50,7 +51,7 @@ function recentEntries(): PageEntry[] {
 
 /** osionos page → a minimal gallery card record (id === real page id). */
 function entryToCard(entry: PageEntry): Page {
-  const at = entry.updatedAt ?? new Date().toISOString();
+  const at = entry.updatedAt ?? UNKNOWN_TIME;
   return {
     id: entry._id,
     databaseId: RECENTS_DB_ID,
@@ -134,9 +135,12 @@ class RecentsDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   async changePropertyType(_databaseId: string, _propertyId: string, _newType: PropertyType): Promise<void> { /* read-only schema */ }
 
   // Arrow, not method: the ObjectDatabase host EXTRACTS this and calls it
-  // detached, so `this` must be lexically bound. Read-only → just re-emit to
-  // discard any in-view edit and reload the live state.
-  persistState = (): void => { this.emit({ type: "state-replaced" }); };
+  // detached, so `this` must be lexically bound. Read-only → reload the live state
+  // to discard an in-view edit, but ONLY for a real edit: the host also calls this
+  // after the reload itself, and re-emitting then re-rendered the home page forever.
+  persistState = (next: NotionState, previous?: NotionState): void => {
+    if (viewStateChanged(next, previous)) this.emit({ type: "state-replaced" });
+  };
 
   subscribe(callback: (event: ChangeEvent) => void): () => void {
     this.subscribers.add(callback);

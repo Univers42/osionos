@@ -19,16 +19,28 @@ function strokeSize(element: DrawElement): number {
 /** Dynamically import perfect-freehand and return an outline generator. */
 export async function loadFreehandAdapter(): Promise<FreehandAdapter> {
   const { getStroke } = await import("perfect-freehand");
+  // Per-element outline cache (mirrors roughRenderer's drawable cache — one
+  // entry per id, overwritten on change, no eviction). Validity is the points
+  // ARRAY IDENTITY plus the stroke size — NOT element.version: the in-flight
+  // freedraw gesture grows `points` and the pointer-up normalisation shifts
+  // them without bumping the version, while every mutation path replaces the
+  // array (never edits in place), so the reference is the exact change signal.
+  const cache = new Map<string, { points: Array<[number, number]>; size: number; outline: number[][] }>();
   return {
     outline(element) {
       const points = element.points ?? [];
-      return getStroke(points, {
-        size: strokeSize(element),
+      const size = strokeSize(element);
+      const entry = cache.get(element.id);
+      if (entry && entry.points === points && entry.size === size) return entry.outline;
+      const outline = getStroke(points, {
+        size,
         thinning: 0.6,
         smoothing: 0.5,
         streamline: 0.5,
         last: true,
       });
+      cache.set(element.id, { points, size, outline });
+      return outline;
     },
   };
 }

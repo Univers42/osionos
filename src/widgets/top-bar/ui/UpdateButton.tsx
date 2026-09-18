@@ -31,7 +31,7 @@ export const UpdateButton: React.FC = () => {
     const user = useUserStore.getState();
     const workspace = user.activeWorkspace();
     const jwt = user.activePageJwt() ?? "";
-    if (workspace) await usePageStore.getState().fetchPages(workspace._id, jwt);
+    if (workspace) await usePageStore.getState().fetchPages(workspace._id, jwt, true);
   }
 
   async function onUpdate(): Promise<void> {

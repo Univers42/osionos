@@ -23,6 +23,9 @@ import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordSubitemNoteB
 import { publishRealtime } from './bridge-social-core.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
+import { createIdeSandboxHandler, reapExpiredSandboxes } from './bridge-ide-sandbox.mjs';
+import { createIdeOpsHandler, createIdePreviewHandler } from './bridge-ide-ops.mjs';
+import { createIdeExecUpgradeHandler } from './bridge-ide-exec.mjs';
 import { createConnectorHandler } from './bridge-connector.mjs';
 import { createOAuthHandler } from './bridge-oauth.mjs';
 import { createChatHandler } from './bridge-chat.mjs';
@@ -35,7 +38,7 @@ import { createPublicHandler } from './bridge-public.mjs';
 import { createCollabHandler } from './bridge-collab.mjs';
 import { createCommunityHandler } from './bridge-communities.mjs';
 import { createFeedHandler } from './bridge-feed.mjs';
-import { handlePermsRoute } from './bridge-perms.mjs';
+import { createPermsHandler } from './bridge-perms.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
 import { createSocialHandler } from './bridge-social.mjs';
@@ -505,11 +508,27 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
  * api-key. Used by the data graph: the api-key resolves to the tenant + owner-scopes
  * the read to the seeded business records. 503 if the key/url aren't configured.
  */
+/** fetch the query-router, turning "the engine never answered" into a 503.
+ *  A timeout (our own AbortController) or a refused connection is an engine that is down,
+ *  not a bridge fault — surfaced raw it read as `500 This operation was aborted`, and the
+ *  database page rendered an engine that was merely offline as a crash. */
+async function queryRouterFetch(fetchImpl, url, options, timeoutMs) {
+	try {
+		return await fetchWithTimeout(fetchImpl, url, options, timeoutMs);
+	} catch (error) {
+		const aborted = error?.name === 'AbortError';
+		const unreachable = aborted || error instanceof TypeError;
+		if (!unreachable) throw error;
+		const reason = aborted ? `did not answer within ${timeoutMs} ms` : 'is not reachable';
+		throw Object.assign(new Error(`The database engine behind this workspace database ${reason} — it may be offline.`), { status: 503 });
+	}
+}
+
 async function baasQueryPost(config, fetchImpl, path, body, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
 	if (!config.queryRouterUrl || !config.baasApiKey) {
 		throw Object.assign(new Error('osionos query-router access is not configured.'), { status: 503 });
 	}
-	const response = await fetchWithTimeout(fetchImpl, `${config.queryRouterUrl}${path}`, {
+	const response = await queryRouterFetch(fetchImpl, `${config.queryRouterUrl}${path}`, {
 		method: 'POST',
 		headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Baas-Api-Key': config.baasApiKey },
 		body: JSON.stringify(body),
@@ -533,7 +552,7 @@ async function baasQueryGet(config, fetchImpl, path, timeoutMs = BAAS_FETCH_TIME
 	if (!config.queryRouterUrl || !config.baasApiKey) {
 		throw Object.assign(new Error('osionos query-router access is not configured.'), { status: 503 });
 	}
-	const response = await fetchWithTimeout(fetchImpl, `${config.queryRouterUrl}${path}`, {
+	const response = await queryRouterFetch(fetchImpl, `${config.queryRouterUrl}${path}`, {
 		method: 'GET',
 		headers: { Accept: 'application/json', 'X-Baas-Api-Key': config.baasApiKey },
 	}, timeoutMs);
@@ -631,7 +650,13 @@ function pageRowToEntry(row) {
 		sortOrder: typeof row.sort_order === 'number' ? row.sort_order : null,
 		databaseId: row.database_id ?? null,
 		archivedAt: row.archived_at ?? null,
-		content: safeJsonArray(row.content),
+		// content is included ONLY when the column was selected (the list endpoint
+		// omits it — see PAGE_LIST_SELECT). Absence MUST stay absent, never []:
+		// the client merge does `incoming.content ?? cached` to preserve loaded
+		// content, and [] (which safeJsonArray(undefined) returns) would defeat that
+		// guard and wipe the cached/server copy. hasOwn distinguishes "not selected"
+		// from "selected & empty" (PostgREST returns the key only when selected).
+		...(hasOwn(row, 'content') ? { content: safeJsonArray(row.content) } : {}),
 		properties: safeJsonArray(row.properties),
 		surface: PAGE_SURFACE_VALUES.has(row.surface) ? row.surface : undefined,
 		isTemplate: row.is_template === true,
@@ -847,6 +872,18 @@ async function fetchPageRowIfUuid(pageId, config, fetchImpl) {
 	return fetchPageRow(pageId, config, fetchImpl);
 }
 
+// Auth/cascade-only page row for handlePageUpdate — every existing.<col> the
+// update path dereferences (requirePageOwnership: owner_id/properties/collaborators;
+// ownerOrWorkspaceAccess: owner_id/workspace_id; the workspace-change guard:
+// workspace_id; handlePageArchiveCascade: id/workspace_id), and nothing else. Skips
+// the heavy content JSONB + search_doc tsvector that fetchPageRow's select:'*' pulls.
+async function fetchPageAuthRow(pageId, config, fetchImpl) {
+	const id = requireUuid(pageId, 'pageId');
+	const query = postgrestQuery({ id: `eq.${id}`, select: 'id,owner_id,workspace_id,properties,collaborators', limit: '1' });
+	const rows = await baasRest(config, fetchImpl, `osionos_pages?${query}`);
+	return Array.isArray(rows) ? rows[0] ?? null : null;
+}
+
 async function fetchPageConfigRow(pageId, userId, config, fetchImpl) {
 	const query = postgrestQuery({
 		page_id: `eq.${requirePageReference(pageId)}`,
@@ -890,13 +927,19 @@ async function requirePageScopeAccess(request, pageId, payload, permission, conf
 	return { pageId: normalizedPageId, workspaceId, authContext, row: null };
 }
 
-async function listPageRows(workspaceId, config, fetchImpl, filters = {}) {
+// Every field pageRowToEntry reads EXCEPT the heavy `content` JSONB (and the
+// generated search_doc tsvector `select:'*'` also pulls). Used for the bulk
+// /api/pages/all hydrate so a workspace boot ships metadata, not ~1MB of blocks;
+// content then loads lazily per page on open (fetchPageContent).
+const PAGE_LIST_SELECT = 'id,title,icon,cover,cover_position,updated_at,created_at,workspace_id,owner_id,visibility,collaborators,parent_page_id,sort_order,database_id,archived_at,properties,surface,is_template,is_default_template,template_surface,recurrence';
+
+async function listPageRows(workspaceId, config, fetchImpl, filters = {}, select = '*') {
 	const query = postgrestQuery({
 		workspace_id: `eq.${workspaceId}`,
 		database_id: nullablePostgrestFilter(filters.databaseId),
 		parent_page_id: nullablePostgrestFilter(filters.parentPageId, (value) => requireUuid(value, 'parentPageId')),
 		surface: filters.surface ? `eq.${filters.surface}` : undefined,
-		select: '*',
+		select,
 		order: 'updated_at.desc',
 	});
 	return await baasRest(config, fetchImpl, `osionos_pages?${query}`) ?? [];
@@ -1636,7 +1679,8 @@ function pageSubresourceIdFromPath(pathname, subresource) {
 async function handlePageList(url, request, response, config, fetchImpl) {
 	const workspaceId = requireUuid(url.searchParams.get('workspaceId'), 'workspaceId');
 	await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
-	const filters = url.pathname === '/api/pages/all' ? {} : {
+	const isFullList = url.pathname === '/api/pages/all';
+	const filters = isFullList ? {} : {
 		databaseId: url.searchParams.has('databaseId')
 			? (url.searchParams.get('databaseId') || null)
 			: undefined,
@@ -1645,7 +1689,10 @@ async function handlePageList(url, request, response, config, fetchImpl) {
 			: undefined,
 		surface: PAGE_SURFACE_VALUES.has(url.searchParams.get('surface')) ? url.searchParams.get('surface') : undefined,
 	};
-	json(response, 200, pageRowsToEntries(await listPageRows(workspaceId, config, fetchImpl, filters)), config);
+	// Only the bulk /api/pages/all hydrate goes metadata-only (content loads lazily
+	// on page open); the filtered single-list path keeps '*' so nothing regresses.
+	const select = isFullList ? PAGE_LIST_SELECT : '*';
+	json(response, 200, pageRowsToEntries(await listPageRows(workspaceId, config, fetchImpl, filters, select)), config);
 	return true;
 }
 
@@ -2617,7 +2664,8 @@ async function handlePageArchiveCascade(row, archivedAt, config, fetchImpl) {
 async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	const pageId = pageIdFromPath(url.pathname);
 	if (!pageId) return false;
-	const existing = await fetchPageRow(pageId, config, fetchImpl);
+	// Auth-only columns — the update path never reads existing.content/title.
+	const existing = await fetchPageAuthRow(pageId, config, fetchImpl);
 	if (!existing) throw Object.assign(new Error('Page not found.'), { status: 404 });
 	// The page OWNER may update their own page even when the workspace gate would
 	// deny — e.g. a record-note that landed in a read-only seed workspace (ac3e…)
@@ -2633,16 +2681,22 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 		await requireWorkspaceAccess(request, payload.workspaceId, 'create', config, fetchImpl);
 	}
 	const updateRow = pageUpdateRowFromPayload(payload);
-	const rows = await baasRest(config, fetchImpl, `osionos_pages?id=eq.${pageId}`, {
+	// return=minimal: the outbox (pageOutbox.publishPage) and the archive/restore
+	// callers all ignore the response body, so echoing the full updated row (incl.
+	// the heavy content JSONB) was pure waste. The cascade guard must NOT depend on
+	// a returned row anymore — return=minimal yields no body (baasRest → null), so
+	// gate the cascade on the payload's archived_at, which is what we're applying.
+	await baasRest(config, fetchImpl, `osionos_pages?id=eq.${pageId}`, {
 		method: 'PATCH',
 		body: updateRow,
-		prefer: 'return=representation',
+		prefer: 'return=minimal',
 	});
-	const updated = Array.isArray(rows) ? rows[0] : rows;
-	if (updated && hasOwn(updateRow, 'archived_at')) {
+	if (hasOwn(updateRow, 'archived_at')) {
 		await handlePageArchiveCascade(existing, updateRow.archived_at, config, fetchImpl);
 	}
-	json(response, 200, pageRowToEntry(updated), config);
+	// updated_at is stamped by pageUpdateRowFromPayload (no BEFORE-UPDATE trigger on
+	// osionos_pages), so the value we wrote IS the stored value — authoritative.
+	json(response, 200, { ok: true, updatedAt: updateRow.updated_at }, config);
 	return true;
 }
 
@@ -3235,9 +3289,12 @@ async function handleBridgeRequest(request, response, context) {
 	// chat/profile/feed (WS-B).
 	if (await context.social.agent(url, request, response, context.config)) return;
 	if (await context.social.runner(url, request, response, context.config)) return;
+	if (await context.social.ideSandbox(url, request, response, context.config)) return;
+	if (await context.social.idePreview(url, request, response, context.config)) return;
+	if (await context.social.ideOps(url, request, response, context.config)) return;
 	if (await context.social.connector(url, request, response, context.config)) return;
 		if (await context.social.oauth(url, request, response, context.config)) return;
-	if (await handlePermsRoute(request, response, url, context.fetchImpl)) return;
+	if (await context.social.perms(url, request, response, context.config)) return;
 	if (await context.social.rtc(url, request, response, context.config)) return;
 	if (await context.social.chat(url, request, response, context.config)) return;
 	if (await context.social.notify(url, request, response, context.config)) return;
@@ -3284,6 +3341,10 @@ export function createBridgeServer(options = {}) {
 	const social = options.social ?? {
 		agent: createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		perms: createPermsHandler({ verifySession: verifyAppSessionToken, requireWorkspaceAccess, fetchImpl }),
+		ideSandbox: createIdeSandboxHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
+		ideOps: createIdeOpsHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
+		idePreview: createIdePreviewHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
 		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
 		rtc: createRtcTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
@@ -3316,7 +3377,7 @@ export function createBridgeServer(options = {}) {
 		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 	};
-	return createServer(async (request, response) => {
+	const server = createServer(async (request, response) => {
 		let responseConfig = requestOriginConfig(config, request);
 		try {
 			await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl, social });
@@ -3324,6 +3385,19 @@ export function createBridgeServer(options = {}) {
 			if (!response.headersSent) errorJson(response, error, responseConfig);
 		}
 	});
+	// The IDE PTY (P3) / LSP (P5) WS relays own their own upgrade paths; every
+	// other upgrade is refused (the bridge does no other WS — realtime is Kong).
+	const ideExecUpgrade = createIdeExecUpgradeHandler({
+		config, verifySession: verifyAppSessionToken, env: process.env,
+		// Same origin allowlist as the REST CORS layer: an origin is allowed iff
+		// requestOriginConfig echoes it back as the allowedOrigin.
+		allowOrigin: (origin) => requestOriginConfig(config, { headers: { origin } }).allowedOrigin === origin,
+	});
+	server.on('upgrade', (request, socket) => {
+		try { if (!ideExecUpgrade(request, socket)) socket.destroy(); }
+		catch { socket.destroy(); }
+	});
+	return server;
 }
 
 export function startBridgeServer(config = configFromEnv()) {
@@ -3331,6 +3405,18 @@ export function startBridgeServer(config = configFromEnv()) {
 	server.listen(config.port, '0.0.0.0', () => {
 		console.info(`[osionos-bridge] listening on 0.0.0.0:${config.port}`);
 	});
+	// Max-lifetime IDE sandbox reaper (#16). reapExpiredSandboxes self-gates (a
+	// no-op unless OSIONOS_IDE_SANDBOX=1 + OSIONOS_IDE_DOCKER_HOST are set), so
+	// it is safe to always schedule. unref() so it never keeps the process alive;
+	// errors are logged, not thrown (a transient docker-ide outage must not crash
+	// the bridge). Wired here in the runtime entry, not in createBridgeServer, so
+	// unit-test-constructed servers do not spawn a background interval.
+	const reapIntervalMs = Number(process.env.OSIONOS_IDE_REAP_INTERVAL_MS) || 15 * 60 * 1000;
+	setInterval(() => {
+		reapExpiredSandboxes(process.env)
+			.then((n) => { if (n > 0) console.info(`[osionos-bridge] reaped ${n} expired IDE sandbox(es)`); })
+			.catch((error) => console.warn('[osionos-bridge] sandbox reap failed:', error?.message ?? error));
+	}, reapIntervalMs).unref();
 	return server;
 }
 

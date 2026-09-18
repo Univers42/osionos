@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import { api, ApiError } from "@/shared/api/client";
+import { notifyCreateFailure } from "./pageCreateFeedback";
 import { pageApiJwtFromSessionToken } from "@/features/auth/model/userStore.helpers";
 import {
   canDeletePage,
@@ -124,19 +125,35 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
   };
 }
 
+/** Client-side freshness window for `/api/pages/all`. A sidebar/panel remount within this
+ *  window resolves against the already-fetched store copy instead of re-pulling the whole
+ *  workspace list; an explicit user refresh can pass `force` to bypass it. Complements (does
+ *  not replace) the in-flight guard below and the api client's shared-GET collapse. */
+const FETCH_PAGES_TTL_MS = 30_000;
+const lastFetchedAt = new Map<string, number>();
+
 export function createFetchPages(set: SetFn, get: GetFn) {
-  return async (workspaceId: string, jwt: string) => {
+  // `force` (default false) is an extra optional arg — assignable to the 2-param PageStore
+  // type, so existing callers are unchanged; an explicit-refresh call site can pass true.
+  return async (workspaceId: string, jwt: string, force = false) => {
     const pageJwt = pageApiJwtFromSessionToken(jwt);
     if (!pageJwt) return;
     const context = getCurrentPageAccessContext();
     if (context && !context.workspaceIds.includes(workspaceId)) return;
     if (get().loadingIds.has(workspaceId)) return;
+    // Freshness TTL: a workspace pulled within the window is treated as current, so an
+    // incidental remount resolves without a network round-trip. force always re-pulls.
+    if (!force) {
+      const fetchedAt = lastFetchedAt.get(workspaceId);
+      if (fetchedAt !== undefined && Date.now() - fetchedAt < FETCH_PAGES_TTL_MS) return;
+    }
     set((s) => ({ loadingIds: new Set([...s.loadingIds, workspaceId]) }));
     try {
       const data = await api.get<PageEntry[]>(
         `/api/pages/all?workspaceId=${workspaceId}`,
         pageJwt,
       );
+      lastFetchedAt.set(workspaceId, Date.now()); // stamp only after a confirmed pull
       set((s) => ({
         ...derivePageState({
           ...s.pages,
@@ -218,7 +235,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
   ): Promise<PageEntry | null> => {
     const context = getCurrentPageAccessContext();
     if (!context?.workspaceIds.includes(workspaceId)) {
-      return null;
+      return notifyCreateFailure("You don't have access to this workspace.");
     }
     const targetVisibility = options.visibility ?? getTargetWorkspaceMoveVisibility(
       workspaceId,
@@ -265,8 +282,13 @@ export function createAddPage(set: SetFn, get: GetFn) {
         }));
         savePagesCache(get().pages, workspaceId);
         return pageWithTimestamp;
-      } catch {
-        return null;
+      } catch (err) {
+        return notifyCreateFailure(
+          err instanceof ApiError
+            ? err.message
+            : "The server rejected the request. Check your connection and try again.",
+          err,
+        );
       }
     }
     const newPage: PageEntry = {

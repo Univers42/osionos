@@ -14,6 +14,7 @@ import { create } from "zustand";
 
 import { api, getActivePageJwt } from "@/shared/api/client";
 import type { HeaderTemplate } from "@/entities/page/model/headerTemplate";
+import { isUuidId } from "@/store/pageStore.helpers";
 
 const LS_KEY = "osio-header-templates.v1";
 
@@ -48,6 +49,14 @@ interface HeaderTemplateStore {
  * devices/users) with a localStorage cache for instant render + offline. The resolver
  * layers these on top of the built-in preset registry.
  */
+/** Whether a database's template can live on the server. The bridge keys templates by a
+ *  page UUID and answers anything else with 422 — object databases (`db-<hex>`) and virtual
+ *  surfaces (`home-dashboard:<workspaceId>`) were producing one on every load. Those keep
+ *  their template in localStorage only. */
+function serverKeyed(databaseId: string): boolean {
+  return isUuidId(databaseId);
+}
+
 export const useHeaderTemplateStore = create<HeaderTemplateStore>((set, get) => ({
   overrides: loadLocal(),
   loaded: {},
@@ -55,7 +64,9 @@ export const useHeaderTemplateStore = create<HeaderTemplateStore>((set, get) => 
     const next = { ...get().overrides, [databaseId]: template };
     set({ overrides: next });
     saveLocal(next);
-    api.post("/api/marketplace/header-template", { databaseId, template }, getActivePageJwt() ?? undefined).catch(() => {});
+    if (serverKeyed(databaseId)) {
+      api.post("/api/marketplace/header-template", { databaseId, template }, getActivePageJwt() ?? undefined).catch(() => {});
+    }
   },
   clearOverride: (databaseId) => {
     const next = { ...get().overrides };
@@ -65,6 +76,7 @@ export const useHeaderTemplateStore = create<HeaderTemplateStore>((set, get) => 
   },
   ensureLoaded: (databaseId) => {
     if (!databaseId || get().loaded[databaseId]) return;
+    if (!serverKeyed(databaseId)) return;
     set({ loaded: { ...get().loaded, [databaseId]: true } });
     api
       .get<{ template: HeaderTemplate | null }>(`/api/marketplace/header-template?databaseId=${encodeURIComponent(databaseId)}`, getActivePageJwt() ?? undefined)
