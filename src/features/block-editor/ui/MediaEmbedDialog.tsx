@@ -17,6 +17,7 @@ import { Modal } from "@osionos/ui/primitives/Modal";
 import { MiniTabs } from "@osionos/ui/primitives/MiniTabs";
 import { Button } from "@/shared/ui";
 import { useUserStore } from "@/features/auth";
+import { normalizeExternalUrl } from "@/shared/lib/media/externalImageUrl";
 import { useAssetLibraryStore } from "@/shared/config/assetLibraryStore";
 import { uploadPageMedia } from "@/shared/lib/media/pageMediaUpload";
 import { searchUnsplashPickerAssets } from "@/shared/lib/media/unsplash";
@@ -126,7 +127,10 @@ export const MediaEmbedDialog: React.FC<MediaEmbedDialogProps> = ({ kind, onSele
   function handleLink() {
     const trimmed = urlDraft.trim();
     if (!trimmed) return;
-    commit(`url:${trimmed}`);
+    // Shared normalizer: unwraps Google-Images-style viewer URLs to the real
+    // image (embedding the wrapper can never render — the browser ORB-blocks
+    // an HTML page loaded as media). Odd-but-direct inputs pass through.
+    commit(`url:${normalizeExternalUrl(trimmed) ?? trimmed}`);
   }
 
   async function runUnsplash(query: string) {
