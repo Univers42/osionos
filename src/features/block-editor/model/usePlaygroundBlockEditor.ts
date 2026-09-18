@@ -57,7 +57,8 @@ import { useBlockHistory } from "./useBlockHistory";
 import { isAutomationsEnabled } from "@/shared/config/featureFlags";
 import { getInlineMarkAtCaretEnd, placeCaretAfterInlineMark } from "./inlineMarkHelpers";
 import {
-  EMOJI_TRIGGER_RE,
+  applyEmojiInsert,
+  matchEmojiTrigger,
   type SlashMenuState,
   type PageSelectorMenuState,
   type EmojiMenuState,
@@ -990,9 +991,9 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
   const tryHandleEmojiMenu = useCallback(
     (blockId: string, text: string): boolean => {
-      const match = EMOJI_TRIGGER_RE.exec(text);
+      const match = matchEmojiTrigger(text);
       if (match) {
-        const filter = match[1];
+        const { filter } = match;
         setEmojiMenu((prev) =>
           prev && prev.blockId === blockId
             ? (prev.filter === filter ? prev : { ...prev, filter })
@@ -1966,9 +1967,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       if (!block) return;
 
       // `:name` trigger -> replace it; opened via `/emoji` (no trigger) -> append.
-      const text = block.content;
-      const colonIdx = EMOJI_TRIGGER_RE.test(text) ? text.lastIndexOf(":") : -1;
-      const newContent = colonIdx >= 0 ? text.slice(0, colonIdx) + insert : text + insert;
+      const newContent = applyEmojiInsert(block.content, insert);
       updateBlock(pageId, blockId, { content: newContent });
       focusBlock(blockId, true);
     },
