@@ -14,6 +14,7 @@ import React from "react";
 import { CalendarClock, ListTodo } from "lucide-react";
 import { cx } from "@osionos/ui/shared/classNames";
 import { usePageStore } from "@/store/usePageStore";
+import { toDateKey } from "@/shared/lib/date/dateKey";
 import { bucketOf, useMyTasks, type TaskBucket, type TaskItem } from "../model/useMyTasks";
 
 const GROUPS: { key: TaskBucket; label: string }[] = [
@@ -42,10 +43,10 @@ function TaskRow({ task }: { task: TaskItem }): React.ReactElement {
     >
       <span className="h-3.5 w-3.5 shrink-0 rounded-[3px] border border-[var(--osio-border-default)]" aria-hidden />
       <span className="min-w-0 flex-1 truncate">{task.content || "Untitled task"}</span>
-      {task.dueAt && (
+      {toDateKey(task.dueAt) && (
         <span className={cx("flex shrink-0 items-center gap-1 text-xs", overdue ? "text-[var(--osio-danger)]" : "text-[var(--osio-fg-subtle)]")}>
           <CalendarClock size={12} />
-          {task.dueAt.slice(5, 10)}
+          {toDateKey(task.dueAt).slice(5)}
         </span>
       )}
     </button>

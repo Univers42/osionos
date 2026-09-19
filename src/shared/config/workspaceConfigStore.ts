@@ -14,6 +14,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { api, getActiveJwt } from '@/shared/api/client';
+import { chatBridgeAvailable, createChannel as createBridgeChannel } from '@/shared/chat/channelApi';
 
 export type WorkspaceChannelType = 'text' | 'thread' | 'forum' | 'audio' | 'video' | 'stage' | 'archive' | 'agent';
 export type WorkspaceChannelVisibility = 'workspace' | 'members';
@@ -244,6 +245,49 @@ async function persistWorkspaceConfigToApi(workspaceId: string, config: Workspac
   }
 }
 
+/**
+ * Workspace channel types the bridge has a kind for. Everything else (thread,
+ * forum, stage, archive, agent) is a text channel there — its createChannel
+ * coerces any unknown kind to 'text' — while this store keeps the richer type.
+ */
+const BRIDGE_CHANNEL_KIND: Partial<Record<WorkspaceChannelType, string>> = {
+  text: 'text',
+  audio: 'voice',
+  video: 'video',
+};
+
+/**
+ * A channel id the chat bridge will recognise.
+ *
+ * This used to be `channel-${crypto.randomUUID()}`, an id that existed nowhere
+ * but this store: opening such a channel made every chat widget poll
+ * /api/chat/channels/<id>/{messages,read,receipts} for a row that was never
+ * created, so the console filled with 404s and no message could ever load.
+ * The channel is now created through the same endpoint CreateChannelModal
+ * uses, and we keep the uuid it returns.
+ *
+ * With no bridge session (offline) or on a failed create we fall back to the
+ * old local id, so offline mode still gets a channel — one that stays
+ * local-only, and 404s the same way, until it is recreated online.
+ */
+async function bridgeChannelId(
+  workspaceId: string,
+  name: string,
+  type: WorkspaceChannelType,
+): Promise<string> {
+  if (!chatBridgeAvailable()) return `channel-${crypto.randomUUID()}`;
+  try {
+    const created = await createBridgeChannel({
+      workspaceId,
+      name,
+      kind: BRIDGE_CHANNEL_KIND[type] ?? 'text',
+    });
+    return created.id;
+  } catch {
+    return `channel-${crypto.randomUUID()}`;
+  }
+}
+
 export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
   persist(
     (set, get) => ({
@@ -254,7 +298,7 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
         const current = resolveWorkspaceConfig(get().configs[key]);
         const now = new Date().toISOString();
         const channel: WorkspaceChannel = {
-          id: `channel-${crypto.randomUUID()}`,
+          id: await bridgeChannelId(workspaceId, name, type),
           workspaceId,
           parentChannelId,
           name,

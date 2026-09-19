@@ -13,31 +13,29 @@
 import React, { useState } from "react";
 import { CalendarClock, CalendarPlus } from "lucide-react";
 import { cx } from "@osionos/ui/shared/classNames";
+import { toDateKey, todayKey } from "@/shared/lib/date/dateKey";
 
-/** Local YYYY-MM-DD for "today" (compared against the stored ISO date). */
-function todayKey(): string {
-  const now = new Date();
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
-function formatDue(dueAt: string): string {
-  const date = new Date(`${dueAt}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return dueAt;
+function formatDue(dueKey: string): string {
+  const date = new Date(`${dueKey}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dueKey;
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 /** A due-date chip on a to_do block. Native <input type="date"> (no picker lib);
- *  the value round-trips as YYYY-MM-DD into block.dueAt → osionos_tasks. */
+ *  the value is written back as YYYY-MM-DD into block.dueAt → osionos_tasks.
+ *  It is READ through toDateKey: osionos_tasks.due_at is a timestamptz, so a due
+ *  date that has round-tripped through the bridge comes back as a full timestamp
+ *  the date input would refuse. */
 export const TodoDueDate: React.FC<{ dueAt?: string; checked?: boolean; onChange: (dueAt: string | undefined) => void }> = ({ dueAt, checked, onChange }) => {
   const [editing, setEditing] = useState(false);
+  const dueKey = toDateKey(dueAt);
 
   if (editing) {
     return (
       <input
         type="date"
         autoFocus
-        defaultValue={dueAt ?? ""}
+        defaultValue={dueKey}
         onChange={(event) => onChange(event.target.value || undefined)}
         onBlur={() => setEditing(false)}
         onKeyDown={(event) => { if (event.key === "Enter" || event.key === "Escape") setEditing(false); }}
@@ -46,7 +44,7 @@ export const TodoDueDate: React.FC<{ dueAt?: string; checked?: boolean; onChange
     );
   }
 
-  if (!dueAt) {
+  if (!dueKey) {
     // Floating affordance — absolute so it consumes ZERO layout space (no offset
     // between checkboxes); appears on row hover, pinned to the row's right edge.
     return (
@@ -62,12 +60,12 @@ export const TodoDueDate: React.FC<{ dueAt?: string; checked?: boolean; onChange
     );
   }
 
-  const overdue = !checked && dueAt < todayKey();
+  const overdue = !checked && dueKey < todayKey();
   return (
     <button
       type="button"
       onClick={() => setEditing(true)}
-      aria-label={`Due ${formatDue(dueAt)} — change date`}
+      aria-label={`Due ${formatDue(dueKey)} — change date`}
       title="Change due date"
       className={cx(
         "mt-[3px] inline-flex min-w-0 max-w-full items-center gap-1 rounded px-1 py-0.5 text-xs hover:bg-[var(--osio-bg-hover)]",
@@ -75,7 +73,7 @@ export const TodoDueDate: React.FC<{ dueAt?: string; checked?: boolean; onChange
       )}
     >
       <CalendarClock size={12} aria-hidden className="shrink-0" />
-      <span className="min-w-0 truncate">{formatDue(dueAt)}</span>
+      <span className="min-w-0 truncate">{formatDue(dueKey)}</span>
     </button>
   );
 };
