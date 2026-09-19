@@ -6,21 +6,24 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/20 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/20 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/09/19 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
-
-import type { Extension } from "@codemirror/state";
-import { LSPClient, languageServerSupport, type Transport } from "@codemirror/lsp-client";
 
 import { API_BASE, getActivePageJwt } from "@/shared/api/client";
 import { frameLsp, createLspFramer } from "./lspFraming";
 import { ideWsProtocols } from "./useIdeTerminal";
 import { useDiagnosticsStore, type IdeDiagnostic } from "./diagnosticsStore";
+import { LspClient, type LspDiagnostic, type Transport } from "./lspProtocol";
 import { LSP_REQUEST_TIMEOUT_MS, whenInitialized } from "./lspReady";
 
-// CodeMirror languageId → sandbox LSP server key (bridge LSP_SERVERS). Only these
-// have a server installed in the sandbox image; anything else → no LSP. clangd
+// The browser wiring around lspProtocol.ts: the WebSocket transport to the
+// bridge's `/api/ide/lsp?lang=` relay, one connection per (workspace, server),
+// and the publishDiagnostics tap into the Problems store. No editor import —
+// the Monaco providers live in lspMonaco.ts on top of this.
+
+// IDE languageId → sandbox LSP server key (bridge LSP_SERVERS). Only these have
+// a server installed in the sandbox image; anything else → no LSP. clangd
 // serves both C and C++.
 const LSP_SERVER: Record<string, string> = {
   typescript: "typescript", tsx: "typescript", javascript: "typescript", jsx: "typescript",
@@ -29,7 +32,7 @@ const LSP_SERVER: Record<string, string> = {
   rust: "rust",
   c: "clangd", cpp: "clangd",
 };
-// CodeMirror languageId → the LSP `languageId` the server expects on didOpen.
+// IDE languageId → the LSP `languageId` the server expects on didOpen.
 const LSP_DOC_LANG: Record<string, string> = {
   typescript: "typescript", tsx: "typescriptreact", javascript: "javascript", jsx: "javascriptreact",
   python: "python",
@@ -38,25 +41,25 @@ const LSP_DOC_LANG: Record<string, string> = {
   c: "c", cpp: "cpp",
 };
 
-/** The sandbox LSP server key for a CodeMirror language, or null if none. */
+/** The sandbox LSP server key for an IDE language, or null if none. */
 export function lspServerFor(languageId: string): string | null {
   return LSP_SERVER[languageId] ?? null;
 }
 
-interface RawDiagnostic {
-  severity?: number;
-  message?: string;
-  source?: string;
-  range?: { start?: { line?: number; character?: number } };
+/** The `languageId` sent on didOpen for an IDE language. */
+export function lspDocumentLanguage(languageId: string): string {
+  return LSP_DOC_LANG[languageId] ?? languageId;
 }
 
-function mapDiagnostic(uri: string, d: RawDiagnostic): IdeDiagnostic {
+function mapDiagnostic(uri: string, d: LspDiagnostic): IdeDiagnostic {
   return {
     uri,
     severity: typeof d.severity === "number" ? d.severity : 1,
     message: String(d.message ?? ""),
     line: d.range?.start?.line ?? 0,
     character: d.range?.start?.character ?? 0,
+    endLine: d.range?.end?.line,
+    endCharacter: d.range?.end?.character,
     source: d.source,
   };
 }
@@ -94,7 +97,7 @@ function connect(serverLang: string, workspaceId: string): { transport: Transpor
 // One connection per (workspace, server). Dropped when its socket closes or its server
 // never initializes, so the next file open dials again — a restarted sandbox self-heals.
 interface LspConnection {
-  client: LSPClient;
+  client: LspClient;
   ws: WebSocket;
   closed: Promise<void>;
 }
@@ -116,43 +119,38 @@ function getConnection(serverLang: string, workspaceId: string): { key: string; 
     ws.addEventListener("close", () => resolve());
     ws.addEventListener("error", () => resolve());
   });
-  const client = new LSPClient({
+  const client = new LspClient({
     rootUri: "file:///workspace",
     timeout: LSP_REQUEST_TIMEOUT_MS,
     notificationHandlers: {
-      // Tap diagnostics for the Problems panel; return false so the built-in
-      // lint extension still drives the in-editor gutter.
-      "textDocument/publishDiagnostics": (_c, params) => {
-        const p = params as { uri: string; diagnostics?: RawDiagnostic[] };
+      // Diagnostics land in the store; the Problems panel AND the editor's marker
+      // layer (lspMonaco) both read from there, so there is one source of truth.
+      "textDocument/publishDiagnostics": (params) => {
+        const p = params as { uri: string; diagnostics?: LspDiagnostic[] };
         useDiagnosticsStore.getState().setForUri(p.uri, (p.diagnostics ?? []).map((d) => mapDiagnostic(p.uri, d)));
-        return false;
       },
     },
   }).connect(transport);
   const conn = { client, ws, closed };
   connections.set(key, conn);
-  void closed.then(() => { if (connections.get(key) === conn) connections.delete(key); });
+  void closed.then(() => { if (connections.get(key) === conn) { connections.delete(key); client.disconnect(); } });
   return { key, conn };
 }
 
 /**
- * The CodeMirror extension wiring a document to its language server (completion,
- * hover, diagnostics, goto), once that server has initialized. Resolves null when
- * the language has no server, the bridge is unconfigured, or the server is not
- * reachable (e.g. a stopped sandbox). Dynamically imported by CodeFileView so
- * @codemirror/lsp-client never lands in the base editor chunk.
+ * An initialized client for the language's server, or null when the language
+ * has no server, the bridge is unconfigured, or the server is not reachable
+ * (e.g. a stopped sandbox). Dynamically imported by CodeFileView so none of the
+ * LSP layer lands in the base editor chunk.
  */
-export async function lspExtensionFor(languageId: string, uri: string, workspaceId: string): Promise<Extension | null> {
+export async function acquireLspClient(languageId: string, workspaceId: string): Promise<LspClient | null> {
   const serverLang = lspServerFor(languageId);
   if (!serverLang || !API_BASE || !workspaceId) return null;
   try {
     const { key, conn } = getConnection(serverLang, workspaceId);
     const client = await whenInitialized(conn.client, conn.closed);
-    if (!client) {
-      dropConnection(key, conn);
-      return null;
-    }
-    return languageServerSupport(client, uri, LSP_DOC_LANG[languageId] ?? languageId);
+    if (!client) dropConnection(key, conn);
+    return client;
   } catch {
     return null;
   }

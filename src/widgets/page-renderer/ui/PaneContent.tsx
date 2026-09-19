@@ -69,7 +69,7 @@ const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab }) 
   if (page.surface === "agent") {
     return <div className="h-full overflow-hidden"><LazyAgentConversationPage pageId={tab.pageId} /></div>;
   }
-  // IDE code file: line-based CodeMirror editor instead of the block editor.
+  // IDE code file: line-based Monaco editor instead of the block editor.
   // Double guard — surface AND flag — so a code page falls back to the normal
   // editor (never a blank pane) whenever osio.ide is off.
   if (page.surface === "code" && isIdeEnabled()) {

@@ -18,7 +18,7 @@ import { languageForFileName } from "./ideLanguages";
  * A `surface: "code"` page stores its whole file as ONE `code` block in
  * `page.content` — so it rides the existing page-save path (stamp/outbox/
  * hydrate) with no new table or route. These helpers are the single seam
- * between "a page" and "a code file": the CodeMirror view reads the block's
+ * between "a page" and "a code file": the Monaco view reads the block's
  * text + language, and writes edits straight back into the block. `content`
  * stays `Block[]`, so nothing about page sync or ACL changes.
  */

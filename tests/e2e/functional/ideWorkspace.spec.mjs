@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/19 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/19 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/09/19 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,12 +31,12 @@ async function enterIdeMode(page) {
   await toggle.waitFor({ state: "visible", timeout: 20_000 });
   await toggle.click();
   // The dedicated shell mounts (activity bar + explorer). First entry pays the
-  // cold lazy-compile of the CodeMirror-heavy IDE chunk, so allow generous time.
+  // cold lazy-compile of the Monaco-heavy IDE chunk, so allow generous time.
   await page.locator("[data-osio-ide-shell]").waitFor({ state: "visible", timeout: 30_000 });
 }
 
 test("IDE mode: create, rename→relanguage, search, exit", async ({ page }) => {
-  test.setTimeout(90_000); // cold lazy-compile of the IDE + CodeMirror chunk
+  test.setTimeout(90_000); // cold lazy-compile of the IDE + Monaco chunk
   await enterIdeMode(page);
 
   // Create a code file from the explorer toolbar; the inline input takes a name.
@@ -46,13 +46,13 @@ test("IDE mode: create, rename→relanguage, search, exit", async ({ page }) => 
   await input.fill("main.py");
   await input.press("Enter");
 
-  // The file appears in the tree and opens in a CodeMirror pane.
+  // The file appears in the tree and opens in a Monaco pane.
   const fileRow = page.locator('[role="treeitem"]', { hasText: "main.py" });
   await expect(fileRow).toHaveCount(1, { timeout: 8_000 });
-  await expect(page.locator(".cm-editor")).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 8_000 });
 
   // Type code, then search finds it across the project.
-  await page.locator(".cm-content").click();
+  await page.locator(".monaco-editor .view-lines").click();
   await page.keyboard.type("def greet():\n    return 'hi'");
   await page.waitForTimeout(400);
 

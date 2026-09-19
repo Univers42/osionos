@@ -40,7 +40,7 @@ const StyleGuideRouteImpl = lazy(() =>
 );
 
 // The dedicated IDE layout (file tree + editor grid + terminal strip). Its own
-// chunk so the CodeMirror/IDE tree never touches the warm shell; loads only when
+// chunk so the Monaco/IDE tree never touches the warm shell; loads only when
 // a workspace is flipped into IDE mode.
 const IdeShellImpl = lazy(() =>
   import("@/widgets/ide-shell").then((module) => ({ default: module.IdeShell })),

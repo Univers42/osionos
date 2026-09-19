@@ -6,12 +6,12 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/20 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/20 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/09/19 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 // The LSP base protocol (`Content-Length: N\r\n\r\n<json>`) codec, in the
-// browser. @codemirror/lsp-client's Transport exchanges bare JSON strings, but
+// browser. The LspClient Transport (lspProtocol.ts) exchanges bare JSON strings, but
 // the language server speaks framed stdio and the bridge relays raw bytes — so
 // the frontend adds the frame on send and strips it on receive. Byte-accurate
 // (Content-Length is UTF-8 bytes, not chars) and handles messages split across
