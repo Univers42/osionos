@@ -17,7 +17,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { favoritesForWorkspace } from "../../src/store/favorites/favoritesScope.ts";
+import { favoritesForWorkspace, isServerPageId } from "../../src/store/favorites/favoritesScope.ts";
 
 // Pages p1,p2 live in workspace A; p3 in workspace B. (Mirrors pagesIndex.)
 const workspaceOf = (id: string): string | undefined =>
@@ -42,4 +42,26 @@ test("unloaded favorites (unknown workspace) are hidden, as before", () => {
 
 test("no active workspace → nothing to show (never falls back to all)", () => {
   assert.deepEqual(favoritesForWorkspace(["p1", "p3"], "", workspaceOf), []);
+});
+
+// Regression guard for the second bug: POST /api/favorites answered 422
+// ("pageId must be a UUID") for every star, because the store posted whatever id
+// the page carried. osionos_page_favorites.page_id is a uuid column, so an id of
+// any other shape can never be stored — it must not reach the network.
+test("accepts the uuid shape the bridge's own UUID_REGEX accepts", () => {
+  assert.equal(isServerPageId("fcf48b5b-2fed-41d6-9c5d-0075988728d1"), true);
+  assert.equal(isServerPageId("5a4b1c2d-2222-4222-8222-000000000002"), true);
+  assert.equal(isServerPageId("FCF48B5B-2FED-41D6-9C5D-0075988728D1"), true);
+});
+
+test("rejects every id the bridge would answer 422 for", () => {
+  assert.equal(isServerPageId("home"), false);
+  assert.equal(isServerPageId(""), false);
+  assert.equal(isServerPageId("p1"), false);
+  assert.equal(isServerPageId("fcf48b5b2fed41d69c5d0075988728d1"), false); // unhyphenated
+  assert.equal(isServerPageId("fcf48b5b-2fed-41d6-9c5d-0075988728d1x"), false);
+  // Version nibble 0 and variant nibble c are outside RFC 4122 — the bridge's
+  // regex pins [1-5] and [89ab], so these are 422s too.
+  assert.equal(isServerPageId("fcf48b5b-2fed-01d6-9c5d-0075988728d1"), false);
+  assert.equal(isServerPageId("fcf48b5b-2fed-41d6-cc5d-0075988728d1"), false);
 });

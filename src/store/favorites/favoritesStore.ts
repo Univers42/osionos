@@ -16,7 +16,9 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { api, getActivePageJwt } from "@/shared/api/client";
+import { isServerPageId } from "./favoritesScope";
 
 interface FavoritesStore {
   pageIds: string[];
@@ -42,11 +44,23 @@ export const useFavoritesStore = create<FavoritesStore>()(
         const prev = get().pageIds;
         const has = prev.includes(pageId);
         set({ pageIds: has ? prev.filter((id) => id !== pageId) : [pageId, ...prev] });
+        // A page the server has never seen has no uuid, so the write can only
+        // 422. Keep the star in the local cache instead of firing a request that
+        // is guaranteed to fail and then snapping the icon back.
+        if (!isServerPageId(pageId)) return;
         try {
           if (has) await api.delete(`/api/favorites/${pageId}`, getActivePageJwt() ?? undefined);
           else await api.post("/api/favorites", { pageId }, getActivePageJwt() ?? undefined);
-        } catch {
+        } catch (error) {
           set({ pageIds: prev }); // revert the optimistic change
+          // Reverting in silence is what made this look like a dead button:
+          // the star flipped back with no reason given, so the only feedback
+          // was the network tab. Name the failure instead.
+          useToastStore.getState().push({
+            kind: "error",
+            title: has ? "Couldn't remove from favorites" : "Couldn't add to favorites",
+            description: error instanceof Error ? error.message : undefined,
+          });
         }
       },
     }),

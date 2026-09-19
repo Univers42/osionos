@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, getActivePageJwt } from "@/shared/api/client";
 import { useUserStore } from "@/features/auth";
+import { toDateKey, todayKey } from "@/shared/lib/date/dateKey";
 
 export interface TaskItem {
   pageId: string;
@@ -25,15 +26,8 @@ export interface TaskItem {
 
 export type TaskBucket = "overdue" | "today" | "upcoming" | "someday";
 
-/** Local YYYY-MM-DD "today" (dueAt is stored/compared as a date string). */
-function todayKey(): string {
-  const now = new Date();
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
 export function bucketOf(task: TaskItem, today = todayKey()): TaskBucket {
-  const due = task.dueAt ? task.dueAt.slice(0, 10) : "";
+  const due = toDateKey(task.dueAt);
   if (!due) return "someday";
   if (due < today) return "overdue";
   if (due === today) return "today";
