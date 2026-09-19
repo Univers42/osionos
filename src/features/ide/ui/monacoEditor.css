@@ -1,0 +1,16 @@
+/* Monaco chrome the theme map cannot express, token-driven like the rest of the
+   editor. The gutter's 1px right border matched the shipped CodeMirror gutter;
+   `--osio-code-border` is defined on the code card, so the IDE shell (which
+   only sets the syntax palette) falls back to a faint line of the text color. */
+[data-osio-ide] .monaco-editor .margin {
+  border-right: 1px solid var(--osio-code-border, color-mix(in srgb, currentColor 15%, transparent));
+}
+
+/* Widgets (hover, suggest, find) inherit the app's UI font; the text surface
+   keeps the mono stack passed through the editor's fontFamily option. */
+[data-osio-ide] .monaco-editor .monaco-hover,
+[data-osio-ide] .monaco-editor .suggest-widget,
+[data-osio-ide] .monaco-editor .find-widget,
+[data-osio-ide] .monaco-editor .parameter-hints-widget {
+  font-family: var(--osio-font-sans, inherit);
+}

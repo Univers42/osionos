@@ -7,7 +7,7 @@
 #    By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+         #
 #                                                 +#+#+#+#+#+   +#+            #
 #    Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#              #
-#    Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr        #
+#    Updated: 2026/09/19 00:00:00 by dlesieur         ###   ########.fr        #
 #                                                                              #
 # **************************************************************************** #
 
@@ -22,9 +22,12 @@ cd "${ROOT_DIR}"
 
 run_inside_container() {
   case "${COMMAND}" in
-    build) exec sh -c 'pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec vite build' ;;
+    # Monaco's ESM tree (~2.5k modules) pushed `vite build` past Node's default ~2 G
+    # heap ("Ineffective mark-compacts near heap limit", measured 2026-09-19); 3 G
+    # is enough with room, and stays under this VM's 7.5 G with the stack running.
+    build) exec sh -c 'pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build' ;;
     # Offline-mode prod bundle for the perf benches (same env as the Playwright webServer).
-    build-offline) exec sh -c 'VITE_API_URL= VITE_REQUIRE_BRIDGE_SESSION=false VITE_ALLOW_OFFLINE_MODE=true VITE_BAAS_URL= VITE_BAAS_API_KEY= VITE_BAAS_LIVE_MOUNTS= pnpm exec vite build' ;;
+    build-offline) exec sh -c 'VITE_API_URL= VITE_REQUIRE_BRIDGE_SESSION=false VITE_ALLOW_OFFLINE_MODE=true VITE_BAAS_URL= VITE_BAAS_API_KEY= VITE_BAAS_LIVE_MOUNTS= NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build' ;;
     preview) exec pnpm exec vite preview --host 0.0.0.0 "$@" ;;
     typecheck) exec sh -c 'pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit' ;;
     lint) exec pnpm exec eslint src/ packages/ --max-warnings=0 "$@" ;;

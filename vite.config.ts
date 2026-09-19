@@ -204,6 +204,11 @@ export default defineConfig(({ mode }) => {
               return `vendor-lucide-${((hash % 32) + 32) % 32}`;
             }
             if (/[/\\](react|react-dom|scheduler|use-sync-external-store)[/\\]/.test(id)) return 'vendor-react';
+            // NOT monaco-editor: a manual chunk absorbs its modules' static deps, and
+            // Monaco's core has dynamic imports, so Vite's preload helper landed in
+            // that chunk and every chunk using the helper — the entry included —
+            // imported 3.3 MB of Monaco (measured 2026-09-19). Left to the import
+            // graph, Monaco is reachable only through the lazy IDE editor.
             if (/[/\\](motion|framer-motion|motion-dom)[/\\]/.test(id)) return 'vendor-motion';
             if (id.includes('@univers42')) return 'vendor-ui-collection';
             if (/[/\\]date-fns[/\\]/.test(id)) return 'vendor-date-fns';

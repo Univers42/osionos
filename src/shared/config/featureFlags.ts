@@ -169,7 +169,7 @@ export function isDrawEnabled(): boolean {
 }
 
 /** The IDE / Dev-Mode surface: line-based code files (`surface: "code"`), a
- *  CodeMirror editor, and (server-gated) a sandboxed run terminal. Default OFF —
+ *  Monaco editor, and (server-gated) a sandboxed run terminal. Default OFF —
  *  the whole feature is additive and must never affect block pages. Turn on via
  *  `?osio.ide=1`, the `osio.ide` localStorage key, or `VITE_OSIO_IDE=1`. Code
  *  EXECUTION is double-gated: this flag AND the bridge env `OSIONOS_RUNNER_URL`

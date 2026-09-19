@@ -6,19 +6,23 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/20 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/20 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/09/19 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import { create } from "zustand";
 
-/** LSP DiagnosticSeverity: 1=Error 2=Warning 3=Information 4=Hint. */
+/** LSP DiagnosticSeverity: 1=Error 2=Warning 3=Information 4=Hint. Positions are
+ *  0-based (LSP). `endLine`/`endCharacter` are optional so a start-only producer
+ *  still works; the editor's marker layer uses them to underline the whole range. */
 export interface IdeDiagnostic {
   uri: string;
   severity: number;
   message: string;
   line: number; // 0-based (LSP)
   character: number;
+  endLine?: number;
+  endCharacter?: number;
   source?: string;
 }
 
@@ -30,7 +34,8 @@ interface DiagnosticsState {
 }
 
 /** Diagnostics surfaced by the LSP client (P5), keyed by document URI. Fed from
- *  the lspClient publishDiagnostics tap; read by the Problems panel. */
+ *  the lspClient publishDiagnostics tap; read by the Problems panel and by the
+ *  editor's marker layer (lspMonaco). */
 export const useDiagnosticsStore = create<DiagnosticsState>((set) => ({
   byUri: {},
   setForUri: (uri, diagnostics) =>

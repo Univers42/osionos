@@ -37,13 +37,14 @@ ENV VITE_BAAS_ANON_KEY=$VITE_BAAS_ANON_KEY
 # serves them with zero CPU per request.
 #
 # Runs the graph-engine + root typecheck and the vite build directly (the
-# same steps as `npm run build` / scripts/docker-run.sh's build case) instead
+# same steps as `npm run build` / scripts/docker-run.sh's build case, incl. the
+# 3 G heap Monaco's ESM tree needs) instead
 # of through docker-run.sh: that script's host/container proxy is pointless
 # noise inside a container that's already the build target, and it requires
 # bash, which this Alpine builder stage doesn't have.
 RUN pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit \
  && pnpm exec tsc --noEmit \
- && pnpm exec vite build \
+ && NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build \
  && find build -name '*.map' -delete \
  && find build -type f \( -name '*.js' -o -name '*.css' -o -name '*.svg' \
       -o -name '*.json' -o -name '*.wasm' \) -size +1k -print0 \

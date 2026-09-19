@@ -1589,6 +1589,8 @@ body {
   --osio-code-fg-muted: #99a3af;
   --osio-code-caret: #58a6ff;
   --osio-code-selection: rgba(56, 139, 253, 0.35);
+  --osio-code-active-line: rgba(255, 255, 255, 0.05);
+  --osio-code-bracket: rgba(56, 139, 253, 0.25);
   --osio-code-shadow: 0 1px 2px rgba(1, 4, 9, 0.5), 0 12px 28px -8px rgba(1, 4, 9, 0.45);
   --osio-code-chip-bg: rgba(255, 255, 255, 0.04);
   --osio-code-btn-hover: rgba(255, 255, 255, 0.1);
@@ -1616,6 +1618,8 @@ body {
   --osio-code-fg-muted: #636c76;
   --osio-code-caret: #0969da;
   --osio-code-selection: rgba(9, 105, 218, 0.16);
+  --osio-code-active-line: rgba(13, 17, 23, 0.04);
+  --osio-code-bracket: rgba(9, 105, 218, 0.18);
   --osio-code-shadow: 0 1px 2px rgba(31, 35, 40, 0.1), 0 8px 24px -10px rgba(31, 35, 40, 0.18);
   --osio-code-chip-bg: rgba(13, 17, 23, 0.03);
   --osio-code-btn-hover: rgba(13, 17, 23, 0.06);

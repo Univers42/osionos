@@ -6,21 +6,20 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/09/17 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/09/17 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/09/19 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LSPClient, type Transport } from "@codemirror/lsp-client";
-
+import { LspClient, type Transport } from "../../src/features/ide/model/lspProtocol.ts";
 import { LSP_REQUEST_TIMEOUT_MS, whenInitialized } from "../../src/features/ide/model/lspReady.ts";
 
 // The IDE opens a language server over the bridge. With the sandbox stopped the bridge
-// closes that socket at once, but @codemirror/lsp-client keeps waiting for `initialize`
-// until its timeout, then rejects `initializing` — and every notification already chained
-// on it became "Uncaught (in promise) Error: Request timed out" in the browser, with the
-// dead client cached until the socket closed.
+// closes that socket at once, but a client keeps waiting for `initialize` until its
+// timeout, then rejects `initializing` — and (with the previous CodeMirror client) every
+// notification already chained on it became "Uncaught (in promise) Error: Request timed
+// out" in the browser, with the dead client cached until the socket closed.
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -47,12 +46,12 @@ async function unhandledDuring(run: () => Promise<void>): Promise<unknown[]> {
 }
 
 test("a server that answers initialize yields the client", async () => {
-  const client = new LSPClient({ timeout: 200 }).connect(fakeServer(true));
+  const client = new LspClient({ timeout: 200 }).connect(fakeServer(true));
   assert.equal(await whenInitialized(client, new Promise(() => {})), client);
 });
 
 test("a socket that closes gives up at once, without an uncaught error", async () => {
-  const client = new LSPClient({ timeout: 40 }).connect(fakeServer(false));
+  const client = new LspClient({ timeout: 40 }).connect(fakeServer(false));
   const unhandled = await unhandledDuring(async () => {
     const started = Date.now();
     assert.equal(await whenInitialized(client, Promise.resolve()), null);
@@ -63,7 +62,7 @@ test("a socket that closes gives up at once, without an uncaught error", async (
 });
 
 test("a server that never answers yields null, without an uncaught error", async () => {
-  const client = new LSPClient({ timeout: 40 }).connect(fakeServer(false));
+  const client = new LspClient({ timeout: 40 }).connect(fakeServer(false));
   const unhandled = await unhandledDuring(async () => {
     assert.equal(await whenInitialized(client, new Promise(() => {})), null);
     await sleep(40);
@@ -71,6 +70,6 @@ test("a server that never answers yields null, without an uncaught error", async
   assert.deepEqual(unhandled, []);
 });
 
-test("initialize gets more than the library's 3 s default", () => {
+test("initialize gets more than a 3 s budget", () => {
   assert.ok(LSP_REQUEST_TIMEOUT_MS >= 10_000, "a busy machine answered initialize in > 3 s");
 });
