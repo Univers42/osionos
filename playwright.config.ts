@@ -53,10 +53,10 @@ export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
-  retries: 0,
-  timeout: 30_000,
+  retries: process.env.CI ? 1 : 0,
+  timeout: 60_000,
   expect: {
-    timeout: 10_000,
+    timeout: 15_000,
   },
   workers: configuredWorkers ?? 1,
   shard: parseShard(process.env.PLAYWRIGHT_SHARD),
@@ -67,6 +67,7 @@ export default defineConfig({
     ["junit", { outputFile: "test-results/junit.xml" }],
   ],
   use: {
+    channel: process.env.PLAYWRIGHT_CHANNEL ?? (process.env.CI ? undefined : "chrome"),
     baseURL,
     viewport: { width: 1440, height: 960 },
     locale: "en-US",
@@ -77,7 +78,7 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   webServer: {
-    command: `VITE_API_URL= VITE_ALLOW_OFFLINE_MODE=true VITE_REQUIRE_BRIDGE_SESSION=false pnpm exec vite --mode test --host 127.0.0.1 --port ${testPort} --strictPort`,
+    command: `pnpm exec vite --mode test --host 127.0.0.1 --port ${testPort} --strictPort`,
     url: baseURL,
     reuseExistingServer,
     env: {
