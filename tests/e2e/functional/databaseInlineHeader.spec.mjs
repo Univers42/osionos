@@ -17,6 +17,7 @@
 
 import { test, expect } from "@playwright/test";
 
+import { fillCell } from "../support/databaseHelpers.mjs";
 import {
   activateFirstEditor,
   openFreshPage,
@@ -360,11 +361,8 @@ test.describe("database-inline-header", () => {
     await titleBox.click();
     await expect(block.locator("tbody tr")).toHaveCount(2);
 
-    // Fill the starter row's Text cell (dblclick opens the inline editor).
-    const textCell = block.locator("tbody tr").first().locator("td").nth(3);
-    await textCell.dblclick();
-    await textCell.locator("input, textarea").first().fill("hello board");
-    await page.keyboard.press("Enter");
+    // Fill the starter row's Text cell (Enter opens the inline editor).
+    await fillCell(page, block, 0, 3, "hello board");
 
     // The add-view panel: portaled Notion grid, fully on-screen, all 10 tiles.
     await block.hover();
@@ -538,15 +536,10 @@ test.describe("database-inline-header", () => {
     await block.locator('[aria-label="Add property"]').click();
     await page.getByTestId("add-property-panel").getByRole("button", { name: "Text", exact: true }).click();
     await titleBox.click(); // close the auto-opened config panel
-    const fillText = async (row, value) => {
-      const cell = block.locator("tbody tr").nth(row).locator("td").nth(2);
-      await cell.dblclick();
-      await cell.locator("input, textarea").first().fill(value);
-      await page.keyboard.press("Enter");
-    };
-    await fillText(0, "alpha");
+    await expect(page.getByTestId("property-config-panel")).toHaveCount(0);
+    await fillCell(page, block, 0, 2, "alpha");
     await block.getByRole("button", { name: "New", exact: true }).last().click();
-    await fillText(1, "beta");
+    await fillCell(page, block, 1, 2, "beta");
 
     // Gallery view, grouped by Text via Layout settings.
     await block.hover();

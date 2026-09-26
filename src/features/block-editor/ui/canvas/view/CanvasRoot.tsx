@@ -115,15 +115,17 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
       data-layout-role={block.layoutRole}
     >
       <div className="osionos-layout-shell">
-        <button
-          type="button"
-          aria-label="Layout settings"
-          title="Layout settings"
-          className="osionos-layout-settings-tab"
-          onClick={openSettings}
-        >
-          ⚙
-        </button>
+        {!settingsOpen ? (
+          <button
+            type="button"
+            aria-label="Layout settings"
+            title="Layout settings"
+            className="osionos-layout-settings-tab"
+            onClick={openSettings}
+          >
+            ⚙
+          </button>
+        ) : null}
 
         <CanvasToolbar
           store={store}

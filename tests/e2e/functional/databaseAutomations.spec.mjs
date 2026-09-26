@@ -16,22 +16,7 @@
 
 import { test, expect } from "@playwright/test";
 
-import {
-  activateFirstEditor,
-  openFreshPage,
-  openSlashMenuFromEditor,
-  slashCommandEntry,
-} from "../../browser/core/app.mjs";
-
-async function insertInlineDatabase(page) {
-  await openFreshPage(page, "/");
-  const editor = await activateFirstEditor(page);
-  await openSlashMenuFromEditor(editor, "/database");
-  await slashCommandEntry(page, "Database - Inline").click();
-  const block = page.locator(".osionos-database-block--inline").first();
-  await block.waitFor({ timeout: 15_000 });
-  return block;
-}
+import { fillCell, insertInlineDatabase } from "../support/databaseHelpers.mjs";
 
 /** Add a property of `type`, rename it in the auto-opened config panel, close. */
 async function addNamedProperty(page, block, typeLabel, name) {
@@ -44,13 +29,6 @@ async function addNamedProperty(page, block, typeLabel, name) {
   await nameInput.press("Enter");
   await page.getByRole("textbox", { name: "Page title" }).click(); // close panel
   await expect(config).toHaveCount(0);
-}
-
-async function fillCell(page, block, row, col, value) {
-  const cell = block.locator("tbody tr").nth(row).locator("td").nth(col);
-  await cell.dblclick();
-  await cell.locator("input, textarea").first().fill(value);
-  await page.keyboard.press("Enter");
 }
 
 test.describe("database-automations", () => {
@@ -95,6 +73,7 @@ test.describe("database-automations", () => {
     await dialog.getByText("+ Add action").click();
     await dialog.locator('[aria-label="Message"]').last().fill("Rule fired");
     await page.locator('button[aria-label="Close"][tabindex="-1"]').click();
+    await expect(dialog).toHaveCount(0);
 
     // Edit the Trigger cell → the rule writes Target and raises a toast.
     await fillCell(page, block, 0, 2, "hello");

@@ -198,7 +198,7 @@ export const PageHeader: React.FC<Props> = ({ pageId, activePage, locked, commen
             </button>
           )}
           {!locked && !head.hasHeaderCanvasLayout && (
-            <button type="button" className="osionos-page-toolbar-btn" onClick={head.hasHeaderBand ? actions.customizeHeader : openCustomizer}>
+            <button type="button" className="osionos-page-toolbar-btn" onClick={actions.customizeHeader}>
               <LayoutDashboard size={14} />
               {customizeLabel}
             </button>
