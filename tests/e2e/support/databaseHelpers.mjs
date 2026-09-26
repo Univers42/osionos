@@ -41,9 +41,21 @@ export async function addPropertyOfType(block, page, typeLabel, name) {
   const nameBox = page.getByRole("textbox", { name: "Property name" });
   await nameBox.waitFor({ timeout: 5_000 });
   await nameBox.fill(name);
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("Escape");
+  await nameBox.press("Enter");
+  await page.getByRole("textbox", { name: "Page title" }).click();
+  await expect(page.getByTestId("property-config-panel")).toHaveCount(0);
   await expect(block.locator("th", { hasText: name }).first()).toBeVisible();
+}
+
+/** Spreadsheet edit: click selects, Enter opens the inline editor. */
+export async function fillCell(page, block, row, col, value) {
+  const cell = block.locator("tbody tr").nth(row).locator("td").nth(col);
+  await cell.click();
+  await page.keyboard.press("Enter");
+  const editor = cell.locator("input, textarea").first();
+  await editor.waitFor({ state: "visible", timeout: 10_000 });
+  await editor.fill(value);
+  await page.keyboard.press("Enter");
 }
 
 export async function addTextProperty(block, page, name = "Notes") {

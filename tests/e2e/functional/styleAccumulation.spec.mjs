@@ -44,11 +44,11 @@ async function typeInFreshBlock(page, baseURL, text) {
 }
 
 const STACKS = [
-  { typed: "***hello***", marks: ["EM", "STRONG"] },
+  { typed: "***hello***", marks: ["STRONG", "EM"] },
   { typed: "**__hello__**", marks: ["STRONG", "U"] },
   { typed: "__**hello**__", marks: ["U", "STRONG"] },
   { typed: "~~**hello**~~", marks: ["DEL", "STRONG"] },
-  { typed: "***__hello__***", marks: ["EM", "STRONG", "U"] },
+  { typed: "***__hello__***", marks: ["STRONG", "EM", "U"] },
 ];
 
 test.describe("inline sugar syntax stacks marks", () => {

@@ -383,7 +383,10 @@ function wordStartsWith(haystack: string, needle: string): boolean {
 function scoreCommand(item: SlashCommand, token: string): number {
   const label = item.label.toLowerCase();
   const aliases = (item.aliases ?? []).map((alias) => alias.toLowerCase());
-  if (label === token || aliases.includes(token)) return 100;
+  // Exact LABEL beats exact alias: "Database - Full page" ships keyword "page",
+  // which must not tie with (and then alphabetically outrank) the "Page" command.
+  if (label === token) return 100;
+  if (aliases.includes(token)) return 90;
   if (label.startsWith(token)) return 80;
   if (aliases.some((alias) => alias.startsWith(token))) return 60;
   if (wordStartsWith(label, token)) return 50;

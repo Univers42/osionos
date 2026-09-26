@@ -68,6 +68,7 @@ test.describe("database-files-media", () => {
     );
     await expect(dialog.getByText("d.png")).toBeVisible();
     await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
 
     // Wrap OFF (default): a single clipped row — first 3 chips + a "+1" overflow.
     const firstRow = block.locator("tbody tr").first();

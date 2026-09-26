@@ -801,18 +801,20 @@ const LayoutBlockEditorLegacy: React.FC<LayoutBlockEditorProps> = ({ block, page
       style={layoutPanelStyle}
     >
       <div className="osionos-layout-shell">
-        <button
-          type="button"
-          aria-label="Layout settings"
-          title="Layout settings"
-          className="osionos-layout-settings-tab"
-          onClick={() => {
-            setSelectedCellId(null);
-            setSettingsOpen((value) => !value);
-          }}
-        >
-          ⚙
-        </button>
+        {!settingsOpen ? (
+          <button
+            type="button"
+            aria-label="Layout settings"
+            title="Layout settings"
+            className="osionos-layout-settings-tab"
+            onClick={() => {
+              setSelectedCellId(null);
+              setSettingsOpen((value) => !value);
+            }}
+          >
+            ⚙
+          </button>
+        ) : null}
 
         <div className="osionos-layout-toolbar" aria-label="Layout tools">
           <button type="button" onClick={() => addCell()}>

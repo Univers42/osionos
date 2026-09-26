@@ -232,7 +232,9 @@
   position: absolute;
   right: 8px;
   top: 8px;
-  z-index: calc(var(--osio-z-popover) + 21);
+  /* Above `.osionos-layout-settings-tab` (+25): that gear stays mounted while
+     the panel is open and was intercepting the close control in e2e. */
+  z-index: calc(var(--osio-z-popover) + 26);
   display: inline-flex;
   width: 28px;
   height: 28px;
