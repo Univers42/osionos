@@ -225,8 +225,10 @@ export default defineConfig(({ mode }) => {
       port: 3001,
       host: '0.0.0.0',
       allowedHosts: ['localhost', '127.0.0.1', 'playground'],
-      watch: {
+      hmr: mode === 'test' ? false : undefined,
+      watch: mode === 'test' ? null : {
         usePolling: true,
+        ignored: ['**/playwright-report/**', '**/test-results/**', '**/.git/**'],
       },
     },
   };
