@@ -16,7 +16,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -98,11 +98,22 @@ function localShTransport(cwd: string): FsOpTransport {
     });
 }
 
+function hasSh(): boolean {
+  try {
+    execFileSync("sh", ["-c", "exit 0"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const TARGETS: { name: string; make: () => FsProvider }[] = [
   { name: "mem", make: () => createMemProvider("mem") },
   { name: "overlay(mem,mem)", make: () => createOverlayProvider("overlay", createMemProvider("mem"), createMemProvider("mem")) },
   { name: "page-backed", make: () => createPageProvider("osionos", memFacade()) },
-  { name: "sandbox(sh)", make: () => createSandboxProvider("sandbox", localShTransport(mkdtempSync(join(tmpdir(), "vfs-")))) },
+  ...(hasSh()
+    ? [{ name: "sandbox(sh)", make: () => createSandboxProvider("sandbox", localShTransport(mkdtempSync(join(tmpdir(), "vfs-")))) }]
+    : []),
 ];
 
 const root = (p: FsProvider) => buildVPath(p.scheme, "t", []);

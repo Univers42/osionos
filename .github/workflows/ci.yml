@@ -79,7 +79,6 @@ jobs:
 
   quality:
     name: quality (${{ matrix.scope }})
-    needs: build-image
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -110,7 +109,7 @@ jobs:
 
       - name: Build MarkEngine image
         if: matrix.scope == 'markengine-submodule'
-        run: docker build --target build src/shared/lib/markengine
+        run: docker build --target build packages/markdown-engine
 
       - name: Setup Node.js for MarkEngine benchmarks
         if: matrix.scope == 'markengine-submodule'
@@ -118,13 +117,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: src/shared/lib/markengine/package-lock.json
+          cache-dependency-path: packages/markdown-engine/package-lock.json
 
-      - name: Run MarkEngine benchmark guard
+      - name: Run MarkEngine tests & benchmark guard
         if: matrix.scope == 'markengine-submodule'
-        working-directory: src/shared/lib/markengine
+        working-directory: packages/markdown-engine
         run: |
           npm ci
+          npm test
           npm run bench:ci
 
       - name: Typecheck
@@ -170,6 +170,9 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Run browser E2E suite
         run: |
