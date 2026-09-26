@@ -72,10 +72,10 @@ jobs:
           push: ${{ github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          provenance: true
-          sbom: true
+          provenance: ${{ github.ref == 'refs/heads/main' }}
+          sbom: ${{ github.ref == 'refs/heads/main' }}
           cache-from: type=gha,scope=osionos-prod
-          cache-to: type=gha,scope=osionos-prod,mode=max
+          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,scope=osionos-prod,mode=max' || '' }}
 
   quality:
     name: quality (${{ matrix.scope }})
