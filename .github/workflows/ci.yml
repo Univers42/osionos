@@ -109,7 +109,10 @@ jobs:
 
       - name: Build MarkEngine image
         if: matrix.scope == 'markengine-submodule'
-        run: docker build --target build packages/markdown-engine
+        run: |
+          docker buildx build \
+            --build-context public.ecr.aws/docker/library/node:24-alpine=docker-image://node:24-alpine \
+            --target build packages/markdown-engine
 
       - name: Setup Node.js for MarkEngine benchmarks
         if: matrix.scope == 'markengine-submodule'
