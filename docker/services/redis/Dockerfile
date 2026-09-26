@@ -1,5 +1,5 @@
 # Redis 7 — cache backend for SonarQube analysis acceleration
-FROM redis:7-alpine
+FROM public.ecr.aws/docker/library/redis:7-alpine
 
 # Copy custom config if present; otherwise Redis runs with defaults
 COPY conf/redis.conf /usr/local/etc/redis/redis.conf

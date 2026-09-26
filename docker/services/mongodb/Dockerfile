@@ -1,4 +1,4 @@
-FROM mongo:7.0
+FROM public.ecr.aws/docker/library/mongo:7.0
 
 LABEL maintainer="dlesieur"
 LABEL description="osionos DBMS — MongoDB 7 with init scripts & tooling"

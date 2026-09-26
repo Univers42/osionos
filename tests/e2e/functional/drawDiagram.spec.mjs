@@ -66,14 +66,13 @@ test.describe("draw block — diagramming", () => {
   });
 
   test("double-click writes a centred label inside a shape", async ({ page, baseURL }) => {
-    const { canvas, box, background } = await openDrawBlock(page, baseURL);
+    const { box, background } = await openDrawBlock(page, baseURL);
 
     await page.keyboard.press("r");
     await drag(page, box, [60, 110], [260, 210]); // centre (160, 160)
 
     await page.keyboard.press("v");
-    await page.waitForTimeout(500);
-    await canvas.dblclick({ position: { x: 160, y: 160 } });
+    await page.mouse.dblclick(box.x + 160, box.y + 160);
 
     await expect(page.getByLabel("Text editor"), "double-click opens the label editor").toBeVisible();
     await page.keyboard.type("Users");

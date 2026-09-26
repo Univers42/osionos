@@ -30,30 +30,13 @@ interface Props {
 export function DrawTextEditor({ engine, request, fontSizePx, onDone }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [value, setValue] = useState(request.text);
-  const unmountedRef = useRef(false);
-  const mountTimeRef = useRef(0);
 
   useEffect(() => {
-    unmountedRef.current = false;
-    mountTimeRef.current = Date.now();
     const node = ref.current;
     if (!node) return;
-    const timer = setTimeout(() => {
-      if (unmountedRef.current) return;
-      node.focus();
-      node.select();
-    }, 16);
-    return () => {
-      clearTimeout(timer);
-      unmountedRef.current = true;
-    };
+    node.focus();
+    node.select();
   }, []);
-
-  const commitAndClose = () => {
-    if (unmountedRef.current) return;
-    engine.setElementText(request.id, value);
-    onDone();
-  };
 
   return (
     <textarea
@@ -66,12 +49,13 @@ export function DrawTextEditor({ engine, request, fontSizePx, onDone }: Props) {
         engine.setElementText(request.id, event.target.value);
       }}
       onBlur={() => {
-        if (unmountedRef.current || Date.now() - mountTimeRef.current < 100) return;
-        commitAndClose();
+        // Commit the final value (empty → the engine discards the element).
+        engine.setElementText(request.id, value);
+        onDone();
       }}
       onKeyDown={(event) => {
         event.stopPropagation();
-        if (event.key === "Escape") commitAndClose();
+        if (event.key === "Escape") event.currentTarget.blur();
       }}
       style={{
         position: "absolute",
