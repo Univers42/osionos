@@ -31,10 +31,11 @@ export function DrawTextEditor({ engine, request, fontSizePx, onDone }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [value, setValue] = useState(request.text);
   const unmountedRef = useRef(false);
-  const mountTimeRef = useRef(Date.now());
+  const mountTimeRef = useRef(0);
 
   useEffect(() => {
     unmountedRef.current = false;
+    mountTimeRef.current = Date.now();
     const node = ref.current;
     if (!node) return;
     const timer = setTimeout(() => {
