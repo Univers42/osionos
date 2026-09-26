@@ -16,7 +16,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
   pnpm install --frozen-lockfile
 
-COPY index.html tsconfig.json vite.config.ts eslint.config.js ./
+COPY index.html tsconfig.json tsconfig.markdown-engine.json vite.config.ts eslint.config.js ./
 COPY src ./src
 COPY packages ./packages
 COPY config ./config
@@ -43,6 +43,7 @@ ENV VITE_BAAS_ANON_KEY=$VITE_BAAS_ANON_KEY
 # noise inside a container that's already the build target, and it requires
 # bash, which this Alpine builder stage doesn't have.
 RUN pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit \
+ && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit \
  && pnpm exec tsc --noEmit \
  && NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build \
  && find build -name '*.map' -delete \
