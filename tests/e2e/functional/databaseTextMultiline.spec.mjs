@@ -30,7 +30,15 @@ test.describe("database-text-multiline", () => {
     // The text cell of the first row is the LAST "Empty" editable cell (the
     // title cell also renders "Empty" when blank). Spreadsheet model: click
     // selects, DOUBLE-click starts editing.
-    await block.locator("tbody tr").first().getByText("Empty", { exact: true }).last().dblclick();
+    const textCell = block.locator("tbody tr").first().locator("td").filter({ hasText: "Empty" }).last();
+    await textCell.dblclick();
+    const textarea = textCell.locator("textarea").first();
+    if (!(await textarea.isVisible())) {
+      await textCell.click();
+      await page.keyboard.press("Enter");
+    }
+    await textarea.waitFor({ state: "visible", timeout: 10_000 });
+    await textarea.focus();
 
     await page.keyboard.type("first line");
     await page.keyboard.press("Shift+Enter");
