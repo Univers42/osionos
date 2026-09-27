@@ -27,16 +27,17 @@ test.describe("database-text-multiline", () => {
     await block.getByRole("button", { name: "New", exact: true }).last().click();
     await addTextProperty(block, page);
 
-    // The text cell of the first row is the LAST "Empty" editable cell (the
-    // title cell also renders "Empty" when blank). Spreadsheet model: click
-    // selects, DOUBLE-click starts editing.
-    const textCell = block.locator("tbody tr").first().locator("td").filter({ hasText: "Empty" }).last();
-    await textCell.dblclick();
-    const textarea = textCell.locator("textarea").first();
-    if (!(await textarea.isVisible())) {
-      await textCell.click();
-      await page.keyboard.press("Enter");
-    }
+    // Locate the Text column ("Notes") cell by structural column index so
+    // Playwright's locator chain does not invalidate once "Empty" placeholder vanishes.
+    const colIndex = await block
+      .locator("thead th")
+      .allTextContents()
+      .then((headers) => headers.findIndex((h) => h.includes("Notes")));
+    const cell = block.locator("tbody tr").first().locator("td").nth(colIndex >= 0 ? colIndex : 2);
+
+    await cell.click();
+    await page.keyboard.press("Enter");
+    const textarea = cell.locator("textarea").first();
     await textarea.waitFor({ state: "visible", timeout: 10_000 });
     await textarea.focus();
 
@@ -46,7 +47,7 @@ test.describe("database-text-multiline", () => {
     await page.keyboard.press("Enter");
 
     // Both lines committed into the SAME cell, separated by a real newline.
-    const cell = block.locator("td").filter({ hasText: "first line" }).first();
+    await expect(cell).toContainText("first line");
     await expect(cell).toContainText("second line");
     const text = await cell.textContent();
     expect(text).toContain("first line\nsecond line");
