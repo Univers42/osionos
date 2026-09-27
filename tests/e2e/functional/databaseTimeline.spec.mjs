@@ -30,6 +30,13 @@ async function setupTimelineWithDatelessRecord(page) {
   await addView(block, page, "Timeline");
   const row = block.locator('[role="row"]').first();
   await row.waitFor({ timeout: 10_000 });
+  await row.scrollIntoViewIfNeeded();
+  const scrollContainer = block.locator(".overflow-x-auto").first();
+  if ((await scrollContainer.count()) > 0) {
+    await scrollContainer.evaluate((el) => {
+      el.scrollLeft = 0;
+    });
+  }
   return { block, row };
 }
 
@@ -109,5 +116,13 @@ async function addPropertyOfTypeInTimeline(block, page) {
   await block.getByText("Table", { exact: true }).first().click();
   await addPropertyOfType(block, page, "Date", "Deadline");
   await block.getByText("Timeline", { exact: true }).first().click();
-  await block.locator('[role="row"]').first().waitFor();
+  const row = block.locator('[role="row"]').first();
+  await row.waitFor();
+  await row.scrollIntoViewIfNeeded();
+  const scrollContainer = block.locator(".overflow-x-auto").first();
+  if ((await scrollContainer.count()) > 0) {
+    await scrollContainer.evaluate((el) => {
+      el.scrollLeft = 0;
+    });
+  }
 }
