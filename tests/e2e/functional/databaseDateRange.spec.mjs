@@ -30,18 +30,13 @@ test.describe("database-date-range", () => {
     await addView(block, page, "Timeline");
     const row = block.locator('[role="row"]').first();
     await row.waitFor({ timeout: 10_000 });
-    await row.scrollIntoViewIfNeeded();
-    const scrollContainer = block.locator(".overflow-x-auto").first();
-    if ((await scrollContainer.count()) > 0) {
-      await scrollContainer.evaluate((el) => {
-        el.scrollLeft = 0;
-      });
-    }
 
     // Draw a 3-cell range on the record's lane.
-    const box = await row.boundingBox();
-    const y = box.y + box.height / 2;
-    const x0 = box.x + 2 * CELL + CELL / 2;
+    const startCell = row.getByRole("gridcell").nth(2);
+    await startCell.scrollIntoViewIfNeeded();
+    const cellBox = await startCell.boundingBox();
+    const y = cellBox.y + cellBox.height / 2;
+    const x0 = cellBox.x + cellBox.width / 2;
     await page.mouse.move(x0, y);
     await page.mouse.down();
     await page.mouse.move(x0 + 3 * CELL, y, { steps: 6 });
