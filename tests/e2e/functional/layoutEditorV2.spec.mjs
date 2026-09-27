@@ -64,6 +64,7 @@ async function selectCellBody(page, cell) {
   const box = await cell.boundingBox();
   if (!box) throw new Error("Could not resolve cell bounding box");
   await page.mouse.click(box.x + box.width / 2, box.y + box.height - 28);
+  await cell.focus();
 }
 
 function cellX(cell) {

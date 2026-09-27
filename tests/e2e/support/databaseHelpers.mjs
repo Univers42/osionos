@@ -42,8 +42,12 @@ export async function addPropertyOfType(block, page, typeLabel, name) {
   await nameBox.waitFor({ timeout: 5_000 });
   await nameBox.fill(name);
   await nameBox.press("Enter");
-  await page.getByRole("textbox", { name: "Page title" }).click();
-  await expect(page.getByTestId("property-config-panel")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  const panel = page.getByTestId("property-config-panel");
+  if ((await panel.count()) > 0) {
+    await page.keyboard.press("Escape");
+  }
+  await expect(panel).toHaveCount(0);
   await expect(block.locator("th", { hasText: name }).first()).toBeVisible();
 }
 
