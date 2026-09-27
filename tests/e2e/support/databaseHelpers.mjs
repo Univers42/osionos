@@ -47,6 +47,12 @@ export async function addPropertyOfType(block, page, typeLabel, name) {
   if ((await panel.count()) > 0) {
     await page.keyboard.press("Escape");
   }
+  if ((await panel.count()) > 0) {
+    await page.mouse.click(10, 10);
+  }
+  if ((await panel.count()) > 0) {
+    await page.getByRole("textbox", { name: "Page title" }).click();
+  }
   await expect(panel).toHaveCount(0);
   await expect(block.locator("th", { hasText: name }).first()).toBeVisible();
 }

@@ -30,13 +30,6 @@ async function setupTimelineWithDatelessRecord(page) {
   await addView(block, page, "Timeline");
   const row = block.locator('[role="row"]').first();
   await row.waitFor({ timeout: 10_000 });
-  await row.scrollIntoViewIfNeeded();
-  const scrollContainer = block.locator(".overflow-x-auto").first();
-  if ((await scrollContainer.count()) > 0) {
-    await scrollContainer.evaluate((el) => {
-      el.scrollLeft = 0;
-    });
-  }
   return { block, row };
 }
 
@@ -45,9 +38,11 @@ test.describe("database-timeline", () => {
     const { block, row } = await setupTimelineWithDatelessRecord(page);
     await expect(row.getByText("No date")).toBeVisible();
 
-    const box = await row.boundingBox();
-    const y = box.y + box.height / 2;
-    const x0 = box.x + 2 * CELL + CELL / 2;
+    const startCell = row.getByRole("gridcell").nth(2);
+    await startCell.scrollIntoViewIfNeeded();
+    const cellBox = await startCell.boundingBox();
+    const y = cellBox.y + cellBox.height / 2;
+    const x0 = cellBox.x + cellBox.width / 2;
     await page.mouse.move(x0, y);
     await page.mouse.down();
     await page.mouse.move(x0 + 3 * CELL, y, { steps: 6 });
@@ -62,9 +57,11 @@ test.describe("database-timeline", () => {
 
   test("dragging a bar edge extends the range and survives re-render", async ({ page }) => {
     const { row } = await setupTimelineWithDatelessRecord(page);
-    const box = await row.boundingBox();
-    const y = box.y + box.height / 2;
-    const x0 = box.x + 2 * CELL + CELL / 2;
+    const startCell = row.getByRole("gridcell").nth(2);
+    await startCell.scrollIntoViewIfNeeded();
+    const cellBox = await startCell.boundingBox();
+    const y = cellBox.y + cellBox.height / 2;
+    const x0 = cellBox.x + cellBox.width / 2;
     await page.mouse.move(x0, y);
     await page.mouse.down();
     await page.mouse.move(x0 + 2 * CELL, y, { steps: 4 });
@@ -90,9 +87,11 @@ test.describe("database-timeline", () => {
     // Give the record a single-day Kickoff (a plain click writes ONLY the
     // start property — a drag would also fill the auto-detected end prop,
     // which with two date props is "Deadline" itself).
-    const box = await row.boundingBox();
-    const y = box.y + box.height / 2;
-    await page.mouse.move(box.x + 2 * CELL + 10, y);
+    const startCell = row.getByRole("gridcell").nth(2);
+    await startCell.scrollIntoViewIfNeeded();
+    const cellBox = await startCell.boundingBox();
+    const y = cellBox.y + cellBox.height / 2;
+    await page.mouse.move(cellBox.x + 10, y);
     await page.mouse.down();
     await page.mouse.up();
     await expect(row.locator("[data-timeline-bar]")).toBeVisible();
@@ -116,13 +115,5 @@ async function addPropertyOfTypeInTimeline(block, page) {
   await block.getByText("Table", { exact: true }).first().click();
   await addPropertyOfType(block, page, "Date", "Deadline");
   await block.getByText("Timeline", { exact: true }).first().click();
-  const row = block.locator('[role="row"]').first();
-  await row.waitFor();
-  await row.scrollIntoViewIfNeeded();
-  const scrollContainer = block.locator(".overflow-x-auto").first();
-  if ((await scrollContainer.count()) > 0) {
-    await scrollContainer.evaluate((el) => {
-      el.scrollLeft = 0;
-    });
-  }
+  await block.locator('[role="row"]').first().waitFor();
 }
