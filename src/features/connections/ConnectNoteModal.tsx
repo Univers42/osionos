@@ -19,7 +19,7 @@
 import React from 'react';
 
 import { useConnections } from '@/features/connections/useConnections';
-import { NoteComposeModal } from '@/shared/ui/NoteComposeModal';
+import { NoteComposeModal } from '@/shared/ui/molecules/NoteComposeModal';
 
 interface ConnectNoteModalProps {
   userId: string;
