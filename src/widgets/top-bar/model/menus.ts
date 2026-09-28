@@ -22,7 +22,7 @@ import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
 import { usePageStore } from "@/store/usePageStore";
 import { clearDrawBinding } from "@/widgets/draw-canvas/model/drawHandoff";
-import { consoleTab, drawTab, homeTab, trashTab, whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { consoleTab, drawTab, homeTab, trashTab, whiteboardAppUrl, whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { usePalette } from "./usePalette";
@@ -141,7 +141,10 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
               run: () => { clearDrawBinding(); layout().openTab(drawTab()); },
             }]
           : []),
-        ...(isWhiteboardEnabled()
+        // Two gates, not one: the flag is the kill-switch, the URL is the capability.
+        // A build with VITE_WHITEBOARD_APP_URL blanked cannot load the embed at all, so
+        // the item is withheld rather than offered and then failing.
+        ...(isWhiteboardEnabled() && whiteboardAppUrl() !== ""
           ? [{
               id: "view.whiteboard",
               label: "Whiteboard",

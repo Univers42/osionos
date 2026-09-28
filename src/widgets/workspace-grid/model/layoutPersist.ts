@@ -59,6 +59,14 @@ const MAIL_APP_URL = (VITE_ENV["VITE_MAIL_APP_URL"] ?? "http://localhost:3002").
 const CALENDAR_APP_URL = (VITE_ENV["VITE_CALENDAR_APP_URL"] ?? "http://localhost:3003").trim();
 const WHITEBOARD_APP_URL = (VITE_ENV["VITE_WHITEBOARD_APP_URL"] ?? "https://localhost:3007").trim();
 
+/** The configured Whiteboard origin, or "" when the build blanked it. `??` above keeps an
+ *  explicit empty value (only an ABSENT var falls back), so setting
+ *  `VITE_WHITEBOARD_APP_URL=` is how a build opts out of the tab entirely — the menu reads
+ *  this so a tab that provably cannot load is never offered. */
+export function whiteboardAppUrl(): string {
+  return WHITEBOARD_APP_URL;
+}
+
 /** Mail / Calendar open as in-app iframe tabs (stable id → focus, not duplicate). */
 export function mailTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: MAIL_TAB_ID, workspaceId: "", kind: "embed", title: "Mail", icon: "icon:mail", url: MAIL_APP_URL };
