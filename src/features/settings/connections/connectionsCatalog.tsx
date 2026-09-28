@@ -70,6 +70,9 @@ export const CONNECTIONS_CATALOG: ConnApp[] = [
   { id: "gitlab", name: "GitLab", description: "Attach merge requests and pipelines to docs.", category: "Developer", color: "#FC6D26", mark: "GL" },
   { id: "sentry", name: "Sentry", description: "Surface error issues next to your runbooks.", category: "Developer", color: "#362D59", mark: "Se" },
   // Design & Whiteboard
+  // Self-hosted, not an OAuth provider: it is a groot compose service behind the local
+  // HTTPS proxy, so it is `live` without a client_id — it needs the profile to be up.
+  { id: "drawnosaurus", name: "Drawnosaurus", description: "Collaborative whiteboard running next to osionos. Opens the board list.", category: "Design & Whiteboard", color: "#2F9E6E", mark: "Dn", live: true },
   { id: "figma", name: "Figma", description: "Embed designs, prototypes and comments live.", category: "Design & Whiteboard", color: "#F24E1E", mark: "Fg" },
   { id: "miro", name: "Miro", description: "Embed boards and keep them in sync.", category: "Design & Whiteboard", color: "#FFD02F", mark: "Mi" },
   { id: "lucidchart", name: "Lucidchart", description: "Embed diagrams that update with the source.", category: "Design & Whiteboard", color: "#F2811D", mark: "Lc" },
