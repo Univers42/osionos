@@ -29,6 +29,7 @@ export type FeatureFlagName =
   | "osio.sqlrun"
   | "osio.publish"
   | "osio.draw"
+  | "osio.whiteboard"
   | "osio.ide";
 
 /**
@@ -166,6 +167,15 @@ export function isPublishEnabled(): boolean {
  *  the `osio.draw` localStorage key, or `VITE_OSIO_DRAW=0`. */
 export function isDrawEnabled(): boolean {
   return isFeatureFlagEnabled("osio.draw", true);
+}
+
+/** The Whiteboard tab: drawnosaurus embedded in an iframe (`tab.kind === "embed"`).
+ *  Distinct from `osio.draw` above — that is the in-app canvas, this is a separate
+ *  service that must be running. Default OFF, because it depends on an opt-in compose
+ *  profile: with the profile down the iframe has nothing to load. Enable via
+ *  `?osio.whiteboard=1`, the `osio.whiteboard` localStorage key, or VITE_OSIO_WHITEBOARD=1. */
+export function isWhiteboardEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.whiteboard", false);
 }
 
 /** The IDE / Dev-Mode surface: line-based code files (`surface: "code"`), a
