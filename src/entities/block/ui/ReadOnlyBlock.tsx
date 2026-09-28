@@ -6,24 +6,12 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
-
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   ReadOnlyBlock.tsx                                   :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: vjan-nie <vjan-nie@student.42madrid.com    +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/20 12:00:00 by vjan-nie         ###   ########.fr       */
+/*   Updated: 2026/09/28 19:25:00 by serjimen         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { lazy, Suspense, useState, useMemo } from "react";
-import { EquationView } from "@/shared/ui/EquationView";
+import { EquationView } from "@/shared/ui/atoms/EquationView";
 import type { Block } from '@/entities/block';
 import { flattenColumns } from '@/entities/block';
 import { DRAW_BLOCK_DEFAULT_HEIGHT } from '@/entities/block/model/drawBlocks';
