@@ -14,7 +14,7 @@ import { useUserStore } from "@/features/auth";
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
 import { useIdeModeStore } from "@/features/ide/model/ideModeStore";
 import { openOrCreateTasksFile, runActiveFile, runDefaultTask } from "@/features/ide/model/ideTasks";
-import { isDrawEnabled, isIdeEnabled, isQuickCaptureEnabled } from "@/shared/config/featureFlags";
+import { isDrawEnabled, isIdeEnabled, isQuickCaptureEnabled, isWhiteboardEnabled } from "@/shared/config/featureFlags";
 import { useQuickCapture } from "@/features/quick-capture/model/useQuickCapture";
 import { applyTheme, persistThemeMode } from "@/shared/config/theme";
 import { useUIStore } from "@/shared/config/uiStore";
@@ -22,7 +22,7 @@ import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
 import { usePageStore } from "@/store/usePageStore";
 import { clearDrawBinding } from "@/widgets/draw-canvas/model/drawHandoff";
-import { consoleTab, drawTab, homeTab, trashTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { consoleTab, drawTab, homeTab, trashTab, whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { usePalette } from "./usePalette";
@@ -139,6 +139,13 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
               // Unbind first: a blank drawing must not write into the draw BLOCK
               // that last expanded into this (singleton) tab.
               run: () => { clearDrawBinding(); layout().openTab(drawTab()); },
+            }]
+          : []),
+        ...(isWhiteboardEnabled()
+          ? [{
+              id: "view.whiteboard",
+              label: "Whiteboard",
+              run: () => layout().openTab(whiteboardTab()),
             }]
           : []),
       ],
