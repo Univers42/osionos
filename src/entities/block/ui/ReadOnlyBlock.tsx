@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { lazy, Suspense, useState, useMemo } from "react";
-import { EquationView } from "@/shared/ui/atoms/EquationView";
+import { EquationView } from "@/shared/ui";
 import type { Block } from '@/entities/block';
 import { flattenColumns } from '@/entities/block';
 import { DRAW_BLOCK_DEFAULT_HEIGHT } from '@/entities/block/model/drawBlocks';
