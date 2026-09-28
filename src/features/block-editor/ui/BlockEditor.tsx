@@ -20,7 +20,7 @@ import React, {
   useState,
 } from "react";
 import { Braces, Check, ChevronDown, Code, Copy, Eye, Hash, Moon, Sun } from "lucide-react";
-import { EquationView } from "@/shared/ui/atoms/EquationView";
+import { EquationView } from "@/shared/ui";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
 import { PlaceholderBlock } from "./PlaceholderBlock";
