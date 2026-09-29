@@ -3,11 +3,12 @@
 /*                                                        :::      ::::::::   */
 /*   index.ts                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: rstancu <rstancu@student.42madrid.com>     +#+  +:+       +#+        */
+/*   By: serjimen <djsurgeon83@gmail.com>           +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/14 00:00:00 by rstancu           #+#    #+#             */
-/*   Updated: 2026/04/14 20:35:07 by rstancu          ###   ########.fr       */
+/*   Updated: 2026/09/29 18:04:00 by serjimen         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 export * from "./MediaAssetPicker";
+export * from "./mediaAssetPickerUtils";
