@@ -3,28 +3,35 @@
 /*                                                        :::      ::::::::   */
 /*   MediaAssetPicker.tsx                               :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: serjimen <djsurgeon83@gmail.com>           +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/14 00:00:00 by rstancu           #+#    #+#             */
-/*   Updated: 2026/05/08 05:35:15 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/09/29 18:04:00 by serjimen         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { AssetPickerBoard } from "@univers42/ui-collection";
 
 import type { MediaBlockType } from "@/entities/block";
 import {
   SLASH_MEDIA_PICKER_BOARD_PROPS,
   getSlashMediaPickerTabs,
+  type CoverPickerAsset,
 } from "@/shared/ui/assets/uiCollectionAssets";
 import {
   searchUnsplashPickerAssets,
   toMediaPickerAsset,
 } from "@/shared/lib/media/unsplash";
+import {
+  formatSearchStatusAria,
+  normalizeSearchQuery,
+  resolveFallbackNotice,
+  shouldFetchUnsplash,
+} from "./mediaAssetPickerUtils";
 
-interface MediaAssetPickerProps {
+export interface MediaAssetPickerProps {
   kind: MediaBlockType;
   value?: string;
   label?: string;
@@ -42,19 +49,37 @@ export const MediaAssetPicker: React.FC<MediaAssetPickerProps> = ({
   onSelect,
 }) => {
   const [query, setQuery] = useState("people workspace");
-  const [unsplashItems, setUnsplashItems] = useState<Array<unknown>>([]);
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
+  const [unsplashItems, setUnsplashItems] = useState<CoverPickerAsset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
     if (kind !== "image") return;
+
+    if (!shouldFetchUnsplash(kind, debouncedQuery)) {
+      queueMicrotask(() => {
+        setUnsplashItems([]);
+        setIsLoading(false);
+        setHasLoaded(true);
+      });
+      return;
+    }
 
     const controller = new AbortController();
     queueMicrotask(() => {
       if (!controller.signal.aborted) setIsLoading(true);
     });
+
     searchUnsplashPickerAssets({
-      query,
+      query: normalizeSearchQuery(debouncedQuery),
       perPage: 12,
       orientation: "landscape",
       signal: controller.signal,
@@ -76,11 +101,18 @@ export const MediaAssetPicker: React.FC<MediaAssetPickerProps> = ({
       });
 
     return () => controller.abort();
-  }, [kind, query]);
+  }, [kind, debouncedQuery]);
 
   const tabs = useMemo(
     () => getSlashMediaPickerTabs(kind, unsplashItems),
     [kind, unsplashItems],
+  );
+
+  const fallbackNotice = resolveFallbackNotice(hasLoaded, unsplashItems.length);
+  const searchStatus = formatSearchStatusAria(
+    isLoading,
+    unsplashItems.length,
+    hasLoaded,
   );
 
   if (tabs.length === 0) {
@@ -95,19 +127,39 @@ export const MediaAssetPicker: React.FC<MediaAssetPickerProps> = ({
       style={{ height }}
     >
       {kind === "image" ? (
-        <div className="border-b border-[var(--osio-border-default)] px-3 py-2">
+        <div role="search" className="border-b border-[var(--osio-border-default)] px-3 py-2">
           <label className="flex h-8 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-xs text-[var(--osio-fg-muted)]">
-            {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+            {isLoading ? (
+              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Search size={14} aria-hidden="true" />
+            )}
             <input
+              role="searchbox"
+              aria-label="Search Unsplash photos"
+              aria-busy={isLoading}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search Unsplash"
               className="min-w-0 flex-1 bg-transparent text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
             />
+            {query.trim().length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+                className="text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)] transition-colors focus:outline-none"
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            ) : null}
           </label>
-          {hasLoaded && unsplashItems.length === 0 ? (
+          <div role="status" aria-live="polite" className="sr-only">
+            {searchStatus}
+          </div>
+          {fallbackNotice ? (
             <p className="mt-1 text-[10px] text-[var(--osio-fg-subtle)]">
-              Showing local fallbacks until the bridge has an Unsplash key.
+              {fallbackNotice}
             </p>
           ) : null}
         </div>
