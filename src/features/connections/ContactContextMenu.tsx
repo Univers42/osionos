@@ -24,7 +24,7 @@ import { useConnections } from '@/features/connections/useConnections';
 import { openDm } from '@/shared/chat/channelApi';
 import { Menu, MenuItem } from '@osionos/ui/primitives/Menu';
 import { Popover } from '@osionos/ui/primitives/Popover';
-import { NoteComposeModal } from '@/shared/ui/NoteComposeModal';
+import { NoteComposeModal } from '@/shared/ui';
 import { genId } from '@/widgets/workspace-grid/model/layoutTree';
 import { useWorkspaceLayout } from '@/widgets/workspace-grid/model/workspaceLayout';
 import { useReportsStore } from '@/store/social/useReportsStore';
