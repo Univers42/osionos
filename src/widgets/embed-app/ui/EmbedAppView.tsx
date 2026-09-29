@@ -22,7 +22,13 @@ interface Props {
  *  reports neither its status code nor a reliable `error` event, and a probe `fetch`
  *  would only trade a silent failure for browser network noise in the console. So the
  *  signal used here is the one the embedder is actually allowed to observe: whether
- *  `load` fired at all. */
+ *  `load` fired at all.
+ *
+ *  Ponytail: the window covers the FIRST document only. A navigation the user makes
+ *  inside the frame (opening a board from the Whiteboard list) is invisible to the
+ *  embedder, so a second document that hangs shows the stale first one rather than this
+ *  message. Under-reporting, deliberately: the alternative re-arms a deadline on every
+ *  `load` and declares a working pane dead, which is the bug this comment replaces. */
 const LOAD_GRACE_MS = 8000;
 
 /**
@@ -33,13 +39,21 @@ const LOAD_GRACE_MS = 8000;
  */
 export const EmbedAppView: React.FC<Props> = ({ url, title }) => {
   const [stalled, setStalled] = React.useState(false);
+  // A ref, not state: the timer below reads it after the fact, and re-rendering on
+  // `load` would only re-run an effect that must not restart its own deadline.
+  const hasLoaded = React.useRef(false);
 
   React.useEffect(() => {
     if (!url) {
       return undefined;
     }
+    hasLoaded.current = false;
     setStalled(false);
-    const timer = globalThis.setTimeout(() => setStalled(true), LOAD_GRACE_MS);
+    const timer = globalThis.setTimeout(() => {
+      if (!hasLoaded.current) {
+        setStalled(true);
+      }
+    }, LOAD_GRACE_MS);
     return () => globalThis.clearTimeout(timer);
   }, [url]);
 
@@ -80,7 +94,10 @@ export const EmbedAppView: React.FC<Props> = ({ url, title }) => {
       <iframe
         src={url}
         title={title}
-        onLoad={() => setStalled(false)}
+        onLoad={() => {
+          hasLoaded.current = true;
+          setStalled(false);
+        }}
         className={`w-full flex-1 border-0 bg-[var(--osio-bg-page)] ${stalled ? "hidden" : "h-full"}`}
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
       />
