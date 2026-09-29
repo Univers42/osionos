@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integrated `zustand/middleware` for `localStorage` persistence (`ui-storage`), ensuring the sidebar state is remembered across browser sessions.
 
 ### Changed
+- Enhanced `NoteComposeModal` with accessible form labeling (`aria-label`), `aria-hidden` visual heading to eliminate duplicate screen reader announcements, `Cmd+Enter`/`Ctrl+Enter` keyboard submission, and inline visual error feedback on rejection.
 - Standardized default asset picker label to English ('Asset picker') and added ARIA tablist semantics (`role="tablist"`, `role="tab"`, `aria-selected`, `tabIndex`) in `CompactAssetPickerBoard`.
 - Refactored `PageTreeItem` and `SidebarNavItem` from native `<button>` elements to `<div role="button">` to resolve nested button DOM hierarchy errors while maintaining accessibility.
 - Updated `SidebarPageTree` to support hover actions ("Add child page" and "Options") in the "Recents" section, aligning its functionality with the "Private" section.
