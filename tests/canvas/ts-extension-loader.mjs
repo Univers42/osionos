@@ -24,6 +24,7 @@ const ENGINE_SUBPATHS = {
   "": "index.ts",
   "/blocks": "blocks.ts",
   "/inline": "inline.ts",
+  "/inlineColorTokens": "inlineColorTokens.ts",
   "/dom": "dom.ts",
   "/react": "react.tsx",
   "/tables": "tableConfig.ts",
