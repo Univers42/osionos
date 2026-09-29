@@ -14,8 +14,8 @@ import {
   DEFAULT_COLOR_PRESETS,
   type ColorPickerPreset,
 } from '@univers42/ui-collection';
-import { normalizeHexColor, normalizeInlineColorToken } from '@osionos/markdown-engine/inline';
-export { normalizeInlineColorToken } from '@osionos/markdown-engine/inline';
+import { normalizeHexColor, normalizeInlineColorToken } from '@osionos/markdown-engine/inlineColorTokens';
+export { normalizeInlineColorToken } from '@osionos/markdown-engine/inlineColorTokens';
 
 export interface InlineColorOption extends ColorPickerPreset {
   id: string;
@@ -24,10 +24,10 @@ export interface InlineColorOption extends ColorPickerPreset {
   swatch: string;
 }
 
-function hexToRgba(hex: string, alpha: number) {
+export function hexToRgba(hex: string, alpha: number) {
   const normalized = normalizeHexColor(hex);
   if (!normalized) {
-    return `rgba(15, 23, 42, ${alpha})`;
+    return `var(--osio-bg-muted, color-mix(in srgb, var(--osio-fg-default) ${Math.round(alpha * 100)}%, transparent))`;
   }
 
   const r = Number.parseInt(normalized.slice(1, 3), 16);
