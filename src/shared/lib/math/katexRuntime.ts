@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   katexRuntime.ts                                    :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   By: serjimen <djsurgeon83@gmail.com>           +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/02 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/02 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/09/29 17:50:00 by serjimen         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -52,10 +52,19 @@ export function onKatexReady(listener: () => void): () => void {
 /** Render LaTeX to HTML, or null when katex has not loaded yet. */
 export function renderMathToHtml(source: string, displayMode: boolean): string | null {
   if (!instance) return null;
-  const options = { displayMode, throwOnError: false, strict: "ignore" as const };
+  const options = {
+    displayMode,
+    throwOnError: false,
+    strict: "ignore" as const,
+    trust: false,
+  };
   try {
     return instance.renderToString(source || (displayMode ? "E = mc^2" : ""), options);
   } catch {
-    return instance.renderToString(String.raw`\text{Invalid equation}`, { displayMode, throwOnError: false });
+    return instance.renderToString(String.raw`\text{Invalid equation}`, {
+      displayMode,
+      throwOnError: false,
+      trust: false,
+    });
   }
 }
