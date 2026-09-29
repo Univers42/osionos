@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integrated `zustand/middleware` for `localStorage` persistence (`ui-storage`), ensuring the sidebar state is remembered across browser sessions.
 
 ### Changed
+- Enhanced `EquationView` (`src/shared/ui/atoms/EquationView`) with WCAG-compliant `role="math"` semantics, accessible formula aria labels, and a 1-click raw LaTeX copy button with temporary checkmark feedback.
+- Hardened KaTeX runtime (`src/shared/lib/math/katexRuntime.ts`) by enforcing `trust: false` on math rendering options to prevent untrusted LaTeX command execution.
 - Refactored `PageTreeItem` and `SidebarNavItem` from native `<button>` elements to `<div role="button">` to resolve nested button DOM hierarchy errors while maintaining accessibility.
 - Updated `SidebarPageTree` to support hover actions ("Add child page" and "Options") in the "Recents" section, aligning its functionality with the "Private" section.
 - Improved `usePageStore` delete action to automatically filter and persist the updated `recents` list when a page is deleted.
