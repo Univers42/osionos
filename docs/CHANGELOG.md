@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integrated `zustand/middleware` for `localStorage` persistence (`ui-storage`), ensuring the sidebar state is remembered across browser sessions.
 
 ### Changed
+- Standardized default asset picker label to English ('Asset picker') and added ARIA tablist semantics (`role="tablist"`, `role="tab"`, `aria-selected`, `tabIndex`) in `CompactAssetPickerBoard`.
 - Refactored `PageTreeItem` and `SidebarNavItem` from native `<button>` elements to `<div role="button">` to resolve nested button DOM hierarchy errors while maintaining accessibility.
 - Updated `SidebarPageTree` to support hover actions ("Add child page" and "Options") in the "Recents" section, aligning its functionality with the "Private" section.
 - Improved `usePageStore` delete action to automatically filter and persist the updated `recents` list when a page is deleted.
@@ -33,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `App.tsx` layout to include the `SidebarTrigger` and handle dynamic sidebar resizing.
 
 ### Fixed
+- Replaced hardcoded dark slate color literal in `inlineTextStyles.ts` with a token-driven CSS fallback (`var(--osio-bg-muted)` / `color-mix`) for adaptive light/dark theme consistency.
+- Added unit test suite for `inlineTextStyles` in `tests/canvas/inline-text-styles.test.ts`.
 - Resolved offline page deletion by relaxing strict JWT validation in `PageOptionsMenu` to support local state manipulation.
 - Fixed missing `PageOptionsMenu` dropdown positioning by restoring Tailwind `relative` utility classes.
 - Fixed React duplicate key warnings in `PageCover` gallery by incorporating array indices into map keys.
