@@ -29,6 +29,7 @@ export type FeatureFlagName =
   | "osio.sqlrun"
   | "osio.publish"
   | "osio.draw"
+  | "osio.whiteboard"
   | "osio.ide";
 
 /**
@@ -166,6 +167,18 @@ export function isPublishEnabled(): boolean {
  *  the `osio.draw` localStorage key, or `VITE_OSIO_DRAW=0`. */
 export function isDrawEnabled(): boolean {
   return isFeatureFlagEnabled("osio.draw", true);
+}
+
+/** The Whiteboard tab: drawnosaurus embedded in an iframe (`tab.kind === "embed"`).
+ *  Distinct from `osio.draw` above — that is the in-app canvas, this is a separate
+ *  service that must be running. Default ON: drawnosaurus is part of the default
+ *  `make all` pipeline, so the service is up on the standard path. The flag is a
+ *  kill-switch, and the tab is additionally hidden when no URL is configured
+ *  (`whiteboardAppUrl()`), so a build without `VITE_WHITEBOARD_APP_URL` never shows a
+ *  tab that cannot load. Disable via `?osio.whiteboard=0`, the `osio.whiteboard`
+ *  localStorage key, or `VITE_OSIO_WHITEBOARD=0`. */
+export function isWhiteboardEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.whiteboard", true);
 }
 
 /** The IDE / Dev-Mode surface: line-based code files (`surface: "code"`), a

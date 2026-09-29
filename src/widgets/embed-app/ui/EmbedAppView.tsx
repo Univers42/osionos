@@ -18,12 +18,31 @@ interface Props {
   title: string;
 }
 
+/** How long the iframe may stay blank before the pane says so. A cross-origin frame
+ *  reports neither its status code nor a reliable `error` event, and a probe `fetch`
+ *  would only trade a silent failure for browser network noise in the console. So the
+ *  signal used here is the one the embedder is actually allowed to observe: whether
+ *  `load` fired at all. */
+const LOAD_GRACE_MS = 8000;
+
 /**
- * Hosts a separate osionos app (Mail / Calendar) inside a pane via a sandboxed
- * iframe. Some apps block framing (X-Frame-Options/CSP) — the header always
- * offers an "Open externally" escape hatch so the destination stays reachable.
+ * Hosts a separate osionos app (Mail / Calendar / Whiteboard) inside a pane via a
+ * sandboxed iframe. Some apps block framing (X-Frame-Options/CSP) and some are simply
+ * not running — the header always offers an "Open externally" escape hatch, and a frame
+ * that never loads degrades to a readable message instead of an empty pane.
  */
 export const EmbedAppView: React.FC<Props> = ({ url, title }) => {
+  const [stalled, setStalled] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!url) {
+      return undefined;
+    }
+    setStalled(false);
+    const timer = globalThis.setTimeout(() => setStalled(true), LOAD_GRACE_MS);
+    return () => globalThis.clearTimeout(timer);
+  }, [url]);
+
   if (!url) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--osio-fg-subtle)]">
@@ -44,10 +63,25 @@ export const EmbedAppView: React.FC<Props> = ({ url, title }) => {
           Open externally <ExternalLink size={12} />
         </button>
       </div>
+      {stalled ? (
+        <div
+          data-testid="embed-unavailable"
+          className="flex h-full flex-1 flex-col items-center justify-center gap-2 px-6 text-center"
+        >
+          <span className="text-sm font-semibold text-[var(--osio-fg-default)]">
+            {title} is not responding
+          </span>
+          <span className="max-w-md text-xs text-[var(--osio-fg-subtle)]">
+            Nothing answered at {url}. The service may still be starting, or it may not be
+            running. The rest of osionos is unaffected.
+          </span>
+        </div>
+      ) : null}
       <iframe
         src={url}
         title={title}
-        className="h-full w-full flex-1 border-0 bg-[var(--osio-bg-page)]"
+        onLoad={() => setStalled(false)}
+        className={`w-full flex-1 border-0 bg-[var(--osio-bg-page)] ${stalled ? "hidden" : "h-full"}`}
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
       />
     </div>

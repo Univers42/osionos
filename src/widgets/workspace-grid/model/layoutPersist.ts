@@ -24,6 +24,7 @@ export const MAIL_TAB_ID = "__mail__";
 export const CALENDAR_TAB_ID = "__calendar__";
 export const CHAT_TAB_ID = "__chat__";
 export const DRAW_TAB_ID = "__draw__";
+export const WHITEBOARD_TAB_ID = "__whiteboard__";
 
 const STORAGE_KEY = "osionos.workspace.layout.v2";
 const LEGACY_PREFIX = "osionos.workspace.layout.v1";
@@ -56,6 +57,15 @@ function wipeLegacyLayouts(): void {
 const VITE_ENV = ((import.meta as { env?: Record<string, string> }).env ?? {}) as Record<string, string>;
 const MAIL_APP_URL = (VITE_ENV["VITE_MAIL_APP_URL"] ?? "http://localhost:3002").trim();
 const CALENDAR_APP_URL = (VITE_ENV["VITE_CALENDAR_APP_URL"] ?? "http://localhost:3003").trim();
+const WHITEBOARD_APP_URL = (VITE_ENV["VITE_WHITEBOARD_APP_URL"] ?? "https://localhost:3007").trim();
+
+/** The configured Whiteboard origin, or "" when the build blanked it. `??` above keeps an
+ *  explicit empty value (only an ABSENT var falls back), so setting
+ *  `VITE_WHITEBOARD_APP_URL=` is how a build opts out of the tab entirely — the menu reads
+ *  this so a tab that provably cannot load is never offered. */
+export function whiteboardAppUrl(): string {
+  return WHITEBOARD_APP_URL;
+}
 
 /** Mail / Calendar open as in-app iframe tabs (stable id → focus, not duplicate). */
 export function mailTab(): WorkspaceTab {
@@ -83,6 +93,13 @@ export function consoleTab(): WorkspaceTab {
  *  id → re-opening focuses the tab instead of duplicating it. */
 export function drawTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: DRAW_TAB_ID, workspaceId: "", kind: "draw", title: "Draw", icon: "icon:pen-tool" };
+}
+
+/** The Whiteboard tab — drawnosaurus, embedded. Opens its BOARD LIST, never a specific
+ *  board: a board's identity is its slug, and osionos deliberately stores no slugs, so a
+ *  deep link here would go stale the moment a board is renamed or removed. */
+export function whiteboardTab(): WorkspaceTab {
+  return { tabId: genId("tab"), pageId: WHITEBOARD_TAB_ID, workspaceId: "", kind: "embed", title: "Whiteboard", icon: "icon:pen-tool", url: WHITEBOARD_APP_URL };
 }
 
 /** A live external-database table tab (`baas:<dbId>:<table>` id). pageId == the

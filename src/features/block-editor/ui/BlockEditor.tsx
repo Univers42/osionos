@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/05 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/12 18:59:04 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/09/28 19:25:00 by serjimen         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,7 +20,7 @@ import React, {
   useState,
 } from "react";
 import { Braces, Check, ChevronDown, Code, Copy, Eye, Hash, Moon, Sun } from "lucide-react";
-import { EquationView } from "@/shared/ui/EquationView";
+import { EquationView } from "@/shared/ui";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
 import { PlaceholderBlock } from "./PlaceholderBlock";
