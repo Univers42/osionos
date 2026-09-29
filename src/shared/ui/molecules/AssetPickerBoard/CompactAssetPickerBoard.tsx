@@ -149,7 +149,7 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
   value,
   width = EMOJI_BOARD_WIDTH,
   height = 352,
-  label = 'Selector de assets',
+  label = 'Asset picker',
   onSerializedValueChange,
 }) => {
   const [activeSource, setActiveSource] = useState<string>(() => resolveInitialSource(value));
@@ -197,13 +197,16 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
       }}
     >
       <div className="border-b border-[var(--osio-border-default)] px-2 py-2">
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Asset sources">
           {SOURCE_OPTIONS.map((option) => {
             const isActive = option.id === activeSource;
             return (
               <button
                 key={option.id}
                 type="button"
+                role="tab"
+                aria-selected={isActive}
+                tabIndex={isActive ? 0 : -1}
                 className={[
                   'h-8 rounded-md border px-3 text-xs font-medium transition-colors duration-[120ms]',
                   isActive
@@ -219,13 +222,16 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
         </div>
 
         {activeSource === 'emojis' && EMOJI_CATEGORY_OPTIONS.length > 0 && (
-          <div className="mt-2 flex gap-1 overflow-x-auto pb-1">
+          <div className="mt-2 flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Emoji categories">
             {EMOJI_CATEGORY_OPTIONS.map((category) => {
               const isActive = category.id === activeEmojiCategory;
               return (
                 <button
                   key={category.id}
                   type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  tabIndex={isActive ? 0 : -1}
                   aria-label={category.label}
                   title={category.label}
                   className={[
