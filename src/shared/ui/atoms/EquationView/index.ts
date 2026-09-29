@@ -3,11 +3,12 @@
 /*                                                        :::      ::::::::   */
 /*   index.ts                                           :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: serjimen <serjimen@student.42.fr>          +#+  +:+       +#+        */
+/*   By: serjimen <djsurgeon83@gmail.com>           +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/09/28 19:15:28 by serjimen          #+#    #+#             */
-/*   Updated: 2026/09/28 19:25:00 by serjimen         ###   ########.fr       */
+/*   Updated: 2026/09/29 17:50:00 by serjimen         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-export { EquationView } from './EquationView';
+export { EquationView, type EquationViewProps } from './EquationView';
+export * from './equationUtils';
