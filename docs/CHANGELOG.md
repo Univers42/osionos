@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integrated `zustand/middleware` for `localStorage` persistence (`ui-storage`), ensuring the sidebar state is remembered across browser sessions.
 
 ### Changed
+- Enhanced `MediaAssetPicker` (`src/shared/ui/molecules/MediaAssetPicker`) with search query debouncing (300ms), a one-click clear search button, strict `CoverPickerAsset[]` typing, and accessible `role="search"`/`role="searchbox"` semantics with live status announcements.
 - Enhanced `EquationView` (`src/shared/ui/atoms/EquationView`) with WCAG-compliant `role="math"` semantics, accessible formula aria labels, and a 1-click raw LaTeX copy button with temporary checkmark feedback.
 - Hardened KaTeX runtime (`src/shared/lib/math/katexRuntime.ts`) by enforcing `trust: false` on math rendering options to prevent untrusted LaTeX command execution.
 - Enhanced `NoteComposeModal` with accessible form labeling (`aria-label`), `aria-hidden` visual heading to eliminate duplicate screen reader announcements, `Cmd+Enter`/`Ctrl+Enter` keyboard submission, and inline visual error feedback on rejection.
