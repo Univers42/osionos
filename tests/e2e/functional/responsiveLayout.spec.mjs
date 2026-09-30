@@ -40,11 +40,18 @@ async function waitForAppShell(page) {
 }
 
 async function closeSidebar(page) {
-	// Use force:true to avoid timeouts if the toggle button is partially obscured
-	const toggleBtn = page.locator('button[data-testid="sidebar-toggle"], .odb-collapse-btn').first();
-	if (await toggleBtn.isVisible()) {
-		await toggleBtn.click({ force: true, timeout: 5000 }).catch(() => {});
-		await page.waitForTimeout(500); // Wait for transition
+	// Close the main app sidebar if open
+	const mainToggle = page.locator('button[aria-label="Toggle sidebar"]');
+	if (await mainToggle.count() > 0 && await mainToggle.first().isVisible()) {
+		await mainToggle.first().click({ force: true, timeout: 5000 }).catch(() => {});
+		await page.waitForTimeout(300);
+	}
+	
+	// Close the nested database/gallery sidebar if present
+	const dbToggle = page.locator('.odb-collapse-btn');
+	if (await dbToggle.count() > 0 && await dbToggle.first().isVisible()) {
+		await dbToggle.first().click({ force: true, timeout: 5000 }).catch(() => {});
+		await page.waitForTimeout(300);
 	}
 }
 
@@ -56,8 +63,8 @@ function overflowDetector() {
 		const rect = el.getBoundingClientRect();
 		// Ignore hidden / zero-size elements
 		if (rect.width === 0 || rect.height === 0) continue;
-		// Skip elements parented by a sidebar-like container or the secondary topbar
-		if (el.closest('[class*="sidebar"], [class*="Sidebar"], .odb-topbar-actions, [class*="topBar"], [class*="top-bar"]')) continue;
+		// Skip elements parented by a sidebar-like container, the topbar, or scrollable containers
+		if (el.closest('[class*="sidebar"], [class*="Sidebar"], .odb-topbar-actions, [class*="topBar"], [class*="top-bar"], .odb-topbar, .overflow-auto, .overflow-x-auto, .sticky.top-0')) continue;
 		if (rect.right > vw + 4) {
 			overflowing.push({
 				tag: el.tagName,
