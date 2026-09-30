@@ -40,10 +40,22 @@ async function waitForAppShell(page) {
 }
 
 async function closeSidebar(page) {
-	// Close the main app sidebar if open
-	const mainToggle = page.locator('button[aria-label="Toggle sidebar"]');
-	if (await mainToggle.count() > 0 && await mainToggle.first().isVisible()) {
-		await mainToggle.first().click({ force: true, timeout: 5000 }).catch(() => {});
+	// Close the main app sidebar only if currently expanded
+	const isExpanded = await page.evaluate(() => {
+		const aside = document.querySelector('aside[aria-label="Sidebar"]');
+		if (!aside) return false;
+		return aside.getBoundingClientRect().width > 50;
+	});
+	if (isExpanded) {
+		const closeBtn = page.locator('button[title="Close sidebar"]');
+		if (await closeBtn.count() > 0 && await closeBtn.first().isVisible()) {
+			await closeBtn.first().click({ force: true, timeout: 5000 }).catch(() => {});
+		} else {
+			const mainToggle = page.locator('button[aria-label="Toggle sidebar"]');
+			if (await mainToggle.count() > 0 && await mainToggle.first().isVisible()) {
+				await mainToggle.first().click({ force: true, timeout: 5000 }).catch(() => {});
+			}
+		}
 		await page.waitForTimeout(300);
 	}
 	
