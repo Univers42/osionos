@@ -40,23 +40,25 @@ async function waitForAppShell(page) {
 }
 
 async function closeSidebar(page) {
-	// Close the main app sidebar only if currently expanded
+	// Close the main app sidebar only if currently expanded (rail is ~54px, expanded panel is ~266px)
 	const isExpanded = await page.evaluate(() => {
 		const aside = document.querySelector('aside[aria-label="Sidebar"]');
 		if (!aside) return false;
-		return aside.getBoundingClientRect().width > 50;
+		return aside.getBoundingClientRect().width > 100;
 	});
 	if (isExpanded) {
 		const closeBtn = page.locator('button[title="Close sidebar"]');
+		const collapseBtn = page.locator('button[aria-label="Collapse to rail"]');
+		const mainToggle = page.locator('button[aria-label="Toggle sidebar"]');
+
 		if (await closeBtn.count() > 0 && await closeBtn.first().isVisible()) {
 			await closeBtn.first().click({ force: true, timeout: 5000 }).catch(() => {});
-		} else {
-			const mainToggle = page.locator('button[aria-label="Toggle sidebar"]');
-			if (await mainToggle.count() > 0 && await mainToggle.first().isVisible()) {
-				await mainToggle.first().click({ force: true, timeout: 5000 }).catch(() => {});
-			}
+		} else if (await collapseBtn.count() > 0 && await collapseBtn.first().isVisible()) {
+			await collapseBtn.first().click({ force: true, timeout: 5000 }).catch(() => {});
+		} else if (await mainToggle.count() > 0 && await mainToggle.first().isVisible()) {
+			await mainToggle.first().click({ force: true, timeout: 5000 }).catch(() => {});
 		}
-		await page.waitForTimeout(300);
+		await page.waitForTimeout(400);
 	}
 	
 	// Close the nested database/gallery sidebar if present
