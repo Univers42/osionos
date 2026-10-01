@@ -25,7 +25,7 @@
  * channels) and capture the dock thread as visual context.
  *
  * 3 separate browser CONTEXTS (confidentiality is per-context):
- *   DEV   = dev.pro.photo@gmail.com / Osionos123!      (Dylan)
+ *   DEV   = dev.pro.photo@gmail.com / $DEMO_LOGIN_PASSWORD (Dylan)
  *   SOFIA = e02.lindqvist@agency.local / AgencyDemo1!  (peer of the Dylan↔Sofia DM)
  *   DAVID = e03.okafor@agency.local / AgencyDemo1!
  *
@@ -50,6 +50,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { demoLoginPassword } from './required-env.mjs';
 
 /* ── config ─────────────────────────────────────────────────────────────── */
 const websiteUrl = process.env.SUITE_WEBSITE_URL ?? 'https://127.0.0.1:4322';
@@ -59,7 +60,7 @@ const outDir = process.env.OUT_DIR ?? '/app/test-results/messenger-media';
 const headless = process.env.SUITE_HEADLESS !== '0';
 const slowMo = Number.parseInt(process.env.SUITE_SLOWMO_MS ?? '0', 10) || 0;
 
-const DEV = { email: 'dev.pro.photo@gmail.com', password: 'Osionos123!', label: 'dev' };
+const DEV = { email: 'dev.pro.photo@gmail.com', password: demoLoginPassword(), label: 'dev' };
 const SOFIA = { email: 'e02.lindqvist@agency.local', password: process.env.AGENCY_PASSWORD ?? 'AgencyDemo1!', label: 'sofia' };
 const DAVID = { email: 'e03.okafor@agency.local', password: process.env.AGENCY_PASSWORD ?? 'AgencyDemo1!', label: 'david' };
 

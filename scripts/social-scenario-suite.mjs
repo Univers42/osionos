@@ -44,6 +44,7 @@
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { demoLoginPassword } from './required-env.mjs';
 
 /* ── config ─────────────────────────────────────────────────────────────── */
 const websiteUrl = process.env.SUITE_WEBSITE_URL ?? 'https://127.0.0.1:4322';
@@ -56,7 +57,7 @@ const slowMo = Number.parseInt(process.env.SUITE_SLOWMO_MS ?? '0', 10) || 0;
 const stamp = Date.now();
 const tag = stamp.toString(36);
 
-const DEV = { email: 'dev.pro.photo@gmail.com', password: 'Osionos123!', label: 'dev' };
+const DEV = { email: 'dev.pro.photo@gmail.com', password: demoLoginPassword(), label: 'dev' };
 const TEAM_PW = 'AgencyDemo1!';
 // The workspace DEV shares with the teammates (Track Binocle Crew). DMs, the
 // "Crew Standup" group and every teammate membership live here — NOT the agency
