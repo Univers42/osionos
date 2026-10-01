@@ -2,10 +2,14 @@
 // in this browser's localStorage) is restored into the sidebar on load.
 //   node scripts/sb-hydrate-check.mjs
 import { chromium } from "playwright";
+import { readDotEnv, requiredEnv } from "./required-env.mjs";
 
 const BAAS = "http://127.0.0.1:8000";
-const APIKEY = "mbk_cvbightpaaxq_puvv7u3rvzfolv2cbdh3fj2sqzo6zbty";
-const KONG = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc3MjMwMTA0LCJleHAiOjE5MzQ5MTAxMDR9.JP6NNY2xkRSt9nG3aqRd22Vh5ly85ZUHoXreJnLJ86g";
+// Same keys the app is built with: the tenant key and Kong key from this checkout's .env.
+const env = readDotEnv(".env");
+const BAAS_HINT = "set it in apps/osionos/app/.env (make seed-live-demo mints the tenant key)";
+const APIKEY = requiredEnv("VITE_BAAS_API_KEY", BAAS_HINT, env);
+const KONG = requiredEnv("VITE_BAAS_KONG_KEY", BAAS_HINT, env);
 const MONGO = "ca660785-ccc3-48b9-92fd-a47c7a863923";
 const URL = process.env.SB_URL ?? "http://localhost:3001/";
 

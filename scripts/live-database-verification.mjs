@@ -26,11 +26,12 @@
  */
 
 import { chromium } from 'playwright';
+import { demoLoginPassword } from './required-env.mjs';
 
 const websiteUrl = process.env.PLAYGROUND_WEBSITE_URL ?? 'https://127.0.0.1:4322';
 const appOrigin = new URL(process.env.PLAYGROUND_APP_URL ?? 'https://127.0.0.1:3001');
 const email = process.env.LIVE_E2E_EMAIL ?? 'dylan@gmail.com';
-const password = process.env.LIVE_E2E_PASSWORD ?? 'Osionos123!';
+const password = process.env.LIVE_E2E_PASSWORD || demoLoginPassword();
 const headless = (process.env.PLAYGROUND_HEADLESS ?? '1') !== '0';
 const required = process.env.LIVE_E2E_REQUIRED === '1';
 
