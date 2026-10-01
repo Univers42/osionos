@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { demoLoginPassword } from "./required-env.mjs";
 const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
 
 async function login(theme) {
@@ -10,7 +11,7 @@ async function login(theme) {
   await page.locator("#portal[open]").waitFor({ timeout: 15000 });
   await page.locator('[data-auth-switch="login"]').click();
   await page.getByRole("textbox", { name: "Email" }).fill("dylan@gmail.com");
-  await page.getByRole("textbox", { name: "Password" }).fill("Osionos123!");
+  await page.getByRole("textbox", { name: "Password" }).fill(demoLoginPassword());
   await page.locator("#portal [data-login-submit]").click();
   await page.waitForURL((u) => u.port === "3001", { timeout: 45000 });
   await page.waitForFunction(() => Boolean(localStorage.getItem("osionos:bridge-session")), null, { timeout: 45000 });
