@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MCP Policy Tests**: Added 18 unit tests for `mcpPolicy.ts` pure functions (`canConnectApp`, `addConnection`, `removeConnection`, `connectedAppIds`) covering edge cases including undefined `approvedApps` and idempotent connection adds.
 - **Layout Tree Tests**: Added 27 unit tests for `layoutTree.ts` tree operations (`genId`, `findPane`, `collectPanes`, `updatePane`, `findOpenTab`, `activeTabOf`) covering DFS traversal, immutable updates, referential equality, and fallback chains.
 - **Page Stamp Tests**: Added 27 unit tests for `pageStamp.ts` sync-engine functions (`isPersistablePage`, `pageStamp`, `buildDesiredPages`) covering stamp determinism, field sensitivity, `CONTENT_UNLOADED` sentinel invariant, content hash caching, and outbox filtering.
+- **Pane Drop Zone Tests**: Added 21 unit tests for `paneDropZone.ts` geometry functions (`computeDropZone`, `zoneToSplit`) covering center/edge classification, corner nearest-edge resolution, custom thresholds, degenerate rects, and boundary conditions.
 - **Responsive Layout Testing**: Added `responsiveLayout.spec.mjs` Playwright test suite to verify frontend responsiveness across desktop, tablet, and mobile viewports.
 
 ### Fixed
