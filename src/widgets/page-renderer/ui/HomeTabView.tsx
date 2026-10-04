@@ -21,7 +21,7 @@ import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 import { LoadingPane } from "@/shared/ui";
 import {
-  LazyGraphEngineExplorer,
+  LazyLegacyGraphEngineExplorer,
   LazyHomeWorkspaceMode,
   LazyWorkspaceDatabaseBlock,
   LazyOsionosPage,
@@ -59,7 +59,7 @@ export const HomeTabView: React.FC = () => {
 };
 
 function renderHomeVariantContent(variant: HomeVariant, homeDashboardPage: PageEntry | undefined): React.ReactNode {
-  if (variant === "graph") return <LazyGraphEngineExplorer />;
+  if (variant === "graph") return <LazyLegacyGraphEngineExplorer />;
   if (variant === "database") {
     // The Database surface is the notion-database-sys (ObjectDatabase) over the live
     // workspace pages — Files as a real Notion table with the full view chrome.

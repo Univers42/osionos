@@ -89,12 +89,12 @@ export default defineConfig(({ mode }) => {
           replacement: path.resolve(root, 'src/shared/notion-database-sys/packages/contract-types/src/index.ts'),
         },
         {
-          find: /^@osionos\/graph-engine$/,
-          replacement: path.resolve(root, 'packages/graph-engine/src/index.ts'),
+          find: /^@osionos\/legacy-graph-engine$/,
+          replacement: path.resolve(root, 'packages/legacy-graph-engine/src/index.ts'),
         },
         {
-          find: /^@osionos\/graph-engine\//,
-          replacement: `${path.resolve(root, 'packages/graph-engine/src')}/`,
+          find: /^@osionos\/legacy-graph-engine\//,
+          replacement: `${path.resolve(root, 'packages/legacy-graph-engine/src')}/`,
         },
         {
           find: /^@osionos\/draw-engine$/,

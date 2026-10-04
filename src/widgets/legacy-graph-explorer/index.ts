@@ -5,12 +5,9 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/05/18 21:19:22 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/18 21:19:22 by dlesieur         ###   ########.fr       */
+/*   Created: 2026/06/08 12:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/06/08 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-// HomeKnowledgeGraph (legacy SVG graph) was cut over to @osionos/legacy-graph-engine
-// (rendered via @/widgets/legacy-graph-explorer) and removed.
-export * from "./ui/HomeDatabaseMode";
-export * from "./ui/HomeWorkspaceMode";
+export { LegacyGraphEngineExplorer } from "./LegacyGraphEngineExplorer";

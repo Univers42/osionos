@@ -55,7 +55,7 @@ import { TableBlockEditor } from "./table/TableBlockEditor";
 // Heavy cross-engine graph: lazy-boundaried (canvas already defer-mounts the
 // cell that holds it, so the worker only spins up once the cell is in view).
 const GraphViewBlock = lazy(() =>
-  import("@/widgets/graph-explorer/GraphEngineExplorer").then((m) => ({ default: m.GraphEngineExplorer })),
+  import("@/widgets/legacy-graph-explorer/LegacyGraphEngineExplorer").then((m) => ({ default: m.LegacyGraphEngineExplorer })),
 );
 
 // The embedded /draw canvas — lazy, same boundary (pulls the draw-engine + roughjs).
