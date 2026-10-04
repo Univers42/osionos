@@ -212,9 +212,21 @@ class GrobaseChannel implements RealtimeChannel {
     this.presenceHandlers.clear();
     this.requestHandlers.length = 0;
     if (this.subscribed) this.frame({ type: 'UNTRACK', topic: this.topic });
-    try { this.ws?.close(1000, 'leave'); } catch { /* already closing */ }
+    const ws = this.ws;
     this.ws = null;
     this.subscribed = false;
+    if (ws) {
+      try {
+        if (ws.readyState === 0) {
+          ws.onopen = () => { try { ws.close(1000, 'leave'); } catch { /* ignore */ } };
+          ws.onerror = () => { /* ignore */ };
+          ws.onclose = () => { /* ignore */ };
+          ws.onmessage = () => { /* ignore */ };
+        } else {
+          ws.close(1000, 'leave');
+        }
+      } catch { /* already closing */ }
+    }
   }
 
   private onInboundRequest(payload: unknown): void {
