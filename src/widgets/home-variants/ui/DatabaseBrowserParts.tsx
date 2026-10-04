@@ -13,7 +13,7 @@
 import React from "react";
 import { RefreshCw } from "lucide-react";
 
-import type { BaasGraphNode } from "@/features/second-brain/baas/types";
+import type { BaasGraphNode } from "@/features/legacy-second-brain/baas/types";
 import { cellText } from "../model/baasDatabaseData";
 
 export const Centered: React.FC<{ title: string; hint?: string; onRetry?: () => void }> = ({ title, hint, onRetry }) => (

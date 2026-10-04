@@ -48,15 +48,10 @@ import { SqlRunButton } from "@/features/sql-runner/ui/SqlRunButton";
 import { CodeGutter } from "@/entities/block/ui/CodeGutter";
 import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
+import { LegacyGraphViewBlock } from "@/widgets/legacy-graph-explorer/LegacyGraphViewBlock";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
 import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
-
-// Heavy cross-engine graph: lazy-boundaried (canvas already defer-mounts the
-// cell that holds it, so the worker only spins up once the cell is in view).
-const GraphViewBlock = lazy(() =>
-  import("@/widgets/graph-explorer/GraphEngineExplorer").then((m) => ({ default: m.GraphEngineExplorer })),
-);
 
 // The embedded /draw canvas — lazy, same boundary (pulls the draw-engine + roughjs).
 const DrawBlockCanvas = lazy(() =>
@@ -1050,9 +1045,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           aria-label="Graph block"
           className="relative my-0 h-full min-h-[336px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
         >
-          <Suspense fallback={null}>
-            <GraphViewBlock />
-          </Suspense>
+          <LegacyGraphViewBlock fallback={null} />
         </div>
       );
 

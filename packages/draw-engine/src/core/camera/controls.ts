@@ -1,7 +1,7 @@
 /**
  * Camera manipulation: zoom-at-cursor, pan, fit-to-bounds, and the visible world
  * rect (for culling). All pure — return a new Camera, never mutate.
- * (Lifted from @osionos/graph-engine/core/camera/controls.)
+ * (Lifted from @osionos/legacy-graph-engine/core/camera/controls.)
  */
 
 import { clamp } from "../math";
