@@ -42,7 +42,7 @@ const DatabaseBlock = lazy(() =>
 // The cross-engine force graph is heavy; reuse the same lazy boundary the
 // page-renderer uses so it never lands on the warm read-only path.
 const GraphViewBlock = lazy(() =>
-  import("@/widgets/graph-explorer/GraphEngineExplorer").then((m) => ({ default: m.GraphEngineExplorer })),
+  import("@/widgets/legacy-graph-explorer/LegacyGraphEngineExplorer").then((m) => ({ default: m.LegacyGraphEngineExplorer })),
 );
 
 // The embedded /draw canvas, read-only (scene rendered, no tools).

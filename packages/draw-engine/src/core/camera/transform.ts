@@ -1,7 +1,7 @@
 /**
  * World ↔ screen transform for the canvas. Pure math, shared by culling,
  * hit-testing, and pointer handling. screen = world · scale + offset.
- * (Lifted from @osionos/graph-engine/core/camera/transform.)
+ * (Lifted from @osionos/legacy-graph-engine/core/camera/transform.)
  */
 
 export interface Camera {

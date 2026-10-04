@@ -42,7 +42,7 @@ ENV VITE_BAAS_ANON_KEY=$VITE_BAAS_ANON_KEY
 # of through docker-run.sh: that script's host/container proxy is pointless
 # noise inside a container that's already the build target, and it requires
 # bash, which this Alpine builder stage doesn't have.
-RUN pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit \
+RUN pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit \
  && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit \
  && pnpm exec tsc --noEmit \
  && NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build \
