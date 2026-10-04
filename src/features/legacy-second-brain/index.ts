@@ -59,7 +59,7 @@ export {
 
 export { NOTE_COLOR, TAG_COLOR, databaseColor } from "./model/palette";
 
-export { LEGACY_GRAPH_SOURCE } from "./featureFlag";
+export { LEGACY_GRAPH_SOURCE } from "./graphSource";
 // Rendering (SecondBrainView + render/ + layout/) was cut over to
 // @osionos/legacy-graph-engine and removed. The model/baas/sync layers below remain —
 // the new graph view reuses them as its data adapters.

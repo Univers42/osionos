@@ -13,10 +13,10 @@
 // Visual smoke test for @osionos/legacy-graph-engine wired into osionos. It forces the
 // Home → graph variant and verifies the aurora-glass canvas, console and (when
 // data is present) an inspectable node render. It SKIPS itself unless the engine
-// view is active (VITE_GRAPH_ENGINE_V2=true), so it stays green in normal CI.
+// view's canvas mounts, so it stays green in normal CI.
 //
 // To run with a capture:
-//   .env.test → VITE_GRAPH_ENGINE_V2=true (+ offline/local), then
+//   (the legacy view is on by default; VITE_LEGACY_SECOND_BRAIN=false removes it)
 //   docker compose ... run --rm --no-deps browser-tests \
 //     pnpm exec playwright test tests/e2e/legacy-graph-engine-visual.spec.mjs
 
@@ -37,7 +37,7 @@ test("aurora-glass graph: canvas + console render", async ({ page }) => {
     .waitFor({ state: "visible", timeout: 12_000 })
     .then(() => true)
     .catch(() => false);
-  test.skip(!active, "graph-engine view inactive (set VITE_GRAPH_ENGINE_V2=true)");
+  test.skip(!active, "legacy graph view inactive (canvas did not mount)");
 
   // Aurora background canvas + the control console are both present.
   await expect(page.locator("canvas.osio-graph__bg")).toBeVisible();

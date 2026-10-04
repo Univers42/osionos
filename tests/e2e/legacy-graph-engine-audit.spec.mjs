@@ -14,7 +14,7 @@
 // a11y: every interactive control in the explorer must expose an accessible name
 // (the most common WCAG 2.1 failure — buttons/inputs without names), and the
 // canvas must be labeled. perf: sample real rAF frame timing to back the
-// "ultra fast" claim. Skips unless VITE_GRAPH_ENGINE_V2=true (CI-safe).
+// "ultra fast" claim. Skips when the canvas does not mount (CI-safe).
 
 import { expect, test } from "@playwright/test";
 
@@ -37,7 +37,7 @@ async function openGraph(page) {
 
 test("a11y: every interactive control has an accessible name", async ({ page }) => {
   const { active } = await openGraph(page);
-  test.skip(!active, "graph-engine view inactive (set VITE_GRAPH_ENGINE_V2=true)");
+  test.skip(!active, "legacy graph view inactive (canvas did not mount)");
   await page.waitForTimeout(1500);
 
   const issues = await page.evaluate(() => {
@@ -67,7 +67,7 @@ test("a11y: every interactive control has an accessible name", async ({ page }) 
 
 test("perf: live frame timing stays smooth", async ({ page }) => {
   const { active } = await openGraph(page);
-  test.skip(!active, "graph-engine view inactive (set VITE_GRAPH_ENGINE_V2=true)");
+  test.skip(!active, "legacy graph view inactive (canvas did not mount)");
   await page.waitForTimeout(1500);
 
   const stats = await page.evaluate(
