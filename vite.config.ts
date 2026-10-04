@@ -68,6 +68,9 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_REQUIRE_BRIDGE_SESSION': JSON.stringify(env.VITE_REQUIRE_BRIDGE_SESSION ?? ''),
       'import.meta.env.VITE_ALLOW_OFFLINE_MODE': JSON.stringify(env.VITE_ALLOW_OFFLINE_MODE ?? ''),
       'import.meta.env.VITE_BAAS_URL': JSON.stringify(env.VITE_BAAS_URL ?? ''),
+      // Build-time legacy second brain gate (src/shared/config/legacySecondBrain.ts):
+      // always a literal so Rollup can fold the gate and drop the legacy chunk.
+      'import.meta.env.VITE_LEGACY_SECOND_BRAIN': JSON.stringify(env.VITE_LEGACY_SECOND_BRAIN ?? ''),
     },
     resolve: {
       dedupe: ['react', 'react-dom'],
