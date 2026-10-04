@@ -12,6 +12,8 @@
 
 import { lazy, Suspense } from "react";
 
+import { LEGACY_SECOND_BRAIN_ENABLED } from "@/shared/config/legacySecondBrain";
+
 /**
  * Code-split the heavy editor / page-renderer subtree (block editor, katex,
  * table & canvas editors, …) and the dev-only canvas debug route out of the
@@ -65,9 +67,11 @@ void import("@/widgets/page-renderer/ui/MainContent");
 function initialSurfaceUsesEditor(): boolean {
   if (globalThis.window === undefined) return false;
   const linked = new URLSearchParams(globalThis.location.search).get("home");
-  if (linked) return linked === "dashboard";
+  // A "graph" link or stored choice only selects the graph surface when the legacy
+  // gate is on; with it off the store falls back to the dashboard, which needs the editor.
+  if (linked) return linked === "dashboard" || (linked === "graph" && !LEGACY_SECOND_BRAIN_ENABLED);
   const stored = globalThis.localStorage?.getItem("osionos.home.variant");
-  return stored !== "graph" && stored !== "database";
+  return stored !== "database" && !(stored === "graph" && LEGACY_SECOND_BRAIN_ENABLED);
 }
 
 if (initialSurfaceUsesEditor()) {

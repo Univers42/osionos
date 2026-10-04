@@ -579,7 +579,7 @@
   /* Fix latent undefined token referenced by notionPage.css/components. */
   --osio-shadow: var(--osio-shadow-menu);
 
-  /* @osionos/graph-engine — "Warm Constellation": the graph is an extension of
+  /* @osionos/legacy-graph-engine — "Warm Constellation": the graph is an extension of
      the editorial brand. Light = cream/parchment "warm map of ideas" (paper
      grain, ink labels, white "seed" node sheets, terracotta accents); dark =
      warm-charcoal "ember". The engine derives light/dark node materials from the
