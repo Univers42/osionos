@@ -30,6 +30,7 @@ import { timed } from '@osionos/perf-probe';
 import { InternalPageLink } from "@/entities/page";
 import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
 import { usePageStore } from "@/store/usePageStore";
+import { LegacyGraphViewBlock } from "@/widgets/legacy-graph-explorer/LegacyGraphViewBlock";
 
 // Async boundary: database blocks are rare in rendered pages. Loading the
 // database view lazily (deep path, not the barrel) keeps the read-only
@@ -37,12 +38,6 @@ import { usePageStore } from "@/store/usePageStore";
 // database/editor tree (same code-split discipline as lazyViews.tsx).
 const DatabaseBlock = lazy(() =>
   import("@/widgets/database-view/ui/DatabaseBlock").then((m) => ({ default: m.DatabaseBlock })),
-);
-
-// The cross-engine force graph is heavy; reuse the same lazy boundary the
-// page-renderer uses so it never lands on the warm read-only path.
-const GraphViewBlock = lazy(() =>
-  import("@/widgets/legacy-graph-explorer/LegacyGraphEngineExplorer").then((m) => ({ default: m.LegacyGraphEngineExplorer })),
 );
 
 // The embedded /draw canvas, read-only (scene rendered, no tools).
@@ -472,9 +467,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "graph_view":
       return (
         <div className="my-3 h-full min-h-[336px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
-          <Suspense fallback={databaseLoadingFallback}>
-            <GraphViewBlock />
-          </Suspense>
+          <LegacyGraphViewBlock fallback={databaseLoadingFallback} />
         </div>
       );
 

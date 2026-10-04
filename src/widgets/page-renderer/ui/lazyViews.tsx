@@ -69,10 +69,6 @@ export const LazyProfilePageView = lazy(() =>
   import("@/widgets/profile-page/ProfilePageView").then((m) => ({ default: m.ProfilePageView })),
 );
 
-export const LazyLegacyGraphEngineExplorer = lazy(() =>
-  import("@/widgets/legacy-graph-explorer/LegacyGraphEngineExplorer").then((m) => ({ default: m.LegacyGraphEngineExplorer })),
-);
-
 export const LazyHomeWorkspaceMode = lazy(() =>
   import("@/widgets/home-variants/ui/HomeWorkspaceMode").then((m) => ({ default: m.HomeWorkspaceMode })),
 );
