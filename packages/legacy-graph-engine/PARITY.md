@@ -55,7 +55,7 @@ known functional regression.
 ## Deleted (cutover — last step)
 
 Legacy rendering, replaced by the package (data adapters kept — the new view
-reuses `second-brain/model`, `baas`, `sync`; `NodeInspector` was later deleted as dead):
+reuses `second-brain/model`, `baas`, `sync`, `NodeInspector` — now `LegacyNodeInspector`, kept as a developer-only backup with no caller):
 
 - `second-brain/ui/{SecondBrainView,Minimap}.tsx`,
   `second-brain/render/{CanvasScene,camera,theme}.ts`,
