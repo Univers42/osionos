@@ -22,7 +22,7 @@ import { type Dispatch, type SetStateAction, useCallback, useMemo, useState } fr
 import type { NotionState } from "@notion-db/object-database";
 import { useKnownDatabaseStateStore } from "@/widgets/database-view/model/knownDatabaseState";
 import { useUserStore } from "@/features/auth";
-import { LEGACY_GRAPH_SOURCE } from "@/features/legacy-second-brain/featureFlag";
+import { LEGACY_GRAPH_SOURCE } from "@/features/legacy-second-brain/graphSource";
 import { type GraphModel, type NodeId, emptyModel } from "@/features/legacy-second-brain/model/graphModel";
 import { deriveGraph } from "@/features/legacy-second-brain/model/deriveGraph";
 import { deriveTagConfig } from "@/features/legacy-second-brain/model/deriveTagConfig";

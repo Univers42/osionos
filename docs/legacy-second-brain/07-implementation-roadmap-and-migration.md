@@ -14,7 +14,7 @@ module beside it, behind a feature flag, and cut over only when it meets the
 budgets (doc 04) and feature parity. The old widget then becomes a thin
 re-export and is deleted in the final phase.
 
-- **Flag:** `VITE_SECOND_BRAIN_V2` (build-time) + a runtime toggle in settings, so
+- **Flag:** `VITE_SECOND_BRAIN_V2` (build-time; removed as dead — the legacy view is now gated by `VITE_LEGACY_SECOND_BRAIN`) + a runtime toggle in settings, so
   we can A/B and roll back instantly.
 - **Shared seam:** both old and new read the same canonical state + reuse the
   *pure* derivation logic, so there's no data divergence during cutover.
