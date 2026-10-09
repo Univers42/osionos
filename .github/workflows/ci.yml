@@ -192,16 +192,58 @@ jobs:
             test-results
           if-no-files-found: ignore
 
+  # The gate-off build (VITE_LEGACY_SECOND_BRAIN=false): every second-brain entry point must
+  # open the graph_render graph. The default shards run the gate-on build, so this folder is
+  # ignored there (playwright.config.ts) and run here on its own.
+  test-graph-studio-off:
+    name: Browser tests (gate off, graph-studio)
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "1"
+      TEST_WORKERS: 2
+      VITE_LEGACY_SECOND_BRAIN: "false"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run the gate-off graph-studio suite
+        run: |
+          docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up -d --wait mongodb
+          docker compose -f docker-compose.base.yml -f docker-compose.dev.yml run --rm --no-deps \
+            browser-tests pnpm exec playwright test tests/e2e/graph-studio-off
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-graph-studio-off
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
   # Single required status for the whole sharded suite. `needs.test.result` is the AGGREGATE
   # of the matrix: it is only 'success' when all 6 shards succeeded. A skipped or cancelled
   # shard is therefore a failure here, not a silent pass.
   test-gate:
     name: Browser tests
-    needs: test
+    needs: [test, test-graph-studio-off]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Require every shard to have succeeded
+      - name: Require every shard and the gate-off job to have succeeded
+        env:
+          SHARDS_RESULT: ${{ needs.test.result }}
+          GATE_OFF_RESULT: ${{ needs.test-graph-studio-off.result }}
         run: |
-          echo "shard matrix result: ${{ needs.test.result }}"
-          test "${{ needs.test.result }}" = "success"
+          echo "shard matrix result: $SHARDS_RESULT; gate-off graph-studio result: $GATE_OFF_RESULT"
+          test "$SHARDS_RESULT" = "success"
+          test "$GATE_OFF_RESULT" = "success"

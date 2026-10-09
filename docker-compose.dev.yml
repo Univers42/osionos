@@ -49,6 +49,8 @@ services:
       VITE_BAAS_ENABLED: ${VITE_BAAS_ENABLED:-false}
       VITE_BAAS_URL: ${VITE_BAAS_URL:-}
       VITE_BAAS_ANON_KEY: ${VITE_BAAS_ANON_KEY:-}
+      # Build-time legacy second brain gate; "false" for the gate-off graph-studio job.
+      VITE_LEGACY_SECOND_BRAIN: ${VITE_LEGACY_SECOND_BRAIN:-}
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
     volumes:
