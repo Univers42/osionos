@@ -18,7 +18,7 @@
  */
 
 const REBUILD_BASE = (
-  (import.meta.env as Record<string, string>)["VITE_REBUILD_URL"] || "http://127.0.0.1:7799"
+  (import.meta.env as Record<string, string>)["VITE_REBUILD_URL"] || ""
 ).replace(/\/$/, "");
 
 export interface RebuildResult {
@@ -29,6 +29,7 @@ export interface RebuildResult {
 
 /** Is the host rebuild daemon reachable? (Fast probe; failure ⇒ daemon not running.) */
 export async function rebuildServerUp(): Promise<boolean> {
+  if (!REBUILD_BASE) return false;
   try {
     const res = await fetch(`${REBUILD_BASE}/health`, { method: "GET" });
     return res.ok;
