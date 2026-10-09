@@ -19,14 +19,15 @@ import {
   loadGraphScope,
   loadStudio,
   pageIdOf,
+  recordRefOf,
   saveGraphScope,
   takeGraphFocus,
   toIngestDoc,
 } from "@/features/graph-studio";
 import { api, getActivePageJwt } from "@/shared/api/client";
 import { usePageStore } from "@/store/usePageStore";
-import { pageEntryToTab } from "@/widgets/workspace-grid/model/pageToTab";
-import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+// Deep path, not the barrel: the database view's barrel has side effects this view does not need.
+import { openNotePage, openRecordNote } from "@/widgets/database-view/model/recordSubItems";
 
 interface LoadResult {
   readonly nodes: number;
@@ -72,20 +73,32 @@ async function fetchPage(pageId: string): Promise<PageEntry | null> {
   }
 }
 
-/** A page node opens its page in a tab; any other node has no page to open. */
+/** The page behind a node: a page itself, or the note the bridge keeps for a record. */
+async function nodePage(nodeId: string): Promise<PageEntry | null | undefined> {
+  const pageId = pageIdOf(nodeId);
+  if (pageId) return usePageStore.getState().pageById(pageId) ?? (await fetchPage(pageId));
+  const record = recordRefOf(nodeId);
+  return record ? openRecordNote(record) : undefined;
+}
+
+/**
+ * A page node opens its page in a tab, and a record node its note (made on first open, as
+ * the legacy graph did). Either may come from the bridge without being in the page store,
+ * so it opens through openNotePage, which adds it to the store first; a tab whose page the
+ * store lacks would stay on the Loading pane.
+ */
 async function openGraphNode(nodeId: string): Promise<void> {
   const toast = useToastStore.getState().push;
-  const pageId = pageIdOf(nodeId);
-  if (!pageId) {
-    toast({ kind: "info", title: "Only pages open from the graph" });
+  const page = await nodePage(nodeId);
+  if (page === undefined) {
+    toast({ kind: "info", title: "Only pages and records open from the graph" });
     return;
   }
-  const page = usePageStore.getState().pageById(pageId) ?? (await fetchPage(pageId));
   if (!page) {
     toast({ kind: "error", title: "That page could not be opened" });
     return;
   }
-  useWorkspaceLayout.getState().openTab(pageEntryToTab(page));
+  openNotePage(page);
 }
 
 function droppedTotal(dropped: Dropped): number {
