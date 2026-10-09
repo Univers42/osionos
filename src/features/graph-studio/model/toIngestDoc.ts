@@ -181,6 +181,24 @@ export function pageIdOf(nodeId: string): string | null {
   return text(nodeId.slice(prefix.length));
 }
 
+/** The database record behind a node (`<dbId>:<table>:<pk>`), as the record API names it. */
+export interface RecordRef {
+  readonly dbId: string;
+  readonly table: string;
+  readonly pk: string;
+}
+
+/**
+ * The record behind a record node, or null for a page, folder, tag or malformed id. The pk
+ * keeps any later `:` (a composite key), as the database view's live ids do.
+ */
+export function recordRefOf(nodeId: string): RecordRef | null {
+  const [dbId = "", table = "", ...rest] = nodeId.split(":");
+  const pk = rest.join(":");
+  if (!dbId || !table || !pk || dbId === SOURCE) return null;
+  return nodeKind(table) === "record" ? { dbId, table, pk } : null;
+}
+
 /** The node id the bridge gives a page. */
 export function pageNodeId(pageId: string): string {
   return `osionos:osionos_pages:${pageId}`;
