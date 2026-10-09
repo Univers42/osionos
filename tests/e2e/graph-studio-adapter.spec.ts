@@ -104,6 +104,14 @@ test("T9: no graph, or an empty one, is a valid empty document", () => {
   expect(toIngestDoc({ nodes: [], edges: [] })).toEqual(empty);
 });
 
+test("a null node or edge in the bridge's arrays is skipped, not thrown on", () => {
+  const graph = { nodes: [null, page(A, "A"), page(B, "B")], edges: [null, { id: "e", from: B, to: A, type: "parent" }] } as unknown as BridgeGraph;
+  const { doc, dropped } = toIngestDoc(graph);
+  expect(doc.nodes.map((n) => n.id)).toEqual([A, B]);
+  expect(doc.edges.map((e) => e.id)).toEqual(["e"]);
+  expect(dropped).toEqual({ dupNodes: 0, dupEdges: 0, dangling: 0 });
+});
+
 test("an edge with no id gets the bridge's own synthesised id", () => {
   const { doc } = toIngestDoc({ nodes: [page(A, "a"), page(B, "b")], edges: [{ from: A, to: B, type: "relation" }] });
   expect(doc.edges[0]?.id).toBe(`${A}->${B}:relation`);
