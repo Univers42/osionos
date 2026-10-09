@@ -184,8 +184,9 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
 
   useEffect(() => {
     if (!element) return;
-    const token = ++book.current.token;
-    const live = () => token === book.current.token;
+    const ledger = book.current;
+    const token = ++ledger.token;
+    const live = () => token === ledger.token;
     void (async () => {
       let graph: Awaited<ReturnType<typeof fetchBridgeGraph>>;
       try {
@@ -199,7 +200,10 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
       if (droppedTotal(dropped) > 0) {
         console.info(`[graph-studio] dropped ${dropped.dupNodes} duplicate node(s), ${dropped.dupEdges} duplicate edge(s), ${dropped.dangling} dangling edge(s)`);
       }
-      book.current.inFlight += 1;
+      // A refusal's twin graph-error from an earlier load is no longer expected.
+      ledger.refused = null;
+      ledger.inFlight += 1;
+      let refusal: string | null = null;
       try {
         const result = await element.loadGraph(doc);
         if (import.meta.env.DEV && result.notes.length > 0) {
@@ -207,20 +211,29 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
         }
         if (!live()) return;
         setView({ phase: "ready", nodes: result.nodes, edges: result.edges, dropped, signedIn: graph !== null });
-        const focus = takeGraphFocus();
+        // Only the Home graph takes a focus request; a graph_view block in a page never does.
+        const focus = fixedScope ? null : takeGraphFocus();
         if (focus && !(await element.focusNode(focus))) {
           useToastStore.getState().push({ kind: "info", title: "That page is not in this graph's scope" });
         }
       } catch (error) {
-        const message = messageOf(error);
-        if (book.current.seen !== message) book.current.refused = message;
-        if (live()) setView({ phase: "error", message });
+        refusal = messageOf(error);
+        if (live()) setView({ phase: "error", message: refusal });
       } finally {
-        book.current.inFlight -= 1;
-        book.current.seen = null;
+        ledger.inFlight -= 1;
+        const seen = ledger.seen;
+        ledger.seen = null;
+        // The element fires graph-error for a refused load as well as rejecting, in either
+        // order: the overlay reports it, so its twin is swallowed whichever comes second.
+        if (refusal === null && seen !== null) console.warn("[graph-studio] graph-error", { message: seen });
+        else if (refusal !== null && seen !== refusal && live()) ledger.refused = refusal;
       }
     })();
-  }, [element, scope, workspaceId, attempt]);
+    // Unmounted or superseded: a load still in flight must not touch the view or take a focus.
+    return () => {
+      ledger.token += 1;
+    };
+  }, [element, scope, workspaceId, attempt, fixedScope]);
 
   const pickScope = useCallback((next: GraphScope) => {
     saveGraphScope(next);
