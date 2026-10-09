@@ -48,7 +48,7 @@ import { SqlRunButton } from "@/features/sql-runner/ui/SqlRunButton";
 import { CodeGutter } from "@/entities/block/ui/CodeGutter";
 import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
-import { LegacyGraphViewBlock } from "@/widgets/legacy-graph-explorer/LegacyGraphViewBlock";
+import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
 import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
@@ -1045,7 +1045,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           aria-label="Graph block"
           className="relative my-0 h-full min-h-[336px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
         >
-          <LegacyGraphViewBlock fallback={null} />
+          <GraphViewBlock fallback={null} />
         </div>
       );
 
