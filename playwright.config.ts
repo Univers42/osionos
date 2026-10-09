@@ -51,6 +51,8 @@ const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1"
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  // tests/e2e/graph-studio-off is the gate-off build's own CI job (VITE_LEGACY_SECOND_BRAIN=false).
+  testIgnore: process.env.VITE_LEGACY_SECOND_BRAIN === "false" ? [] : ["**/graph-studio-off/**"],
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
