@@ -26,7 +26,14 @@ async function createPage(page, baseURL, title) {
   return active.id;
 }
 
+// The page's row in the sidebar tree: the page context menu (Open with …) lives there.
+function treeRow(page, title) {
+  return page.locator('button[title^="Double-click to rename"]', { hasText: title });
+}
+
 async function openFromRail(page) {
+  // The icon rail exists only while the sidebar is collapsed to it (sidebarRail.spec.mjs).
+  await page.getByRole("button", { name: "Collapse to rail" }).click();
   await page.getByRole("tablist", { name: "Activity bar" }).getByRole("tab", { name: "Home", exact: true }).click();
   await page.getByRole("menuitem", { name: "Second Brain" }).click();
 }
@@ -83,7 +90,7 @@ test("node-open on a page node opens that page in a tab", async ({ page, baseURL
 test('entry 7: "Open in graph" opens the new graph and focuses the page', async ({ page, baseURL }) => {
   await installStub(page);
   const id = await createPage(page, baseURL, "Focus Me");
-  await page.getByText("Focus Me", { exact: true }).first().click({ button: "right" });
+  await treeRow(page, "Focus Me").click({ button: "right" });
   await page.getByRole("menuitem", { name: "Open with" }).click();
   await page.getByRole("menuitem", { name: "Open in graph" }).click();
   await expectNewGraph(page.locator(VIEW));
@@ -98,7 +105,7 @@ test("entries 8/9/10: an ```osigraph fence becomes a graph_view block drawn by t
   await expectNewGraph(inEditor);
   await expect(inEditor.getByRole("group", { name: "Graph scope" }), "a block has a fixed scope").toHaveCount(0);
   // Raw mode previews the page with the read-only renderer (ReadOnlyBlock).
-  await page.getByText("Graph Block", { exact: true }).first().click({ button: "right" });
+  await treeRow(page, "Graph Block").click({ button: "right" });
   await page.getByRole("menuitem", { name: "Open with" }).click();
   await page.getByRole("menuitem", { name: "Open as raw markdown" }).click();
   await expectNewGraph(page.locator(`${VIEW}:not([aria-label="Graph block"] *)`).first());
