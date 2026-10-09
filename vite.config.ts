@@ -69,7 +69,7 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_ALLOW_OFFLINE_MODE': JSON.stringify(env.VITE_ALLOW_OFFLINE_MODE ?? ''),
       'import.meta.env.VITE_BAAS_URL': JSON.stringify(env.VITE_BAAS_URL ?? ''),
       // Build-time legacy second brain gate (src/shared/config/legacySecondBrain.ts):
-      // always a literal so Rollup can fold the gate and drop the legacy chunk.
+      // always a literal so Rollup can fold the gate and drop the legacy chunk. Unset = OFF.
       'import.meta.env.VITE_LEGACY_SECOND_BRAIN': JSON.stringify(env.VITE_LEGACY_SECOND_BRAIN ?? ''),
     },
     resolve: {
