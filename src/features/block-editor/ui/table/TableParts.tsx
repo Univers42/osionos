@@ -15,6 +15,10 @@ import { GripVertical } from "lucide-react";
 
 import type { TableBlockConfig, TableBlockTextAlign } from "@/entities/block";
 import { getTableAlignmentClassName, getTablePaddingClassName } from "@/entities/block/model/tableBlocks";
+import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
+import { usePageStore } from "@/store/usePageStore";
+import { parseInlineMarkdown } from "@osionos/markdown-engine";
+import { normalizeInlineLinkHref } from "@osionos/markdown-engine/inline";
 import type { CellCommit, CellFocusHandler, CellKeyHandler } from "./tableTypes";
 
 const CELL_PROPS = {
@@ -91,15 +95,124 @@ interface EditableTableCellProps {
   onFocus: CellFocusHandler;
 }
 
+const INTERNAL_PAGE_LINK_PREFIX = "page://";
+
+function getInternalPageIdFromHref(href: string): string | null {
+  return href.startsWith(INTERNAL_PAGE_LINK_PREFIX)
+    ? href.slice(INTERNAL_PAGE_LINK_PREFIX.length)
+    : null;
+}
+
+interface NavigablePage {
+  _id: string;
+  workspaceId: string;
+  databaseId?: string | null;
+  title: string;
+  icon?: string | null;
+}
+
+function openPageById(pageId: string | null | undefined): boolean {
+  if (!pageId) return false;
+  const page = usePageStore.getState().pageById(pageId) as NavigablePage | null;
+  if (!page) return false;
+  usePageStore.getState().openPage({
+    id: page._id,
+    workspaceId: page.workspaceId,
+    kind: page.databaseId ? "database" : "page",
+    title: page.title,
+    icon: page.icon ?? undefined,
+    databaseId: page.databaseId,
+  });
+  return true;
+}
+
+function renderCellHtml(value: string): string {
+  if (!value) return "";
+  return parseInlineMarkdown(value, {
+    editorChrome: true,
+    externalLinks: true,
+    resolveInternalLinkTitle: resolveInternalPageLinkTitle,
+  });
+}
+
 const EditableTableCell = React.memo(function EditableTableCell({ cellId, initialValue, rowIndex, columnIndex, alignment, onCommit, isHeader, onKeyDown, onFocus }: Readonly<EditableTableCellProps>) {
   const cellRef = useRef<HTMLDivElement | null>(null);
+  const initialValueRef = useRef(initialValue);
+
   useLayoutEffect(() => {
+    initialValueRef.current = initialValue;
     const node = cellRef.current;
-    if (node && document.activeElement !== node && node.textContent !== initialValue) node.textContent = initialValue;
+    if (!node || document.activeElement === node) return;
+    const targetHtml = renderCellHtml(initialValue);
+    if (node.innerHTML !== targetHtml) {
+      node.innerHTML = targetHtml;
+    }
   }, [cellId, initialValue]);
+
   // Event-time read of the uncontrolled contentEditable (onBlur/keydown —
   // never during render); the analyzer cannot prove call sites.
   const commitFromNode = useCallback((flush = false) => onCommit(cellRef.current?.textContent ?? "", flush), [onCommit]);
+
+  const handleFocus = useCallback(() => {
+    onFocus(cellId);
+    const node = cellRef.current;
+    if (node && node.firstElementChild !== null) {
+      node.textContent = initialValueRef.current;
+      const selection = globalThis.getSelection();
+      if (selection) {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    }
+  }, [cellId, onFocus]);
+
+  const handleBlur = useCallback(() => {
+    commitFromNode(true);
+    const node = cellRef.current;
+    if (node) {
+      const text = node.textContent ?? "";
+      node.innerHTML = renderCellHtml(text);
+    }
+  }, [commitFromNode]);
+
+  const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    if (event.metaKey || event.ctrlKey) {
+      return;
+    }
+    const anchor = target.closest("a[href]") as HTMLAnchorElement | null;
+    if (anchor) {
+      const href = anchor.getAttribute("href");
+      if (href) {
+        const normalizedHref = normalizeInlineLinkHref(href);
+        const internalPageId = getInternalPageIdFromHref(normalizedHref);
+        if (internalPageId) {
+          if (openPageById(internalPageId)) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        globalThis.open(normalizedHref, "_blank", "noopener,noreferrer");
+        return;
+      }
+    }
+    const mention = target.closest(".page-mention-placeholder") as HTMLElement | null;
+    if (mention) {
+      const pageId = mention.dataset.pageId;
+      if (openPageById(pageId)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }
+  }, []);
+
   // onInput/onBlur call commitFromNode — an event-time contentEditable read
   // (never during render); the analyzer anchors its diagnostic here.
   // eslint-disable-next-line react-hooks/refs
@@ -110,9 +223,10 @@ const EditableTableCell = React.memo(function EditableTableCell({ cellId, initia
     "data-table-cell-id": cellId,
     className: ["min-h-8 w-full bg-transparent outline-none", "whitespace-pre-wrap break-words", getTableAlignmentClassName(alignment), isHeader ? "font-medium" : ""].join(" "),
     onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => onKeyDown(event, rowIndex, columnIndex),
-    onFocus: () => onFocus(cellId),
+    onFocus: handleFocus,
+    onBlur: handleBlur,
     onInput: () => commitFromNode(false),
-    onBlur: () => commitFromNode(true),
+    onMouseDown: handleMouseDown,
   });
 }, areCellsEqual);
 
