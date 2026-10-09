@@ -48,9 +48,20 @@ const testPort = parsePositiveInt(process.env.PLAYWRIGHT_PORT) ?? 3004;
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${testPort}`;
 const configuredWorkers = parsePositiveInt(process.env.TEST_WORKERS);
 const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1";
+// The build-time legacy second brain gate (src/shared/config/legacySecondBrain.ts), default
+// OFF. A default build runs tests/e2e/graph-studio-off; a VITE_LEGACY_SECOND_BRAIN=true build
+// (CI's gate-on job) runs the specs that need the legacy view instead.
+const legacySecondBrainOn = process.env.VITE_LEGACY_SECOND_BRAIN === "true";
+const LEGACY_ON_SPECS = [
+  "legacy-second-brain-gate.spec.mjs",
+  "legacy-graph-engine-audit.spec.mjs",
+  "legacy-graph-engine-visual.spec.mjs",
+  "legacy-graph-semantic-zoom.spec.mjs",
+];
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  testIgnore: legacySecondBrainOn ? ["**/graph-studio-off/**"] : LEGACY_ON_SPECS.map((spec) => `**/${spec}`),
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,

@@ -51,7 +51,7 @@ export const PagePropertiesPanel: React.FC<Props> = ({
   if (properties.length === 0 && !editable) return null;
 
   return (
-    <div role="group" aria-label="Page properties" className="osionos-page-properties mt-1 flex flex-col gap-0.5">
+    <div role="group" aria-label="Page properties" className="mt-1 flex flex-col gap-0.5">
       {properties.map((property) => (
         <PagePropertyRow
           key={property.key}

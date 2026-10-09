@@ -10,9 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { baasConfigured } from "@/features/second-brain/baas/baasFetch";
-import { configuredResources, fetchGraphOverview } from "@/features/second-brain/baas/baasGraphClient";
-import type { BaasGraphNode } from "@/features/second-brain/baas/types";
+import { baasConfigured } from "@/features/legacy-second-brain/baas/baasFetch";
+import { configuredResources, fetchGraphOverview } from "@/features/legacy-second-brain/baas/baasGraphClient";
+import type { BaasGraphNode } from "@/features/legacy-second-brain/baas/types";
 
 export interface DatabaseTable {
   table: string;

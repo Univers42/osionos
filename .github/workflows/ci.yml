@@ -192,16 +192,125 @@ jobs:
             test-results
           if-no-files-found: ignore
 
+  # The legacy second brain gate defaults OFF, so the default shards already run the
+  # graph_render suite (tests/e2e/graph-studio-off). This job builds with the gate ON
+  # (the developer backup) and runs the specs that need the legacy view; playwright.config
+  # ignores them in a default build.
+  test-legacy-on:
+    name: Browser tests (gate on, legacy second brain)
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "1"
+      TEST_WORKERS: 2
+      VITE_LEGACY_SECOND_BRAIN: "true"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run the gate-on legacy second brain specs
+        run: |
+          docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up -d --wait mongodb
+          docker compose -f docker-compose.base.yml -f docker-compose.dev.yml run --rm --no-deps \
+            browser-tests pnpm exec playwright test \
+              tests/e2e/legacy-second-brain-gate.spec.mjs \
+              tests/e2e/legacy-graph-engine-audit.spec.mjs \
+              tests/e2e/legacy-graph-engine-visual.spec.mjs \
+              tests/e2e/legacy-graph-semantic-zoom.spec.mjs
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-legacy-on
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
+  # The production bundle (Dockerfile.prod's builder stage) must hold no legacy second brain
+  # when built by default, and must still hold it when built with the gate ON: the ON build
+  # is the control that proves the grep would see the legacy code if it were there.
+  bundle-legacy-gate:
+    name: Bundle legacy second brain (gate ${{ matrix.gate == 'true' && 'on' || 'default' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: ["", "true"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build the production bundle
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/services/node/Dockerfile.prod
+          target: builder
+          load: true
+          push: false
+          tags: osionos-bundle:ci
+          build-args: VITE_LEGACY_SECOND_BRAIN=${{ matrix.gate }}
+          cache-from: type=gha,scope=osionos-prod
+
+      - name: Count legacy second brain strings in the bundle
+        env:
+          GATE: ${{ matrix.gate }}
+        run: |
+          set -euo pipefail
+          # The needles, as groot's tests/graph-studio/second-brain.bats: two legacy strings
+          # and the graph_render host's meta name. Each exists in source, so a zero below is
+          # not vacuous.
+          grep -rq 'osio-sb-graph-snapshot' src/features/legacy-second-brain
+          grep -rq 'osio-graph__fg' packages/legacy-graph-engine/src
+          grep -rq 'graph-studio-base' src/features/graph-studio
+          # Plain node in the builder image walks the bundle (its busybox grep has no
+          # --include); a missing build dir fails the step instead of reading as 0 matches.
+          out=$(docker run --rm -v "$PWD/scripts:/checks:ro" --entrypoint node osionos-bundle:ci \
+            /checks/count-bundle-strings.mjs build osio-sb-graph-snapshot osio-graph__fg graph-studio-base)
+          echo "gate=${GATE:-unset}: $out"
+          files=$(jq -e '.files' <<<"$out")
+          legacy=$(jq -e '.counts["osio-sb-graph-snapshot"] + .counts["osio-graph__fg"]' <<<"$out")
+          host=$(jq -e '.counts["graph-studio-base"]' <<<"$out")
+          test "$files" -gt 0
+          if [ "$GATE" = "true" ]; then
+            test "$legacy" -gt 0
+          else
+            test "$legacy" -eq 0
+            test "$host" -gt 0
+          fi
+
   # Single required status for the whole sharded suite. `needs.test.result` is the AGGREGATE
   # of the matrix: it is only 'success' when all 6 shards succeeded. A skipped or cancelled
   # shard is therefore a failure here, not a silent pass.
   test-gate:
     name: Browser tests
-    needs: test
+    needs: [test, test-legacy-on, bundle-legacy-gate]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Require every shard to have succeeded
+      - name: Require every shard, the gate-on job and the bundle check to have succeeded
+        env:
+          SHARDS_RESULT: ${{ needs.test.result }}
+          GATE_ON_RESULT: ${{ needs.test-legacy-on.result }}
+          BUNDLE_RESULT: ${{ needs.bundle-legacy-gate.result }}
         run: |
-          echo "shard matrix result: ${{ needs.test.result }}"
-          test "${{ needs.test.result }}" = "success"
+          echo "shards: $SHARDS_RESULT; gate-on legacy: $GATE_ON_RESULT; bundle legacy gate: $BUNDLE_RESULT"
+          test "$SHARDS_RESULT" = "success"
+          test "$GATE_ON_RESULT" = "success"
+          test "$BUNDLE_RESULT" = "success"

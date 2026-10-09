@@ -65,9 +65,10 @@ void import("@/widgets/page-renderer/ui/MainContent");
 function initialSurfaceUsesEditor(): boolean {
   if (globalThis.window === undefined) return false;
   const linked = new URLSearchParams(globalThis.location.search).get("home");
+  // "graph" is a graph surface in every build (legacy or graph_render), never the editor.
   if (linked) return linked === "dashboard";
   const stored = globalThis.localStorage?.getItem("osionos.home.variant");
-  return stored !== "graph" && stored !== "database";
+  return stored !== "database" && stored !== "graph";
 }
 
 if (initialSurfaceUsesEditor()) {
