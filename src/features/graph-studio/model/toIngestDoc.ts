@@ -164,6 +164,8 @@ export function toIngestDoc(graph: BridgeGraph | null | undefined): Adapted {
   }
   const edges = new Map<string, IngestEdge>();
   for (const edge of graph?.edges ?? []) {
+    // A hole in the array is not an edge; nodes skip theirs the same way.
+    if (!edge) continue;
     const shaped = toEdge(edge);
     if (edges.has(shaped.id)) dropped.dupEdges += 1;
     else if (!nodes.has(shaped.source) || !nodes.has(shaped.target)) dropped.dangling += 1;
