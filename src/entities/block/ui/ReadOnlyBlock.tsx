@@ -30,7 +30,7 @@ import { timed } from '@osionos/perf-probe';
 import { InternalPageLink } from "@/entities/page";
 import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
 import { usePageStore } from "@/store/usePageStore";
-import { LegacyGraphViewBlock } from "@/widgets/legacy-graph-explorer/LegacyGraphViewBlock";
+import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 
 // Async boundary: database blocks are rare in rendered pages. Loading the
 // database view lazily (deep path, not the barrel) keeps the read-only
@@ -467,7 +467,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "graph_view":
       return (
         <div className="my-3 h-full min-h-[336px] overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
-          <LegacyGraphViewBlock fallback={databaseLoadingFallback} />
+          <GraphViewBlock fallback={databaseLoadingFallback} />
         </div>
       );
 

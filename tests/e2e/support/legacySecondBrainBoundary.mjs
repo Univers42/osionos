@@ -13,8 +13,8 @@ const LEGACY_IMPORT = /(?:from|import\()\s*["']([^"']*(?:legacy-second-brain|leg
 
 export const ALLOWED_IMPORTS = {
   "src/widgets/page-renderer/ui/HomeTabView.tsx": ["@/widgets/legacy-graph-explorer/lazy"], // gated: null when off
-  "src/entities/block/ui/ReadOnlyBlock.tsx": ["@/widgets/legacy-graph-explorer/LegacyGraphViewBlock"], // gated
-  "src/features/block-editor/ui/BlockEditor.tsx": ["@/widgets/legacy-graph-explorer/LegacyGraphViewBlock"], // gated
+  // gated: the graph_view block body for both the editor and the read-only renderer
+  "src/widgets/graph-studio-view/GraphViewBlock.tsx": ["@/widgets/legacy-graph-explorer/LegacyGraphViewBlock"],
   // Old Home "Database" browser (not second brain): reuses the baas client, has no
   // importer since 80f58f2, so it is not reachable either.
   "src/widgets/home-variants/model/baasDatabaseData.ts": [
