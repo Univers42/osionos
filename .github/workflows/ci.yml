@@ -273,22 +273,25 @@ jobs:
           GATE: ${{ matrix.gate }}
         run: |
           set -euo pipefail
-          # The needles exist in source, so a zero below is not vacuous.
+          # The needles, as groot's tests/graph-studio/second-brain.bats: two legacy strings
+          # and the graph_render host's meta name. Each exists in source, so a zero below is
+          # not vacuous.
           grep -rq 'osio-sb-graph-snapshot' src/features/legacy-second-brain
           grep -rq 'osio-graph__fg' packages/legacy-graph-engine/src
-          count() {
-            docker run --rm --entrypoint sh osionos-bundle:ci -c \
-              "grep -rhoE --include='*.js' --include='*.css' --include='*.html' '$1' build | wc -l"
-          }
-          legacy=$(count 'osio-sb-graph-snapshot|osio-graph__fg')
-          explorer=$(count 'LegacyGraphEngineExplorer')
-          host=$(count 'graph-studio-base')
-          echo "gate=${GATE:-unset}: legacy needles=${legacy} LegacyGraphEngineExplorer=${explorer} graph-studio-base=${host}"
+          grep -rq 'graph-studio-base' src/features/graph-studio
+          # Plain node in the builder image walks the bundle (its busybox grep has no
+          # --include); a missing build dir fails the step instead of reading as 0 matches.
+          out=$(docker run --rm -v "$PWD/scripts:/checks:ro" --entrypoint node osionos-bundle:ci \
+            /checks/count-bundle-strings.mjs build osio-sb-graph-snapshot osio-graph__fg graph-studio-base)
+          echo "gate=${GATE:-unset}: $out"
+          files=$(jq -e '.files' <<<"$out")
+          legacy=$(jq -e '.counts["osio-sb-graph-snapshot"] + .counts["osio-graph__fg"]' <<<"$out")
+          host=$(jq -e '.counts["graph-studio-base"]' <<<"$out")
+          test "$files" -gt 0
           if [ "$GATE" = "true" ]; then
             test "$legacy" -gt 0
           else
             test "$legacy" -eq 0
-            test "$explorer" -eq 0
             test "$host" -gt 0
           fi
 
