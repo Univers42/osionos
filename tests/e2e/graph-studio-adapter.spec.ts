@@ -11,6 +11,7 @@ import {
   type IngestDoc,
   pageIdOf,
   pageNodeId,
+  recordRefOf,
   toIngestDoc,
 } from "../../src/features/graph-studio/model/toIngestDoc.ts";
 
@@ -96,6 +97,21 @@ test("T8: page ids round-trip; tag, record and folder-less ids are not pages", (
   expect(pageIdOf("osionos:tags:work")).toBeNull();
   expect(pageIdOf("db1:orders:osionos_pages:1")).toBeNull();
   expect(pageIdOf("osionos:osionos_pages:")).toBeNull();
+});
+
+test("a record node names its record; a page, folder, tag or malformed id is no record", () => {
+  expect(recordRefOf("db1:orders:1234")).toEqual({ dbId: "db1", table: "orders", pk: "1234" });
+  // A composite key keeps its own colons, as the database view's live ids do.
+  expect(recordRefOf("db1:order_items:7:2")).toEqual({ dbId: "db1", table: "order_items", pk: "7:2" });
+  expect(recordRefOf(pageNodeId("aaaaaaaa-0000-4000-8000-000000000001"))).toBeNull();
+  expect(recordRefOf("osionos:folders:f1")).toBeNull();
+  expect(recordRefOf("osionos:tags:work")).toBeNull();
+  expect(recordRefOf("db1:tags:work")).toBeNull();
+  expect(recordRefOf("osionos:orders:1")).toBeNull();
+  expect(recordRefOf("db1:orders:")).toBeNull();
+  expect(recordRefOf("db1::1")).toBeNull();
+  expect(recordRefOf(":orders:1")).toBeNull();
+  expect(recordRefOf("db1")).toBeNull();
 });
 
 test("T9: no graph, or an empty one, is a valid empty document", () => {

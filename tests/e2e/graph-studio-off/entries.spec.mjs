@@ -4,6 +4,8 @@
 // vite dev, so React StrictMode mounts each view twice. The element is a stub
 // (./support.mjs); groot's CI checks the real one.
 
+import { randomUUID } from "node:crypto";
+
 import { expect, test } from "@playwright/test";
 
 import { activateFirstEditor, clearAndTypePageTitle, openFreshPage, pageTitleEditor, pasteText, waitForRenderStability } from "../../browser/core/app.mjs";
@@ -85,6 +87,81 @@ test("node-open on a page node opens that page in a tab", async ({ page, baseURL
     el.dispatchEvent(new CustomEvent("node-open", { bubbles: true, composed: true, detail: { id: nodeId, via: "enter" } }));
   }, `osionos:osionos_pages:${id}`);
   await expect(page.locator('textarea[aria-label="Page title"]:visible').first()).toHaveValue("Graph Target", { timeout: 15_000 });
+});
+
+/**
+ * Stands in for the bridge at the app's own api client (the offline build has none): GET
+ * `/api/pages/<id>` and POST `/api/records/…/open` answer with an entry the page store has
+ * never held, built on the open page's workspace and owner so the session may read it. Every
+ * other call goes to the real client. Returns what the fake was asked for.
+ */
+async function serveFromFakeBridge(page, routes) {
+  await page.evaluate(async (served) => {
+    const { api } = await import("/src/shared/api/client.ts");
+    const { usePageStore } = await import("/src/store/usePageStore.ts");
+    const open = usePageStore.getState().activePage;
+    const template = usePageStore.getState().pageById(open.id);
+    const entry = (fake) => ({ ...template, parentPageId: null, ...fake });
+    const calls = (globalThis.__fakeBridgeCalls = []);
+    const real = { get: api.get, post: api.post };
+    api.get = (path, ...rest) => {
+      calls.push(`GET ${path}`);
+      return served.get[path] ? Promise.resolve(entry(served.get[path])) : real.get(path, ...rest);
+    };
+    api.post = (path, ...rest) => {
+      calls.push(`POST ${path}`);
+      return served.post[path] ? Promise.resolve(entry(served.post[path])) : real.post(path, ...rest);
+    };
+  }, routes);
+}
+
+async function openNode(page, nodeId) {
+  await page.locator(`${VIEW} graph-studio`).evaluate((el, id) => {
+    el.dispatchEvent(new CustomEvent("node-open", { bubbles: true, composed: true, detail: { id, via: "enter" } }));
+  }, nodeId);
+}
+
+function storeHas(page, pageId) {
+  return page.evaluate(async (id) => {
+    const { usePageStore } = await import("/src/store/usePageStore.ts");
+    return usePageStore.getState().pageById(id) != null;
+  }, pageId);
+}
+
+test("node-open on a page only the bridge holds opens it with its content, not a Loading pane", async ({ page, baseURL }) => {
+  await installStub(page);
+  await createPage(page, baseURL, "Graph Host Page");
+  const id = randomUUID();
+  const body = "This body lives only on the bridge";
+  await serveFromFakeBridge(page, {
+    get: { [`/api/pages/${id}`]: { _id: id, title: "Server Only Page", content: [{ id: "srv-b1", type: "paragraph", content: body }] } },
+    post: {},
+  });
+  expect(await storeHas(page, id), "the page is not in the client store").toBe(false);
+  await openFromRail(page);
+  await expectNewGraph(page.locator(VIEW));
+  await openNode(page, `osionos:osionos_pages:${id}`);
+  await expect(page.locator('textarea[aria-label="Page title"]:visible').first()).toHaveValue("Server Only Page", { timeout: 15_000 });
+  await expect(page.getByText(body)).toBeVisible();
+  expect(await page.evaluate(() => globalThis.__fakeBridgeCalls)).toContain(`GET /api/pages/${id}`);
+});
+
+test("node-open on a database record opens the record's note, as the legacy graph did", async ({ page, baseURL }) => {
+  await installStub(page);
+  await createPage(page, baseURL, "Graph Record Host");
+  const noteId = randomUUID();
+  const body = "Note behind order 42";
+  const openPath = "/api/records/db1/orders/42/open";
+  await serveFromFakeBridge(page, {
+    get: {},
+    post: { [openPath]: { _id: noteId, title: "Order 42", content: [{ id: "rec-b1", type: "paragraph", content: body }] } },
+  });
+  await openFromRail(page);
+  await expectNewGraph(page.locator(VIEW));
+  await openNode(page, "db1:orders:42");
+  await expect(page.locator('textarea[aria-label="Page title"]:visible').first()).toHaveValue("Order 42", { timeout: 15_000 });
+  await expect(page.getByText(body)).toBeVisible();
+  expect(await page.evaluate(() => globalThis.__fakeBridgeCalls)).toContain(`POST ${openPath}`);
 });
 
 test('entry 7: "Open in graph" opens the new graph and focuses the page', async ({ page, baseURL }) => {
