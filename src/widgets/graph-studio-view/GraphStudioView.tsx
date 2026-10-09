@@ -135,7 +135,9 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
         const el = document.createElement(GRAPH_STUDIO_TAG) as StudioElement;
         el.setAttribute("wasm", `${pack.base}graph_wasm.wasm`);
         el.setAttribute("fixtures", `${pack.base}fixtures/`);
-        el.style.cssText = "display:block;width:100%;height:100%";
+        // Pinned to the host, not sized by percentages: a graph_view block's host has only
+        // a min-height, so height:100% would resolve to 0 there.
+        el.style.cssText = "display:block;position:absolute;inset:0";
         host.appendChild(el);
         if (el.hostApi !== HOST_API) {
           el.remove();
