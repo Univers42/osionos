@@ -1,6 +1,6 @@
 /**
  * Tiny pure math helpers shared across the draw engine. No dependencies, no DOM.
- * (Lifted from @osionos/graph-engine — same primitives, one copy per package to
+ * (Lifted from @osionos/legacy-graph-engine — same primitives, one copy per package to
  * keep the core self-contained and the import firewall clean.)
  */
 

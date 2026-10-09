@@ -15,9 +15,12 @@ import { create } from "zustand";
 export type HomeVariant = "dashboard" | "graph" | "database" | "workspace";
 
 const STORAGE_KEY = "osionos.home.variant";
+// "graph" is valid in every build: HomeTabView draws the legacy second brain when the
+// build-time gate is on and the graph_render graph when it is off, so a ?home=graph link,
+// a stored choice or a setVariant("graph") caller always lands on a graph.
 const VALID: HomeVariant[] = ["dashboard", "graph", "database", "workspace"];
 
-const isVariant = (value: string | null): value is HomeVariant =>
+export const isVariant = (value: string | null): value is HomeVariant =>
   value !== null && (VALID as string[]).includes(value);
 
 function initialVariant(): HomeVariant {
@@ -44,6 +47,7 @@ interface HomeVariantState {
 export const useHomeVariantStore = create<HomeVariantState>((set) => ({
   variant: initialVariant(),
   setVariant: (variant) => {
+    if (!isVariant(variant)) return;
     if (globalThis.window !== undefined) {
       globalThis.localStorage.setItem(STORAGE_KEY, variant);
     }

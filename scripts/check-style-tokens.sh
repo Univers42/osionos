@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 
 # Scan ALL app-authored CSS/SCSS, EXCLUDING:
 #   - src/app/styles/**   token-definition files (global.css holds the canonical
-#                         hex/rgba values, incl. the graph-engine/canvas blocks)
+#                         hex/rgba values, incl. the legacy-graph-engine/canvas blocks)
 #   - vendored trees      notion-database-sys & lib/markengine (own quality gates)
 mapfile -d '' FILES < <(
   find src \

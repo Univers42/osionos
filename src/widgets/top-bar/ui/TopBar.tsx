@@ -50,20 +50,24 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
         <PanelLeft size={16} aria-hidden />
       </button>
 
-      <span className="flex shrink-0 select-none items-center gap-1.5 pl-1 pr-1.5" aria-label="osionos">
+      <span className="hidden md:flex shrink-0 select-none items-center gap-1.5 pl-1 pr-1.5" aria-label="osionos">
         <span aria-hidden className="h-4 w-4 rounded-[5px] bg-[var(--osio-accent)]" />
         <span className="text-sm font-semibold tracking-tight text-[var(--osio-fg-default)]">osionos</span>
       </span>
 
-      <TopBarMenu groups={menus} />
+      <div className="hidden md:block">
+        <TopBarMenu groups={menus} />
+      </div>
 
       <div className="flex min-w-0 flex-1 justify-center px-3">
         <TopBarSearch commands={commands} />
       </div>
 
-      <SharedSpacePresenceBar />
-      <QuickCaptureButton />
-      <UpdateButton />
+      <div className="hidden sm:flex items-center gap-1">
+        <SharedSpacePresenceBar />
+        <QuickCaptureButton />
+        <UpdateButton />
+      </div>
       <WindowControls />
     </header>
   );

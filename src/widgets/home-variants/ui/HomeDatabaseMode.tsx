@@ -13,7 +13,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Database, Table2, Layers } from "lucide-react";
 
-import { baasConfigured } from "@/features/second-brain/baas/baasFetch";
+import { baasConfigured } from "@/features/legacy-second-brain/baas/baasFetch";
 import { fetchDatabaseCatalog, tableColumns, type DatabaseMount } from "../model/baasDatabaseData";
 import { Centered, PaneHeader, PickButton, RecordsTable } from "./DatabaseBrowserParts";
 

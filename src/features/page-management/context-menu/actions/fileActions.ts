@@ -22,6 +22,8 @@ import {
 import { useUserStore } from "@/features/auth";
 import { usePageConfigStore } from "@/shared/config/pageConfigStore";
 import { useHomeVariantStore } from "@/widgets/home-variants/model/homeVariantStore";
+import { LEGACY_SECOND_BRAIN_ENABLED } from "@/shared/config/legacySecondBrain";
+import { pageNodeId, requestGraphFocus } from "@/features/graph-studio";
 import { useShareTarget } from "@/features/share/useShareTarget";
 import { pageEntryToTab } from "@/widgets/workspace-grid/model/pageToTab";
 import type { ActivePageKind, PageEntry } from "@/entities/page";
@@ -76,6 +78,33 @@ function pageDeepLink(pageId: string): string {
   return url.toString();
 }
 
+const OPEN_IN_LEGACY_GRAPH: PageMenuAction = {
+  id: "open-graph", label: "Open in graph", icon: Network, scope: "file",
+  run: (ctx) => {
+    useHomeVariantStore.getState().setVariant("graph");
+    ctx.layout.getState().openTab({
+      tabId: `tab-home-${Date.now()}`,
+      pageId: "__home__", workspaceId: ctx.workspaceId,
+      kind: "home", title: "Second Brain", icon: "icon:home", databaseId: null,
+    });
+    ctx.toast({ kind: "info", title: `Focused "${ctx.page.title || "Untitled"}" in the graph` });
+  },
+};
+
+// Gate-off builds: the same entry opens the graph_render graph and really focuses the page.
+const OPEN_IN_GRAPH: PageMenuAction = {
+  id: "open-graph", label: "Open in graph", icon: Network, scope: "file",
+  run: (ctx) => {
+    requestGraphFocus(pageNodeId(ctx.page._id));
+    useHomeVariantStore.getState().setVariant("graph");
+    ctx.layout.getState().openTab({
+      tabId: `tab-home-${Date.now()}`,
+      pageId: "__home__", workspaceId: ctx.workspaceId,
+      kind: "home", title: "Second Brain", icon: "icon:home", databaseId: null,
+    });
+  },
+};
+
 const OPEN_WITH: PageMenuAction[] = [
   {
     id: "open", label: "Open", icon: FileText, scope: "file",
@@ -89,18 +118,8 @@ const OPEN_WITH: PageMenuAction[] = [
       void usePageConfigStore.getState().updateConfig(userId, ctx.page._id, { rawMode: true });
     },
   },
-  {
-    id: "open-graph", label: "Open in graph", icon: Network, scope: "file",
-    run: (ctx) => {
-      useHomeVariantStore.getState().setVariant("graph");
-      ctx.layout.getState().openTab({
-        tabId: `tab-home-${Date.now()}`,
-        pageId: "__home__", workspaceId: ctx.workspaceId,
-        kind: "home", title: "Second Brain", icon: "icon:home", databaseId: null,
-      });
-      ctx.toast({ kind: "info", title: `Focused "${ctx.page.title || "Untitled"}" in the graph` });
-    },
-  },
+  // The legacy second brain when the build-time gate is on, the graph_render graph when off.
+  ...(LEGACY_SECOND_BRAIN_ENABLED ? [OPEN_IN_LEGACY_GRAPH] : [OPEN_IN_GRAPH]),
 ];
 
 export const FILE_ACTIONS: PageMenuAction[] = [

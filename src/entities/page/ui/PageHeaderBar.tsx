@@ -199,8 +199,8 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
   }
 
   return (
-    <div className="sticky top-0 z-[var(--osio-z-raised)] flex h-11 w-full items-center border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
-      <div className="flex w-full items-center justify-between px-4">
+    <div className="sticky top-0 z-[var(--osio-z-raised)] flex h-11 w-full min-w-0 items-center border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
+      <div className="flex w-full min-w-0 items-center justify-between px-4">
         <div className="min-w-0 flex-1 overflow-hidden">
           <PageBreadcrumbs pageId={pageId} onOpenHome={openPageActionsHome} />
         </div>

@@ -25,11 +25,11 @@ run_inside_container() {
     # Monaco's ESM tree (~2.5k modules) pushed `vite build` past Node's default ~2 G
     # heap ("Ineffective mark-compacts near heap limit", measured 2026-09-19); 3 G
     # is enough with room, and stays under this VM's 7.5 G with the stack running.
-    build) exec sh -c 'pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build' ;;
+    build) exec sh -c 'pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build' ;;
     # Offline-mode prod bundle for the perf benches (same env as the Playwright webServer).
     build-offline) exec sh -c 'VITE_API_URL= VITE_REQUIRE_BRIDGE_SESSION=false VITE_ALLOW_OFFLINE_MODE=true VITE_BAAS_URL= VITE_BAAS_API_KEY= VITE_BAAS_LIVE_MOUNTS= NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build' ;;
     preview) exec pnpm exec vite preview --host 0.0.0.0 "$@" ;;
-    typecheck) exec sh -c 'pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit' ;;
+    typecheck) exec sh -c 'pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit' ;;
     lint) exec pnpm exec eslint src/ packages/ --max-warnings=0 "$@" ;;
     lint-fix) exec pnpm exec eslint src/ packages/ --fix "$@" ;;
     test-e2e) exec pnpm exec playwright test "$@" ;;
@@ -42,7 +42,7 @@ run_inside_container() {
     mcp-claude) exec node scripts/osionos-mcp-server.mjs "$@" ;;
     lighthouse) exec node scripts/lighthouse.mjs "$@" ;;
     bench-layout) exec node scripts/layout-bench.mjs "$@" ;;
-    quality) pnpm exec tsc -p packages/graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ --max-warnings=0 "$@" && bash scripts/check-markdown-engine-boundary.sh && bash scripts/check-ui-token-contract.sh && exec bash scripts/check-style-tokens.sh ;;
+    quality) pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ --max-warnings=0 "$@" && bash scripts/check-markdown-engine-boundary.sh && bash scripts/check-ui-token-contract.sh && exec bash scripts/check-style-tokens.sh ;;
     *) echo "Unknown docker-run command: ${COMMAND}" >&2; exit 2 ;;
   esac
 }
