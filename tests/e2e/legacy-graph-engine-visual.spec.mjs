@@ -16,8 +16,8 @@
 // view's canvas mounts, so it stays green in normal CI.
 //
 // To run with a capture:
-//   (the legacy view is on by default; VITE_LEGACY_SECOND_BRAIN=false removes it)
-//   docker compose ... run --rm --no-deps browser-tests \
+//   (the legacy view is off by default; build with VITE_LEGACY_SECOND_BRAIN=true)
+//   VITE_LEGACY_SECOND_BRAIN=true docker compose ... run --rm --no-deps browser-tests \
 //     pnpm exec playwright test tests/e2e/legacy-graph-engine-visual.spec.mjs
 
 import { expect, test } from "@playwright/test";

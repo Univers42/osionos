@@ -1,8 +1,14 @@
-// VITE_LEGACY_SECOND_BRAIN defaults ON, so the default test build must still open
-// the legacy graph through both Home entry points. Unlike the legacy-graph-*
-// specs, these never skip: a canvas that fails to mount is a failure.
+// VITE_LEGACY_SECOND_BRAIN defaults OFF; a build with it set to "true" is the developer
+// backup, and it must still open the legacy graph through both Home entry points. CI's
+// gate-on job runs this file (playwright.config ignores it in a default build). Unlike the
+// legacy-graph-* specs, these never skip: a canvas that fails to mount is a failure.
 
 import { expect, test } from "@playwright/test";
+
+test.beforeAll(() => {
+  // Not a skip: this file only means something in a gate-on build.
+  expect(process.env.VITE_LEGACY_SECOND_BRAIN, "run this file with VITE_LEGACY_SECOND_BRAIN=true").toBe("true");
+});
 
 const GRAPH_CANVAS = "canvas.osio-graph__fg";
 
