@@ -1,19 +1,22 @@
-// Gate-off build (VITE_LEGACY_SECOND_BRAIN=false): every second-brain entry point opens
-// the graph_render graph instead of the legacy one, and the host keeps the element's
-// rules. Runs in its own CI job (playwright.config ignores this folder otherwise), on
-// vite dev, so React StrictMode mounts each view twice. The element is a stub
-// (./support.mjs); groot's CI checks the real one.
+// Gate-off build (the default; VITE_LEGACY_SECOND_BRAIN unset): every second-brain entry
+// point opens the graph_render graph instead of the legacy one, and the host keeps the
+// element's rules. Runs in the default shards (playwright.config ignores this folder only
+// in a gate-on build), on vite dev, so React StrictMode mounts each view twice. The element
+// is a stub (./support.mjs); groot's CI checks the real one.
 
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 
 import { expect, test } from "@playwright/test";
 
 import { activateFirstEditor, clearAndTypePageTitle, openFreshPage, pageTitleEditor, pasteText, waitForRenderStability } from "../../browser/core/app.mjs";
 import { BASE, VIEW, expectNewGraph, installStub, stubLog } from "./support.mjs";
 
+const LEGACY_CANVAS = "canvas.osio-graph__fg";
+
 test.beforeAll(() => {
   // Not a skip: this folder only means something in a gate-off build.
-  expect(process.env.VITE_LEGACY_SECOND_BRAIN, "run this folder with VITE_LEGACY_SECOND_BRAIN=false").toBe("false");
+  expect(process.env.VITE_LEGACY_SECOND_BRAIN, "this folder is for a gate-off build").not.toBe("true");
 });
 
 async function createPage(page, baseURL, title) {
@@ -45,7 +48,7 @@ test("entry 1: rail Home → Second Brain opens the new graph", async ({ page, b
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
   await openFromRail(page);
   await expectNewGraph(page.locator(VIEW));
-  await expect(page.locator("canvas.osio-graph__fg")).toHaveCount(0);
+  await expect(page.locator(LEGACY_CANVAS)).toHaveCount(0);
 });
 
 test("entry 2: ?home=graph opens the new graph", async ({ page }) => {
@@ -186,6 +189,36 @@ test("entries 8/9/10: an ```osigraph fence becomes a graph_view block drawn by t
   await page.getByRole("menuitem", { name: "Open with" }).click();
   await page.getByRole("menuitem", { name: "Open as raw markdown" }).click();
   await expectNewGraph(page.locator(`${VIEW}:not([aria-label="Graph block"] *)`).first());
+  await expect(page.locator(LEGACY_CANVAS), "a graph_view block draws no legacy graph").toHaveCount(0);
+});
+
+// Every runtime override a user holds: each ?osio.* feature flag (FeatureFlagName in
+// featureFlags.ts) on, plus the gate's own variable through the URL and localStorage. The
+// gate is fixed at build time, so none of them may bring the legacy graph back.
+const FLAG_NAMES = [...fs.readFileSync(new URL("../../../src/shared/config/featureFlags.ts", import.meta.url), "utf8")
+  .matchAll(/\|\s*"(osio\.[\w.]+)"/g)].map((match) => match[1]);
+const EVERY_OVERRIDE = [...FLAG_NAMES.map((name) => `${name}=1`), "VITE_LEGACY_SECOND_BRAIN=true", "legacySecondBrain=1"].join("&");
+
+async function overrideEverything(page) {
+  await page.addInitScript((names) => {
+    for (const name of names) localStorage.setItem(name, "1");
+    localStorage.setItem("VITE_LEGACY_SECOND_BRAIN", "true");
+  }, FLAG_NAMES);
+}
+
+test("default build: ?home=graph and a stored graph variant stay on the new graph under every user override", async ({ page }) => {
+  expect(FLAG_NAMES.length, "featureFlags.ts names its flags (the override list is not empty)").toBeGreaterThan(10);
+  await installStub(page);
+  await overrideEverything(page);
+
+  await page.goto(`/?home=graph&graphBench=200&${EVERY_OVERRIDE}`, { waitUntil: "domcontentloaded" });
+  await expectNewGraph(page.locator(VIEW));
+  await expect(page.locator(LEGACY_CANVAS), "?home=graph").toHaveCount(0);
+
+  await page.evaluate(() => localStorage.setItem("osionos.home.variant", "graph"));
+  await page.goto(`/?${EVERY_OVERRIDE}#${EVERY_OVERRIDE}`, { waitUntil: "domcontentloaded" });
+  await expectNewGraph(page.locator(VIEW));
+  await expect(page.locator(LEGACY_CANVAS), "a stored graph variant").toHaveCount(0);
 });
 
 test("a refused load is shown once and not reported again from graph-error", async ({ page }) => {
