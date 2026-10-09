@@ -21,20 +21,17 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Database, Home, Images, LayoutDashboard, Network } from "lucide-react";
 
-import { isVariant, useHomeVariantStore, type HomeVariant } from "@/widgets/home-variants/model/homeVariantStore";
+import { useHomeVariantStore, type HomeVariant } from "@/widgets/home-variants/model/homeVariantStore";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { homeTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { RailIcon } from "./RailIcon";
 
-const ALL_HOME_VARIANTS: Array<{ id: HomeVariant; label: string; Icon: typeof Home }> = [
+const HOME_VARIANTS: Array<{ id: HomeVariant; label: string; Icon: typeof Home }> = [
   { id: "dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { id: "graph", label: "Second Brain", Icon: Network },
   { id: "database", label: "Database", Icon: Database },
   { id: "workspace", label: "Gallery", Icon: Images },
 ];
-
-// Drops the legacy "graph" item from gate-off builds (see homeVariantStore VALID).
-const HOME_VARIANTS = ALL_HOME_VARIANTS.filter((item) => isVariant(item.id));
 
 export const RailHomeButton: React.FC = () => {
   const variant = useHomeVariantStore((s) => s.variant);

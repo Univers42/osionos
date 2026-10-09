@@ -12,17 +12,13 @@
 
 import { create } from "zustand";
 
-import { LEGACY_SECOND_BRAIN_ENABLED } from "@/shared/config/legacySecondBrain";
-
 export type HomeVariant = "dashboard" | "graph" | "database" | "workspace";
 
 const STORAGE_KEY = "osionos.home.variant";
-// "graph" (the legacy second brain) is only a valid variant when the build-time gate
-// is on, so a ?home=graph link, a stored choice or a setVariant("graph") caller all
-// fall back to the dashboard in a gate-off build. The stored value is never rewritten.
-const VALID: HomeVariant[] = LEGACY_SECOND_BRAIN_ENABLED
-  ? ["dashboard", "graph", "database", "workspace"]
-  : ["dashboard", "database", "workspace"];
+// "graph" is valid in every build: HomeTabView draws the legacy second brain when the
+// build-time gate is on and the graph_render graph when it is off, so a ?home=graph link,
+// a stored choice or a setVariant("graph") caller always lands on a graph.
+const VALID: HomeVariant[] = ["dashboard", "graph", "database", "workspace"];
 
 export const isVariant = (value: string | null): value is HomeVariant =>
   value !== null && (VALID as string[]).includes(value);

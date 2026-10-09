@@ -21,6 +21,7 @@ import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 import { LoadingPane } from "@/shared/ui";
 import { LazyLegacyGraphEngineExplorer } from "@/widgets/legacy-graph-explorer/lazy";
+import { LazyGraphStudioView } from "@/widgets/graph-studio-view/lazy";
 import {
   LazyHomeWorkspaceMode,
   LazyWorkspaceDatabaseBlock,
@@ -59,7 +60,8 @@ export const HomeTabView: React.FC = () => {
 };
 
 function renderHomeVariantContent(variant: HomeVariant, homeDashboardPage: PageEntry | undefined): React.ReactNode {
-  if (variant === "graph" && LazyLegacyGraphEngineExplorer) return <LazyLegacyGraphEngineExplorer />;
+  // The legacy explorer is null in gate-off builds, which draw the graph_render graph.
+  if (variant === "graph") return LazyLegacyGraphEngineExplorer ? <LazyLegacyGraphEngineExplorer /> : <LazyGraphStudioView />;
   if (variant === "database") {
     // The Database surface is the notion-database-sys (ObjectDatabase) over the live
     // workspace pages — Files as a real Notion table with the full view chrome.
