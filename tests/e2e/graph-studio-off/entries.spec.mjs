@@ -6,7 +6,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { activateFirstEditor, openFreshPage, pageTitleEditor, pasteText, waitForRenderStability } from "../../browser/core/app.mjs";
+import { activateFirstEditor, clearAndTypePageTitle, openFreshPage, pageTitleEditor, pasteText, waitForRenderStability } from "../../browser/core/app.mjs";
 import { BASE, VIEW, expectNewGraph, installStub, stubLog } from "./support.mjs";
 
 test.beforeAll(() => {
@@ -16,11 +16,10 @@ test.beforeAll(() => {
 
 async function createPage(page, baseURL, title) {
   await openFreshPage(page, baseURL);
-  const titleBox = pageTitleEditor(page);
-  await titleBox.click();
-  await page.keyboard.type(title);
+  // A fresh page may already hold "Untitled" as its value: replace it, never append.
+  await clearAndTypePageTitle(page, title);
   await waitForRenderStability(page);
-  await expect(titleBox).toHaveValue(title);
+  await expect(pageTitleEditor(page)).toHaveValue(title);
   // The page just created is the open one; its id is what the bridge would put in a node id.
   const active = await page.evaluate(() => JSON.parse(localStorage.getItem("pg:activePage") ?? "null"));
   expect(typeof active?.id, "pg:activePage names the open page").toBe("string");
@@ -28,7 +27,7 @@ async function createPage(page, baseURL, title) {
 }
 
 async function openFromRail(page) {
-  await page.getByRole("button", { name: "Home", exact: true }).first().click();
+  await page.getByRole("tablist", { name: "Activity bar" }).getByRole("tab", { name: "Home", exact: true }).click();
   await page.getByRole("menuitem", { name: "Second Brain" }).click();
 }
 
