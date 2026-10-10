@@ -34,6 +34,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Every job that builds or pulls an image goes through .github/actions/docker-hub-access
+  # first: anonymous Docker Hub pulls from the shared runner IPs hit 429 (run 37990792990).
   build-image:
     name: Build & push Docker image
     runs-on: ubuntu-latest
@@ -44,8 +46,11 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
 
       - name: Log in to GitHub Container Registry
         if: github.ref == 'refs/heads/main'
@@ -91,8 +96,11 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
 
       - name: Cache Docker layers
         uses: actions/cache@v4
@@ -174,8 +182,11 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
 
       - name: Run browser E2E suite
         run: |
@@ -212,8 +223,11 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
 
       - name: Run the gate-on legacy second brain specs
         run: |
@@ -253,8 +267,11 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
 
       - name: Build the production bundle
         uses: docker/build-push-action@v6
