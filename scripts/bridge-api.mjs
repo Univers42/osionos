@@ -158,10 +158,11 @@ export function configFromEnv(env = process.env) {
 		googleClientSecret: env.OSIONOS_GOOGLE_CLIENT_SECRET ?? env.GOOGLE_CLIENT_SECRET ?? '',
 		oauthRedirectUri: env.OSIONOS_OAUTH_REDIRECT_URI ?? 'https://localhost:4000/api/app-connections/oauth/callback',
 		baasUrl: (env.OSIONOS_BAAS_URL ?? env.PUBLIC_BAAS_URL ?? 'http://localhost:8000').replace(/\/$/, ''),
-		// Query-router is internal-only (no Kong route for /query/v1 graph); the bridge
-		// reaches it by container DNS and authenticates with the tenant api-key, which
-		// owner-scopes reads to the seeded business data.
-		queryRouterUrl: (env.OSIONOS_QUERY_ROUTER_URL ?? 'http://mini-baas-query-router:4001').replace(/\/$/, ''),
+		// The tenant api-key owner-scopes reads to the seeded business data. Default: container
+		// DNS, when grobase shares this daemon. Behind a link only Kong is relayed, so the link
+		// sets Kong's public route (http://mini-baas-kong:8000/query/v1); a blank value means
+		// the default, as the link writes one for a local grobase.
+		queryRouterUrl: (env.OSIONOS_QUERY_ROUTER_URL || 'http://mini-baas-query-router:4001').replace(/\/$/, ''),
 		baasApiKey: env.OSIONOS_BAAS_API_KEY ?? env.BAAS_API_KEY ?? env.VITE_BAAS_API_KEY ?? '',
 		// Adapter-registry lists the tenant's databases; it trusts X-Baas-Tenant-Id
 		// (no Kong route works from the browser — anon key 401s on /admin/v1). The
@@ -321,6 +322,8 @@ function normalizePermission(value) {
 function responseStatusForBaasFailure(status) {
 	if (status === 401 || status === 403) return 403;
 	if (status === 404) return 404;
+	// Kong's rate limit: the caller should back off, not read it as a broken upstream.
+	if (status === 429) return 429;
 	return 502;
 }
 
@@ -504,8 +507,8 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
 }
 
 /**
- * POST to the grobase query-router (internal-only, NOT via Kong) with the tenant
- * api-key. Used by the data graph: the api-key resolves to the tenant + owner-scopes
+ * POST to the grobase query-router (container DNS, or Kong's /query/v1 behind a link) with
+ * the tenant api-key. Used by the data graph: the api-key resolves to the tenant + owner-scopes
  * the read to the seeded business records. 503 if the key/url aren't configured.
  */
 /** fetch the query-router, turning "the engine never answered" into a 503.
@@ -524,13 +527,21 @@ async function queryRouterFetch(fetchImpl, url, options, timeoutMs) {
 	}
 }
 
+/** Query-router request headers: the tenant api-key, plus the public anon key that Kong's
+ *  /query/v1 route requires (a direct query-router ignores it). */
+function queryRouterHeaders(config, extra) {
+	const headers = { Accept: 'application/json', ...extra, 'X-Baas-Api-Key': config.baasApiKey };
+	if (config.publicApiKey) headers.apikey = config.publicApiKey;
+	return headers;
+}
+
 async function baasQueryPost(config, fetchImpl, path, body, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
 	if (!config.queryRouterUrl || !config.baasApiKey) {
 		throw Object.assign(new Error('osionos query-router access is not configured.'), { status: 503 });
 	}
 	const response = await queryRouterFetch(fetchImpl, `${config.queryRouterUrl}${path}`, {
 		method: 'POST',
-		headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Baas-Api-Key': config.baasApiKey },
+		headers: queryRouterHeaders(config, { 'Content-Type': 'application/json' }),
 		body: JSON.stringify(body),
 	}, timeoutMs);
 	const text = await response.text().catch(() => '');
@@ -546,7 +557,7 @@ async function baasQueryPost(config, fetchImpl, path, body, timeoutMs = BAAS_FET
 	}
 }
 
-/** GET from the query-router (internal-only) with the tenant api-key. Sibling of
+/** GET from the query-router with the tenant api-key. Sibling of
  *  baasQueryPost for read-only routes like /:dbId/schema. */
 async function baasQueryGet(config, fetchImpl, path, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
 	if (!config.queryRouterUrl || !config.baasApiKey) {
@@ -554,7 +565,7 @@ async function baasQueryGet(config, fetchImpl, path, timeoutMs = BAAS_FETCH_TIME
 	}
 	const response = await queryRouterFetch(fetchImpl, `${config.queryRouterUrl}${path}`, {
 		method: 'GET',
-		headers: { Accept: 'application/json', 'X-Baas-Api-Key': config.baasApiKey },
+		headers: queryRouterHeaders(config),
 	}, timeoutMs);
 	const text = await response.text().catch(() => '');
 	if (!response.ok) {
@@ -581,7 +592,7 @@ async function baasQueryPassthrough(config, fetchImpl, path, body, timeoutMs = B
 	try {
 		response = await fetchWithTimeout(fetchImpl, `${config.queryRouterUrl}${path}`, {
 			method: 'POST',
-			headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Baas-Api-Key': config.baasApiKey },
+			headers: queryRouterHeaders(config, { 'Content-Type': 'application/json' }),
 			body: JSON.stringify(body),
 		}, timeoutMs);
 	} catch (error) {
