@@ -167,7 +167,9 @@ export function configFromEnv(env = process.env) {
 		// Adapter-registry lists the tenant's databases; it trusts X-Baas-Tenant-Id
 		// (no Kong route works from the browser — anon key 401s on /admin/v1). The
 		// tenant id is taken from env, or derived from the api-key via tenant-control.
-		adapterRegistryUrl: (env.OSIONOS_ADAPTER_REGISTRY_URL ?? 'http://mini-baas-adapter-registry-go:3021').replace(/\/$/, ''),
+		// Behind a link the registry is not relayed, so the link sets Kong's
+		// service_role-only route (http://mini-baas-kong:8000/admin/v1); blank = default.
+		adapterRegistryUrl: (env.OSIONOS_ADAPTER_REGISTRY_URL || 'http://mini-baas-adapter-registry-go:3021').replace(/\/$/, ''),
 		tenantControlUrl: (env.OSIONOS_TENANT_CONTROL_URL ?? 'http://mini-baas-tenant-control:3022').replace(/\/$/, ''),
 		baasTenantId: env.OSIONOS_BAAS_TENANT_ID ?? env.VITE_BAAS_TENANT_ID ?? env.BAAS_TENANT_ID ?? '',
 		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''),
@@ -606,8 +608,10 @@ async function baasQueryPassthrough(config, fetchImpl, path, body, timeoutMs = B
 	return { status: response.status, body: parsed };
 }
 
-/** GET the tenant's databases from the adapter-registry (internal-only). The
- *  registry trusts the X-Baas-Tenant-Id header and RLS-scopes to that tenant. */
+/** GET the tenant's databases from the adapter-registry (container DNS, or Kong's
+ *  /admin/v1 behind a link, which admits the service key alone; a direct registry
+ *  ignores it). The registry trusts the X-Baas-Tenant-Id header and RLS-scopes to
+ *  that tenant. */
 async function baasRegistryGet(config, fetchImpl, path, tenantId, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
 	if (!config.adapterRegistryUrl || !tenantId) {
 		throw Object.assign(new Error('osionos adapter-registry tenant id is not configured (set OSIONOS_BAAS_TENANT_ID).'), { status: 503 });
@@ -622,6 +626,7 @@ async function baasRegistryGet(config, fetchImpl, path, tenantId, timeoutMs = BA
 			// NOT the osionos app-session user (who owns nothing here → empty list,
 			// which used to silently degrade the panel to the env mock mounts).
 			'X-Baas-User-Id': tenantId,
+			...(config.serviceKey ? { apikey: config.serviceKey } : {}),
 		},
 	}, timeoutMs);
 	const text = await response.text().catch(() => '');
