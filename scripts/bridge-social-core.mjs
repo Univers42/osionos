@@ -20,7 +20,9 @@
  * (mini-baas network) — REST contract from realtime-gateway/src/rest_api.rs:
  *   POST {REALTIME_PUBLISH_URL}/v1/publish  { topic, event_type, payload }
  * Publishes are best-effort: chat/feed writes never fail because the gateway
- * is down. Env: REALTIME_PUBLISH_URL (default http://mini-baas-realtime:4000).
+ * is down. Env: REALTIME_PUBLISH_URL (default http://mini-baas-realtime:4000);
+ * REALTIME_PUBLISH_APIKEY, the service_role key when that URL is grobase's edge
+ * (http://mini-baas-kong:8000/realtime: Kong admits that key alone there).
  */
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -110,11 +112,14 @@ export async function rest(config, fetchImpl, path, { method = 'GET', body, pref
 
 /** Best-effort publish to the Rust realtime gateway; never throws. */
 export async function publishRealtime({ topic, eventType, payload, fetchImpl = fetch, env = process.env }) {
-	const base = (env.REALTIME_PUBLISH_URL ?? 'http://mini-baas-realtime:4000').replace(/\/$/, '');
+	const base = (env.REALTIME_PUBLISH_URL || 'http://mini-baas-realtime:4000').replace(/\/$/, '');
+	const apikey = (env.REALTIME_PUBLISH_APIKEY ?? '').trim();
+	const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+	if (apikey) headers.apikey = apikey;
 	try {
 		const response = await fetchImpl(`${base}/v1/publish`, {
 			method: 'POST',
-			headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+			headers,
 			body: JSON.stringify({ topic, event_type: eventType, payload }),
 			signal: AbortSignal.timeout(PUBLISH_TIMEOUT_MS),
 		});

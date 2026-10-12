@@ -499,8 +499,10 @@ export const useUserStore = create<UserStore>((set, get) => ({
     }));
   },
 
+  // The bridge's workspace routes verify the osionos_v1 app session (verifyAppSessionToken),
+  // which activeJwt() deliberately blanks — with it a signed-in user's create stayed local.
   createWorkspace: async (name, slug) => {
-    const jwt = get().activeJwt();
+    const jwt = get().activePageJwt();
     const uid = get().activeUserId;
     if (!jwt) {
       const ws = {
@@ -562,8 +564,9 @@ export const useUserStore = create<UserStore>((set, get) => ({
       savePersistedWorkspaces(sessions);
       return { sessions };
     });
-    // Persist to the BaaS (owner-only PATCH); optimistic local update stays on failure.
-    const jwt = get().activeJwt();
+    // Persist to the BaaS (owner-only PATCH, same app-session check as create); the
+    // optimistic local update stays on failure.
+    const jwt = get().activePageJwt();
     if (jwt) void api.patch(`/api/workspaces/${workspaceId}`, { name }, jwt).catch(() => undefined);
   },
 

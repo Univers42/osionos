@@ -158,15 +158,18 @@ export function configFromEnv(env = process.env) {
 		googleClientSecret: env.OSIONOS_GOOGLE_CLIENT_SECRET ?? env.GOOGLE_CLIENT_SECRET ?? '',
 		oauthRedirectUri: env.OSIONOS_OAUTH_REDIRECT_URI ?? 'https://localhost:4000/api/app-connections/oauth/callback',
 		baasUrl: (env.OSIONOS_BAAS_URL ?? env.PUBLIC_BAAS_URL ?? 'http://localhost:8000').replace(/\/$/, ''),
-		// Query-router is internal-only (no Kong route for /query/v1 graph); the bridge
-		// reaches it by container DNS and authenticates with the tenant api-key, which
-		// owner-scopes reads to the seeded business data.
-		queryRouterUrl: (env.OSIONOS_QUERY_ROUTER_URL ?? 'http://mini-baas-query-router:4001').replace(/\/$/, ''),
+		// The tenant api-key owner-scopes reads to the seeded business data. Default: container
+		// DNS, when grobase shares this daemon. Behind a link only Kong is relayed, so the link
+		// sets Kong's public route (http://mini-baas-kong:8000/query/v1); a blank value means
+		// the default, as the link writes one for a local grobase.
+		queryRouterUrl: (env.OSIONOS_QUERY_ROUTER_URL || 'http://mini-baas-query-router:4001').replace(/\/$/, ''),
 		baasApiKey: env.OSIONOS_BAAS_API_KEY ?? env.BAAS_API_KEY ?? env.VITE_BAAS_API_KEY ?? '',
 		// Adapter-registry lists the tenant's databases; it trusts X-Baas-Tenant-Id
 		// (no Kong route works from the browser — anon key 401s on /admin/v1). The
 		// tenant id is taken from env, or derived from the api-key via tenant-control.
-		adapterRegistryUrl: (env.OSIONOS_ADAPTER_REGISTRY_URL ?? 'http://mini-baas-adapter-registry-go:3021').replace(/\/$/, ''),
+		// Behind a link the registry is not relayed, so the link sets Kong's
+		// service_role-only route (http://mini-baas-kong:8000/admin/v1); blank = default.
+		adapterRegistryUrl: (env.OSIONOS_ADAPTER_REGISTRY_URL || 'http://mini-baas-adapter-registry-go:3021').replace(/\/$/, ''),
 		tenantControlUrl: (env.OSIONOS_TENANT_CONTROL_URL ?? 'http://mini-baas-tenant-control:3022').replace(/\/$/, ''),
 		baasTenantId: env.OSIONOS_BAAS_TENANT_ID ?? env.VITE_BAAS_TENANT_ID ?? env.BAAS_TENANT_ID ?? '',
 		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''),
@@ -321,6 +324,8 @@ function normalizePermission(value) {
 function responseStatusForBaasFailure(status) {
 	if (status === 401 || status === 403) return 403;
 	if (status === 404) return 404;
+	// Kong's rate limit: the caller should back off, not read it as a broken upstream.
+	if (status === 429) return 429;
 	return 502;
 }
 
@@ -504,8 +509,8 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
 }
 
 /**
- * POST to the grobase query-router (internal-only, NOT via Kong) with the tenant
- * api-key. Used by the data graph: the api-key resolves to the tenant + owner-scopes
+ * POST to the grobase query-router (container DNS, or Kong's /query/v1 behind a link) with
+ * the tenant api-key. Used by the data graph: the api-key resolves to the tenant + owner-scopes
  * the read to the seeded business records. 503 if the key/url aren't configured.
  */
 /** fetch the query-router, turning "the engine never answered" into a 503.
@@ -513,15 +518,29 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
  *  not a bridge fault — surfaced raw it read as `500 This operation was aborted`, and the
  *  database page rendered an engine that was merely offline as a crash. */
 async function queryRouterFetch(fetchImpl, url, options, timeoutMs) {
+	return engineFetchOrUnavailable(() => fetchWithTimeout(fetchImpl, url, options, timeoutMs), timeoutMs, 'The database engine behind this workspace database');
+}
+
+/** Turn "the engine never answered" (our timeout, or a refused connection) into a 503.
+ *  Shared by every engine call so a slow registry or query-router reads as offline, never as a 500. */
+async function engineFetchOrUnavailable(send, timeoutMs, subject) {
 	try {
-		return await fetchWithTimeout(fetchImpl, url, options, timeoutMs);
+		return await send();
 	} catch (error) {
 		const aborted = error?.name === 'AbortError';
 		const unreachable = aborted || error instanceof TypeError;
 		if (!unreachable) throw error;
 		const reason = aborted ? `did not answer within ${timeoutMs} ms` : 'is not reachable';
-		throw Object.assign(new Error(`The database engine behind this workspace database ${reason} — it may be offline.`), { status: 503 });
+		throw Object.assign(new Error(`${subject} ${reason} — it may be offline.`), { status: 503 });
 	}
+}
+
+/** Query-router request headers: the tenant api-key, plus the public anon key that Kong's
+ *  /query/v1 route requires (a direct query-router ignores it). */
+function queryRouterHeaders(config, extra) {
+	const headers = { Accept: 'application/json', ...extra, 'X-Baas-Api-Key': config.baasApiKey };
+	if (config.publicApiKey) headers.apikey = config.publicApiKey;
+	return headers;
 }
 
 async function baasQueryPost(config, fetchImpl, path, body, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
@@ -530,7 +549,7 @@ async function baasQueryPost(config, fetchImpl, path, body, timeoutMs = BAAS_FET
 	}
 	const response = await queryRouterFetch(fetchImpl, `${config.queryRouterUrl}${path}`, {
 		method: 'POST',
-		headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Baas-Api-Key': config.baasApiKey },
+		headers: queryRouterHeaders(config, { 'Content-Type': 'application/json' }),
 		body: JSON.stringify(body),
 	}, timeoutMs);
 	const text = await response.text().catch(() => '');
@@ -546,7 +565,7 @@ async function baasQueryPost(config, fetchImpl, path, body, timeoutMs = BAAS_FET
 	}
 }
 
-/** GET from the query-router (internal-only) with the tenant api-key. Sibling of
+/** GET from the query-router with the tenant api-key. Sibling of
  *  baasQueryPost for read-only routes like /:dbId/schema. */
 async function baasQueryGet(config, fetchImpl, path, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
 	if (!config.queryRouterUrl || !config.baasApiKey) {
@@ -554,7 +573,7 @@ async function baasQueryGet(config, fetchImpl, path, timeoutMs = BAAS_FETCH_TIME
 	}
 	const response = await queryRouterFetch(fetchImpl, `${config.queryRouterUrl}${path}`, {
 		method: 'GET',
-		headers: { Accept: 'application/json', 'X-Baas-Api-Key': config.baasApiKey },
+		headers: queryRouterHeaders(config),
 	}, timeoutMs);
 	const text = await response.text().catch(() => '');
 	if (!response.ok) {
@@ -581,7 +600,7 @@ async function baasQueryPassthrough(config, fetchImpl, path, body, timeoutMs = B
 	try {
 		response = await fetchWithTimeout(fetchImpl, `${config.queryRouterUrl}${path}`, {
 			method: 'POST',
-			headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Baas-Api-Key': config.baasApiKey },
+			headers: queryRouterHeaders(config, { 'Content-Type': 'application/json' }),
 			body: JSON.stringify(body),
 		}, timeoutMs);
 	} catch (error) {
@@ -595,13 +614,15 @@ async function baasQueryPassthrough(config, fetchImpl, path, body, timeoutMs = B
 	return { status: response.status, body: parsed };
 }
 
-/** GET the tenant's databases from the adapter-registry (internal-only). The
- *  registry trusts the X-Baas-Tenant-Id header and RLS-scopes to that tenant. */
-async function baasRegistryGet(config, fetchImpl, path, tenantId, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
+/** GET the tenant's databases from the adapter-registry (container DNS, or Kong's
+ *  /admin/v1 behind a link, which admits the service key alone; a direct registry
+ *  ignores it). The registry trusts the X-Baas-Tenant-Id header and RLS-scopes to
+ *  that tenant. */
+export async function baasRegistryGet(config, fetchImpl, path, tenantId, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
 	if (!config.adapterRegistryUrl || !tenantId) {
 		throw Object.assign(new Error('osionos adapter-registry tenant id is not configured (set OSIONOS_BAAS_TENANT_ID).'), { status: 503 });
 	}
-	const response = await fetchWithTimeout(fetchImpl, `${config.adapterRegistryUrl}${path}`, {
+	const response = await engineFetchOrUnavailable(() => fetchWithTimeout(fetchImpl, `${config.adapterRegistryUrl}${path}`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -611,8 +632,9 @@ async function baasRegistryGet(config, fetchImpl, path, tenantId, timeoutMs = BA
 			// NOT the osionos app-session user (who owns nothing here → empty list,
 			// which used to silently degrade the panel to the env mock mounts).
 			'X-Baas-User-Id': tenantId,
+			...(config.serviceKey ? { apikey: config.serviceKey } : {}),
 		},
-	}, timeoutMs);
+	}, timeoutMs), timeoutMs, 'The adapter-registry');
 	const text = await response.text().catch(() => '');
 	if (!response.ok) {
 		const status = responseStatusForBaasFailure(response.status);
