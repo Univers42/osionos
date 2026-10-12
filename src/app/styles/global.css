@@ -188,25 +188,29 @@
   --color-osio-warning: var(--osio-warning);
   --color-osio-warning-fg: var(--osio-warning-fg);
 
-  --spacing: var(--osio-space-1);
-
-  /* Radius scale → rounded-xs/sm/md/lg utilities resolve to tokens */
-  --radius-xs: var(--osio-radius-xs);
-  --radius-sm: var(--osio-radius-sm);
-  --radius-md: var(--osio-radius);
-  --radius-lg: var(--osio-radius-lg);
   --radius-full: var(--osio-radius-full);
-
-  /* Token-backed font families */
-  --font-sans: var(--osio-font-family-sans);
-  --font-serif: var(--osio-font-family-serif);
-  --font-mono: var(--osio-font-family-mono);
 
   /* Elevation utilities (shadow-menu / shadow-modal) */
   --shadow-osio-sm: var(--osio-shadow-sm);
   --shadow-osio-menu: var(--osio-shadow-menu);
   --shadow-osio-modal: var(--osio-shadow-modal);
+}
 
+:root {
+  /* Tailwind's stock theme keys, mapped onto the tokens below. Unlayered on
+     purpose, not in @theme: the vendored notion-database-sys stylesheet ships
+     its own `@import "tailwindcss"`, whose stock @layer theme loads later and
+     wins inside the layer. Measured: --text-sm was 13px at first paint and
+     .875rem once the database chunk arrived, so the UI shrank after loading.
+     Unlayered declarations beat every layer, whatever loads when. */
+  --spacing: var(--osio-space-1);
+  --radius-xs: var(--osio-radius-xs);
+  --radius-sm: var(--osio-radius-sm);
+  --radius-md: var(--osio-radius);
+  --radius-lg: var(--osio-radius-lg);
+  --font-sans: var(--osio-font-family-sans);
+  --font-serif: var(--osio-font-family-serif);
+  --font-mono: var(--osio-font-family-mono);
   --text-xs: var(--osio-font-size-xs);
   --text-xs--line-height: var(--osio-line-height-tight);
   --text-sm: var(--osio-font-size-sm);
@@ -221,9 +225,8 @@
   --text-2xl--line-height: var(--osio-line-height-tight);
   --text-3xl: var(--osio-font-size-3xl);
   --text-3xl--line-height: var(--osio-line-height-tight);
-}
 
-:root {
+
   --osio-space-1: 4px;
   --osio-space-2: 8px;
   --osio-space-3: 12px;
@@ -245,7 +248,7 @@
   --osio-font-family-serif: "Newsreader", Georgia, "Iowan Old Style", "Times New Roman", serif, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Twemoji Mozilla", emoji;
   --osio-font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Consolas, Menlo, monospace, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Twemoji Mozilla", emoji;
   --osio-font-size-xs: 12px;
-  --osio-font-size-sm: 13px;
+  --osio-font-size-sm: 14px;
   --osio-font-size-base: 14px;
   --osio-font-size-lg: 16px;
   --osio-font-size-xl: 20px;
@@ -1425,11 +1428,16 @@ html,
 body {
   height: 100%;
   font-family: var(--osio-font-family-sans);
-  font-size: var(--osio-font-size-base);
   color: var(--osio-fg-default);
   background: var(--osio-bg-page);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* The UI size goes on body only. On html it redefines 1rem, and every rem in
+   the app and the vendored views rendered at 87.5% (measured: 1rem = 14px). */
+body {
+  font-size: var(--osio-font-size-base);
 }
 
 #root {

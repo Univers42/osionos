@@ -163,6 +163,10 @@ Important local setup rules:
 - dependencies are installed only inside Docker with `pnpm install --frozen-lockfile`
 - `make dev` no longer installs `@univers42/ui-collection@latest` dynamically
 - Chromium system dependencies are baked into the Docker `browser-tests` image
+- hosts that cannot reach Playwright's browser CDN (HTTP 403 during `playwright install`) can opt in to
+  Debian's `chromium` with `PW_BROWSER_SOURCE=system bash scripts/docker-run.sh test-e2e <spec>`; it builds
+  a separate `osionos-browser-tests:system` image and the default `download` build is unchanged. Debian's
+  Chromium is not the build this Playwright release was tested against, so prefer `download` when it works
 
 ## CI Execution
 

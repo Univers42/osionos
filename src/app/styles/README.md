@@ -59,7 +59,37 @@ Defaults:
 
 ## Typography scale
 
-Use Tailwind `text-xs`, `text-sm`, `text-base`, `text-lg`, `text-xl`, `text-2xl`, and `text-3xl`. Tailwind v4 reads those utilities from the `--osio-font-size-*` tokens through the `@theme` block in [global.css](global.css).
+Use Tailwind `text-xs`, `text-sm`, `text-base`, `text-lg`, `text-xl`, `text-2xl`, and `text-3xl`. They read the `--osio-font-size-*` tokens through the stock-key mapping in the unlayered `:root` block of [global.css](global.css).
+
+| Utility | Token | Value | Use |
+| --- | --- | ---: | --- |
+| `text-xs` | `--osio-font-size-xs` | 12px | secondary labels, captions, tab labels |
+| `text-sm` | `--osio-font-size-sm` | 14px | primary UI text |
+| `text-base` | `--osio-font-size-base` | 14px | `body` default, sidebar nav rows |
+| `text-lg` | `--osio-font-size-lg` | 16px | small headings |
+| `text-xl` | `--osio-font-size-xl` | 20px | |
+| `text-2xl` | `--osio-font-size-2xl` | 24px | |
+| `text-3xl` | `--osio-font-size-3xl` | 30px | |
+
+That mapping (`--text-*`, `--spacing`, `--radius-*`, `--font-*`) is not in `@theme`. The vendored `notion-database-sys` stylesheet imports Tailwind itself, and its stock `@layer theme` loads later and wins inside the layer; unlayered declarations beat every layer. Add a stock-key override to that `:root` block, not to `@theme`.
+
+The UI font size is set on `body`, never on `html`: a font size on the root element redefines `1rem` for the whole app and the vendored views.
+
+### Reading scale
+
+Inside a document (`.osionos-page-body`) the same utilities resolve one step larger, set in [notionPage.css](../../pages/notion-page/ui/notionPage.css):
+
+| Block | Utility | In the chrome | In a document |
+| --- | --- | ---: | ---: |
+| paragraph, lists, quote, callout, heading 5 | `text-sm` | 14px | 16px |
+| heading 4 | `text-base` | 14px | 18px |
+| heading 3 | `text-lg` | 16px | 20px |
+| heading 2 | `text-xl` | 20px | 24px |
+| heading 1 | `text-2xl` | 24px | 30px |
+
+The page's "Small text" setting switches the step-up off. Embedded databases, code blocks, graph and draw blocks, layout cells and inline menus keep the chrome scale.
+
+It does not reach the read-only renderers that mount outside `.osionos-page-body` — the public page, profile, marketplace preview and hover preview stay on the chrome scale.
 
 Avoid hardcoded values like `text-[11px]` unless there is a documented product exception.
 
