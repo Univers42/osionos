@@ -58,7 +58,7 @@ import { PageShareButton } from './PageShareButton';
 import { PageFavoriteButton } from './PageFavoriteButton';
 import { PageCommentsButton } from '@/features/comments/ui/PageCommentsButton';
 
-interface PageHeaderBarProps {
+export interface PageHeaderBarProps {
   pageId: string;
   workspaceId: string;
 }

@@ -31,7 +31,7 @@ import {
 import "./homeVariants.css";
 
 /** The Home "tab": the Dashboard / Second Brain / Database / Gallery surfaces. */
-export const HomeTabView: React.FC = () => {
+export const HomeTabView: React.FC<{ chrome?: "bar" | "none" }> = ({ chrome }) => {
   const activeWorkspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const firstPrivateWorkspaceId = useUserStore((s) => s.activeSession()?.privateWorkspaces[0]?._id ?? "");
   const firstWsId = activeWorkspaceId || firstPrivateWorkspaceId;
@@ -51,7 +51,7 @@ export const HomeTabView: React.FC = () => {
             fragile height:100% chain that collapses to the inspector's height. */}
         <div className="relative flex-1 min-h-0 w-full">
           <Suspense fallback={<LoadingPane />}>
-            {renderHomeVariantContent(variant, homeDashboardPage)}
+            {renderHomeVariantContent(variant, homeDashboardPage, chrome)}
           </Suspense>
         </div>
       </div>
@@ -59,7 +59,11 @@ export const HomeTabView: React.FC = () => {
   );
 };
 
-function renderHomeVariantContent(variant: HomeVariant, homeDashboardPage: PageEntry | undefined): React.ReactNode {
+function renderHomeVariantContent(
+  variant: HomeVariant,
+  homeDashboardPage: PageEntry | undefined,
+  chrome?: "bar" | "none",
+): React.ReactNode {
   // The legacy explorer is null in gate-off builds, which draw the graph_render graph.
   if (variant === "graph") return LazyLegacyGraphEngineExplorer ? <LazyLegacyGraphEngineExplorer /> : <LazyGraphStudioView />;
   if (variant === "database") {
@@ -76,6 +80,6 @@ function renderHomeVariantContent(variant: HomeVariant, homeDashboardPage: PageE
     );
   }
   if (variant === "workspace") return <LazyHomeWorkspaceMode />;
-  if (homeDashboardPage) return <LazyOsionosPage pageId={homeDashboardPage._id} />;
+  if (homeDashboardPage) return <LazyOsionosPage pageId={homeDashboardPage._id} chrome={chrome} />;
   return <LoadingPane />;
 }

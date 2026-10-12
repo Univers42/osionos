@@ -419,7 +419,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
               </div>
             )}
           >
-            <OsionosPage pageId={pageId} />
+            <OsionosPage pageId={pageId} chrome="bar" />
           </React.Suspense>
         ) : (
           <div className="mx-auto max-w-3xl px-10 py-10 text-sm text-[var(--osio-fg-muted)]">

@@ -21,6 +21,7 @@ import { isPerfEnabled } from "@osionos/perf-probe";
 import { initRealtimeMessagesBridge } from "@/services/realtime-messages";
 import { PageHeaderBar } from "@/entities/page";
 import { PageBody } from "./PageBody";
+import { usePageHeaderBarProps } from "@/entities/page/model/usePageHeaderBarProps";
 import { PageHeader } from "./PageHeader";
 import { PageOutlineRail } from "@/widgets/page-toc/PageOutlineRail";
 import { anyJsDebugToolEnabled, usePageDebugStore } from "@/shared/debug/pageDebugStore";
@@ -36,6 +37,8 @@ interface OsionosPageProps {
   pageId: string;
   /** Per-pane active-page ref for the header; falls back to the global one. */
   activePageRef?: ActivePage | null;
+  /** "none" skips the in-page header bar: the workbench's EditorTitleBar owns it. */
+  chrome?: "bar" | "none";
 }
 
 /**
@@ -43,7 +46,7 @@ interface OsionosPageProps {
  * properties, connections — see PageHeader) + the block editor body (PageBody). The header
  * actions, comments, and property handlers live in their own files to keep this a thin shell.
  */
-export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef }) => {
+export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef, chrome = "bar" }) => {
   const renderCountRef = React.useRef(0);
   // Count COMMITTED renders in a dep-less effect: writing a ref during
   // render is illegal under react-hooks/refs (and invisible to React).
@@ -56,7 +59,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
   }, []);
 
   // Narrow shell tuple: the page object gets a new identity on every content
-  // commit (typing), but this shell only branches on the workspace id, the
+  // commit (typing), but this shell only branches on the
   // cover, and the first block's layout flags — subscribe to exactly those so
   // a commit inside PageBody doesn't re-render the header stack per pane.
   const shell = usePageStore(
@@ -64,7 +67,6 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
       const page = s.pageById(pageId);
       const first = page?.content?.[0];
       return {
-        workspaceId: page?.workspaceId,
         cover: page?.cover,
         soleBlock: page?.content?.length === 1,
         firstType: first?.type,
@@ -81,6 +83,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
   const activePage = activePageRef ?? globalActivePage;
   const activeUserId = useUserStore((s) => s.activeUserId);
   const safeUserId = activeUserId || "anonymous";
+  const headerBarProps = usePageHeaderBarProps(pageId, activePage?.workspaceId);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const storedPageConfig = usePageConfigStore((s) => s.configs[pageConfigKey(safeUserId, pageId)]);
   const pageConfig = useMemo(() => resolvePageConfig(storedPageConfig), [storedPageConfig]);
@@ -150,11 +153,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
     >
       {!hasFullPageLayout && <PageOutlineRail pageId={pageId} />}
 
-      <PageHeaderBar
-        key={pageId}
-        pageId={pageId}
-        workspaceId={shell.workspaceId ?? activePage?.workspaceId ?? ""}
-      />
+      {chrome === "bar" && <PageHeaderBar key={pageId} {...headerBarProps} />}
 
       <PageHeader
         pageId={pageId}
