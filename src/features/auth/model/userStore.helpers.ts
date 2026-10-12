@@ -148,9 +148,16 @@ export async function loginPersona(persona: StaticPersona) {
     );
     clearTimeout(timeout);
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return { ok: false as const, message: (data.message as string) || 'Invalid email or password.' };
+    if (!res.ok) {
+      const message = (data.message as string) || 'Invalid email or password.';
+      // The UI shows one line; the console keeps the status that tells a wrong password
+      // (401) from a sign-in service that never checked it (502, 503).
+      console.warn(`[osionos] sign-in refused for ${persona.email}: HTTP ${res.status} — ${message}`);
+      return { ok: false as const, message };
+    }
     return { ok: true as const, userId: data.user.id as string, accessToken: data.accessToken as string, refreshToken: data.refreshToken as string };
-  } catch {
+  } catch (error) {
+    console.error(`[osionos] sign-in could not reach ${API_BASE}/api/auth/login:`, error);
     return { ok: false as const, message: 'Could not reach the server. Check your connection.' };
   }
 }
