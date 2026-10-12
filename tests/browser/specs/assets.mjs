@@ -421,6 +421,27 @@ export const assetScenarios = [
   defineScenario(
     "12. Emojis, Icons & Media",
     "Page cover",
+    "the Video tab has a search box; without a bridge it says so and the bundled clips stay pickable",
+    async ({ page, appUrl }) => {
+      // The offline build has no bridge, so the Pixabay search cannot answer here;
+      // the results flow is covered by tests/bridge and by a probe on a live stack.
+      await openFreshPage(page, appUrl);
+      await addPageCover(page);
+      await openCoverPicker(page);
+      const picker = page.getByTestId("page-cover-picker");
+      await picker.getByRole("button", { name: "Video", exact: true }).click();
+      const search = picker.getByPlaceholder("Search videos");
+      await expect(search).toBeVisible();
+      await expect.poll(() => picker.getByTestId("cover-picker-item").count()).toBeGreaterThan(0);
+
+      await search.fill("ocean waves");
+      await expect(picker.getByText("Video search is unavailable right now.")).toBeVisible();
+      await expect.poll(() => picker.getByTestId("cover-picker-item").count()).toBeGreaterThan(0);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Page cover",
     "pressing Escape closes the cover picker",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
