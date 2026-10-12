@@ -60,31 +60,37 @@
   font-size: calc(40px * var(--page-font-size-scale, 0.8));
 }
 
-/* Small text is a clearly more compact reading size (~22% smaller than the
-   default "larger" size) so the toggle reads as an obvious change, not a
-   near-imperceptible nudge. */
-.osionos-page--small-text .osionos-page-body :where(.text-xs) {
-  font-size: 0.6rem !important;
+/* ── Reading scale ────────────────────────────────────────────────────── */
+
+/* Blocks are sized with the chrome's text utilities (paragraph = text-sm,
+   h1 = text-2xl …). The document steps each one up a notch here instead of
+   every block restating a size: 16px body under the 40px title, 30/24/20/18
+   headings. "Small text" is this step-up switched off, so it reads at the
+   chrome's 14px. */
+.osionos-page:not(.osionos-page--small-text) .osionos-page-body {
+  --text-sm: var(--osio-font-size-lg);
+  --text-base: 18px;
+  --text-lg: var(--osio-font-size-xl);
+  --text-xl: var(--osio-font-size-2xl);
+  --text-2xl: var(--osio-font-size-3xl);
 }
 
-.osionos-page--small-text .osionos-page-body :where(.text-sm) {
-  font-size: 0.7rem !important;
-}
-
-.osionos-page--small-text .osionos-page-body :where(.text-base) {
-  font-size: 0.78rem !important;
-}
-
-.osionos-page--small-text .osionos-page-body :where(.text-lg) {
-  font-size: 0.9rem !important;
-}
-
-.osionos-page--small-text .osionos-page-body :where(.text-xl) {
-  font-size: 1rem !important;
-}
-
-.osionos-page--small-text .osionos-page-body :where(.text-2xl) {
-  font-size: 1.12rem !important;
+/* Not prose: embedded apps, code, layout cells (fixed geometry, their own
+   font-size setting) and inline menus keep the chrome scale. */
+.osionos-page-body :where(
+  [data-database-id],
+  [data-block-type="code"],
+  [data-block-type="graph_view"],
+  [data-block-type="draw"],
+  [data-block-type="home_views"],
+  .osionos-layout-cell-editor,
+  [role="menu"]
+) {
+  --text-sm: var(--osio-font-size-sm);
+  --text-base: var(--osio-font-size-base);
+  --text-lg: var(--osio-font-size-lg);
+  --text-xl: var(--osio-font-size-xl);
+  --text-2xl: var(--osio-font-size-2xl);
 }
 
 .osionos-page--locked .osionos-page-body [contenteditable="true"] {
@@ -1246,7 +1252,7 @@ body[data-pane-resizing] .osionos-layout-cell {
   padding: 2px 6px;
   margin: 0;
   border-radius: var(--osio-radius-xs);
-  font-size: 12px;
+  font-size: var(--osio-font-size-sm);
   line-height: 1.25;
   color: var(--osio-fg-muted);
   white-space: nowrap;
