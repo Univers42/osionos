@@ -274,6 +274,10 @@
   --osio-topbar-bg: var(--osio-bg-subtle);
   --osio-topbar-border: var(--osio-border-default);
 
+  /* Workbench: single status bar and the smallest the bottom dock may shrink to. */
+  --osio-statusbar-h: 24px;
+  --osio-dock-min-h: 120px;
+
   --sidebar-width: 260px;
 
   --osio-cell-min-content-width: 280px;
