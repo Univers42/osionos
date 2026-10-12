@@ -15,6 +15,8 @@ import React from "react";
 interface Props {
   initialValue?: string;
   placeholder?: string;
+  /** Accessible name; a placeholder alone is not one. */
+  label?: string;
   depth: number;
   onSubmit: (name: string) => void;
   onCancel: () => void;
@@ -22,7 +24,7 @@ interface Props {
 
 /** A single-line inline editor for creating or renaming a tree entry. Enter
  *  commits a non-empty trimmed value, Escape cancels, blur commits-or-cancels. */
-export const IdeInlineInput: React.FC<Props> = ({ initialValue = "", placeholder, depth, onSubmit, onCancel }) => {
+export const IdeInlineInput: React.FC<Props> = ({ initialValue = "", placeholder, label, depth, onSubmit, onCancel }) => {
   const [value, setValue] = React.useState(initialValue);
   const ref = React.useRef<HTMLInputElement | null>(null);
 
@@ -45,6 +47,7 @@ export const IdeInlineInput: React.FC<Props> = ({ initialValue = "", placeholder
       ref={ref}
       value={value}
       placeholder={placeholder}
+      aria-label={label ?? placeholder}
       onChange={(event) => setValue(event.target.value)}
       onKeyDown={(event) => {
         if (event.key === "Enter") { event.preventDefault(); commit(); }
