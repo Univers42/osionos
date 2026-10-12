@@ -518,14 +518,20 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
  *  not a bridge fault — surfaced raw it read as `500 This operation was aborted`, and the
  *  database page rendered an engine that was merely offline as a crash. */
 async function queryRouterFetch(fetchImpl, url, options, timeoutMs) {
+	return engineFetchOrUnavailable(() => fetchWithTimeout(fetchImpl, url, options, timeoutMs), timeoutMs, 'The database engine behind this workspace database');
+}
+
+/** Turn "the engine never answered" (our timeout, or a refused connection) into a 503.
+ *  Shared by every engine call so a slow registry or query-router reads as offline, never as a 500. */
+async function engineFetchOrUnavailable(send, timeoutMs, subject) {
 	try {
-		return await fetchWithTimeout(fetchImpl, url, options, timeoutMs);
+		return await send();
 	} catch (error) {
 		const aborted = error?.name === 'AbortError';
 		const unreachable = aborted || error instanceof TypeError;
 		if (!unreachable) throw error;
 		const reason = aborted ? `did not answer within ${timeoutMs} ms` : 'is not reachable';
-		throw Object.assign(new Error(`The database engine behind this workspace database ${reason} — it may be offline.`), { status: 503 });
+		throw Object.assign(new Error(`${subject} ${reason} — it may be offline.`), { status: 503 });
 	}
 }
 
@@ -612,11 +618,11 @@ async function baasQueryPassthrough(config, fetchImpl, path, body, timeoutMs = B
  *  /admin/v1 behind a link, which admits the service key alone; a direct registry
  *  ignores it). The registry trusts the X-Baas-Tenant-Id header and RLS-scopes to
  *  that tenant. */
-async function baasRegistryGet(config, fetchImpl, path, tenantId, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
+export async function baasRegistryGet(config, fetchImpl, path, tenantId, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
 	if (!config.adapterRegistryUrl || !tenantId) {
 		throw Object.assign(new Error('osionos adapter-registry tenant id is not configured (set OSIONOS_BAAS_TENANT_ID).'), { status: 503 });
 	}
-	const response = await fetchWithTimeout(fetchImpl, `${config.adapterRegistryUrl}${path}`, {
+	const response = await engineFetchOrUnavailable(() => fetchWithTimeout(fetchImpl, `${config.adapterRegistryUrl}${path}`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
@@ -628,7 +634,7 @@ async function baasRegistryGet(config, fetchImpl, path, tenantId, timeoutMs = BA
 			'X-Baas-User-Id': tenantId,
 			...(config.serviceKey ? { apikey: config.serviceKey } : {}),
 		},
-	}, timeoutMs);
+	}, timeoutMs), timeoutMs, 'The adapter-registry');
 	const text = await response.text().catch(() => '');
 	if (!response.ok) {
 		const status = responseStatusForBaasFailure(response.status);
