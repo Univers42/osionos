@@ -50,7 +50,7 @@ import { WS_FILES_DB_ID, WS_FOLDERS_DB_ID } from "@/widgets/database-view/model/
  *  (NotionPage), so panes stay isolated: typing in one persists to that pane's
  *  page and does not re-render the others. Background panes stay cheap via
  *  PaneView's serial idle-mount + `contain: layout paint` isolation. */
-const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab }) => {
+const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string; chrome?: "bar" | "none" }> = ({ tab, chrome }) => {
   const page = usePageStore((s) => s.pageById(tab.pageId));
   const fetchPageContent = usePageStore((s) => s.fetchPageContent);
   const jwt = useUserStore((s) => s.activePageJwt() ?? "");
@@ -77,14 +77,21 @@ const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab }) 
   }
   return (
     <div className="h-full overflow-hidden">
-      <LazyOsionosPage pageId={tab.pageId} activePageRef={tabToActivePage(tab)} />
+      <LazyOsionosPage pageId={tab.pageId} activePageRef={tabToActivePage(tab)} chrome={chrome} />
     </div>
   );
 };
 
 /** Render the right view for one tab — the per-pane equivalent of MainContent. */
-const PaneContentImpl: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab, paneId }) => {
-  if (tab.kind === "home") return <HomeTabView />;
+interface PaneContentProps {
+  tab: WorkspaceTab;
+  paneId?: string;
+  /** "none" when the pane renders an EditorTitleBar above, so the page drops its own bar. */
+  chrome?: "bar" | "none";
+}
+
+const PaneContentImpl: React.FC<PaneContentProps> = ({ tab, paneId, chrome }) => {
+  if (tab.kind === "home") return <HomeTabView chrome={chrome} />;
 
   if (tab.kind === "folder") return <FolderTabView tab={tab} paneId={paneId} />;
 
@@ -234,7 +241,7 @@ const PaneContentImpl: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab
   return (
     <ErrorBoundary>
       <Suspense fallback={<LoadingPane />}>
-        <PageTabView tab={tab} paneId={paneId} />
+        <PageTabView tab={tab} paneId={paneId} chrome={chrome} />
       </Suspense>
     </ErrorBoundary>
   );
