@@ -16,7 +16,11 @@ import { ExternalLink } from "lucide-react";
 
 import { useUserStore } from "@/features/auth";
 import { fetchSandboxPorts, openPortPreview, type SandboxPort } from "@/features/ide/model/idePorts";
+import { isSandboxOnline, useSandboxHealthStore } from "@/features/ide/model/sandboxHealthStore";
+import { SandboxUnavailable } from "@/features/ide/ui/SandboxUnavailable";
 
+// Ponytail: fixed 5 s interval — a slow response can overlap the next tick and
+// land out of order; harmless for a listener list. Runs only while health is online.
 const POLL_MS = 5000;
 
 /** The dock's PORTS tab: TCP listeners inside the sandbox, refreshed while the
@@ -25,9 +29,11 @@ const POLL_MS = 5000;
 export const IdePortsPanel: React.FC = () => {
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const [ports, setPorts] = React.useState<SandboxPort[] | null>(null);
+  const healthState = useSandboxHealthStore((s) => s.state);
+  const online = isSandboxOnline(healthState);
 
   React.useEffect(() => {
-    if (!workspaceId) return;
+    if (!workspaceId || !online) return;
     let disposed = false;
     const refresh = async () => {
       const next = await fetchSandboxPorts(workspaceId);
@@ -36,17 +42,19 @@ export const IdePortsPanel: React.FC = () => {
     void refresh();
     const timer = setInterval(refresh, POLL_MS);
     return () => { disposed = true; clearInterval(timer); };
-  }, [workspaceId]);
+  }, [workspaceId, online]);
 
   return (
     <div className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-[12px] leading-6 text-[var(--osio-code-fg)]">
-      {ports === null && <p className="py-4 text-center text-[var(--osio-code-fg-muted)]">Checking sandbox listeners…</p>}
-      {ports?.length === 0 && (
+      {!online && healthState !== "unknown" && <SandboxUnavailable compact />}
+      {!online && healthState === "unknown" && <p className="py-4 text-center text-[var(--osio-code-fg-muted)]">Checking sandbox…</p>}
+      {online && ports === null && <p className="py-4 text-center text-[var(--osio-code-fg-muted)]">Checking sandbox listeners…</p>}
+      {online && ports?.length === 0 && (
         <p className="py-4 text-center text-[var(--osio-code-fg-muted)]">
           Nothing listening in the sandbox. Start a server in the terminal and it appears here.
         </p>
       )}
-      {(ports ?? []).map((entry) => (
+      {(online ? (ports ?? []) : []).map((entry) => (
         <div key={entry.port} className="flex items-center gap-3">
           <span className="w-14 shrink-0 text-right font-semibold text-[var(--osio-accent)]">{entry.port}</span>
           <span className="min-w-0 flex-1 truncate text-[var(--osio-code-fg-muted)]">{entry.address}</span>
@@ -60,7 +68,7 @@ export const IdePortsPanel: React.FC = () => {
           </button>
         </div>
       ))}
-      {(ports?.length ?? 0) > 0 && (
+      {online && (ports?.length ?? 0) > 0 && (
         <p className="mt-3 text-[11px] text-[var(--osio-code-fg-muted)]">
           Preview rides the isolated exec channel: GET-only, 2 MiB cap, no websockets yet — live-reload dev servers render but do not hot-update.
         </p>

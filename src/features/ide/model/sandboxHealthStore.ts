@@ -10,9 +10,12 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { useEffect } from "react";
 import { create } from "zustand";
 
-import { healthFromCloseCode } from "./wsCloseCodes";
+import { API_BASE, getActivePageJwt } from "@/shared/api/client";
+
+import { createHealthCore } from "./sandboxHealthCore";
 
 /**
  * One answer to "can the IDE sandbox be used right now?", shared by the
@@ -23,7 +26,6 @@ import { healthFromCloseCode } from "./wsCloseCodes";
  *   disabled    404, or no API_BASE / no session (offline build, signed out)
  *   unavailable 502 or network error — Plane B daemon down
  *   unknown     not probed yet
- * LANE I STUB — lane A (feat/ide-health) replaces the bodies, keeping every export.
  */
 export type SandboxHealthState = "unknown" | "online" | "stopped" | "disabled" | "unavailable";
 
@@ -41,30 +43,51 @@ export interface SandboxHealth {
   retry: () => Promise<SandboxHealthState>;
 }
 
-export const useSandboxHealthStore = create<SandboxHealth>((set, get) => ({
-  state: "unknown",
-  reason: null,
-  workspaceId: null,
-  checkedAt: null,
-  probe: async (workspaceId) => {
-    set({ workspaceId });
-    return get().state;
-  },
-  ensure: async (workspaceId) => get().probe(workspaceId),
-  markClosed: (code, reason) => {
-    const state = healthFromCloseCode(code);
-    if (state) set({ state, reason, checkedAt: Date.now() });
-  },
-  retry: async () => get().state,
+const core = createHealthCore({
+  fetch: (url, init) => fetch(url, init),
+  apiBase: () => API_BASE,
+  jwt: getActivePageJwt,
+  now: () => Date.now(),
+});
+
+export const useSandboxHealthStore = create<SandboxHealth>(() => ({
+  ...core.snapshot(),
+  probe: core.probe,
+  ensure: core.ensure,
+  markClosed: core.markClosed,
+  retry: core.retry,
 }));
+
+core.subscribe((snap) => useSandboxHealthStore.setState(snap));
 
 export function isSandboxOnline(state: SandboxHealthState): boolean {
   return state === "online";
 }
 
+/** May a terminal dial the bridge? Its connect starts a stopped sandbox
+ *  (bridge-ide-exec.mjs ensureSandbox), so only disabled/unavailable refuse. */
+export function isSandboxReachable(state: SandboxHealthState): boolean {
+  return state !== "disabled" && state !== "unavailable";
+}
+
+// Ponytail: a sandbox that comes back is seen up to 60 s late; Retry is immediate.
+export const HEALTH_POLL_MS = 60_000;
+
 /** Probe on mount and keep the state fresh while it is not online. */
 export function useSandboxHealthProbe(workspaceId: string, enabled: boolean): SandboxHealthState {
-  void workspaceId;
-  void enabled;
-  return useSandboxHealthStore((s) => s.state);
+  const state = useSandboxHealthStore((s) => s.state);
+  const probe = useSandboxHealthStore((s) => s.probe);
+
+  useEffect(() => {
+    if (!enabled || workspaceId === "") return;
+    void probe(workspaceId);
+  }, [enabled, workspaceId, probe]);
+
+  useEffect(() => {
+    if (!enabled || workspaceId === "" || state === "online") return;
+    const timer = setInterval(() => void probe(workspaceId), HEALTH_POLL_MS);
+    return () => clearInterval(timer);
+  }, [enabled, workspaceId, state, probe]);
+
+  return state;
 }
