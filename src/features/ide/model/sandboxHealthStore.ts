@@ -62,6 +62,12 @@ export function isSandboxOnline(state: SandboxHealthState): boolean {
   return state === "online";
 }
 
+/** May a terminal dial the bridge? Its connect starts a stopped sandbox
+ *  (bridge-ide-exec.mjs ensureSandbox), so only disabled/unavailable refuse. */
+export function isSandboxReachable(state: SandboxHealthState): boolean {
+  return state !== "disabled" && state !== "unavailable";
+}
+
 /** Probe on mount and keep the state fresh while it is not online. */
 export function useSandboxHealthProbe(workspaceId: string, enabled: boolean): SandboxHealthState {
   void workspaceId;
