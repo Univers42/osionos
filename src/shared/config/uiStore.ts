@@ -25,7 +25,12 @@ export type ActivePanel =
   | 'notifications'
   | 'tasks'
   | 'public'
-  | 'database';
+  | 'database'
+  // Workbench-only panels (gated by isWorkbenchEnabled). A persisted value
+  // with the flag off is mapped to 'files' by visiblePanel, so no version bump.
+  | 'scm'
+  | 'run'
+  | 'problems';
 
 /** Panel-width bounds (px). The rail itself is a fixed ~48px, set in CSS. */
 export const PANEL_MIN_WIDTH = 160;

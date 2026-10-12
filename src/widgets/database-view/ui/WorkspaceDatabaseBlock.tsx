@@ -66,7 +66,7 @@ export const WorkspaceRecordPeek: React.FC<{ pageId: string; onClose: () => void
             Close
           </button>
         </div>
-        {osionosPage ? <OsionosPage pageId={pageId} /> : (
+        {osionosPage ? <OsionosPage pageId={pageId} chrome="bar" /> : (
           <div className="mx-auto max-w-3xl px-10 py-10 text-sm text-[var(--osio-fg-muted)]">Page unavailable</div>
         )}
       </aside>

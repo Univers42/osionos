@@ -46,6 +46,12 @@ const IdeShellImpl = lazy(() =>
   import("@/widgets/ide-shell").then((module) => ({ default: module.IdeShell })),
 );
 
+// Unified workbench (grid + dock + status bar), behind `osio.workbench`. Own
+// chunk; never loaded while the flag is off.
+const WorkbenchImpl = lazy(() =>
+  import("@/widgets/workbench/ui/Workbench").then((module) => ({ default: module.Workbench })),
+);
+
 // Warm the page-renderer SHELL (grid + panes) in parallel with the entry bundle
 // so it is ready by the time auth resolves -- removes the lazy-load waterfall
 // from LCP without putting the editor back on the critical path. Deep path so we
@@ -100,4 +106,8 @@ export function LazyStyleGuideRoute() {
 
 export function LazyIdeShell() {
   return <Suspense fallback={contentFallback}>{<IdeShellImpl />}</Suspense>;
+}
+
+export function LazyWorkbench() {
+  return <Suspense fallback={contentFallback}>{<WorkbenchImpl />}</Suspense>;
 }

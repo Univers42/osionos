@@ -19,6 +19,8 @@
 // Heavy store/language modules are imported LAZILY inside the actions: this
 // module is reachable from the top-bar menu (warm chunk) and must stay thin.
 
+import { isWorkbenchEnabled } from "@/shared/config/featureFlags";
+
 export const TASKS_FILE = "tasks.json";
 
 export type IdeTask = {
@@ -82,8 +84,10 @@ export async function runInTerminal(command: string): Promise<void> {
     import("./ideModeStore"),
     import("./terminalRunBus"),
   ]);
-  useIdeModeStore.getState().setIdeMode(workspaceId, true);
-  useIdeModeStore.getState().setBottomOpen(true);
+  if (!isWorkbenchEnabled()) {
+    useIdeModeStore.getState().setIdeMode(workspaceId, true);
+    useIdeModeStore.getState().setBottomOpen(true);
+  }
   useTerminalRunBus.getState().requestRun(`cd /workspace && ${command}`);
 }
 
