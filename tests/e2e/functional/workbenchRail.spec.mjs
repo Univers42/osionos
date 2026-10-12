@@ -40,7 +40,11 @@ async function open(page, baseURL, { workbench, persistedPanel }) {
 function collectErrors(page) {
   const errors = [];
   page.on("console", (msg) => {
-    if (msg.type() === "error") errors.push(`console: ${msg.text()}`);
+    // Same filter as workbench.spec.mjs: a backend that is configured (.env) but not running in
+    // the e2e container fails at the network layer — that is not a render error of a panel.
+    if (msg.type() === "error" && !/Failed to load resource|ERR_|net::/i.test(msg.text())) {
+      errors.push(`console: ${msg.text()}`);
+    }
   });
   page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
   return errors;
