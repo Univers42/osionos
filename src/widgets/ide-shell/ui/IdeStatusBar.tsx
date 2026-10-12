@@ -14,6 +14,40 @@ import React from "react";
 import { GitBranch, GitCompareArrows, SquareTerminal } from "lucide-react";
 
 import { useIdeSyncConflicts, conflictCount } from "@/features/ide/model/ideSyncConflicts";
+import { isSandboxOnline, useSandboxHealthStore, type SandboxHealthState } from "@/features/ide/model/sandboxHealthStore";
+
+const CHIP_LABEL: Readonly<Record<SandboxHealthState, string>> = {
+  unknown: "Checking…",
+  online: "Online",
+  stopped: "Stopped",
+  unavailable: "Unavailable",
+  disabled: "Disabled",
+};
+const CHIP_DOT: Readonly<Record<SandboxHealthState, string>> = {
+  unknown: "bg-[var(--osio-code-fg-muted)]",
+  online: "bg-[var(--osio-success)]",
+  stopped: "bg-[var(--osio-warning)]",
+  unavailable: "bg-[var(--osio-danger)]",
+  disabled: "bg-[var(--osio-code-fg-muted)]",
+};
+
+/** Dot + text (never colour alone); clicking re-probes when the sandbox is not online. */
+const SandboxChip: React.FC = () => {
+  const state = useSandboxHealthStore((s) => s.state);
+  const retry = useSandboxHealthStore((s) => s.retry);
+  const online = isSandboxOnline(state);
+  return (
+    <button
+      type="button"
+      onClick={() => { if (!online) void retry(); }}
+      title={online ? "Sandbox is online" : "Click to retry the sandbox connection"}
+      className="inline-flex items-center gap-1 hover:text-[var(--osio-code-fg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--osio-accent)]"
+    >
+      <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${CHIP_DOT[state]}`} />
+      Sandbox: {CHIP_LABEL[state]}
+    </button>
+  );
+};
 
 interface Props {
   fileCount: number;
@@ -29,7 +63,7 @@ export const IdeStatusBar: React.FC<Props> = ({ fileCount, onToggleTerminal }) =
       <span className="inline-flex items-center gap-1 text-[var(--osio-accent)]">IDE</span>
       {conflicts > 0 && (
         <span
-          className="inline-flex items-center gap-1 text-[var(--osio-warning,#d97706)]"
+          className="inline-flex items-center gap-1 text-[var(--osio-warning)]"
           title="Open a conflicted file to resolve (keep mine / take sandbox)"
         >
           <GitCompareArrows size={12} /> {conflicts} sync {conflicts === 1 ? "conflict" : "conflicts"}
@@ -43,6 +77,7 @@ export const IdeStatusBar: React.FC<Props> = ({ fileCount, onToggleTerminal }) =
       >
         <SquareTerminal size={12} /> Terminal
       </button>
+      <SandboxChip />
       <span className="flex-1" />
       <span className="inline-flex items-center gap-1 opacity-70" title="Git status arrives with the sandbox">
         <GitBranch size={12} /> —

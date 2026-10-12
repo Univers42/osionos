@@ -19,6 +19,8 @@ import { createSandboxProvider } from "../vfs/sandboxProvider";
 import { bridgeFsTransport } from "../vfs/bridgeTransport";
 import type { ListedEntry } from "../vfs/types";
 import { subscribeFsEvents } from "../model/ideFsEvents";
+import { isSandboxOnline, useSandboxHealthStore } from "../model/sandboxHealthStore";
+import { SandboxUnavailable } from "./SandboxUnavailable";
 
 const dirsFirst = (entries: ListedEntry[]): ListedEntry[] =>
   [...entries].sort((a, b) => (a.kind === b.kind ? (a.name < b.name ? -1 : 1) : a.kind === "dir" ? -1 : 1));
@@ -30,6 +32,8 @@ const dirsFirst = (entries: ListedEntry[]): ListedEntry[] =>
 export const IdeSandboxTree: React.FC = () => {
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const [open, setOpen] = React.useState(false);
+  const healthState = useSandboxHealthStore((s) => s.state);
+  const online = isSandboxOnline(healthState);
   const [listings, setListings] = React.useState<Map<string, ListedEntry[] | "error">>(new Map());
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
 
@@ -52,7 +56,7 @@ export const IdeSandboxTree: React.FC = () => {
   );
 
   React.useEffect(() => {
-    if (!open || !workspaceId) return;
+    if (!open || !workspaceId || !online) return;
     void load("");
     let timer: ReturnType<typeof setTimeout> | undefined;
     const off = subscribeFsEvents(workspaceId, () => {
@@ -65,7 +69,7 @@ export const IdeSandboxTree: React.FC = () => {
       }, 500);
     });
     return () => { off(); clearTimeout(timer); };
-  }, [open, workspaceId, load]);
+  }, [open, workspaceId, online, load]);
 
   const toggleDir = (rel: string) => {
     setExpanded((prev) => {
@@ -127,7 +131,12 @@ export const IdeSandboxTree: React.FC = () => {
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <HardDrive size={12} /> Sandbox
       </button>
-      {open && <div className="pb-1">{renderDir("", 0)}</div>}
+      {open && online && <div className="pb-1">{renderDir("", 0)}</div>}
+      {open && !online && (
+        healthState === "unknown"
+          ? <p className="px-3 py-1 text-[11px] text-[var(--osio-code-fg-muted)]">Checking sandbox…</p>
+          : <SandboxUnavailable compact />
+      )}
     </div>
   );
 };

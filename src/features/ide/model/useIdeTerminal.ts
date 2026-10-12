@@ -10,14 +10,24 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Terminal } from "@xterm/xterm";
 
 import { API_BASE, getActivePageJwt } from "@/shared/api/client";
 import { ideOutput } from "./ideOutputBus";
+import { isSandboxReachable, useSandboxHealthStore } from "./sandboxHealthStore";
 import { useTerminalRunBus } from "./terminalRunBus";
+import { isDeliberateClose } from "./wsCloseCodes";
 
 export type IdeTerminalStatus = "connecting" | "open" | "closed" | "unavailable";
+
+export interface IdeTerminalConnection {
+  status: IdeTerminalStatus;
+  /** Why the server ended the session on purpose; null while connected or on a network drop. */
+  closedReason: string | null;
+  /** Dial again now (the Retry path); a no-op while a socket is live. */
+  reconnect: () => void;
+}
 
 /** Bridge WS URL for the sandbox PTY (P3). The JWT rides the WS subprotocol
  *  (see ideWsProtocols), NOT the URL — query strings land in access logs.
@@ -44,14 +54,23 @@ export function ideWsProtocols(jwt: string): string[] {
  * on the SAME bridge-owned session (replay first); deliberate closes (shell
  * exit, auth/gate) stay closed with the reason printed.
  */
-export function useIdeTerminal(term: Terminal | null, workspaceId: string, termId = "0"): IdeTerminalStatus {
+export function useIdeTerminal(term: Terminal | null, workspaceId: string, termId = "0"): IdeTerminalConnection {
   // "connecting" until a WS callback moves it; "unavailable" is derived (no
   // synchronous setState in the effect — that trips react-hooks/set-state-in-effect).
   const [wsStatus, setWsStatus] = useState<IdeTerminalStatus>("connecting");
+  const [closedReason, setClosedReason] = useState<string | null>(null);
+  // Bumped by reconnect() to re-run the dial effect after a deliberate close.
+  const [dialSeq, setDialSeq] = useState(0);
+  const reachable = useSandboxHealthStore((s) => isSandboxReachable(s.state));
+  const reconnect = useCallback(() => {
+    setClosedReason(null);
+    setWsStatus("connecting");
+    setDialSeq((n) => n + 1);
+  }, []);
   const url = useMemo(() => (term ? ptyUrl(workspaceId, getActivePageJwt() ?? "", termId) : null), [term, workspaceId, termId]);
 
   useEffect(() => {
-    if (!term || !url) return;
+    if (!term || !url || !reachable) return;
     let disposed = false;
     let ws: WebSocket | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -77,6 +96,8 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string, termI
         attempt = 0;
         term.reset(); // the session replay repaints current state — no doubling
         setWsStatus("open");
+        // The bridge just started the sandbox: flip health to online so fs-sync dials.
+        void useSandboxHealthStore.getState().probe(workspaceId);
         sendResize();
         term.focus();
         runPending();
@@ -90,9 +111,10 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string, termI
         setWsStatus("closed");
         // Deliberate ends (shell exit, auth/gate refusals) stay closed; network
         // drops reconnect — the bridge-owned session is waiting for us.
-        const deliberate = ev.code === 1000 || (ev.code >= 4000 && ev.code !== 4029);
-        if (deliberate) {
+        if (isDeliberateClose(ev.code)) {
           const why = ev.reason || "connection closed";
+          useSandboxHealthStore.getState().markClosed(ev.code, why);
+          setClosedReason(why);
           term.write(`\r\n\x1b[2m[terminal: ${why}]\x1b[0m\r\n`);
           ideOutput("terminal", `session closed: ${why}`);
           return;
@@ -120,7 +142,8 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string, termI
       runSub();
       try { ws?.close(); } catch { /* already closed */ }
     };
-  }, [term, url]);
+  }, [term, url, reachable, workspaceId, dialSeq]);
 
-  return term && !url ? "unavailable" : wsStatus;
+  const status: IdeTerminalStatus = term && !url ? "unavailable" : wsStatus;
+  return { status, closedReason, reconnect };
 }
