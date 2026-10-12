@@ -30,7 +30,8 @@ export type FeatureFlagName =
   | "osio.publish"
   | "osio.draw"
   | "osio.whiteboard"
-  | "osio.ide";
+  | "osio.ide"
+  | "osio.workbench";
 
 /**
  * Resolution (URL -> localStorage -> env -> fallback) lives in @osionos/feature-flags.
@@ -189,4 +190,12 @@ export function isWhiteboardEnabled(): boolean {
  *  must both be set, so the flag alone can never open an execution path. */
 export function isIdeEnabled(): boolean {
   return isFeatureFlagEnabled("osio.ide", false);
+}
+
+/** The unified workbench (one rail, one side panel, editor grid + bottom dock,
+ *  one status bar) that replaces both the IDE-mode shell and the page chrome.
+ *  Default OFF until it reaches parity; `?osio.workbench=1`, the `osio.workbench`
+ *  localStorage key, or `VITE_OSIO_WORKBENCH=1` turns it on. */
+export function isWorkbenchEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.workbench", false);
 }
