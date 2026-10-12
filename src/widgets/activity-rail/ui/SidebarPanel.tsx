@@ -15,6 +15,8 @@ import { PanelLeftClose } from "lucide-react";
 import { WorkspaceSwitcher } from "@/features/auth";
 import { IconButton } from "@/shared/ui";
 import { useUIStore, type ActivePanel } from "@/shared/config/uiStore";
+import { isWorkbenchEnabled } from "@/shared/config/featureFlags";
+import { visiblePanel } from "../model/railItems";
 import { FilesPanel } from "./panels/FilesPanel";
 
 // Only the default Explorer panel loads eagerly — every other panel mounts on
@@ -38,6 +40,12 @@ const NotificationsPanel = React.lazy(() =>
   import("@/widgets/notifications/ui/NotificationsPanel").then((m) => ({ default: m.NotificationsPanel })));
 const MyTasksPanel = React.lazy(() =>
   import("@/widgets/tasks/ui/MyTasksPanel").then((m) => ({ default: m.MyTasksPanel })));
+const IdeSourceControlPanel = React.lazy(() =>
+  import("@/features/ide/ui/IdeSourceControl").then((m) => ({ default: m.IdeSourceControl })));
+const IdeRunPanel = React.lazy(() =>
+  import("@/features/ide/ui/IdeRunPanel").then((m) => ({ default: m.IdeRunPanel })));
+const IdeProblemsPanel = React.lazy(() =>
+  import("@/features/ide/ui/IdeProblemsPanel").then((m) => ({ default: m.IdeProblemsPanel })));
 
 const PANEL_TITLES: Record<ActivePanel, string> = {
   files: "Explorer",
@@ -49,6 +57,9 @@ const PANEL_TITLES: Record<ActivePanel, string> = {
   public: "Shared", // label-only rename (AOC §12); id stays "public" (R-R3)
   marketplace: "Marketplace",
   database: "Databases",
+  scm: "Source Control",
+  run: "Run",
+  problems: "Problems",
 };
 
 interface Props {
@@ -57,51 +68,58 @@ interface Props {
   onOpenConsole?: () => void;
 }
 
+function PanelBody({ panel, onOpenSettings, onOpenTrash, onOpenConsole }: Props & { panel: ActivePanel }) {
+  switch (panel) {
+    case "files":
+      return <FilesPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />;
+    case "search":
+      return <SearchPanelSlot />;
+    case "agents":
+      return <AgentsPanel />;
+    case "messenger":
+      return <MessengerPanel />;
+    case "notifications":
+      return <NotificationsPanel />;
+    case "tasks":
+      return <MyTasksPanel />;
+    case "public":
+      return <PublicSwitcherPanel />;
+    case "marketplace":
+      return <MarketplacePanel />;
+    case "database":
+      return <DatabasesPanel />;
+    case "scm":
+      return <IdeSourceControlPanel />;
+    case "run":
+      return <IdeRunPanel />;
+    case "problems":
+      return <IdeProblemsPanel />;
+    default:
+      return null;
+  }
+}
+
 /** The expanded side panel: shared workspace/account header + the active view.
  *  Memoized — it stays mounted as a hidden layer, and the parent re-renders on
  *  every rail-preview flip; memo keeps those flips from re-rendering the tree. */
-export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, onOpenTrash, onOpenConsole }: Props) {
+export const SidebarPanel = React.memo(function SidebarPanel(handlers: Props) {
   const activePanel = useUIStore((s) => s.activePanel);
   const collapseToRail = useUIStore((s) => s.collapseToRail);
-
-  const body = () => {
-    switch (activePanel) {
-      case "files":
-        return <FilesPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />;
-      case "search":
-        return <SearchPanelSlot />;
-      case "agents":
-        return <AgentsPanel />;
-      case "messenger":
-        return <MessengerPanel />;
-      case "notifications":
-        return <NotificationsPanel />;
-      case "tasks":
-        return <MyTasksPanel />;
-      case "public":
-        return <PublicSwitcherPanel />;
-      case "marketplace":
-        return <MarketplacePanel />;
-      case "database":
-        return <DatabasesPanel />;
-      default:
-        return null;
-    }
-  };
+  const panel = visiblePanel(activePanel, isWorkbenchEnabled());
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--osio-bg-subtle)]">
       <WorkspaceSwitcher />
       <div className="flex items-center justify-between px-3 py-2">
         <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--osio-fg-subtle)]">
-          {PANEL_TITLES[activePanel]}
+          {PANEL_TITLES[panel]}
         </span>
         <IconButton aria-label="Collapse to rail" title="Collapse to rail" onClick={collapseToRail}>
           <PanelLeftClose size={14} />
         </IconButton>
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
-        <React.Suspense fallback={null}>{body()}</React.Suspense>
+        <React.Suspense fallback={null}><PanelBody panel={panel} {...handlers} /></React.Suspense>
       </div>
     </div>
   );

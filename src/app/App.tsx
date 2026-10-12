@@ -32,8 +32,8 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPagePrune";
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
-import { LazyCanvasDebugRoute, LazyIdeShell, LazyMainContent, LazyStyleGuideRoute } from "./lazyAppRegions";
-import { isIdeEnabled } from "@/shared/config/featureFlags";
+import { LazyCanvasDebugRoute, LazyIdeShell, LazyMainContent, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
+import { isIdeEnabled, isWorkbenchEnabled } from "@/shared/config/featureFlags";
 import { useIdeModeStore } from "@/features/ide/model/ideModeStore";
 import { applyStoredAppearance } from "@/shared/config/theme";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
@@ -213,6 +213,7 @@ const App: React.FC = () => {
   const activeWorkspaceId = activeWorkspace?._id ?? "";
   const ideModeOn = useIdeModeStore((s) => (activeWorkspaceId ? s.byWorkspace[activeWorkspaceId] === true : false));
   const showIde = ideModeOn && isIdeEnabled();
+  const legacyRegion = showIde ? <LazyIdeShell /> : <LazyMainContent />;
 
   // Database automations → app services: notify events become toasts; webhook
   // actions route through the bridge's SSRF-guarded proxy endpoint.
@@ -363,7 +364,7 @@ const App: React.FC = () => {
         {/* Content area — the dedicated IDE shell when this workspace is in IDE
             mode, otherwise the normal tabbed/splittable workspace grid. */}
         <main className="flex-1 flex min-w-0 overflow-hidden relative">
-          {showIde ? <LazyIdeShell /> : <LazyMainContent />}
+          {isWorkbenchEnabled() ? <LazyWorkbench /> : legacyRegion}
         </main>
       </div>
 

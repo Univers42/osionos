@@ -86,6 +86,8 @@ export interface CoverPickerAsset {
   label: string;
   ref: string;
   previewUrl?: string;
+  /** Smallest clip of a video asset: what a tile plays on hover instead of `ref`. */
+  previewVideoUrl?: string;
   credit?: string;
   downloadLocation?: string;
   author?: string;

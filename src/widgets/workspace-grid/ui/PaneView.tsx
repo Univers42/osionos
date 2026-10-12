@@ -17,6 +17,8 @@ import type { PaneNode } from "../model/layoutTree";
 import { TabStrip } from "./TabStrip";
 import { PaneDropOverlay } from "./PaneDropOverlay";
 import { usePaneDnd } from "./usePaneDnd";
+import { EditorTitleBar } from "@/widgets/workbench/ui/EditorTitleBar";
+import { isWorkbenchEnabled } from "@/shared/config/featureFlags";
 
 /**
  * A shared, SERIAL idle queue: it mounts one deferred pane per idle tick instead
@@ -62,6 +64,7 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
   const { dragActive, dropZone, dropHandlers } = usePaneDnd(pane.id);
   const activeTab = pane.tabs.find((t) => t.tabId === pane.activeTabId) ?? pane.tabs[0] ?? null;
   const mounted = useDeferredMount(isActive);
+  const workbench = isWorkbenchEnabled();
 
   return (
     <div
@@ -75,6 +78,7 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
       ].join(" ")}
     >
       <TabStrip pane={pane} />
+      {workbench && activeTab ? <EditorTitleBar tab={activeTab} /> : null}
       <div
         className="relative flex-1 min-h-0 overflow-hidden"
         // Every pane is editable now, so focusing into a pane's BODY (not just its
@@ -90,7 +94,7 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
       >
         {activeTab ? (
           mounted ? (
-            <PaneContent tab={activeTab} paneId={pane.id} />
+            <PaneContent tab={activeTab} paneId={pane.id} chrome={workbench ? "none" : undefined} />
           ) : (
             // Deferred (inactive pane): cheap placeholder until the idle mount.
             <div className="h-full bg-[var(--osio-bg-page)]" aria-busy="true" />

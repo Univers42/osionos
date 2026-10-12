@@ -87,6 +87,24 @@ Harness-level checks for rendering and non-editing coverage.
 
 Utility layer that converts scenario objects into native Playwright tests and splits serial vs parallel scenarios.
 
+### `tests/bench`
+
+Micro-benchmarks for pure hot-path modules (`*.bench.ts`, each exporting `bench` from
+`defineBench`). `harness.ts` warms up, calibrates a batch so one timed sample lasts ≥ 200 µs, and
+gates each case on its **p95 per operation** against `budgetNs`; `run.ts` prints the table, writes
+`test-results/bench/<name>.json` and exits 1 when a case is over budget.
+
+```bash
+npm run test:bench                                         # every tests/bench/*.bench.ts
+npm run test:bench -- tests/bench/explorer-rows.bench.ts   # one file
+```
+
+Budgets are about 3× the p95 measured when the case was written (the date and the numbers are
+in a comment above it). Numbers come from a shared machine inside Docker: a busy neighbour can
+push one case over budget (a false failure, never a false pass) — re-run before acting. Modules
+that import the browser-only graph (the page store, anything reaching `import.meta.env`) cannot
+load in node; their interaction cost is measured in the browser, not here.
+
 ## Official Commands
 
 Primary Docker commands:
@@ -163,6 +181,10 @@ Important local setup rules:
 - dependencies are installed only inside Docker with `pnpm install --frozen-lockfile`
 - `make dev` no longer installs `@univers42/ui-collection@latest` dynamically
 - Chromium system dependencies are baked into the Docker `browser-tests` image
+- hosts that cannot reach Playwright's browser CDN (HTTP 403 during `playwright install`) can opt in to
+  Debian's `chromium` with `PW_BROWSER_SOURCE=system bash scripts/docker-run.sh test-e2e <spec>`; it builds
+  a separate `osionos-browser-tests:system` image and the default `download` build is unchanged. Debian's
+  Chromium is not the build this Playwright release was tested against, so prefer `download` when it works
 
 ## CI Execution
 

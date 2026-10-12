@@ -39,9 +39,11 @@ test("the dock opens with five tabs and the terminal's honest offline state", as
   for (const label of ["Terminal", "Problems", "Output", "Debug Console", "Ports"]) {
     await expect(page.locator(`[data-dock-tab]`, { hasText: label }).first()).toBeVisible();
   }
-  // Offline build: no bridge URL → the terminal reports unavailability honestly.
+  // Offline build: no bridge URL → one "Sandbox …" status with a Retry, not a retry loop.
   // The lazy xterm chunk + suspense can be slow on a loaded machine.
-  await expect(page.getByText(/enable the workspace sandbox/i)).toBeVisible({ timeout: 30_000 });
+  const status = page.getByRole("status").filter({ hasText: /Sandbox (disabled|unavailable|stopped)/ }).first();
+  await expect(status).toBeVisible({ timeout: 30_000 });
+  await expect(status.getByRole("button", { name: /^Retry$/ })).toBeVisible();
 });
 
 test("Output and Ports tabs render their real empty states; Debug is honest", async ({ page }) => {
@@ -51,7 +53,10 @@ test("Output and Ports tabs render their real empty states; Debug is honest", as
   await page.locator('[data-dock-tab="output"]').click();
   await expect(page.getByText(/No output yet/i)).toBeVisible();
   await page.locator('[data-dock-tab="ports"]').click();
-  await expect(page.getByText(/Nothing listening|Checking sandbox/i)).toBeVisible();
+  // getByRole skips the hidden terminal tab's own "Sandbox …" status.
+  await expect(
+    page.getByRole("status").filter({ hasText: /Sandbox (disabled|unavailable|stopped)/ }).or(page.getByText(/Nothing listening|Checking sandbox/i)).first(),
+  ).toBeVisible();
   await page.locator('[data-dock-tab="debug"]').click();
   await expect(page.getByText(/debugger lands with the DAP client/i)).toBeVisible();
 });
@@ -62,7 +67,9 @@ test("the explorer shows the SANDBOX root with its honest offline state", async 
   const root = page.locator("[data-sandbox-root]");
   await expect(root).toBeVisible();
   await root.click();
-  await expect(page.getByText(/sandbox not connected/i)).toBeVisible({ timeout: 10_000 });
+  await expect(
+    page.getByRole("status").filter({ hasText: /Sandbox (disabled|unavailable|stopped)/ }).or(page.getByText(/Checking sandbox/i)).first(),
+  ).toBeVisible({ timeout: 10_000 });
 });
 
 test("Ctrl+J toggles the dock inside the IDE shell", async ({ page }) => {
