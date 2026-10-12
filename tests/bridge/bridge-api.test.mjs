@@ -23,6 +23,7 @@ import {
 	createUserSession,
 	persistBridgeIdentity,
 	requireWorkspaceAccess,
+	searchPixabayVideos,
 	searchUnsplashPhotos,
 	stableStringify,
 	validateBridgePayload,
@@ -497,6 +498,77 @@ describe('osionos bridge receiver', () => {
 
 	it('rejects Unsplash search when the bridge key is missing', async () => {
 		await assert.rejects(() => searchUnsplashPhotos({}, configFromEnv({}), async () => new Response('{}')), /Unsplash access key is not configured/);
+	});
+
+	const pixabayHit = {
+		id: 125,
+		pageURL: 'https://pixabay.com/videos/id-125/',
+		tags: 'flowers, yellow, blossom',
+		duration: 12,
+		user: 'Coverr-Free-Footage',
+		videos: {
+			large: { url: 'https://cdn.pixabay.com/video/125_large.mp4', width: 1920, height: 1080, size: 6615235, thumbnail: 'https://cdn.pixabay.com/video/125_large.jpg' },
+			medium: { url: 'https://cdn.pixabay.com/video/125_medium.mp4', width: 1280, height: 720, size: 3562083, thumbnail: 'https://cdn.pixabay.com/video/125_medium.jpg' },
+			small: { url: 'https://cdn.pixabay.com/video/125_small.mp4', width: 640, height: 360, size: 1030736, thumbnail: 'https://cdn.pixabay.com/video/125_small.jpg' },
+			tiny: { url: 'https://cdn.pixabay.com/video/125_tiny.mp4', width: 480, height: 270, size: 426799, thumbnail: 'https://cdn.pixabay.com/video/125_tiny.jpg' },
+		},
+	};
+	const pixabayResponse = () => new Response(JSON.stringify({ total: 4692, totalHits: 500, hits: [pixabayHit] }), {
+		status: 200,
+		headers: { 'content-type': 'application/json' },
+	});
+
+	it('searches Pixabay videos with a server-side key and returns cover-ready items', async () => {
+		const config = configFromEnv({ PIXABAY_API: 'pixabay-test-key' });
+		let requestedUrl = '';
+		const result = await searchPixabayVideos({ query: 'yellow flowers', perPage: 6, page: 2 }, config, async (url) => {
+			requestedUrl = String(url);
+			return pixabayResponse();
+		});
+		const url = new URL(requestedUrl);
+		assert.equal(`${url.origin}${url.pathname}`, 'https://pixabay.com/api/videos/');
+		assert.equal(url.searchParams.get('key'), 'pixabay-test-key');
+		assert.equal(url.searchParams.get('q'), 'yellow flowers');
+		assert.equal(url.searchParams.get('per_page'), '6');
+		assert.equal(url.searchParams.get('page'), '2');
+		assert.equal(url.searchParams.get('safesearch'), 'true');
+		assert.deepEqual(result.results, [{
+			id: 'pixabay-125',
+			label: 'flowers, yellow, blossom',
+			ref: 'https://cdn.pixabay.com/video/125_medium.mp4',
+			previewUrl: 'https://cdn.pixabay.com/video/125_tiny.jpg',
+			previewVideoUrl: 'https://cdn.pixabay.com/video/125_tiny.mp4',
+			credit: 'Pixabay · Coverr-Free-Footage',
+		}]);
+		assert.equal(result.total, 500);
+	});
+
+	it('rejects a Pixabay search without a key, and never puts the key in an upstream error', async () => {
+		await assert.rejects(() => searchPixabayVideos({ query: 'sea' }, configFromEnv({}), async () => pixabayResponse()), /Pixabay API key is not configured/);
+		const config = configFromEnv({ PIXABAY_API_KEY: 'secret-pixabay-key' });
+		await assert.rejects(
+			() => searchPixabayVideos({ query: 'sea' }, config, async () => new Response('[ERROR 429] API rate limit exceeded', { status: 429 })),
+			(error) => error.status === 502 && /429/.test(error.message) && !error.message.includes('secret-pixabay-key'),
+		);
+	});
+
+	it('serves the video search over HTTP and asks Pixabay once per query (their 24h caching rule)', async () => {
+		const config = { ...testConfig(), pixabayApiKey: 'pixabay-route-key' };
+		let upstreamCalls = 0;
+		const server = createBridgeServer({ config, fetchImpl: async () => { upstreamCalls += 1; return pixabayResponse(); } });
+		const baseUrl = await listen(server);
+
+		try {
+			const first = await fetch(`${baseUrl}/api/media/pixabay/videos?query=cache%20once%20per%20query`);
+			assert.equal(first.status, 200);
+			assert.equal((await first.json()).results[0].id, 'pixabay-125');
+			const second = await fetch(`${baseUrl}/api/media/pixabay/videos?query=cache%20once%20per%20query`);
+			assert.equal(second.status, 200);
+			assert.equal((await second.json()).results[0].ref, 'https://cdn.pixabay.com/video/125_medium.mp4');
+			assert.equal(upstreamCalls, 1);
+		} finally {
+			await new Promise((resolveClose) => server.close(resolveClose));
+		}
 	});
 
 	it('keeps server-only secrets out of Vite-exposed environment variables', () => {
