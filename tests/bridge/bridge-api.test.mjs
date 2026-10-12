@@ -467,6 +467,34 @@ describe('osionos bridge receiver', () => {
 		assert.equal(result.results[0].id, 'photo-1');
 	});
 
+	it('serves the photo search over HTTP: the uploads module does not swallow /api/media/unsplash/search', async () => {
+		const config = { ...testConfig(), unsplashAccessKey: 'unsplash-route-key' };
+		const upstream = [];
+		const server = createBridgeServer({
+			config,
+			fetchImpl: async (url, init = {}) => {
+				upstream.push({ url: String(url), authorization: init.headers?.Authorization });
+				return new Response(JSON.stringify({
+					total: 1,
+					results: [{ id: 'photo-over-http', urls: { small: 'https://images.unsplash.com/small', regular: 'https://images.unsplash.com/regular' } }],
+				}), { status: 200, headers: { 'content-type': 'application/json' } });
+			},
+		});
+		const baseUrl = await listen(server);
+
+		try {
+			const response = await fetch(`${baseUrl}/api/media/unsplash/search?query=dispatcher%20order&perPage=3`);
+			assert.equal(response.status, 200);
+			const payload = await response.json();
+			assert.equal(payload.results[0].id, 'photo-over-http');
+			assert.equal(upstream.length, 1);
+			assert.equal(new URL(upstream[0].url).hostname, 'api.unsplash.com');
+			assert.equal(upstream[0].authorization, 'Client-ID unsplash-route-key');
+		} finally {
+			await new Promise((resolveClose) => server.close(resolveClose));
+		}
+	});
+
 	it('rejects Unsplash search when the bridge key is missing', async () => {
 		await assert.rejects(() => searchUnsplashPhotos({}, configFromEnv({}), async () => new Response('{}')), /Unsplash access key is not configured/);
 	});
