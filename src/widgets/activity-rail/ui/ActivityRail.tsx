@@ -21,7 +21,8 @@ import { useInstalledApps } from "@/features/marketplace/model/useInstalledApps"
 import { installedTab } from "@/features/marketplace/model/installedAppLauncher";
 import { RailIcon } from "./RailIcon";
 import { RailHomeButton } from "./RailHomeButton";
-import { RAIL_TOP_ITEMS, type RailItem } from "../model/railItems";
+import { isWorkbenchEnabled } from "@/shared/config/featureFlags";
+import { railTopItems, visiblePanel, type RailItem } from "../model/railItems";
 import { useConnectionNotifications, useIncomingInviteCount } from "@/widgets/notifications/model/useConnectionNotifications";
 
 interface Props {
@@ -38,6 +39,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
   const selectPanel = useUIStore((s) => s.selectPanel);
   const installedMap = useInstalledApps((s) => s.installed);
   const listRef = useRef<HTMLDivElement>(null);
+  const workbench = isWorkbenchEnabled();
 
   // Live connection-invitation notifications: hydrate + realtime; badge = incoming count.
   useConnectionNotifications();
@@ -80,8 +82,10 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
     buttons[(next + buttons.length) % buttons.length]?.focus();
   }, []);
 
+  // Highlight the panel that is actually shown, so a stale workbench id reads as Files.
+  const shownPanel = visiblePanel(activePanel, workbench);
   const isPanelItemActive = (item: RailItem) =>
-    item.action.kind === "panel" && sidebarMode === "panel" && activePanel === item.action.panel;
+    item.action.kind === "panel" && sidebarMode === "panel" && shownPanel === item.action.panel;
 
   return (
     <div
@@ -94,7 +98,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
     >
       <RailHomeButton />
       <div className="my-1 h-px w-6 bg-[var(--osio-border-default)]" />
-      {RAIL_TOP_ITEMS.map((item) => (
+      {railTopItems(workbench).map((item) => (
         <RailIcon
           key={item.id}
           label={item.label}

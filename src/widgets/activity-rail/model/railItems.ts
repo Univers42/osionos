@@ -14,12 +14,15 @@ import {
   Bell,
   Bot,
   CalendarRange,
+  CircleAlert,
   Database,
   Files,
+  GitBranch,
   Globe,
   ListTodo,
   Mail,
   MessagesSquare,
+  Play,
   Search,
   Store,
   type LucideIcon,
@@ -62,6 +65,27 @@ export const RAIL_TOP_ITEMS: RailItem[] = [
   { id: "marketplace", label: "Marketplace", Icon: Store, action: { kind: "panel", panel: "marketplace" } },
   { id: "database", label: "Databases", Icon: Database, action: { kind: "panel", panel: "database" } },
 ];
+
+/** Workbench group, appended under the top group only when the workbench flag is on. */
+export const RAIL_WORKBENCH_ITEMS: RailItem[] = [
+  { id: "scm", label: "Source Control", Icon: GitBranch, action: { kind: "panel", panel: "scm" } },
+  { id: "run", label: "Run", Icon: Play, action: { kind: "panel", panel: "run" } },
+  { id: "problems", label: "Problems", Icon: CircleAlert, action: { kind: "panel", panel: "problems" } },
+];
+
+/** The top group for the given flag state. Returns RAIL_TOP_ITEMS itself when off
+ *  (same identity, no per-render copy). */
+export function railTopItems(workbench: boolean): RailItem[] {
+  return workbench ? [...RAIL_TOP_ITEMS, ...RAIL_WORKBENCH_ITEMS] : RAIL_TOP_ITEMS;
+}
+
+/** The panel actually shown for a stored activePanel. A workbench panel persisted
+ *  while the flag is off would otherwise render an empty switch case, so it falls
+ *  back to the Explorer. */
+export function visiblePanel(panel: ActivePanel, workbench: boolean): ActivePanel {
+  if (workbench) return panel;
+  return panel === "scm" || panel === "run" || panel === "problems" ? "files" : panel;
+}
 
 /** App launchers — open an in-app iframe tab rather than a panel. */
 export const RAIL_APP_ITEMS: RailItem[] = [
