@@ -250,6 +250,43 @@ export const assetScenarios = [
   ),
   defineScenario(
     "12. Emojis, Icons & Media",
+    "Expanded catalogs",
+    "the GIFs tab previews are static: an animation is fetched only for the hovered emoji and the picked icon",
+    async ({ page, appUrl }) => {
+      // The 512px animated file is ~330 KB and decodes at 512x512 per frame. Used
+      // as the 26px thumbnail it cost 58 MB and +660 MB of browser memory just to
+      // open the tab (measured on the live app), so the grid must not request it.
+      const animatedRequests = [];
+      await page.route("**/notoemoji/latest/**", (route) =>
+        route.fulfill({ status: 200, contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>' }),
+      );
+      page.on("request", (request) => {
+        if (/\/notoemoji\/latest\/[^/]+\/512\.webp$/.test(request.url())) animatedRequests.push(request.url());
+      });
+
+      await openFreshPage(page, appUrl);
+      await addPageIcon(page);
+      await openPageIconPicker(page);
+      await page.getByRole("button", { name: /^GIFs$/ }).click();
+      const picker = page.getByTestId("emoji-picker");
+      const previews = picker.locator('img[src*="notoemoji"]');
+      await expect.poll(() => previews.count()).toBeGreaterThan(8);
+      await expect.poll(() => previews.evaluateAll((images) => images.every((image) => image.complete))).toBe(true);
+      expect(animatedRequests).toEqual([]);
+
+      const firstTile = picker.locator('button:has(img[src*="notoemoji"])').first();
+      await firstTile.hover();
+      await expect(firstTile.locator("img")).toHaveAttribute("src", /\/512\.webp$/);
+      expect(animatedRequests).toHaveLength(1);
+      await page.getByRole("button", { name: /^GIFs$/ }).hover();
+      await expect(firstTile.locator("img")).toHaveAttribute("src", /\/emoji\.svg$/);
+
+      await firstTile.click();
+      await expect(pageIconButton(page).locator('img[src$="/512.webp"]')).toHaveCount(1);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
     "Callout icons",
     "new callout blocks start with the default light bulb icon",
     async ({ page, appUrl }) => {
@@ -379,6 +416,27 @@ export const assetScenarios = [
       await openCoverPicker(page);
       await clickOutside(page);
       await expect(page.getByTestId("page-cover-picker")).toHaveCount(0);
+    },
+  ),
+  defineScenario(
+    "12. Emojis, Icons & Media",
+    "Page cover",
+    "the Video tab has a search box; without a bridge it says so and the bundled clips stay pickable",
+    async ({ page, appUrl }) => {
+      // The offline build has no bridge, so the Pixabay search cannot answer here;
+      // the results flow is covered by tests/bridge and by a probe on a live stack.
+      await openFreshPage(page, appUrl);
+      await addPageCover(page);
+      await openCoverPicker(page);
+      const picker = page.getByTestId("page-cover-picker");
+      await picker.getByRole("button", { name: "Video", exact: true }).click();
+      const search = picker.getByPlaceholder("Search videos");
+      await expect(search).toBeVisible();
+      await expect.poll(() => picker.getByTestId("cover-picker-item").count()).toBeGreaterThan(0);
+
+      await search.fill("ocean waves");
+      await expect(picker.getByText("Video search is unavailable right now.")).toBeVisible();
+      await expect.poll(() => picker.getByTestId("cover-picker-item").count()).toBeGreaterThan(0);
     },
   ),
   defineScenario(

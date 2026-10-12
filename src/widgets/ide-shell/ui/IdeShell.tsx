@@ -17,6 +17,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { useIdeModeStore } from "@/features/ide/model/ideModeStore";
 import { useIdeFsSync } from "@/features/ide/model/useIdeFsSync";
+import { useSandboxHealthProbe } from "@/features/ide/model/sandboxHealthStore";
 import { buildIdeFileTree, flattenIdeTree } from "@/features/ide/model/ideFileTree";
 import { IdeActivityBar } from "./IdeActivityBar";
 import { IdeSidePanel } from "./IdeSidePanel";
@@ -44,6 +45,7 @@ export const IdeShell: React.FC = () => {
 
   // Live writeback: shell/git-created files → pages, edits/deletes tracked; also
   // materializes the tree into the sandbox on attach. No-op without a sandbox.
+  useSandboxHealthProbe(workspaceId, true);
   useIdeFsSync(workspaceId, inIdeMode);
 
   // Ctrl+` and Ctrl+J toggle the dock (both VS Code chords) — terminal-first

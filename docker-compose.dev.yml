@@ -32,9 +32,13 @@ services:
       - osionos_net
 
   browser-tests:
+    # Tag per source so a system-Chromium build never shadows the default download build.
+    image: osionos-browser-tests:${PW_BROWSER_SOURCE:-download}
     build:
       context: .
       dockerfile: docker/services/browser-tests/Dockerfile
+      args:
+        PW_BROWSER_SOURCE: ${PW_BROWSER_SOURCE:-download}
     working_dir: /app
     init: true
     ipc: host

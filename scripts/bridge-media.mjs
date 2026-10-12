@@ -87,7 +87,10 @@ export function createMediaHandler({ config, verifySession, fetchImpl = fetch })
 	const deps = { fetchImpl, env: process.env };
 	return async function handleMediaRoute(url, request, response, requestConfig = config) {
 		const pathname = url.pathname;
-		if (!pathname.startsWith('/api/media/')) return false;
+		// Only the uploads subtree is ours. Claiming all of /api/media/ answered
+		// 404 for /api/media/unsplash/search, which bridge-api.mjs serves later in
+		// the dispatch order, so the cover photo search was unreachable.
+		if (pathname !== '/api/media/uploads' && !pathname.startsWith('/api/media/uploads/')) return false;
 		const method = (request.method || 'GET').toUpperCase();
 		try {
 			const serve = SERVE_RE.exec(pathname);

@@ -24,6 +24,8 @@ import { useIdeSyncConflicts } from "./ideSyncConflicts";
 import { materializeWorkspace } from "./materialize";
 import { pageStoreFacade } from "./pageStoreFacade";
 import { createReconnectBackoff } from "./reconnectBackoff";
+import { isSandboxOnline, useSandboxHealthStore } from "./sandboxHealthStore";
+import { isDeliberateClose } from "./wsCloseCodes";
 import { usePageStore } from "@/store/usePageStore";
 
 /** Normalize a container path to the sanitized segment form pages use. */
@@ -130,19 +132,25 @@ export async function applyFsEvent(evt: FsEvent, workspaceId: string): Promise<v
  * Live writeback (P4): streams the in-sandbox fs-agent's events, PUBLISHES them
  * on the per-workspace bus (the sandbox:// provider's watch() rides the same
  * socket), and maps them onto the page mount via the sync engine. On "ready"
- * it materializes the tree. Auto-reconnects with 1s/4s/15s backoff (reconnectBackoff).
+ * it materializes the tree. Dials only while the shared sandbox health is online;
+ * a deliberate server close parks (health store owns the state, no timer), any
+ * other close re-probes and reconnects with 1s/4s/15s backoff (reconnectBackoff).
  */
 export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
+  const online = useSandboxHealthStore((s) => isSandboxOnline(s.state));
   useEffect(() => {
-    if (!enabled || !workspaceId || !API_BASE) return;
+    if (!enabled || !online || !workspaceId || !API_BASE) return;
     let disposed = false;
+    // One Output line per outage, re-armed once data flows again — a down
+    // sandbox otherwise logs on every backoff attempt.
+    let outageLogged = false;
     let ws: WebSocket | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const backoff = createReconnectBackoff();
 
     const connect = () => {
       const jwt = getActivePageJwt() ?? "";
-      if (disposed || !jwt) return;
+      if (disposed || !jwt || !isSandboxOnline(useSandboxHealthStore.getState().state)) return;
       const wsBase = API_BASE.replace(/^http/, "ws"); // http→ws, https→wss
       ws = new WebSocket(`${wsBase}/api/ide/fsync?workspaceId=${encodeURIComponent(workspaceId)}`, ideWsProtocols(jwt));
       ws.binaryType = "arraybuffer";
@@ -150,6 +158,7 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
       let buffer = "";
       ws.onmessage = (ev) => {
         backoff.delivered();
+        outageLogged = false;
         buffer += typeof ev.data === "string" ? ev.data : new TextDecoder().decode(ev.data);
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
@@ -160,11 +169,23 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
           void applyFsEvent(evt, workspaceId);
         }
       };
-      ws.onclose = () => {
+      ws.onclose = (ev) => {
         if (disposed) return;
+        const health = useSandboxHealthStore.getState();
+        if (isDeliberateClose(ev.code)) {
+          // Retrying cannot help; the store flips offline and the UI shows Retry.
+          health.markClosed(ev.code, ev.reason);
+          if (!outageLogged) ideOutput("fs-sync", `sandbox refused the sync socket (${ev.code}) — ${ev.reason || "no reason given"}`);
+          outageLogged = true;
+          return;
+        }
+        void health.probe(workspaceId);
         const delayMs = backoff.next();
-        ideOutput("fs-sync", `disconnected — reconnecting in ${delayMs / 1000}s`);
-        console.warn(`[ide] fs sync disconnected — reconnecting in ${delayMs / 1000}s`);
+        if (!outageLogged) {
+          ideOutput("fs-sync", `disconnected — reconnecting in ${delayMs / 1000}s`);
+          console.warn(`[ide] fs sync disconnected — reconnecting (further attempts are not logged)`);
+        }
+        outageLogged = true;
         timer = setTimeout(connect, delayMs);
       };
     };
@@ -175,5 +196,5 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
       if (timer) clearTimeout(timer);
       try { ws?.close(); } catch { /* already closed */ }
     };
-  }, [workspaceId, enabled]);
+  }, [workspaceId, enabled, online]);
 }
