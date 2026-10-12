@@ -39,6 +39,7 @@ import {
   type ColorPickerPreset,
 } from "@univers42/ui-collection";
 import { parseInlineMarkdown } from "@osionos/markdown-engine";
+import { sanitizeUrl } from "@osionos/markdown-engine/renderCore";
 import {
   applyInlineFormatting,
   autoformatInlineMarkdown,
@@ -1143,9 +1144,11 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     renderContent(canonicalSourceRef.current);
   }, [renderContent]);
 
+  // The href comes from the stored link source, not the rendered anchor, so it has
+  // not been through the renderer's scheme allowlist: a javascript: link would open.
   const handleOpenLinkUrl = useCallback((href: string) => {
-    const normalized = normalizeInlineLinkHref(href);
-    if (normalized) globalThis.open(normalized, "_blank", "noopener,noreferrer");
+    const safeHref = sanitizeUrl(normalizeInlineLinkHref(href));
+    if (safeHref) globalThis.open(safeHref, "_blank", "noopener,noreferrer");
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
