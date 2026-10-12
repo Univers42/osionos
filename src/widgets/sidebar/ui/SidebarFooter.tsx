@@ -24,7 +24,7 @@ import {
 import { PanelsTopLeft } from "lucide-react";
 
 import { SidebarNavItem } from "./SidebarNavItem";
-import { isIdeEnabled } from "@/shared/config/featureFlags";
+import { isIdeEnabled, isWorkbenchEnabled } from "@/shared/config/featureFlags";
 import { useDevMode } from "@/shared/config/useDevMode";
 import { useIdeModeStore } from "@/features/ide/model/ideModeStore";
 import { useUserStore } from "@/features/auth";
@@ -55,6 +55,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   const dev = useDevMode((s) => s.dev);
   const toggleDev = useDevMode((s) => s.toggle);
   const ideOn = isIdeEnabled();
+  const workbenchOn = isWorkbenchEnabled();
   // IDE Workspace: flip the whole content region into the dedicated VS Code
   // layout for this workspace (per-workspace, persisted). Gated by the same flag.
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
@@ -95,7 +96,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
             onClick={() => onOpenConsole?.()}
           />
         )}
-        {ideOn && (
+        {!workbenchOn && ideOn && (
           <SidebarNavItem
             icon={<Code2 size={16} />}
             label="Dev Mode"
@@ -115,7 +116,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
             }
           />
         )}
-        {ideOn && workspaceId && (
+        {!workbenchOn && ideOn && workspaceId && (
           <SidebarNavItem
             icon={<PanelsTopLeft size={16} />}
             label="IDE Workspace"

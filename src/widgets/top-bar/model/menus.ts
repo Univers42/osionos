@@ -14,7 +14,7 @@ import { useUserStore } from "@/features/auth";
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
 import { useIdeModeStore } from "@/features/ide/model/ideModeStore";
 import { openOrCreateTasksFile, runActiveFile, runDefaultTask } from "@/features/ide/model/ideTasks";
-import { isDrawEnabled, isIdeEnabled, isQuickCaptureEnabled, isWhiteboardEnabled } from "@/shared/config/featureFlags";
+import { isDrawEnabled, isIdeEnabled, isQuickCaptureEnabled, isWhiteboardEnabled, isWorkbenchEnabled } from "@/shared/config/featureFlags";
 import { useQuickCapture } from "@/features/quick-capture/model/useQuickCapture";
 import { applyTheme, persistThemeMode } from "@/shared/config/theme";
 import { useUIStore } from "@/shared/config/uiStore";
@@ -26,6 +26,7 @@ import { consoleTab, drawTab, homeTab, trashTab, whiteboardAppUrl, whiteboardTab
 import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { usePalette } from "./usePalette";
+import { openWorkbenchTerminal, workbenchViewMenu } from "@/widgets/workbench/model/workbenchMenuActions";
 
 export interface MenuItem {
   id: string;
@@ -55,6 +56,11 @@ const DOCS_URL = "https://github.com/Univers42/osionos";
 function openIdeTerminal(mode: "new" | "split"): void {
   const workspace = useUserStore.getState().activeWorkspace();
   if (!workspace) return;
+
+  if (isWorkbenchEnabled()) {
+    openWorkbenchTerminal(mode);
+    return;
+  }
   const modeState = useIdeModeStore.getState();
   const dock = useIdeDockStore.getState();
   if (mode === "split") dock.splitTerminal();
@@ -129,6 +135,7 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
       id: "view", label: "View", items: [
         { id: "view.sidebar", label: "Toggle sidebar", run: () => useUIStore.getState().toggleSidebar() },
         { id: "view.theme", label: "Toggle theme", run: toggleTheme, separatorAfter: true },
+        ...(isWorkbenchEnabled() ? workbenchViewMenu() : []),
         { id: "view.home", label: "Home", run: () => layout().openTab(homeTab()) },
         { id: "view.trash", label: "Trash", run: () => layout().openTab(trashTab()) },
         { id: "view.console", label: "BaaS Console", run: () => layout().openTab(consoleTab()) },
@@ -153,16 +160,18 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
           : []),
       ],
     },
-    ...(isIdeEnabled()
+    ...(isIdeEnabled() || isWorkbenchEnabled()
       ? [{
           id: "terminal", label: "Terminal", items: [
             { id: "term.new", label: "New Terminal", accelerator: "⌃`", run: () => openIdeTerminal("new") },
             { id: "term.split", label: "Split Terminal", run: () => openIdeTerminal("split") },
-            {
-              id: "term.window", label: "New Terminal Window",
-              run: () => useToastStore.getState().push({ kind: "info", title: "New Terminal Window", description: "Detached windows land with the desktop shell — use Split Terminal meanwhile." }),
-              separatorAfter: true,
-            },
+            ...(!isWorkbenchEnabled()
+              ? [{
+                  id: "term.window", label: "New Terminal Window",
+                  run: () => useToastStore.getState().push({ kind: "info", title: "New Terminal Window", description: "Detached windows land with the desktop shell — use Split Terminal meanwhile." }),
+                  separatorAfter: true,
+                }]
+              : []),
             { id: "term.run-task", label: "Run Task", run: () => void runDefaultTask() },
             { id: "term.run-build", label: "Run Build Task", run: () => void runDefaultTask("build") },
             { id: "term.run-active", label: "Run Active File", run: () => void runActiveFile() },

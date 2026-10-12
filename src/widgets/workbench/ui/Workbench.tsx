@@ -17,6 +17,7 @@ import { useIdeFsSync } from "@/features/ide/model/useIdeFsSync";
 import { useSandboxHealthProbe } from "@/features/ide/model/sandboxHealthStore";
 import { MainContent } from "@/widgets/page-renderer/ui/MainContent";
 import { useDockHotkeys } from "@/widgets/workbench/model/useDockHotkeys";
+import { useOpenDockOnRunRequest } from "@/widgets/workbench/model/useOpenDockOnRunRequest";
 import { useWorkbenchStore } from "@/widgets/workbench/model/workbenchStore";
 import { DockSplitter } from "./DockSplitter";
 import { WorkbenchDock } from "./WorkbenchDock";
@@ -34,6 +35,7 @@ export const Workbench: React.FC = () => {
   // the hook itself no-ops without a bridge URL or workspace.
   useIdeFsSync(workspaceId, true);
   useDockHotkeys();
+  useOpenDockOnRunRequest();
 
   return (
     <div data-osio-workbench className="flex h-full w-full min-w-0 flex-col">
