@@ -68,44 +68,44 @@ interface Props {
   onOpenConsole?: () => void;
 }
 
+function PanelBody({ panel, onOpenSettings, onOpenTrash, onOpenConsole }: Props & { panel: ActivePanel }) {
+  switch (panel) {
+    case "files":
+      return <FilesPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />;
+    case "search":
+      return <SearchPanelSlot />;
+    case "agents":
+      return <AgentsPanel />;
+    case "messenger":
+      return <MessengerPanel />;
+    case "notifications":
+      return <NotificationsPanel />;
+    case "tasks":
+      return <MyTasksPanel />;
+    case "public":
+      return <PublicSwitcherPanel />;
+    case "marketplace":
+      return <MarketplacePanel />;
+    case "database":
+      return <DatabasesPanel />;
+    case "scm":
+      return <IdeSourceControlPanel />;
+    case "run":
+      return <IdeRunPanel />;
+    case "problems":
+      return <IdeProblemsPanel />;
+    default:
+      return null;
+  }
+}
+
 /** The expanded side panel: shared workspace/account header + the active view.
  *  Memoized — it stays mounted as a hidden layer, and the parent re-renders on
  *  every rail-preview flip; memo keeps those flips from re-rendering the tree. */
-export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, onOpenTrash, onOpenConsole }: Props) {
+export const SidebarPanel = React.memo(function SidebarPanel(handlers: Props) {
   const activePanel = useUIStore((s) => s.activePanel);
   const collapseToRail = useUIStore((s) => s.collapseToRail);
   const panel = visiblePanel(activePanel, isWorkbenchEnabled());
-
-  const body = () => {
-    switch (panel) {
-      case "files":
-        return <FilesPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />;
-      case "search":
-        return <SearchPanelSlot />;
-      case "agents":
-        return <AgentsPanel />;
-      case "messenger":
-        return <MessengerPanel />;
-      case "notifications":
-        return <NotificationsPanel />;
-      case "tasks":
-        return <MyTasksPanel />;
-      case "public":
-        return <PublicSwitcherPanel />;
-      case "marketplace":
-        return <MarketplacePanel />;
-      case "database":
-        return <DatabasesPanel />;
-      case "scm":
-        return <IdeSourceControlPanel />;
-      case "run":
-        return <IdeRunPanel />;
-      case "problems":
-        return <IdeProblemsPanel />;
-      default:
-        return null;
-    }
-  };
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--osio-bg-subtle)]">
@@ -119,7 +119,7 @@ export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, o
         </IconButton>
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
-        <React.Suspense fallback={null}>{body()}</React.Suspense>
+        <React.Suspense fallback={null}><PanelBody panel={panel} {...handlers} /></React.Suspense>
       </div>
     </div>
   );

@@ -39,55 +39,70 @@ const DOT_CLASS: Record<SandboxHealthState, string> = {
 
 const CHIP = "inline-flex items-center gap-1.5 rounded px-1.5 hover:bg-[var(--osio-bg-hover)]";
 
-/** Git branch is intentionally absent: no hook exposes it yet, and a placeholder would lie. */
-export const WorkbenchStatusBar: React.FC = () => {
+const SandboxChip: React.FC = () => {
   const state = useSandboxHealthStore((s) => s.state);
   const reason = useSandboxHealthStore((s) => s.reason);
   const retry = useSandboxHealthStore((s) => s.retry);
+  const online = isSandboxOnline(state);
+  return (
+    <button
+      type="button"
+      data-testid="sandbox-chip"
+      onClick={online ? undefined : () => void retry()}
+      disabled={online}
+      title={online ? "Sandbox is running" : `${reason ?? STATE_LABEL[state]} - click to retry`}
+      className={`${CHIP} disabled:cursor-default disabled:hover:bg-transparent`}
+    >
+      <span aria-hidden className={`h-2 w-2 rounded-full ${DOT_CLASS[state]}`} />
+      {STATE_LABEL[state]}
+    </button>
+  );
+};
+
+const ProblemsChip: React.FC = () => {
   const problems = useDiagnosticsStore((s) =>
     Object.values(s.byUri).reduce((n, list) => n + list.length, 0),
   );
-  const dockOpen = useWorkbenchStore((s) => s.dockOpen);
-  const toggleDock = useWorkbenchStore((s) => s.toggleDock);
   const openDock = useWorkbenchStore((s) => s.openDock);
-  const online = isSandboxOnline(state);
-
   return (
-    <footer
-      data-testid="workbench-statusbar"
-      className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-border-default)] bg-[var(--osio-topbar-bg)] px-2 text-[11px] text-[var(--osio-text-secondary)]"
-      style={{ height: "var(--osio-statusbar-h)" }}
+    <button
+      type="button"
+      onClick={() => openDock("problems")}
+      aria-label={`${problems} problems`}
+      title="Problems"
+      className={CHIP}
     >
-      <button
-        type="button"
-        data-testid="sandbox-chip"
-        onClick={online ? undefined : () => void retry()}
-        disabled={online}
-        title={online ? "Sandbox is running" : `${reason ?? STATE_LABEL[state]} - click to retry`}
-        className={`${CHIP} disabled:cursor-default disabled:hover:bg-transparent`}
-      >
-        <span aria-hidden className={`h-2 w-2 rounded-full ${DOT_CLASS[state]}`} />
-        {STATE_LABEL[state]}
-      </button>
-      <button
-        type="button"
-        onClick={() => openDock("problems")}
-        aria-label={`${problems} problems`}
-        title="Problems"
-        className={CHIP}
-      >
-        <AlertCircle size={12} aria-hidden /> {problems}
-      </button>
-      <span className="flex-1" />
-      <button
-        type="button"
-        onClick={toggleDock}
-        aria-pressed={dockOpen}
-        title="Toggle panel (Ctrl+J)"
-        className={CHIP}
-      >
-        <PanelBottom size={12} aria-hidden /> Panel
-      </button>
-    </footer>
+      <AlertCircle size={12} aria-hidden /> {problems}
+    </button>
   );
 };
+
+const PanelToggleChip: React.FC = () => {
+  const dockOpen = useWorkbenchStore((s) => s.dockOpen);
+  const toggleDock = useWorkbenchStore((s) => s.toggleDock);
+  return (
+    <button
+      type="button"
+      onClick={toggleDock}
+      aria-pressed={dockOpen}
+      title="Toggle panel (Ctrl+J)"
+      className={CHIP}
+    >
+      <PanelBottom size={12} aria-hidden /> Panel
+    </button>
+  );
+};
+
+/** Git branch is intentionally absent: no hook exposes it yet, and a placeholder would lie. */
+export const WorkbenchStatusBar: React.FC = () => (
+  <footer
+    data-testid="workbench-statusbar"
+    className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-border-default)] bg-[var(--osio-topbar-bg)] px-2 text-[11px] text-[var(--osio-text-secondary)]"
+    style={{ height: "var(--osio-statusbar-h)" }}
+  >
+    <SandboxChip />
+    <ProblemsChip />
+    <span className="flex-1" />
+    <PanelToggleChip />
+  </footer>
+);
