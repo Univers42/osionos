@@ -17,6 +17,8 @@ import "@xterm/xterm/css/xterm.css";
 
 import { useUserStore } from "@/features/auth";
 import { useIdeTerminal } from "@/features/ide/model/useIdeTerminal";
+import { isSandboxReachable, useSandboxHealthStore } from "@/features/ide/model/sandboxHealthStore";
+import { SandboxUnavailable } from "./SandboxUnavailable";
 
 /** xterm.js terminal over the sandbox PTY (P3). Lazy-loaded from IdeBottomStrip
  *  so xterm never lands in the warm IDE chunk — it loads on first terminal open.
@@ -52,14 +54,15 @@ export const IdeTerminal: React.FC<{ termId?: string }> = ({ termId = "0" }) => 
     return () => ro.disconnect();
   }, [term]);
 
-  const status = useIdeTerminal(term, workspaceId, termId);
+  const { closedReason, reconnect } = useIdeTerminal(term, workspaceId, termId);
+  const reachable = useSandboxHealthStore((s) => isSandboxReachable(s.state));
 
   return (
     <div className="relative min-h-0 flex-1">
       <div ref={hostRef} className="absolute inset-0 px-2 py-1" />
-      {status === "unavailable" && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-[12px] text-[var(--osio-code-fg-muted)]">
-          Sign in and enable the workspace sandbox (OSIONOS_IDE_SANDBOX) to use the terminal.
+      {(!reachable || closedReason !== null) && (
+        <div className="absolute inset-0">
+          <SandboxUnavailable onRetried={(next) => { if (isSandboxReachable(next)) reconnect(); }} />
         </div>
       )}
     </div>
