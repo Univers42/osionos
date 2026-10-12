@@ -73,7 +73,7 @@ export const CoverTile: React.FC<CoverTileProps> = ({ item, selected, video, onS
         )}
         {video && motion ? (
           <video
-            src={normalizeMediaSource(item.ref)}
+            src={normalizeMediaSource(item.previewVideoUrl ?? item.ref)}
             className="absolute inset-0 h-full w-full object-cover"
             muted
             loop
