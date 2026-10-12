@@ -12,7 +12,6 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, FolderPlus, Hash, Lock, MessageSquare, Volume2, Video, GitBranch, Archive, Bot } from "lucide-react";
-import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useShallow } from "zustand/react/shallow";
 
 import type { ActivePage, PageEntry } from "@/entities/page";
@@ -25,10 +24,10 @@ import { isFavoritesEnabled, isIdeEnabled } from "@/shared/config/featureFlags";
 import { useDevMode } from "@/shared/config/useDevMode";
 import { createCodeFileBlock } from "@/features/ide/model/codeFile";
 import { OsionosAppsSection } from "./OsionosAppsSection";
+import { RecentPageActions, RecentPageRow } from "./RecentPageRow";
 import { PageTreeItem } from "./PageTreeItem";
 import { SidebarTreeToolbar } from "./SidebarTreeToolbar";
 import { useSidebarTreeDnd } from "../model/sidebarTreeDnd";
-import { PageOptionsMenu } from "@/features/page-management";
 import { byPageOrder } from "./pageTreeItem.helpers";
 import { usePageStore } from "@/store/usePageStore";
 import {
@@ -50,23 +49,7 @@ import {
 
 const EMPTY_PAGE_IDS: readonly string[] = [];
 const EMPTY_WORKSPACE_PAGES: readonly PageEntry[] = [];
-type PageStoreState = ReturnType<typeof usePageStore.getState>;
 type RootPageBucket = "agent" | "private" | "owned-shared" | "shared-workspace";
-
-export function selectPageAccessEntry(state: PageStoreState, pageId: string): PageEntry | null {
-  const index = state.pagesIndex[pageId];
-  const page = index ? state.pages[index.workspaceId]?.[index.index] : undefined;
-  if (!page) return null;
-  return {
-    _id: page._id,
-    title: page.title,
-    icon: page.icon,
-    workspaceId: page.workspaceId,
-    ownerId: page.ownerId,
-    visibility: page.visibility,
-    collaborators: page.collaborators,
-  };
-}
 
 function selectRootPageIds(
   pages: readonly PageEntry[],
@@ -89,95 +72,6 @@ function selectRootPageIds(
 interface WorkspaceRef {
   _id: string;
 }
-
-interface RecentPageActionsProps {
-  recent: ActivePage;
-  active: boolean;
-  onRedirectHome: () => void;
-  onAddChild: (e: React.MouseEvent, recent: ActivePage) => void;
-}
-
-const RecentPageActions: React.FC<RecentPageActionsProps> = ({
-  recent,
-  active,
-  onRedirectHome,
-  onAddChild,
-}) => {
-  const page = usePageStore(useShallow((s) => selectPageAccessEntry(s, recent.id)));
-  const accessContext = usePageAccessContext();
-
-  if (!page || !canReadPage(page, accessContext)) {
-    return null;
-  }
-
-  return (
-    <div className="flex items-center gap-0.5 mr-0.5 shrink-0">
-      <PageOptionsMenu
-        pageId={recent.id}
-        workspaceId={recent.workspaceId}
-        pageTitle={recent.title || "Untitled"}
-        isActivePage={active}
-        onRedirectHome={onRedirectHome}
-      />
-      <button
-        type="button"
-        className="p-1 rounded-md text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-        onClick={(e) => onAddChild(e, recent)}
-        title="Add child page"
-      >
-        <Plus size={14} />
-      </button>
-    </div>
-  );
-};
-
-interface RecentSidebarItemProps {
-  recent: ActivePage;
-  activePageId: string | null | undefined;
-  onOpenPage: (page: ActivePage) => void;
-  onRedirectHome: () => void;
-  onAddChild: (e: React.MouseEvent, recent: ActivePage) => void;
-}
-
-const RecentSidebarItem: React.FC<RecentSidebarItemProps> = ({
-  recent,
-  activePageId,
-  onOpenPage,
-  onRedirectHome,
-  onAddChild,
-}) => {
-  const page = usePageStore(useShallow((s) => selectPageAccessEntry(s, recent.id)));
-  const accessContext = usePageAccessContext();
-
-  if (!page || !canReadPage(page, accessContext)) {
-    return null;
-  }
-
-  const isActive = activePageId === recent.id;
-
-  return (
-    <SidebarNavItem
-      icon={
-        recent.icon ? (
-          <IconValueView value={recent.icon} size={14} />
-        ) : (
-          <IconValueView value="icon:page" size={14} />
-        )
-      }
-      label={recent.title ?? "Untitled"}
-      active={isActive}
-      onClick={() => onOpenPage(recent)}
-      rightElement={
-        <RecentPageActions
-          recent={recent}
-          active={isActive}
-          onRedirectHome={onRedirectHome}
-          onAddChild={onAddChild}
-        />
-      }
-    />
-  );
-};
 
 interface SidebarPageTreeProps {
   recents: ActivePage[];
@@ -532,18 +426,19 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
           workspaceRecents
             .slice(0, 8)
             .map((r) => (
-              <RecentSidebarItem
+              <RecentPageRow
                 key={r.id}
                 recent={r}
                 activePageId={activePageId}
                 onOpenPage={openPage}
-                onRedirectHome={() =>
-                  usePageStore.setState({
-                    activePage: null,
-                    navigationPath: [],
-                  })
+                rightElement={
+                  <RecentPageActions
+                    recent={r}
+                    active={activePageId === r.id}
+                    onRedirectHome={() => usePageStore.setState({ activePage: null, navigationPath: [] })}
+                    onAddChild={handleAddChildToRecent}
+                  />
                 }
-                onAddChild={handleAddChildToRecent}
               />
             ))
         ) : (

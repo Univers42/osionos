@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { SidebarPageTree } from "@/widgets/sidebar/ui/SidebarPageTree";
@@ -18,6 +18,7 @@ import { SidebarFooter } from "@/widgets/sidebar/ui/SidebarFooter";
 import { FolderRail } from "@/widgets/home-variants/ui/HomeWorkspaceParts";
 import { ExplorerViewSwitch } from "./ExplorerViewSwitch";
 import { useExplorerView } from "../../model/explorerView";
+import { useFetchActiveWorkspacePages } from "../../model/useFetchActiveWorkspacePages";
 
 interface Props {
   onOpenSettings?: () => void;
@@ -31,13 +32,11 @@ interface Props {
 export const FilesPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpenConsole }) => {
   const explorerView = useExplorerView((s) => s.view);
   const activeUserId = useUserStore((s) => s.activeUserId);
-  const jwt = useUserStore((s) => s.activePageJwt() ?? "");
-  const activeWorkspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
+  const { activeWorkspaceId, jwt } = useFetchActiveWorkspacePages();
   const activeWorkspaceOwnerId = useUserStore((s) => s.activeWorkspace()?.ownerId ?? "");
   const activePageId = usePageStore((s) => s.activePage?.id ?? null);
   const activePageKind = usePageStore((s) => s.activePage?.kind ?? null);
   const recents = usePageStore((s) => s.recents);
-  const fetchPages = usePageStore((s) => s.fetchPages);
   const openPage = usePageStore((s) => s.openPage);
   const addPage = usePageStore((s) => s.addPage);
 
@@ -51,10 +50,6 @@ export const FilesPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpe
     () => (activeWorkspaceId && activeWorkspaceOwnerId !== activeUserId ? [{ _id: activeWorkspaceId }] : []),
     [activeUserId, activeWorkspaceId, activeWorkspaceOwnerId],
   );
-
-  useEffect(() => {
-    if (activeWorkspaceId && jwt) fetchPages(activeWorkspaceId, jwt);
-  }, [activeWorkspaceId, jwt, fetchPages]);
 
   const handleAddToWorkspace = useCallback(
     (wsId: string) => {
