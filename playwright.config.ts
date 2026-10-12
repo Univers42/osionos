@@ -59,6 +59,12 @@ const LEGACY_ON_SPECS = [
   "legacy-graph-semantic-zoom.spec.mjs",
 ];
 
+// Ponytail: PW_CHROMIUM_PATH (set by the browser-tests image built with PW_BROWSER_SOURCE=system)
+// runs Debian's Chromium, not the build this Playwright release was tested against, so a
+// protocol mismatch can surface as odd failures after a Playwright bump. Escape hatch: the
+// default `download` image build.
+const chromiumExecutablePath = process.env.PW_CHROMIUM_PATH || undefined;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   testIgnore: legacySecondBrainOn ? ["**/graph-studio-off/**"] : LEGACY_ON_SPECS.map((spec) => `**/${spec}`),
@@ -86,7 +92,9 @@ export default defineConfig({
     colorScheme: "light",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    // Playwright's bundled ffmpeg comes from the same blocked CDN, so the system build records no video.
+    video: chromiumExecutablePath ? "off" : "retain-on-failure",
+    launchOptions: { executablePath: chromiumExecutablePath },
   },
   webServer: {
     command: `pnpm exec vite --mode test --host 127.0.0.1 --port ${testPort} --strictPort`,
