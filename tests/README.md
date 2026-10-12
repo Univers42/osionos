@@ -87,6 +87,24 @@ Harness-level checks for rendering and non-editing coverage.
 
 Utility layer that converts scenario objects into native Playwright tests and splits serial vs parallel scenarios.
 
+### `tests/bench`
+
+Micro-benchmarks for pure hot-path modules (`*.bench.ts`, each exporting `bench` from
+`defineBench`). `harness.ts` warms up, calibrates a batch so one timed sample lasts ≥ 200 µs, and
+gates each case on its **p95 per operation** against `budgetNs`; `run.ts` prints the table, writes
+`test-results/bench/<name>.json` and exits 1 when a case is over budget.
+
+```bash
+npm run test:bench                                         # every tests/bench/*.bench.ts
+npm run test:bench -- tests/bench/explorer-rows.bench.ts   # one file
+```
+
+Budgets are about 3× the p95 measured when the case was written (the date and the numbers are
+in a comment above it). Numbers come from a shared machine inside Docker: a busy neighbour can
+push one case over budget (a false failure, never a false pass) — re-run before acting. Modules
+that import the browser-only graph (the page store, anything reaching `import.meta.env`) cannot
+load in node; their interaction cost is measured in the browser, not here.
+
 ## Official Commands
 
 Primary Docker commands:
