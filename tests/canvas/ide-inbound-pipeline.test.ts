@@ -103,6 +103,18 @@ test("queue: idle resolves only after everything queued so far settled", async (
   assert.equal(idleResolved, true);
 });
 
+test("queue: idle also waits for a task queued by a running task (a drain's flush)", async () => {
+  const queue = createSerialQueue(() => {});
+  let flushed = false;
+  void queue.run(async () => {
+    void queue.run(async () => {
+      flushed = true;
+    });
+  });
+  await queue.idle();
+  assert.equal(flushed, true);
+});
+
 test("decode: ASCII, multi-byte UTF-8 and empty content", () => {
   assert.equal(decodeUtf8Strict(utf8B64("hello world")), "hello world");
   assert.equal(decodeUtf8Strict(utf8B64("é")), "é");

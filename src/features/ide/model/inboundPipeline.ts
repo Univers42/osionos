@@ -32,8 +32,13 @@ export function createSerialQueue(report: (error: unknown) => void): SerialQueue
       tail = settled.then(() => {}); // keep the chain alive for the next run
       return settled;
     },
-    idle() {
-      return tail;
+    // Until the queue is empty, tasks queued meanwhile included: a drain's flush
+    // is queued by the event before it. O(tasks queued while waiting).
+    async idle() {
+      for (let seen = tail; ; seen = tail) {
+        await seen;
+        if (seen === tail) return;
+      }
     },
   };
 }
