@@ -769,6 +769,8 @@ describe('media routes spend provider keys, so they need a signed-in user', () =
 			assert.equal(result.results[0].id, 'ov-cc-1');
 		}
 		await assert.rejects(() => searchCoverPhotos({ query: 'unsplash is down' }, config, upstream(500)), (error) => error.status === 502);
+	});
+});
 
 describe('a member\'s private page stays theirs in a shared workspace', () => {
 	const otherMember = '6a1e5f1c-8f0b-4f0e-9a43-6d0c2b7b1a11';
