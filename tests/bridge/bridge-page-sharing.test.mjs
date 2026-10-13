@@ -66,18 +66,28 @@ describe('SEC1 PATCH guard — sharing keys from a non-owner are ignored, never 
 	});
 
 	const attempts = [
-		['visibility', { visibility: 'shared' }],
+		['visibility', { visibility: 'public' }],
 		['collaborators', { collaborators: [{ userId: IDS.userB, role: 'editor' }] }],
 		['workspaceId', { workspaceId: IDS.homeB }],
 	];
 	for (const [key, body] of attempts) {
-		it(`leaves the row unchanged when a non-owner sends ${key}, and the page stays unreadable`, async () => {
+		it(`ignores ${key} from a non-owner on a page they can read, and leaves the row unchanged`, async () => {
+			const mock = createPostgrestMock(teamWorld({ memberRole: 'editor' }));
+			const before = structuredClone(mock.page(IDS.sharedA));
+			await withBridge(config, mock.fetchImpl, async (base) => {
+				const result = await send(base, `/api/pages/${IDS.sharedA}`, asB, patch(body));
+				assert.equal(result.status, 200, result.text);
+				assert.deepEqual(result.body.ignored, [key]);
+				assert.deepEqual(mock.page(IDS.sharedA), before);
+			});
+		});
+
+		it(`404s ${key} from a non-owner on a page they cannot read, and the page stays unreadable`, async () => {
 			const mock = createPostgrestMock(teamWorld({ memberRole: 'editor' }));
 			const before = structuredClone(mock.page(IDS.privateA));
 			await withBridge(config, mock.fetchImpl, async (base) => {
 				const result = await send(base, `/api/pages/${IDS.privateA}`, asB, patch(body));
-				assert.equal(result.status, 200, result.text);
-				assert.deepEqual(result.body.ignored, [key]);
+				assert.equal(result.status, 404, result.text);
 				assert.deepEqual(mock.page(IDS.privateA), before);
 				assert.equal((await send(base, `/api/pages/${IDS.privateA}`, asB)).status, 404);
 			});
@@ -126,10 +136,12 @@ describe('SEC1 marketplace', () => {
 		});
 	});
 
-	it('does not return a foreign private page moved under the caller\'s app', async () => {
+	it('does not return a foreign private page placed under the caller\'s app', async () => {
 		const mock = createPostgrestMock(marketWorld());
 		await withBridge(config, mock.fetchImpl, async (base) => {
-			const moved = await send(base, `/api/pages/${IDS.privateA}`, asB, patch({ parentPageId: APPS.publishedB }));
+			const blind = await send(base, `/api/pages/${IDS.privateA}`, asB, patch({ parentPageId: APPS.publishedB }));
+			assert.equal(blind.status, 404, blind.text);
+			const moved = await send(base, `/api/pages/${IDS.privateA}`, asA, patch({ parentPageId: APPS.publishedB }));
 			assert.equal(moved.status, 200, moved.text);
 			const app = await send(base, `/api/marketplace/apps/${APPS.publishedB}`, asB);
 			assert.equal(app.status, 200, app.text);

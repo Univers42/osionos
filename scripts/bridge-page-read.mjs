@@ -27,8 +27,9 @@ export function pageVisibility(value) {
 	return PAGE_VISIBILITIES.has(value) ? value : 'private';
 }
 
-// UUIDs are case-insensitive: Postgres stores lower-case, a token may carry upper-case.
-function sameId(left, right) {
+// The one owner/collaborator id match. UUIDs are case-insensitive: Postgres stores
+// lower-case, a token may carry upper-case.
+export function sameId(left, right) {
 	return typeof left === 'string' && typeof right === 'string' && left !== '' && left.toLowerCase() === right.toLowerCase();
 }
 
