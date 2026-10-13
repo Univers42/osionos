@@ -130,7 +130,7 @@ test("keystroke CPU profile, workbench ON, default seed", async ({ page }) => {
 
 // The legacy page tree (workbench OFF) re-renders per sidebar row on a title keystroke
 // (titleTyping.spec.mjs): this case says which functions that time goes to.
-test("title keystroke CPU profile, workbench OFF, ~1000 pages", async ({ page }) => {
+test("title keystroke CPU profile, workbench OFF, ~5000 pages", async ({ page }) => {
   test.setTimeout(300_000);
   await bootApp(page, { workbench: false });
   await createNewWorkspacePage(page);
@@ -138,8 +138,8 @@ test("title keystroke CPU profile, workbench OFF, ~1000 pages", async ({ page })
   await title.waitFor();
   await title.click();
   await profileKeystrokeCase(page, title, {
-    seedPages: 1000,
-    caseName: "titleWorkbenchOff.pages1000",
-    rawName: "keystroke-profile.title-off-1000.cpuprofile",
+    seedPages: 5000,
+    caseName: "titleWorkbenchOff.pages5000",
+    rawName: "keystroke-profile.title-off-5000.cpuprofile",
   });
 });

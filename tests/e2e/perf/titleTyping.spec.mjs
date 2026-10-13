@@ -18,7 +18,7 @@
 //   workbench ON,  default seed  : p95 31.1-31.8 ms (floor 30.6-31.4)           -> 38
 //   workbench ON,  ~10000 pages  : p95 31.1-31.8 ms (floor 30.8-31.2)           -> 38
 //   workbench OFF, ~1000 pages   : p95 33.5 ms, median 29.5 (floor 30.8)        -> 60
-//   workbench OFF, ~5000 pages   : p95 110 ms, median 81.6, max 156 (floor 30.8) -> 330
+//   workbench OFF, ~5000 pages   : p95 81.5 ms, median 61.3 (floor 30.7)          -> 98
 // The workbench cases render NO explorer rows offline (explorerRows 0 in the report): the
 // workspace:// mount that serves pages without a sandbox is not wired yet, so they measure the
 // store, header and tab strip, not the tree.
@@ -28,6 +28,9 @@
 // waking every subscriber to it; each row's closed options menu scanned every page per store
 // commit; and the recents update re-rendered the whole tree, whose rows were not memoized. What
 // is left at 5000 pages is per mounted row: each row's store selectors run on every commit.
+// Then (p95 110 -> 81.5 ms at 5000): a title key was two store commits (updatePageTitle, then
+// the active-page patch) and each row subscribed to six store actions; now one commit, and rows
+// read actions at call time. Still linear: ~10 000 row subscriptions are notified per key.
 
 import { expect, test } from "@playwright/test";
 
@@ -38,7 +41,7 @@ test.use(PERF_USE);
 
 const SPEC = "titleTyping";
 const TARGET_MS = 16;
-const BUDGET = { workbenchOn: 38, pages10000: 38, workbenchOff1000: 60, workbenchOff5000: 330 };
+const BUDGET = { workbenchOn: 38, pages10000: 38, workbenchOff1000: 60, workbenchOff5000: 98 };
 
 async function openTitle(page, workbench) {
   await bootApp(page, { workbench });

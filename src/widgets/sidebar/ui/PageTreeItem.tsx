@@ -55,10 +55,9 @@ export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspace
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
-  const openPage = usePageStore((s) => s.openPage);
-  const addPage = usePageStore((s) => s.addPage);
-  const updatePageTitle = usePageStore((s) => s.updatePageTitle);
-  const archivePage = usePageStore((s) => s.archivePage);
+  // Store actions are read at call time (usePageStore.getState()), never subscribed: a row is
+  // mounted per visible page and every subscription re-runs on every store commit, so six
+  // action selectors per row cost 6 x rows callbacks per keystroke (titleTyping.spec.mjs).
   const page = usePageStore(useShallow((s) => selectPageTreeEntry(s, pageId)));
   const childPageIds = usePageStore(useShallow((s) => selectChildPageIds(s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES, pageId)));
   const accessContext = usePageAccessContext();
@@ -96,7 +95,7 @@ export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspace
   function handleRowClick(e: React.MouseEvent) {
     e.stopPropagation();
     if (isFolder) { setExpanded((o) => !o); return; }
-    openPage({
+    usePageStore.getState().openPage({
       id: pageEntry._id, workspaceId,
       kind: pageEntry.databaseId ? "database" : "page",
       title: pageEntry.title, icon: pageEntry.icon, databaseId: pageEntry.databaseId,
@@ -106,17 +105,17 @@ export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspace
   async function createChild(asFolder: boolean, e: React.MouseEvent) {
     e.stopPropagation();
     const title = asFolder ? "New folder" : "Untitled";
-    const child = await addPage(workspaceId, title, jwt, pageEntry._id, asFolder ? { surface: "folder" } : undefined);
+    const child = await usePageStore.getState().addPage(workspaceId, title, jwt, pageEntry._id, asFolder ? { surface: "folder" } : undefined);
     if (!child) return;
     setExpanded(true);
-    if (!asFolder) openPage({ id: child._id, workspaceId, kind: "page", title: child.title });
+    if (!asFolder) usePageStore.getState().openPage({ id: child._id, workspaceId, kind: "page", title: child.title });
   }
 
   // Quick-delete: with the row focused (after a click), Del archives the page —
   // confirmed once, then skippable via the modal's "Don't ask again".
   function doArchivePage() {
     setConfirmDelete(false);
-    void archivePage(pageEntry._id, workspaceId, jwt ?? "");
+    void usePageStore.getState().archivePage(pageEntry._id, workspaceId, jwt ?? "");
   }
   function requestDelete() {
     if (globalThis.localStorage?.getItem("osionos.delete-skip-confirm") === "1") {
@@ -199,7 +198,7 @@ export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspace
         {renaming ? (
           <SidebarRenameInput
             initialValue={pageEntry.title || ""}
-            onCommit={(value) => { if (value) updatePageTitle(pageEntry._id, value); setRenaming(false); }}
+            onCommit={(value) => { if (value) usePageStore.getState().updatePageTitle(pageEntry._id, value); setRenaming(false); }}
             onCancel={() => setRenaming(false)}
           />
         ) : (

@@ -33,6 +33,7 @@ import {
   applyBlockTypeChange,
 } from "./pageStore.helpers";
 import { replacePage } from "./replacePage";
+import { patchActivePageSlice } from "./activePageMetadata";
 import {
   createSeedOfflinePages,
   createSeedOnlinePages,
@@ -402,6 +403,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       schedulePagesCachePersist(next.pages, page.workspaceId);
       return {
         ...next,
+        ...patchActivePageSlice(s, pageId, { title }),
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     }));

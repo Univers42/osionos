@@ -30,7 +30,6 @@ import {
 import { classicHeaderTemplate } from "@/entities/page/model/headerTemplate";
 import { usePageHeaderActions } from "./usePageHeaderActions";
 import { usePageProperties } from "./usePageProperties";
-import { patchActivePageMetadata } from "./notionPageMeta";
 import { PageComments } from "./PageComments";
 import { TemplateHeader } from "./TemplateHeader";
 import { TemplateEditBanner } from "./TemplateEditBanner";
@@ -113,8 +112,8 @@ export const PageHeader: React.FC<Props> = ({ pageId, activePage, locked, commen
 
   function changeTitle(newTitle: string) {
     if (locked) return;
+    // updatePageTitle also patches the active page / breadcrumb / recents in the same set.
     updatePageTitle(pageId, newTitle);
-    patchActivePageMetadata(pageId, { title: newTitle });
   }
 
   const templateBanner = head.isTemplate ? <TemplateEditBanner pageId={pageId} /> : null;
