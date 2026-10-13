@@ -97,7 +97,8 @@ function connect(serverLang: string, workspaceId: string): { transport: Transpor
     socket.addEventListener("close", (ev) => { if (isTokenExpiredClose(ev.code)) invalidateIdeToken(workspaceId); settle(); });
     socket.addEventListener("error", () => settle());
   };
-  void dial();
+  // A mint that throws must still settle `closed`, or the connection is never dropped and redialled.
+  dial().catch(() => settle());
 
   const transport: Transport = {
     send(message) {
