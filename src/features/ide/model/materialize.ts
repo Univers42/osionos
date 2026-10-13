@@ -108,13 +108,14 @@ async function surfaceConflict(input: { path: string; theirs: string; pageId: st
  * session — the executor records the ledger when it applies. Refused when the
  * page object changed since the snapshot (the app moved on: applying could undo
  * its edit or rename) or when the executor did not apply it; either way the
- * sandbox side goes to the conflict store and the old agreement stands.
+ * sandbox side goes to the conflict store and the old agreement stands. An
+ * outcome the executor already reported is not reported again (C3b5 C4.1, P5).
  */
 async function settleInbound(deps: AttachDeps, file: { path: string; content: string }, was: Snapshot): Promise<void> {
   try {
     if (deps.session.views.pageById(was.pageId) !== was.page) throw new Error("the page changed during attach");
     const outcome = await deps.session.run({ kind: "write", path: file.path, text: file.content, hash: await sha16(file.content) });
-    if (!outcome.applied) throw new Error(outcome.error ?? "the executor did not apply it");
+    if (!outcome.applied && !outcome.reported) throw new Error(outcome.error ?? "the executor did not apply it");
   } catch (error) {
     const why = `changed in the sandbox but could not be applied (${messageOf(error)})`;
     await surfaceConflict({ path: file.path, theirs: file.content, pageId: was.pageId, why });

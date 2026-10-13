@@ -19,7 +19,7 @@ import { archiveIfGone, type StatResult } from "./inboundArchive";
 import { createPage, movePage, restorePage } from "./inboundExecTree";
 import { ideOutput } from "./ideOutputBus";
 import { recordSyncedHash } from "./ideSyncEngine";
-import { useIdeSyncConflicts } from "./ideSyncConflicts";
+import { useIdeSyncConflicts, type IdeSyncConflict } from "./ideSyncConflicts";
 
 import type { PageFacade } from "../vfs/pageProvider";
 import type { InboundStep } from "./inboundPlan";
@@ -39,11 +39,16 @@ export interface ExecContext {
   stat(path: string): Promise<StatResult>;
 }
 
-/** `applied`: an apply step landed (attach's onInbound needs to know). */
+/** `applied`: an apply step landed (attach's onInbound needs to know). `reported`: this
+ *  event's outcome is already in front of the user — a conflict entry, or the page-gone
+ *  line — so the caller must not report it again (C3b5 C4.1, P5). */
 export interface ExecOutcome {
   applied: boolean;
+  reported: boolean;
   error: string | null;
 }
+
+type ApplyStep = Extract<InboundStep, { op: "apply" }>;
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -56,16 +61,36 @@ const messageOf = (error: unknown): string => (error instanceof Error ? error.me
  */
 export async function executeSteps(steps: readonly InboundStep[], eventPath: string, ctx: ExecContext): Promise<ExecOutcome> {
   let applied = false;
+  let reported = false;
   for (const step of steps) {
     try {
       await runStep(step, ctx);
     } catch (error) {
+      if (step.op === "apply") return { applied, reported: reportRefused(step, eventPath, messageOf(error), ctx), error: messageOf(error) };
       ideOutput("fs-sync", failureLine(step, eventPath, messageOf(error)));
-      return { applied, error: messageOf(error) };
+      return { applied, reported, error: messageOf(error) };
     }
     applied = applied || step.op === "apply";
+    reported = reported || step.op === "conflict";
   }
-  return { applied, error: null };
+  return { applied, reported, error: null };
+}
+
+/**
+ * Condition 13 on the socket path (C3b5 C4.1, C4.3): an apply the store refused
+ * (read-only, archived, a store error) leaves the shell text waiting as a conflict
+ * on the page, the ledger untouched — what attach does. A page gone from the tree
+ * gets one line instead: no banner can act on it. Always reports. O(1).
+ */
+function reportRefused(step: ApplyStep, eventPath: string, reason: string, ctx: ExecContext): true {
+  const pageId = ownerOf(step.pageId);
+  if (ctx.view.pageState(pageId) === undefined) {
+    ideOutput("fs-sync", `${eventPath}: not applied — the page is gone; the file stays in the sandbox, unsynced`);
+    return true;
+  }
+  ideOutput("fs-sync", failureLine(step, eventPath, reason));
+  surface({ relPath: step.path, pageId, theirs: step.text, theirsHash: step.hash }, `changed in the sandbox but could not be applied (${reason})`);
+  return true;
 }
 
 async function runStep(step: InboundStep, ctx: ExecContext): Promise<void> {
@@ -74,7 +99,8 @@ async function runStep(step: InboundStep, ctx: ExecContext): Promise<void> {
       if (!step.quiet) ideOutput("fs-sync", `skipped: ${step.reason}`);
       return;
     case "record":
-      return recordSyncedHash(ctx.workspaceId, step.path, step.hash);
+      recordSyncedHash(ctx.workspaceId, step.path, step.hash);
+      return resolveAgreed(pageAt(step.path, ctx));
     case "cancel-archive":
       return ctx.pending.cancel(step.pageId);
     case "schedule-archive":
@@ -90,6 +116,7 @@ async function runStep(step: InboundStep, ctx: ExecContext): Promise<void> {
       // surface, the owner the visibility (pinFilePatch, B6).
       await ctx.facade.writeContent(step.pageId, step.text);
       recordSyncedHash(ctx.workspaceId, step.path, step.hash);
+      resolveAgreed(step.pageId);
       return ctx.landed.remember(step.path, step.hash, step.pageId);
     case "create":
       return createPage(step, ctx);
@@ -98,12 +125,27 @@ async function runStep(step: InboundStep, ctx: ExecContext): Promise<void> {
   }
 }
 
+/** C3b5 C4.2: file and page agree again, so an open conflict's `theirs` is no longer what
+ *  the file holds — "take file" would apply that older shell text. Ends the entry. O(1). */
+function resolveAgreed(pageId: string | undefined): void {
+  if (pageId !== undefined) useIdeSyncConflicts.getState().resolve(ownerOf(pageId));
+}
+
+/** The page whose own file is `path`; looked up only while a conflict is open. O(depth). */
+function pageAt(path: string, ctx: ExecContext): string | undefined {
+  if (Object.keys(useIdeSyncConflicts.getState().byPageId).length === 0) return undefined;
+  const entry = ctx.view.entryAt(path.split("/"));
+  return entry === undefined || "caseOf" in entry ? undefined : entry.pageId;
+}
+
 /** Condition 23: reported under the PAGE's id (a `#meta` names its folder) with the file path. */
 function reportConflict(step: Extract<InboundStep, { op: "conflict" }>): void {
-  useIdeSyncConflicts.getState().report({
-    relPath: step.path, pageId: ownerOf(step.pageId), theirs: step.theirs, theirsHash: step.hash, atMs: Date.now(),
-  });
-  ideOutput("sync", `CONFLICT: ${step.path} changed on both sides — open the file to resolve`);
+  surface({ relPath: step.path, pageId: ownerOf(step.pageId), theirs: step.theirs, theirsHash: step.hash }, "changed on both sides");
+}
+
+function surface(conflict: Omit<IdeSyncConflict, "atMs">, why: string): void {
+  useIdeSyncConflicts.getState().report({ ...conflict, atMs: Date.now() });
+  ideOutput("sync", `CONFLICT: ${conflict.relPath} ${why} — open the file to resolve`);
 }
 
 export function failureLine(step: InboundStep, eventPath: string, reason: string): string {
