@@ -12,18 +12,18 @@
 
 import React from "react";
 
-import type { VisibleItem } from "../model/explorerRows";
-
 /** Roving tabindex + programmatic focus for the tree. Focus is requested by path
- *  and applied after the next commit, once the row exists in the DOM. */
-export function useExplorerFocus(visible: readonly VisibleItem[]) {
+ *  and applied after the next commit, once the row exists in the DOM — the list keeps
+ *  the tabbable row mounted even off-screen (useExplorerVirtualizer), and focus()
+ *  scrolls it into view. `rowIndex` maps each visible path to its line. */
+export function useExplorerFocus(rowIndex: ReadonlyMap<string, number>, firstRel: string) {
   const [focusedRel, setFocusedRel] = React.useState("");
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const wantFocus = React.useRef<string | null>(null);
 
   // A focused row that scrolled out of the visible list (collapsed, renamed, deleted)
   // falls back to the first row so the tree always keeps one tab stop.
-  const tabbableRel = visible.some((item) => item.rel === focusedRel) ? focusedRel : visible[0]?.rel ?? "";
+  const tabbableRel = rowIndex.has(focusedRel) ? focusedRel : firstRel;
 
   React.useEffect(() => {
     const target = wantFocus.current;
