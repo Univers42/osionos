@@ -11,8 +11,9 @@
 /* ************************************************************************** */
 
 /**
- * Topbar people search (mounted from SidebarTopNav's search button): type a
- * name, open the member's profile tab, or jump straight into a DM.
+ * People search: type a name, open the member's profile tab, or jump straight
+ * into a DM. Nothing mounts it since the top navigation that opened it was
+ * removed; the contact dock's "Start a new chat" picker is the live search.
  */
 
 import React, { useRef, useState } from 'react';
