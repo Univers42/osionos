@@ -208,7 +208,7 @@ function createBlocks(blockCount: number): Block[] {
   }));
 }
 
-function resolvePerfWorkspace() {
+export function resolvePerfWorkspace() {
   const userState = useUserStore.getState();
   const session = userState.activeSession();
   const activeWorkspace = userState.activeWorkspace();
@@ -240,7 +240,7 @@ function findBlockLocation(blockId: string): { pageId: string; block: Block } | 
   return null;
 }
 
-function createPerfPage(pageId: string, workspaceId: string, ownerId: string | null): PageEntry {
+export function createPerfPage(pageId: string, workspaceId: string, ownerId: string | null): PageEntry {
   return {
     _id: pageId,
     title: `Perf ${pageId.replace(PERF_PAGE_ID_PREFIX, "")} blocks`,
