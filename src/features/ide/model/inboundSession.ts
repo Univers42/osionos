@@ -53,7 +53,7 @@ export interface InboundSession {
   handle(evt: FsEvent): Promise<void>;
   /** Plan + execute one decoded event, for a caller already inside the queue (attach, D1). */
   run(event: InboundEvent): Promise<ExecOutcome>;
-  /** Drops the timers and the restore memory (B5). */
+  /** Drops the timers and the restore memory (B5); a deferred create is still made (C1.1). */
   dispose(): void;
 }
 
@@ -66,8 +66,11 @@ export function createInboundSession(deps: InboundSessionDeps): InboundSession {
   const readText = (id: string): Promise<string> => facade.readContent(id);
   const landed = createLandedMemo({ workspaceId: deps.workspaceId, readText });
   const view = createInboundView({ workspaceId: deps.workspaceId, store: deps.store, views, pending, landed, readText });
-  const ctx: ExecContext = { workspaceId: deps.workspaceId, facade, view, pending, landed, restore: deps.restore, stat: deps.stat };
-  const drain = createInboundDrain({ store: deps.store, views, ctx, enqueue: deps.enqueue });
+  const ctx: ExecContext = {
+    workspaceId: deps.workspaceId, facade, view, pending, landed, restore: deps.restore, stat: deps.stat,
+    settle: () => drain.flush(), // only ever called from a queued task, after `drain` exists
+  };
+  const drain = createInboundDrain({ store: deps.store, views, ctx, schedule: deps.schedule, enqueue: deps.enqueue });
   return {
     views,
     view,
@@ -83,7 +86,10 @@ export function createInboundSession(deps: InboundSessionDeps): InboundSession {
       }
     },
     run: drain.run,
-    dispose: () => pending.dispose(),
+    dispose() {
+      pending.dispose();
+      drain.dispose();
+    },
   };
 }
 

@@ -18,7 +18,8 @@
 import type { Block } from "../../../src/entities/block/model/types.ts";
 import type { PageEntry } from "../../../src/entities/page/model/types.ts";
 import { sha16, type FsEvent } from "../../../src/features/ide/model/ideFsEcho.ts";
-import { INBOUND_WINDOW_MS, createInboundPending } from "../../../src/features/ide/model/inboundPending.ts";
+import { FLUSH_MAX_MS } from "../../../src/features/ide/model/inboundFlushWindow.ts";
+import { INBOUND_WINDOW_MS, createInboundPending, type Schedule } from "../../../src/features/ide/model/inboundPending.ts";
 import { createSerialQueue } from "../../../src/features/ide/model/inboundPipeline.ts";
 import { statInProvider, type StatResult } from "../../../src/features/ide/model/inboundArchive.ts";
 import { createInboundSession } from "../../../src/features/ide/model/inboundSession.ts";
@@ -90,7 +91,8 @@ export async function putFile(sandbox: FsProvider, workspaceId: string, path: st
   await sandbox.write(buildVPath(sandbox.scheme, workspaceId, segments), textToBytes(text));
 }
 
-export type ExecWorldOptions = { files?: Record<string, string>; stat?: (path: string) => Promise<StatResult> };
+/** `schedule`: the session's timers (default: the world's manual clock). */
+export type ExecWorldOptions = { files?: Record<string, string>; stat?: (path: string) => Promise<StatResult>; schedule?: Schedule };
 
 /** The whole inbound path: a session on a real serial queue, a mem sandbox, a manual clock. */
 export async function execWorld(pages: PageEntry[], opts: ExecWorldOptions = {}) {
@@ -105,13 +107,18 @@ export async function execWorld(pages: PageEntry[], opts: ExecWorldOptions = {})
   const queue = createSerialQueue((error) => { queueErrors.push(error); });
   const enqueued = { count: 0 };
   const session = createInboundSession({
-    workspaceId, store, restore: async (id) => setArchived(store, id, null), schedule: clock.schedule,
+    workspaceId, store, restore: async (id) => setArchived(store, id, null), schedule: opts.schedule ?? clock.schedule,
     stat: opts.stat ?? ((path) => statInProvider(sandbox, workspaceId, path)),
     enqueue: (task) => { enqueued.count += 1; void queue.run(task); },
   });
   const send = (evt: FsEvent): Promise<void> => queue.run(() => session.handle(evt));
-  /** Every queued task done and every deferred create landed (inboundDrain). */
-  const settle = async (): Promise<void> => { await queue.idle(); };
+  /** Every queued task done and every deferred create landed: the flush window ends
+   *  (inboundFlushWindow), its flush runs. Time moves FLUSH_MAX_MS per call. */
+  const settle = async (): Promise<void> => {
+    await queue.idle();
+    clock.advance(FLUSH_MAX_MS);
+    await queue.idle();
+  };
   const shellWrite = async (path: string, text: string): Promise<void> => {
     await putFile(sandbox, workspaceId, path, text);
     await send({ event: "write", path, hash: await sha16(text), content: b64(text) });

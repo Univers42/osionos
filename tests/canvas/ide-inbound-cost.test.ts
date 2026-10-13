@@ -77,7 +77,7 @@ test("cost: a shell edit three levels deep in a 10 000-page workspace makes at m
 
   const event = { kind: "write" as const, path: "Area/Team/Roadmap.omd", text, hash: await sha16(text) };
   const steps = await planInbound(event, view);
-  const ctx = { workspaceId: world.workspaceId, facade, view, pending: world.pending, landed, restore: async () => undefined, stat: async () => "unknown" as const };
+  const ctx = { workspaceId: world.workspaceId, facade, view, pending: world.pending, landed, settle: async () => undefined, restore: async () => undefined, stat: async () => "unknown" as const };
   const outcome = await executeSteps(steps, event.path, ctx);
 
   assert.deepEqual(steps.map((step) => step.op), ["apply"]);

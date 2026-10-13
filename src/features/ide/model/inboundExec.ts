@@ -34,6 +34,8 @@ export interface ExecContext {
   readonly pending: InboundPending;
   readonly landed: LandedMemo;
   restore(pageId: string): Promise<void>;
+  /** Makes every deferred create now: a queued task about to read the tree calls it first. */
+  settle(): Promise<void>;
   stat(path: string): Promise<StatResult>;
 }
 

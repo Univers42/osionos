@@ -42,12 +42,14 @@ const messageOf = (error: unknown): string => (error instanceof Error ? error.me
  * B1. Archive a due page only when its path is the one the delete named, the
  * sandbox says that path is gone, and — when the page has sub-pages — their
  * directory is gone too. `rm Roadmap.omd` alone must not cascade onto children
- * whose files are still there. Any doubt keeps the page; nothing throws.
- * O(1) plus at most two sandbox stats.
+ * whose files are still there. A child create still deferred in the drain counts:
+ * the batch is made first (C3b5 R4). Any doubt keeps the page; nothing throws.
+ * O(1) plus at most two sandbox stats, plus the deferred batch.
  */
 export async function archiveIfGone(ticket: ArchiveTicket, ctx: ExecContext): Promise<void> {
   if (!ctx.pending.claim(ticket)) return;
   try {
+    await ctx.settle();
     const keep = await keepReason(ticket, ctx);
     if (keep === undefined) await archiveNow(ticket, ctx);
     else if (keep !== null) ideOutput("fs-sync", keep);

@@ -10,14 +10,16 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// One index build per queue drain, not per created file (18/20). A lone create
+// One index build per batch of created files, not per file (18/20). A lone create
 // rebuilds the workspace's index and tables (~20 ms at 10 000 pages), so a
 // 500-file checkout cost ~12 s. Here a socket event whose whole plan is one
-// create is DEFERRED: its folder is resolved now, the page waits, and one flush
-// task — queued behind the events already waiting — makes the batch. Anything
-// that could tell the difference runs after a flush: a write at or under a
-// deferred path (before planning), any plan that is not a lone create — a
-// delete included — (flushed, then re-planned), and attach's direct `run`.
+// create is DEFERRED: its folder is resolved now, the page waits for the flush —
+// queued when the flush window ends (inboundFlushWindow, C3b5 P1), made inline at
+// FLUSH_MAX_CREATES. Anything that could tell the difference runs after a flush: a
+// write at or under a deferred path (before planning) unless it re-plans as the
+// same lone create (it then replaces that create), any plan that is not a lone
+// create — a delete included — (flushed, then re-planned), attach's direct `run`,
+// and an archive re-check (ExecContext.settle).
 
 import { childDirOfPath } from "@/features/page-file/model/outboundPlan";
 import { createPagesBatch } from "@/features/page-file/model/pageFileBatchCreate";
@@ -25,18 +27,24 @@ import { ideOutput } from "./ideOutputBus";
 import { recordSyncedHash } from "./ideSyncEngine";
 import { executeSteps, failureLine, type ExecContext, type ExecOutcome } from "./inboundExec";
 import { ensureDirPage, splitPath } from "./inboundExecTree";
+import { createFlushWindow } from "./inboundFlushWindow";
 import { planInbound, type InboundEvent, type InboundStep } from "./inboundPlan";
 
 import type { PageFileStore } from "@/features/page-file/model/pageFileFacade";
 import type { ReadableViews } from "@/features/page-file/model/pageFileFacadeViews";
+import type { Schedule } from "./inboundPending";
 
 type CreateStep = Extract<InboundStep, { op: "create" }>;
 type Deferred = { step: CreateStep; parentId: string | null; name: string };
+
+/** A batch this size is made at once: it bounds one flush's main-thread time. */
+export const FLUSH_MAX_CREATES = 256;
 
 export interface DrainDeps {
   store: PageFileStore;
   views: ReadableViews;
   ctx: ExecContext;
+  schedule: Schedule;
   /** Puts the flush on the event queue; never awaited from inside one (B8). */
   enqueue(task: () => Promise<void>): void;
 }
@@ -48,26 +56,48 @@ export interface InboundDrain {
   run(event: InboundEvent): Promise<ExecOutcome>;
   /** Makes every deferred page in one batch. */
   flush(): Promise<void>;
+  /** Stops the window and queues the flush: a deferred create survives the session (C1.1). */
+  dispose(): void;
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+const loneCreate = (steps: readonly InboundStep[]): CreateStep | undefined => (steps.length === 1 && steps[0].op === "create" ? steps[0] : undefined);
 
 /**
- * Ponytail: the batch is what was queued when its first create ran — a socket
- * message's lines. An agent that sends one line per message gets one flush per
- * event (no gain, no loss). A deferred page appears at the flush, not at its own
- * event, and the live store's addPage awaits the server per page — the batch
- * removes the index rebuilds, not those round trips.
+ * Ponytail: a deferred page appears at the flush, up to FLUSH_MAX_MS after its own
+ * event (longer in a throttled hidden tab), and the live store's addPage awaits the
+ * server per page — the batch removes the index rebuilds, not those round trips.
  */
 export function createInboundDrain(deps: DrainDeps): InboundDrain {
   let batch: Deferred[] = [];
   const held = new Set<string>();
+  const slots = new Map<string, number>();
+  let queued = false;
+  let disposed = false;
+  const queueFlush = (): void => {
+    if (queued) return;
+    queued = true;
+    deps.enqueue(async () => {
+      queued = false;
+      await flush();
+    });
+  };
+  const flushWindow = createFlushWindow({ schedule: deps.schedule, due: queueFlush });
   const flush = async (): Promise<void> => {
+    flushWindow.stop();
     if (batch.length === 0) return;
     const items = batch;
     batch = [];
     held.clear();
+    slots.clear();
     await makeBatch(deps, items);
+  };
+  // A queued flush already covers this create (it runs after the event in hand);
+  // after dispose no timer is armed, the flush is queued as it was before P1.
+  const noteCreate = async (): Promise<void> => {
+    if (batch.length >= FLUSH_MAX_CREATES) await flush();
+    else if (disposed) queueFlush();
+    else if (!queued) flushWindow.touch();
   };
   const run = async (event: InboundEvent): Promise<ExecOutcome> => {
     await flush();
@@ -77,24 +107,45 @@ export function createInboundDrain(deps: DrainDeps): InboundDrain {
     const { dir, name } = splitPath(step.path);
     try {
       const parentId = await ensureDirPage(dir, deps.ctx);
-      if (batch.length === 0) deps.enqueue(flush);
+      slots.set(step.path, batch.length);
       batch.push({ step, parentId, name });
       held.add(step.path.toLowerCase());
       held.add(childDirOfPath(step.kind, step.path).toLowerCase());
     } catch (error) {
       ideOutput("fs-sync", failureLine(step, step.path, messageOf(error)));
+      return;
     }
+    await noteCreate();
+  };
+  // The page was never seen by anyone: a newer write at its exact path that still
+  // plans as a lone create IS the file now, so it replaces the deferred step (R2).
+  const replaced = async (event: InboundEvent): Promise<boolean> => {
+    const at = slots.get(event.path);
+    if (event.kind !== "write" || at === undefined) return false;
+    const step = loneCreate(await planInbound(event, deps.ctx.view));
+    if (step === undefined || step.path !== event.path) return false;
+    batch[at] = { ...batch[at], step };
+    await noteCreate();
+    return true;
   };
   return {
     flush,
     run,
     async handle(event) {
-      if (batch.length > 0 && isHeld(held, event.path)) await flush();
+      if (batch.length > 0 && isHeld(held, event.path)) {
+        if (await replaced(event)) return;
+        await flush();
+      }
       const steps = await planInbound(event, deps.ctx.view);
-      const only = steps.length === 1 ? steps[0] : undefined;
-      if (only?.op === "create") return defer(only);
+      const step = loneCreate(steps);
+      if (step !== undefined) return defer(step);
       if (batch.length > 0) await run(event);
       else await executeSteps(steps, event.path, deps.ctx);
+    },
+    dispose() {
+      disposed = true;
+      flushWindow.stop();
+      if (batch.length > 0) queueFlush();
     },
   };
 }
