@@ -20,8 +20,10 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 import { createNewWorkspacePage } from "../../browser/core/app.mjs";
-import { bootApp, measureToPaint, REPORT_DIR, writeReport } from "./perfHarness.mjs";
+import { PERF_USE, REPORT_DIR, bootApp, measureToPaint, writeReport } from "./perfHarness.mjs";
 import { aggregateProfile, formatTop, profileDuring } from "./perfProfile.mjs";
+
+test.use(PERF_USE);
 
 const SPEC = "keystroke-profile";
 const WARMUP_RUNS = 5;
