@@ -27,11 +27,10 @@ export function useResolvedDrawChrome(): DrawChrome {
   useEffect(() => {
     const resolve = () => {
       const style = getComputedStyle(document.documentElement);
-      // The canvas is a REAL surface, not a hole in the page: use the surface
-      // token, not --osio-bg-page. Painting it page-coloured made the drawing area
-      // indistinguishable from the page behind it — it read as transparent, with
-      // no sense of a canvas at all.
-      const background = style.getPropertyValue("--osio-bg-surface").trim();
+      // The canvas is a REAL surface, not a hole in the page: painted the page's
+      // colour it read as transparent, with no sense of a canvas at all. A page is
+      // the pane's card (--osio-bg-surface), so the canvas is an inset in it.
+      const background = style.getPropertyValue("--osio-bg-subtle").trim();
       const grid = style.getPropertyValue("--osio-border-soft").trim();
       const accent = style.getPropertyValue("--osio-accent").trim();
       const ink = style.getPropertyValue("--osio-fg-default").trim();

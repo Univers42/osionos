@@ -61,11 +61,12 @@ test.describe("styleguide", () => {
 
   test("the palette control re-themes the document and the choice survives a reload", async ({ page, baseURL }) => {
     await openStyleguide(page, baseURL);
-    const pageColour = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--osio-bg-page").trim());
-    const before = await pageColour();
+    // The canvas is what the window shows around the cards; a page is the card itself.
+    const canvasColour = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--osio-bg-canvas").trim());
+    const before = await canvasColour();
     await page.getByLabel("Palette", { exact: true }).selectOption("nord");
     await expect(html(page)).toHaveAttribute("data-palette", "nord");
-    expect(await pageColour()).not.toBe(before);
+    expect(await canvasColour()).not.toBe(before);
     expect(await page.evaluate(() => localStorage.getItem("osionos:palette"))).toBe("nord");
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByTestId("styleguide").waitFor();
