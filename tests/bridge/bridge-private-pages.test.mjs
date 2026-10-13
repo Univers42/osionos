@@ -136,6 +136,17 @@ describe('backlinks show only readable pages', () => {
 			assert.deepEqual(refIds(result.body.mentions), [IDS.sharedMemoA]);
 		});
 	});
+
+	it('drops a shared linking page that moved to a workspace the caller is not in', async () => {
+		const world = teamWorld();
+		world.osionos_pages.find((row) => row.id === IDS.sharedA).workspace_id = IDS.homeA;
+		const mock = createPostgrestMock(world);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const result = await send(base, `/api/pages/${IDS.pageB}/backlinks`, asB);
+			assert.equal(result.status, 200, result.text);
+			assert.deepEqual(refIds(result.body.linked), []);
+		});
+	});
 });
 
 describe('comments and publishing need a readable page', () => {

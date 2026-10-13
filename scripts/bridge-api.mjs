@@ -2789,7 +2789,7 @@ async function handlePageBacklinks(url, request, response, config, fetchImpl) {
 	const linkRows = await baasRest(config, fetchImpl, `osionos_page_links?target_page_id=eq.${pageId}&${inWorkspace}&select=source_page_id`);
 	const sourceIds = [...new Set((Array.isArray(linkRows) ? linkRows : []).map((r) => r.source_page_id).filter((id) => id && id !== pageId))];
 	const linked = sourceIds.length
-		? backlinkRefsFromRows(readablePageRows(await baasRest(config, fetchImpl, `osionos_pages?id=in.(${sourceIds.join(',')})&archived_at=is.null&select=${BACKLINK_SELECT}`), authContext.userId))
+		? backlinkRefsFromRows(readablePageRows(await baasRest(config, fetchImpl, `osionos_pages?id=in.(${sourceIds.join(',')})&${inWorkspace}&archived_at=is.null&select=${BACKLINK_SELECT}`), authContext.userId))
 		: [];
 	const title = String(row.title || '').trim();
 	let mentions = [];
