@@ -111,6 +111,8 @@ export function createPageFileFacade(deps: PageFileStore): PageFacade {
     childByName: (parentId, name) => dirOf(parentId)?.byName.get(name.toLowerCase()),
     // The loaded-body hit stays inline: no promise chain beyond this async frame, no closure
     // (budgeted at 100 ns in the bench); only a missing body takes loadedPage's fetch path.
+    // That path ends in pageFileText either way, so a body that never arrived reads as
+    // front matter with an empty body (loadedPage's Ponytail) rather than failing the read.
     readContent: async (id) => {
       const page = views.pageById(ownerOf(id));
       return pageFileText(page?.content === undefined ? await loadedPage(ctx, id) : page);

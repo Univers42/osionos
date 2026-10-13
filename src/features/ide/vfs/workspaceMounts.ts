@@ -80,11 +80,17 @@ function switchingWatch({ workspaceId, current, path, onEvent, signal }: Switchi
   return run().finally(end);
 }
 
-/** Stable provider that delegates each call to the current backend (sandbox or page-file). */
-function createSwitchingProvider(workspaceId: string): FsProvider {
+/** The backend this workspace's calls go to now, plus the close that ends it. The provider
+ *  object is stable across flips, so only this closure's two locals change. */
+interface Backends {
+  current(): FsProvider;
+  delegate<T>(fn: (backend: FsProvider) => Promise<T>): Promise<T>;
+  close(): Promise<void>;
+}
+
+function createBackends(workspaceId: string): Backends {
   let backend: FsProvider | null = null;
   let online: boolean | null = null;
-
   const current = (): FsProvider => {
     const now = isOnlineHere(workspaceId);
     if (backend === null || now !== online) {
@@ -95,38 +101,40 @@ function createSwitchingProvider(workspaceId: string): FsProvider {
     }
     return backend;
   };
-
-  // Ponytail: a flip mid-operation (an operation that started on one backend
-  // finishes there) — the backend reference is captured at call start, so a
-  // read that began on the sandbox completes on the sandbox even if the
-  // sandbox dies before it resolves.
-  const delegate = <T,>(fn: (backend: FsProvider) => Promise<T>): Promise<T> => {
-    const active = current();
-    return fn(active);
+  // Ponytail: a flip mid-operation (an operation that started on one backend finishes
+  // there) — the backend reference is captured at call start, so a read that began on
+  // the sandbox completes on the sandbox even if the sandbox dies before it resolves.
+  return {
+    current,
+    delegate: <T,>(fn: (backend: FsProvider) => Promise<T>): Promise<T> => fn(current()),
+    close: async (): Promise<void> => {
+      if (backend === null) return;
+      await backend.close();
+      backend = null;
+      online = null;
+    },
   };
+}
 
+/** Stable provider that delegates each call to the current backend (sandbox or page-file). */
+function createSwitchingProvider(workspaceId: string): FsProvider {
+  const backends = createBackends(workspaceId);
   return {
     get scheme() {
       return WORKSPACE_SCHEME;
     },
     capabilities() {
-      return current().capabilities();
+      return backends.current().capabilities();
     },
-    stat: (path, signal) => delegate((b) => b.stat(path, signal)),
-    list: (path, signal) => delegate((b) => b.list(path, signal)),
-    read: (path, opts) => delegate((b) => b.read(path, opts)),
-    write: (path, data, opts) => delegate((b) => b.write(path, data, opts)),
-    mkdir: (path, signal) => delegate((b) => b.mkdir(path, signal)),
-    delete: (path, opts) => delegate((b) => b.delete(path, opts)),
-    rename: (from, to, opts) => delegate((b) => b.rename(from, to, opts)),
-    watch: (path, onEvent, signal) => switchingWatch({ workspaceId, current, path, onEvent, signal }),
-    async close() {
-      if (backend !== null) {
-        await backend.close();
-        backend = null;
-        online = null;
-      }
-    },
+    stat: (path, signal) => backends.delegate((b) => b.stat(path, signal)),
+    list: (path, signal) => backends.delegate((b) => b.list(path, signal)),
+    read: (path, opts) => backends.delegate((b) => b.read(path, opts)),
+    write: (path, data, opts) => backends.delegate((b) => b.write(path, data, opts)),
+    mkdir: (path, signal) => backends.delegate((b) => b.mkdir(path, signal)),
+    delete: (path, opts) => backends.delegate((b) => b.delete(path, opts)),
+    rename: (from, to, opts) => backends.delegate((b) => b.rename(from, to, opts)),
+    watch: (path, onEvent, signal) => switchingWatch({ workspaceId, current: backends.current, path, onEvent, signal }),
+    close: () => backends.close(),
   };
 }
 

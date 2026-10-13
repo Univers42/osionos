@@ -32,6 +32,9 @@ test("write: a page whose body fails to load is refused and the store is untouch
   store._seed([unloadedPage("u1", "Doc.omd", null)]);
   const before = store.pages();
 
+  // The read of the same page is fine (front matter only); the write is not, because
+  // patching a body the store never received would drop blocks that are merely UNLOADED.
+  assert.ok((await createPageFileFacade(store).readContent("u1")).startsWith("---\n"));
   await rejectsWithCode(createPageFileFacade(store).writeContent("u1", "# overwrite"), "Io");
   assert.equal(store.pages(), before);
 });
@@ -152,11 +155,17 @@ test("move: the cycle check walks the target's ancestors, not the whole page set
   assert.ok(reads.parent < 50, `walked ${reads.parent} parent links for a depth-5 chain in 2000 pages`);
 });
 
-test("read: a body that is still missing after the fetch is Io, not an empty file", async () => {
+// A server page document may legitimately carry no `content` field at all, so a
+// read of such a page answers with whatever the store holds: front matter only.
+test("read: a body still missing after the fetch reads as front matter only", async () => {
   const store = createFixtureStore("ws");
   store._seed([unloadedPage("u1", "Doc.omd", null)]);
 
-  await rejectsWithCode(createPageFileFacade(store).readContent("u1"), "Io");
+  const text = await createPageFileFacade(store).readContent("u1");
+
+  assert.ok(text.startsWith("---\n"), `not front matter: ${JSON.stringify(text)}`);
+  assert.ok(text.includes('title: "Doc.omd"'), `title missing: ${JSON.stringify(text)}`);
+  assert.equal(text.split("\n").filter((line) => line === "---").length, 2, "a body would add a third fence");
 });
 
 test("rename, move and archive of a page the user cannot read are NotFound", async () => {

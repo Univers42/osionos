@@ -25,10 +25,59 @@ interface Slice {
   byId: Map<string, PageEntry> | null;
 }
 
+/** source pages array → access snapshot → that pair's readable slice. */
+type SliceCache = WeakMap<readonly PageEntry[], WeakMap<object, Slice>>;
+
 export interface ReadableViews {
   indexOf(): PageIndex;
   tablesFor(): Tables;
   pageById(id: string): PageEntry | undefined;
+}
+
+// Memoised per (source array, access snapshot): a NEW access object drops the slice
+// even when the user store kept the same pages array. Ponytail: the key is the access
+// object's identity, so an access/session object mutated IN PLACE (same reference,
+// grants changed) keeps serving the stale slice — pages revoked that way stay
+// readable until the pages array changes. Escape hatch: have `access()` return a
+// fresh snapshot per change. O(n) per new pair, O(1) on a hit.
+function sliceOf(deps: PageFileStore, cache: SliceCache): Slice {
+  const source = deps.pages();
+  const access = deps.access() ?? NO_ACCESS;
+  let byAccess = cache.get(source);
+  if (byAccess === undefined) {
+    byAccess = new WeakMap();
+    cache.set(source, byAccess);
+  }
+  const cached = byAccess.get(access);
+  if (cached) return cached;
+  const pages: PageEntry[] = [];
+  for (const page of source) if (deps.canRead(page)) pages.push(page);
+  const slice: Slice = { pages, byId: null };
+  byAccess.set(access, slice);
+  return slice;
+}
+
+/** One page by id off the readable slice, lazily indexed. O(1) after the first map. */
+function pageById(deps: PageFileStore, cache: SliceCache, id: string): PageEntry | undefined {
+  const slice = sliceOf(deps, cache);
+  if (slice.byId === null) slice.byId = new Map(slice.pages.map((p) => [p._id, p]));
+  return slice.byId.get(id);
+}
+
+function indexOf(deps: PageFileStore, cache: SliceCache): PageIndex {
+  return pageIndexFor(`${deps.workspaceId}#readable`, sliceOf(deps, cache).pages);
+}
+
+// Ponytail: timestamps are read at THIS build and never refreshed while the index
+// object lives: a body edit (updatedAt is not an index field) leaves stat() on the
+// pre-edit mtime until a new index object.
+function tablesFor(deps: PageFileStore, cache: SliceCache, built: WeakMap<PageIndex, Tables>): Tables {
+  const index = indexOf(deps, cache);
+  const cached = built.get(index);
+  if (cached) return cached;
+  const tables = buildTables(index, sliceOf(deps, cache).pages);
+  built.set(index, tables);
+  return tables;
 }
 
 /**
@@ -37,51 +86,11 @@ export interface ReadableViews {
  * costs one O(n) readable filter plus the index's O(n) shape scan.
  */
 export function createReadableViews(deps: PageFileStore): ReadableViews {
-  const slices = new WeakMap<readonly PageEntry[], WeakMap<object, Slice>>();
+  const slices: SliceCache = new WeakMap();
   const tablesOf = new WeakMap<PageIndex, Tables>();
-
-  // Memoised per (source array, access snapshot): a NEW access object drops the slice
-  // even when the user store kept the same pages array. Ponytail: the key is the access
-  // object's identity, so an access/session object mutated IN PLACE (same reference,
-  // grants changed) keeps serving the stale slice — pages revoked that way stay
-  // readable until the pages array changes. Escape hatch: have `access()` return a
-  // fresh snapshot per change.
-  const sliceOf = (): Slice => {
-    const source = deps.pages();
-    const access = deps.access() ?? NO_ACCESS;
-    let byAccess = slices.get(source);
-    if (byAccess === undefined) {
-      byAccess = new WeakMap();
-      slices.set(source, byAccess);
-    }
-    const cached = byAccess.get(access);
-    if (cached) return cached;
-    const pages: PageEntry[] = [];
-    for (const page of source) if (deps.canRead(page)) pages.push(page);
-    const slice: Slice = { pages, byId: null };
-    byAccess.set(access, slice);
-    return slice;
+  return {
+    indexOf: () => indexOf(deps, slices),
+    tablesFor: () => tablesFor(deps, slices, tablesOf),
+    pageById: (id) => pageById(deps, slices, id),
   };
-
-  const indexOf = (): PageIndex => pageIndexFor(`${deps.workspaceId}#readable`, sliceOf().pages);
-
-  // Ponytail: timestamps are read at THIS build and never refreshed while the index
-  // object lives: a body edit (updatedAt is not an index field) leaves stat() on the
-  // pre-edit mtime until a new index object.
-  const tablesFor = (): Tables => {
-    const index = indexOf();
-    const cached = tablesOf.get(index);
-    if (cached) return cached;
-    const tables = buildTables(index, sliceOf().pages);
-    tablesOf.set(index, tables);
-    return tables;
-  };
-
-  const pageById = (id: string): PageEntry | undefined => {
-    const slice = sliceOf();
-    if (slice.byId === null) slice.byId = new Map(slice.pages.map((p) => [p._id, p]));
-    return slice.byId.get(id);
-  };
-
-  return { indexOf, tablesFor, pageById };
 }
