@@ -35,6 +35,7 @@ run_inside_container() {
     test-e2e) exec pnpm exec playwright test "$@" ;;
     test-e2e-serial) exec pnpm exec playwright test --workers=1 "$@" ;;
     test-e2e-smoke) exec pnpm exec playwright test tests/e2e/smoke "$@" ;;
+    test-e2e-perf) exec pnpm exec playwright test tests/e2e/perf --workers=1 "$@" ;;
     test-canvas) exec node --experimental-strip-types --experimental-loader ./tests/canvas/ts-extension-loader.mjs --test tests/canvas/*.test.ts "$@" ;;
     test-doctor) exec node tests/test-env-doctor.mjs "$@" ;;
     test-bridge) exec node --test tests/bridge/*.test.mjs "$@" ;;
@@ -83,13 +84,16 @@ case "${COMMAND}" in
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh lint-fix "$@"
     ;;
   test-e2e)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e OSIO_CANVAS_V2 browser-tests pnpm exec playwright test "$@"
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e OSIO_CANVAS_V2 -e PLAYWRIGHT_BUILD browser-tests pnpm exec playwright test "$@"
     ;;
   test-e2e-serial)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e OSIO_CANVAS_V2 browser-tests pnpm exec playwright test --workers=1 "$@"
     ;;
   test-e2e-smoke)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests pnpm exec playwright test tests/e2e/smoke "$@"
+    ;;
+  test-e2e-perf)
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests pnpm exec playwright test tests/e2e/perf --workers=1 "$@"
     ;;
   test-canvas)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh test-canvas "$@"
@@ -120,7 +124,7 @@ case "${COMMAND}" in
       playground bash scripts/docker-run.sh mcp-claude "$@"
     ;;
   *)
-    echo "Usage: $0 {build|preview|typecheck|lint|lint-fix|test-e2e|test-e2e-serial|test-e2e-smoke|test-canvas|test-bench|test-doctor|test-bridge|quality|bench-layout|bridge-api|mcp-claude}" >&2
+    echo "Usage: $0 {build|preview|typecheck|lint|lint-fix|test-e2e|test-e2e-serial|test-e2e-smoke|test-e2e-perf|test-canvas|test-bench|test-doctor|test-bridge|quality|bench-layout|bridge-api|mcp-claude}" >&2
     exit 2
     ;;
 esac

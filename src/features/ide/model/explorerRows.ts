@@ -116,6 +116,42 @@ export function visibleItemOf(dir: string, row: ExplorerRow, index: number, setS
   return { rel: joinRel(dir, row.name), row, parentRel: dir, level, setSize, posInSet: index + 1 };
 }
 
+/** One line of the virtualized tree: a row, the inline create input, or the
+ *  loading/error line of an expanded folder whose rows are not there yet. */
+export type RenderRow =
+  | { type: "item"; item: VisibleItem }
+  | { type: "create"; parent: string; level: number; kind: "file" | "dir" }
+  | { type: "status"; dir: string; level: number };
+
+export type PendingCreate = { parent: string; kind: "file" | "dir" };
+
+type RowVisitor = {
+  item(item: VisibleItem): void;
+  /** A folder's children are about to be listed, at `level`. */
+  enter?(dir: string, level: number): void;
+  /** A folder is reached but its rows are not loaded (loading, error, not yet asked). */
+  unready?(dir: string, level: number): void;
+};
+
+/** The one depth-first walk both flattenings share, so their orders cannot drift.
+ *  Only expanded folders are entered. O(visible rows). */
+function walkRows(dirs: Readonly<Record<string, DirState>>, expanded: ReadonlySet<string>, visit: RowVisitor): void {
+  const walk = (dir: string, level: number): void => {
+    const state = dirs[dir];
+    if (state?.status !== "ready") {
+      visit.unready?.(dir, level);
+      return;
+    }
+    visit.enter?.(dir, level);
+    state.rows.forEach((row, index) => {
+      const item = visibleItemOf(dir, row, index, state.rows.length, level);
+      visit.item(item);
+      if (row.kind === "dir" && expanded.has(item.rel)) walk(item.rel, level + 1);
+    });
+  };
+  walk("", 1);
+}
+
 /** Depth-first list of the rows a user can currently reach — the order that
  *  ArrowUp/ArrowDown walk. Only expanded, loaded directories contribute. */
 export function flattenVisible(
@@ -123,15 +159,43 @@ export function flattenVisible(
   expanded: ReadonlySet<string>,
 ): VisibleItem[] {
   const out: VisibleItem[] = [];
-  const walk = (dir: string, level: number): void => {
-    const state = dirs[dir];
-    if (state?.status !== "ready") return;
-    state.rows.forEach((row, index) => {
-      const item = visibleItemOf(dir, row, index, state.rows.length, level);
-      out.push(item);
-      if (row.kind === "dir" && expanded.has(item.rel)) walk(item.rel, level + 1);
-    });
-  };
-  walk("", 1);
+  walkRows(dirs, expanded, { item: (item) => out.push(item) });
   return out;
+}
+
+/** Every line the tree draws, in flattenVisible's order: an expanded folder that is
+ *  not loaded shows one status line where its rows will be, and a pending create
+ *  shows its input first among its folder's rows (as the nested tree did). */
+export function flattenForRender(
+  dirs: Readonly<Record<string, DirState>>,
+  expanded: ReadonlySet<string>,
+  creating: PendingCreate | null,
+): RenderRow[] {
+  const out: RenderRow[] = [];
+  walkRows(dirs, expanded, {
+    item: (item) => out.push({ type: "item", item }),
+    enter: (dir, level) => {
+      if (creating?.parent === dir) out.push({ type: "create", parent: dir, level, kind: creating.kind });
+    },
+    unready: (dir, level) => out.push({ type: "status", dir, level }),
+  });
+  return out;
+}
+
+/** Stable identity of a line across re-flattenings: React keys and the virtualizer's
+ *  measurement cache both follow it, so a row keeps its DOM node (and focus) when
+ *  rows above it appear or disappear. */
+export function renderRowKey(row: RenderRow): string {
+  if (row.type === "item") return `i:${row.item.rel}`;
+  if (row.type === "create") return `c:${row.parent}`;
+  return `s:${row.dir}`;
+}
+
+/** Line index of every row path. O(lines). */
+export function indexByRel(rows: readonly RenderRow[]): Map<string, number> {
+  const index = new Map<string, number>();
+  rows.forEach((row, at) => {
+    if (row.type === "item") index.set(row.item.rel, at);
+  });
+  return index;
 }

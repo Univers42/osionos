@@ -20,7 +20,10 @@ import { pageConfigKey, resolvePageConfig, usePageConfigStore } from "@/shared/c
 import { isPerfEnabled } from "@osionos/perf-probe";
 import { initRealtimeMessagesBridge } from "@/services/realtime-messages";
 import { PageHeaderBar } from "@/entities/page";
+import { LoadingPane } from "@/shared/ui";
 import { PageBody } from "./PageBody";
+import { PageBodyUnavailable } from "./PageBodyUnavailable";
+import { usePageBodyLoad } from "../model/usePageBodyLoad";
 import { usePageHeaderBarProps } from "@/entities/page/model/usePageHeaderBarProps";
 import { PageHeader } from "./PageHeader";
 import { PageOutlineRail } from "@/widgets/page-toc/PageOutlineRail";
@@ -87,6 +90,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef,
   const [commentsOpen, setCommentsOpen] = useState(false);
   const storedPageConfig = usePageConfigStore((s) => s.configs[pageConfigKey(safeUserId, pageId)]);
   const pageConfig = useMemo(() => resolvePageConfig(storedPageConfig), [storedPageConfig]);
+  const body = usePageBodyLoad(pageId);
 
   useEffect(() => {
     initRealtimeMessagesBridge();
@@ -164,7 +168,11 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef,
         onCloseComments={() => setCommentsOpen(false)}
       />
 
-      <PageBody pageId={pageId} locked={pageConfig.locked} />
+      {body.state === "ready" && <PageBody pageId={pageId} locked={pageConfig.locked} />}
+      {body.state === "loading" && <LoadingPane label="Loading page" className="py-16" />}
+      {(body.state === "failed" || body.state === "signed-out") && (
+        <PageBodyUnavailable signedIn={body.state === "failed"} onRetry={body.retry} />
+      )}
 
       {anyJsDebugToolEnabled(debugTools) && (
         <Suspense fallback={null}>

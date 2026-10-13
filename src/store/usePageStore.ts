@@ -21,7 +21,6 @@ import {
   derivePageState,
   savePagesCache,
   schedulePagesCachePersist,
-  updatePageInState,
   withTimestamp,
   applyBlockUpdate,
   applyBlockInsert,
@@ -32,7 +31,10 @@ import {
   applyBlockIndent,
   applyBlockOutdent,
   applyBlockTypeChange,
+  canEditBody,
 } from "./pageStore.helpers";
+import { replacePage } from "./replacePage";
+import { patchActivePageSlice } from "./activePageMetadata";
 import {
   createSeedOfflinePages,
   createSeedOnlinePages,
@@ -215,7 +217,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       const pages = { ...s.pages };
       delete pages[workspaceId];
       savePagesCache(pages, workspaceId);
-      return derivePageState(pages, s.pageIdsByWorkspace);
+      return derivePageState(pages, s);
     });
   },
 
@@ -226,17 +228,13 @@ export const usePageStore = create<PageStore>((set, get) => ({
   updateBlock: (pageId, blockId, updates) => {
     timed("updateBlock", () => {
       const page = get().pageById(pageId);
-      if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+      if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
       set((s) => {
-        const pages = updatePageInState(
-          s.pages,
-          pageId,
-          withTimestamp(applyBlockUpdate(blockId, updates)),
-        );
-        schedulePagesCachePersist(pages, page.workspaceId);
+        const next = replacePage(s, pageId, withTimestamp(applyBlockUpdate(blockId, updates)));
+        schedulePagesCachePersist(next.pages, page.workspaceId);
         return {
-          ...derivePageState(pages, s.pageIdsByWorkspace),
+          ...next,
           pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
         };
       });
@@ -246,17 +244,13 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   insertBlock: (pageId, afterBlockId, block) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
-      const pages = updatePageInState(
-        s.pages,
-        pageId,
-        withTimestamp(applyBlockInsert(afterBlockId, block)),
-      );
-      schedulePagesCachePersist(pages, page.workspaceId);
+      const next = replacePage(s, pageId, withTimestamp(applyBlockInsert(afterBlockId, block)));
+      schedulePagesCachePersist(next.pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...next,
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -265,17 +259,13 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   deleteBlock: (pageId, blockId) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
-      const pages = updatePageInState(
-        s.pages,
-        pageId,
-        withTimestamp(applyBlockDelete(blockId)),
-      );
-      schedulePagesCachePersist(pages, page.workspaceId);
+      const next = replacePage(s, pageId, withTimestamp(applyBlockDelete(blockId)));
+      schedulePagesCachePersist(next.pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...next,
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -284,17 +274,13 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   moveBlock: (pageId, blockId, targetIndex, parentBlockId = null) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
-      const pages = updatePageInState(
-        s.pages,
-        pageId,
-        withTimestamp(applyBlockMove(blockId, targetIndex, parentBlockId)),
-      );
-      schedulePagesCachePersist(pages, page.workspaceId);
+      const next = replacePage(s, pageId, withTimestamp(applyBlockMove(blockId, targetIndex, parentBlockId)));
+      schedulePagesCachePersist(next.pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...next,
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -303,19 +289,15 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   moveBlockAcrossTree: (pageId, blockId, targetParentBlockId, targetIndex) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
-      const pages = updatePageInState(
-        s.pages,
-        pageId,
-        withTimestamp(
-          applyBlockMoveAcrossTree(blockId, targetParentBlockId, targetIndex),
-        ),
-      );
-      savePagesCache(pages, page.workspaceId);
+      const next = replacePage(s, pageId, withTimestamp(
+        applyBlockMoveAcrossTree(blockId, targetParentBlockId, targetIndex),
+      ));
+      savePagesCache(next.pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...next,
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -324,17 +306,13 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   indentBlock: (pageId, blockId) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
-      const pages = updatePageInState(
-        s.pages,
-        pageId,
-        withTimestamp(applyBlockIndent(blockId)),
-      );
-      schedulePagesCachePersist(pages, page.workspaceId);
+      const next = replacePage(s, pageId, withTimestamp(applyBlockIndent(blockId)));
+      schedulePagesCachePersist(next.pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...next,
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -343,17 +321,13 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   outdentBlock: (pageId, blockId) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
-      const pages = updatePageInState(
-        s.pages,
-        pageId,
-        withTimestamp(applyBlockOutdent(blockId)),
-      );
-      schedulePagesCachePersist(pages, page.workspaceId);
+      const next = replacePage(s, pageId, withTimestamp(applyBlockOutdent(blockId)));
+      schedulePagesCachePersist(next.pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...next,
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -362,17 +336,13 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   changeBlockType: (pageId, blockId, newType) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
-      const pages = updatePageInState(
-        s.pages,
-        pageId,
-        withTimestamp(applyBlockTypeChange(blockId, newType)),
-      );
-      schedulePagesCachePersist(pages, page.workspaceId);
+      const next = replacePage(s, pageId, withTimestamp(applyBlockTypeChange(blockId, newType)));
+      schedulePagesCachePersist(next.pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...next,
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     });
@@ -382,17 +352,13 @@ export const usePageStore = create<PageStore>((set, get) => ({
   updatePageContent: (pageId, blocks) => {
     timed("updatePageContent", () => {
       const page = get().pageById(pageId);
-      if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+      if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
       set((s) => {
-        const pages = updatePageInState(
-          s.pages,
-          pageId,
-          withTimestamp(applyPageContentUpdate(blocks)),
-        );
-        schedulePagesCachePersist(pages, page.workspaceId);
+        const next = replacePage(s, pageId, withTimestamp(applyPageContentUpdate(blocks)));
+        schedulePagesCachePersist(next.pages, page.workspaceId);
         return {
-          ...derivePageState(pages, s.pageIdsByWorkspace),
+          ...next,
           pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
         };
       });
@@ -414,7 +380,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
       };
       schedulePagesCachePersist(pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...derivePageState(pages, s),
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
     }));
@@ -430,21 +396,18 @@ export const usePageStore = create<PageStore>((set, get) => ({
     const page = get().pageById(pageId);
     if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
 
-    set((s) => {
-      const pages = updatePageInState(
-        s.pages,
-        pageId,
-        withTimestamp((page) => ({
-          ...page,
-          title,
-        })),
-      );
-      schedulePagesCachePersist(pages, page.workspaceId);
+    set((s) => timed("updatePageTitle", () => {
+      const next = replacePage(s, pageId, withTimestamp((page) => ({
+        ...page,
+        title,
+      })));
+      schedulePagesCachePersist(next.pages, page.workspaceId);
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...next,
+        ...patchActivePageSlice(s, pageId, { title }),
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
-    });
+    }));
     persistPageTitle(pageId, title);
     notifyTabsOfPagePatch(pageId, { title });
   },

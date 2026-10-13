@@ -17,15 +17,19 @@
  * same column line-to-line through the page (a real text-editor feel), instead
  * of snapping to line start/end.
  */
+import { setInlineEditorSelectionOffsets } from "@osionos/markdown-engine/dom";
 import { hitTestCaretRange } from "./caretGeometry";
 
 export type CaretEdge = { edge: "first" | "last"; x: number };
-export type CaretPlacement = "start" | "end" | CaretEdge;
+/** Text offset in the rendered block, counted the way getInlineEditorSelectionOffsets counts. */
+export type CaretOffset = { offset: number };
+export type CaretPlacement = "start" | "end" | CaretEdge | CaretOffset;
 export const VIRTUAL_BLOCK_FOCUS_EVENT = "osionos:block-focus-request";
 
 /** Collapse an edge-placement to the coarse start/end used by cell/textarea targets. */
 function placementEdge(placement: CaretPlacement): "start" | "end" {
   if (placement === "start" || placement === "end") return placement;
+  if ("offset" in placement) return placement.offset === 0 ? "start" : "end";
   return placement.edge === "first" ? "start" : "end";
 }
 
@@ -129,7 +133,9 @@ function placeCaret(target: HTMLElement, placement: CaretPlacement) {
   const edge = placementEdge(placement);
   // Textarea and input: use selectionStart/selectionEnd
   if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
-    const pos = edge === "end" ? target.value.length : 0;
+    const pos = typeof placement === "object" && "offset" in placement
+      ? Math.min(placement.offset, target.value.length)
+      : edge === "end" ? target.value.length : 0;
     target.selectionStart = pos;
     target.selectionEnd = pos;
     return;
@@ -141,6 +147,10 @@ function placeCaret(target: HTMLElement, placement: CaretPlacement) {
   const selection = globalThis.getSelection();
   if (!selection) return;
 
+  if (typeof placement === "object" && "offset" in placement) {
+    setInlineEditorSelectionOffsets(target, { start: placement.offset, end: placement.offset });
+    return;
+  }
   if (typeof placement === "object" && placeCaretAtGoalX(target, placement, selection)) return;
 
   const range = document.createRange();

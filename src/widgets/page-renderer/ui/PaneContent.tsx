@@ -10,11 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { Suspense, useEffect } from "react";
+import React, { Suspense } from "react";
 
 import { ErrorBoundary, LoadingPane } from "@/shared/ui";
 import { usePageStore } from "@/store/usePageStore";
-import { useUserStore } from "@/features/auth";
 import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
 import { tabToActivePage } from "@/widgets/workspace-grid/model/layoutSync";
 import { HomeTabView } from "./HomeTabView";
@@ -43,7 +42,8 @@ import { isDrawEnabled, isIdeEnabled, isWorkbenchEnabled } from "@/shared/config
 // ~458KB seed JSON) onto this warm pane path. The constants module is leaf-pure.
 import { WS_FILES_DB_ID, WS_FOLDERS_DB_ID } from "@/widgets/database-view/model/workspaceDatabaseConstants";
 
-/** A page tab: lazily fetch its content, then render agent or osionos view.
+/** A page tab: the agent, code or osionos view. The osionos page loads its own body
+ *  (usePageBodyLoad) and the code view its own file, so the tab fetches nothing.
  *  EVERY pane mounts its own live, editable editor so several files can be edited
  *  side by side. The editor is fully keyed by pageId and, because we pass
  *  activePageRef, the pane does NOT subscribe to the global activePage
@@ -52,18 +52,6 @@ import { WS_FILES_DB_ID, WS_FOLDERS_DB_ID } from "@/widgets/database-view/model/
  *  PaneView's serial idle-mount + `contain: layout paint` isolation. */
 const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string; chrome?: "bar" | "none" }> = ({ tab, chrome }) => {
   const page = usePageStore((s) => s.pageById(tab.pageId));
-  const fetchPageContent = usePageStore((s) => s.fetchPageContent);
-  const jwt = useUserStore((s) => s.activePageJwt() ?? "");
-
-  useEffect(() => {
-    // Fetch on missing PAGE *or* missing CONTENT: the bulk /api/pages/all hydrate
-    // now ships metadata only, so a page can be present with content===undefined
-    // (unloaded). Without this, a background/split pane renders a blank editor and
-    // a stray click would write [] over the real server content. Guard on
-    // `=== undefined` (unloaded), never a length check — a genuinely empty page
-    // has content===[] and must not fetch-loop.
-    if (jwt && (!page || page.content === undefined)) fetchPageContent(tab.pageId, jwt);
-  }, [page, jwt, tab.pageId, fetchPageContent]);
 
   if (!page) return <LoadingPane />;
   if (page.surface === "agent") {

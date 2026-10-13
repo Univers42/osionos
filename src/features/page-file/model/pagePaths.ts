@@ -29,6 +29,14 @@ export interface SiblingName {
   childDir: string;
 }
 
+/** Lower-cased once at load: the one name a sibling group can never claim. O(1). */
+const FOLDER_META_LOWER = FOLDER_META_NAME.toLowerCase();
+
+/** `_id` order: the semantic order deciding who keeps the plain name. O(1). */
+function compareIdAsc(a: PageEntry, b: PageEntry): number {
+  return a._id < b._id ? -1 : a._id > b._id ? 1 : 0;
+}
+
 /**
  * Assigns collision-free names to live siblings.
  * Ponytail: sorting by `_id` is deterministic but not creation order (ids are random
@@ -37,42 +45,74 @@ export interface SiblingName {
  * O(n log n) for the sort + O(n) for assignment using a per-base next-k map.
  */
 export function assignSiblingNames(siblings: readonly PageEntry[]): Map<string, SiblingName> {
-  const seen = new Set<string>();
-  const live = siblings
-    .filter((p) => !p.archivedAt && !seen.has(p._id) && seen.add(p._id))
-    .sort((a, b) => (a._id < b._id ? -1 : a._id > b._id ? 1 : 0));
-  const claimed = new Set<string>([FOLDER_META_NAME.toLowerCase()]);
-  const nextK = new Map<string, number>();
   const result = new Map<string, SiblingName>();
-  for (const page of live) {
-    const kind = kindOfPage(page);
-    const base = baseNameFor(page, kind);
-    const lowerBase = base.toLowerCase();
-    for (let k = nextK.get(lowerBase) ?? 1; ; k++) {
-      const candidate = k === 1 ? base : suffixed(base, k, kind === "code");
-      const own = ownName(candidate, kind);
-      const childDir = childDirName(candidate, kind);
-      if (claimed.has(own.toLowerCase()) || claimed.has(childDir.toLowerCase())) continue;
-      claimed.add(own.toLowerCase());
-      claimed.add(childDir.toLowerCase());
-      result.set(page._id, { own, childDir });
-      nextK.set(lowerBase, k + 1);
-      break;
-    }
+  const single = siblings.length === 1 ? siblings[0] : undefined;
+  if (single !== undefined) {
+    if (!single.archivedAt) claimNext(single, new Set([FOLDER_META_LOWER]), new Map<string, number>(), result);
+    return result;
   }
+  const live: PageEntry[] = [];
+  const seen = new Set<string>();
+  for (const page of siblings) {
+    if (page.archivedAt || seen.has(page._id)) continue;
+    seen.add(page._id);
+    live.push(page);
+  }
+  const only = live.length === 1 ? live[0] : undefined;
+  if (only !== undefined) {
+    claimNext(only, new Set([FOLDER_META_LOWER]), new Map<string, number>(), result);
+    return result;
+  }
+  if (live.length === 0) return result;
+  live.sort(compareIdAsc);
+  const claimed = new Set<string>([FOLDER_META_LOWER]);
+  const nextK = new Map<string, number>();
+  for (const page of live) claimNext(page, claimed, nextK, result);
   return result;
 }
 
-/** Sanitized title; a page drops a typed ".omd" (the suffix is added back), a code
- *  file named "*.omd" gets ".txt" so it is never read back as a page file. */
-function baseNameFor(page: PageEntry, kind: PageFileKind): string {
-  const base = sanitizeSegment(page.title || "untitled");
-  if (base === ".") return "untitled";
-  const endsOmd = base.toLowerCase().endsWith(PAGE_FILE_SUFFIX);
-  if (kind === "code") return endsOmd ? `${base}.txt` : base;
-  if (kind !== "page" || !endsOmd) return base;
-  const stripped = base.slice(0, -PAGE_FILE_SUFFIX.length);
-  return stripped && stripped !== "." ? stripped : "untitled";
+/** Next free " (k)" for `page`: `nextK` resumes per base, so this runs once unless two
+ *  bases fold onto one name. Both lowers are computed once. O(title) per try. */
+function claimNext(page: PageEntry, claimed: Set<string>, nextK: Map<string, number>, result: Map<string, SiblingName>): void {
+  const kind = kindOfPage(page);
+  const found = baseFor(page, kind);
+  const isCode = kind === "code";
+  for (let k = nextK.get(found.lower) ?? 1; ; k++) {
+    const candidate = k === 1 ? found.base : suffixed(found.base, k, isCode);
+    const own = ownName(candidate, kind);
+    const childDir = childDirName(candidate, kind);
+    const ownLower = own.toLowerCase();
+    const childLower = own === childDir ? ownLower : childDir.toLowerCase();
+    if (claimed.has(ownLower) || claimed.has(childLower)) continue;
+    claimed.add(ownLower);
+    claimed.add(childLower);
+    result.set(page._id, { own, childDir });
+    nextK.set(found.lower, k + 1);
+    return;
+  }
+}
+
+/**
+ * Sanitized base plus its lower-case, sharing one `toLowerCase` between the `.omd`
+ * probe and the collision key (the old code paid it twice per page). A page drops a
+ * typed ".omd" (the suffix is added back), a code file named "*.omd" gets ".txt" so
+ * it is never read back as a page file. O(title).
+ */
+function baseFor(page: PageEntry, kind: PageFileKind): { base: string; lower: string } {
+  const raw = sanitizeSegment(page.title || "untitled");
+  const clean = raw === "." ? "untitled" : raw;
+  const lowerRaw = clean.toLowerCase();
+  if (kind === "code") {
+    if (lowerRaw.endsWith(PAGE_FILE_SUFFIX)) return { base: `${clean}.txt`, lower: `${lowerRaw}.txt` };
+    return { base: clean, lower: lowerRaw };
+  }
+  if (kind !== "page" || !lowerRaw.endsWith(PAGE_FILE_SUFFIX)) return { base: clean, lower: lowerRaw };
+  const stripped = clean.slice(0, -PAGE_FILE_SUFFIX.length);
+  if (stripped === "" || stripped === ".") return { base: "untitled", lower: "untitled" };
+  // Lower-cased again, not sliced: case mapping is context-sensitive (a Greek
+  // final sigma before ".omd" is not final), so lower(stripped) can differ from
+  // a slice of lower(clean). Only titles ending in ".omd" pay this.
+  return { base: stripped, lower: stripped.toLowerCase() };
 }
 
 function ownName(base: string, kind: PageFileKind): string {

@@ -16,6 +16,7 @@ import { pageApiJwtFromSessionToken } from "@/features/auth/model/userStore.help
 import {
   canDeletePage,
   canDuplicatePage,
+  canEditPage,
   canMovePage,
   canReadPage,
   getTargetWorkspaceMoveVisibility,
@@ -25,18 +26,21 @@ import { SEED_PAGES } from "../data/seedPages";
 import {
   seedToEntry,
   localId,
-  updatePageInState,
   isPersistedPageId,
   saveRecents,
   addRecent,
   getAllDescendantIds,
   savePagesCache,
   derivePageState,
-  mergeWorkspacePages,
   isValidMove,
   nextDuplicateTitle,
   instantiateTemplateContent,
 } from "./pageStore.helpers";
+import { replacePage } from "./replacePage";
+import { loadLedger, saveLedger } from "@osionos/outbox-ledger";
+import { applyServerPages } from "./sync/applyServerPages";
+import { resolveFetchedPage } from "./sync/mergeServerPages";
+import { PAGE_OUTBOX_KEY, pageStamp } from "./sync/pageStamp";
 import type { AddPageOptions, PageEntry, PageStore, ActivePage, PageRecurrence } from "@/entities/page";
 
 type SetFn = (
@@ -50,7 +54,7 @@ export function createSeedOfflinePages(set: SetFn, get: GetFn) {
     const existingPages = get().pages;
     if (Object.keys(existingPages).length > 0) {
       const mergedPages = mergeMissingSeedPages(existingPages);
-      set((s) => ({ ...derivePageState(mergedPages, s.pageIdsByWorkspace), seeded: true }));
+      set((s) => ({ ...derivePageState(mergedPages, s), seeded: true }));
       savePagesCache(mergedPages);
       return;
     }
@@ -59,7 +63,7 @@ export function createSeedOfflinePages(set: SetFn, get: GetFn) {
       if (!grouped[sp.workspaceId]) grouped[sp.workspaceId] = [];
       grouped[sp.workspaceId].push(seedToEntry(sp));
     }
-    set((s) => ({ ...derivePageState(grouped, s.pageIdsByWorkspace), seeded: true }));
+    set((s) => ({ ...derivePageState(grouped, s), seeded: true }));
     savePagesCache(grouped);
   };
 }
@@ -115,7 +119,7 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
           ...derivePageState({
             ...s.pages,
             [realWsId]: [...(s.pages[realWsId] ?? []), page],
-          }, s.pageIdsByWorkspace),
+          }, s),
         }));
         savePagesCache(get().pages, realWsId);
       } catch (err) {
@@ -154,16 +158,12 @@ export function createFetchPages(set: SetFn, get: GetFn) {
         pageJwt,
       );
       lastFetchedAt.set(workspaceId, Date.now()); // stamp only after a confirmed pull
+      if (Array.isArray(data)) applyServerPages(set, workspaceId, data, true);
       set((s) => ({
-        ...derivePageState({
-          ...s.pages,
-          [workspaceId]: mergeWorkspacePages(s.pages[workspaceId], data),
-        }, s.pageIdsByWorkspace),
         loadingIds: new Set(
           [...s.loadingIds].filter((id) => id !== workspaceId),
         ),
       }));
-      savePagesCache(get().pages, workspaceId);
     } catch {
       set((s) => ({
         loadingIds: new Set(
@@ -184,36 +184,35 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
     try {
       const fullPage = await api.get<PageEntry>(`/api/pages/${pageId}`, pageJwt);
       if (!fullPage) return;
-      set((s) => ({
-        ...derivePageState(updatePageInState(s.pages, pageId, (p) => {
-          // Last-write-wins (same rule as hydratePages.mergePage): a background
-          // fetch (search index, export prefetch, lazy mount) must never apply a
-          // STALE server copy over newer local edits — e.g. a rename still inside
-          // the outbox debounce window. ISO strings compare lexicographically.
-          const serverNewer = (fullPage.updatedAt ?? "") > (p.updatedAt ?? "");
-          return {
-            ...p,
-            // Filling missing content is this fetch's whole purpose — always take it.
-            content: p.content === undefined || serverNewer ? (fullPage.content ?? p.content) : p.content,
-            title: serverNewer ? (fullPage.title ?? p.title) : p.title,
-            icon: serverNewer ? (fullPage.icon ?? p.icon) : p.icon,
-            cover: serverNewer ? (fullPage.cover ?? p.cover) : p.cover,
-            updatedAt: serverNewer ? (fullPage.updatedAt ?? p.updatedAt) : p.updatedAt,
-          };
-        }), s.pageIdsByWorkspace),
-      }));
+      // Decided on the page as it is NOW: an edit typed while the request was in flight must
+      // stay unpublished-and-pending, never be recorded as the server's copy.
+      const current = get().pageById(pageId);
+      if (!current) return;
+      const ledger = loadLedger(PAGE_OUTBOX_KEY);
+      const resolved = resolveFetchedPage(
+        current,
+        fullPage,
+        ledger,
+        context !== null && canEditPage(current, context),
+      );
+      if (!resolved) return;
+      set((s) => replacePage(s, pageId, () => resolved.page));
       savePagesCache(get().pages, page.workspaceId);
+      if (resolved.recordSynced) {
+        ledger[pageId] = pageStamp(resolved.page);
+        saveLedger(PAGE_OUTBOX_KEY, ledger);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         // The page is gone server-side — a stale localStorage ghost the additive
-        // hydrate (hydratePages.mergeWorkspace) never prunes. Evict it from the
+        // hydrate (sync/applyServerPages) never prunes. Evict it from the
         // store + cache so it stops being re-fetched in a loop and drops out of
         // the sidebar/tree instead of flooding the console with 404s.
         set((s) => {
           const wsPages = s.pages[page.workspaceId] ?? [];
           const pages = { ...s.pages, [page.workspaceId]: wsPages.filter((p) => p._id !== pageId) };
           return {
-            ...derivePageState(pages, s.pageIdsByWorkspace),
+            ...derivePageState(pages, s),
             activePage: s.activePage && s.activePage.id === pageId ? null : s.activePage,
           };
         });
@@ -278,7 +277,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
           ...derivePageState({
             ...s.pages,
             [workspaceId]: [...(s.pages[workspaceId] ?? []), pageWithTimestamp],
-          }, s.pageIdsByWorkspace),
+          }, s),
         }));
         savePagesCache(get().pages, workspaceId);
         return pageWithTimestamp;
@@ -314,7 +313,7 @@ export function createAddPage(set: SetFn, get: GetFn) {
       ...derivePageState({
         ...s.pages,
         [workspaceId]: [...(s.pages[workspaceId] ?? []), newPage],
-      }, s.pageIdsByWorkspace),
+      }, s),
     }));
     savePagesCache(get().pages, workspaceId);
     return newPage;
@@ -367,7 +366,7 @@ export function createAddDatabasePage(set: SetFn, get: GetFn) {
           ...derivePageState({
             ...s.pages,
             [workspaceId]: [...(s.pages[workspaceId] ?? []), pageWithTimestamp],
-          }, s.pageIdsByWorkspace),
+          }, s),
         }));
         savePagesCache(get().pages, workspaceId);
         return pageWithTimestamp;
@@ -394,7 +393,7 @@ export function createAddDatabasePage(set: SetFn, get: GetFn) {
       ...derivePageState({
         ...s.pages,
         [workspaceId]: [...(s.pages[workspaceId] ?? []), newPage],
-      }, s.pageIdsByWorkspace),
+      }, s),
     }));
     savePagesCache(get().pages, workspaceId);
     return newPage;
@@ -437,7 +436,7 @@ export function createArchivePage(set: SetFn, get: GetFn) {
         };
 
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...derivePageState(pages, s),
         recents: newRecents,
       };
     });
@@ -516,13 +515,13 @@ export function createDuplicatePage(set: SetFn, get: GetFn) {
         saveRecents(recents);
 
         return {
-          ...derivePageState(nextAllPages, s.pageIdsByWorkspace),
+          ...derivePageState(nextAllPages, s),
           activePage: newActivePage,
           recents,
         };
       }
 
-      return derivePageState(nextAllPages, s.pageIdsByWorkspace);
+      return derivePageState(nextAllPages, s);
     });
 
     return newRootId;
@@ -635,7 +634,7 @@ export function createReorderSibling(set: SetFn) {
       const nextList = list.map((p) => (p._id === pageId ? moved : p));
       const nextPages = { ...s.pages, [workspaceId]: nextList };
       savePagesCache(nextPages, workspaceId);
-      return derivePageState(nextPages, s.pageIdsByWorkspace);
+      return derivePageState(nextPages, s);
     });
   };
 }
@@ -696,7 +695,7 @@ export function createMovePage(set: SetFn, get: GetFn) {
         );
 
         savePagesCache(nextPages, sourceWorkspaceId);
-        return derivePageState(nextPages, s.pageIdsByWorkspace);
+        return derivePageState(nextPages, s);
       } else {
         // Cross-workspace move
         const sourceList = nextPages[sourceWorkspaceId] ?? [];
@@ -747,7 +746,7 @@ export function createMovePage(set: SetFn, get: GetFn) {
         savePagesCache(nextPages, [sourceWorkspaceId, targetWorkspaceId]);
 
         return {
-          ...derivePageState(nextPages, s.pageIdsByWorkspace),
+          ...derivePageState(nextPages, s),
           recents: updatedRecents,
           activePage: updatedActivePage,
         };
@@ -785,7 +784,7 @@ export function createRestorePage(set: SetFn, get: GetFn) {
           ),
         };
 
-      return derivePageState(pages, s.pageIdsByWorkspace);
+      return derivePageState(pages, s);
     });
     savePagesCache(get().pages, workspaceId);
   };
@@ -827,7 +826,7 @@ export function createDeletePage(set: SetFn, get: GetFn) {
         };
 
       return {
-        ...derivePageState(pages, s.pageIdsByWorkspace),
+        ...derivePageState(pages, s),
         activePage:
           s.activePage && deletedIds.has(s.activePage.id) ? null : s.activePage,
         recents,

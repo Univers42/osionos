@@ -36,7 +36,7 @@ import { flushAllBlockDrafts } from "@/features/block-editor/model/blockDraftSto
 import { buildDesiredPages, PAGE_OUTBOX_KEY } from "./pageStamp";
 import { publishPage, publishPageKeepalive } from "./pageOutbox";
 import { hydratePagesFromBaas } from "./hydratePages";
-import { computeSyncActions, loadLedger, saveLedger } from "@osionos/outbox-ledger";
+import { computeSyncActions, loadLedger, saveLedger, type SyncLedger } from "@osionos/outbox-ledger";
 
 const DEBOUNCE_MS = 800;
 /** First retry delay when the server pushes back; doubles up to MAX_RETRY_MS. */
@@ -99,22 +99,29 @@ export function usePageSync(): void {
           (page) => !!context && canEditPage(page, context), // never publish a non-editable page
         );
         const { toPublish, toUnpublish } = computeSyncActions(desired, ledger);
+        const confirmed: SyncLedger = {};
+        const forgotten = new Set(toUnpublish); // left desired set → forget (no network)
         let failed = false;
         for (const id of toPublish) {
           const page = payloads.get(id);
           const stamp = desired.get(id);
           if (!page || stamp === undefined) continue;
           const result = await publishPage(page);
-          if (result === "ok") { ledger[id] = stamp; continue; } // advance ONLY on confirm
-          if (result === "gone") { delete ledger[id]; continue; } // deleted/unowned → forget it
+          if (result === "ok") { confirmed[id] = stamp; continue; } // advance ONLY on confirm
+          if (result === "gone") { forgotten.add(id); continue; } // deleted/unowned → forget it
           // Transient (offline / 5xx / 429): STOP. Hammering the rest of the batch is what
           // turns a rate-limited server into a self-sustaining 429/502 storm. Back off and
           // resume next cycle — the pages already confirmed above stay advanced.
           failed = true;
           break;
         }
-        for (const id of toUnpublish) delete ledger[id]; // left desired set → forget (no network)
-        saveLedger(PAGE_OUTBOX_KEY, ledger);
+        // Reloaded after the awaits: a content fetch or page-list merge may have recorded a
+        // page as synced meanwhile, and writing back the copy loaded above would drop that
+        // record and PATCH the server's own body back on the next flush.
+        const latest = loadLedger(PAGE_OUTBOX_KEY);
+        Object.assign(latest, confirmed);
+        for (const id of forgotten) delete latest[id];
+        saveLedger(PAGE_OUTBOX_KEY, latest);
         if (failed) scheduleRetry(); else clearRetry();
       } finally {
         flushing = false;

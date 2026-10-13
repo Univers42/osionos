@@ -42,8 +42,13 @@ export function pathForPage(pageId: string, resolve: (id: string) => PageEntry |
  * separators, `..`, NUL and control chars so a title can never escape its
  * folder or forge a path; empty results fall back to "untitled". This is the
  * same guard the container-materialize step (P4) relies on.
+ *
+ * A segment the rewrite below would not touch is handed back after one scan, so
+ * the ~6 strings the rewrite cost every real title are paid only by titles that
+ * are actually dirty. O(len) either way.
  */
 export function sanitizeSegment(name: string): string {
+  if (isAlreadyClean(name)) return name;
   // Control band (NUL..US) mapped per char-code — a raw range in a regex
   // literal trips eslint's no-control-regex; behavior is identical.
   const controlFree = Array.from(name, (ch) => (ch.charCodeAt(0) < 0x20 ? " " : ch)).join("");
@@ -53,6 +58,53 @@ export function sanitizeSegment(name: string): string {
     .trim()
     .replace(/\s+/g, " ");
   return cleaned || "untitled";
+}
+
+/**
+ * True when the rewrite above returns `name` itself: no code below U+0021 but an
+ * inner single space, no "/", no "\", no "..", and nothing `trim` or `\s+` folds.
+ * Empty is false — it becomes "untitled". O(len), one charCodeAt pass, no alloc.
+ * Ponytail: the above-U+007E space list is hand-copied from JS's `\s`, so it
+ * matches `trim`/`\s+` as of ES2024 and silently stops matching if Unicode adds a
+ * code point to `\s` — a new one would take this fast path and skip its fold.
+ * Only the code points the oracle test cannot enumerate are at risk; re-check
+ * the list whenever sanitizeSegment's output is allowed to differ.
+ */
+function isAlreadyClean(name: string): boolean {
+  const n = name.length;
+  if (n === 0) return false;
+  let afterSpace = false;
+  for (let i = 0; i < n; i++) {
+    const code = name.charCodeAt(i);
+    if (code < 0x21) {
+      if (code !== 0x20) return false;
+      if (i === 0 || i === n - 1 || afterSpace) return false;
+      afterSpace = true;
+      continue;
+    }
+    afterSpace = false;
+    if (code === 0x2e) {
+      if (name.charCodeAt(i + 1) === 0x2e) return false;
+      continue;
+    }
+    if (code === 0x2f || code === 0x5c || (code > 0x7e && isFoldingSpace(code))) return false;
+  }
+  return true;
+}
+
+/** `\s` at U+007F and above — what `trim` strips and `\s+` folds. The caller only
+ *  asks about codes above U+007E, and U+0009–U+001F die in its `code < 0x21`
+ *  branch. O(1). */
+function isFoldingSpace(code: number): boolean {
+  if (code === 0xa0 || (code >= 0x2000 && code <= 0x200a)) return true;
+  return (
+    code === 0x1680 ||
+    (code >= 0x2028 && code <= 0x2029) ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  );
 }
 
 /** Collect every code file under `nodes` as `{ path, content }`, folders implied

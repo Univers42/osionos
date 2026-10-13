@@ -34,8 +34,6 @@ interface RowDndArgs {
  * so the dragged node's whole subtree follows it.
  */
 export function usePageRowDnd({ pageId, workspaceId, canExpand, expanded, onSpringOpen }: RowDndArgs) {
-  const movePage = usePageStore((s) => s.movePage);
-  const reorderSibling = usePageStore((s) => s.reorderSibling);
   const draggingId = useSidebarTreeDnd((s) => s.draggingId);
   const dropTargetId = useSidebarTreeDnd((s) => s.dropTargetId);
   const dropMode = useSidebarTreeDnd((s) => s.dropMode);
@@ -80,11 +78,11 @@ export function usePageRowDnd({ pageId, workspaceId, canExpand, expanded, onSpri
     clearSpring();
     if (mode === "inside") {
       // Drop into this row (re-parent the whole subtree under it).
-      movePage(draggingId!, pageId, workspaceId);
+      usePageStore.getState().movePage(draggingId!, pageId, workspaceId);
     } else {
       // Drop before/after this row — reposition at the same level (or reparent
       // into this row's parent and place there).
-      reorderSibling(draggingId!, pageId, mode === "before", workspaceId);
+      usePageStore.getState().reorderSibling(draggingId!, pageId, mode === "before", workspaceId);
     }
     endDrag();
   }

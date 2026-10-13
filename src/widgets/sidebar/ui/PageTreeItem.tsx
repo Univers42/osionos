@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/08 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,7 @@ import { BookOpen, ChevronRight, Folder, FolderOpen } from "lucide-react";
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useShallow } from "zustand/react/shallow";
 import { usePageStore, type PageEntry } from "@/store/usePageStore";
+import { useIsActivePage } from "@/store/activePageFlag";
 import { canReadPage, usePageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { isFolderEntry, isWikiEntry, selectChildPageIds, selectPageTreeEntry } from "./pageTreeItem.helpers";
 import { SidebarRenameInput } from "./SidebarRenameInput";
@@ -37,7 +38,6 @@ interface Props {
   workspaceId: string;
   jwt: string;
   depth?: number;
-  activeId?: string | null;
 }
 
 /**
@@ -46,20 +46,24 @@ interface Props {
  * – Drag a row onto another: dropping on its middle nests it as a child; dropping
  *   on the top/bottom edge keeps it at the same depth (sibling, blue line).
  * – Hovering a collapsed folder mid-drag springs it open after a short dwell.
+ * Memoized on its primitive props: the tree re-renders on every title keystroke (recents
+ * change), and 1 000 rows re-rendering cost ~250 ms per key (tests/e2e/perf/titleTyping.spec.mjs).
+ * The active highlight is a keyed subscription, not a prop: an `activeId` prop changed for every
+ * row on every navigation (1 000 pages: 306 ms median page switch, tests/e2e/perf/interactions.spec.mjs).
  */
-export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth = 0, activeId }) => {
+export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspaceId, jwt, depth = 0 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
-  const openPage = usePageStore((s) => s.openPage);
-  const addPage = usePageStore((s) => s.addPage);
-  const updatePageTitle = usePageStore((s) => s.updatePageTitle);
-  const archivePage = usePageStore((s) => s.archivePage);
+  // Store actions are read at call time (usePageStore.getState()), never subscribed: a row is
+  // mounted per visible page and every subscription re-runs on every store commit, so six
+  // action selectors per row cost 6 x rows callbacks per keystroke (titleTyping.spec.mjs).
   const page = usePageStore(useShallow((s) => selectPageTreeEntry(s, pageId)));
-  const childPageIds = usePageStore(useShallow((s) => selectChildPageIds(s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES, pageId)));
+  const childPageIds = usePageStore(useShallow((s) => selectChildPageIds(s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES, pageId, workspaceId)));
   const accessContext = usePageAccessContext();
+  const isActive = useIsActivePage(pageId);
   const collapseToken = useSidebarTreeDnd((s) => s.collapseToken);
   const devMode = useDevMode((s) => s.dev);
 
@@ -87,14 +91,13 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
 
   if (!page || page.archivedAt || !canReadPage(page, accessContext)) return null;
   const pageEntry = page;
-  const isActive = activeId === pageEntry._id;
   const paddingLeft = `calc(var(--osio-space-2) + ${depth} * var(--osio-space-4))`;
   const fallbackIcon = pageEntry.databaseId ? "icon:table" : "icon:page";
 
   function handleRowClick(e: React.MouseEvent) {
     e.stopPropagation();
     if (isFolder) { setExpanded((o) => !o); return; }
-    openPage({
+    usePageStore.getState().openPage({
       id: pageEntry._id, workspaceId,
       kind: pageEntry.databaseId ? "database" : "page",
       title: pageEntry.title, icon: pageEntry.icon, databaseId: pageEntry.databaseId,
@@ -104,17 +107,17 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
   async function createChild(asFolder: boolean, e: React.MouseEvent) {
     e.stopPropagation();
     const title = asFolder ? "New folder" : "Untitled";
-    const child = await addPage(workspaceId, title, jwt, pageEntry._id, asFolder ? { surface: "folder" } : undefined);
+    const child = await usePageStore.getState().addPage(workspaceId, title, jwt, pageEntry._id, asFolder ? { surface: "folder" } : undefined);
     if (!child) return;
     setExpanded(true);
-    if (!asFolder) openPage({ id: child._id, workspaceId, kind: "page", title: child.title });
+    if (!asFolder) usePageStore.getState().openPage({ id: child._id, workspaceId, kind: "page", title: child.title });
   }
 
   // Quick-delete: with the row focused (after a click), Del archives the page —
   // confirmed once, then skippable via the modal's "Don't ask again".
   function doArchivePage() {
     setConfirmDelete(false);
-    void archivePage(pageEntry._id, workspaceId, jwt ?? "");
+    void usePageStore.getState().archivePage(pageEntry._id, workspaceId, jwt ?? "");
   }
   function requestDelete() {
     if (globalThis.localStorage?.getItem("osionos.delete-skip-confirm") === "1") {
@@ -197,7 +200,7 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
         {renaming ? (
           <SidebarRenameInput
             initialValue={pageEntry.title || ""}
-            onCommit={(value) => { if (value) updatePageTitle(pageEntry._id, value); setRenaming(false); }}
+            onCommit={(value) => { if (value) usePageStore.getState().updatePageTitle(pageEntry._id, value); setRenaming(false); }}
             onCancel={() => setRenaming(false)}
           />
         ) : (
@@ -205,6 +208,7 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
             type="button"
             {...dragHandlers}
             onClick={handleRowClick}
+            aria-current={isActive ? "page" : undefined}
             onDoubleClick={(e) => { e.stopPropagation(); setRenaming(true); }}
             onKeyDown={(e) => {
               if (e.key === "Delete") { e.preventDefault(); e.stopPropagation(); requestDelete(); }
@@ -232,10 +236,9 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
         />
       </div>
 
-      {expanded && hasChildren &&
-        children.map((childId) => (
-          <PageTreeItem key={childId} pageId={childId} workspaceId={workspaceId} jwt={jwt} depth={depth + 1} activeId={activeId} />
-        ))}
+      {expanded && hasChildren && (
+        <PageTreeRows pageIds={children} workspaceId={workspaceId} jwt={jwt} depth={depth + 1} />
+      )}
 
       {contextMenu ? (
         <PageContextMenu
@@ -261,4 +264,23 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
       ) : null}
     </>
   );
-};
+});
+
+interface PageTreeRowsProps {
+  pageIds: readonly string[];
+  workspaceId: string;
+  jwt: string;
+  depth: number;
+}
+
+/** Sibling rows. Memoized so a parent re-render with the same (store-stable) id list
+ *  creates no elements at all — the sidebar re-renders on every title keystroke. */
+export const PageTreeRows = React.memo(function PageTreeRows({ pageIds, workspaceId, jwt, depth }: PageTreeRowsProps) {
+  return (
+    <>
+      {pageIds.map((pageId) => (
+        <PageTreeItem key={pageId} pageId={pageId} workspaceId={workspaceId} jwt={jwt} depth={depth} />
+      ))}
+    </>
+  );
+});

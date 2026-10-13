@@ -25,7 +25,7 @@ import {
   type InlineEditorSelectionOffsets,
 } from "@osionos/markdown-engine/dom";
 import { getCalloutIconForKind } from "@osionos/markdown-engine/terminal";
-import { useSlashSelect, repositionCursor } from "@/features/slash-commands";
+import { useSlashSelect } from "@/features/slash-commands";
 import { createHeaderBandBlock } from "@/features/slash-commands/model/profileHeaderPreset";
 import { contentWithoutHeader, isRemovableHeader } from "@/entities/block/model/headerCanvas";
 import { useUserStore } from "@/features/auth";
@@ -929,7 +929,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
           content: "",
           language: fenceMatch[1].toLowerCase() || "plaintext",
         });
-        repositionCursor(blockId, "");
+        focusBlock(blockId);
         return true;
       }
 
@@ -940,7 +940,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       updateBlock(pageId, blockId, parsedTable);
       return true;
     },
-    [pageId, changeBlockType, updateBlock],
+    [pageId, changeBlockType, updateBlock, focusBlock],
   );
 
   const tryHandleSlashMenu = useCallback(
@@ -1063,7 +1063,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       // scrambled fast typing into "eadingH".
       const pane = selectionPaneRoot();
       if (!commitEditableBlockText(blockId, detection.remainingContent, pane)) {
-        repositionCursor(blockId, detection.remainingContent);
+        focusBlock(blockId, "end");
       }
       refocusBlockIfLost(blockId, "end", pane);
     },
@@ -1191,7 +1191,6 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       changeBlockType(pageId, blockId, "toggle");
       updateBlock(pageId, blockId, { content: rest, collapsed: false, headingLevel: level });
       focusBlock(blockId);
-      repositionCursor(blockId, rest);
       return true;
     },
     [pageId, changeBlockType, updateBlock, focusBlock],
@@ -1223,11 +1222,11 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         indentBlock(pageId, blockId);
       }
 
-      repositionCursor(blockId, block.content);
+      focusBlock(blockId);
 
       return true;
     },
-    [pageId, indentBlock, outdentBlock],
+    [pageId, indentBlock, outdentBlock, focusBlock],
   );
 
   // Enter on an empty *indented* block walks it back out one level at a time
@@ -1235,7 +1234,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   // do the list/to-do handlers below convert it to a paragraph. A COLUMN child
   // is exempt: in Notion, Enter inside a column always stays in the column —
   // outdenting instead lifted the block out, tripped the one-column-collapse
-  // normalization (the whole split dissolved), and repositionCursor then
+  // normalization (the whole split dissolved), and the refocus then
   // targeted a block the re-render had just relocated: caret gone to <body>.
   const handleEmptyEnterOutdent = useCallback(
     (
@@ -1252,10 +1251,10 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       e.preventDefault();
       flushPendingBlockDraft(blockId, "structural");
       outdentBlock(pageId, blockId);
-      repositionCursor(blockId, "");
+      focusBlock(blockId);
       return true;
     },
-    [pageId, outdentBlock, flushPendingBlockDraft],
+    [pageId, outdentBlock, flushPendingBlockDraft, focusBlock],
   );
 
   const handleEmptyListEnter = useCallback(
@@ -1281,7 +1280,6 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       changeBlockType(pageId, blockId, "paragraph");
       updateBlock(pageId, blockId, { content: "" });
       focusBlock(blockId);
-      repositionCursor(blockId, "");
 
       return true;
     },
@@ -1308,7 +1306,6 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       changeBlockType(pageId, blockId, "paragraph");
       updateBlock(pageId, blockId, { content: "", checked: false });
       focusBlock(blockId);
-      repositionCursor(blockId, "");
 
       return true;
     },
@@ -1431,7 +1428,6 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         e.preventDefault();
         outdentBlock(pageId, blockId);
         focusBlock(blockId);
-        repositionCursor(blockId, "");
         return true;
       }
 
@@ -1473,10 +1469,10 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       e.preventDefault();
       flushPendingBlockDraft(blockId, "structural");
       outdentBlock(pageId, blockId);
-      repositionCursor(blockId, block.content);
+      focusBlock(blockId);
       return true;
     },
-    [pageId, outdentBlock, flushPendingBlockDraft],
+    [pageId, outdentBlock, flushPendingBlockDraft, focusBlock],
   );
 
   /**
@@ -1510,7 +1506,6 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         flushPendingBlockDraft(blockId, "structural");
         changeBlockType(pageId, blockId, "paragraph");
         focusBlock(blockId);
-        repositionCursor(blockId, "");
         return true;
       }
       if (block.type !== "paragraph") return false;
@@ -1525,12 +1520,19 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       if (!mergeable) return false;
 
       e.preventDefault();
-      flushPendingBlockDraft(blockId, "structural");
-      const prefix = previous.content ?? "";
-      updateBlock(pageId, previous.id, { content: prefix + (block.content ?? "") });
+      // Read both texts AFTER the flush: `block` was taken before it, so a line typed since the
+      // last draft commit still read as its old text and was deleted with its block.
+      const flushed = flushPendingBlockDraft(blockId, "structural");
+      const prefix = findBlockInTree(flushed, previous.id)?.content ?? "";
+      const text = findBlockInTree(flushed, blockId)?.content ?? "";
+      // Ponytail: the seam is the rendered length of the previous block before the merge; a
+      // markdown pair spanning the seam ("**a" + "b**") renders shorter merged, so the caret lands
+      // past the seam by the marker width. Plain text and closed styles are exact.
+      const seam = selectionPaneRoot()
+        .querySelector(`[data-block-id="${previous.id}"] [contenteditable]`)?.textContent?.length ?? 0;
+      updateBlock(pageId, previous.id, { content: prefix + text });
       deleteBlock(pageId, blockId);
-      focusBlock(previous.id);
-      repositionCursor(previous.id, prefix); // caret sits exactly at the seam
+      focusBlock(previous.id, { offset: seam });
       return true;
     },
     [pageId, changeBlockType, updateBlock, deleteBlock, focusBlock, flushPendingBlockDraft],
@@ -1773,7 +1775,6 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         const { blocks: next } = insertBlockRelative(contentRef.current, blockId, spacer, "before");
         updatePageContent(pageId, next);
         focusBlock(blockId);
-        repositionCursor(blockId, "");
         return true;
       }
       // MID-text: keep the head here, carry the tail into the new block.
@@ -1787,7 +1788,6 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         updateBlock(pageId, blockId, { content: head });
         insertBlock(pageId, blockId, tailBlock);
         focusBlock(tailBlock.id);
-        repositionCursor(tailBlock.id, "");
         return true;
       }
       return false; // at the end → the plain append path below
@@ -2040,11 +2040,11 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         const newContent =
           text.slice(0, triggerIdx) + `[[page:${targetPageId}]] `;
         updateBlock(pageId, blockId, { content: newContent });
-        repositionCursor(blockId, newContent);
+        focusBlock(blockId, "end");
       }
       setPageSelector(null);
     },
-    [flushPendingBlockDraft, pageSelector, pageId, updateBlock],
+    [flushPendingBlockDraft, pageSelector, pageId, updateBlock, focusBlock],
   );
 
   const handlePageSelectorCreate = useCallback(async () => {
