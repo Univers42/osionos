@@ -62,21 +62,26 @@ export function fontSampleClass(font: PageFont): string {
   return '';
 }
 
-function formatEditedLabel(updatedAt: string | undefined, now: number): string {
-  if (!updatedAt) return 'Edited recently';
+/** How long ago `updatedAt` was: "just now", "5 min ago", "3 days ago", or "recently" when unknown. */
+export function formatEditedAgo(updatedAt: string | undefined, now: number): string {
+  if (!updatedAt) return 'recently';
   const elapsed = Math.max(0, now - new Date(updatedAt).getTime());
-  if (Number.isNaN(elapsed)) return 'Edited recently';
-  if (elapsed < MINUTE_IN_MS) return 'Edited just now';
+  if (Number.isNaN(elapsed)) return 'recently';
+  if (elapsed < MINUTE_IN_MS) return 'just now';
   if (elapsed < HOUR_IN_MS) {
     const minutes = Math.floor(elapsed / MINUTE_IN_MS);
-    return `Edited ${minutes} min ago`;
+    return `${minutes} min ago`;
   }
   if (elapsed < DAY_IN_MS) {
     const hours = Math.floor(elapsed / HOUR_IN_MS);
-    return `Edited ${hours} hour${hours === 1 ? '' : 's'} ago`;
+    return `${hours} hour${hours === 1 ? '' : 's'} ago`;
   }
   const days = Math.floor(elapsed / DAY_IN_MS);
-  return `Edited ${days} day${days === 1 ? '' : 's'} ago`;
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function formatEditedLabel(updatedAt: string | undefined, now: number): string {
+  return `Edited ${formatEditedAgo(updatedAt, now)}`;
 }
 
 import { isRemovableHeader, PROFILE_HEADER_COVER_URL } from '@/entities/block/model/headerCanvas';
