@@ -50,7 +50,7 @@ import {
   usePageActions,
 } from '@/entities/page';
 import type { PageConfig, PageFont, PageVersion } from '@/shared/config/pageConfigStore';
-import { useClickOutside, useEscapeKey, useToastStore } from '@/shared/ui';
+import { Dropdown, useClickOutside, useEscapeKey, useToastStore } from '@/shared/ui';
 import { usePageStore } from '@/store/usePageStore';
 
 import { PageBreadcrumbs } from './PageBreadcrumbs';
@@ -279,9 +279,16 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                       <div className="flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--osio-bg-hover)]">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--osio-fg-muted)]"><Languages size={16} /></span>
                         <span className="min-w-0 flex-1 truncate">Translate</span>
-                        <select value={actions.translateLocale} className="max-w-28 rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-1.5 py-1 text-xs text-[var(--osio-fg-default)] outline-none" onChange={(event) => actions.setTranslateLocale(event.target.value)}>
-                          {TRANSLATION_LANGUAGES.map((language) => <option key={language.locale} value={language.locale}>{language.label}</option>)}
-                        </select>
+                        <span className="flex min-w-0 max-w-32">
+                          <Dropdown
+                            variant="inline"
+                            width={176}
+                            label="Translation language"
+                            value={actions.translateLocale}
+                            options={TRANSLATION_LANGUAGES.map((language) => ({ value: language.locale, label: language.label }))}
+                            onChange={actions.setTranslateLocale}
+                          />
+                        </span>
                         <button type="button" className="rounded bg-[var(--osio-accent)] px-2 py-1 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90" onClick={() => runPageAction(actions.translate(actions.translateLocale), showActionError)}>Apply</button>
                       </div>
                     </div>
