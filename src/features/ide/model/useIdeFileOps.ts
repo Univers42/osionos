@@ -18,7 +18,8 @@ import { useUserStore } from "@/features/auth";
 import { codeBlockOf, createCodeFileBlock } from "./codeFile";
 import { languageForFileName } from "./ideLanguages";
 import { readImportFiles } from "./importFolder";
-import { buildImportPlan, pathForPage } from "./idePaths";
+import { buildImportPlan } from "./idePaths";
+import { pagePathOf } from "./pagePathOf";
 import { mirrorSandboxDelete, mirrorSandboxRename } from "./sandboxMirrorOps";
 import { exportIdeProjectZip } from "./exportZip";
 
@@ -53,7 +54,7 @@ export function useIdeFileOps() {
 
   const rename = useCallback((pageId: string, newName: string): void => {
     const store = usePageStore.getState();
-    const fromRel = pathForPage(pageId, (id) => store.pageById(id));
+    const fromRel = pagePathOf(pageId);
     store.updatePageTitle(pageId, newName);
     const page = store.pageById(pageId);
     const block = codeBlockOf(page);
@@ -62,13 +63,13 @@ export function useIdeFileOps() {
       store.updateBlock(pageId, block.id, { fileName: newName, language: languageForFileName(newName).id });
     }
     // The sandbox file follows the page — no stale twin left on disk.
-    const toRel = pathForPage(pageId, (id) => usePageStore.getState().pageById(id));
+    const toRel = pagePathOf(pageId);
     void mirrorSandboxRename(workspaceId, fromRel, toRel);
   }, [workspaceId]);
 
   const remove = useCallback(
     (pageId: string) => {
-      const rel = pathForPage(pageId, (id) => usePageStore.getState().pageById(id));
+      const rel = pagePathOf(pageId);
       const result = usePageStore.getState().archivePage(pageId, workspaceId, jwt);
       void mirrorSandboxDelete(workspaceId, rel);
       return result;
@@ -78,9 +79,9 @@ export function useIdeFileOps() {
 
   const move = useCallback(
     (pageId: string, targetParentId: string | null) => {
-      const fromRel = pathForPage(pageId, (id) => usePageStore.getState().pageById(id));
+      const fromRel = pagePathOf(pageId);
       const result = usePageStore.getState().movePage(pageId, targetParentId, workspaceId);
-      const toRel = pathForPage(pageId, (id) => usePageStore.getState().pageById(id));
+      const toRel = pagePathOf(pageId);
       void mirrorSandboxRename(workspaceId, fromRel, toRel);
       return result;
     },

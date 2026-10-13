@@ -104,7 +104,7 @@ export function pageToFile(page: PageEntry): string {
   if (content.length === 0) return joinFrontMatter({ ...meta }, "");
   return joinFrontMatter(
     { ...meta, blocks: collectOverlay(content, OVERLAY_KEYS) },
-    serializeBlocksToMarkdown(content),
+    serializeBlocksToMarkdown(content, { keepEmptyParagraphs: true }),
   );
 }
 
@@ -141,7 +141,7 @@ function blocksOf(body: string, overlay: BlockOverlay | undefined, existing?: Pa
 /** A parser crash must not eat a hand-edited file: one paragraph holds the body. */
 function parseBody(body: string): Block[] {
   try {
-    return parseMarkdownToBlocks(body);
+    return parseMarkdownToBlocks(body, { keepEmptyParagraphs: true });
   } catch {
     return [{ id: crypto.randomUUID(), type: "paragraph", content: body }];
   }

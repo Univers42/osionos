@@ -143,10 +143,10 @@ export async function runActiveFile(): Promise<void> {
     useToastStore.getState().push({ kind: "info", title: "Run Active File", description: "Open a code file first — it runs the focused file." });
     return;
   }
-  const [{ codeBlockOf }, { languageById, languageForFileName }, { pathForPage }, { ideFsWrite }] = await Promise.all([
+  const [{ codeBlockOf }, { languageById, languageForFileName }, { pagePathOf }, { ideFsWrite }] = await Promise.all([
     import("./codeFile"),
     import("./ideLanguages"),
-    import("./idePaths"),
+    import("./pagePathOf"),
     import("./ideFsClient"),
   ]);
   const block = codeBlockOf(page);
@@ -155,7 +155,7 @@ export async function runActiveFile(): Promise<void> {
     useToastStore.getState().push({ kind: "info", title: "Run Active File", description: `${lang.label} has no run command yet.` });
     return;
   }
-  const relPath = pathForPage(page._id, (id) => store.pageById(id));
+  const relPath = pagePathOf(page._id);
   const shellPath = `'/workspace/${relPath.replace(/'/g, "'\\''")}'`;
   await ideFsWrite(workspaceId, relPath, block?.content ?? "");
   await runInTerminal(lang.runCmd.replaceAll("{file}", shellPath));
