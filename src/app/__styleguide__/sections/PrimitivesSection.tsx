@@ -2,6 +2,7 @@ import React from "react";
 
 import { Badge, Button, Card, Input } from "@/shared/ui";
 import { AvatarSamples, CheckboxSamples, KeySamples, TooltipSample } from "./ControlSamples";
+import { RecipeSamples } from "./RecipeSamples";
 import { StyleGuideSection } from "./StyleGuideSection";
 
 export const PrimitivesSection: React.FC = () => (
@@ -31,6 +32,7 @@ export const PrimitivesSection: React.FC = () => (
       <KeySamples />
       <CheckboxSamples />
       <TooltipSample />
+      <RecipeSamples />
     </div>
   </StyleGuideSection>
 );

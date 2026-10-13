@@ -2,6 +2,7 @@ import React from "react";
 import { Bell, Trash2 } from "lucide-react";
 
 import { Menu, MenuItem } from "@/shared/ui";
+import { OverlayRecipeSample } from "./RecipeSamples";
 import { StyleGuideSection } from "./StyleGuideSection";
 
 export const OverlaySection: React.FC = () => (
@@ -18,5 +19,6 @@ export const OverlaySection: React.FC = () => (
       <p className="text-sm font-semibold text-[var(--osio-fg-strong)]">Confirm action</p>
       <p className="pt-1 text-sm text-[var(--osio-fg-muted)]">A static picture of a dialog surface.</p>
     </div>
+    <OverlayRecipeSample />
   </StyleGuideSection>
 );
