@@ -2435,14 +2435,18 @@ async function fetchRecordNoteMirror(noteId, config, fetchImpl) {
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
-/** POST /api/records/:dbId/:table/:pk/open — resolve-or-create the linked note (idempotent). */
+/**
+ * POST /api/records/:dbId/:table/:pk/open — resolve-or-create the linked note (idempotent),
+ * then answer exactly what GET /api/pages/<noteId> answers the caller.
+ */
 async function handleRecordOpen(match, request, response, config, fetchImpl) {
 	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
 	const table = safeText(decodeURIComponent(match[2]), 120);
 	const pk = safeText(decodeURIComponent(match[3]), 220);
 	if (!table || !pk) throw Object.assign(new Error('table and pk are required.'), { status: 422 });
 	const { noteId } = await ensureRecordNote(dbId, table, pk, request, config, fetchImpl);
-	json(response, 200, pageRowToEntry(await fetchPageRow(noteId, config, fetchImpl)), config);
+	const { row } = await readablePageAccess(request, noteId, 'read', config, fetchImpl);
+	json(response, 200, pageRowToEntry(row), config);
 	return true;
 }
 

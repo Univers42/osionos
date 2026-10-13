@@ -114,3 +114,47 @@ describe('record notes keep what people wrote in them', () => {
 		});
 	});
 });
+
+describe('opening a record answers like reading its note', () => {
+	async function openAndRead(base, headers) {
+		const opened = await send(base, OPEN, headers, { method: 'POST' });
+		const read = await send(base, `/api/pages/${NOTE_ID}`, headers);
+		return { opened, read };
+	}
+
+	it('answers a member who cannot read a private note exactly like the page read', async () => {
+		const { mock } = recordWorld();
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			await openAndWrite(base, mock);
+			assert.equal((await send(base, `/api/pages/${NOTE_ID}`, asA, patch({ visibility: 'private' }))).status, 200);
+			const { opened, read } = await openAndRead(base, asB);
+			assert.equal(opened.status, 404, opened.text);
+			assert.deepEqual([opened.status, opened.body], [read.status, read.body]);
+			assert.equal(opened.text.includes(WRITTEN[0].content), false);
+		});
+	});
+
+	it('answers a member outside the workspace the owner moved the note to exactly like the page read', async () => {
+		const { mock } = recordWorld();
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			await openAndWrite(base, mock);
+			assert.equal((await send(base, `/api/pages/${NOTE_ID}`, asA, patch({ workspaceId: IDS.homeA }))).status, 200);
+			assert.equal(mock.page(NOTE_ID).workspace_id, IDS.homeA);
+			const { opened, read } = await openAndRead(base, asB);
+			assert.notEqual(opened.status, 200, opened.text);
+			assert.deepEqual([opened.status, opened.body], [read.status, read.body]);
+			assert.equal(opened.text.includes(WRITTEN[0].content), false);
+		});
+	});
+
+	it('returns the full note to a member who can read it', async () => {
+		const { mock } = recordWorld();
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			await openAndWrite(base, mock);
+			const { opened, read } = await openAndRead(base, asB);
+			assert.equal(opened.status, 200, opened.text);
+			assert.deepEqual(opened.body, read.body);
+			assert.deepEqual(opened.body.content, WRITTEN);
+		});
+	});
+});
