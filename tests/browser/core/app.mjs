@@ -35,6 +35,16 @@ export async function createNewWorkspacePage(page) {
   await page.getByRole("textbox", { name: "Page title" }).waitFor();
 }
 
+/** The workbench explorer row of the page titled `title`. The row's text may start with the
+ *  page's emoji icon, so the title is matched at the end, after a non-letter or the start.
+ *  Ponytail: a title that ends another one after a space ("Started", "Getting Started") matches
+ *  both and the first in tree order wins; rows are virtualised, so a page scrolled far out of
+ *  the explorer is not mounted and is not found (fine for the default seed's dozen rows). */
+export function explorerRow(page, title) {
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return page.getByRole("treeitem").filter({ hasText: new RegExp(`(?:^|\\P{L})${escaped}$`, "u") }).first();
+}
+
 export async function openFreshPage(page, appUrl) {
   await page.goto(appUrl, { waitUntil: "domcontentloaded" });
   await createNewWorkspacePage(page);
