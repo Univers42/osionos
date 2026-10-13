@@ -18,10 +18,12 @@
  *
  * Merge policy = last-write-wins by `updatedAt`: ADD pages missing locally; UPDATE a
  * local page only when the server copy is strictly newer (so a local edit still pending
- * in the outbox is never clobbered). We SEED the outbox ledger — atomically, from the
- * post-merge value captured inside the state update — for every page the server copy was
- * taken for, so a freshly-hydrated page is not pointlessly re-published; we never seed a
- * page the local copy won (it may carry a pending edit that still must be sent).
+ * in the outbox is never clobbered). EXCEPT a page the outbox is RECOVERING: its local
+ * copy holds the only copy of an edit the bridge refused, so it wins however stale it
+ * looks. We SEED the outbox ledger — atomically, from the post-merge value captured
+ * inside the state update — for every page the server copy was taken for, so a
+ * freshly-hydrated page is not pointlessly re-published; we never seed a page the
+ * local copy won (it may carry a pending edit that still must be sent).
  */
 
 import { usePageStore } from "@/store/usePageStore";
@@ -30,11 +32,20 @@ import { api, getActivePageJwt } from "@/shared/api/client";
 import { getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { loadLedger, saveLedger } from "@osionos/outbox-ledger";
 import { PAGE_OUTBOX_KEY, pageStamp } from "./pageStamp";
+import { OUTBOX_RECOVERING_KEY, recoveringIds } from "./outboxRecovery";
 import type { PageEntry } from "@/entities/page";
 
 /** Merge one server page (O(1) via the index map); returns the post-merge page when the
  *  SERVER copy was taken (added or strictly newer) so it can be seeded, else null. */
-function mergePage(bucket: PageEntry[], index: Map<string, number>, incoming: PageEntry): PageEntry | null {
+export function mergePage(
+  bucket: PageEntry[],
+  index: Map<string, number>,
+  incoming: PageEntry,
+  recovering: ReadonlySet<string>,
+): PageEntry | null {
+  // A recovery in flight owns this page's local copy: a newer server copy here would
+  // overwrite the only copy of the edit the bridge refused, losing it for good.
+  if (recovering.has(incoming._id)) return null;
   const at = index.get(incoming._id);
   if (at === undefined) {
     index.set(incoming._id, bucket.length);
@@ -57,14 +68,14 @@ function seedLedger(seeds: Array<[string, string]>): void {
 }
 
 /** Merge a workspace's server pages into the store (LWW) + seed the ledger. # changed. */
-function mergeWorkspace(workspaceId: string, rows: PageEntry[]): number {
+function mergeWorkspace(workspaceId: string, rows: PageEntry[], recovering: ReadonlySet<string>): number {
   const seeds: Array<[string, string]> = [];
   usePageStore.setState((state) => {
     const pages: Record<string, PageEntry[]> = { ...state.pages };
     const bucket = pages[workspaceId] ? [...pages[workspaceId]] : [];
     const index = new Map(bucket.map((page, at) => [page._id, at] as const));
     for (const row of rows) {
-      const merged = mergePage(bucket, index, row);
+      const merged = mergePage(bucket, index, row, recovering);
       if (merged) seeds.push([merged._id, pageStamp(merged)]); // capture stamp atomically
     }
     pages[workspaceId] = bucket;
@@ -76,9 +87,13 @@ function mergeWorkspace(workspaceId: string, rows: PageEntry[]): number {
 }
 
 /** Pull one workspace's pages from the BaaS (via the bridge) and merge them in. */
-async function hydrateWorkspace(workspaceId: string, jwt: string): Promise<number> {
+async function hydrateWorkspace(
+  workspaceId: string,
+  jwt: string,
+  recovering: ReadonlySet<string>,
+): Promise<number> {
   const rows = await api.get<PageEntry[]>(`/api/pages/all?workspaceId=${encodeURIComponent(workspaceId)}`, jwt);
-  return Array.isArray(rows) ? mergeWorkspace(workspaceId, rows) : 0;
+  return Array.isArray(rows) ? mergeWorkspace(workspaceId, rows, recovering) : 0;
 }
 
 /** Restore the viewer's pages from the BaaS for every accessible workspace (LWW). */
@@ -86,12 +101,16 @@ export async function hydratePagesFromBaas(): Promise<number> {
   const jwt = getActivePageJwt();
   const context = getCurrentPageAccessContext();
   if (!jwt || !context) return 0;
+  // The recovering marks are read ONCE per hydrate, not per page: the outbox writes
+  // them while a recovery runs, so a per-page read could merge a page against a
+  // view of "who is protected" that is already stale by the next row.
+  const recovering = recoveringIds(loadLedger(OUTBOX_RECOVERING_KEY));
   // Hydrate every workspace in parallel; the api client's 6-slot limiter (shared/api/client)
   // bounds real concurrency, so N workspaces drain in ~ceil(N/6) waves instead of serially.
   // allSettled: one workspace's offline/transient failure must not abort the others — a
   // skipped workspace is reconciled by the outbox + the next hydrate; never block load.
   const results = await Promise.allSettled(
-    context.workspaceIds.map((workspaceId) => hydrateWorkspace(workspaceId, jwt)),
+    context.workspaceIds.map((workspaceId) => hydrateWorkspace(workspaceId, jwt, recovering)),
   );
   let changed = 0;
   for (const result of results) {

@@ -32,6 +32,12 @@ export interface PageAccessContext {
   sharedWorkspaceIds: string[];
   /** The caller's membership per workspace, keyed by LOWER-CASE id; absent offline. */
   memberAccess?: Record<string, PageMemberAccess>;
+  /**
+   * Pages whose write the bridge refused this session. OPTIONAL so a context built by
+   * hand in an existing test (without the field) still type-checks — the gates use
+   * `?.` and treat an absent set as "nothing refused yet".
+   */
+  refusedPageIds?: Set<string>;
 }
 
 /** The permission a page write needs, as the bridge's PATCH/DELETE routes ask for it. */
@@ -90,6 +96,7 @@ export function createPageAccessContext(session: UserSession | null | undefined)
     privateWorkspaceIds: privateWorkspaces,
     sharedWorkspaceIds: sharedWorkspaces,
     memberAccess: memberAccessOf(session),
+    refusedPageIds: new Set<string>(),
   };
 }
 
@@ -245,11 +252,28 @@ export function canReadPage(page: PageEntry, context: PageAccessContext | null):
   return getCollaboratorRole(page, context.userId) !== null;
 }
 
+/**
+ * Record a bridge refusal on the current context so this session's write gates stop
+ * offering edits the server has already turned down (and the outbox stops re-sending
+ * them). No-op when there is no context — offline, there is nothing to refuse.
+ * O(1).
+ */
+// Ponytail: a mark lasts until the session object changes; a role restored mid-session stays read-only until then.
+export function markPageWriteRefused(pageId: string): void {
+  const context = getCurrentPageAccessContext();
+  if (!context) return;
+  context.refusedPageIds ??= new Set<string>();
+  context.refusedPageIds.add(pageId);
+}
+
 /** The bridge's canWritePageRow (scripts/bridge-api.mjs) as one predicate. O(w + p + c). */
 export function canWritePage(
   page: PageEntry, context: PageAccessContext | null, permission: "update" | "delete"
 ): boolean {
   if (!context) return false;
+  // The server's own verdict, ahead of every local rule: a page this session was
+  // refused on stays read-only even though the membership still grants the write.
+  if (context.refusedPageIds?.has(page._id)) return false;
   if (sameUserId(page.ownerId, context.userId)) return true;
   if (!canReadPage(page, context)) return false;
   const member = memberFor(context, page.workspaceId);

@@ -15,6 +15,7 @@ import { notifyCreateFailure } from "./pageCreateFeedback";
 import { pageApiJwtFromSessionToken } from "@/features/auth/model/userStore.helpers";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { planDuplicate } from "./duplicatePlan";
+import { evictPageFromState } from "./evictLocalPage";
 import {
   canDeletePage,
   canDuplicatePage,
@@ -216,15 +217,10 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
         // The page is gone server-side — a stale localStorage ghost the additive
         // hydrate (hydratePages.mergeWorkspace) never prunes. Evict it from the
         // store + cache so it stops being re-fetched in a loop and drops out of
-        // the sidebar/tree instead of flooding the console with 404s.
-        set((s) => {
-          const wsPages = s.pages[page.workspaceId] ?? [];
-          const pages = { ...s.pages, [page.workspaceId]: wsPages.filter((p) => p._id !== pageId) };
-          return {
-            ...derivePageState(pages, s.pageIdsByWorkspace),
-            activePage: s.activePage && s.activePage.id === pageId ? null : s.activePage,
-          };
-        });
+        // the sidebar/tree instead of flooding the console with 404s. The rule
+        // itself lives in ./evictLocalPage (shared with the refused-edit
+        // recovery): actions cannot import the store, usePageStore imports them.
+        set((s) => evictPageFromState(s, page.workspaceId, pageId));
         savePagesCache(get().pages, page.workspaceId);
         return;
       }
