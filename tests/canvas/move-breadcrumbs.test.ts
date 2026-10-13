@@ -27,3 +27,9 @@ test("move breadcrumbs name the workspace, then every ancestor root first, then 
   assert.equal(buildMoveBreadcrumbs("leaf", "ws", pages, WORKSPACES), "Team / Root / Untitled / Leaf");
   assert.equal(buildMoveBreadcrumbs("leaf", "elsewhere", pages, WORKSPACES), "Root / Untitled / Leaf");
 });
+
+test("move breadcrumbs end on a parentPageId cycle and name each page once", () => {
+  const pages = [page("x", "X", "y"), page("y", "Y", "x"), page("self", "Self", "self")];
+  assert.equal(buildMoveBreadcrumbs("x", "ws", pages, WORKSPACES), "Team / Y / X");
+  assert.equal(buildMoveBreadcrumbs("self", "ws", pages, WORKSPACES), "Team / Self");
+});
