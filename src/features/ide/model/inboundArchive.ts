@@ -14,14 +14,27 @@
 // Everything here runs as a queued task (the timer only enqueues), so no event
 // interleaves with the re-check.
 
+import { isFsError } from "../vfs/errors";
+import { buildVPath } from "../vfs/vpath";
 import { ideOutput } from "./ideOutputBus";
 import { clearSyncedHash, syncedHashOf } from "./ideSyncEngine";
 
+import type { FsProvider } from "../vfs/types";
 import type { ExecContext } from "./inboundExec";
 import type { ArchiveTicket } from "./inboundPending";
 
 /** What a sandbox `stat` told us; "unknown" (offline, refused) never archives. */
 export type StatResult = "present" | "absent" | "unknown";
+
+/** Only NotFound counts as gone: any other failure (offline, refused) is "unknown". */
+export async function statInProvider(provider: FsProvider, workspaceId: string, path: string): Promise<StatResult> {
+  try {
+    await provider.stat(buildVPath(provider.scheme, workspaceId, path.split("/")));
+    return "present";
+  } catch (error) {
+    return isFsError(error) && error.code === "NotFound" ? "absent" : "unknown";
+  }
+}
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 

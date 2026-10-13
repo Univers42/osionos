@@ -20,9 +20,9 @@ import type { PageEntry } from "../../../src/entities/page/model/types.ts";
 import { sha16, type FsEvent } from "../../../src/features/ide/model/ideFsEcho.ts";
 import { INBOUND_WINDOW_MS, createInboundPending } from "../../../src/features/ide/model/inboundPending.ts";
 import { createSerialQueue } from "../../../src/features/ide/model/inboundPipeline.ts";
-import { createInboundSession, type StatResult } from "../../../src/features/ide/model/inboundSession.ts";
+import { statInProvider, type StatResult } from "../../../src/features/ide/model/inboundArchive.ts";
+import { createInboundSession } from "../../../src/features/ide/model/inboundSession.ts";
 import { createInboundView } from "../../../src/features/ide/model/inboundView.ts";
-import { isFsError } from "../../../src/features/ide/vfs/errors.ts";
 import { createMemProvider } from "../../../src/features/ide/vfs/memProvider.ts";
 import { buildVPath } from "../../../src/features/ide/vfs/vpath.ts";
 import { textToBytes } from "../../../src/features/ide/vfs/bytes.ts";
@@ -79,15 +79,6 @@ function setArchived(store: ReturnType<typeof createFixtureStore>, pageId: strin
   store._seed(store.pages().map((entry) => (ids.has(entry._id) ? { ...entry, archivedAt } : entry)));
 }
 
-async function statIn(provider: FsProvider, workspaceId: string, path: string): Promise<StatResult> {
-  try {
-    await provider.stat(buildVPath(provider.scheme, workspaceId, path.split("/")));
-    return "present";
-  } catch (error) {
-    return isFsError(error) && error.code === "NotFound" ? "absent" : "unknown";
-  }
-}
-
 /** Puts `text` at `path` in the sandbox, creating the parent directories. */
 export async function putFile(sandbox: FsProvider, workspaceId: string, path: string, text: string): Promise<void> {
   const segments = path.split("/");
@@ -113,7 +104,7 @@ export async function execWorld(pages: PageEntry[], opts: ExecWorldOptions = {})
   const enqueued = { count: 0 };
   const session = createInboundSession({
     workspaceId, store, restore: async (id) => setArchived(store, id, null), schedule: clock.schedule,
-    stat: opts.stat ?? ((path) => statIn(sandbox, workspaceId, path)),
+    stat: opts.stat ?? ((path) => statInProvider(sandbox, workspaceId, path)),
     enqueue: (task) => { enqueued.count += 1; void queue.run(task); },
   });
   const send = (evt: FsEvent): Promise<void> => queue.run(() => session.handle(evt));
