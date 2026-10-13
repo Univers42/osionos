@@ -68,12 +68,12 @@ export function persistThemeMode(mode: ThemeMode) {
 /* ── Palette (color scheme) — orthogonal to light/dark ──────────────────────
  * The `data-palette` axis selects a named color scheme (Warm, Nord, …); the
  * `data-theme` axis (above) selects light/dark within it. Every palette ships
- * both modes. The default "warm" palette has no override block in global.css —
- * it falls through to the base `:root`/[data-theme] tokens — so it stays
- * byte-identical to the original editorial theme. */
+ * both modes. The default palette keeps the id "warm" because that id is stored
+ * in users' browsers; it is shown as "Calm". Its colours are generated into
+ * tokens.generated.css on `:root`/[data-theme], with no data-palette block. */
 
 export interface PaletteMeta {
-  /** matches `[data-palette="<id>"]` in global.css; "warm" = the default base. */
+  /** matches `[data-palette="<id>"]` in global.css; "warm" is the default palette. */
   id: string;
   label: string;
   description: string;
@@ -85,10 +85,10 @@ export interface PaletteMeta {
 
 export const WARM_PALETTE: PaletteMeta = {
   id: "warm",
-  label: "Warm Editorial",
-  description: "Cream parchment and terracotta — the signature editorial theme.",
+  label: "Calm",
+  description: "Warm paper greys with one deep cobalt for actions, links and focus.",
   signatureMode: "light",
-  swatches: ["#FAF9F5", "#FFFFFF", "#CC785C", "#2563EB", "#1A1A18"],
+  swatches: ["#FBF9F5", "#FFFFFF", "#1F5BC4", "#1F5BC4", "#1B1A18"],
 };
 
 // The remaining palettes are appended here from the generated registry.

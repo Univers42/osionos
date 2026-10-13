@@ -11,10 +11,13 @@
 /* ************************************************************************** */
 
 /**
- * Independent WCAG contrast gate for every osionos color palette (data-palette ×
- * light/dark). Parses the `[data-palette=...][data-theme=...]` blocks straight
- * out of global.css and asserts the critical foreground/background pairs meet
- * AA (>=4.5:1 text, >=3:1 large/UI) — AAA (>=7:1) for the High-Contrast theme.
+ * WCAG contrast check for the seven palettes that are still hand-written in
+ * global.css (data-palette × light/dark). Parses their
+ * `[data-palette=...][data-theme=...]` blocks and asserts the critical
+ * foreground/background pairs meet AA (>=4.5:1 text, >=3:1 large/UI) — AAA
+ * (>=7:1) for the High-Contrast theme. The default palette is generated, and
+ * scripts/build-tokens.mjs checks it; this script goes when the other seven
+ * are generated too.
  * Run: node scripts/theme-contrast-check.mjs   (from apps/osionos/app)
  */
 
@@ -50,38 +53,17 @@ function parseBlock(id, mode) {
   return tokens;
 }
 
-// The default Warm theme has no data-palette block (it IS the base); bake its
-// values so the gate covers all 8 themes.
-const WARM = {
-  light: { 'bg-page': '#FAF9F5', 'bg-surface': '#FFFFFF', 'fg-default': '#1A1A18', 'fg-muted': '#6B6862', 'fg-subtle': '#6F6B63', 'fg-strong': '#0F0F0E', accent: '#CC785C', 'accent-fg': '#FFFFFF', 'accent-text': '#B5532E', update: '#2563EB', 'update-fg': '#FFFFFF', danger: '#B42318', 'danger-fg': '#FFFFFF', success: '#287D3C', 'success-fg': '#FFFFFF', warning: '#B45309', 'warning-fg': '#FFFFFF', 'syntax-keyword': '#B5532E', 'syntax-string': '#287D3C', 'syntax-number': '#1F6FB2', 'syntax-comment': '#8C877D', 'syntax-function': '#7156A5', 'syntax-type': '#9A5418', 'syntax-property': '#1F6FB2', 'syntax-tag': '#287D3C', 'syntax-attr': '#7156A5', 'syntax-literal': '#6B4A2E' },
-  dark: { 'bg-page': '#1B1A17', 'bg-surface': '#242120', 'fg-default': '#EDEAE3', 'fg-muted': '#A8A399', 'fg-subtle': '#8C877D', 'fg-strong': '#FBF8F2', accent: '#E0937A', 'accent-fg': '#1B1A17', 'accent-text': '#E8A78F', update: '#3B82F6', 'update-fg': '#0B1220', danger: '#F2998C', 'danger-fg': '#1B1A17', success: '#6FC27F', 'success-fg': '#1B1A17', warning: '#E0A958', 'warning-fg': '#1B1A17', 'syntax-keyword': '#E8A78F', 'syntax-string': '#9BD9AE', 'syntax-number': '#8FC2DE', 'syntax-comment': '#8C877D', 'syntax-function': '#C3AEE6', 'syntax-type': '#E0A958', 'syntax-property': '#8FC2DE', 'syntax-tag': '#9BD9AE', 'syntax-attr': '#C3AEE6', 'syntax-literal': '#8FC2DE' },
-};
-
 const PALETTES = ['mono', 'contrast', 'maximal', 'nord', 'solarized', 'midnight', 'rose'];
 const SYNTAX = ['keyword', 'string', 'number', 'comment', 'function', 'type', 'property', 'tag', 'attr', 'literal'];
 
 let failures = 0;
 let checks = 0;
-let allowed = 0;
-
-// Pre-existing, intentional tradeoffs in the default Warm theme (kept byte-
-// identical by design). Each is a known sub-AA pair with a one-line reason; new
-// palettes get NO exemptions. Reason: warm accent is a 3:1 *fill* color (button
-// labels) — small accent text uses --osio-accent-text (#B5532E, passes); the
-// syntax comment hue is muted by design.
-const ALLOW = new Set([
-  'warm/light accentFg/accent',     // white on terracotta button fill — 3:1 fill, not small text
-  'warm/light syn:comment/bgSurface', // muted comment hue (editorial), ~3.6:1
-  'warm/dark syn:comment/bgSurface',  // muted comment hue (editorial), ~4.5:1
-]);
 
 function check(theme, mode, label, fg, bg, min) {
   checks++;
   const r = ratio(fg, bg);
   if (r == null) { console.log(`  FAIL ${theme}/${mode} ${label}: missing token (${fg} on ${bg})`); failures++; return; }
   if (r < min) {
-    const key = `${theme}/${mode} ${label}`;
-    if (ALLOW.has(key)) { console.log(`  ALLOW ${key}: ${r.toFixed(2)} (pre-existing warm tradeoff)`); allowed++; return; }
     console.log(`  FAIL ${theme}/${mode} ${label}: ${r.toFixed(2)} < ${min} (${fg} on ${bg})`);
     failures++;
   }
@@ -103,9 +85,6 @@ function audit(theme, mode, t) {
   for (const s of SYNTAX) check(theme, mode, `syn:${s}/bgSurface`, t[`syntax-${s}`], t['bg-surface'], 4.5);
 }
 
-console.log('Warm (default — base tokens)');
-audit('warm', 'light', WARM.light);
-audit('warm', 'dark', WARM.dark);
 for (const id of PALETTES) {
   console.log(id);
   for (const mode of ['light', 'dark']) {
@@ -115,5 +94,5 @@ for (const id of PALETTES) {
   }
 }
 
-console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILURES`}  (${checks} checks across 8 palettes × light+dark; ${allowed} pre-existing warm allowances)`);
+console.log(`\n${failures === 0 ? 'ALL PASS' : `${failures} FAILURES`}  (${checks} checks across ${PALETTES.length} palettes × light+dark)`);
 process.exit(failures === 0 ? 0 : 1);

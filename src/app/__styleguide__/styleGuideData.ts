@@ -23,8 +23,10 @@ export interface Swatch {
 }
 
 export const SURFACE_SWATCHES: Swatch[] = [
+  { token: "--osio-bg-canvas" },
   { token: "--osio-bg-page" },
   { token: "--osio-bg-surface" },
+  { token: "--osio-bg-elevated" },
   { token: "--osio-bg-subtle" },
   { token: "--osio-bg-muted" },
   { token: "--osio-bg-hover" },

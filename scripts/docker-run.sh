@@ -35,6 +35,7 @@ run_inside_container() {
     test-e2e) exec pnpm exec playwright test "$@" ;;
     test-e2e-serial) exec pnpm exec playwright test --workers=1 "$@" ;;
     test-e2e-smoke) exec pnpm exec playwright test tests/e2e/smoke "$@" ;;
+    tokens) exec node scripts/build-tokens.mjs "$@" ;;
     test-canvas) exec node --experimental-strip-types --experimental-loader ./tests/canvas/ts-extension-loader.mjs --test tests/canvas/*.test.ts "$@" ;;
     test-doctor) exec node tests/test-env-doctor.mjs "$@" ;;
     test-bridge) exec node --test tests/bridge/*.test.mjs "$@" ;;
@@ -42,7 +43,7 @@ run_inside_container() {
     mcp-claude) exec node scripts/osionos-mcp-server.mjs "$@" ;;
     lighthouse) exec node scripts/lighthouse.mjs "$@" ;;
     bench-layout) exec node scripts/layout-bench.mjs "$@" ;;
-    quality) pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ --max-warnings=0 "$@" && bash scripts/check-markdown-engine-boundary.sh && bash scripts/check-ui-token-contract.sh && node scripts/check-token-refs.mjs && exec bash scripts/check-style-tokens.sh ;;
+    quality) pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ --max-warnings=0 "$@" && bash scripts/check-markdown-engine-boundary.sh && bash scripts/check-ui-token-contract.sh && node scripts/check-token-refs.mjs && node scripts/build-tokens.mjs --check && exec bash scripts/check-style-tokens.sh ;;
     *) echo "Unknown docker-run command: ${COMMAND}" >&2; exit 2 ;;
   esac
 }
@@ -86,6 +87,9 @@ case "${COMMAND}" in
     ;;
   test-e2e-smoke)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests pnpm exec playwright test tests/e2e/smoke "$@"
+    ;;
+  tokens)
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh tokens "$@"
     ;;
   test-canvas)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh test-canvas "$@"

@@ -11,6 +11,11 @@
 /* ************************************************************************** */
 
 @import "tailwindcss";
+/* Every colour that is seeded per palette (surfaces, text, borders, accent,
+   status, block tints, syntax). What is left in this file is what is not
+   generated yet: shadows, overlays, the graph's neutral inks, and the seven
+   palettes other than the default. */
+@import "./tokens.generated.css";
 /* highlight.js base theme intentionally NOT imported eagerly (perf P2): the
    .hljs-* rules further down fully recolor every token via --osio-syntax-*, so
    the upstream github.css was redundant and only bloated the render-blocking
@@ -343,57 +348,11 @@
 
 :root,
 [data-theme="light"] {
-  /* Warm editorial (Claude-docs) — cream canvas + white sheet. */
-  --osio-bg-page: #FAF9F5;
-  --osio-bg-surface: #FFFFFF;
-  --osio-bg-subtle: #F5F3EC;
-  --osio-bg-muted: #EFEDE4;
-  --osio-bg-elevated: #FFFFFF;
-  --osio-bg-hover: #F0EEE6;
-  --osio-bg-panel: #FFFFFF;
-
-  --osio-fg-default: #1A1A18;
-  --osio-fg-muted: #6B6862;
-  --osio-fg-subtle: #6F6B63;
-  --osio-fg-strong: #0F0F0E;
-  --osio-fg-inverse: #FFFFFF;
-
-  --osio-border-default: #EBE8E0;
-  --osio-border-strong: #DAD6CB;
-  --osio-border: #EBE8E0;
   /* Hairlines for dense data grids (derive from the stronger border so light
      hairlines remain visible per table row). */
   --osio-db-line: color-mix(in srgb, var(--osio-border-strong) 70%, transparent);
   --osio-db-line-soft: color-mix(in srgb, var(--osio-border-strong) 42%, transparent);
 
-  /* Terracotta accent. --osio-accent drives fills/active/focus/icons (3:1+ ok);
-     small accent text/links MUST use --osio-accent-text for AA (#CC785C as text
-     on white is only ~3.4:1). */
-  --osio-accent: #CC785C;
-  --osio-accent-hover: #BD6A4D;
-  --osio-accent-fg: #FFFFFF;
-  --osio-accent-text: #B5532E;
-  --osio-accent-subtle: #F7ECE5;
-
-  /* Update / sync action — deliberately blue, distinct from the terracotta accent. */
-  --osio-update: #1D4ED8; /* blue-700: >=4.5:1 on the tinted chip (a11y contrast) */
-  --osio-update-hover: #1E40AF;
-  --osio-update-fg: #FFFFFF;
-
-  /* Web links — conventionally blue (a link affordance, not the brand accent).
-     Palette-independent: links stay blue across every palette. #2563EB on cream
-     is ~5.3:1 (AA). Internal page mentions keep --osio-accent-text. */
-  --osio-link: #2563EB;
-  --osio-link-hover: #1D4ED8;
-
-  --osio-danger: #B42318;
-  --osio-danger-hover: #8E1C13;
-  --osio-danger-fg: #FFFFFF;
-  --osio-success: #287D3C;
-  --osio-success-hover: #1F6330;
-  --osio-success-fg: #FFFFFF;
-  --osio-warning: #B45309;
-  --osio-warning-fg: #FFFFFF;
   --osio-overlay: rgba(26, 26, 24, 0.42);
 
   /* Soft warm elevation — only floating layers cast a shadow. */
@@ -424,43 +383,11 @@
   --osio-border-soft: color-mix(in srgb, var(--osio-border-default) 14%, transparent);
   --osio-shadow-cell: 0 2px 8px rgba(40, 33, 24, 0.08), 0 1px 3px rgba(40, 33, 24, 0.04);
   --osio-shadow-cell-selected: 0 8px 24px rgba(40, 33, 24, 0.16), 0 4px 12px rgba(40, 33, 24, 0.1);
-
-  --osio-block-tint-gray-fg: #6B6862;
-  --osio-block-tint-gray-bg: #F0EEE6;
-  --osio-block-tint-brown-fg: #7A4A2B;
-  --osio-block-tint-brown-bg: #F1E7DD;
-  --osio-block-tint-orange-fg: #B45309;
-  --osio-block-tint-orange-bg: #FAEAD9;
-  --osio-block-tint-yellow-fg: #8A6A00;
-  --osio-block-tint-yellow-bg: #F7EFCF;
-  --osio-block-tint-green-fg: #287D3C;
-  --osio-block-tint-green-bg: #E5EFDF;
-  --osio-block-tint-blue-fg: #1F6FB2;
-  --osio-block-tint-blue-bg: #E4EEF3;
-  --osio-block-tint-purple-fg: #7156A5;
-  --osio-block-tint-purple-bg: #ECE7F3;
-  --osio-block-tint-pink-fg: #A84A78;
-  --osio-block-tint-pink-bg: #F4E6EC;
-  --osio-block-tint-red-fg: #B42318;
-  --osio-block-tint-red-bg: #F6E5E1;
-
-  --osio-syntax-keyword: #B5532E;
-  --osio-syntax-string: #287D3C;
-  --osio-syntax-number: #1F6FB2;
-  --osio-syntax-comment: #8C877D;
-  --osio-syntax-function: #7156A5;
-  --osio-syntax-type: #9A5418;
-  --osio-syntax-property: #1F6FB2;
-  --osio-syntax-tag: #287D3C;
-  --osio-syntax-attr: #7156A5;
-  --osio-syntax-literal: #6B4A2E;
 }
 
-/* Aliases, declared on every [data-theme] element (not only :root) so a nested
-   themed subtree resolves them against its own palette. */
-:root,
-[data-theme] {
-  /* The canvas behind the app's surfaces. */
+/* The seven palettes below predate the canvas colour and do not set one, so
+   they would show the default palette's canvas behind their own page. */
+[data-palette]:not([data-palette="warm"]) {
   --osio-bg-canvas: var(--osio-bg-page);
 }
 
@@ -470,51 +397,8 @@
 [data-theme="dark"] { color-scheme: dark; }
 
 [data-theme="dark"] {
-  /* Warm charcoal parity. */
-  --osio-bg-page: #1B1A17;
-  --osio-bg-surface: #242120;
-  --osio-bg-subtle: #201E1B;
-  --osio-bg-muted: #2A2723;
-  /* Elevated MUST differ from muted: menus paint the panel with elevated and the
-     active row with muted — identical values made the highlight invisible. */
-  --osio-bg-elevated: #33302B;
-  --osio-bg-hover: #2F2B27;
-  --osio-bg-panel: #242120;
-
-  --osio-fg-default: #EDEAE3;
-  --osio-fg-muted: #A8A399;
-  --osio-fg-subtle: #99948A; /* ≥4.5:1 on surface — was #8C877D at 4.47 (AA fail) */
-  --osio-fg-strong: #FBF8F2;
-  --osio-fg-inverse: #1B1A17;
-
-  --osio-border-default: #353029;
-  --osio-border-strong: #463F36;
-  --osio-border: #353029;
   --osio-db-line: color-mix(in srgb, var(--osio-border-strong) 80%, transparent);
   --osio-db-line-soft: color-mix(in srgb, var(--osio-border-strong) 50%, transparent);
-  /* On dark, the lighter terracotta clears AA as text too. */
-  --osio-accent: #E0937A;
-  --osio-accent-hover: #E8A78F;
-  --osio-accent-fg: #1B1A17;
-  --osio-accent-text: #E8A78F;
-  --osio-accent-subtle: #33241E;
-
-  /* Update / sync action — blue in dark mode too. */
-  --osio-update: #3B82F6;
-  --osio-update-hover: #60A5FA;
-  --osio-update-fg: #0B1220;
-
-  /* Web links — lighter blue for AA as text on dark (#60A5FA ~5.7:1). */
-  --osio-link: #60A5FA;
-  --osio-link-hover: #93C0FF;
-  --osio-danger: #F2998C;
-  --osio-danger-hover: #F7B6AD;
-  --osio-danger-fg: #1B1A17;
-  --osio-success: #6FC27F;
-  --osio-success-hover: #93D49F;
-  --osio-success-fg: #1B1A17;
-  --osio-warning: #E0A958;
-  --osio-warning-fg: #1B1A17;
   --osio-overlay: rgba(0, 0, 0, 0.6);
 
   --osio-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
@@ -540,36 +424,6 @@
   --osio-border-soft: color-mix(in srgb, var(--osio-border-default) 55%, transparent);
   --osio-shadow-cell: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
   --osio-shadow-cell-selected: 0 8px 24px rgba(0, 0, 0, 0.45), 0 4px 12px rgba(0, 0, 0, 0.3);
-
-  --osio-block-tint-gray-fg: #B7B2A8;
-  --osio-block-tint-gray-bg: #2A2723;
-  --osio-block-tint-brown-fg: #D9B89C;
-  --osio-block-tint-brown-bg: #2C2118;
-  --osio-block-tint-orange-fg: #E0A958;
-  --osio-block-tint-orange-bg: #2E2114;
-  --osio-block-tint-yellow-fg: #DBC56A;
-  --osio-block-tint-yellow-bg: #2A2613;
-  --osio-block-tint-green-fg: #6FC27F;
-  --osio-block-tint-green-bg: #1B2A1E;
-  --osio-block-tint-blue-fg: #8FC2DE;
-  --osio-block-tint-blue-bg: #18242C;
-  --osio-block-tint-purple-fg: #C3AEE6;
-  --osio-block-tint-purple-bg: #241D33;
-  --osio-block-tint-pink-fg: #E5A8C2;
-  --osio-block-tint-pink-bg: #2C1B24;
-  --osio-block-tint-red-fg: #F2998C;
-  --osio-block-tint-red-bg: #2E1A17;
-
-  --osio-syntax-keyword: #E8A78F;
-  --osio-syntax-string: #9BD9AE;
-  --osio-syntax-number: #8FC2DE;
-  --osio-syntax-comment: #8C877D;
-  --osio-syntax-function: #C3AEE6;
-  --osio-syntax-type: #E0A958;
-  --osio-syntax-property: #8FC2DE;
-  --osio-syntax-tag: #9BD9AE;
-  --osio-syntax-attr: #C3AEE6;
-  --osio-syntax-literal: #8FC2DE;
 }
 
 :root,
@@ -597,31 +451,22 @@
 
   /* @osionos/legacy-graph-engine — "Warm Constellation": the graph is an extension of
      the editorial brand. Light = cream/parchment "warm map of ideas" (paper
-     grain, ink labels, white "seed" node sheets, terracotta accents); dark =
-     warm-charcoal "ember". The engine derives light/dark node materials from the
-     resolved background luminance. */
-  --osio-graph-bg-0: #faf9f5; /* cream, matches --osio-bg-page */
+     grain, ink labels, white "seed" node sheets); dark = warm-charcoal "ember".
+     The engine derives light/dark node materials from the resolved background
+     luminance. The colours that follow the accent are generated; the hover ring
+     and the focus thread have no token because the engine derives both from
+     --osio-graph-select. */
   --osio-graph-bg-1: #f3f0e7; /* parchment — luminance > .5 → "light" mode */
   --osio-graph-grain: rgba(120, 96, 64, 0.05); /* warm paper grain (baked once) */
   --osio-graph-vignette: rgba(120, 96, 64, 0.07); /* warm tonal edge */
-  --osio-graph-field-warm: rgba(204, 120, 92, 0.05); /* faint terracotta center bloom */
   --osio-graph-node-backing: #ffffff; /* white "sheet" moat under each node */
   --osio-graph-node-rim: rgba(40, 33, 24, 0.12); /* warm ink stone edge */
   --osio-graph-node-shadow: rgba(40, 33, 24, 0.22); /* soft warm drop shadow (baked) — deeper for far-zoom separation on cream */
-  --osio-graph-ink: #1a1a18;
-  --osio-graph-ink-muted: #6b6862;
   --osio-graph-halo: rgba(250, 249, 245, 0.92); /* cream halo lifts ink labels */
-  --osio-graph-card-bg: #ffffff;
-  --osio-graph-card-border: #ebe8e0;
   --osio-graph-card-shadow: rgba(40, 33, 24, 0.08);
   --osio-graph-edge: rgba(74, 66, 53, 0.28); /* relation: warm taupe ink */
   --osio-graph-edge-tag: rgba(122, 74, 43, 0.16); /* tag: faint brown */
-  --osio-graph-edge-note: rgba(204, 120, 92, 0.5); /* note: terracotta */
   --osio-graph-edge-hier: rgba(122, 74, 43, 0.62); /* hierarchy: structural brown */
-  --osio-graph-select: #cc785c; /* terracotta accent (--osio-accent) */
-  --osio-graph-hover: rgba(204, 120, 92, 0.55);
-  --osio-graph-note: #b45309; /* warm orange (note hue) */
-  --osio-graph-focus-thread: rgba(204, 120, 92, 0.85); /* focus edge thread */
 
   /* Canvas V2 debug shell (dev surface) — fixed dark stage, theme-independent.
      Values live here in the single token file; canvas.css only references them. */
@@ -631,28 +476,17 @@
 
 [data-theme="dark"] {
   /* "ember" — warm charcoal, the dark face of the Warm Constellation. */
-  --osio-graph-bg-0: #1b1a17; /* warm charcoal */
   --osio-graph-bg-1: #15140f; /* warm-black — luminance < .5 → "dark" mode */
   --osio-graph-grain: rgba(255, 240, 210, 0.025); /* faint warm specks */
   --osio-graph-vignette: rgba(0, 0, 0, 0.4);
-  --osio-graph-field-warm: rgba(224, 147, 122, 0.1); /* ember bloom */
   --osio-graph-node-backing: rgba(20, 18, 14, 0.72); /* matte stone backing */
   --osio-graph-node-rim: rgba(255, 244, 228, 0.16); /* warm sheen rim */
   --osio-graph-node-shadow: rgba(0, 0, 0, 0.45);
-  --osio-graph-ink: #edeae3;
-  --osio-graph-ink-muted: #a8a399;
   --osio-graph-halo: rgba(21, 20, 15, 0.85);
-  --osio-graph-card-bg: #242120;
-  --osio-graph-card-border: #353029;
   --osio-graph-card-shadow: rgba(0, 0, 0, 0.55);
   --osio-graph-edge: rgba(168, 163, 153, 0.26);
   --osio-graph-edge-tag: rgba(217, 184, 156, 0.16);
-  --osio-graph-edge-note: rgba(224, 147, 122, 0.55);
   --osio-graph-edge-hier: rgba(217, 184, 156, 0.78);
-  --osio-graph-select: #e0937a; /* warm terracotta-glow accent */
-  --osio-graph-hover: rgba(224, 147, 122, 0.55);
-  --osio-graph-note: #e0a958; /* warm amber */
-  --osio-graph-focus-thread: rgba(224, 147, 122, 0.85);
 }
 
 /* Shared live-collaboration presence palette (AOC §6/R-A8). Eight curated,
@@ -662,7 +496,7 @@
    The collab feature references these tokens only (never raw hex), so the
    style-token guard stays green and dark mode is handled right here. */
 :root {
-  --collab-1: #cc785c; /* terracotta (brand) */
+  --collab-1: #cc785c; /* terracotta */
   --collab-2: #2e7d74; /* teal */
   --collab-3: #4054b2; /* indigo */
   --collab-4: #b26a00; /* ochre */
@@ -1619,16 +1453,6 @@ body {
   --osio-code-btn-hover: rgba(255, 255, 255, 0.1);
   --osio-code-btn-active: rgba(255, 255, 255, 0.08);
 
-  --osio-syntax-keyword: #ff7b72;
-  --osio-syntax-string: #a5d6ff;
-  --osio-syntax-number: #79c0ff;
-  --osio-syntax-comment: #8b949e;
-  --osio-syntax-function: #d2a8ff;
-  --osio-syntax-type: #ffa657;
-  --osio-syntax-property: #79c0ff;
-  --osio-syntax-tag: #7ee787;
-  --osio-syntax-attr: #d2a8ff;
-  --osio-syntax-literal: #79c0ff;
 }
 
 /* Optional light variant of the card (per-block toggle). */
@@ -1649,16 +1473,6 @@ body {
   --osio-code-btn-hover: rgba(13, 17, 23, 0.06);
   --osio-code-btn-active: rgba(13, 17, 23, 0.08);
 
-  --osio-syntax-keyword: #cf222e;
-  --osio-syntax-string: #0a3069;
-  --osio-syntax-number: #0550ae;
-  --osio-syntax-comment: #6e7781;
-  --osio-syntax-function: #8250df;
-  --osio-syntax-type: #953800;
-  --osio-syntax-property: #0550ae;
-  --osio-syntax-tag: #116329;
-  --osio-syntax-attr: #6639ba;
-  --osio-syntax-literal: #0a3069;
 }
 
 .osio-code-card .hljs,

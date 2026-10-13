@@ -105,7 +105,7 @@ test.describe("styleguide", () => {
 
   test("colour sections show one sample per token", async ({ page, baseURL }) => {
     await openStyleguide(page, baseURL);
-    await expect(section(page, "Surfaces").locator("[data-token]")).toHaveCount(5);
+    await expect(section(page, "Surfaces").locator("[data-token]")).toHaveCount(7);
     await expect(section(page, "Text").locator("[data-token]")).toHaveCount(4);
     await expect(section(page, "Accent").locator("[data-token]")).toHaveCount(3);
     await expect(section(page, "Border and status").locator("[data-token]")).toHaveCount(4);
