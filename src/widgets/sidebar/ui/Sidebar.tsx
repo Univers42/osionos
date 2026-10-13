@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { workspaceSpaces } from "../model/workspaceSpaces";
 
 import { useUserStore, WorkspaceSwitcher } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
@@ -67,12 +68,8 @@ export const Sidebar: React.FC<Props> = ({
 
   const [showInviteCTA, setShowInviteCTA] = useState(true);
 
-  const privateWorkspaces = useMemo(
-    () => activeWorkspaceId && activeWorkspaceOwnerId === activeUserId ? [{ _id: activeWorkspaceId }] : [],
-    [activeUserId, activeWorkspaceId, activeWorkspaceOwnerId],
-  );
-  const sharedWorkspaces = useMemo(
-    () => activeWorkspaceId && activeWorkspaceOwnerId !== activeUserId ? [{ _id: activeWorkspaceId }] : [],
+  const { privateWorkspaces, sharedWorkspaces } = useMemo(
+    () => workspaceSpaces(activeWorkspaceId, activeWorkspaceOwnerId, activeUserId),
     [activeUserId, activeWorkspaceId, activeWorkspaceOwnerId],
   );
 
@@ -82,7 +79,7 @@ export const Sidebar: React.FC<Props> = ({
   }, [activeWorkspaceId, jwt, fetchPages]);
 
   const handleAddToWorkspace = useCallback((wsId: string) => {
-    addPage(wsId, "Untitled", jwt).then((page) => {
+    addPage(wsId, "Untitled", jwt, undefined, { visibility: "private" }).then((page) => {
       if (page)
         openPage({
           id: page._id,
