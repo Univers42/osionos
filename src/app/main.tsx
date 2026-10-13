@@ -26,9 +26,12 @@ import './styles/_graphical-chart.scss';
 import './styles/global.css';
 
 // The load-test/perf harness is a dev-only tool — keep its store/perf code out
-// of the production entry bundle (cuts initial JS parse / TBT on mobile).
-if (import.meta.env.DEV) {
+// of the production entry bundle (cuts initial JS parse / TBT on mobile). A perf build
+// (VITE_PERF_FIXTURES=true, set by PLAYWRIGHT_BUILD=production) keeps it, so the perf specs can
+// measure the production code users run.
+if (import.meta.env.DEV || import.meta.env.VITE_PERF_FIXTURES === 'true') {
   void import('@/shared/lib/perf/loadTest');
+  void import('@/shared/lib/perf/perfFixtures');
 }
 
 // Self-recover from stale lazy chunks after a redeploy: when a dynamic import

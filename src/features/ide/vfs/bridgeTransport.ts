@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { API_BASE, getActivePageJwt } from "@/shared/api/client";
+import { ideFetch } from "../api/ideTransport";
 import { fsError } from "./errors";
 import type { FsOpTransport } from "./sandboxFsOps";
 
@@ -19,18 +19,19 @@ import type { FsOpTransport } from "./sandboxFsOps";
  *  and map in sandboxFsOps. */
 export function bridgeFsTransport(workspaceId: string): FsOpTransport {
   return async (op, params) => {
-    const jwt = getActivePageJwt();
-    if (!API_BASE || !jwt || !workspaceId) throw fsError("Unsupported", undefined, "bridge unavailable (no session)");
-    let response: Response;
+    if (!workspaceId) throw fsError("Unsupported", undefined, "bridge unavailable (no session)");
+    let result: Awaited<ReturnType<typeof ideFetch>>;
     try {
-      response = await fetch(`${API_BASE}/api/ide/fs`, {
+      result = await ideFetch(workspaceId, "/api/ide/fs", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspaceId, op, ...params }),
       });
     } catch (cause) {
       throw fsError("Io", undefined, `bridge unreachable: ${String(cause)}`);
     }
+    if (result.kind === "unavailable") throw fsError("Unsupported", undefined, `bridge unavailable (${result.reason})`);
+    const response = result.response;
     if (response.status === 401 || response.status === 403) throw fsError("PermissionDenied", undefined, `bridge ${response.status}`);
     if (response.status === 404) throw fsError("Unsupported", undefined, "IDE sandbox is not enabled");
     if (response.status === 409) throw fsError("Io", undefined, "no running sandbox");

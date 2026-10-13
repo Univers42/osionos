@@ -35,8 +35,10 @@ export const useIdeSyncConflicts = create<ConflictState>((set) => ({
   byPageId: {},
   report: (conflict) =>
     set((state) => ({ byPageId: { ...state.byPageId, [conflict.pageId]: conflict } })),
+  // The same state back when nothing is open: zustand then notifies nobody (the executor resolves on every apply).
   resolve: (pageId) =>
     set((state) => {
+      if (!(pageId in state.byPageId)) return state;
       const next = { ...state.byPageId };
       delete next[pageId];
       return { byPageId: next };

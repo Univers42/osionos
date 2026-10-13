@@ -15,11 +15,11 @@ import { test, expect } from "@playwright/test";
 const composer = (page) => page.getByPlaceholder("Do anything with AI…");
 
 async function openAssistant(page) {
-  // The assistant is reachable from the rail "Assistant" icon and the sidebar
-  // "New agent" button; the latter is always visible, so drive the test with it.
-  const newAgent = page.getByRole("button", { name: "New agent" });
-  await newAgent.first().waitFor({ timeout: 20_000 });
-  await newAgent.first().click();
+  // The assistant lives in the Conversations panel: "New AI chat" opens a fresh one.
+  const tab = page.getByRole("tab", { name: /^Conversations/ });
+  await tab.waitFor({ timeout: 20_000 });
+  await tab.click();
+  await page.locator('[data-sidebar-panel="conversations"]').getByRole("button", { name: "New AI chat" }).click();
 }
 
 test.describe("chat-shell", () => {

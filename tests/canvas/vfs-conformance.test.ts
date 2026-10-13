@@ -33,6 +33,8 @@ import { collectBytes, textToBytes, bytesToText } from "../../src/features/ide/v
 import { createMemProvider } from "../../src/features/ide/vfs/memProvider.ts";
 import { createOverlayProvider } from "../../src/features/ide/vfs/overlayProvider.ts";
 import { createPageProvider, type PageFacade, type PageFacadeEntry } from "../../src/features/ide/vfs/pageProvider.ts";
+import { createPageFileFacade } from "../../src/features/page-file/model/pageFileFacade.ts";
+import { createFixtureStore } from "./page-file-facade-fixtures.ts";
 import { createMountTable } from "../../src/features/ide/vfs/mountTable.ts";
 import { sanitizeSegment } from "../../src/features/ide/model/idePaths.ts";
 import type { FsProvider } from "../../src/features/ide/vfs/types.ts";
@@ -111,6 +113,7 @@ const TARGETS: { name: string; make: () => FsProvider }[] = [
   { name: "mem", make: () => createMemProvider("mem") },
   { name: "overlay(mem,mem)", make: () => createOverlayProvider("overlay", createMemProvider("mem"), createMemProvider("mem")) },
   { name: "page-backed", make: () => createPageProvider("osionos", memFacade()) },
+  { name: "page-file", make: () => createPageProvider("workspace", createPageFileFacade(createFixtureStore("ws"))) },
   ...(hasSh()
     ? [{ name: "sandbox(sh)", make: () => createSandboxProvider("sandbox", localShTransport(mkdtempSync(join(tmpdir(), "vfs-")))) }]
     : []),
@@ -225,7 +228,13 @@ for (const target of TARGETS) {
 
   test(`vfs[${target.name}] case-only siblings honor the declared capability`, async () => {
     const p = target.make();
-    if (p.capabilities().caseSensitivity !== "sensitive") return;
+    if (p.capabilities().caseSensitivity !== "sensitive") {
+      await writeText(p, at(p, "Case.txt"), "upper");
+      await writeText(p, at(p, "case.txt"), "lower");
+      assert.equal((await p.list(root(p))).length, 1, "one entry: the names are the same file");
+      assert.equal(await readText(p, at(p, "Case.txt")), "lower");
+      return;
+    }
     await writeText(p, at(p, "Case.txt"), "upper");
     await writeText(p, at(p, "case.txt"), "lower");
     assert.equal(await readText(p, at(p, "Case.txt")), "upper");

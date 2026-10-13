@@ -1,0 +1,134 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   sanitize-segment.test.ts                           :+:      :+:    :+:   */
+/*                                                    +:+前回の                        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+ ierz             +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { sanitizeSegment } from "../../src/features/ide/model/idePaths.ts";
+import { seeded } from "./page-tree-fixtures.ts";
+
+/**
+ * The pre-optimization sanitizeSegment, verbatim — the oracle any rewrite of the
+ * live one must still match. `sanitizeSegment` also names sandbox files and LSP
+ * URIs, so "same output" is a compatibility promise, not a preference.
+ */
+function referenceSanitize(name: string): string {
+  // Control band (NUL..US) mapped per char-code — a raw range in a regex
+  // literal trips eslint's no-control-regex; behavior is identical.
+  const controlFree = Array.from(name, (ch) => (ch.charCodeAt(0) < 0x20 ? " " : ch)).join("");
+  const cleaned = controlFree
+    .replace(/[/\\]/g, " ")
+    .replace(/\.\.+/g, ".")
+    .trim()
+    .replace(/\s+/g, " ");
+  return cleaned || "untitled";
+}
+
+/**
+ * Alphabet weighted toward what sanitizing has to catch — separators, dot runs,
+ * whitespace and the control band — plus letters, digits, one astral emoji and
+ * two realistic file names. The `\s` family is spelled in escapes so the file
+ * holds no literal exotic space.
+ */
+const ALPHABET: readonly string[] = [
+  "/",
+  "\\",
+  ".",
+  "..",
+  "...",
+  " ",
+  "  ",
+  "\t",
+  "\n",
+  "\r",
+  "\v",
+  "\f",
+  "\u0000",
+  "\u0001",
+  "\u001f",
+  "\u007f",
+  "\u00a0",
+  "\u2003",
+  "\u2028",
+  "\u202f",
+  "\u205f",
+  "\u3000",
+  "\ufeff",
+  "a",
+  "B",
+  "z",
+  "7",
+  "Q",
+  "\u{1f389}",
+  "main.ts",
+  "Plan.omd",
+];
+
+const HAND_CASES: readonly string[] = [
+  "",
+  "  ",
+  ".",
+  "..",
+  "a/b",
+  "a\\b",
+  "a..b",
+  "a...b",
+  " lead",
+  "trail ",
+  "a   b",
+  "tab\there",
+  "\u0000nul",
+  "\u001f",
+  "\u{1f389}",
+  "a/../b",
+];
+
+/** One seeded string, length 0..12, drawn from the weighted alphabet. O(len). */
+function randomSegment(random: () => number): string {
+  const length = Math.floor(random() * 13);
+  let out = "";
+  for (let i = 0; i < length; i++) out += ALPHABET[Math.floor(random() * ALPHABET.length)] ?? "a";
+  return out;
+}
+
+/** 20 000 seeded draws in one test, so a mismatch names the input in full. O(total). */
+test("20 000 seeded random segments equal the reference sanitizeSegment", () => {
+  const random = seeded(1337);
+  for (let i = 0; i < 20_000; i++) {
+    const input = randomSegment(random);
+    assert.equal(sanitizeSegment(input), referenceSanitize(input), `input ${JSON.stringify(input)}`);
+  }
+});
+
+test("hand-picked segments equal the reference sanitizeSegment", () => {
+  for (const input of HAND_CASES) {
+    assert.equal(sanitizeSegment(input), referenceSanitize(input), `input ${JSON.stringify(input)}`);
+  }
+});
+
+test("hand-picked segments keep the spellings the file layer relies on", () => {
+  assert.equal(sanitizeSegment("Roadmap"), "Roadmap");
+  assert.equal(sanitizeSegment("Q3 Plan"), "Q3 Plan");
+  assert.equal(sanitizeSegment("main.test.ts"), "main.test.ts");
+  assert.equal(sanitizeSegment(""), "untitled");
+  assert.equal(sanitizeSegment(".."), ".");
+  assert.equal(sanitizeSegment(" a/b\\c..d\u0000e "), "a b c.d e");
+  assert.equal(sanitizeSegment("\u0000nul"), "nul");
+  assert.equal(sanitizeSegment("\u{1f389} party"), "\u{1f389} party");
+});
+
+test("a segment the rewrite would not touch comes back as that same string", () => {
+  for (const input of ["Roadmap", "Q3 Plan", "main.test.ts", ".", "a.b", "a b c", "\u{1f389}"]) {
+    assert.equal(referenceSanitize(input), input, `${JSON.stringify(input)} must be a fixed point`);
+    assert.equal(sanitizeSegment(input), input, JSON.stringify(input));
+  }
+});

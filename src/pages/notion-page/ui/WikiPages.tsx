@@ -23,7 +23,7 @@ import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { formatEditedAgo, type PageEntry } from "@/entities/page";
 import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
-import { selectChildPageIds } from "@/widgets/sidebar/ui/pageTreeItem.helpers";
+import { selectChildPageIds } from "@/store/childPages";
 
 interface WikiPagesProps {
   pageId: string;

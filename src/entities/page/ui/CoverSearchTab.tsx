@@ -13,7 +13,7 @@
 import React, { useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 
-import type { CoverPickerAsset } from "@/shared/ui/assets/uiCollectionAssets";
+import type { CoverPickerAsset } from "@/shared/ui/assets/collectionMedia";
 import { reportUnsplashDownload, searchUnsplashPickerAssets, type UnsplashPickerAsset } from "@/shared/lib/media/unsplash";
 import { searchRefusalNotice } from "@/shared/lib/media/searchRefusal";
 import { loadCoverGallery, searchCoverGallery } from "@/shared/lib/media/coverGallery";

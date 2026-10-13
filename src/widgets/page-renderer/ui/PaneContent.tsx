@@ -10,11 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { Suspense, useEffect } from "react";
+import React, { Suspense } from "react";
 
 import { ErrorBoundary, LoadingPane } from "@/shared/ui";
 import { usePageStore } from "@/store/usePageStore";
-import { useUserStore } from "@/features/auth";
 import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
 import { tabToActivePage } from "@/widgets/workspace-grid/model/layoutSync";
 import { HomeTabView } from "./HomeTabView";
@@ -37,54 +36,48 @@ import {
   LazyTrashView,
   LazyWorkspaceDatabaseBlock,
 } from "./lazyViews";
-import { isDrawEnabled, isIdeEnabled } from "@/shared/config/featureFlags";
+import { isDrawEnabled } from "@/shared/config/featureFlags";
 // Deep path, NOT the barrel: `@/widgets/database-view` has a side-effect
 // `import './model/dataSourceProvider'` that pulls knownDatabaseState (and its
 // ~458KB seed JSON) onto this warm pane path. The constants module is leaf-pure.
 import { WS_FILES_DB_ID, WS_FOLDERS_DB_ID } from "@/widgets/database-view/model/workspaceDatabaseConstants";
 
-/** A page tab: lazily fetch its content, then render agent or osionos view.
+/** A page tab: the agent, code or osionos view. The osionos page loads its own body
+ *  (usePageBodyLoad) and the code view its own file, so the tab fetches nothing.
  *  EVERY pane mounts its own live, editable editor so several files can be edited
  *  side by side. The editor is fully keyed by pageId and, because we pass
  *  activePageRef, the pane does NOT subscribe to the global activePage
  *  (NotionPage), so panes stay isolated: typing in one persists to that pane's
  *  page and does not re-render the others. Background panes stay cheap via
  *  PaneView's serial idle-mount + `contain: layout paint` isolation. */
-const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab }) => {
+const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string; chrome?: "bar" | "none" }> = ({ tab, chrome }) => {
   const page = usePageStore((s) => s.pageById(tab.pageId));
-  const fetchPageContent = usePageStore((s) => s.fetchPageContent);
-  const jwt = useUserStore((s) => s.activePageJwt() ?? "");
-
-  useEffect(() => {
-    // Fetch on missing PAGE *or* missing CONTENT: the bulk /api/pages/all hydrate
-    // now ships metadata only, so a page can be present with content===undefined
-    // (unloaded). Without this, a background/split pane renders a blank editor and
-    // a stray click would write [] over the real server content. Guard on
-    // `=== undefined` (unloaded), never a length check — a genuinely empty page
-    // has content===[] and must not fetch-loop.
-    if (jwt && (!page || page.content === undefined)) fetchPageContent(tab.pageId, jwt);
-  }, [page, jwt, tab.pageId, fetchPageContent]);
 
   if (!page) return <LoadingPane />;
   if (page.surface === "agent") {
     return <div className="h-full overflow-hidden"><LazyAgentConversationPage pageId={tab.pageId} /></div>;
   }
   // IDE code file: line-based Monaco editor instead of the block editor.
-  // Double guard — surface AND flag — so a code page falls back to the normal
-  // editor (never a blank pane) whenever osio.ide is off.
-  if (page.surface === "code" && isIdeEnabled()) {
+  if (page.surface === "code") {
     return <div className="h-full overflow-hidden"><LazyCodeFileView pageId={tab.pageId} /></div>;
   }
   return (
     <div className="h-full overflow-hidden">
-      <LazyOsionosPage pageId={tab.pageId} activePageRef={tabToActivePage(tab)} />
+      <LazyOsionosPage pageId={tab.pageId} activePageRef={tabToActivePage(tab)} chrome={chrome} />
     </div>
   );
 };
 
 /** Render the right view for one tab — the per-pane equivalent of MainContent. */
-const PaneContentImpl: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab, paneId }) => {
-  if (tab.kind === "home") return <HomeTabView />;
+interface PaneContentProps {
+  tab: WorkspaceTab;
+  paneId?: string;
+  /** "none" when the pane renders an EditorTitleBar above, so the page drops its own bar. */
+  chrome?: "bar" | "none";
+}
+
+const PaneContentImpl: React.FC<PaneContentProps> = ({ tab, paneId, chrome }) => {
+  if (tab.kind === "home") return <HomeTabView chrome={chrome} />;
 
   if (tab.kind === "folder") return <FolderTabView tab={tab} paneId={paneId} />;
 
@@ -234,7 +227,7 @@ const PaneContentImpl: React.FC<{ tab: WorkspaceTab; paneId?: string }> = ({ tab
   return (
     <ErrorBoundary>
       <Suspense fallback={<LoadingPane />}>
-        <PageTabView tab={tab} paneId={paneId} />
+        <PageTabView tab={tab} paneId={paneId} chrome={chrome} />
       </Suspense>
     </ErrorBoundary>
   );

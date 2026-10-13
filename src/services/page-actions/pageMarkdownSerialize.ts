@@ -11,10 +11,14 @@
 /* ************************************************************************** */
 
 import type { Block } from "@/entities/block";
+import { appFence, escapeParagraphContent, mediaBlockToMarkdown, tableBlockToMarkdown } from "./pageMarkdownEscape";
+import { indentLines, isListItem, joinTight, joinWithEmpties } from "./pageMarkdownJoin";
+import type { SerializeOptions } from "./pageMarkdownEscape";
 
 // Block -> markdown, in the dialect the markengine AST parser round-trips back
 // to the same Block types (see markengine parseToggle/parseCallout/parseTable):
-//   toggle   -> "> [>] summary"     (children indented 2 spaces)
+//   toggle   -> "> [>] summary"     (children indented 1 tab: 2 spaces over-strip
+//                                     a toggle nested in a toggle on parse)
 //   callout  -> "> [!icon] title"   (children prefixed "> ")
 //   quote    -> "> text"            (children prefixed "> ")
 //   image    -> "![alt](asset "caption")"
@@ -22,40 +26,12 @@ import type { Block } from "@/entities/block";
 //   file     -> <object data="…" title="name"></object>
 //   draw     -> ```osidraw h=<px> fence     app embeds -> ```osi* JSON fences
 //   columns  -> ":::columns" / ":::column <ratio>" containers
-// This keeps the raw-mode round-trip (serialize -> parse) lossless for block
-// type, content, list/checkbox state, code language, headings 1-6, toggle
-// heading level, equations, tables, media, drawings, buttons, database/graph/
-// home embeds and column layouts. Pure view state (collapsed) has no markdown
-// form and is not emitted.
+// Paragraph text that would parse as another block gets a backslash escape.
+// Pure view state (collapsed) has no markdown form and is not emitted.
+// Empty paragraphs are opt-in (`keepEmptyParagraphs`, page files only): each
+// adds one blank line at its indentation; without it they collapse away.
 
-const escapeAttr = (value: string) => value.replaceAll('"', "&quot;");
-
-/** JSON fence for an app block: only the block's own config keys, pretty-printed. */
-function appFence(lang: string, config: Record<string, unknown>): string {
-  const entries = Object.entries(config).filter(([, value]) => value !== undefined);
-  return `\`\`\`${lang}\n${JSON.stringify(Object.fromEntries(entries), null, 2)}\n\`\`\``;
-}
-
-function mediaBlockToMarkdown(block: Block): string {
-  const asset = typeof block.asset === "string" ? block.asset : "";
-  const caption = block.content ?? "";
-  switch (block.type) {
-    case "image": {
-      const title = caption ? ` "${caption.replaceAll('"', "'")}"` : "";
-      return `![${block.mediaAlt ?? ""}](${asset}${title})`;
-    }
-    case "video":
-      return `<video src="${escapeAttr(asset)}"${caption ? ` data-caption="${escapeAttr(caption)}"` : ""}></video>`;
-    case "audio":
-      return `<audio src="${escapeAttr(asset)}"${caption ? ` data-caption="${escapeAttr(caption)}"` : ""}></audio>`;
-    default: {
-      const title = block.fileName ?? caption;
-      return `<object data="${escapeAttr(asset)}"${title ? ` title="${escapeAttr(title)}"` : ""}></object>`;
-    }
-  }
-}
-
-function columnContainerToMarkdown(block: Block, depth: number): string {
+function columnContainerToMarkdown(block: Block, depth: number, options?: SerializeOptions): string {
   const opener =
     block.type === "column" && typeof block.widthRatio === "number"
       ? `:::column ${block.widthRatio}`
@@ -63,53 +39,32 @@ function columnContainerToMarkdown(block: Block, depth: number): string {
         ? ":::column"
         : ":::columns";
   const body = (block.children ?? [])
-    .map((child) => blockToMarkdown(child, depth + 1))
+    .map((child) => blockToMarkdown(child, depth + 1, options))
     .join("\n\n");
   return body ? `${opener}\n${body}\n:::` : `${opener}\n:::`;
 }
 
-function tableBlockToMarkdown(block: Block): string {
-  const rows = block.tableData ?? [];
-  if (rows.length === 0) return block.content ?? "";
-  const aligns = block.tableConfig?.columnAlignments ?? [];
-  const escapedPipe = String.raw`\|`;
-  const toRow = (cells: string[]) => {
-    const escaped = cells.map((cell) => cell.replaceAll("|", escapedPipe)).join(" | ");
-    return `| ${escaped} |`;
-  };
-  const separator = (rows[0] ?? []).map((_, index) => {
-    const align = aligns[index];
-    if (align === "left") return ":---";
-    if (align === "right") return "---:";
-    if (align === "center") return ":---:";
-    return "---";
-  });
-  const [header, ...body] = rows;
-  return [toRow(header ?? []), `| ${separator.join(" | ")} |`, ...body.map(toRow)].join("\n");
-}
-
-/** Render a container's children: blockquote/callout bodies are recognised by a
- *  leading "> " per line; toggle and list children nest by 2-space indent. */
-function childMarkdown(block: Block, depth: number): string {
+/** Blockquote/callout bodies are recognised by a leading "> " per line; toggle
+ *  children nest by tab, list children by 2 spaces. O(T). */
+function childMarkdown(block: Block, depth: number, options?: SerializeOptions): string {
   const children = block.children ?? [];
   if (children.length === 0) return "";
-  const rendered = children.map((child) => blockToMarkdown(child, depth + 1));
   if (block.type === "quote" || block.type === "callout") {
-    return rendered
-      .join("\n")
-      .split("\n")
-      .map((blockLine) => (blockLine ? `> ${blockLine}` : ">"))
-      .join("\n");
+    const rendered = children.map((child) => blockToMarkdown(child, depth + 1, options));
+    return rendered.join("\n").split("\n").map((line) => (line ? `> ${line}` : ">")).join("\n");
   }
-  return rendered
-    .map((markdown) => markdown.split("\n").map((line) => `  ${line}`).join("\n"))
-    .join("\n");
+  const prefix = block.type === "toggle" ? "\t" : "  ";
+  const render = (child: Block): string => indentLines(blockToMarkdown(child, depth + 1, options), prefix);
+  return options?.keepEmptyParagraphs === true ? joinWithEmpties(children, render, prefix) : joinTight(children, render);
 }
 
-export function blockToMarkdown(block: Block, depth = 0): string {
+export function blockToMarkdown(block: Block, depth = 0, options?: SerializeOptions): string {
   const content = block.content ?? "";
   let line = content;
   switch (block.type) {
+    case "paragraph": case "placeholder":
+      line = escapeParagraphContent(content);
+      break;
     case "heading_1": case "heading_2": case "heading_3":
     case "heading_4": case "heading_5": case "heading_6":
       line = `${"#".repeat(Number(block.type.slice("heading_".length)))} ${content}`;
@@ -179,14 +134,26 @@ export function blockToMarkdown(block: Block, depth = 0): string {
         schemaVersion: block.schemaVersion,
       });
     case "column_list": case "column":
-      return columnContainerToMarkdown(block, depth);
-    // default: paragraph and any other type keep `content` as-is.
+      return columnContainerToMarkdown(block, depth, options);
   }
-  const children = childMarkdown(block, depth);
-  return children ? `${line}\n${children}` : line;
+  const children = childMarkdown(block, depth, options);
+  if (!children) return line;
+  // A list item's text and a first child that is not a list item would merge on
+  // parse without a blank separator (a nested list stays tight in the clipboard
+  // form). The toggle header parses on its own, so it joins directly: a leading
+  // blank would read as an empty paragraph.
+  if (!isListItem(block)) return `${line}\n${children}`;
+  const tight = options?.keepEmptyParagraphs !== true && isListItem(block.children?.[0]);
+  return `${line}${tight ? "\n" : "\n\n"}${children}`;
 }
 
-/** Serializes a block list to markdown body source (no page-title heading). */
-export function serializeBlocksToMarkdown(blocks: Block[]): string {
-  return blocks.map((block) => blockToMarkdown(block)).join("\n\n");
+/**
+ * Body source (no page-title heading). The default keeps today's top-level
+ * bytes; `keepEmptyParagraphs` adds one blank per empty paragraph: leading
+ * "\n", between "\n\n\n", trailing "\n\n". O(T).
+ */
+export function serializeBlocksToMarkdown(blocks: Block[], options?: SerializeOptions): string {
+  const render = (block: Block): string => blockToMarkdown(block, 0, options);
+  if (options?.keepEmptyParagraphs === true) return joinWithEmpties(blocks, render, "");
+  return blocks.map(render).join("\n\n");
 }

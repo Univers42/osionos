@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import type { SeedPage } from './seedBlockHelpers';
-import { getCollectionEmojiValue } from '@/shared/ui/assets/uiCollectionAssets';
+import { getCollectionEmojiValue } from '@/shared/ui/assets/collectionEmoji';
 import {
   h1, h2, h3, p, bullet, todo, code,
   quote, callout, divider, toggle,

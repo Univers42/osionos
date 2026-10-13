@@ -22,10 +22,9 @@ import 'leaflet/dist/leaflet.css';
 import type { Block } from '@/entities/block';
 import type { PageEntry, PagePropertyEntry } from '@/entities/page';
 import {
-  COVER_PICKER_TABS,
   normalizeMediaSource,
   resolveCollectionMediaAsset,
-} from '@/shared/ui/assets/uiCollectionAssets';
+} from '@/shared/ui/assets/collectionMedia';
 import { useUserStore } from '@/features/auth';
 import {
   DEFAULT_OBJECT_DATABASE_ID,
@@ -419,7 +418,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
               </div>
             )}
           >
-            <OsionosPage pageId={pageId} />
+            <OsionosPage pageId={pageId} chrome="bar" />
           </React.Suspense>
         ) : (
           <div className="mx-auto max-w-3xl px-10 py-10 text-sm text-[var(--osio-fg-muted)]">
@@ -486,7 +485,7 @@ function mergeOsionosDatabasePage(entry: PageEntry, nextEntry: PageEntry): PageE
  *  the engine renders only URLs/gradients, so refs resolve here. */
 function resolveCoverForEngine(cover: string): string {
   if (cover.startsWith('linear-gradient') || cover.startsWith('radial-gradient')) return cover;
-  const resolved = resolveCollectionMediaAsset(cover, COVER_PICKER_TABS);
+  const resolved = resolveCollectionMediaAsset(cover);
   return normalizeMediaSource(resolved?.url ?? cover) ?? cover;
 }
 

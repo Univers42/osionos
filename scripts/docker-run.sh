@@ -35,6 +35,7 @@ run_inside_container() {
     test-e2e) exec pnpm exec playwright test "$@" ;;
     test-e2e-serial) exec pnpm exec playwright test --workers=1 "$@" ;;
     test-e2e-smoke) exec pnpm exec playwright test tests/e2e/smoke "$@" ;;
+    test-e2e-perf) PLAYWRIGHT_PERF=1 exec pnpm exec playwright test tests/e2e/perf --workers=1 "$@" ;;
     test-canvas) exec node --experimental-strip-types --experimental-loader ./tests/canvas/ts-extension-loader.mjs --test tests/canvas/*.test.ts "$@" ;;
     test-doctor) exec node tests/test-env-doctor.mjs "$@" ;;
     test-bridge) exec node --test tests/bridge/*.test.mjs "$@" ;;
@@ -42,6 +43,10 @@ run_inside_container() {
     mcp-claude) exec node scripts/osionos-mcp-server.mjs "$@" ;;
     lighthouse) exec node scripts/lighthouse.mjs "$@" ;;
     bench-layout) exec node scripts/layout-bench.mjs "$@" ;;
+    # --expose-gc: the harness collects before each case so one case's garbage is not billed to the next.
+    test-bench)
+      [ $# -gt 0 ] || set -- tests/bench/*.bench.ts
+      exec node --experimental-strip-types --expose-gc --experimental-loader ./tests/canvas/ts-extension-loader.mjs tests/bench/run.ts "$@" ;;
     quality) pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ --max-warnings=0 "$@" && bash scripts/check-markdown-engine-boundary.sh && bash scripts/check-ui-token-contract.sh && exec bash scripts/check-style-tokens.sh ;;
     *) echo "Unknown docker-run command: ${COMMAND}" >&2; exit 2 ;;
   esac
@@ -79,13 +84,16 @@ case "${COMMAND}" in
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh lint-fix "$@"
     ;;
   test-e2e)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e OSIO_CANVAS_V2 browser-tests pnpm exec playwright test "$@"
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e OSIO_CANVAS_V2 -e PLAYWRIGHT_BUILD browser-tests pnpm exec playwright test "$@"
     ;;
   test-e2e-serial)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e OSIO_CANVAS_V2 browser-tests pnpm exec playwright test --workers=1 "$@"
     ;;
   test-e2e-smoke)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests pnpm exec playwright test tests/e2e/smoke "$@"
+    ;;
+  test-e2e-perf)
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e PLAYWRIGHT_PERF=1 browser-tests pnpm exec playwright test tests/e2e/perf --workers=1 "$@"
     ;;
   test-canvas)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh test-canvas "$@"
@@ -98,6 +106,9 @@ case "${COMMAND}" in
     ;;
   quality)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh quality "$@"
+    ;;
+  test-bench)
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh test-bench "$@"
     ;;
   bench-layout)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests bash scripts/docker-run.sh bench-layout "$@"
@@ -113,7 +124,7 @@ case "${COMMAND}" in
       playground bash scripts/docker-run.sh mcp-claude "$@"
     ;;
   *)
-    echo "Usage: $0 {build|preview|typecheck|lint|lint-fix|test-e2e|test-e2e-serial|test-e2e-smoke|test-canvas|test-doctor|test-bridge|quality|bench-layout|bridge-api|mcp-claude}" >&2
+    echo "Usage: $0 {build|preview|typecheck|lint|lint-fix|test-e2e|test-e2e-serial|test-e2e-smoke|test-e2e-perf|test-canvas|test-bench|test-doctor|test-bridge|quality|bench-layout|bridge-api|mcp-claude}" >&2
     exit 2
     ;;
 esac

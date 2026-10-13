@@ -17,12 +17,14 @@
 import {
   Scissors,
   Copy,
+  CopyPlus,
   ClipboardPaste,
   Link2,
   CornerDownRight,
   Pencil,
   Trash2,
 } from "lucide-react";
+import { canDuplicatePage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import type { PageEntry } from "@/entities/page";
 import type { MenuActionCtx, PageMenuAction } from "../types";
 
@@ -143,6 +145,18 @@ export const SHARED_ACTIONS: PageMenuAction[] = [
     scope: "both",
     section: "edit",
     run: (ctx) => ctx.onRename(),
+  },
+  {
+    id: "duplicate",
+    label: "Duplicate",
+    icon: CopyPlus,
+    scope: "both",
+    section: "edit",
+    enabled: (ctx) => canDuplicatePage(ctx.page, getCurrentPageAccessContext()),
+    // The store owns the feedback (success/failure) — no toast here.
+    run: async (ctx) => {
+      await ctx.store.getState().duplicatePage(ctx.page._id, ctx.workspaceId);
+    },
   },
   {
     id: "delete",

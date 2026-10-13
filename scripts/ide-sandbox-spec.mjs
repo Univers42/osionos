@@ -19,14 +19,29 @@ import { createHash } from "node:crypto";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** A sandbox is a shell on a shared machine — access is opt-in per account.
+ *  Unset, empty, or only-commas in OSIONOS_IDE_ALLOWED_SUBJECTS → everyone refused. */
+export function requireIdeSubject(userId, env) {
+  const list = String(env?.OSIONOS_IDE_ALLOWED_SUBJECTS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (!list.includes(String(userId).toLowerCase())) {
+    throw Object.assign(new Error("The IDE is not enabled for this account."), { status: 403 });
+  }
+}
+
 /** Owner is the session `sub`; workspace must be one the session already holds.
  *  Both are UUIDs — this throws (403/400) before any name is derived so a
- *  cross-tenant or malformed request never provisions. */
-export function requireSandboxIdentity(session, workspaceId) {
+ *  cross-tenant or malformed request never provisions.
+ *  The subject allow-list is checked FIRST so an unlisted account learns
+ *  nothing about workspace ids. */
+export function requireSandboxIdentity(session, workspaceId, env) {
   const userId = String(session?.userId ?? "");
   if (!UUID_RE.test(userId)) {
     throw Object.assign(new Error("Invalid session subject."), { status: 401 });
   }
+  requireIdeSubject(userId, env);
   if (!UUID_RE.test(String(workspaceId ?? ""))) {
     throw Object.assign(new Error("Invalid workspace id."), { status: 400 });
   }
@@ -47,6 +62,10 @@ export function deriveNames(userId, workspaceId) {
   }
   return { digest, containerName, volumeName };
 }
+
+/** Under host-wide memory pressure the kernel kills the highest oom_score_adj first: a box,
+ *  never the databases that share the host (they run at the default 0). */
+export const SANDBOX_OOM_SCORE_ADJ = 500;
 
 const PROXY_URL = "http://ide-egress:8080";
 
@@ -84,6 +103,7 @@ export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, vol
       PidsLimit: pidsLimit,
       Memory: memoryBytes,
       MemorySwap: memoryBytes, // no swap headroom beyond mem
+      OomScoreAdj: SANDBOX_OOM_SCORE_ADJ,
       NanoCpus: nanoCpus,
       Ulimits: [
         { Name: "core", Soft: 0, Hard: 0 },   // no core dumps (condition 14)

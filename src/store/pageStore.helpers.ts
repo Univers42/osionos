@@ -14,11 +14,16 @@ import type { Block, BlockType } from "@/entities/block";
 import type { SeedPage } from "../data/seedPages";
 import type { ActivePage, PageEntry, PageIndexEntry } from "@/entities/page";
 import { timed } from "@osionos/perf-probe";
+import { canEditPage, type PageAccessContext } from "@/shared/lib/auth/pageAccess";
 
 const RECENTS_KEY = "pg:recents";
 const ACTIVE_PAGE_KEY = "pg:activePage";
 const LEGACY_PAGE_CACHE_KEYS = ["osio:pages", "pg:pages"];
 const PAGE_CACHE_WORKSPACE_PREFIX = "osio:pages:";
+/** localStorage key of the page outbox ledger. It shares the cache's prefix, so the cache must
+ *  never read it as a workspace nor write over it (it once loaded as workspace "outbox" = [] and an
+ *  unscoped savePagesCache stored "[]" there, wiping every sync confirmation). */
+export const PAGE_OUTBOX_KEY = "osio:pages:outbox";
 const PAGE_CACHE_SAVE_DEBOUNCE_MS = 750;
 const PAGE_CACHE_IDLE_FALLBACK_MS = 50;
 const DUPLICATE_TITLE_SUFFIX_RE = /^(.*)\((\d{1,10})\)$/;
@@ -29,7 +34,7 @@ const MAX_SIGNED_INT32 = 2147483647;
 const OBJECT_ID_RE = /^[a-f\d]{24}$/i;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-interface PageDerivedState {
+export interface PageDerivedState {
   pages: Record<string, PageEntry[]>;
   pageIdsByWorkspace: Record<string, string[]>;
   pagesIndex: Record<string, PageIndexEntry>;
@@ -46,6 +51,17 @@ export function isUuidId(id: string): boolean {
 
 export function isPersistedPageId(id: string): boolean {
   return isMongoId(id) || isUuidId(id);
+}
+
+/** A saved page whose body has not been fetched: an edit now would publish over the server's body. */
+export function isContentUnloaded(page: PageEntry): boolean {
+  return page.content === undefined && isPersistedPageId(page._id);
+}
+
+/** The body writers' gate: edit access AND a loaded body. A writer on an unloaded page would
+ *  build on an empty body and publish it over the server's. */
+export function canEditBody(page: PageEntry | undefined, context: PageAccessContext | null): page is PageEntry {
+  return page !== undefined && !isContentUnloaded(page) && canEditPage(page, context);
 }
 
 /**
@@ -155,26 +171,49 @@ export function loadPagesCache(): Record<string, PageEntry[]> {
   return migrateLegacyPagesCache();
 }
 
+export type PreviousPageDerivedState = Partial<Pick<PageDerivedState, "pageIdsByWorkspace" | "pagesIndex">>;
+
+/**
+ * Indexes `pages`. When no workspace's id sequence changed, the previous `pageIdsByWorkspace`
+ * and `pagesIndex` objects are returned as they are: subscribers to either (the sidebar's
+ * favourites, every tree row's selector) see the same reference and skip their re-render.
+ * Rebuilding `pagesIndex` on every title keystroke re-rendered every sidebar row
+ * (tests/e2e/perf/titleTyping.spec.mjs, 2026-10-13).
+ */
 export function derivePageState(
   pages: Record<string, PageEntry[]>,
-  previousPageIdsByWorkspace: Record<string, string[]> = {},
+  previous: PreviousPageDerivedState = {},
 ): PageDerivedState {
+  const previousPageIdsByWorkspace = previous.pageIdsByWorkspace ?? {};
   const pageIdsByWorkspace: Record<string, string[]> = {};
-  const pagesIndex: Record<string, PageIndexEntry> = {};
+  let unchanged = Object.keys(previousPageIdsByWorkspace).length === Object.keys(pages).length;
 
   for (const [workspaceId, workspacePages] of Object.entries(pages)) {
     const list = Array.isArray(workspacePages) ? workspacePages : [];
-    const pageIds = list.map((page, index) => {
-      pagesIndex[page._id] = { workspaceId, index };
-      return page._id;
-    });
+    const pageIds = list.map((page) => page._id);
     const previousPageIds = previousPageIdsByWorkspace[workspaceId];
-    pageIdsByWorkspace[workspaceId] = areStringArraysEqual(previousPageIds, pageIds)
-      ? previousPageIds
-      : pageIds;
+    if (areStringArraysEqual(previousPageIds, pageIds)) {
+      pageIdsByWorkspace[workspaceId] = previousPageIds;
+    } else {
+      pageIdsByWorkspace[workspaceId] = pageIds;
+      unchanged = false;
+    }
   }
 
-  return { pages, pageIdsByWorkspace, pagesIndex };
+  if (unchanged && previous.pageIdsByWorkspace && previous.pagesIndex) {
+    return { pages, pageIdsByWorkspace: previous.pageIdsByWorkspace, pagesIndex: previous.pagesIndex };
+  }
+  return { pages, pageIdsByWorkspace, pagesIndex: indexPageIds(pageIdsByWorkspace) };
+}
+
+function indexPageIds(pageIdsByWorkspace: Record<string, string[]>): Record<string, PageIndexEntry> {
+  const pagesIndex: Record<string, PageIndexEntry> = {};
+  for (const [workspaceId, pageIds] of Object.entries(pageIdsByWorkspace)) {
+    pageIds.forEach((pageId, index) => {
+      pagesIndex[pageId] = { workspaceId, index };
+    });
+  }
+  return pagesIndex;
 }
 
 function areStringArraysEqual(left: readonly string[] | undefined, right: readonly string[]): left is string[] {
@@ -242,6 +281,7 @@ export function flushScheduledPagesCachePersist() {
     try {
       for (const workspaceId of workspaceIds) {
         const workspacePages = pages[workspaceId];
+        if (workspaceCacheKey(workspaceId) === PAGE_OUTBOX_KEY) continue;
         if (workspacePages) {
           localStorage.setItem(workspaceCacheKey(workspaceId), JSON.stringify(workspacePages));
         } else {
@@ -267,7 +307,7 @@ function loadSplitPagesCache(): Record<string, PageEntry[]> {
   try {
     for (let index = 0; index < localStorage.length; index += 1) {
       const key = localStorage.key(index);
-      if (!key?.startsWith(PAGE_CACHE_WORKSPACE_PREFIX)) continue;
+      if (!key?.startsWith(PAGE_CACHE_WORKSPACE_PREFIX) || key === PAGE_OUTBOX_KEY) continue;
       const workspaceId = key.slice(PAGE_CACHE_WORKSPACE_PREFIX.length);
       const parsed = JSON.parse(localStorage.getItem(key) ?? "[]");
       pages[workspaceId] = Array.isArray(parsed) ? (parsed as PageEntry[]) : [];
@@ -365,39 +405,6 @@ function cancelIdlePagesCacheFlush() {
   }
 
   pendingPagesCacheIdleHandle = null;
-}
-
-export function mergeWorkspacePages(
-  existingPages: PageEntry[] | undefined,
-  incomingPages: PageEntry[],
-): PageEntry[] {
-  const previousPages = existingPages ?? [];
-  if (incomingPages.length === 0) return previousPages;
-
-  const cachedById = new Map(
-    previousPages.map((page) => [page._id, page] as const),
-  );
-  const mergedPages = incomingPages.map((page) => {
-    const cachedPage = cachedById.get(page._id);
-    if (!cachedPage) return page;
-    return {
-      ...cachedPage,
-      ...page,
-      content: page.content ?? cachedPage.content,
-    };
-  });
-
-  const incomingIds = new Set(incomingPages.map((page) => page._id));
-  for (const cachedPage of previousPages) {
-    if (incomingIds.has(cachedPage._id)) continue;
-    // The incoming list is authoritative (GET /api/pages/all). A cached page it
-    // omits was deleted server-side — keep it ONLY if it's an unsynced local page
-    // (temp id); drop persisted ghosts so deletions reconcile instead of
-    // resurrecting (the duplicate-cleanup 404 flood / phantom rows).
-    if (!isPersistedPageId(cachedPage._id)) mergedPages.push(cachedPage);
-  }
-
-  return mergedPages;
 }
 
 /**

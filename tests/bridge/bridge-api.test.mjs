@@ -22,7 +22,6 @@ import {
 	createBridgeServer,
 	createBridgeHandoff,
 	createUserSession,
-	isPageReadableBy,
 	persistBridgeIdentity,
 	requireWorkspaceAccess,
 	searchCoverPhotos,
@@ -780,18 +779,6 @@ describe('a member\'s private page stays theirs in a shared workspace', () => {
 		id, workspace_id: workspaceId, parent_page_id: null, owner_id: otherMember, title: `${visibility} page of another member`,
 		visibility, collaborators: [], properties: [], content: [], archived_at: null,
 		created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', ...extra,
-	});
-
-	it('isPageReadableBy: owner, collaborator, shared, public and legacy pages are readable; another member\'s private page is not', () => {
-		const me = subject;
-		assert.equal(isPageReadableBy({ owner_id: me, visibility: 'private' }, me), true);
-		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: 'shared' }, me), true);
-		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: 'public' }, me), true);
-		assert.equal(isPageReadableBy({ owner_id: null, visibility: null, collaborators: [] }, me), true);
-		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: 'private', collaborators: [{ userId: me, role: 'viewer' }] }, me), true);
-		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: 'private' }, me), false);
-		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: null }, me), false);
-		assert.equal(isPageReadableBy({ owner_id: null, visibility: 'private' }, me), false);
 	});
 
 	it('the page list and a page read leave out another member\'s private page and keep their shared one', async () => {

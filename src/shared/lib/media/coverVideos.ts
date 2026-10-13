@@ -16,7 +16,7 @@
 // direct provider call — a key in the browser bundle is a published key.
 
 import { api, getActivePageJwt } from "@/shared/api/client";
-import type { CoverPickerAsset } from "@/shared/ui/assets/uiCollectionAssets";
+import type { CoverPickerAsset } from "@/shared/ui/assets/collectionMedia";
 
 const PAGE_SIZE = 18;
 

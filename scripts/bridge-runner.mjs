@@ -34,6 +34,7 @@
 
 import { bearerToken, readJsonBody, safeText } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { requireIdeSubject } from './ide-sandbox-spec.mjs';
 
 const RUN_BODY_LIMIT = 256 * 1024;
 const MAX_STDIN = 64 * 1024;
@@ -98,6 +99,7 @@ export function createRunnerHandler({ config, verifySession, fetchImpl = fetch, 
     let session;
     try {
       session = verifySession(bearerToken(request), requestConfig);
+      requireIdeSubject(session?.userId, env);
     } catch (error) {
       jsonReply(response, error?.status ?? 401, { ok: false, message: error instanceof Error ? error.message : 'Authentication required.' }, requestConfig);
       return true;

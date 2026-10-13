@@ -14,20 +14,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  requireSandboxIdentity, deriveNames, buildContainerSpec, buildGitExecSpec, buildShellExecSpec,
-  buildSearchExecSpec, buildWriteExecSpec,
+  requireSandboxIdentity, requireIdeSubject, deriveNames, buildContainerSpec, buildGitExecSpec, buildShellExecSpec,
+  buildSearchExecSpec, buildWriteExecSpec, SANDBOX_OOM_SCORE_ADJ,
 } from "../../scripts/ide-sandbox-spec.mjs";
 
 const U = "11111111-1111-4111-8111-111111111111";
 const W = "22222222-2222-4222-8222-222222222222";
 const session = { userId: U, workspaceIds: [W] };
+const env = { OSIONOS_IDE_ALLOWED_SUBJECTS: U };
 
 test("identity: owner from session, workspace ownership-checked (devil #11)", () => {
-  assert.deepEqual(requireSandboxIdentity(session, W), { userId: U, workspaceId: W });
-  assert.throws(() => requireSandboxIdentity(session, "33333333-3333-4333-8333-333333333333"), /No access/);
-  assert.throws(() => requireSandboxIdentity({ userId: "not-a-uuid", workspaceIds: [W] }, W), /session subject/);
-  assert.throws(() => requireSandboxIdentity(session, "../../etc"), /workspace id/);
-  assert.throws(() => requireSandboxIdentity(session, "mini-baas-postgres"), /workspace id/);
+  assert.deepEqual(requireSandboxIdentity(session, W, env), { userId: U, workspaceId: W });
+  assert.throws(() => requireSandboxIdentity(session, "33333333-3333-4333-8333-333333333333", env), /No access/);
+  assert.throws(() => requireSandboxIdentity({ userId: "not-a-uuid", workspaceIds: [W] }, W, env), /session subject/);
+  assert.throws(() => requireSandboxIdentity(session, "../../etc", env), /workspace id/);
+  assert.throws(() => requireSandboxIdentity(session, "mini-baas-postgres", env), /workspace id/);
 });
 
 test("names: hashed, regex-safe, carry no raw id (devil #11)", () => {
@@ -55,6 +56,9 @@ test("container spec: hardening baked, no user params, no PAT (devil #8,#14)", (
   assert.equal(spec.HostConfig.Privileged, undefined);
   // core dumps off; caps present.
   assert.ok(spec.HostConfig.Ulimits.some((u) => u.Name === "core" && u.Hard === 0));
+  // the kernel's first OOM choice is a box, never the databases sharing the host.
+  assert.equal(SANDBOX_OOM_SCORE_ADJ, 500);
+  assert.equal(spec.HostConfig.OomScoreAdj, 500);
   // block quota is opt-in (xfs+pquota only) — omitted by default, applied when asked.
   assert.equal(spec.HostConfig.StorageOpt, undefined);
   const quota = buildContainerSpec({ userId: U, workspaceId: W, image: "x", sandboxNet: "n", volumeName, diskSize: "2G" });

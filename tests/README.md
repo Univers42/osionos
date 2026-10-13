@@ -87,6 +87,66 @@ Harness-level checks for rendering and non-editing coverage.
 
 Utility layer that converts scenario objects into native Playwright tests and splits serial vs parallel scenarios.
 
+### `tests/bench`
+
+Micro-benchmarks for pure hot-path modules (`*.bench.ts`, each exporting `bench` from
+`defineBench`). `harness.ts` warms up, calibrates a batch so one timed sample lasts ≥ 200 µs, and
+gates each case on its **p95 per operation** against `budgetNs`; `run.ts` prints the table, writes
+`test-results/bench/<name>.json` and exits 1 when a case is over budget.
+
+```bash
+npm run test:bench                                         # every tests/bench/*.bench.ts
+npm run test:bench -- tests/bench/explorer-rows.bench.ts   # one file
+```
+
+Budgets are about 3× the p95 measured when the case was written (the date and the numbers are
+in a comment above it). Numbers come from a shared machine inside Docker: a busy neighbour can
+push one case over budget (a false failure, never a false pass) — re-run before acting. Modules
+that import the browser-only graph (the page store, anything reaching `import.meta.env`) cannot
+load in node; their interaction cost is measured in the browser, not here.
+
+### `tests/e2e/perf`
+
+The browser half of the perf harness: real input in the running app, timed from the page's own
+capture-phase listener to the **second `requestAnimationFrame`** after it (the frame that shows
+the result), 30 runs after 5 warm-ups, p95 asserted against a budget. `perfHarness.mjs` holds
+`measureToPaint`, `measureFloor`, `percentile`, `writeReport` and `assertBudget`; one spec per
+interaction (typing in a block page flag ON/OFF and with ~2 000 pages, Monaco typing, rail panel
+first open / re-open, Ctrl+J dock, expanding a 500-child page in the Explorer).
+
+```bash
+npm run test:e2e:perf                                  # whole folder, one worker
+npm run test:e2e:perf -- tests/e2e/perf/typing.spec.mjs
+```
+
+Reports: `test-results/perf/<spec>.json` (median, p95, max, target, budget, PASS/FINDING, the
+`floor`, and for typing the `updateBlock` / `updatePageContent` / `savePagesCache` store actions
+in µs). Fixtures come from `window.__perfSeedPages`, `__perfSeedFolder`, `__perfOpenCodePage`,
+`__perfDurations`, `__perfReset` (`src/shared/lib/perf/perfFixtures.ts`), installed only on the
+dev server behind `isPerfEnabled()`.
+
+How budgets are set: each case carries a comment with the date and measured p95. A **target**
+(16 ms per frame for input, 50 ms for a panel or a 500-row expand) is never loosened: when the
+measured p95 misses it the case is a FINDING in the report and the budget is the worst observed
+p95 x 1.2, so the gate is green but the gap stays visible. When the target is met the budget is
+2-3x measured, capped at the target.
+
+Limits (read the numbers as an upper bound):
+
+- "Painted" = second rAF, an approximation of presentation time; the compositor, GPU and display
+  are not observable from JS.
+- Docker + software rendering + a shared machine: a busy neighbour or a GC pause inflates p95
+  (a false failure, never a false pass).
+- The method has a **floor**: an input nothing handles still costs 0-2 frame intervals
+  (`measureFloor`, ~21-26 ms here). Every case stores it next to its number; read a result as
+  floor + app, so a raw "≤ 16 ms" target is not reachable on this setup and shows up as a FINDING
+  with `overFloorMedian` near zero.
+- `performance.now()` has 100 µs resolution (no cross-origin isolation): store actions are
+  timed in µs but quantised to 0.1 ms.
+- First rail open can only be sampled once per page load: 8 fresh loads, not 30.
+- Run against the Vite dev server (React dev build), so absolute numbers are pessimistic for
+  render-heavy cases.
+
 ## Official Commands
 
 Primary Docker commands:
@@ -163,6 +223,10 @@ Important local setup rules:
 - dependencies are installed only inside Docker with `pnpm install --frozen-lockfile`
 - `make dev` no longer installs `@univers42/ui-collection@latest` dynamically
 - Chromium system dependencies are baked into the Docker `browser-tests` image
+- hosts that cannot reach Playwright's browser CDN (HTTP 403 during `playwright install`) can opt in to
+  Debian's `chromium` with `PW_BROWSER_SOURCE=system bash scripts/docker-run.sh test-e2e <spec>`; it builds
+  a separate `osionos-browser-tests:system` image and the default `download` build is unchanged. Debian's
+  Chromium is not the build this Playwright release was tested against, so prefer `download` when it works
 
 ## CI Execution
 

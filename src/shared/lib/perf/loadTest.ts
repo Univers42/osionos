@@ -208,7 +208,7 @@ function createBlocks(blockCount: number): Block[] {
   }));
 }
 
-function resolvePerfWorkspace() {
+export function resolvePerfWorkspace() {
   const userState = useUserStore.getState();
   const session = userState.activeSession();
   const activeWorkspace = userState.activeWorkspace();
@@ -240,7 +240,7 @@ function findBlockLocation(blockId: string): { pageId: string; block: Block } | 
   return null;
 }
 
-function createPerfPage(pageId: string, workspaceId: string, ownerId: string | null): PageEntry {
+export function createPerfPage(pageId: string, workspaceId: string, ownerId: string | null): PageEntry {
   return {
     _id: pageId,
     title: `Perf ${pageId.replace(PERF_PAGE_ID_PREFIX, "")} blocks`,
@@ -276,7 +276,7 @@ function insertPerfPage(page: PageEntry): ActivePage {
           page,
           ...existingPages.filter((existingPage) => !existingPage._id.startsWith(PERF_PAGE_ID_PREFIX)),
         ],
-      }, state.pageIdsByWorkspace),
+      }, state),
       showTrash: false,
       navigationPath: [],
     };
@@ -301,7 +301,7 @@ function ensurePerfContent(pageId: string, blocks: Block[]) {
         entry._id === pageId ? { ...entry, content: blocks } : entry
       ));
     }
-    return derivePageState(pages, state.pageIdsByWorkspace);
+    return derivePageState(pages, state);
   });
 }
 

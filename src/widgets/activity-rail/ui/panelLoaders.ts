@@ -26,6 +26,9 @@ export const PANEL_LOADERS = {
   database: () => import("@/widgets/database-view/ui/DatabasesPanel").then((m) => ({ default: m.DatabasesPanel })),
   notifications: () => import("@/widgets/notifications/ui/NotificationsPanel").then((m) => ({ default: m.NotificationsPanel })),
   tasks: () => import("@/widgets/tasks/ui/MyTasksPanel").then((m) => ({ default: m.MyTasksPanel })),
+  scm: () => import("@/features/ide/ui/IdeSourceControl").then((m) => ({ default: m.IdeSourceControl })),
+  run: () => import("@/features/ide/ui/IdeRunPanel").then((m) => ({ default: m.IdeRunPanel })),
+  problems: () => import("@/features/ide/ui/IdeProblemsPanel").then((m) => ({ default: m.IdeProblemsPanel })),
 } satisfies Partial<Record<ActivePanel, () => Promise<{ default: React.ComponentType }>>>;
 
 const started = new Set<ActivePanel>();

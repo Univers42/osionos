@@ -13,14 +13,13 @@
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, MoreHorizontal, Plus, Settings, Users, X } from 'lucide-react';
-import { AssetRenderer } from '@univers42/ui-collection';
 import { IconValueView } from '@osionos/ui/atoms/IconValueView';
 import { useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
 import { useUserStore } from '@/features/auth';
 import { useWorkspaceOnboarding } from '@/features/workspace-onboarding/model/useWorkspaceOnboarding';
 import {
   COLLECTION_ROLE_BADGES,
-} from '@/shared/ui/assets/uiCollectionAssets';
+} from '@/shared/ui/assets/collectionEmoji';
 import { LazySettingsCenter } from '@/features/settings/LazySettingsCenter';
 
 interface Props {
@@ -171,7 +170,6 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
   const [authOpen, setAuthOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'settings' | 'people' | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
-  const [newSidebarEnabled, setNewSidebarEnabled] = useState(true);
   const [position, setPosition] = useState({ top: 48, left: 8 });
 
   // Track whether a modal is open to prevent outside-click from closing the panel
@@ -260,7 +258,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
       <header className="bg-[var(--osio-bg-subtle)] p-3">
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--osio-bg-muted)]">
-            <AssetRenderer value={activePersona?.emoji ?? '🌏'} size={28} />
+            <IconValueView value={activePersona?.emoji ?? '🌏'} size={28} />
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-[var(--osio-fg-default)]">
@@ -354,7 +352,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
                 }}
                 className="flex min-w-0 flex-1 items-center gap-3 text-left"
               >
-                <AssetRenderer value={p.emoji} size={20} />
+                <IconValueView value={p.emoji} size={20} />
 
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1">
@@ -362,7 +360,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
                       {p.name}
                     </span>
                     <span className="shrink-0">
-                      <AssetRenderer
+                      <IconValueView
                         value={
                           COLLECTION_ROLE_BADGES[p.roleBadge.toLowerCase()] ??
                           COLLECTION_ROLE_BADGES.guest
@@ -412,24 +410,6 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
           className="flex h-8 w-full items-center px-2 text-left text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
         >
           Log out
-        </button>
-        <button
-          type="button"
-          onClick={() => setNewSidebarEnabled((value) => !value)}
-          className="mt-1 flex w-full items-center gap-3 rounded-md border border-[var(--osio-border-default)] p-2 text-left hover:bg-[var(--osio-bg-hover)]"
-        >
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-1 text-[var(--osio-fg-default)]">
-              <span>Try the new sidebar</span>
-              <span className="rounded bg-[var(--osio-accent-subtle)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">New</span>
-            </span>
-            <span className="block text-xs font-normal text-[var(--osio-fg-muted)]">
-              Keep your pages, meetings, and AI within reach.
-            </span>
-          </span>
-          <span className={`relative h-4 w-7 rounded-full ${newSidebarEnabled ? 'bg-[var(--osio-accent)]' : 'bg-[var(--osio-bg-muted)]'}`}>
-            <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-[var(--osio-accent-fg)] transition-transform ${newSidebarEnabled ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
-          </span>
         </button>
       </footer>
       </div>

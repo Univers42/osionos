@@ -23,7 +23,7 @@ const UserSwitcherPanel = lazy(() =>
 import { usePageStore } from '@/store/usePageStore';
 import {
   getCollectionEmojiValue,
-} from '@/shared/ui/assets/uiCollectionAssets';
+} from '@/shared/ui/assets/collectionEmoji';
 import { useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
 
 interface Props {

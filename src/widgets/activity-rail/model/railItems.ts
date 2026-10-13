@@ -13,12 +13,15 @@
 import {
   Bell,
   CalendarRange,
+  CircleAlert,
   Database,
   Files,
+  GitBranch,
   Globe,
   ListTodo,
   Mail,
   MessagesSquare,
+  Play,
   Search,
   Store,
   type LucideIcon,
@@ -49,7 +52,7 @@ export interface RailItem {
 }
 
 export interface RailGroup {
-  id: "workspace" | "conversations" | "apps";
+  id: "workspace" | "workbench" | "conversations" | "apps";
   label: string;
   items: readonly RailItem[];
 }
@@ -68,6 +71,15 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
       // ponytail: nav LABEL renamed Public→Shared (AOC §12); panel id stays "public"
       // (R-R3) so the persisted uiStore activePanel keeps resolving.
       { id: "public", label: "Shared", Icon: Globe, action: { kind: "panel", panel: "public" } },
+    ],
+  },
+  {
+    id: "workbench",
+    label: "Workbench",
+    items: [
+      { id: "scm", label: "Source Control", Icon: GitBranch, action: { kind: "panel", panel: "scm" } },
+      { id: "run", label: "Run", Icon: Play, action: { kind: "panel", panel: "run" } },
+      { id: "problems", label: "Problems", Icon: CircleAlert, action: { kind: "panel", panel: "problems" } },
     ],
   },
   {

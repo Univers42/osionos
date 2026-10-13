@@ -40,7 +40,7 @@ function descendantIds(ctx: MenuActionCtx): string[] {
 }
 
 /** Create a child page (or folder) under this dir and open it when it's a file. */
-async function createChild(ctx: MenuActionCtx, asFolder: boolean): Promise<void> {
+export async function createChild(ctx: MenuActionCtx, asFolder: boolean): Promise<void> {
   const title = asFolder ? "New folder" : "Untitled";
   const child = await ctx.store
     .getState()

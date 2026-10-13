@@ -12,7 +12,6 @@
 
 import type { ReactNode } from "react";
 import type { Block, BlockType } from "@/entities/block";
-import { COLLECTION_SLASH_ITEMS } from "@/shared/ui/assets/uiCollectionAssets";
 
 export interface BlockContextMenuState {
   blockId: string;
@@ -42,12 +41,6 @@ export interface BlockContextMenuItem {
 export interface BlockContextMenuSection {
   label?: string;
   items: BlockContextMenuItem[];
-}
-
-export interface BlockTransformOption {
-  type: BlockType;
-  label: string;
-  icon: ReactNode;
 }
 
 function createEmptyParagraph(): Block {
@@ -80,41 +73,6 @@ function createColumnsFromBlock(block: Block, count: number): Block[] {
     ),
   );
 }
-
-const CONTEXT_MENU_TRANSFORM_TYPES = new Set<BlockType>([
-  "paragraph",
-  "heading_1",
-  "heading_2",
-  "heading_3",
-  "heading_4",
-  "heading_5",
-  "heading_6",
-  "bulleted_list",
-  "numbered_list",
-  "to_do",
-  "toggle",
-  "quote",
-  "code",
-  "callout",
-  "equation",
-  "layout",
-  "column_list",
-  "divider",
-]);
-
-export const BLOCK_TRANSFORM_OPTIONS: readonly BlockTransformOption[] =
-  [
-    ...COLLECTION_SLASH_ITEMS.filter((item) =>
-      CONTEXT_MENU_TRANSFORM_TYPES.has(item.type),
-    ).map((item) => ({
-      type: item.type,
-      label: item.label,
-      icon: item.icon,
-    })),
-    { type: "equation" as BlockType, label: "Block equation", icon: "∑" },
-    { type: "layout" as BlockType, label: "Layout", icon: "▦" },
-    { type: "column_list" as BlockType, label: "2 columns", icon: "▥" },
-  ];
 
 export function cloneBlock(block: Block, regenerateIds = false): Block {
   const nextId = regenerateIds ? crypto.randomUUID() : block.id;

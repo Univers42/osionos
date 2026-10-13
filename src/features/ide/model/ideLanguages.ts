@@ -63,7 +63,7 @@ export const IDE_LANGUAGES: IdeLanguage[] = [
   { id: "html", label: "HTML", extensions: ["html", "htm", "xhtml"], accent: "#e34c26", runnable: false, formatterId: "prettier", monacoId: "html" },
   { id: "css", label: "CSS", extensions: ["css", "scss", "sass", "less"], accent: "#563d7c", runnable: false, formatterId: "prettier", monacoId: "css" },
   { id: "json", label: "JSON", extensions: ["json", "jsonc", "json5"], accent: "#cbcb41", runnable: false, formatterId: "prettier", monacoId: "json" },
-  { id: "markdown", label: "Markdown", extensions: ["md", "markdown", "mdx"], accent: "#083fa1", runnable: false, formatterId: "prettier", monacoId: "markdown" },
+  { id: "markdown", label: "Markdown", extensions: ["md", "markdown", "mdx", "omd"], accent: "#083fa1", runnable: false, formatterId: "prettier", monacoId: "markdown" },
   { id: "xml", label: "XML", extensions: ["xml", "svg", "xsl", "plist"], accent: "#0060ac", runnable: false, formatterId: "prettier", monacoId: "xml" },
   { id: "yaml", label: "YAML", extensions: ["yml", "yaml"], accent: "#cb171e", runnable: false, formatterId: "prettier", monacoId: "yaml" },
   // --- the long tail (Monaco Monarch grammars, or ideMonarch.ts when Monaco has none) ---

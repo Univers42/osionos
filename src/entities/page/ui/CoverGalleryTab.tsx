@@ -18,7 +18,7 @@ import {
   searchCoverGallery,
   type CoverGalleryCategory,
 } from "@/shared/lib/media/coverGallery";
-import type { CoverPickerAsset } from "@/shared/ui/assets/uiCollectionAssets";
+import type { CoverPickerAsset } from "@/shared/ui/assets/collectionMedia";
 import { CoverTile } from "./coverPickerTiles";
 
 interface CoverGalleryTabProps {

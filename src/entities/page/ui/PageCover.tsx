@@ -12,12 +12,11 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LayoutDashboard, MoveVertical, Trash2 } from 'lucide-react';
+import { IconImage } from '@univers42/ui-collection';
 import {
-  COVER_PICKER_TABS,
-  IconImage,
   normalizeMediaSource,
   resolveCollectionMediaAsset,
-} from '@/shared/ui/assets/uiCollectionAssets';
+} from '@/shared/ui/assets/collectionMedia';
 import { CoverAssetPicker } from './CoverAssetPicker';
 import { CoverMediaElement } from './CoverMediaElement';
 import { DEFAULT_COVER_POSITION } from './coverPositionMath';
@@ -60,7 +59,7 @@ export const PageCover: React.FC<PageCoverProps> = ({
   const isGradient = cover.startsWith('linear-gradient') || cover.startsWith('radial-gradient');
   const resolvedCover = isGradient
     ? null
-    : resolveCollectionMediaAsset(cover, COVER_PICKER_TABS);
+    : resolveCollectionMediaAsset(cover);
   const isUrl = !isGradient;
   const coverSrc = normalizeMediaSource(resolvedCover?.url ?? cover);
   // Reposition only makes sense for an image cover (a gradient always fills).

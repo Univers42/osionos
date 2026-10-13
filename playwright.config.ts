@@ -48,10 +48,24 @@ const testPort = parsePositiveInt(process.env.PLAYWRIGHT_PORT) ?? 3004;
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${testPort}`;
 const configuredWorkers = parsePositiveInt(process.env.TEST_WORKERS);
 const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_EXISTING_SERVER === "1";
+// Opt-in (PLAYWRIGHT_BUILD=production): serve a minified production build through `vite
+// preview` so perf specs measure what users run (React prod, no StrictMode double render).
+// VITE_PERF_FIXTURES keeps the perf fixtures in that build (src/app/main.tsx); they install
+// only behind the "osio:perf" localStorage flag, which perfHarness.bootApp sets.
+const productionBuild = process.env.PLAYWRIGHT_BUILD === "production";
+const productionOutDir = "test-results/dist-e2e";
+const webServerCommand = productionBuild
+  ? `NODE_ENV=production VITE_PERF_FIXTURES=true NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build --mode test --outDir ${productionOutDir} --emptyOutDir`
+    + ` && pnpm exec vite preview --mode test --outDir ${productionOutDir} --host 127.0.0.1 --port ${testPort} --strictPort`
+  : `pnpm exec vite --mode test --host 127.0.0.1 --port ${testPort} --strictPort`;
 // The build-time legacy second brain gate (src/shared/config/legacySecondBrain.ts), default
 // OFF. A default build runs tests/e2e/graph-studio-off; a VITE_LEGACY_SECOND_BRAIN=true build
 // (CI's gate-on job) runs the specs that need the legacy view instead.
 const legacySecondBrainOn = process.env.VITE_LEGACY_SECOND_BRAIN === "true";
+// The perf specs time input -> paint and a busy machine inflates their p95 (perfHarness.mjs):
+// they run only through their own runner (`test:e2e:perf`, one worker), never in the
+// parallel suite next to other tests.
+const perfRun = process.env.PLAYWRIGHT_PERF === "1";
 const LEGACY_ON_SPECS = [
   "legacy-second-brain-gate.spec.mjs",
   "legacy-graph-engine-audit.spec.mjs",
@@ -59,9 +73,18 @@ const LEGACY_ON_SPECS = [
   "legacy-graph-semantic-zoom.spec.mjs",
 ];
 
+// Ponytail: PW_CHROMIUM_PATH (set by the browser-tests image built with PW_BROWSER_SOURCE=system)
+// runs Debian's Chromium, not the build this Playwright release was tested against, so a
+// protocol mismatch can surface as odd failures after a Playwright bump. Escape hatch: the
+// default `download` image build.
+const chromiumExecutablePath = process.env.PW_CHROMIUM_PATH || undefined;
+
 export default defineConfig({
   testDir: "./tests/e2e",
-  testIgnore: legacySecondBrainOn ? ["**/graph-studio-off/**"] : LEGACY_ON_SPECS.map((spec) => `**/${spec}`),
+  testIgnore: [
+    ...(legacySecondBrainOn ? ["**/graph-studio-off/**"] : LEGACY_ON_SPECS.map((spec) => `**/${spec}`)),
+    ...(perfRun ? [] : ["**/perf/**"]),
+  ],
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
@@ -86,10 +109,12 @@ export default defineConfig({
     colorScheme: "light",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    // Playwright's bundled ffmpeg comes from the same blocked CDN, so the system build records no video.
+    video: chromiumExecutablePath ? "off" : "retain-on-failure",
+    launchOptions: { executablePath: chromiumExecutablePath },
   },
   webServer: {
-    command: `pnpm exec vite --mode test --host 127.0.0.1 --port ${testPort} --strictPort`,
+    command: webServerCommand,
     url: baseURL,
     reuseExistingServer,
     env: {
@@ -100,6 +125,6 @@ export default defineConfig({
     },
     stdout: "pipe",
     stderr: "pipe",
-    timeout: 60_000,
+    timeout: productionBuild ? 900_000 : 60_000,
   },
 });

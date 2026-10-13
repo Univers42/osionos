@@ -14,10 +14,12 @@ import type { MenuActionCtx, PageMenuAction } from "./types";
 import { SHARED_ACTIONS } from "./actions/sharedActions";
 import { FILE_ACTIONS } from "./actions/fileActions";
 import { DIR_ACTIONS } from "./actions/dirActions";
+import { VISIBILITY_ACTIONS } from "./actions/visibilityActions";
 
 /** Every registered action, in render order. Sections group within. */
 export const ALL_ACTIONS: PageMenuAction[] = [
   ...SHARED_ACTIONS,
+  ...VISIBILITY_ACTIONS,
   ...FILE_ACTIONS,
   ...DIR_ACTIONS,
 ];

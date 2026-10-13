@@ -16,8 +16,8 @@
 // the global useShareTarget seam — no logic reimplemented here.
 
 import {
-  AppWindow, FileText, GitBranch, GitCompareArrows, History,
-  PanelRightOpen, Share2, Code, Network, ExternalLink, Link2,
+  AppWindow, FilePlus, FileText, GitBranch, GitCompareArrows, History,
+  PanelRightOpen, Share2, Code, Network, ExternalLink, Link2, Download,
 } from "lucide-react";
 import { useUserStore } from "@/features/auth";
 import { usePageConfigStore } from "@/shared/config/pageConfigStore";
@@ -25,9 +25,11 @@ import { useHomeVariantStore } from "@/widgets/home-variants/model/homeVariantSt
 import { LEGACY_SECOND_BRAIN_ENABLED } from "@/shared/config/legacySecondBrain";
 import { pageNodeId, requestGraphFocus } from "@/features/graph-studio";
 import { useShareTarget } from "@/features/share/useShareTarget";
+import { useExportTarget } from "@/features/page-export/model/useExportTarget";
 import { pageEntryToTab } from "@/widgets/workspace-grid/model/pageToTab";
 import type { ActivePageKind, PageEntry } from "@/entities/page";
 import type { MenuActionCtx, PageMenuAction } from "../types";
+import { createChild } from "./dirActions";
 
 function activeKindOf(page: PageEntry): ActivePageKind {
   return page.databaseId ? "database" : "page";
@@ -124,6 +126,11 @@ const OPEN_WITH: PageMenuAction[] = [
 
 export const FILE_ACTIONS: PageMenuAction[] = [
   {
+    id: "add-child", label: "Add child page", icon: FilePlus, scope: "file",
+    section: "create",
+    run: (ctx) => createChild(ctx, false),
+  },
+  {
     id: "open-with", label: "Open with", icon: AppWindow, scope: "file",
     section: "open", submenu: OPEN_WITH, run: () => {},
   },
@@ -149,6 +156,12 @@ export const FILE_ACTIONS: PageMenuAction[] = [
       await navigator.clipboard.writeText(pageDeepLink(ctx.page._id));
       ctx.toast({ kind: "success", title: "Link copied" });
     },
+  },
+  {
+    id: "export", label: "Export", icon: Download, scope: "file",
+    section: "export",
+    run: (ctx) =>
+      useExportTarget.getState().open({ pageId: ctx.page._id, workspaceId: ctx.workspaceId }),
   },
   {
     id: "export-diagram", label: "Export workspace diagram", icon: ExternalLink,

@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useRef } from "react";
-import { useSidebarTreeDnd } from "@/widgets/sidebar/model/sidebarTreeDnd";
+import { useDragSession } from "@/store/dragSession";
 
 interface Props {
   direction: "row" | "column";
@@ -30,7 +30,7 @@ export const PaneSplitter: React.FC<Props> = ({ direction, onResizeStart, onResi
   // The splitter sits at z-20 (above each pane's z-10 drop-capture layer). During an
   // external tab/page drag it must NOT intercept the drag, or a drop near a divider
   // (e.g. the bottom edge of a stacked pane) is rejected and the split never happens.
-  const dragActive = useSidebarTreeDnd((s) => s.dragKind !== null);
+  const dragActive = useDragSession((s) => s.dragKind !== null);
 
   function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
     event.preventDefault();

@@ -27,7 +27,9 @@ export type MenuActionId =
   | "copy-relative-path"
   | "rename"
   | "delete"
+  | "duplicate"
   // file only
+  | "add-child"
   | "open-with"
   | "open"
   | "open-raw"
@@ -35,6 +37,7 @@ export type MenuActionId =
   | "open-to-side"
   | "share"
   | "copy-remote-url"
+  | "export"
   | "export-diagram"
   | "select-for-compare"
   | "open-changes"
@@ -45,7 +48,10 @@ export type MenuActionId =
   | "open-containing-folder"
   | "find-in-folder"
   | "images-preview"
-  | "folder-history";
+  | "folder-history"
+  // visibility (both)
+  | "make-private"
+  | "share-with-workspace";
 
 /** A handle to the page store (the hook itself; call `.getState()` for actions). */
 export type PageStoreHandle = typeof usePageStore;
@@ -57,8 +63,8 @@ export type ClipboardHandle = typeof usePageContextClipboard;
 export type ToastFn = ReturnType<typeof useToastStore.getState>["push"];
 
 /**
- * Everything an action's `run(ctx)` needs. Built once by PageTreeItem when the
- * context menu opens and passed unchanged to every action and submenu.
+ * Everything an action's `run(ctx)` needs. Built once by the Explorer row menu
+ * when the context menu opens and passed unchanged to every action and submenu.
  */
 export interface MenuActionCtx {
   /** The page this menu was opened on. */
@@ -80,9 +86,9 @@ export interface MenuActionCtx {
   /** Push a toast (info/success/warning/error). */
   toast: ToastFn;
 
-  /** Trigger PageTreeItem's inline rename (setRenaming(true)). */
+  /** Start the row's inline rename. */
   onRename: () => void;
-  /** Trigger PageTreeItem's archive+confirm flow (requestDelete()). */
+  /** Start the row's archive flow, which asks for confirmation. */
   onDelete: () => void;
 
   /** All pages in this workspace (for path breadcrumbs + diagram generation). */

@@ -74,16 +74,11 @@ async function workspaceContext() {
   };
 }
 
-/** Enter IDE mode + open the dock terminal, then hand the command to the PTY. */
+/** Hand the command to the PTY (the workbench opens its dock on run request). */
 export async function runInTerminal(command: string): Promise<void> {
   const { workspaceId } = await workspaceContext();
   if (!workspaceId) return;
-  const [{ useIdeModeStore }, { useTerminalRunBus }] = await Promise.all([
-    import("./ideModeStore"),
-    import("./terminalRunBus"),
-  ]);
-  useIdeModeStore.getState().setIdeMode(workspaceId, true);
-  useIdeModeStore.getState().setBottomOpen(true);
+  const { useTerminalRunBus } = await import("./terminalRunBus");
   useTerminalRunBus.getState().requestRun(`cd /workspace && ${command}`);
 }
 
@@ -139,10 +134,10 @@ export async function runActiveFile(): Promise<void> {
     useToastStore.getState().push({ kind: "info", title: "Run Active File", description: "Open a code file first — it runs the focused file." });
     return;
   }
-  const [{ codeBlockOf }, { languageById, languageForFileName }, { pathForPage }, { ideFsWrite }] = await Promise.all([
+  const [{ codeBlockOf }, { languageById, languageForFileName }, { pagePathOf }, { ideFsWrite }] = await Promise.all([
     import("./codeFile"),
     import("./ideLanguages"),
-    import("./idePaths"),
+    import("./pagePathOf"),
     import("./ideFsClient"),
   ]);
   const block = codeBlockOf(page);
@@ -151,7 +146,7 @@ export async function runActiveFile(): Promise<void> {
     useToastStore.getState().push({ kind: "info", title: "Run Active File", description: `${lang.label} has no run command yet.` });
     return;
   }
-  const relPath = pathForPage(page._id, (id) => store.pageById(id));
+  const relPath = pagePathOf(page._id);
   const shellPath = `'/workspace/${relPath.replace(/'/g, "'\\''")}'`;
   await ideFsWrite(workspaceId, relPath, block?.content ?? "");
   await runInTerminal(lang.runCmd.replaceAll("{file}", shellPath));

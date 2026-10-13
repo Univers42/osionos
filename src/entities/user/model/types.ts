@@ -32,6 +32,12 @@ export interface Workspace {
   icon?: string;
   memberIds?: string[];
   settings?: Record<string, unknown>;
+  /** The CALLER's own membership role, never the creator's: the bridge stamps it from
+   *  osionos_workspace_members, and a bridge-created workspace puts the creator's
+   *  owner role in `settings` instead (models/osionos-bridge-migration.sql:392-404). */
+  role?: string;
+  /** The caller's own workspace permissions (the strings the bridge's ACL compares). */
+  permissions?: string[];
 }
 
 export interface UserSession {

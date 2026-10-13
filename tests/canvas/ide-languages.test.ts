@@ -45,3 +45,9 @@ test("createCodeFileBlock + codeBlockOf round-trip", () => {
   assert.equal(codeBlockOf(page)?.id, block.id);
   assert.equal(codeBlockOf({ _id: "p2", title: "empty", workspaceId: "w1" }), undefined);
 });
+
+// .omd is the osionos page dialect: Markdown plus front-matter, so the code editor highlights it as Markdown.
+test("an .omd page file opens as Markdown", () => {
+  assert.equal(languageForFileName("Roadmap.omd")?.id, "markdown");
+  assert.equal(languageForFileName("_folder.omd")?.id, "markdown");
+});

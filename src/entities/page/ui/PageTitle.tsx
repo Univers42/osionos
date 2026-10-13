@@ -16,6 +16,12 @@ import { applyEmojiInsert, matchEmojiTrigger } from '@/shared/lib/emoji/emojiTri
 import { parseIconValue } from '@osionos/ui/shared/iconValue';
 import { EmojiPicker } from '@/shared/ui';
 
+// `field-sizing: content` (notionPage.css) sizes the title in the browser's own layout pass.
+// The fallback below (height 0, read scrollHeight, set it) forces a synchronous layout and
+// moves everything under the title twice per keystroke - 3.9 ms of a 5 000-page keystroke
+// (keystrokeProfile.spec.mjs, 2026-10-13) - so it runs only where the property is missing.
+const TITLE_SIZES_ITSELF = typeof CSS !== 'undefined' && CSS.supports('field-sizing', 'content');
+
 interface PageTitleProps {
   /** Current page title. */
   title: string;
@@ -40,7 +46,7 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
   const [emojiFilter, setEmojiFilter] = useState<string | null>(null);
 
   useLayoutEffect(() => {
-    if (!ref.current) return;
+    if (TITLE_SIZES_ITSELF || !ref.current) return;
     ref.current.style.height = '0px';
     ref.current.style.height = `${ref.current.scrollHeight}px`;
   }, [title]);
