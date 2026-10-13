@@ -32,10 +32,7 @@ import {
   readStoredThemeMode,
   type ThemeMode,
 } from '@/shared/config/theme';
-import {
-  clearWorkspaceAppearance,
-  useWorkspaceConfigStore,
-} from '@/shared/config/workspaceConfigStore';
+import { useWorkspaceConfigStore } from '@/shared/config/workspaceConfigStore';
 
 interface WorkspaceThemeControlsProps {
   compact?: boolean;
@@ -87,9 +84,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
     applyPalette(id);
     persistPalette(id);
     setPalette(id);
-    // A per-workspace inline override would mask the palette — drop it so the
-    // chosen palette is what the user actually sees.
-    clearWorkspaceAppearance();
+    // Drop a per-workspace appearance still stored from before palettes existed.
     const workspaceId = activeWorkspace?._id;
     if (activeUserId && workspaceId) void clearAppearance(activeUserId, workspaceId).catch(() => {});
   };

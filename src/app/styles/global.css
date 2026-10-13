@@ -456,6 +456,19 @@
   --osio-syntax-literal: #6B4A2E;
 }
 
+/* Aliases, declared on every [data-theme] element (not only :root) so a nested
+   themed subtree resolves them against its own palette. */
+:root,
+[data-theme] {
+  /* The canvas behind the app's surfaces. */
+  --osio-bg-canvas: var(--osio-bg-page);
+}
+
+/* Native controls (date pickers, scrollbars, selects) follow the app's theme,
+   not the OS's: without this they stay light on a dark page, or the reverse. */
+[data-theme="light"] { color-scheme: light; }
+[data-theme="dark"] { color-scheme: dark; }
+
 [data-theme="dark"] {
   /* Warm charcoal parity. */
   --osio-bg-page: #1B1A17;

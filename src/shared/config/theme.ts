@@ -16,17 +16,39 @@ export type ThemeMode = "light" | "dark" | "system";
 
 const THEME_STORAGE_KEY = "osionos:theme-mode";
 
+const OS_DARK = "(prefers-color-scheme: dark)";
+
+function osTheme(): "light" | "dark" {
+  return globalThis.matchMedia(OS_DARK).matches ? "dark" : "light";
+}
+
 export function applyTheme(mode: ThemeMode) {
   if (typeof document === "undefined") return;
-  const root = document.documentElement;
-  if (mode === "system") {
-    const prefersDark = globalThis.matchMedia(
-      "(prefers-color-scheme: dark)",
-    ).matches;
-    root.dataset.theme = prefersDark ? "dark" : "light";
-    return;
-  }
-  root.dataset.theme = mode;
+  document.documentElement.dataset.theme = mode === "system" ? osTheme() : mode;
+}
+
+/** Keeps "system" mode in step with the OS while the app is open (a laptop
+ *  that turns dark at sunset). This module is the only writer of
+ *  <html data-theme>. Returns the unsubscribe. */
+export function watchSystemTheme(): () => void {
+  if (globalThis.window === undefined) return () => undefined;
+  const query = globalThis.matchMedia(OS_DARK);
+  const follow = () => {
+    if (readStoredThemeMode() === "system") applyTheme("system");
+  };
+  query.addEventListener("change", follow);
+  return () => query.removeEventListener("change", follow);
+}
+
+/** The quick light/dark flip. Landing back on the OS's own theme stores
+ *  "system" rather than pinning it, so the app goes on following the OS; a
+ *  permanent choice is made in Settings. */
+export function toggleThemeMode(): ThemeMode {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  const mode: ThemeMode = next === osTheme() ? "system" : next;
+  applyTheme(mode);
+  persistThemeMode(mode);
+  return mode;
 }
 
 export function readStoredThemeMode(): ThemeMode {

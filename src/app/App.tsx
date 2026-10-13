@@ -35,16 +35,9 @@ import { SidebarEdgePeek } from "@/widgets/activity-rail/ui/SidebarEdgePeek";
 import { LazyCanvasDebugRoute, LazyIdeShell, LazyMainContent, LazyStyleGuideRoute } from "./lazyAppRegions";
 import { isIdeEnabled } from "@/shared/config/featureFlags";
 import { useIdeModeStore } from "@/features/ide/model/ideModeStore";
-import { applyStoredAppearance } from "@/shared/config/theme";
+import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
-import {
-  applyWorkspaceAppearance,
-  clearWorkspaceAppearance,
-  resolveWorkspaceConfig,
-  useWorkspaceConfigStore,
-  workspaceConfigKey,
-} from "@/shared/config/workspaceConfigStore";
 import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
@@ -163,8 +156,6 @@ const App: React.FC = () => {
   const error = useUserStore((s) => s.error);
   const activeUserId = useUserStore((s) => s.activeUserId);
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
-  const workspaceKey = workspaceConfigKey(activeUserId || "anonymous", activeWorkspace?._id ?? "workspace");
-  const storedWorkspaceConfig = useWorkspaceConfigStore((s) => s.configs[workspaceKey]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const openSettings = (tab?: SettingsTab) => {
@@ -286,15 +277,7 @@ const App: React.FC = () => {
     }
   }, [seeded, persistedActivePage]);
 
-  useEffect(() => {
-    if (!activeWorkspace?._id) return;
-    const appearance = resolveWorkspaceConfig(storedWorkspaceConfig).appearance;
-    if (appearance) {
-      applyWorkspaceAppearance(appearance);
-      return;
-    }
-    clearWorkspaceAppearance();
-  }, [activeWorkspace?._id, storedWorkspaceConfig]);
+  useEffect(() => watchSystemTheme(), []);
 
   if (isDevCanvasDebugRoute()) {
     return <LazyCanvasDebugRoute />;
