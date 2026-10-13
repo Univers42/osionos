@@ -12,7 +12,7 @@
 
 import React from "react";
 
-import { flattenVisible } from "../model/explorerRows";
+import { flattenForRender, indexByRel } from "../model/explorerRows";
 import { useExplorerTree } from "../model/useExplorerTree";
 import type { WorkspaceFileOps } from "../model/workspaceFileOps";
 import { parentOf } from "../model/workspacePath";
@@ -20,6 +20,7 @@ import type { ExplorerContextValue } from "./explorerContext";
 import { useExplorerActions } from "./useExplorerActions";
 import { useExplorerFocus } from "./useExplorerFocus";
 import { useExplorerKeyDown } from "./useExplorerKeyDown";
+import { useExplorerVirtualizer } from "./useExplorerVirtualizer";
 import { EXPLORER_DRAG_MIME } from "./WorkspaceExplorerRow";
 
 export type ExplorerControllerProps = {
@@ -32,10 +33,14 @@ export type ExplorerControllerProps = {
  *  read plus the root-level handlers. No JSX: WorkspaceExplorer only lays out. */
 export function useExplorerController({ ops, onOpen, activeRel }: ExplorerControllerProps) {
   const tree = useExplorerTree(ops);
-  const visible = React.useMemo(() => flattenVisible(tree.dirs, tree.expanded), [tree.dirs, tree.expanded]);
-  const { rootRef, tabbableRel, focusRow } = useExplorerFocus(visible);
   const actions = useExplorerActions({ ops, tree, onOpen });
   const { pending, setPending } = actions;
+  const creating = pending?.type === "create" ? pending : null;
+  const rows = React.useMemo(() => flattenForRender(tree.dirs, tree.expanded, creating), [tree.dirs, tree.expanded, creating]);
+  const visible = React.useMemo(() => rows.flatMap((row) => (row.type === "item" ? [row.item] : [])), [rows]);
+  const rowIndex = React.useMemo(() => indexByRel(rows), [rows]);
+  const { rootRef, tabbableRel, focusRow } = useExplorerFocus(rowIndex, visible[0]?.rel ?? "");
+  const { scrollRef, virtualizer } = useExplorerVirtualizer(rows, rowIndex.get(tabbableRel) ?? -1);
 
   const activate: ExplorerContextValue["activate"] = (rel, row) => {
     focusRow(rel);
@@ -66,5 +71,5 @@ export function useExplorerController({ ops, onOpen, activeRel }: ExplorerContro
     if (parentOf(from) !== "") actions.moveTo(from, "");
   };
 
-  return { tree, actions, value, rootRef, onKeyDown, onRootDrop, cancelEdit, newIn };
+  return { tree, actions, value, rootRef, onKeyDown, onRootDrop, cancelEdit, newIn, rows, scrollRef, virtualizer };
 }

@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { buildExplorerRows, flattenVisible, type DirState } from "../../src/features/ide/model/explorerRows.ts";
+import { buildExplorerRows, flattenForRender, flattenVisible, indexByRel, type DirState } from "../../src/features/ide/model/explorerRows.ts";
 import type { ListedEntry } from "../../src/features/ide/vfs/types.ts";
 import { defineBench } from "./harness.ts";
 
@@ -60,6 +60,26 @@ export const bench = defineBench("explorer rows", [
     setup: () => {
       const { dirs, expanded } = expandedTree(22, 3);
       return () => flattenVisible(dirs, expanded);
+    },
+  },
+  {
+    name: "flattenForRender: 22^3 = 10 648 expanded rows",
+    // 2026-10-13: median 0.40 ms, p95 1.80 ms (contract: ≤ 2 ms p95 at 10k lines). Runs only
+    // when the tree changes (expand, listing, create), never per scroll frame.
+    budgetNs: 5_000_000,
+    setup: () => {
+      const { dirs, expanded } = expandedTree(22, 3);
+      return () => flattenForRender(dirs, expanded, { parent: "d3/d4", kind: "file" });
+    },
+  },
+  {
+    name: "indexByRel: 10 648 lines",
+    // 2026-10-13: median 0.55 ms, p95 0.91 ms — one Map insertion per line, same cadence as above.
+    budgetNs: 5_000_000,
+    setup: () => {
+      const { dirs, expanded } = expandedTree(22, 3);
+      const rows = flattenForRender(dirs, expanded, null);
+      return () => indexByRel(rows);
     },
   },
 ]);
