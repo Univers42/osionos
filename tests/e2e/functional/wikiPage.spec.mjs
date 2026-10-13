@@ -102,4 +102,17 @@ test.describe("wiki pages", () => {
     await page.getByTestId("cover-picker-item").first().click();
     await expect(page.locator(".osionos-page-cover")).toHaveCount(1);
   });
+
+  test("the page ··· menu turns a page into a wiki and back", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await activateFirstEditor(page);
+
+    await page.getByRole("button", { name: "Open page configuration" }).click();
+    await page.getByRole("button", { name: "Turn into wiki" }).click();
+    await expect(wikiPages(page)).toBeVisible();
+
+    await page.getByRole("button", { name: "Open page configuration" }).click();
+    await page.getByRole("button", { name: "Turn into page" }).click();
+    await expect(wikiPages(page)).toHaveCount(0);
+  });
 });
