@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 // Inbound fs-event plumbing: the serial queue that keeps one connection's
-// events in order, strict UTF-8 decoding, the per-path echo test, and the
+// events in order, strict UTF-8 decoding, and the
 // Web-Locks leadership that keeps exactly one tab applying per connection.
 // Pure and store-free so the node canvas runner can unit-test it directly.
 
@@ -60,16 +60,6 @@ export function decodeUtf8Strict(base64: string): string | null {
   } catch {
     return null;
   }
-}
-
-/** Echo only when the hash is a recent local write AND the ledger for THAT
- *  path already agrees on it — a hash alone can be forged by a shell rename. */
-export function isEchoAt(
-  hash: string | null,
-  syncedHashAtPath: string | null,
-  isEcho: (h: string) => boolean,
-): boolean {
-  return hash !== null && syncedHashAtPath === hash && isEcho(hash);
 }
 
 /** The subset of navigator.locks this module calls (request is all we need). */

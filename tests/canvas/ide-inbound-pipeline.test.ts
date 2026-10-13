@@ -16,7 +16,6 @@ import assert from "node:assert/strict";
 import {
   createSerialQueue,
   decodeUtf8Strict,
-  isEchoAt,
   acquireInboundLeadership,
 } from "../../src/features/ide/model/inboundPipeline.ts";
 import { createFakeLocks } from "./fixtures/fakeLocks.ts";
@@ -125,17 +124,6 @@ test("decode: ASCII, multi-byte UTF-8 and empty content", () => {
 test("decode: invalid base64 or invalid UTF-8 → null", () => {
   assert.equal(decodeUtf8Strict("not base64!!"), null);
   assert.equal(decodeUtf8Strict("/w=="), null); // valid base64, 0xFF is not UTF-8
-});
-
-test("isEchoAt: echo set membership AND per-path ledger agreement", () => {
-  const inEchoSet = (h: string) => h === "h";
-  const notInEchoSet = () => false;
-  assert.equal(isEchoAt("h", "h", inEchoSet), true);
-  assert.equal(isEchoAt("h", "other", inEchoSet), false);
-  assert.equal(isEchoAt("h", "h", notInEchoSet), false);
-  assert.equal(isEchoAt("h", "other", notInEchoSet), false);
-  assert.equal(isEchoAt(null, null, inEchoSet), false);
-  assert.equal(isEchoAt(null, "h", inEchoSet), false);
 });
 
 test("leadership: first tab leads, second waits, under the workspace lock name", async () => {
