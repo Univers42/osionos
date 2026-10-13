@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import type { IdeFetchResult } from "../api/ideTransport";
 import type { SandboxHealthState } from "./sandboxHealthStore";
 import { healthFromCloseCode } from "./wsCloseCodes";
 
@@ -25,6 +26,9 @@ export interface HealthDeps {
   apiBase: () => string; // "" → not configured
   jwt: () => string | null; // null → signed out
   now: () => number;
+  /** When set, requests go through the IDE transport (IDE origin, IDE token) and
+   *  fetch/apiBase/jwt are not consulted. */
+  ideFetch?: (workspaceId: string, path: string, init: RequestInit) => Promise<IdeFetchResult>;
 }
 
 export interface HealthCore {
@@ -115,19 +119,45 @@ export function createHealthCore(deps: HealthDeps): HealthCore {
     notify();
   };
 
+  // Today's mapping, kept for the IDE transport: unconfigured / refused / signed out
+  // are "disabled" (a 429 keeps the verdict), a failed mint is an unreachable probe.
+  const unavailableResult = (
+    reason: Extract<IdeFetchResult, { kind: "unavailable" }>["reason"],
+  ): { state: SandboxHealthState | "keep"; reason: string | null } => {
+    if (reason === "not-allowed") return { state: "disabled", reason: HEALTH_REASONS.forbidden };
+    if (reason === "throttled") return { state: "keep", reason: null };
+    if (reason === "error") return { state: "unavailable", reason: HEALTH_REASONS.unreachable };
+    return { state: "disabled", reason: HEALTH_REASONS.notConfigured };
+  };
+
+  // The legacy path: app origin + app token supplied directly. Null means "disabled, not configured".
+  const sendDirect = async (path: string, init: RequestInit): Promise<Response | null> => {
+    const base = deps.apiBase();
+    const token = deps.jwt();
+    if (base === "" || token === null) return null;
+    const headers = { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${token}` };
+    return deps.fetch(`${base}${path}`, { ...init, headers });
+  };
+
   // One HTTP request per workspace: a null init is the GET probe, a POST init is
   // ensure (which re-probes on 2xx). O(1).
   const request = async (ws: string, init: RequestInit | null): Promise<SandboxHealthState> => {
     adopt(ws);
-    const base = deps.apiBase();
-    const token = deps.jwt();
-    if (base === "" || token === null) {
-      return apply({ state: "disabled", reason: HEALTH_REASONS.notConfigured }, ws);
-    }
-    const url = init === null ? `${base}/api/ide/session?workspaceId=${encodeURIComponent(ws)}` : `${base}/api/ide/session`;
+    const path = init === null ? `/api/ide/session?workspaceId=${encodeURIComponent(ws)}` : "/api/ide/session";
     let response: Response;
     try {
-      response = await deps.fetch(url, init === null ? { headers: { Authorization: `Bearer ${token}` } } : init);
+      if (deps.ideFetch) {
+        const sent = await deps.ideFetch(ws, path, init ?? {});
+        if (sent.kind === "unavailable") {
+          const verdict = unavailableResult(sent.reason);
+          return verdict.state === "keep" ? applyKeep(ws) : apply({ state: verdict.state, reason: verdict.reason }, ws);
+        }
+        response = sent.response;
+      } else {
+        const sent = await sendDirect(path, init ?? {});
+        if (sent === null) return apply({ state: "disabled", reason: HEALTH_REASONS.notConfigured }, ws);
+        response = sent;
+      }
     } catch {
       return apply({ state: "unavailable", reason: HEALTH_REASONS.unreachable }, ws);
     }
@@ -156,7 +186,7 @@ export function createHealthCore(deps: HealthDeps): HealthCore {
     dedupe(ws, () =>
       request(ws, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${deps.jwt()}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspaceId: ws }),
       }),
     );
