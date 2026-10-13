@@ -41,7 +41,14 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = (props) => {
         onDrop={onRootDrop}
         className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]"
       >
-        <ExplorerToolbar onNewFile={newIn("file")} onNewFolder={newIn("dir")} onRefresh={() => void tree.refresh()} />
+        <ExplorerToolbar
+          onNewFile={newIn("file")}
+          onNewFolder={newIn("dir")}
+          onRefresh={() => void tree.refresh()}
+          onCollapseAll={tree.collapseAll}
+          onImportFolder={props.onImportFolder}
+          onExportZip={props.onExportZip}
+        />
         {actions.notice && <ExplorerNotice message={actions.notice} onDismiss={actions.dismissNotice} />}
         {tree.watchNotice && <ExplorerNotice message={tree.watchNotice} />}
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">

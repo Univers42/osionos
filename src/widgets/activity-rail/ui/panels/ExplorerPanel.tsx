@@ -21,6 +21,8 @@ import { useExplorerView } from "../../model/explorerView";
 import { useFetchActiveWorkspacePages } from "../../model/useFetchActiveWorkspacePages";
 import { pageIdForEntry, pageIdForDir } from "../../model/workspaceEntry";
 import { usePageStore } from "@/store/usePageStore";
+import { useUserStore } from "@/features/auth";
+import { useToastStore } from "@osionos/ui/primitives";
 import type { ExplorerRowKind } from "@/features/ide/model/explorerRows";
 
 interface Props {
@@ -38,8 +40,50 @@ const NOOP_OPEN = (): void => undefined;
 export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpenConsole, onOpenFile = NOOP_OPEN }) => {
   const explorerView = useExplorerView((s) => s.view);
   const { activeWorkspaceId } = useFetchActiveWorkspacePages();
-  const { ops } = useWorkspaceFileOps();
+  const { ops, importFolder, exportProject } = useWorkspaceFileOps();
+  const workspaceName = useUserStore((s) => s.activeWorkspace()?.name ?? "project");
   const [showInviteCTA, setShowInviteCTA] = useState(true);
+  const importRef = React.useRef<HTMLInputElement | null>(null);
+
+  // `webkitdirectory` is a non-standard input attribute with no JSX typing; set
+  // it imperatively so the picker selects a whole folder (with relative paths).
+  React.useEffect(() => {
+    const input = importRef.current;
+    if (input) {
+      input.setAttribute("webkitdirectory", "");
+      input.setAttribute("directory", "");
+    }
+  }, []);
+
+  const onImport = React.useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files ? Array.from(event.target.files) : [];
+      event.target.value = "";
+      if (files.length) {
+        void importFolder(files).then(
+          (created) => useToastStore.getState().push({ kind: "success", title: `Imported ${created} item${created === 1 ? "" : "s"}` }),
+          (error: unknown) => useToastStore.getState().push({
+            kind: "error",
+            title: "Import failed",
+            description: error instanceof Error ? error.message : String(error),
+          }),
+        );
+      }
+    },
+    [importFolder],
+  );
+
+  const onExportZip = React.useCallback(() => {
+    try {
+      if (exportProject(workspaceName) === 0) useToastStore.getState().push({ kind: "info", title: "Nothing to export yet" });
+    } catch (error: unknown) {
+      useToastStore.getState().push({
+        kind: "error",
+        title: "Export failed",
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [exportProject, workspaceName]);
 
   const pageIdOf = useCallback(
     (rel: string, kind: ExplorerRowKind): string | undefined => {
@@ -64,7 +108,13 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
         ) : (
           <>
             <ExplorerRecents activeWorkspaceId={activeWorkspaceId} />
-            <WorkspaceExplorer ops={ops} onOpen={onOpenFile} pageIdOf={pageIdOf} />
+            <WorkspaceExplorer
+              ops={ops}
+              onOpen={onOpenFile}
+              pageIdOf={pageIdOf}
+              onImportFolder={() => importRef.current?.click()}
+              onExportZip={onExportZip}
+            />
           </>
         )}
       </nav>
@@ -74,6 +124,16 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
         onOpenConsole={onOpenConsole}
         showInviteCTA={showInviteCTA}
         onDismissInvite={() => setShowInviteCTA(false)}
+      />
+      <input
+        ref={importRef}
+        type="file"
+        multiple
+        onChange={onImport}
+        className="hidden"
+        aria-label="Import folder"
+        aria-hidden
+        tabIndex={-1}
       />
     </div>
   );

@@ -51,3 +51,45 @@ test("clicking first page row opens it and highlights it exclusively", async ({ 
   expect(count).toBe(1);
   expect(errors).toEqual([]);
 });
+
+test("collapse all, import/export buttons, and honest delete copy", async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = await bootWorkbench(page);
+
+  // Create a folder so there is a directory row to expand.
+  await page.getByRole("button", { name: "New folder", exact: true }).click();
+  const input = page.locator('[role="tree"] input');
+  await input.waitFor({ state: "visible" });
+  await input.fill("test-folder");
+  await input.press("Enter");
+
+  // Expand the folder row with ArrowRight.
+  const folderRow = page.locator('[role="treeitem"][data-rel="test-folder"]');
+  await expect(folderRow).toBeVisible({ timeout: 10_000 });
+  await folderRow.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(folderRow).toHaveAttribute("aria-expanded", "true");
+
+  // Collapse all: no treeitem should remain expanded.
+  await page.getByRole("button", { name: "Collapse all", exact: true }).click();
+  await expect(page.locator('[role="treeitem"][aria-expanded="true"]')).toHaveCount(0);
+
+  // The toolbar shows Import folder and Export as .zip.
+  await expect(page.getByRole("button", { name: "Import folder", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export as .zip", exact: true })).toBeVisible();
+
+  // Trigger delete on a page row: the dialog text contains "trash".
+  const pageRow = page.locator('[role="treeitem"][data-rel$=".omd"]').first();
+  await expect(pageRow).toBeVisible({ timeout: 10_000 });
+  await pageRow.focus();
+  await page.keyboard.press("Delete");
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("trash");
+
+  // Cancel leaves the row in place.
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(pageRow).toBeVisible();
+
+  expect(errors).toEqual([]);
+});

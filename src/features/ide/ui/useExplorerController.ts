@@ -27,6 +27,8 @@ export type ExplorerControllerProps = {
   ops: WorkspaceFileOps;
   onOpen: (relPath: string, kind: "page" | "code") => void;
   pageIdOf?: (rel: string, kind: "dir" | "page" | "code") => string | undefined;
+  onImportFolder?: () => void;
+  onExportZip?: () => void;
 };
 
 /** Wires tree state, focus, mutations and keys into the context value the rows

@@ -117,5 +117,10 @@ export function useExplorerTree(ops: WorkspaceFileOps) {
     if (open) void load(dir);
   }, [load]);
 
-  return { dirs, expanded, setOpen, load, refresh, watchNotice };
+  // One state update, O(1): clears every expanded directory at once.
+  const collapseAll = useCallback((): void => {
+    setExpanded(new Set());
+  }, []);
+
+  return { dirs, expanded, setOpen, collapseAll, load, refresh, watchNotice };
 }

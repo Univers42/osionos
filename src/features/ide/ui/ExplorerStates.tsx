@@ -50,10 +50,10 @@ export const ExplorerDeleteConfirm: React.FC<{ name: string; onConfirm: () => vo
     onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onCancel(); } }}
     className="flex flex-col gap-2 border-t border-[var(--osio-code-border)] px-3 py-2 text-[12px] text-[var(--osio-code-fg)]"
   >
-    <p id="explorer-delete-title">Delete “{name}”? Folders are deleted with everything inside.</p>
+    <p id="explorer-delete-title">Move “{name}” to the trash? A folder goes with everything inside. Restore it from Archived files.</p>
     <div className="flex gap-2">
       <button type="button" autoFocus onClick={onCancel} className={BUTTON}>Cancel</button>
-      <button type="button" onClick={onConfirm} className={BUTTON}>Delete</button>
+      <button type="button" onClick={onConfirm} className={BUTTON}>Move to trash</button>
     </div>
   </div>
 );
