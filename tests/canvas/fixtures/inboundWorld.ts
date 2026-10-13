@@ -108,10 +108,12 @@ export async function execWorld(pages: PageEntry[], opts: ExecWorldOptions = {})
     enqueue: (task) => { enqueued.count += 1; void queue.run(task); },
   });
   const send = (evt: FsEvent): Promise<void> => queue.run(() => session.handle(evt));
+  /** Every queued task done and every deferred create landed (inboundDrain). */
+  const settle = async (): Promise<void> => { await queue.idle(); };
   const shellWrite = async (path: string, text: string): Promise<void> => {
     await putFile(sandbox, workspaceId, path, text);
     await send({ event: "write", path, hash: await sha16(text), content: b64(text) });
-    await queue.idle(); // a create lands at its drain's flush (inboundDrain)
+    await settle();
   };
   const shellDelete = async (path: string): Promise<void> => {
     await sandbox.delete(buildVPath(sandbox.scheme, workspaceId, path.split("/")), { recursive: true }).catch(() => undefined);
@@ -119,5 +121,5 @@ export async function execWorld(pages: PageEntry[], opts: ExecWorldOptions = {})
   };
   const elapse = async (): Promise<void> => { clock.advance(INBOUND_WINDOW_MS); await queue.idle(); };
   const pageOf = (id: string): PageEntry | undefined => store.pages().find((entry) => entry._id === id);
-  return { workspaceId, store, sandbox, clock, queue, queueErrors, enqueued, session, send, shellWrite, shellDelete, elapse, pageOf };
+  return { workspaceId, store, sandbox, clock, queue, queueErrors, enqueued, session, send, settle, shellWrite, shellDelete, elapse, pageOf };
 }

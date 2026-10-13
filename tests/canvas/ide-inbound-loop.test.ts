@@ -19,40 +19,8 @@ import test from "node:test";
 
 import { sha16 } from "../../src/features/ide/model/ideFsEcho.ts";
 import { recordSyncedHash, syncedHashOf } from "../../src/features/ide/model/ideSyncEngine.ts";
-import { bytesToText, collectBytes } from "../../src/features/ide/vfs/bytes.ts";
-import { buildVPath } from "../../src/features/ide/vfs/vpath.ts";
-import { planOutbound, type Snapshot } from "../../src/features/page-file/model/outboundPlan.ts";
-import { runOutbound, type OutboundIo } from "../../src/features/page-file/model/outboundRun.ts";
-import { pageIndexFor } from "../../src/features/page-file/model/pageIndexCache.ts";
 import { b64, blockPage, execWorld, putFile } from "./fixtures/inboundWorld.ts";
-
-type World = Awaited<ReturnType<typeof execWorld>>;
-
-const snapshotOf = (world: World): Snapshot => {
-  const pages = world.store.pages();
-  return { index: pageIndexFor(world.workspaceId, pages), pages };
-};
-
-/** The writer's io over the world's sandbox, every write logged. */
-function sandboxIo(world: World, writes: string[]): OutboundIo {
-  const at = (path: string) => buildVPath("sandbox", world.workspaceId, path.split("/"));
-  return {
-    read: async (path) => world.sandbox.read(at(path)).then(async (data) => bytesToText(await collectBytes(data)), () => null),
-    write: async (path, content) => { writes.push(path); await putFile(world.sandbox, world.workspaceId, path, content); },
-    rename: async (from, to) => world.sandbox.rename(at(from), at(to)),
-    remove: async (path) => world.sandbox.delete(at(path)),
-  };
-}
-
-async function writerRound(world: World, from: Snapshot, writes: string[]): Promise<Snapshot> {
-  const next = snapshotOf(world);
-  const byId = new Map(next.pages.map((entry) => [entry._id, entry]));
-  await runOutbound({
-    workspaceId: world.workspaceId, plan: planOutbound(from, next), io: sandboxIo(world, writes),
-    pageById: (id) => byId.get(id), pathOf: (id) => next.index.pathForId(id),
-  });
-  return next;
-}
+import { snapshotOf, writerRound } from "./fixtures/outboundWorld.ts";
 
 test("21 loop: one shell edit → one apply → exactly one outbound write; its echo records only; a second round writes nothing", async () => {
   const world = await execWorld([{ ...blockPage("R", "Roadmap"), updatedAt: "2026-01-01T00:00:00.000Z" }]);
