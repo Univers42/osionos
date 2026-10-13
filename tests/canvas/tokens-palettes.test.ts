@@ -116,8 +116,8 @@ test("the colours kept outside the stylesheet match the generated palette", () =
   const light = resolved("light");
   const dark = resolved("dark");
   const html = readAppFile("index.html");
-  assert.ok(html.includes(`content="${light["--osio-bg-page"]}" media="(prefers-color-scheme: light)"`), "light theme-color");
-  assert.ok(html.includes(`content="${dark["--osio-bg-page"]}" media="(prefers-color-scheme: dark)"`), "dark theme-color");
+  assert.ok(html.includes(`content="${light["--osio-bg-canvas"]}" media="(prefers-color-scheme: light)"`), "light theme-color");
+  assert.ok(html.includes(`content="${dark["--osio-bg-canvas"]}" media="(prefers-color-scheme: dark)"`), "dark theme-color");
   assert.ok(readAppFile("public/favicon.svg").includes(`fill="${light["--osio-accent"]}"`), "favicon");
   assert.ok(readAppFile("src/features/auth/ui/Portal.tsx").includes(`fill="${light["--osio-accent"]}"`), "sign-in brand mark");
 });

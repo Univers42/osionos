@@ -16,6 +16,7 @@
    generated yet: shadows, overlays, the graph's neutral inks, and the seven
    palettes other than the default. */
 @import "./tokens.generated.css";
+@import "./shell.css";
 /* The vendored database's own colours (tables, boards, charts) as references to
    the tokens above, plus its stock shadow and radius classes. */
 @import "./database-bridge.generated.css";
@@ -838,9 +839,10 @@ body {
   display: none !important;
 }
 
-/* The active-pane accent ring is a Tailwind `ring-*` (a box-shadow) — noise in zen. */
+/* A pane card's active outline is chrome — noise in zen. The border and shadow
+   already collapse with the gap (shell.css). */
 [data-zen="1"] [data-osio-pane] {
-  box-shadow: none !important;
+  outline: none !important;
 }
 
 /* ==========================================================================

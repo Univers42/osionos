@@ -80,7 +80,7 @@ export interface PaletteMeta {
   description: string;
   /** the mode the picker card previews (a theme's most flattering face). */
   signatureMode: "light" | "dark";
-  /** [bgPage, bgSurface, accent, update, fgDefault] for the picker swatch card. */
+  /** [bgCanvas, bgSurface, accent, update, fgDefault] for the picker swatch card. */
   swatches: readonly string[];
 }
 

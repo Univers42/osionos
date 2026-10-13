@@ -1,0 +1,55 @@
+/* The Calm canvas shell: the sidebar panel and every pane are rounded cards that
+   float on the canvas, a frame gap apart. These tokens are the only knobs; Zen,
+   compact density and phone widths turn the gap and the radius to 0 so the
+   cards run edge to edge. */
+:root {
+  --osio-frame-gap: 6px;
+  --osio-radius-pane: calc(12px * var(--osio-radius-scale, 1));
+  --osio-pane-border: var(--osio-border-default);
+  --osio-pane-shadow: var(--osio-e1);
+  --osio-pane-outline-active: color-mix(in srgb, var(--osio-accent) 40%, transparent);
+  --osio-pane-outline-offset: 0;
+  /* Resting divider between cards and between the sidebar and a pane: the gap
+     is the divider while there is one. */
+  --osio-pane-seam: transparent;
+  --osio-sidebar-border-end: var(--osio-pane-border);
+  --osio-splitter-hit-min: 6px;
+}
+
+/* Edge to edge, the outline would be clipped by the window at the outer
+   edges: it moves inside the card instead. Card borders and shadows go with
+   the gap (side by side they would double into 2px lines and trace the window
+   edge); one seam hairline per division replaces them. */
+:root[data-density="compact"],
+[data-zen="1"] {
+  --osio-frame-gap: 0px;
+  --osio-radius-pane: 0px;
+  --osio-pane-outline-offset: -1px;
+  --osio-pane-border: transparent;
+  --osio-pane-shadow: none;
+  --osio-pane-seam: var(--osio-border-default);
+  --osio-sidebar-border-end: var(--osio-border-default);
+}
+
+@media (max-width: 767.98px) {
+  :root {
+    --osio-frame-gap: 0px;
+    --osio-radius-pane: 0px;
+    --osio-pane-outline-offset: -1px;
+    --osio-pane-border: transparent;
+    --osio-pane-shadow: none;
+    --osio-pane-seam: var(--osio-border-default);
+    --osio-sidebar-border-end: var(--osio-border-default);
+  }
+}
+
+[data-osio-pane-active] {
+  outline: 1px solid var(--osio-pane-outline-active);
+  outline-offset: var(--osio-pane-outline-offset);
+}
+
+/* Resizing relayouts the panes every frame; a blurred shadow behind each one
+   is paint work the drag does not need. */
+body[data-pane-resizing] [data-osio-pane] {
+  box-shadow: none;
+}

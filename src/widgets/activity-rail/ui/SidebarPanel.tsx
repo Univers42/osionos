@@ -87,7 +87,7 @@ export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, o
 
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[var(--osio-bg-subtle)]" onKeyDown={returnFocusToContent}>
+    <div className="flex h-full min-h-0 flex-col" onKeyDown={returnFocusToContent}>
       <WorkspaceSwitcher />
       <div className="flex h-8 items-center justify-between px-3">
         <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--osio-fg-subtle)]">

@@ -26,7 +26,7 @@ test("the registry entry for the default palette carries its swatches, id and la
   const light = resolved("light");
   const warm = PICKER_PALETTES.find((palette: { id: string }) => idOf(palette) === defaultPalette.id);
   assert.deepEqual(warm.swatches, [
-    light["--osio-bg-page"],
+    light["--osio-bg-canvas"],
     light["--osio-bg-surface"],
     light["--osio-accent"],
     light["--osio-update"],

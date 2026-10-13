@@ -11,7 +11,7 @@ export const ALIASES = {
   "--osio-bg-canvas": "--osio-n-0",
   "--osio-bg-surface": "--osio-n-1",
   "--osio-bg-panel": "--osio-bg-surface",
-  "--osio-bg-page": "--osio-n-2",
+  "--osio-bg-page": "--osio-n-1",
   "--osio-bg-subtle": "--osio-n-3",
   "--osio-bg-muted": "--osio-n-4",
   "--osio-bg-hover": "--osio-n-5",
