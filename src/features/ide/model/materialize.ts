@@ -142,3 +142,10 @@ export async function materializeWorkspace(
   }
   return { written: report.written.length, failed: report.skipped.length, report };
 }
+
+/** The "ready" task: reconcile, then one Output line with the counts. */
+export async function attachSandbox(workspaceId: string, options: MaterializeOptions = {}): Promise<void> {
+  const { written, failed } = await materializeWorkspace(workspaceId, [], options);
+  ideOutput("fs-sync", `sandbox attached — materialized ${written} files${failed > 0 ? `, ${failed} FAILED` : ""}`);
+  if (failed > 0) console.warn(`[ide] materialize: ${failed} of ${written + failed} files failed to reach the sandbox`);
+}

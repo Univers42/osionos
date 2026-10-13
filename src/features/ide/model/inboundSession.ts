@@ -20,7 +20,7 @@ import { sha16, type FsEvent } from "./ideFsEcho";
 import { ideOutput } from "./ideOutputBus";
 import { executeSteps, type ExecContext, type ExecOutcome } from "./inboundExec";
 import { createInboundPending, type Schedule } from "./inboundPending";
-import { decodeUtf8Strict } from "./inboundPipeline";
+import { decodeUtf8Strict, type SerialQueue } from "./inboundPipeline";
 import { planInbound, type InboundEvent } from "./inboundPlan";
 import { createInboundView, type ExecView } from "./inboundView";
 
@@ -77,6 +77,21 @@ export function createInboundSession(deps: InboundSessionDeps): InboundSession {
     run,
     dispose: () => pending.dispose(),
   };
+}
+
+export interface FsEventRoute {
+  isLeader(): boolean;
+  queue: SerialQueue;
+  session: InboundSession;
+  /** The "ready" task: reconcile the whole tree; it runs inside the queue. */
+  attach(): Promise<void>;
+}
+
+/** One parsed socket event onto the queue — leader tab only, since the bridge
+ *  runs one fs-agent per socket and every open tab hears every event. O(1). */
+export function routeFsEvent(evt: FsEvent, route: FsEventRoute): void {
+  if (!route.isLeader()) return;
+  void route.queue.run(evt.event === "ready" ? route.attach : () => route.session.handle(evt));
 }
 
 /**

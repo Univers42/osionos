@@ -20,21 +20,24 @@ import { ideOutput } from "./ideOutputBus";
 import { createReconnectBackoff } from "./reconnectBackoff";
 import { isSandboxOnline, useSandboxHealthStore } from "./sandboxHealthStore";
 import { isDeliberateClose } from "./wsCloseCodes";
-import { applyFsEvent } from "./applyFsEvent";
+import { createLiveInboundSession } from "./inboundLive";
 import { createSerialQueue, acquireInboundLeadership } from "./inboundPipeline";
+import { routeFsEvent } from "./inboundSession";
+import { attachSandbox } from "./materialize";
 
 /**
  * Live writeback (P4): streams the in-sandbox fs-agent's events, PUBLISHES them
  * on the per-workspace bus (the sandbox:// provider's watch() rides the same
- * socket), and maps them onto the page mount via the sync engine. On "ready"
- * it materializes the tree. Dials only while the shared sandbox health is online;
+ * socket), and hands them to the inbound session (decode → plan → execute). On
+ * "ready" it reconciles the tree. Dials only while the shared sandbox health is online;
  * a deliberate server close parks (health store owns the state, no timer), any
  * other close re-probes and reconnects with 1s/4s/15s backoff (reconnectBackoff).
  *
  * One serial queue + one Web-Locks leadership per connection: events apply
  * first-in-first-out (a burst of writes can no longer race the ledger), and
  * only the leader tab applies — the bridge runs one fs-agent per socket, so
- * without the lock every open tab would apply every event.
+ * without the lock every open tab would apply every event. The session (its
+ * delete windows and restore memory) lives exactly as long as the effect (B5).
  */
 export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
   const online = useSandboxHealthStore((s) => isSandboxOnline(s.state));
@@ -57,6 +60,8 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
     // tabs editing one page yields a spurious conflict (placeholderText is lost
     // on the round trip). Gating the writer too was judged not worth it.
     const leadership = acquireInboundLeadership(workspaceId, globalThis.navigator?.locks);
+    const session = createLiveInboundSession(workspaceId, queue);
+    const route = { isLeader: () => leadership.isLeader(), queue, session, attach: () => attachSandbox(workspaceId) };
 
     const connect = () => {
       const jwt = getActivePageJwt() ?? "";
@@ -76,7 +81,7 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
           const evt = parseFsEvent(line);
           if (!evt) continue;
           publishFsEvent(workspaceId, evt);
-          if (leadership.isLeader()) void queue.run(() => applyFsEvent(evt, workspaceId));
+          routeFsEvent(evt, route);
         }
       };
       ws.onclose = (ev) => {
@@ -103,6 +108,7 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
     connect();
     return () => {
       disposed = true;
+      session.dispose();
       leadership.release();
       if (timer) clearTimeout(timer);
       try { ws?.close(); } catch { /* already closed */ }
