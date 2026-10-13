@@ -15,16 +15,18 @@ import { useMemo } from "react";
 import { usePageStore } from "@/store/usePageStore";
 import type { PageEntry } from "@/entities/page";
 
-import { buildPageIndex, type PageIndex } from "./pageIndex";
+import type { PageIndex } from "./pageIndex";
+import { pageIndexFor } from "./pageIndexCache";
 
 const NO_PAGES: readonly PageEntry[] = [];
 
 /**
- * The page index of one workspace, rebuilt only when its pages array changes identity.
- * Ponytail: any page edit replaces the array and rebuilds the whole index (O(n log n) per
- * edit) — fine for thousands of pages, unmeasured above that.
+ * The page index of one workspace, rebuilt only when a page's index fields change.
+ * Ponytail: the cache keys on workspace id and keeps the last pages array it saw, so a
+ * workspace left behind (switched away from, logged out of) stays reachable through it,
+ * blocks included, until the tab reloads; nothing drops it.
  */
 export function usePageIndex(workspaceId: string): PageIndex {
   const pages = usePageStore((state) => state.pages[workspaceId]) ?? NO_PAGES;
-  return useMemo(() => buildPageIndex(pages), [pages]);
+  return useMemo(() => pageIndexFor(workspaceId, pages), [workspaceId, pages]);
 }
