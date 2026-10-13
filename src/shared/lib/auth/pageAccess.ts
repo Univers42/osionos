@@ -215,3 +215,13 @@ export function getPageCollaboratorList(
     ? collaborators.map((collaborator) => ({ ...collaborator }))
     : [];
 }
+
+/** Returns true when the current user may change this page's visibility.
+ *  Editing a page and deciding who sees it are different rights; the server
+ *  always accepts the owner. O(1). */
+export function canChangePageVisibility(
+  page: PageEntry,
+  context: PageAccessContext | null,
+): boolean {
+  return page.ownerId != null && context !== null && page.ownerId === context.userId;
+}

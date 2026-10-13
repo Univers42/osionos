@@ -27,7 +27,7 @@ import type { MenuActionCtx } from "@/features/page-management/context-menu/type
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useToastStore } from "@osionos/ui/primitives";
 import { usePageRowDnd } from "./usePageRowDnd";
-import { useSidebarTreeDnd } from "../model/sidebarTreeDnd";
+import { useDragSession } from "@/store/dragSession";
 import { useDevMode } from "@/shared/config/useDevMode";
 import { languageForFileName } from "@/features/ide/model/ideLanguages";
 
@@ -64,7 +64,7 @@ export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspace
   const childPageIds = usePageStore(useShallow((s) => selectChildPageIds(s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES, pageId, workspaceId)));
   const accessContext = usePageAccessContext();
   const isActive = useIsActivePage(pageId);
-  const collapseToken = useSidebarTreeDnd((s) => s.collapseToken);
+  const collapseToken = useDragSession((s) => s.collapseToken);
   const devMode = useDevMode((s) => s.dev);
 
   const children = useMemo(() => childPageIds, [childPageIds]);

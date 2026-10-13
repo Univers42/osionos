@@ -14,7 +14,7 @@ import type { VisibleItem } from "./explorerRows";
 
 export type ExplorerKeyAction =
   | { type: "focus"; rel: string }
-  | { type: "expand" | "collapse" | "activate" | "rename" | "delete"; rel: string };
+  | { type: "expand" | "collapse" | "activate" | "rename" | "delete" | "menu"; rel: string };
 
 /** WAI-ARIA tree keyboard map as a pure function of the visible list, so it is
  *  testable without a DOM. Moving items by keyboard is out of scope: drag-and-drop
@@ -47,6 +47,7 @@ export function explorerKeyAction(
     case "Enter": return { type: "activate", rel: current.rel };
     case "F2": return { type: "rename", rel: current.rel };
     case "Delete": return { type: "delete", rel: current.rel };
+    case "ContextMenu": return { type: "menu", rel: current.rel };
     default: return null;
   }
 }

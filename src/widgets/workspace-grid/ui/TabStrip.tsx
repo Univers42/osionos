@@ -13,7 +13,7 @@
 import React, { useRef, useState } from "react";
 import { SplitSquareHorizontal, SplitSquareVertical, X } from "lucide-react";
 import { IconButton } from "@osionos/ui/atoms/IconButton";
-import { useSidebarTreeDnd } from "@/widgets/sidebar/model/sidebarTreeDnd";
+import { useDragSession } from "@/store/dragSession";
 import { usePageStore } from "@/store/usePageStore";
 import { useWorkspaceLayout } from "../model/workspaceLayout";
 import { pageEntryToTab } from "../model/pageToTab";
@@ -37,7 +37,7 @@ const InsertBar: React.FC = () => (
 export const TabStrip: React.FC<{ pane: PaneNode }> = ({ pane }) => {
   const { setActiveTab, closeTab, setActivePane, splitActivePane, closePane, moveTab, openTabAt, replaceTabWith } =
     useWorkspaceLayout.getState();
-  const endDrag = useSidebarTreeDnd((s) => s.endDrag);
+  const endDrag = useDragSession((s) => s.endDrag);
   const listRef = useRef<HTMLDivElement>(null);
   const [hint, setHint] = useState<DropHint | null>(null);
 
@@ -59,7 +59,7 @@ export const TabStrip: React.FC<{ pane: PaneNode }> = ({ pane }) => {
   // gated `onDragOver={dndActive ? … : undefined}` attachment was racing the
   // native drag events and silently rejecting drops.
   function onDragOver(event: React.DragEvent<HTMLDivElement>) {
-    const kind = useSidebarTreeDnd.getState().dragKind;
+    const kind = useDragSession.getState().dragKind;
     if (kind !== "page" && kind !== "tab") return;
     event.preventDefault(); // REQUIRED — without it the browser refuses the drop
     if (kind === "page") {
@@ -73,7 +73,7 @@ export const TabStrip: React.FC<{ pane: PaneNode }> = ({ pane }) => {
   }
 
   function onDrop(event: React.DragEvent<HTMLDivElement>) {
-    const kind = useSidebarTreeDnd.getState().dragKind;
+    const kind = useDragSession.getState().dragKind;
     if (kind !== "page" && kind !== "tab") return;
     event.preventDefault();
     event.stopPropagation();
@@ -88,7 +88,7 @@ export const TabStrip: React.FC<{ pane: PaneNode }> = ({ pane }) => {
       setHint(null);
       return;
     }
-    const pageId = event.dataTransfer.getData("text/plain") || useSidebarTreeDnd.getState().draggingId || "";
+    const pageId = event.dataTransfer.getData("text/plain") || useDragSession.getState().draggingId || "";
     const page = pageId ? usePageStore.getState().pageById(pageId) : null;
     const drop = computeHint(event.clientX);
     if (page && page.surface !== "folder") {

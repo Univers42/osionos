@@ -12,7 +12,7 @@
 
 import { createContext, useContext } from "react";
 
-import type { DirState, ExplorerRow } from "../model/explorerRows";
+import type { DirState, ExplorerRow, ExplorerRowKind } from "../model/explorerRows";
 
 export type ExplorerPending =
   | { type: "create"; parent: string; kind: "file" | "dir" }
@@ -26,7 +26,9 @@ export type ExplorerContextValue = {
   expanded: ReadonlySet<string>;
   /** The one row with tabIndex 0 (roving tabindex). */
   tabbableRel: string;
-  activeRel: string | undefined;
+  /** Resolves a row's (rel, kind) to its page ID, if any. Undefined when the
+   *  explorer is used without a workspace (sandbox) or for non-page rows. */
+  pageIdOf: ((rel: string, kind: ExplorerRowKind) => string | undefined) | undefined;
   pending: ExplorerPending | null;
   focusRow(rel: string): void;
   activate(rel: string, row: ExplorerRow): void;
@@ -35,6 +37,9 @@ export type ExplorerContextValue = {
   cancelEdit(): void;
   moveTo(fromRel: string, targetDir: string): void;
   retry(dir: string): void;
+  /** Opens the page actions menu for the given row. The host widget wires the
+   *  actual PageContextMenu; the explorer only reports the request. */
+  openMenu(rel: string, row: ExplorerRow, at: { x: number; y: number }): void;
 };
 
 const ExplorerContext = createContext<ExplorerContextValue | null>(null);

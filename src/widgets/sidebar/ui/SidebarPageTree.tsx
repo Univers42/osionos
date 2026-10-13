@@ -27,7 +27,7 @@ import { OsionosAppsSection } from "./OsionosAppsSection";
 import { RecentPageActions, RecentPageRow } from "./RecentPageRow";
 import { PageTreeRows } from "./PageTreeItem";
 import { SidebarTreeToolbar } from "./SidebarTreeToolbar";
-import { useSidebarTreeDnd } from "../model/sidebarTreeDnd";
+import { useDragSession } from "@/store/dragSession";
 import { selectRootPageIds } from "./pageTreeItem.helpers";
 import { usePageStore } from "@/store/usePageStore";
 import { usePageAccessContext } from "@/shared/lib/auth/pageAccess";
@@ -95,7 +95,7 @@ function channelTypeLabel(type: WorkspaceChannelType): string {
 /** A drop target shown inside the Private/Shared sections during a page drag —
  *  drop a file here to move it to that visibility (Alt/Ctrl = duplicate instead). */
 const SectionDropZone: React.FC<{ visibility: "private" | "shared"; workspaceId: string }> = ({ visibility, workspaceId }) => {
-  const active = useSidebarTreeDnd((s) => s.dragKind === "page");
+  const active = useDragSession((s) => s.dragKind === "page");
   const [over, setOver] = useState(false);
   if (!active) return null;
   return (
@@ -105,9 +105,9 @@ const SectionDropZone: React.FC<{ visibility: "private" | "shared"; workspaceId:
       onDrop={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        const id = e.dataTransfer.getData("text/plain") || useSidebarTreeDnd.getState().draggingId || "";
+        const id = e.dataTransfer.getData("text/plain") || useDragSession.getState().draggingId || "";
         const page = id ? usePageStore.getState().pageById(id) : null;
-        useSidebarTreeDnd.getState().endDrag();
+        useDragSession.getState().endDrag();
         setOver(false);
         if (!page) return;
         if (e.altKey || e.ctrlKey || e.metaKey) {
@@ -158,7 +158,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   const devMode = useDevMode((s) => s.dev);
   const showCodeFile = isIdeEnabled() && devMode;
   const fetchPages = usePageStore((s) => s.fetchPages);
-  const bumpCollapse = useSidebarTreeDnd((s) => s.bumpCollapse);
+  const bumpCollapse = useDragSession((s) => s.bumpCollapse);
   const activeUserId = useUserStore((s) => s.activeUserId);
   const workspaceKey = workspaceConfigKey(activeUserId || "anonymous", activeWorkspaceId || "workspace");
   const storedWorkspaceConfig = useWorkspaceConfigStore((s) => s.configs[workspaceKey]);

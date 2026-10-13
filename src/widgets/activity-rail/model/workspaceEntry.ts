@@ -38,3 +38,20 @@ export function pageIdForEntry(
   const index = pageIndexFor(workspaceId, pages);
   return index.idForPath(normalised);
 }
+
+/**
+ * Find the page ID that owns a workspace-relative directory path.
+ * Uses the cached index's `ownerOfDir` (never calls `buildPageIndex` directly).
+ * Returns undefined for unknown directories, "" after normalisation, or if no page owns it.
+ * O(1) map hit on a warm cache; first call after structural change pays O(n log n) in pageIndexFor.
+ */
+export function pageIdForDir(
+  workspaceId: string,
+  pages: readonly PageEntry[],
+  relDir: string,
+): string | undefined {
+  const normalised = normaliseRelPath(relDir);
+  if (normalised === "") return undefined;
+  const index = pageIndexFor(workspaceId, pages);
+  return index.ownerOfDir(normalised);
+}

@@ -45,7 +45,10 @@ export type MenuActionId =
   | "open-containing-folder"
   | "find-in-folder"
   | "images-preview"
-  | "folder-history";
+  | "folder-history"
+  // visibility (both)
+  | "make-private"
+  | "share-with-workspace";
 
 /** A handle to the page store (the hook itself; call `.getState()` for actions). */
 export type PageStoreHandle = typeof usePageStore;

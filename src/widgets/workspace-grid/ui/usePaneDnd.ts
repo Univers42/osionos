@@ -12,7 +12,7 @@
 
 import React, { useState } from "react";
 import { usePageStore } from "@/store/usePageStore";
-import { useSidebarTreeDnd } from "@/widgets/sidebar/model/sidebarTreeDnd";
+import { useDragSession } from "@/store/dragSession";
 import { useWorkspaceLayout } from "../model/workspaceLayout";
 import { pageEntryToTab } from "../model/pageToTab";
 import type { WorkspaceTab } from "../model/layoutTree";
@@ -42,7 +42,7 @@ function readDrop(event: React.DragEvent<HTMLElement>): DroppedItem | null {
 /** Drop behavior for a pane body: center → tab, edge → split. */
 export function usePaneDnd(paneId: string) {
   const [zone, setZone] = useState<DropZone | null>(null);
-  const dragActive = useSidebarTreeDnd((s) => s.dragKind !== null);
+  const dragActive = useDragSession((s) => s.dragKind !== null);
   const { openTab, moveTab, splitWith, splitMoveTab } = useWorkspaceLayout.getState();
 
   function onDragOver(event: React.DragEvent<HTMLElement>) {

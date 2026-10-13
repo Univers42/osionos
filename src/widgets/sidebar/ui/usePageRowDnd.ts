@@ -12,7 +12,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { usePageStore } from "@/store/usePageStore";
-import { useSidebarTreeDnd, type DropMode } from "../model/sidebarTreeDnd";
+import { useDragSession, type DropMode } from "@/store/dragSession";
 import { computeDropMode } from "./pageTreeItem.helpers";
 
 /** Hover-over-a-folder dwell time before it springs open mid-drag. */
@@ -34,12 +34,12 @@ interface RowDndArgs {
  * so the dragged node's whole subtree follows it.
  */
 export function usePageRowDnd({ pageId, workspaceId, canExpand, expanded, onSpringOpen }: RowDndArgs) {
-  const draggingId = useSidebarTreeDnd((s) => s.draggingId);
-  const dropTargetId = useSidebarTreeDnd((s) => s.dropTargetId);
-  const dropMode = useSidebarTreeDnd((s) => s.dropMode);
-  const beginDrag = useSidebarTreeDnd((s) => s.beginDrag);
-  const endDrag = useSidebarTreeDnd((s) => s.endDrag);
-  const setDropTarget = useSidebarTreeDnd((s) => s.setDropTarget);
+  const draggingId = useDragSession((s) => s.draggingId);
+  const dropTargetId = useDragSession((s) => s.dropTargetId);
+  const dropMode = useDragSession((s) => s.dropMode);
+  const beginDrag = useDragSession((s) => s.beginDrag);
+  const endDrag = useDragSession((s) => s.endDrag);
+  const setDropTarget = useDragSession((s) => s.setDropTarget);
   const springTimer = useRef<number | null>(null);
 
   const clearSpring = () => {

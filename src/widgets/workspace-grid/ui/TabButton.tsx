@@ -13,7 +13,7 @@
 import React from "react";
 import { Folder, X } from "lucide-react";
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
-import { useSidebarTreeDnd } from "@/widgets/sidebar/model/sidebarTreeDnd";
+import { useDragSession } from "@/store/dragSession";
 import type { WorkspaceTab } from "../model/layoutTree";
 import { TAB_DND_MIME } from "../model/paneDropZone";
 
@@ -31,8 +31,8 @@ interface Props {
  *  is a normal tab now — its variant picker (Dashboard / Second Brain / Database /
  *  Gallery) moved to the activity rail's Home button (RailHomeButton). */
 export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onClose, replaceTarget }) => {
-  const beginTabDrag = useSidebarTreeDnd((s) => s.beginTabDrag);
-  const endDrag = useSidebarTreeDnd((s) => s.endDrag);
+  const beginTabDrag = useDragSession((s) => s.beginTabDrag);
+  const endDrag = useDragSession((s) => s.endDrag);
   const title = tab.title || (tab.kind === "home" ? "Home" : "Untitled");
 
   return (

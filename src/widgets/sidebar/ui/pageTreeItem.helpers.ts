@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import type { PageEntry, usePageStore } from "@/store/usePageStore";
-import type { DropMode } from "../model/sidebarTreeDnd";
+import type { DropMode } from "@/store/dragSession";
 import { canReadPage, type PageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { createIncrementalGrouping } from "@/shared/lib/collections/incrementalGrouping";
 
