@@ -47,6 +47,13 @@ const IdeRunPanel = React.lazy(() =>
 const IdeProblemsPanel = React.lazy(() =>
   import("@/features/ide/ui/IdeProblemsPanel").then((m) => ({ default: m.IdeProblemsPanel })));
 
+// Workbench flag ON → the VFS explorer, its open handler and the page index load
+// together on demand, so the flag-OFF bundle (eager FilesPanel) does not grow.
+const ExplorerPanel = React.lazy(() =>
+  Promise.all([import("./panels/ExplorerPanel"), import("../model/openWorkspaceEntry")]).then(([panel, entry]) => ({
+    default: (props: Props) => <panel.ExplorerPanel {...props} onOpenFile={entry.openWorkspaceEntry} />,
+  })));
+
 const PANEL_TITLES: Record<ActivePanel, string> = {
   files: "Explorer",
   search: "Search",
@@ -69,9 +76,14 @@ interface Props {
 }
 
 function PanelBody({ panel, onOpenSettings, onOpenTrash, onOpenConsole }: Props & { panel: ActivePanel }) {
+  const workbench = isWorkbenchEnabled();
   switch (panel) {
     case "files":
-      return <FilesPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />;
+      return workbench ? (
+        <ExplorerPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />
+      ) : (
+        <FilesPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />
+      );
     case "search":
       return <SearchPanelSlot />;
     case "agents":
