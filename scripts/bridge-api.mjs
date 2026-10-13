@@ -2112,13 +2112,16 @@ async function handleMarketplaceInstalledWrite(request, response, config, fetchI
 	return true;
 }
 
-/** Publish an app record the caller owns into the marketplace (public + published-locked). */
+/**
+ * Publish an app record the caller owns into the marketplace (public + published-locked).
+ * An app the caller cannot read answers like a missing one; a readable one they do not own is a 403.
+ */
 async function handleMarketplacePublish(request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const pageId = requireUuid(payload.pageId, 'pageId');
 	const row = await fetchPageRow(pageId, config, fetchImpl);
-	if (!row || row.workspace_id !== MARKETPLACE_WORKSPACE_ID) throw Object.assign(new Error('Page not found.'), { status: 404 });
+	if (!isReadableMarketplaceRow(row, authContext.userId)) throw Object.assign(new Error('Page not found.'), { status: 404 });
 	if (!canChangePageSharing(row, authContext.userId)) {
 		throw Object.assign(new Error('Only the owner can publish this app.'), { status: 403 });
 	}
@@ -2205,13 +2208,16 @@ async function handleMarketplaceCreate(request, response, config, fetchImpl) {
 	return true;
 }
 
-/** Owner-only edit of a draft app's title / icon / properties. */
+/**
+ * Owner-only edit of a draft app's title / icon / properties. An app the caller cannot
+ * read answers like a missing one; a readable one they do not own is a 403.
+ */
 async function handleMarketplaceUpdate(appId, request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const id = requireUuid(appId, 'appId');
 	const row = await fetchPageRow(id, config, fetchImpl);
-	if (!row || row.workspace_id !== MARKETPLACE_WORKSPACE_ID) throw Object.assign(new Error('App not found.'), { status: 404 });
-	if (row.owner_id !== authContext.userId) throw Object.assign(new Error('Only the owner can edit this app.'), { status: 403 });
+	if (!isReadableMarketplaceRow(row, authContext.userId)) throw Object.assign(new Error('App not found.'), { status: 404 });
+	if (!sameId(row.owner_id, authContext.userId)) throw Object.assign(new Error('Only the owner can edit this app.'), { status: 403 });
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const patch = { updated_at: new Date().toISOString() };
 	if (hasOwn(payload, 'title')) patch.title = safeText(payload.title, 200) || 'New app';

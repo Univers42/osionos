@@ -30,6 +30,7 @@ const APPS = {
 	draftB: 'b4b4b4b4-2222-4222-8222-b4b4b4b4b4b4',
 	draftA: 'a5a5a5a5-1111-4111-8111-a5a5a5a5a5a5',
 	ownerless: 'e0e0e0e0-5555-4555-8555-e0e0e0e0e0e0',
+	publishedA: 'a8a8a8a8-1111-4111-8111-a8a8a8a8a8a8',
 	childA: 'a9a9a9a9-1111-4111-8111-a9a9a9a9a9a9',
 	childC: 'c9c9c9c9-3333-4333-8333-c9c9c9c9c9c9',
 	childOutside: 'a0a9a0a9-1111-4111-8111-a0a9a0a9a0a9',
@@ -53,6 +54,7 @@ function marketWorld() {
 		marketRow(APPS.draftB, IDS.userB, 'private'),
 		marketRow(APPS.draftA, IDS.userA, 'private'),
 		marketRow(APPS.ownerless, null, 'private'),
+		marketRow(APPS.publishedA, IDS.userA, 'public'),
 	);
 	return world;
 }
@@ -112,12 +114,14 @@ describe('sharing keys from a non-owner are ignored, never a 403', () => {
 });
 
 describe('marketplace publishing and app pages', () => {
-	it('refuses to publish an ownerless app and leaves it unchanged', async () => {
+	it('answers publishing an ownerless private app like a missing app and leaves it unchanged', async () => {
 		const mock = createPostgrestMock(marketWorld());
 		const before = structuredClone(mock.page(APPS.ownerless));
 		await withBridge(config, mock.fetchImpl, async (base) => {
 			const result = await send(base, '/api/marketplace/publish', asB, post({ pageId: APPS.ownerless }));
-			assert.equal(result.status, 403, result.text);
+			const missing = await send(base, '/api/marketplace/publish', asB, post({ pageId: IDS.missing }));
+			assert.equal(result.status, 404, result.text);
+			assert.deepEqual([result.status, result.body], [missing.status, missing.body]);
 			assert.deepEqual(mock.page(APPS.ownerless), before);
 		});
 	});
@@ -198,6 +202,52 @@ describe('record note ownership', () => {
 			assert.equal(mock.page(noteId).owner_id, IDS.userA);
 			assert.equal((await send(base, `/api/pages/${noteId}`, asB)).status, 200);
 			assert.equal((await send(base, `/api/pages/${noteId}`, asA)).status, 200);
+		});
+	});
+});
+
+describe('marketplace edit and publish answer an app the caller cannot read like a missing app', () => {
+	const ROUTES = {
+		edit: (base, appId, headers) => send(base, `/api/marketplace/apps/${appId}`, headers, patch({ title: 'Renamed' })),
+		publish: (base, appId, headers) => send(base, '/api/marketplace/publish', headers, post({ pageId: appId })),
+	};
+	const UNREADABLE = {
+		'another user\'s draft app': APPS.draftA,
+		'an ownerless private app': APPS.ownerless,
+		'the caller\'s own page outside the marketplace': IDS.pageB,
+	};
+	for (const [routeName, route] of Object.entries(ROUTES)) {
+		it(`${routeName}: one 404 for a missing app and every app the caller cannot read, rows unchanged`, async () => {
+			const mock = createPostgrestMock(marketWorld());
+			const before = structuredClone(mock.rows('osionos_pages'));
+			await withBridge(config, mock.fetchImpl, async (base) => {
+				const missing = await route(base, IDS.missing, asB);
+				assert.equal(missing.status, 404, missing.text);
+				for (const [name, appId] of Object.entries(UNREADABLE)) {
+					const denied = await route(base, appId, asB);
+					assert.deepEqual([denied.status, denied.body], [missing.status, missing.body], name);
+				}
+				assert.deepEqual(mock.rows('osionos_pages'), before);
+			});
+		});
+
+		it(`${routeName}: 403 for another user's public app, row unchanged`, async () => {
+			const mock = createPostgrestMock(marketWorld());
+			const before = structuredClone(mock.page(APPS.publishedA));
+			await withBridge(config, mock.fetchImpl, async (base) => {
+				const denied = await route(base, APPS.publishedA, asB);
+				assert.equal(denied.status, 403, denied.text);
+				assert.deepEqual(mock.page(APPS.publishedA), before);
+			});
+		});
+	}
+
+	it('edit: the owner with an upper-case token id edits their own app', async () => {
+		const mock = createPostgrestMock(marketWorld());
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const edited = await send(base, `/api/marketplace/apps/${APPS.draftA}`, sessionHeaders(config, IDS.userA.toUpperCase(), IDS.homeA), patch({ title: 'Renamed by A' }));
+			assert.equal(edited.status, 200, edited.text);
+			assert.equal(mock.page(APPS.draftA).title, 'Renamed by A');
 		});
 	});
 });
