@@ -15,9 +15,7 @@ import { PanelLeftClose } from "lucide-react";
 import { WorkspaceSwitcher } from "@/features/auth";
 import { IconButton } from "@/shared/ui";
 import { useUIStore, type ActivePanel } from "@/shared/config/uiStore";
-import { isWorkbenchEnabled } from "@/shared/config/featureFlags";
 import { visiblePanel } from "../model/railItems";
-import { FilesPanel } from "./panels/FilesPanel";
 
 // Only the default Explorer panel loads eagerly — every other panel mounts on
 // demand when its rail icon is clicked. Static imports here were a warm-chunk
@@ -47,8 +45,7 @@ const IdeRunPanel = React.lazy(() =>
 const IdeProblemsPanel = React.lazy(() =>
   import("@/features/ide/ui/IdeProblemsPanel").then((m) => ({ default: m.IdeProblemsPanel })));
 
-// Workbench flag ON → the VFS explorer, its open handler and the page index load
-// together on demand, so the flag-OFF bundle (eager FilesPanel) does not grow.
+// The Explorer and its open handler load together on demand.
 const ExplorerPanel = React.lazy(() =>
   Promise.all([import("./panels/ExplorerPanel"), import("../model/openWorkspaceEntry")]).then(([panel, entry]) => ({
     default: (props: Props) => <panel.ExplorerPanel {...props} onOpenFile={entry.openWorkspaceEntry} />,
@@ -76,13 +73,10 @@ interface Props {
 }
 
 function PanelBody({ panel, onOpenSettings, onOpenTrash, onOpenConsole }: Props & { panel: ActivePanel }) {
-  const workbench = isWorkbenchEnabled();
   switch (panel) {
     case "files":
-      return workbench ? (
+      return (
         <ExplorerPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />
-      ) : (
-        <FilesPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />
       );
     case "search":
       return <SearchPanelSlot />;
@@ -117,7 +111,7 @@ function PanelBody({ panel, onOpenSettings, onOpenTrash, onOpenConsole }: Props 
 export const SidebarPanel = React.memo(function SidebarPanel(handlers: Props) {
   const activePanel = useUIStore((s) => s.activePanel);
   const collapseToRail = useUIStore((s) => s.collapseToRail);
-  const panel = visiblePanel(activePanel, isWorkbenchEnabled());
+  const panel = visiblePanel(activePanel, true);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--osio-bg-subtle)]">

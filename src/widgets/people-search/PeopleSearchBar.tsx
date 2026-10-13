@@ -11,8 +11,8 @@
 /* ************************************************************************** */
 
 /**
- * Topbar people search (mounted from SidebarTopNav's search button): type a
- * name, open the member's profile tab, or jump straight into a DM.
+ * Topbar people search: type a name, open the member's profile tab, or jump
+ * straight into a DM.
  */
 
 import React, { useRef, useState } from 'react';

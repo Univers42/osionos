@@ -63,7 +63,7 @@ export const TabStrip: React.FC<{ pane: PaneNode }> = ({ pane }) => {
     if (kind !== "page" && kind !== "tab") return;
     event.preventDefault(); // REQUIRED — without it the browser refuses the drop
     if (kind === "page") {
-      // MUST match the drag source's effectAllowed ("move", set in usePageRowDnd) —
+      // MUST match the drag source's effectAllowed ("move", set in src/features/ide/ui/WorkspaceExplorerRow.tsx) —
       // a "copy" dropEffect against an effectAllowed of "move" is incompatible, so
       // the browser silently CANCELS the drop (onDragOver shows the hint but the
       // drop event never fires). This was why the tab never landed.

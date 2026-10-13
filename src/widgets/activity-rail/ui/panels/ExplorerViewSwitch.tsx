@@ -13,7 +13,7 @@
 /**
  * Segmented toggle at the top of the Explorer panel: present the workspace as the
  * file TREE or the folders GALLERY. Picking "Gallery" swaps THIS sidebar's body to
- * the folder list (FilesPanel reads useExplorerView) AND opens the cover-card
+ * the folder list (ExplorerPanel reads useExplorerView) AND opens the cover-card
  * gallery in the editor area — one sidebar, no redundant second rail.
  */
 

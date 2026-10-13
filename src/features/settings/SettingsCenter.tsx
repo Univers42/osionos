@@ -62,7 +62,6 @@ import { WorkspaceThemeControls } from '@/features/theme/WorkspaceThemePanel';
 import { importPageFile } from '@/services/page-actions';
 import { API_BASE, api, getActiveJwt } from '@/shared/api/client';
 import { useAssetLibraryStore, type AccountAsset, type AccountAssetKind } from '@/shared/config/assetLibraryStore';
-import { useUIStore } from '@/shared/config/uiStore';
 import { usePageStore } from '@/store/usePageStore';
 import { derivePageState } from '@/store/pageStore.helpers';
 import {
@@ -969,8 +968,6 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
     () => [...(activeSession?.privateWorkspaces ?? []), ...(activeSession?.sharedWorkspaces ?? [])],
     [activeSession],
   );
-  const setUseNewSidebar = useUIStore((state) => state.setUseNewSidebar);
-  const setShowOtherApps = useUIStore((state) => state.setShowOtherApps);
   const pages = usePageStore((state) => state.pages[workspaceId] ?? EMPTY_PAGES);
   const workspaceMembers = useWorkspaceMembersStore((state) => state.data[workspaceId] ?? EMPTY_WORKSPACE_MEMBERS);
   const storedSettings = useWorkspaceSettingsStore((state) => state.data[workspaceId]);
@@ -979,7 +976,6 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
   const reset = useWorkspaceSettingsStore((state) => state.reset);
   const fallbackSettings = useMemo<WorkspaceSettings>(() => defaultWorkspaceSettings(workspaceId, workspaceName), [workspaceId, workspaceName]);
   const settings = storedSettings ?? fallbackSettings;
-  const sidebar = settings.sidebar as { newSidebar?: boolean; showApps?: boolean };
   const analytics = settings.analytics as { pageViews?: boolean };
   const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
@@ -1038,10 +1034,6 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
         <SettingRow stack title="Workspace name" description="Your workspace name can be up to 65 characters" action={<input aria-label="Workspace name" className="w-full max-w-[400px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={workspaceNameDraft} maxLength={65} onChange={(event) => setWorkspaceNameDraft(event.target.value)} />} />
         <SettingRow stack title="Icon" description="Upload an image or pick an emoji. This icon will appear in your sidebar and notifications." action={<div className="relative"><button type="button" className="flex h-[72px] w-[72px] items-center justify-center rounded-md border border-[var(--osio-border-default)] text-5xl" onClick={() => setIconPickerOpen((open) => !open)}><IconValueView value={settings.icon ?? '🌏'} size={44} /></button>{iconPickerOpen && <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2"><EmojiPicker current={settings.icon ?? '🌏'} onSelect={(value) => { update(resolvedUserId, workspaceId, { icon: value }); renameWorkspace(workspaceId, settings.name, value); setIconPickerOpen(false); }} onRemove={() => { update(resolvedUserId, workspaceId, { icon: undefined }); setIconPickerOpen(false); }} onClose={() => setIconPickerOpen(false)} /></div>}</div>} />
         <SettingRow title="Custom landing page" description={<>When a new member joins this workspace, a copy of this page will be added to their <b>Private</b> pages</>} action={<Button onClick={() => setModal({ name: 'page-selector' })}>{settings.landingPageId ? 'Change page' : 'Select page'}</Button>} />
-      </Section>
-      <Section title="Sidebar">
-        <SettingRow title={<span className="inline-flex items-center gap-2">Try the new sidebar <span className="rounded bg-[var(--osio-accent-soft)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">New</span></span>} description="Keep your pages, meetings, and AI within reach." action={<Switch checked={sidebar.newSidebar ?? true} onChange={(checked) => { setUseNewSidebar(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, newSidebar: checked } }); }} />} />
-        <SettingRow title="Show other osionos apps in sidebar" description="Show osionos Calendar and osionos Mail in your sidebar" action={<Switch checked={sidebar.showApps ?? true} onChange={(checked) => { setShowOtherApps(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, showApps: checked } }); }} />} />
       </Section>
       <Section title="Export">
         <SettingRow title="Workspace content" description={`Export all pages in ${settings.name}. This can take longer depending on the size of the workspace.`} action={<Button onClick={() => runAsync(exportWorkspaceContent())}>Export</Button>} />
