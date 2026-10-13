@@ -37,7 +37,10 @@ import type { Schedule } from "./inboundPending";
 type CreateStep = Extract<InboundStep, { op: "create" }>;
 type Deferred = { step: CreateStep; parentId: string | null; name: string };
 
-/** A batch this size is made at once: it bounds one flush's main-thread time. */
+/** A batch this size is made at once: it bounds one flush's main-thread time.
+ *  Ponytail: sized on the fixture store (256 creates over 64 directories, 21–25 ms
+ *  against C1.4's 50 ms, inbound-burst.bench.ts); new directories and the live store's
+ *  round trips are outside that number, so a flush there can run past 50 ms. */
 export const FLUSH_MAX_CREATES = 256;
 
 export interface DrainDeps {
