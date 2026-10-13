@@ -16,6 +16,7 @@
  * new DM. Hidden entirely when the bridge has no chat endpoints.
  */
 
+import { matchingByName } from "@/shared/lib/text/matchingByName";
 import React, { useMemo, useState } from 'react';
 import { MessageCircle, Plus, Users } from 'lucide-react';
 
@@ -42,7 +43,8 @@ function openChannelTab(channel: ChatChannel) {
   });
 }
 
-export const DmList: React.FC = () => {
+/** `filter` narrows the list by name (case-insensitive); empty shows all. */
+export const DmList: React.FC<{ filter?: string }> = ({ filter = "" }) => {
   const { channels, loading, available, reload } = useDmChannels();
   const counts = useUnreadStore((s) => s.counts);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -112,7 +114,7 @@ export const DmList: React.FC = () => {
         </div>
       )}
       <ul className="mt-1 space-y-0.5">
-        {channels.map((channel) => (
+        {matchingByName(channels, filter).map((channel) => (
           <li key={channel.id}>
             <button
               type="button"

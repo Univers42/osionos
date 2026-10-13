@@ -15,64 +15,33 @@
   height: 100%;
   flex-shrink: 0;
   z-index: var(--osio-z-sidebar);
-}
-
-.panel {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
   background: var(--osio-bg-subtle);
   border-right: 1px solid var(--osio-border-default);
-  transition: width var(--osio-motion-standard);
 }
 
-.rail {
+/* The panel beside the rail. No width transition: docking is instant, so the
+   editor next to it is laid out once, not on every animation frame. The inner
+   box keeps the committed width, so a drag clips it instead of re-wrapping
+   every row per frame (VS Code-style). */
+.panel {
   position: relative;
+  min-height: 0;
   height: 100%;
   overflow: hidden;
+  border-left: 1px solid var(--osio-border-default);
 }
 
-/* Rail + panel are PERSISTENT layers that crossfade: crossing the drag
-   threshold or toggling modes flips a class — it never mounts/unmounts the
-   heavy panel subtree (the old content swap was a mid-drag mount storm).
-   Each layer keeps its own fixed width (committed panel width / rail width),
-   so a narrowing container CLIPS it, VSCode-style — rows never re-wrap per
-   drag frame. visibility:hidden keeps the hidden layer out of the a11y tree
-   and tab order; its 90ms delay matches the --osio-motion-fast duration so
-   it flips only after the fade-out completes. */
-.layer {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
+.panel[hidden] {
+  display: none;
+}
+
+.panelInner {
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity var(--osio-motion-fast), visibility 0s linear 90ms;
 }
 
-.layerVisible {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transition: opacity var(--osio-motion-fast);
-}
-
-/* During an active drag the width is written every frame; kill the transition
-   so the edge tracks the pointer 1:1 (the body flag is set by useSidebarResize). */
-:global(body[data-sidebar-resizing]) .panel {
-  transition: none;
-}
-
-/* The drag handle is a thin flex column at the sidebar's right edge — stays
-   mounted across panel<->rail-preview swaps so the pointer-capture drag survives. */
 .resizeHandle {
   position: relative;
   flex: 0 0 6px;
@@ -101,9 +70,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .panel,
-  .layer,
-  .layerVisible {
+  .resizeHandle::after {
     transition: none;
   }
 }

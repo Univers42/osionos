@@ -21,13 +21,29 @@ export type ActivePanel =
   | 'search'
   | 'marketplace'
   | 'agents'
-  | 'messenger'
+  | 'conversations'
   | 'notifications'
   | 'tasks'
   | 'public'
   | 'database';
 
 /** Panel-width bounds (px). The rail itself is a fixed ~48px, set in CSS. */
+/** Where Ctrl+Alt+B goes from `mode`: a docked sidebar (panel or rail) hides,
+ *  a hidden one comes back as it was docked last. */
+export function nextSidebarMode(mode: SidebarMode, lastDocked: Exclude<SidebarMode, 'hidden'>): SidebarMode {
+  return mode === 'hidden' ? lastDocked : 'hidden';
+}
+
+/** Panel ids that were renamed: a stored old id still opens the right panel. */
+export function migratePanelId(panel: unknown): ActivePanel {
+  if (panel === 'messenger') return 'conversations';
+  return typeof panel === 'string' && KNOWN_PANELS.has(panel as ActivePanel) ? (panel as ActivePanel) : 'files';
+}
+
+const KNOWN_PANELS = new Set<ActivePanel>([
+  'files', 'search', 'marketplace', 'agents', 'conversations', 'notifications', 'tasks', 'public', 'database',
+]);
+
 export const PANEL_MIN_WIDTH = 160;
 export const PANEL_MAX_WIDTH = 480;
 const clampPanelWidth = (width: number) =>
@@ -45,6 +61,10 @@ interface UIStore {
   collapseToRail: () => void;
   hide: () => void;
   reveal: () => void;
+  /** The docked mode Ctrl+Alt+B returns to after hiding. */
+  lastDockedMode: Exclude<SidebarMode, 'hidden'>;
+  /** Ctrl+Alt+B: hide a docked sidebar, bring a hidden one back as it was. */
+  toggleDocked: () => void;
 
   // --- legacy fields kept for back-compat (still read by Sidebar/Settings/TopBar) ---
   isSidebarOpen: boolean; // mirror of (sidebarMode !== 'hidden')
@@ -58,21 +78,53 @@ interface UIStore {
   toggleSidebar: () => void;
 }
 
+/** Persisted-state migration. v0 → v1: the old {isSidebarOpen, width} blob
+ *  maps onto the mode machine. v1 → v2: the panel id "messenger" became
+ *  "conversations" and Ctrl+Alt+B remembers the docked mode. */
+export function migrateUiState(persisted: unknown, version: number): UIStore {
+  const prev = (persisted ?? {}) as Partial<UIStore>;
+  if (version < 1) {
+    const open = prev.isSidebarOpen !== false;
+    return {
+      ...prev,
+      sidebarMode: open ? 'panel' : 'hidden',
+      activePanel: 'files',
+      isSidebarOpen: open,
+      sidebarWidth: clampPanelWidth(prev.sidebarWidth ?? 260),
+      useNewSidebar: prev.useNewSidebar ?? true,
+      showOtherApps: prev.showOtherApps ?? true,
+      lastDockedMode: 'panel',
+    } as UIStore;
+  }
+  if (version < 2) {
+    const mode = prev.sidebarMode ?? 'panel';
+    return {
+      ...prev,
+      activePanel: migratePanelId(prev.activePanel),
+      lastDockedMode: mode === 'rail' ? 'rail' : 'panel',
+    } as UIStore;
+  }
+  return prev as UIStore;
+}
+
 /**
  * Shared store for layout and UI state, persisted to localStorage so the
  * sidebar mode/width survive reloads. The sidebar is a small state machine
  * (panel | rail | hidden); `isSidebarOpen` is kept as a derived mirror so the
- * older call-sites (WorkspaceSwitcher, SidebarTrigger, TopBar) keep working.
+ * older call-sites (Settings, Sidebar) keep working.
  */
 export const useUIStore = create<UIStore>()(
   persist(
     (set, get) => {
       // Every mode change also refreshes the `isSidebarOpen` compat mirror.
       const applyMode = (mode: SidebarMode) =>
-        set({ sidebarMode: mode, isSidebarOpen: mode !== 'hidden' });
+        set(mode === 'hidden'
+          ? { sidebarMode: mode, isSidebarOpen: false }
+          : { sidebarMode: mode, isSidebarOpen: true, lastDockedMode: mode });
 
       return {
         sidebarMode: 'panel',
+        lastDockedMode: 'panel',
         activePanel: 'files',
         isSidebarOpen: true,
         sidebarWidth: 260,
@@ -99,6 +151,10 @@ export const useUIStore = create<UIStore>()(
         collapseToRail: () => applyMode('rail'),
         hide: () => applyMode('hidden'),
         reveal: () => applyMode('panel'),
+        toggleDocked: () => {
+          const { sidebarMode, lastDockedMode } = get();
+          applyMode(nextSidebarMode(sidebarMode, lastDockedMode));
+        },
 
         // Back-compat actions, rewired onto the state machine.
         setSidebarOpen: (open) => applyMode(open ? 'panel' : 'rail'),
@@ -112,25 +168,10 @@ export const useUIStore = create<UIStore>()(
     },
     {
       name: 'ui-storage', // key in localStorage
-      version: 1,
+      version: 2,
       // Map the old {isSidebarOpen, sidebarWidth, ...} blob onto the new shape
       // so existing users keep their width and aren't reset to defaults.
-      migrate: (persisted, version) => {
-        const prev = (persisted ?? {}) as Partial<UIStore>;
-        if (version < 1) {
-          const open = prev.isSidebarOpen !== false;
-          return {
-            ...prev,
-            sidebarMode: open ? 'panel' : 'hidden',
-            activePanel: 'files',
-            isSidebarOpen: open,
-            sidebarWidth: clampPanelWidth(prev.sidebarWidth ?? 260),
-            useNewSidebar: prev.useNewSidebar ?? true,
-            showOtherApps: prev.showOtherApps ?? true,
-          } as UIStore;
-        }
-        return prev as UIStore;
-      },
+      migrate: migrateUiState,
     },
   ),
 );
