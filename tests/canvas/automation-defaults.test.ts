@@ -25,7 +25,7 @@ const KNOWN_COMMAND_IDS = new Set<CommandId>([
   "pastePlain", "duplicate", "delete", "moveBlockUp", "moveBlockDown",
   "heading1", "heading2", "heading3", "openPalette", "openSearch", "splitPane",
   "bold", "italic", "underline", "inlineCode", "link", "toggleZenMode",
-  "zoomPaneIn", "zoomPaneOut", "zoomPaneReset",
+  "zoomPaneIn", "zoomPaneOut", "zoomPaneReset", "newPage",
 ]);
 
 /** A context where every enabled default's `when` predicate holds (block selection
