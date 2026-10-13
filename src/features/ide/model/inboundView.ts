@@ -16,8 +16,8 @@
 // state. Store-free: the store arrives as the facade's injected PageFileStore.
 
 import { DIR_SUFFIX, ownerOf, type Tables } from "@/features/page-file/model/pageFileFacadeTables";
+import { fileOfEntry } from "@/features/page-file/model/pageIndex";
 import { kindOfPage } from "@/features/page-file/model/pagePaths";
-import { FOLDER_META_NAME } from "@/features/page-file/model/types";
 import { isEchoHash } from "./ideFsEcho";
 import { syncedHashOf } from "./ideSyncEngine";
 
@@ -89,9 +89,8 @@ function livePage(deps: InboundViewDeps, pageId: string): LivePage | undefined {
   const page = deps.views.pageById(pageId);
   const path = page === undefined || page.archivedAt ? undefined : deps.views.indexOf().pathForId(pageId);
   if (page === undefined || path === undefined) return undefined;
-  const isFolder = kindOfPage(page) === "dir";
-  const filePath = isFolder ? `${path}/${FOLDER_META_NAME}` : path;
-  return { status: "live", path, filePath, isFolder, parentId: page.parentPageId ?? undefined };
+  const kind = kindOfPage(page);
+  return { status: "live", path, filePath: fileOfEntry({ path, kind }), isFolder: kind === "dir", parentId: page.parentPageId ?? undefined };
 }
 
 /**

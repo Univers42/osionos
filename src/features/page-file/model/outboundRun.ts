@@ -16,7 +16,7 @@ import { clearSyncedHash, moveSyncedDir, recordOutboundWrite, recordSyncedHash, 
 import type { Move, OutboundPlan } from "./outboundPlan";
 import { kindOfPage } from "./pagePaths";
 import { pageFileText } from "./pageFileText";
-import { FOLDER_META_NAME } from "./types";
+import { fileOfEntry } from "./pageIndex";
 
 // Executes an OutboundPlan against an injectable io (production: the sandbox
 // provider through the hook's wrapper, tests: an in-memory fake). One failure
@@ -124,7 +124,7 @@ async function runWrites(ctx: OutboundRunCtx, run: Run): Promise<void> {
     if (kind === "code") continue;
     const own = ctx.pathOf(id);
     if (own === undefined) { run.report.skipped.push({ path: id, reason: "not in the index" }); continue; }
-    await writePageFile(ctx, run, page, kind === "dir" ? `${own}/${FOLDER_META_NAME}` : own);
+    await writePageFile(ctx, run, page, fileOfEntry({ path: own, kind }));
   }
 }
 

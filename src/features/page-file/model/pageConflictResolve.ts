@@ -12,9 +12,10 @@
 
 import type { PageEntry } from "@/entities/page";
 import type { IdeSyncConflict } from "@/features/ide/model/ideSyncConflicts";
+import { fileOfEntry } from "./pageIndex";
 import { pageIndexFor } from "./pageIndexCache";
 import { pageFileText } from "./pageFileText";
-import { FOLDER_META_NAME } from "./types";
+import { kindOfPage } from "./pagePaths";
 
 /** The two resolutions of one surfaced divergence (ADR-001 §7). Every collaborator is injected
  *  so the actions stay loadable under node; liveConflictDeps is the only part reaching the app,
@@ -108,7 +109,7 @@ export async function liveConflictDeps(): Promise<PageConflictDeps> {
       const pages = store.usePageStore.getState().pagesForWorkspace(page.workspaceId);
       const own = pageIndexFor(page.workspaceId, pages).pathForId(page._id);
       if (own === undefined) return undefined;
-      return page.surface === "folder" ? `${own}/${FOLDER_META_NAME}` : own;
+      return fileOfEntry({ path: own, kind: kindOfPage(page) });
     },
     conflictOf: (pageId) => conflicts.useIdeSyncConflicts.getState().byPageId[pageId],
     canEdit: (page) => access.canEditPage(page, access.getCurrentPageAccessContext()),
