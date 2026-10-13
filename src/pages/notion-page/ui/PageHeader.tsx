@@ -13,10 +13,11 @@
 import React from "react";
 import { LayoutDashboard, MessageSquare } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import { AssetRenderer } from "@univers42/ui-collection";
+import { IconImage } from "@univers42/ui-collection";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 
 import { usePageStore } from "@/store/usePageStore";
-import { IconImage, getCollectionEmojiValue } from "@/shared/ui/assets/uiCollectionAssets";
+import { getCollectionEmojiValue } from "@/shared/ui/assets/collectionEmoji";
 import { useRealtimeMessagesStore, type RealtimeMessage } from "@/services/realtime-messages";
 import {
   CoverAssetPicker,
@@ -186,7 +187,7 @@ export const PageHeader: React.FC<Props> = ({ pageId, activePage, locked, commen
         <div className="osionos-page-toolbar flex-wrap">
           {!hasIcon && !locked && (
             <button type="button" className="osionos-page-toolbar-btn" onClick={actions.addIcon}>
-              <AssetRenderer value={getCollectionEmojiValue("sparkles")} size={14} />
+              <IconValueView value={getCollectionEmojiValue("sparkles")} size={14} />
               Add icon
             </button>
           )}

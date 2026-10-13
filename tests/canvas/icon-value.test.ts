@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseIconValue, serializeIconValue } from "../../packages/osionos-ui/src/shared/iconValue.ts";
+import { drawableEmojiOf, parseIconValue, serializeIconValue } from "../../packages/osionos-ui/src/shared/iconValue.ts";
 
 test("bare emoji parses as an emoji", () => {
   const v = parseIconValue("🚀");
@@ -75,4 +75,18 @@ test("a bare emoji has no color/bg", () => {
   const v = parseIconValue("⭐");
   assert.equal(v?.bg, undefined);
   assert.equal(v?.color, undefined);
+});
+
+test("a glyph is drawn as-is, a legacy ASCII value goes to the catalog renderer", () => {
+  const drawable = (value: string) => {
+    const parsed = parseIconValue(value);
+    return parsed === null ? null : drawableEmojiOf(parsed);
+  };
+  assert.equal(drawable("🚀"), "🚀");
+  assert.equal(drawable("👍🏽"), "👍🏽");
+  assert.equal(drawable("#️⃣"), "#️⃣");
+  assert.equal(drawable("emoji:🚀"), "🚀");
+  for (const legacy of ["page", "emoji:rocket", "https://a.example/x.png", "url:https://a.example/x.png", "icon:rocket", "img:/x.svg"]) {
+    assert.equal(drawable(legacy), null, legacy);
+  }
 });

@@ -13,14 +13,13 @@
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, MoreHorizontal, Plus, Settings, Users, X } from 'lucide-react';
-import { AssetRenderer } from '@univers42/ui-collection';
 import { IconValueView } from '@osionos/ui/atoms/IconValueView';
 import { useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
 import { useUserStore } from '@/features/auth';
 import { useWorkspaceOnboarding } from '@/features/workspace-onboarding/model/useWorkspaceOnboarding';
 import {
   COLLECTION_ROLE_BADGES,
-} from '@/shared/ui/assets/uiCollectionAssets';
+} from '@/shared/ui/assets/collectionEmoji';
 import { LazySettingsCenter } from '@/features/settings/LazySettingsCenter';
 
 interface Props {
@@ -260,7 +259,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
       <header className="bg-[var(--osio-bg-subtle)] p-3">
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--osio-bg-muted)]">
-            <AssetRenderer value={activePersona?.emoji ?? '🌏'} size={28} />
+            <IconValueView value={activePersona?.emoji ?? '🌏'} size={28} />
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-[var(--osio-fg-default)]">
@@ -354,7 +353,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
                 }}
                 className="flex min-w-0 flex-1 items-center gap-3 text-left"
               >
-                <AssetRenderer value={p.emoji} size={20} />
+                <IconValueView value={p.emoji} size={20} />
 
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1">
@@ -362,7 +361,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
                       {p.name}
                     </span>
                     <span className="shrink-0">
-                      <AssetRenderer
+                      <IconValueView
                         value={
                           COLLECTION_ROLE_BADGES[p.roleBadge.toLowerCase()] ??
                           COLLECTION_ROLE_BADGES.guest

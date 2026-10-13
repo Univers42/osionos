@@ -19,7 +19,9 @@
 // inlineIconInsert.ts to keep it off the warm path) and @univers42/ui-collection's
 // dist/library/components/react/** (142 KB) into the eager vendor-react chunk. So every rule
 // names the package directory right after node_modules/, and react-dom/server is left to the
-// import graph.
+// import graph. So is ui-collection: the app reaches its emoji and icon catalogs (~95 KB) only
+// from lazily loaded pickers, and one chunk for the whole package would load them with the
+// slash-menu icons the editor needs at boot.
 
 const packageDir = (names: string) => new RegExp(`[/\\\\]node_modules[/\\\\](?:${names})[/\\\\]`);
 
@@ -27,7 +29,6 @@ const REACT_DOM_SERVER = /[/\\]node_modules[/\\]react-dom[/\\](?:server|cjs[/\\]
 const RULES: readonly (readonly [RegExp, string])[] = [
   [packageDir("react|react-dom|scheduler|use-sync-external-store"), "vendor-react"],
   [packageDir("motion|framer-motion|motion-dom"), "vendor-motion"],
-  [packageDir("@univers42"), "vendor-ui-collection"],
   [packageDir("date-fns"), "vendor-date-fns"],
   [packageDir("@tanstack"), "vendor-tanstack"],
 ];

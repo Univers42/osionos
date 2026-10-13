@@ -16,7 +16,7 @@
 // imported dynamically so it ships as its own chunk and never lands in the
 // warm path.
 
-import type { CoverPickerAsset } from "@/shared/ui/assets/uiCollectionAssets";
+import type { CoverPickerAsset } from "@/shared/ui/assets/collectionMedia";
 
 export interface CoverGalleryCategory {
   id: string;

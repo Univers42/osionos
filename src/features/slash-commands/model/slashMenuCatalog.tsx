@@ -11,11 +11,11 @@
 /* ************************************************************************** */
 
 import { MousePointerClick, PenTool } from "lucide-react";
+import { IconPage } from "@univers42/ui-collection";
 import {
   COLLECTION_SLASH_ITEMS,
   COLLECTION_SLASH_SECTION_LABELS,
-  IconPage,
-} from "@/shared/ui/assets/uiCollectionAssets";
+} from "@/shared/ui/assets/collectionSlashItems";
 import type { BlockType, MediaBlockType } from "@/entities/block";
 import type {
   SlashCreatePageCommand,

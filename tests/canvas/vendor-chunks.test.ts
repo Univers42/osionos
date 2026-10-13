@@ -34,7 +34,7 @@ test("react-dom/server follows the import graph (it is dynamic-imported)", () =>
 
 test("a library's own react/ folder is not the React runtime", () => {
   const emojiData = UI_COLLECTION("dist/library/components/react/emoji-picker/emojiPickerData.js");
-  assert.equal(vendorChunkOf(emojiData), "vendor-ui-collection");
+  assert.equal(vendorChunkOf(emojiData), undefined);
   assert.equal(vendorChunkOf(pnpm("zustand@5.0.12", "zustand", "react/shallow.js")), undefined);
   assert.equal(vendorChunkOf(pnpm("@reduxjs+toolkit@2.11.2", "@reduxjs/toolkit", "dist/react/index.js")), undefined);
 });
