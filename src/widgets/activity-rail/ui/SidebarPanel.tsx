@@ -16,7 +16,7 @@ import { WorkspaceSwitcher } from "@/features/auth";
 import { IconButton } from "@/shared/ui";
 import { useUIStore, type ActivePanel } from "@/shared/config/uiStore";
 import { FilesPanel } from "./panels/FilesPanel";
-import { PANEL_LOADERS, prefetchPanel } from "./panelLoaders";
+import { PANEL_LOADERS, prefetchPanel, readyPanel } from "./panelLoaders";
 
 // Only the Explorer loads eagerly; every other panel is a lazy chunk the rail
 // prefetches on hover (panelLoaders.ts).
@@ -48,9 +48,11 @@ interface Props {
  *  user switches panel: a switch only flips the wrapper's `hidden`, and the
  *  panels behind it (the Explorer's whole page tree) do not render at all. */
 const PanelBody = React.memo(function PanelBody({ panel, onOpenSettings, onOpenTrash, onOpenConsole }: Omit<Props, "peek"> & { panel: ActivePanel }) {
+  // Chosen once per mount: swapping the lazy wrapper for the loaded component
+  // later would be a different element type, and React would remount the panel.
+  const [Body] = useState(() => readyPanel(panel) ?? LAZY_PANELS[panel as keyof typeof LAZY_PANELS]);
   if (panel === "files") return <FilesPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />;
-  const Lazy = LAZY_PANELS[panel as keyof typeof LAZY_PANELS];
-  return Lazy ? <Lazy /> : null;
+  return Body ? <Body /> : null;
 });
 
 /** Escape in a panel hands the keyboard back to the page being edited. */

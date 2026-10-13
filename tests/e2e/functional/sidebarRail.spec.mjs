@@ -54,6 +54,32 @@ test.describe("activity rail sidebar", () => {
     await expect(explorer(page)).toBeVisible();
   });
 
+  // A loaded panel must not wait behind a Suspense fallback: React holds a
+  // revealed boundary back ~300ms, which was every panel's first open.
+  // Counted in frames, not milliseconds, so a slow CI machine cannot flake it.
+  for (const [name, panel, content, file] of [
+    ["Conversations", "conversations", 'input[aria-label="Filter conversations"]', "/src/widgets/activity-rail/ui/panels/ConversationsPanel.tsx"],
+    ["Search", "search", '[aria-label="Search query"]', "/src/features/search/ui/SearchPanel.tsx"],
+  ]) {
+    test(`${name}, once its code has loaded, shows its content in the first frame after the click`, async ({ page, baseURL }) => {
+      await gotoDocked(page, baseURL);
+      // Hovering starts the rail's prefetch; importing the same module here
+      // returns once that code is loaded.
+      await page.getByRole("tab", { name: new RegExp(`^${name}`) }).hover();
+      await page.evaluate(async (path) => { await import(path); }, file);
+      const emptyFrames = await page.evaluate(async ({ name, panel, content }) => {
+        const tab = [...document.querySelectorAll('[role="tab"]')].find((t) => t.getAttribute("aria-label")?.startsWith(name));
+        tab.click();
+        for (let frame = 0; frame < 120; frame++) {
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+          if (document.querySelector(`[data-sidebar-panel="${panel}"] ${content}`)) return frame;
+        }
+        return 120;
+      }, { name, panel, content });
+      expect(emptyFrames).toBe(0);
+    });
+  }
+
   test("clicking the active icon folds the panel to the rail; the fold survives a reload", async ({ page, baseURL }) => {
     await gotoDocked(page, baseURL);
     await page.getByRole("tab", { name: /^Explorer/, selected: true }).click();
@@ -72,12 +98,17 @@ test.describe("activity rail sidebar", () => {
     await dragHandleTo(page, 3);
     // Only the (closed) edge peek is left, no docked sidebar.
     await expect(page.locator('aside[data-sidebar-mode]:not([data-sidebar-mode="peek"])')).toHaveCount(0);
+    // The drag ended on the edge strip. A hand still resting there must not
+    // bring back the sidebar it just hid.
+    await page.mouse.move(2, 300);
+    await page.waitForTimeout(500);
     await expect(peek(page)).not.toHaveAttribute("data-open", "");
   });
 
-  test("Ctrl+Alt+B hides and restores; nothing floats over the content, and the top bar has no toggle", async ({ page, baseURL }) => {
+  test("Ctrl+Alt+B hides and restores; nothing floats over the content, and the top bar has no toggle or brand label", async ({ page, baseURL }) => {
     await gotoDocked(page, baseURL);
     await expect(page.getByTestId("app-topbar").getByRole("button", { name: "Toggle sidebar" })).toHaveCount(0);
+    await expect(page.getByTestId("app-topbar")).not.toContainText("osionos");
     await hideSidebar(page);
     await expect(page.getByRole("button", { name: "Open sidebar" })).toHaveCount(0);
     await page.keyboard.press("Control+Alt+b");
