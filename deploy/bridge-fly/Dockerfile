@@ -21,7 +21,7 @@ WORKDIR /app
 # bridge-api.mjs): graph projection, in-chat AI agent, LiveKit rtc tokens,
 # permission UX proxy, and the social plane (chat/profile/feed/social/collab/
 # notify/communities + their shared core/storage/ratelimit helpers).
-COPY scripts/bridge-api.mjs scripts/bridge-graph.mjs scripts/bridge-graph-data.mjs scripts/bridge-records.mjs scripts/bridge-agent.mjs scripts/bridge-runner.mjs \
+COPY scripts/bridge-api.mjs scripts/bridge-page-read.mjs scripts/bridge-graph.mjs scripts/bridge-graph-data.mjs scripts/bridge-records.mjs scripts/bridge-agent.mjs scripts/bridge-runner.mjs \
 	scripts/bridge-connector.mjs scripts/bridge-oauth.mjs \
 	scripts/bridge-rtc.mjs scripts/bridge-perms.mjs scripts/bridge-perms-rules.mjs scripts/bridge-chat.mjs \
 	scripts/bridge-chat-media.mjs scripts/bridge-storage-core.mjs scripts/bridge-ratelimit.mjs scripts/bridge-chat-search.mjs scripts/bridge-chat-threads.mjs \

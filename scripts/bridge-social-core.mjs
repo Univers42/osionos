@@ -151,6 +151,23 @@ export async function workspaceMembership(config, fetchImpl, userId, workspaceId
 }
 
 /**
+ * The ids in `workspaceIds` the session belongs to: its own token workspaces plus its
+ * osionos_workspace_members rows (lower-cased). Throws on a backend failure, so a caller
+ * deciding access fails closed instead of reading "not a member".
+ */
+export async function memberWorkspacesAmong(config, fetchImpl, session, workspaceIds) {
+	const wanted = [...new Set(workspaceIds.filter((id) => UUID_REGEX.test(String(id))).map((id) => id.toLowerCase()))];
+	const own = new Set((session.workspaceIds ?? []).map((id) => String(id).toLowerCase()));
+	const others = wanted.filter((id) => !own.has(id));
+	const rows = others.length === 0 ? [] : await rest(
+		config,
+		fetchImpl,
+		`osionos_workspace_members?user_id=eq.${session.userId}&workspace_id=in.(${others.join(',')})&select=workspace_id`,
+	);
+	return [...wanted.filter((id) => own.has(id)), ...(Array.isArray(rows) ? rows : []).map((row) => String(row.workspace_id).toLowerCase())];
+}
+
+/**
  * Set of user ids hidden from the viewer because a block exists in EITHER
  * direction: someone who blocked the viewer, OR someone the viewer blocked.
  * Blocking is symmetric for visibility — used to hide those targets from
