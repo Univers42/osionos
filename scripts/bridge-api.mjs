@@ -19,7 +19,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
-import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordSubitemNoteBody } from './bridge-records.mjs';
+import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
 import { canChangePageSharing, canReadAsNonMember, canReadPageRow, pageVisibility, readablePageRows, withoutForeignSharingChanges } from './bridge-page-read.mjs';
 import { publishRealtime } from './bridge-social-core.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
@@ -2352,17 +2352,30 @@ async function ensureRecordNote(dbId, table, pk, request, config, fetchImpl) {
 		userId: authContext.userId,
 		now: new Date().toISOString(),
 	});
-	// Insert-if-absent, then refresh the mirrored fields WITHOUT owner_id: a merge-upsert of
-	// the whole body re-stamped the owner to whoever opened the record last (SEC1).
-	await baasRest(config, fetchImpl, 'osionos_pages?on_conflict=id', {
-		method: 'POST',
-		body,
-		prefer: 'resolution=ignore-duplicates,return=minimal',
-	});
-	const refresh = { ...body };
-	delete refresh.owner_id;
-	await baasRest(config, fetchImpl, `osionos_pages?id=eq.${body.id}`, { method: 'PATCH', body: refresh, prefer: 'return=minimal' });
+	// Insert-if-absent, else refresh ONLY the record-derived fields: rewriting the whole body
+	// re-stamped the owner and wiped the content people wrote in the note on every open.
+	// Ponytail: a concurrent first open is absorbed by on_conflict + ignore-duplicates (the
+	// loser writes nothing) — proven against the test harness, not a live PostgREST.
+	const stored = await fetchRecordNoteMirror(body.id, config, fetchImpl);
+	if (!stored) {
+		await baasRest(config, fetchImpl, 'osionos_pages?on_conflict=id', {
+			method: 'POST',
+			body,
+			prefer: 'resolution=ignore-duplicates,return=minimal',
+		});
+		return { noteId: body.id, mount, authContext };
+	}
+	const refresh = recordNoteRefresh(stored, body);
+	if (refresh) {
+		await baasRest(config, fetchImpl, `osionos_pages?id=eq.${body.id}`, { method: 'PATCH', body: refresh, prefer: 'return=minimal' });
+	}
 	return { noteId: body.id, mount, authContext };
+}
+
+async function fetchRecordNoteMirror(noteId, config, fetchImpl) {
+	const query = postgrestQuery({ id: `eq.${noteId}`, select: 'id,title,properties,visibility', limit: '1' });
+	const rows = await baasRest(config, fetchImpl, `osionos_pages?${query}`);
+	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
 /** POST /api/records/:dbId/:table/:pk/open — resolve-or-create the linked note (idempotent). */
