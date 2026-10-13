@@ -14,7 +14,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { SidebarPageTree } from "@/widgets/sidebar/ui/SidebarPageTree";
-import { SidebarFooter } from "@/widgets/sidebar/ui/SidebarFooter";
+import { SidebarFooter } from "../SidebarFooter";
 import { FolderRail } from "@/widgets/home-variants/ui/HomeWorkspaceParts";
 import { ExplorerViewSwitch } from "./ExplorerViewSwitch";
 import { useExplorerView } from "../../model/explorerView";

@@ -15,16 +15,16 @@ import { Plus, FolderPlus, Hash, Lock, MessageSquare, Volume2, Video, GitBranch,
 import { useShallow } from "zustand/react/shallow";
 
 import type { ActivePage, PageEntry } from "@/entities/page";
-import { SidebarNavItem } from "./SidebarNavItem";
+import { SidebarNavItem } from "@/widgets/activity-rail/ui/SidebarNavItem";
 import { SidebarSection } from "./SidebarSection";
-import { FavoriteSidebarItem } from "./FavoriteSidebarItem";
+import { FavoriteSidebarItem } from "@/widgets/activity-rail/ui/FavoriteSidebarItem";
 import { useFavoritesStore } from "@/store/favorites/favoritesStore";
 import { favoritesForWorkspace } from "@/store/favorites/favoritesScope";
 import { isFavoritesEnabled, isIdeEnabled } from "@/shared/config/featureFlags";
 import { useDevMode } from "@/shared/config/useDevMode";
 import { createCodeFileBlock } from "@/features/ide/model/codeFile";
 import { OsionosAppsSection } from "./OsionosAppsSection";
-import { RecentPageActions, RecentPageRow } from "./RecentPageRow";
+import { RecentPageActions, RecentPageRow } from "@/widgets/activity-rail/ui/RecentPageRow";
 import { PageTreeRows } from "./PageTreeItem";
 import { SidebarTreeToolbar } from "./SidebarTreeToolbar";
 import { useDragSession } from "@/store/dragSession";

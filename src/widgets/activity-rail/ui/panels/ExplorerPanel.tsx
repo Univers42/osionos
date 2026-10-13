@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useState, useCallback } from "react";
-import { SidebarFooter } from "@/widgets/sidebar/ui/SidebarFooter";
+import { SidebarFooter } from "../SidebarFooter";
 import { FolderRail } from "@/widgets/home-variants/ui/HomeWorkspaceParts";
 import { WorkspaceExplorer } from "@/features/ide/ui/WorkspaceExplorer";
 import { useWorkspaceFileOps } from "@/features/ide/model/useWorkspaceFileOps";

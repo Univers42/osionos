@@ -19,7 +19,7 @@ import type { ActivePage } from "@/entities/page";
 import { usePageStore } from "@/store/usePageStore";
 import { useFavoritesStore } from "@/store/favorites/favoritesStore";
 import { SidebarNavItem } from "./SidebarNavItem";
-import { selectPageAccessEntry } from "./pageAccessEntry";
+import { selectPageAccessEntry } from "../model/pageAccessEntry";
 
 interface FavoriteSidebarItemProps {
   pageId: string;

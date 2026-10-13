@@ -20,7 +20,7 @@ import { ChannelList } from "@/widgets/channel-list";
 import { DmList } from "@/widgets/dm-list";
 import { SidebarTopNav } from "./SidebarTopNav";
 import { SidebarPageTree } from "./SidebarPageTree";
-import { SidebarFooter } from "./SidebarFooter";
+import { SidebarFooter } from "@/widgets/activity-rail/ui/SidebarFooter";
 
 import styles from "./Sidebar.module.scss";
 

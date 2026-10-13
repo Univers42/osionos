@@ -17,7 +17,7 @@ import { useInstalledApps } from "@/features/marketplace/model/useInstalledApps"
 import { installedTab } from "@/features/marketplace/model/installedAppLauncher";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 
-import { SidebarNavItem } from "./SidebarNavItem";
+import { SidebarNavItem } from "@/widgets/activity-rail/ui/SidebarNavItem";
 import { SidebarSection } from "./SidebarSection";
 
 /** "osionos apps" sidebar section — driven by installed+ACTIVE apps; vanishes when none are. */

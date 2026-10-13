@@ -19,7 +19,7 @@ import type { ActivePage } from "@/entities/page";
 import { PageOptionsMenu } from "@/features/page-management";
 import { usePageStore } from "@/store/usePageStore";
 import { SidebarNavItem } from "./SidebarNavItem";
-import { selectPageAccessEntry } from "./pageAccessEntry";
+import { selectPageAccessEntry } from "../model/pageAccessEntry";
 
 interface RecentPageActionsProps {
   recent: ActivePage;
