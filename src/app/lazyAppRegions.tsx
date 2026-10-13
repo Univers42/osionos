@@ -39,13 +39,6 @@ const StyleGuideRouteImpl = lazy(() =>
   })),
 );
 
-// The dedicated IDE layout (file tree + editor grid + terminal strip). Its own
-// chunk so the Monaco/IDE tree never touches the warm shell; loads only when
-// a workspace is flipped into IDE mode.
-const IdeShellImpl = lazy(() =>
-  import("@/widgets/ide-shell").then((module) => ({ default: module.IdeShell })),
-);
-
 // Unified workbench (grid + dock + status bar), behind `osio.workbench`. Own
 // chunk; never loaded while the flag is off.
 const WorkbenchImpl = lazy(() =>
@@ -102,10 +95,6 @@ export function LazyCanvasDebugRoute() {
 
 export function LazyStyleGuideRoute() {
   return <Suspense fallback={contentFallback}>{<StyleGuideRouteImpl />}</Suspense>;
-}
-
-export function LazyIdeShell() {
-  return <Suspense fallback={contentFallback}>{<IdeShellImpl />}</Suspense>;
 }
 
 export function LazyWorkbench() {
