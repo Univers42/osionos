@@ -12,14 +12,13 @@
 
 import { useEffect } from "react";
 
-import { API_BASE, getActivePageJwt } from "@/shared/api/client";
-import { ideWsProtocols } from "./useIdeTerminal";
+import { expiredReconnect, ideSocketTarget } from "../api/ideTransport";
 import { parseFsEvent } from "./ideFsEcho";
 import { publishFsEvent } from "./ideFsEvents";
 import { ideOutput } from "./ideOutputBus";
 import { createReconnectBackoff } from "./reconnectBackoff";
 import { isSandboxOnline, useSandboxHealthStore } from "./sandboxHealthStore";
-import { isDeliberateClose } from "./wsCloseCodes";
+import { isDeliberateClose, isTokenExpiredClose } from "./wsCloseCodes";
 import { createLiveInbound } from "./inboundLive";
 import { createSerialQueue, acquireInboundLeadership } from "./inboundPipeline";
 import { routeFsEvent } from "./inboundSession";
@@ -41,7 +40,7 @@ import { routeFsEvent } from "./inboundSession";
 export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
   const online = useSandboxHealthStore((s) => isSandboxOnline(s.state));
   useEffect(() => {
-    if (!enabled || !online || !workspaceId || !API_BASE) return;
+    if (!enabled || !online || !workspaceId) return;
     let disposed = false;
     // One Output line per outage, re-armed once data flows again — a down
     // sandbox otherwise logs on every backoff attempt.
@@ -49,6 +48,7 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
     let ws: WebSocket | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const backoff = createReconnectBackoff();
+    const expired = expiredReconnect();
 
     const queue = createSerialQueue((error) => {
       ideOutput("fs-sync", `event failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -62,12 +62,19 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
     const { session, attach } = createLiveInbound(workspaceId, queue);
     const route = { isLeader: () => leadership.isLeader(), queue, session, attach };
 
-    const connect = () => {
-      const jwt = getActivePageJwt() ?? "";
-      if (disposed || !jwt || !isSandboxOnline(useSandboxHealthStore.getState().state)) return;
-      const wsBase = API_BASE.replace(/^http/, "ws"); // http→ws, https→wss
-      ws = new WebSocket(`${wsBase}/api/ide/fsync?workspaceId=${encodeURIComponent(workspaceId)}`, ideWsProtocols(jwt));
+    const connect = async () => {
+      if (disposed || !isSandboxOnline(useSandboxHealthStore.getState().state)) return;
+      const target = await ideSocketTarget(workspaceId, "/api/ide/fsync");
+      // Re-checked after the await: health or the effect may have moved while the token was minted.
+      if (disposed || !isSandboxOnline(useSandboxHealthStore.getState().state)) return;
+      if (target.kind === "unavailable") {
+        // Throttled or a failed mint is transient: same backoff as a dropped socket.
+        if (target.reason === "throttled" || target.reason === "error") timer = setTimeout(() => void connect(), backoff.next());
+        return;
+      }
+      ws = new WebSocket(target.url, target.protocols);
       ws.binaryType = "arraybuffer";
+      ws.onopen = () => expired.opened();
 
       let buffer = "";
       ws.onmessage = (ev) => {
@@ -85,6 +92,11 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
       };
       ws.onclose = (ev) => {
         if (disposed) return;
+        // IDE token ran out: fresh token and redial at once — no backoff, no health change.
+        if (isTokenExpiredClose(ev.code) && expired.onExpired(workspaceId)) {
+          void connect();
+          return;
+        }
         const health = useSandboxHealthStore.getState();
         if (isDeliberateClose(ev.code)) {
           // Retrying cannot help; the store flips offline and the UI shows Retry.
@@ -100,11 +112,11 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
           console.warn(`[ide] fs sync disconnected — reconnecting (further attempts are not logged)`);
         }
         outageLogged = true;
-        timer = setTimeout(connect, delayMs);
+        timer = setTimeout(() => void connect(), delayMs);
       };
     };
 
-    connect();
+    void connect();
     return () => {
       disposed = true;
       session.dispose();

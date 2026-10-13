@@ -10,14 +10,14 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Terminal } from "@xterm/xterm";
 
-import { API_BASE, getActivePageJwt } from "@/shared/api/client";
+import { expiredReconnect, ideSocketTarget } from "../api/ideTransport";
 import { ideOutput } from "./ideOutputBus";
 import { isSandboxReachable, useSandboxHealthStore } from "./sandboxHealthStore";
 import { useTerminalRunBus } from "./terminalRunBus";
-import { isDeliberateClose } from "./wsCloseCodes";
+import { isDeliberateClose, isTokenExpiredClose } from "./wsCloseCodes";
 
 export type IdeTerminalStatus = "connecting" | "open" | "closed" | "unavailable";
 
@@ -29,24 +29,8 @@ export interface IdeTerminalConnection {
   reconnect: () => void;
 }
 
-/** Bridge WS URL for the sandbox PTY (P3). The JWT rides the WS subprotocol
- *  (see ideWsProtocols), NOT the URL — query strings land in access logs.
- *  `term` selects the bridge-owned session (ADR-002): reconnects land on the
- *  SAME shell with a replay of recent output. */
-function ptyUrl(workspaceId: string, jwt: string, term = "0"): string | null {
-  if (!API_BASE || !workspaceId || !jwt) return null;
-  const wsBase = API_BASE.replace(/^http/, "ws"); // http→ws, https→wss
-  return `${wsBase}/api/ide/pty?workspaceId=${encodeURIComponent(workspaceId)}&term=${term}`;
-}
-
-/** Subprotocol pair every IDE WS uses: the app protocol + the auth token. The
- *  bridge selects and echoes "osio-ide.v1"; app-session tokens are header-safe. */
-export function ideWsProtocols(jwt: string): string[] {
-  return ["osio-ide.v1", `osio-token.${jwt}`];
-}
-
 /**
- * Bridges an xterm Terminal to the sandbox PTY over the bridge WebSocket. The
+ * Bridges an xterm Terminal to the sandbox PTY over the IDE server WebSocket. The
  * server sends stdout as binary frames and writes our frames to stdin; PTY
  * geometry rides an out-of-band APC control frame (kept off stdin) so a wide
  * browser terminal and the in-container shell agree — vim/htop and >80-col line
@@ -67,14 +51,14 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string, termI
     setWsStatus("connecting");
     setDialSeq((n) => n + 1);
   }, []);
-  const url = useMemo(() => (term ? ptyUrl(workspaceId, getActivePageJwt() ?? "", termId) : null), [term, workspaceId, termId]);
 
   useEffect(() => {
-    if (!term || !url || !reachable) return;
+    if (!term || !workspaceId || !reachable) return;
     let disposed = false;
     let ws: WebSocket | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let attempt = 0;
+    const expired = expiredReconnect();
 
     const sendResize = () => {
       if (ws?.readyState === WebSocket.OPEN) ws.send(`\x1b_osio-resize:${term.cols},${term.rows}\x1b\\`);
@@ -88,12 +72,31 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string, termI
       if (cmd) ws.send(cmd.endsWith("\n") ? cmd : cmd + "\n");
     };
 
-    const connect = () => {
+    const retryLater = (why: string) => {
+      const delayMs = [1000, 4000, 15000][Math.min(attempt, 2)];
+      attempt += 1;
+      term.write(`\r\n\x1b[2m[terminal: reconnecting in ${delayMs / 1000}s…]\x1b[0m\r\n`);
+      ideOutput("terminal", `${why} — reconnecting in ${delayMs / 1000}s`);
+      timer = setTimeout(() => void connect(), delayMs);
+    };
+
+    // `term` selects the bridge-owned session (ADR-002): reconnects land on the SAME
+    // shell with a replay of recent output. The token rides the subprotocol, not the URL.
+    const connect = async () => {
       if (disposed) return;
-      ws = new WebSocket(url, ideWsProtocols(getActivePageJwt() ?? ""));
+      const target = await ideSocketTarget(workspaceId, "/api/ide/pty", { term: termId });
+      if (disposed) return;
+      if (target.kind === "unavailable") {
+        // A throttled or failed mint is transient; the rest cannot be fixed by dialling again.
+        if (target.reason === "throttled" || target.reason === "error") retryLater(`token ${target.reason}`);
+        else setWsStatus("unavailable");
+        return;
+      }
+      ws = new WebSocket(target.url, target.protocols);
       ws.binaryType = "arraybuffer";
       ws.onopen = () => {
         attempt = 0;
+        expired.opened();
         term.reset(); // the session replay repaints current state — no doubling
         setWsStatus("open");
         // The bridge just started the sandbox: flip health to online so fs-sync dials.
@@ -108,6 +111,12 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string, termI
       };
       ws.onclose = (ev) => {
         if (disposed) return;
+        // IDE token ran out: fresh token and redial at once — no backoff, no health change.
+        if (isTokenExpiredClose(ev.code) && expired.onExpired(workspaceId)) {
+          setWsStatus("connecting");
+          void connect();
+          return;
+        }
         setWsStatus("closed");
         // Deliberate ends (shell exit, auth/gate refusals) stay closed; network
         // drops reconnect — the bridge-owned session is waiting for us.
@@ -119,16 +128,12 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string, termI
           ideOutput("terminal", `session closed: ${why}`);
           return;
         }
-        const delayMs = [1000, 4000, 15000][Math.min(attempt, 2)];
-        attempt += 1;
-        term.write(`\r\n\x1b[2m[terminal: reconnecting in ${delayMs / 1000}s…]\x1b[0m\r\n`);
-        ideOutput("terminal", `disconnected (${ev.code}) — reconnecting in ${delayMs / 1000}s`);
-        timer = setTimeout(connect, delayMs);
+        retryLater(`disconnected (${ev.code})`);
       };
       ws.onerror = () => setWsStatus("closed");
     };
 
-    connect();
+    void connect();
     const dataSub = term.onData((d) => { if (ws?.readyState === WebSocket.OPEN) ws.send(d); });
     const resizeSub = term.onResize(() => sendResize());
     // A Run requested while the terminal is already connected fires immediately.
@@ -142,8 +147,7 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string, termI
       runSub();
       try { ws?.close(); } catch { /* already closed */ }
     };
-  }, [term, url, reachable, workspaceId, dialSeq]);
+  }, [term, termId, reachable, workspaceId, dialSeq]);
 
-  const status: IdeTerminalStatus = term && !url ? "unavailable" : wsStatus;
-  return { status, closedReason, reconnect };
+  return { status: wsStatus, closedReason, reconnect };
 }

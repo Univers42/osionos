@@ -13,17 +13,19 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import { API_BASE, getActivePageJwt } from "@/shared/api/client";
+import { IDE_BASE } from "../api/ideToken";
+import { ideFetch } from "../api/ideTransport";
 
 import { createHealthCore } from "./sandboxHealthCore";
 
 /**
  * One answer to "can the IDE sandbox be used right now?", shared by the
  * terminal, fs-sync, ports, run and the status bar so none of them retries on
- * its own. Probed via GET /api/ide/session (scripts/bridge-ide-sandbox.mjs:169-178):
+ * its own. Probed on the IDE origin via GET /api/ide/session (the contract of
+ * scripts/bridge-ide-sandbox.mjs:169-178, now served by the IDE server):
  *   online      200 {status:"running"}
  *   stopped     200 {status:"stopped"} — backend reachable; ensure() starts it
- *   disabled    404, or no API_BASE / no session (offline build, signed out)
+ *   disabled    404, 403, or no IDE origin / no session (VITE_OSIONOS_IDE_URL unset, signed out)
  *   unavailable 502 or network error — Plane B daemon down
  *   unknown     not probed yet
  */
@@ -45,9 +47,10 @@ export interface SandboxHealth {
 
 const core = createHealthCore({
   fetch: (url, init) => fetch(url, init),
-  apiBase: () => API_BASE,
-  jwt: getActivePageJwt,
+  apiBase: () => IDE_BASE,
+  jwt: () => null,
   now: () => Date.now(),
+  ideFetch,
 });
 
 export const useSandboxHealthStore = create<SandboxHealth>(() => ({

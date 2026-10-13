@@ -12,8 +12,9 @@
 
 import { useCallback, useState } from "react";
 
-import { API_BASE, getActivePageJwt } from "@/shared/api/client";
 import { useUserStore } from "@/features/auth";
+
+import { ideFetch } from "../api/ideTransport";
 
 import { parseGitStatus, type GitFileStatus } from "./gitBranch";
 
@@ -21,20 +22,20 @@ export { parseGitStatus, type GitFileStatus } from "./gitBranch";
 
 export type SandboxGitReply =
   | { kind: "ok"; ok: boolean; output: string }
-  /** No session or API, or the bridge says the sandbox is off (404/409). */
+  /** No session, IDE origin or sandbox permission, or the bridge says the sandbox is off (404/409). */
   | { kind: "unavailable" }
   /** The bridge refused the command; `message` is its reason. */
   | { kind: "failed"; message: string };
 
 /** One `POST /api/ide/git` exec. A network error throws, as it always has. */
 export async function runSandboxGit(workspaceId: string, argv: readonly string[], pat?: string): Promise<SandboxGitReply> {
-  const jwt = getActivePageJwt();
-  if (!API_BASE || !jwt) return { kind: "unavailable" };
-  const res = await fetch(`${API_BASE}/api/ide/git`, {
+  const result = await ideFetch(workspaceId, "/api/ide/git", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ workspaceId, argv, pat }),
   });
+  if (result.kind === "unavailable") return { kind: "unavailable" };
+  const res = result.response;
   if (res.status === 404 || res.status === 409) return { kind: "unavailable" };
   const data = (await res.json().catch(() => ({}))) as { ok?: boolean; output?: string; message?: string };
   if (!res.ok) return { kind: "failed", message: data.message ?? `git failed (${res.status})` };
