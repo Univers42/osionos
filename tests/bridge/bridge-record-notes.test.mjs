@@ -11,8 +11,8 @@
 /* ************************************************************************** */
 
 // Re-opening a record refreshes only what the note mirrors from the record (title,
-// properties, visibility); what people wrote in the note survives every /open and
-// every sub-item create.
+// properties); what people wrote in the note — and who may read it — survives every
+// /open and every sub-item create.
 // Ponytail: the in-memory PostgREST models on_conflict + resolution=ignore-duplicates;
 // a live PostgREST's upsert behaviour is not exercised here.
 
@@ -67,7 +67,7 @@ describe('record notes keep what people wrote in them', () => {
 		});
 	});
 
-	it('lets another member read a legacy private note after opening it, without taking it over', async () => {
+	it('keeps a legacy private note private when another member opens it', async () => {
 		const legacy = {
 			id: NOTE_ID, workspace_id: IDS.team, owner_id: IDS.userA, visibility: 'private', parent_page_id: null,
 			database_id: `baas:${DB}:tasks`, title: 'Row seven', icon: 'icon:database', surface: 'page', collaborators: [],
@@ -76,11 +76,27 @@ describe('record notes keep what people wrote in them', () => {
 		};
 		const { mock } = recordWorld([legacy]);
 		await withBridge(config, mock.fetchImpl, async (base) => {
-			assert.equal((await send(base, OPEN, asB, { method: 'POST' })).status, 200);
+			await send(base, OPEN, asB, { method: 'POST' });
 			const read = await send(base, `/api/pages/${NOTE_ID}`, asB);
-			assert.equal(read.status, 200, read.text);
-			assert.deepEqual(read.body.content, WRITTEN);
-			assert.equal(mock.page(NOTE_ID).owner_id, IDS.userA);
+			const missing = await send(base, `/api/pages/${IDS.missing}`, asB);
+			assert.equal(read.status, 404, read.text);
+			assert.deepEqual([read.status, read.body], [missing.status, missing.body]);
+			assert.deepEqual([mock.page(NOTE_ID).owner_id, mock.page(NOTE_ID).visibility, mock.page(NOTE_ID).content], [IDS.userA, 'private', WRITTEN]);
+		});
+	});
+
+	it('keeps the owner\'s visibility choice when another member opens the record', async () => {
+		const { mock, rows } = recordWorld();
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			await openAndWrite(base, mock);
+			assert.equal((await send(base, `/api/pages/${NOTE_ID}`, asA, patch({ visibility: 'private' }))).status, 200);
+			rows[0].title = 'Row seven, renamed';
+			await send(base, OPEN, asB, { method: 'POST' });
+			assert.deepEqual([mock.page(NOTE_ID).visibility, mock.page(NOTE_ID).title], ['private', 'Row seven, renamed']);
+			const read = await send(base, `/api/pages/${NOTE_ID}`, asB);
+			const missing = await send(base, `/api/pages/${IDS.missing}`, asB);
+			assert.equal(read.status, 404, read.text);
+			assert.deepEqual([read.status, read.body], [missing.status, missing.body]);
 		});
 	});
 

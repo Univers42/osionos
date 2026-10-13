@@ -2430,7 +2430,7 @@ async function ensureRecordNote(dbId, table, pk, request, config, fetchImpl) {
 }
 
 async function fetchRecordNoteMirror(noteId, config, fetchImpl) {
-	const query = postgrestQuery({ id: `eq.${noteId}`, select: 'id,title,properties,visibility', limit: '1' });
+	const query = postgrestQuery({ id: `eq.${noteId}`, select: 'id,title,properties', limit: '1' });
 	const rows = await baasRest(config, fetchImpl, `osionos_pages?${query}`);
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
