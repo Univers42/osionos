@@ -115,14 +115,14 @@ test.describe("styleguide recipes", () => {
       root.setProperty("--osio-field-bg", "rgb(10, 11, 12)");
     });
     const menu = section(page, "Overlays").getByRole("menu");
-    expect(await computed(menu, "background-color")).toBe("rgb(1, 2, 3)");
-    expect(await computed(menu, "border-top-left-radius")).toBe("23px");
-    expect(await computed(menu, "border-top-color")).toBe("rgb(4, 5, 6)");
+    await expect(menu).toHaveCSS("background-color", "rgb(1, 2, 3)");
+    await expect(menu).toHaveCSS("border-top-left-radius", "23px");
+    await expect(menu).toHaveCSS("border-top-color", "rgb(4, 5, 6)");
 
     const save = section(page, "Primitives").getByRole("button", { name: "Save", exact: true });
-    expect(await computed(save, "border-top-left-radius")).toBe("21px");
+    await expect(save).toHaveCSS("border-top-left-radius", "21px");
     await save.hover();
-    expect(await computed(page.getByRole("tooltip"), "background-color")).toBe("rgb(7, 8, 9)");
+    await expect(page.getByRole("tooltip")).toHaveCSS("background-color", "rgb(7, 8, 9)");
   });
 
   test("the kit Dropdown list and Input read the overlay and field tokens", async ({ page, baseURL }) => {
@@ -136,15 +136,16 @@ test.describe("styleguide recipes", () => {
       root.setProperty("--osio-field-bg", "rgb(10, 11, 12)");
     });
     const trigger = page.getByRole("combobox", { name: "Sample stage" });
-    expect(await computed(trigger, "height")).toBe("37px");
-    expect(await computed(trigger, "border-top-left-radius")).toBe("19px");
+    await expect(trigger).toHaveCSS("height", "37px");
+    await expect(trigger).toHaveCSS("border-top-left-radius", "19px");
     await trigger.focus();
     await page.keyboard.press("Enter");
     const input = section(page, "Primitives").getByPlaceholder("Type something…");
-    expect(await computed(input, "border-top-left-radius")).toBe("19px");
-    expect(await computed(input, "background-color")).toBe("rgb(10, 11, 12)");
+    await expect(input).toHaveCSS("border-top-left-radius", "19px");
+    await expect(input).toHaveCSS("background-color", "rgb(10, 11, 12)");
     const list = page.getByRole("listbox");
-    expect(await computed(list, "background-color")).toBe("rgb(1, 2, 3)");
-    expect(await computed(list, "padding-top")).toBe("11px");
+    await expect(list).toBeVisible();
+    await expect(list).toHaveCSS("background-color", "rgb(1, 2, 3)");
+    await expect(list).toHaveCSS("padding-top", "11px");
   });
 });
