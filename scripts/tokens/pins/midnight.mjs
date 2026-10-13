@@ -39,6 +39,8 @@ export default {
     "--osio-syntax-literal": "#1A6CB0",
     "--osio-graph-note": "#C2851F",
     "--osio-fg-inverse": "#FFFFFF",
+    "--osio-update": "#1E66C7",
+    "--osio-update-hover": "#1A57AD",
   },
   dark: {
     "--osio-n-0": "#16161E",
@@ -76,5 +78,7 @@ export default {
     "--osio-syntax-literal": "#7DCFFF",
     "--osio-graph-note": "#E0AF68",
     "--osio-fg-inverse": "#1A1B26",
+    "--osio-update": "#7DCFFF",
+    "--osio-update-hover": "#9AD9FF",
   },
 };

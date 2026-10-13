@@ -4,6 +4,10 @@
 
 export default {
   light: {
+    "--osio-n-9": "#706684",
+    "--osio-n-10": "#6A6080",
+    "--osio-n-11": "#1A1422",
+    "--osio-n-12": "#120D1A",
     "--osio-a-solid": "#E5007A",
     "--osio-a-hover": "#CC006D",
     "--osio-a-fg": "#FFFFFF",
@@ -18,6 +22,16 @@ export default {
     "--osio-update": "#0079B8",
     "--osio-update-hover": "#006698",
     "--osio-update-fg": "#FFFFFF",
+    "--osio-syntax-keyword": "#C1006A",
+    "--osio-syntax-string": "#0B7A3E",
+    "--osio-syntax-number": "#006FB0",
+    "--osio-syntax-comment": "#6E6685",
+    "--osio-syntax-function": "#7C3AED",
+    "--osio-syntax-type": "#0E7490",
+    "--osio-syntax-property": "#1A56DB",
+    "--osio-syntax-tag": "#047857",
+    "--osio-syntax-attr": "#9333EA",
+    "--osio-syntax-literal": "#C2410C",
   },
   dark: {
     "--osio-n-0": "#100B19",
@@ -47,5 +61,15 @@ export default {
     "--osio-update": "#34C3F0",
     "--osio-update-hover": "#5AD0F5",
     "--osio-update-fg": "#15101E",
+    "--osio-syntax-keyword": "#FF6FBE",
+    "--osio-syntax-string": "#5FE0A0",
+    "--osio-syntax-number": "#6FD0F5",
+    "--osio-syntax-comment": "#9890AD",
+    "--osio-syntax-function": "#C29BFF",
+    "--osio-syntax-type": "#57D6C2",
+    "--osio-syntax-property": "#82B6FF",
+    "--osio-syntax-tag": "#4FE0B0",
+    "--osio-syntax-attr": "#D6A8FF",
+    "--osio-syntax-literal": "#FFB070",
   },
 };

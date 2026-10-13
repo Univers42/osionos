@@ -1,9 +1,15 @@
 // Monochrome is ink on paper: the accent is the text colour itself, the dark page is
 // true black, and the states and syntax are greys with a whisper of hue. None of
-// that follows from a tone table, so it is pinned.
+// that follows from a tone table, so it is pinned. The light text slots keep their
+// hand-written inks; only the subtle tier moved, to the lightest grey that reads on
+// every surface.
 
 export default {
   light: {
+    "--osio-n-9": "#6B6B6B",
+    "--osio-n-10": "#565656",
+    "--osio-n-11": "#0A0A0A",
+    "--osio-n-12": "#000000",
     "--osio-a-solid": "#0A0A0A",
     "--osio-a-hover": "#262626",
     "--osio-a-fg": "#FFFFFF",
@@ -25,6 +31,8 @@ export default {
     "--osio-syntax-attr": "#4F4F4F",
     "--osio-syntax-literal": "#6A6A6A",
     "--osio-graph-note": "#6E6E6E",
+    "--osio-update": "#4F5B66",
+    "--osio-update-hover": "#3C4750",
   },
   dark: {
     "--osio-n-0": "#050505",
@@ -62,5 +70,7 @@ export default {
     "--osio-syntax-literal": "#949494",
     "--osio-graph-note": "#A0A0A0",
     "--osio-fg-inverse": "#0A0A0A",
+    "--osio-update": "#8895A2",
+    "--osio-update-hover": "#9CA8B4",
   },
 };

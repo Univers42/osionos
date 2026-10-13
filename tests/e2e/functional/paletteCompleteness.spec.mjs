@@ -1,20 +1,19 @@
-// Every palette is complete in the browser, not only in the generator: the
-// colours the graph engine and the shadows read come from the palette that is
-// on, never from the default's browns showing through a palette that left them
-// out (Nord's graph used to be warm).
+// Palettes are told apart in the browser, not only in the generator: the colours
+// the graph engine and the shadows read come from the palette that is on, never
+// from the default's browns (Nord's graph used to be warm). That every token is
+// defined by every palette is pinned statically (tokens-palettes-output.test.ts)
+// and its values by tokenEngine.spec.mjs: a palette that left a token out would
+// inherit the default's from :root and never compute to nothing, so it is not
+// asserted here.
 
 import { expect, test } from "@playwright/test";
 
-import { ALIASES } from "../../../scripts/tokens/aliases.mjs";
 import { MODES, PALETTES } from "../../../scripts/tokens/palettes.mjs";
-import { modeTokens } from "../../../scripts/tokens/ramps.mjs";
 
 const [defaultPalette] = PALETTES;
 
 // What differs between two palettes' graphs, shadows and callouts if each is its own.
-const OWN_TOKENS = ["--osio-graph-edge-note", "--osio-shadow-rgb", "--osio-block-tint-blue-bg", "--osio-graph-edge"];
-
-const generatedNames = [...new Set([...Object.keys(modeTokens(defaultPalette, "light")), ...Object.keys(ALIASES), "--osio-e3", "--osio-shadow-cell"])];
+const OWN_TOKENS = ["--osio-graph-edge-note", "--osio-shadow-rgb", "--osio-block-tint-blue-bg", "--osio-graph-edge", "--osio-graph-edge-tag", "--osio-graph-edge-hier"];
 
 async function openStyleguide(page, baseURL) {
   await page.addInitScript(() => {
@@ -55,13 +54,11 @@ test.describe("palette completeness", () => {
       }
     });
 
-    test(`${mode}: every palette selects in the graph with its own accent and defines every token`, async ({ page, baseURL }) => {
+    test(`${mode}: every palette selects in the graph with its own accent`, async ({ page, baseURL }) => {
       await openStyleguide(page, baseURL);
       for (const id of await paletteIds(page)) {
-        const tokens = await tokensOf(page, id, mode, [...generatedNames, "--osio-graph-select", "--osio-accent"]);
+        const tokens = await tokensOf(page, id, mode, ["--osio-graph-select", "--osio-accent"]);
         expect.soft(tokens["--osio-graph-select"], `${id}/${mode} graph select`).toBe(tokens["--osio-accent"]);
-        const empty = generatedNames.filter((name) => tokens[name] === "");
-        expect.soft(empty, `${id}/${mode} tokens that compute to nothing`).toEqual([]);
       }
     });
 

@@ -8,7 +8,7 @@
 // shadow 40 33 24 became 40 34 25). A palette with a very different lightness
 // can need other opacities; the graph is judged by eye, not by a contrast rule.
 
-import { oklchToHex } from "./oklch.mjs";
+import { hexToOklch, oklchToHex } from "./oklch.mjs";
 import { channels, translucent } from "./translucent.mjs";
 
 // The light-mode shadow is the neutral hue pulled a little warmer and darkened:
@@ -23,6 +23,22 @@ export function shadowInk(palette, mode) {
   return oklchToHex({ l: lightness, c: palette.neutral.chroma * chromaShare, h: palette.neutral.hue + hueShift });
 }
 
+// The neutral the default palette's brown tint was tuned against: the tint's hue
+// is rotated by how far a palette's neutral hue sits from this one, and its
+// chroma scaled by the palette's neutral chroma, so a grey palette gets grey
+// hierarchy edges and a blue one blue.
+const REFERENCE_NEUTRAL = { hue: 88, chroma: 0.012 };
+
+/** The brown tint foreground moved onto the palette's own neutral hue; unchanged for the default palette. */
+function structuralInk(brownForeground, palette) {
+  const { l, c, h } = hexToOklch(brownForeground);
+  return oklchToHex({
+    l,
+    c: c * Math.min(1, palette.neutral.chroma / REFERENCE_NEUTRAL.chroma),
+    h: h + palette.neutral.hue - REFERENCE_NEUTRAL.hue,
+  });
+}
+
 // [slot, alpha] per mode. A slot is a neutral ramp step, "shadow", or "brown".
 const GRAPH_CHROME = {
   light: {
@@ -33,11 +49,11 @@ const GRAPH_CHROME = {
     "--osio-graph-node-shadow": ["shadow", 0.22],
     "--osio-graph-halo": ["n-2", 0.92],
     "--osio-graph-card-shadow": ["shadow", 0.08],
-    "--osio-graph-edge": ["n-10", 0.28],
+    "--osio-graph-edge": ["n-11", 0.22],
     "--osio-graph-edge-tag": ["brown", 0.16],
     "--osio-graph-edge-hier": ["brown", 0.62],
     "--osio-graph-overlay-bg": ["n-1", 0.82],
-    "--osio-overlay": ["n-12", 0.42],
+    "--osio-overlay": ["n-11", 0.42],
   },
   dark: {
     "--osio-graph-grain": ["n-11", 0.025],
@@ -58,7 +74,7 @@ const GRAPH_CHROME = {
 /** `core` (a palette's ramps, pins applied) to the shadow, scrim and graph-chrome tokens. */
 export function ambientTokens(core, palette, mode) {
   const ink = shadowInk(palette, mode);
-  const slots = { shadow: ink, brown: core["--osio-block-tint-brown-fg"] };
+  const slots = { shadow: ink, brown: structuralInk(core["--osio-block-tint-brown-fg"], palette) };
   const colourOf = (slot) => slots[slot] ?? core[`--osio-${slot}`];
   return {
     "--osio-shadow-rgb": channels(ink),

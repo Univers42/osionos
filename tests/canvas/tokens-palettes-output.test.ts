@@ -116,7 +116,7 @@ test("a cool palette gets its own shadows, scrim and graph chrome", () => {
   for (const mode of MODES) {
     const cool = modeTokens(nord, mode);
     const warm = modeTokens(defaultPalette, mode);
-    for (const name of ["--osio-graph-bg-1", "--osio-graph-edge", "--osio-graph-halo", "--osio-graph-edge-note", "--osio-block-tint-blue-bg"]) {
+    for (const name of ["--osio-graph-bg-1", "--osio-graph-edge", "--osio-graph-halo", "--osio-graph-edge-note", "--osio-graph-edge-tag", "--osio-graph-edge-hier", "--osio-block-tint-blue-bg"]) {
       assert.notEqual(cool[name], warm[name], `${mode} ${name}`);
     }
   }
@@ -130,24 +130,62 @@ test("the default palette's shadow tint stays the warm brown it always was", () 
   for (const [actual, expected] of [[red, 40], [green, 33], [blue, 24]]) assert.ok(Math.abs(actual - expected) <= 3, `${actual} vs ${expected}`);
 });
 
+// The effective colour of an "rgba(r, g, b, a)" ink laid over a "#RRGGBB" page, per channel.
+function blended(ink: string, page: string) {
+  const [red, green, blue, alpha] = ink.match(/[\d.]+/g)!.map(Number);
+  const base = [1, 3, 5].map((start) => Number.parseInt(page.slice(start, start + 2), 16));
+  return [red, green, blue].map((channel, index) => alpha * channel + (1 - alpha) * base[index]);
+}
+
 test("the default palette's graph chrome stays close to what was hand-written", () => {
   const light = modeTokens(defaultPalette, "light");
   assert.equal(light["--osio-graph-bg-1"], "#F2F0EC");
   assert.equal(light["--osio-graph-edge-hier"], "rgba(122, 74, 44, 0.62)");
   assert.equal(modeTokens(defaultPalette, "dark")["--osio-graph-edge"], "rgba(168, 163, 153, 0.26)");
+  const edge = blended(light["--osio-graph-edge"], "#F3F0E7");
+  const wasEdge = blended("rgba(74, 66, 53, 0.28)", "#F3F0E7");
+  edge.forEach((channel, index) => assert.ok(Math.abs(channel - wasEdge[index]) <= 5, `light edge channel ${index}: ${channel} vs ${wasEdge[index]}`));
+  assert.equal(light["--osio-overlay"], "rgba(27, 26, 24, 0.42)");
 });
 
-test("every elevation and cell shadow is tinted by --osio-shadow-rgb, never a literal", () => {
+// A hierarchy edge that is the same brown in every palette is the default
+// palette's graph showing through: it has to take the palette's neutral hue.
+test("hierarchy and tag edges follow each palette's neutral hue, and stay grey in a grey palette", () => {
+  for (const mode of MODES) {
+    const seen = new Map<string, string>();
+    for (const palette of PALETTES) {
+      const edge = modeTokens(palette, mode)["--osio-graph-edge-hier"];
+      const [red, green, blue] = edge.match(/[\d.]+/g)!.map(Number);
+      if (palette.neutral.chroma === 0) assert.ok(Math.max(red, green, blue) - Math.min(red, green, blue) <= 2, `${palette.id}/${mode} ${edge}`);
+      seen.set(palette.neutral.hue + ":" + palette.neutral.chroma, edge);
+    }
+    const distinctNeutrals = new Set(PALETTES.map((palette: { neutral: { hue: number; chroma: number } }) => `${palette.neutral.hue}:${palette.neutral.chroma}`));
+    assert.equal(new Set(seen.values()).size, distinctNeutrals.size, `${mode}: one hierarchy edge per distinct neutral`);
+  }
+});
+
+// Both palettes were hand-tuned to a hue; the pins keep it. Only the colours
+// the contrast gate forces may move.
+test("monochrome and maximal keep their hand-written light text colours", () => {
+  const mono = resolvedTokens(paletteById("mono"), "light");
+  assert.deepEqual([mono["--osio-fg-default"], mono["--osio-fg-strong"], mono["--osio-fg-muted"]], ["#0A0A0A", "#000000", "#565656"]);
+  const maximal = resolvedTokens(paletteById("maximal"), "light");
+  assert.deepEqual([maximal["--osio-fg-default"], maximal["--osio-fg-strong"], maximal["--osio-fg-muted"]], ["#1A1422", "#120D1A", "#6A6080"]);
+});
+
+test("every elevation and cell shadow is tinted by --osio-shadow-rgb in every mode, never a literal", () => {
   const blocks = blocksOf(readAppFile("src/app/styles/global.css"), /^(:root|\[data-theme="(light|dark)"\])/);
-  const shadows = new Map<string, string>();
-  for (const block of blocks.values()) {
-    for (const [name, value] of Object.entries(block)) if (/^--osio-(e[1-5]|shadow-(sm|menu|modal|cell|cell-selected))$/.test(name)) shadows.set(name, value);
+  const shadowName = /^--osio-(e[1-5]|shadow-(sm|menu|modal|cell|cell-selected))$/;
+  let checked = 0;
+  for (const [selector, block] of blocks) {
+    for (const [name, value] of Object.entries(block)) {
+      if (!shadowName.test(name)) continue;
+      checked += 1;
+      assert.match(value, /rgb\(var\(--osio-shadow-rgb\) \/ [\d.]+\)/, `${selector} ${name}`);
+      assert.doesNotMatch(value, /rgba\(/, `${selector} ${name}`);
+    }
   }
-  assert.ok(shadows.size >= 10, `found ${shadows.size} shadow tokens`);
-  for (const [name, value] of shadows) {
-    assert.match(value, /rgb\(var\(--osio-shadow-rgb\) \/ [\d.]+\)/, name);
-    assert.doesNotMatch(value, /rgba\(/, name);
-  }
+  assert.ok(checked >= 20, `found ${checked} shadow declarations across the light and dark blocks`);
 });
 
 test("pins override generated values and aliases, and what is derived from them follows", () => {

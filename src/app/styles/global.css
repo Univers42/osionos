@@ -353,12 +353,12 @@
   --osio-db-line: color-mix(in srgb, var(--osio-border-strong) 70%, transparent);
   --osio-db-line-soft: color-mix(in srgb, var(--osio-border-strong) 42%, transparent);
 
-  /* Soft warm elevation — only floating layers cast a shadow. */
+  /* Soft elevation, cast in the palette's own --osio-shadow-rgb — only floating layers cast a shadow. */
   --osio-shadow-sm: 0 1px 2px rgb(var(--osio-shadow-rgb) / 0.05);
   --osio-shadow-menu: 0 4px 14px rgb(var(--osio-shadow-rgb) / 0.08), 0 1px 3px rgb(var(--osio-shadow-rgb) / 0.05);
   --osio-shadow-modal: 0 16px 40px rgb(var(--osio-shadow-rgb) / 0.12), 0 2px 8px rgb(var(--osio-shadow-rgb) / 0.07);
 
-  /* Numeric elevation ladder e0–e5 (ambient + key light, warm-brown based). One
+  /* Numeric elevation ladder e0–e5 (ambient + key light, cast in --osio-shadow-rgb). One
      depth scale so surfaces pick a level by prominence, not a bespoke shadow. */
   --osio-e0: none;
   --osio-e1: 0 1px 2px rgb(var(--osio-shadow-rgb) / 0.05), 0 1px 1px rgb(var(--osio-shadow-rgb) / 0.03);
@@ -395,7 +395,7 @@
   --osio-shadow-menu: 0 4px 16px rgb(var(--osio-shadow-rgb) / 0.55);
   --osio-shadow-modal: 0 18px 44px rgb(var(--osio-shadow-rgb) / 0.6);
 
-  /* Elevation ladder e0–e5 — deeper, black-based so layers separate on charcoal. */
+  /* Elevation ladder e0–e5 — deeper (dark palettes cast in black) so layers separate on charcoal. */
   --osio-e0: none;
   --osio-e1: 0 1px 2px rgb(var(--osio-shadow-rgb) / 0.4);
   --osio-e2: 0 2px 8px rgb(var(--osio-shadow-rgb) / 0.45), 0 1px 2px rgb(var(--osio-shadow-rgb) / 0.35);
