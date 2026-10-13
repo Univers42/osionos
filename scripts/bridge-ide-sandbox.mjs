@@ -36,7 +36,7 @@ import { containerHasActivity, disposeSessionsFor } from './ide-term-sessions.mj
 const BODY_LIMIT = 8 * 1024;
 const SANDBOX_NET = 'osio-ide-sandbox-net';
 
-function jsonReply(response, status, body, config) {
+export function jsonReply(response, status, body, config) {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
