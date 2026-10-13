@@ -19,6 +19,10 @@
 //   workbench ON,  default seed : p95 31.5-31.9 ms (floor 30.7-31.0) -> 38
 //   workbench OFF, default seed : p95 31.2-31.7 ms (floor 30.8-30.9) -> 38
 //   workbench ON,  ~2000 pages  : p95 31.8-31.9 ms (floor 31.5)      -> 38
+//   workbench ON,  ~10000 pages : p95 31.4 ms (floor 31.2), one run   -> 38
+// The page cache write is not in the keystroke: at 10 000 pages savePagesCache costs ~26 ms
+// once per typing pause (idle callback; probe 2026-10-13: JSON.stringify 6-7 ms, setItem of
+// the 3.7 MB string 15-17 ms), so a key pressed during it waits up to that long.
 // A keystroke that costs one more frame lands at ~48 ms and fails all three.
 
 import { expect, test } from "@playwright/test";
@@ -30,7 +34,7 @@ test.use(PERF_USE);
 
 const SPEC = "typing";
 const TARGET_MS = 16;
-const BUDGET = { workbenchOn: 38, workbenchOff: 38, pages2000: 38 };
+const BUDGET = { workbenchOn: 38, workbenchOff: 38, pages2000: 38, pages10000: 38 };
 
 async function openEditor(page, workbench) {
   await bootApp(page, { workbench });
@@ -67,6 +71,14 @@ test("block page typing, workbench ON, ~2000 pages seeded", async ({ page }) => 
   const seeded = await page.evaluate(() => globalThis.__perfSeedPages(2000));
   writeReport(SPEC, "seed2000", { seeded });
   await typeCase(page, editor, "workbenchOn.pages2000", BUDGET.pages2000);
+});
+
+test("block page typing, workbench ON, ~10000 pages seeded", async ({ page }) => {
+  test.setTimeout(180_000);
+  const editor = await openEditor(page, true);
+  const seeded = await page.evaluate(() => globalThis.__perfSeedPages(10_000));
+  writeReport(SPEC, "seed10000", { seeded });
+  await typeCase(page, editor, "workbenchOn.pages10000", BUDGET.pages10000);
 });
 
 test("block page typing, workbench OFF baseline", async ({ page }) => {
