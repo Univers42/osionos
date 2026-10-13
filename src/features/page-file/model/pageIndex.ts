@@ -38,6 +38,8 @@ export interface PageIndex {
 interface Frame {
   entry: PageIndexEntry;
   dir: string;
+  /** Own file name: every frame here shares `prefix`, so this orders like the full path. */
+  own: string;
 }
 
 type Groups = ReadonlyMap<string | null, readonly PageEntry[]>;
@@ -90,7 +92,14 @@ function joinPath(prefix: string, name: string): string {
   return prefix === "" ? name : `${prefix}/${name}`;
 }
 
-/** The live children of `parentId` in REVERSE name order, so the stack pops them in order. */
+/** Reverse own-name order, so the stack pops siblings in name order. O(1). */
+function compareOwnDesc(a: Frame, b: Frame): number {
+  return a.own < b.own ? 1 : a.own > b.own ? -1 : 0;
+}
+
+/** The live children of `parentId` in REVERSE name order, so the stack pops them in order.
+ *  Comparing own names skips the shared prefix a full-path compare re-scans on every
+ *  test (paths nest 12 deep); the order is identical. O(g log g) for g siblings. */
 function childFrames(groups: Groups, parentId: string | null, prefix: string): Frame[] {
   const group = groups.get(parentId);
   if (!group) return [];
@@ -99,8 +108,10 @@ function childFrames(groups: Groups, parentId: string | null, prefix: string): F
   for (const page of group) {
     const name = names.get(page._id);
     if (!name) continue;
-    const entry = { id: page._id, path: joinPath(prefix, name.own), kind: kindOfPage(page), parentId };
-    frames.push({ entry, dir: joinPath(prefix, name.childDir) });
+    const path = joinPath(prefix, name.own);
+    const dir = name.own === name.childDir ? path : joinPath(prefix, name.childDir);
+    frames.push({ entry: { id: page._id, path, kind: kindOfPage(page), parentId }, dir, own: name.own });
   }
-  return frames.sort((a, b) => (a.entry.path < b.entry.path ? 1 : a.entry.path > b.entry.path ? -1 : 0));
+  if (frames.length > 1) frames.sort(compareOwnDesc);
+  return frames;
 }
