@@ -31,7 +31,7 @@ import { ActivitySidebar } from "@/widgets/activity-rail";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPagePrune";
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
-import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
+import { SidebarEdgePeek } from "@/widgets/activity-rail/ui/SidebarEdgePeek";
 import { LazyCanvasDebugRoute, LazyIdeShell, LazyMainContent, LazyStyleGuideRoute } from "./lazyAppRegions";
 import { isIdeEnabled } from "@/shared/config/featureFlags";
 import { useIdeModeStore } from "@/features/ide/model/ideModeStore";
@@ -357,8 +357,12 @@ const App: React.FC = () => {
           onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
         />
 
-        {/* Floating trigger for when sidebar is closed */}
-        <SidebarTrigger />
+        {/* Hidden sidebar: the left edge reveals it over the page (no floating button). */}
+        <SidebarEdgePeek
+          onOpenSettings={() => openSettings()}
+          onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
+          onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
+        />
 
         {/* Content area — the dedicated IDE shell when this workspace is in IDE
             mode, otherwise the normal tabbed/splittable workspace grid. */}

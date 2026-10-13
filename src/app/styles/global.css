@@ -1766,7 +1766,8 @@ body {
    ========================================================================== */
 [data-zen="1"] [data-testid="app-topbar"],
 [data-zen="1"] aside[aria-label="Sidebar"],
-[data-zen="1"] [data-osio-sidebar-trigger],
+[data-zen="1"] [data-sidebar-edge],
+[data-zen="1"] [data-sidebar-peek],
 [data-zen="1"] [data-osio-tabstrip],
 [data-zen="1"] [data-osio-toc],
 [data-zen="1"] [data-osio-dock] {

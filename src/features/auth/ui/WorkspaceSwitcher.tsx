@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { lazy, Suspense, useRef, useState } from 'react';
-import { ChevronDown, PanelLeftClose, PenSquare } from 'lucide-react';
+import { ChevronDown, PenSquare } from 'lucide-react';
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useUserStore } from '@/features/auth';
 
@@ -21,7 +21,6 @@ const UserSwitcherPanel = lazy(() =>
   import('@/features/auth/ui/UserSwitcherPanel').then((m) => ({ default: m.UserSwitcherPanel })),
 );
 import { usePageStore } from '@/store/usePageStore';
-import { useUIStore } from '@/shared/config/uiStore';
 import {
   getCollectionEmojiValue,
 } from '@/shared/ui/assets/uiCollectionAssets';
@@ -47,7 +46,6 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
   const workspaceName   = activeWorkspace?.name ?? session?.privateWorkspaces[0]?.name ?? 'My Workspace';
   const addPage         = usePageStore(s => s.addPage);
   const openPage        = usePageStore(s => s.openPage);
-  const setSidebarOpen  = useUIStore(s => s.setSidebarOpen);
   const renameWorkspace = useUserStore(s => s.renameWorkspace);
   const activeUserId    = useUserStore(s => s.activeUserId);
   // Icon precedence: durable workspace config (Settings → Workspace → Icon) → session record.
@@ -143,18 +141,6 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             <PenSquare size={18} />
           </button>
 
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(false)}
-            className={[
-              'flex items-center justify-center w-7 h-7 rounded shrink-0',
-              'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]',
-              'transition-colors duration-100 cursor-pointer',
-            ].join(' ')}
-            title="Close sidebar"
-          >
-            <PanelLeftClose size={18} />
-          </button>
 
           {/* Dropdown chevron */}
           <button
