@@ -23,9 +23,11 @@ export type InboundPath = { segments: string[] } | { skip: string };
  * sanitizeSegment folds only runs of two or more dots and hands "." back, but
  * "." is the directory itself (the writer maps a "." title to "untitled").
  *
- * Ponytail: the writer adds ".omd" AFTER sanitizing, so a page titled "etc."
- * is written as "etc..omd", which this guard refuses — that page's shell edits
- * are a loud skip (never a wrong page) until it is renamed in the app.
+ * The writer trims a page title's trailing dots before ".omd" (pagePaths
+ * baseFor), so no page file is named "etc..omd". Ponytail: one written before
+ * that trim stays in the sandbox (attach leaves sandbox-only files alone) and
+ * every edit to it is a loud skip, never a wrong page; delete it by hand —
+ * "etc.omd" is that page's file now.
  *
  * O(len(path)) — one split plus one sanitizeSegment per segment.
  */

@@ -96,11 +96,13 @@ function claimNext(page: PageEntry, claimed: Set<string>, nextK: Map<string, num
  * Sanitized base plus its lower-case, sharing one `toLowerCase` between the `.omd`
  * probe and the collision key (the old code paid it twice per page). A page drops a
  * typed ".omd" (the suffix is added back), a code file named "*.omd" gets ".txt" so
- * it is never read back as a page file. O(title).
+ * it is never read back as a page file. A page also drops trailing dots: "etc." would
+ * be "etc..omd", a name the inbound guard refuses (inboundSegments). O(title).
  */
 function baseFor(page: PageEntry, kind: PageFileKind): { base: string; lower: string } {
   const raw = sanitizeSegment(page.title || "untitled");
-  const clean = raw === "." ? "untitled" : raw;
+  const trimmed = kind === "page" ? raw.replace(/\.+$/, "") : raw;
+  const clean = trimmed === "" || trimmed === "." ? "untitled" : trimmed;
   const lowerRaw = clean.toLowerCase();
   if (kind === "code") {
     if (lowerRaw.endsWith(PAGE_FILE_SUFFIX)) return { base: `${clean}.txt`, lower: `${lowerRaw}.txt` };

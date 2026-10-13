@@ -41,7 +41,7 @@ test("R1: a path the app could never own (.., ., empty) is one loud skip, and re
   assert.equal(view.table.ledger.size, 0, "a skipped path never reaches the ledger");
 });
 
-test("R1: Ponytail — the file of a page titled \"etc.\" (etc..omd) is refused loudly, never misread", async () => {
+test("R1: Ponytail — a stale etc..omd (a page titled \"etc.\" before the Q1 trim) is refused loudly, never misread", async () => {
   const view = viewOf([{ id: "E", path: "etc..omd", text: pageText("E") }]);
   await expectPlan(view, write("etc..omd", "h", pageText("E", "edit")), [invalid("etc..omd")]);
 });
