@@ -15,8 +15,8 @@ import { Columns2, Plus, X } from "lucide-react";
 
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
 import { useIdeSyncConflicts, conflictCount } from "@/features/ide/model/ideSyncConflicts";
-import { IdeOutputPanel } from "./IdeOutputPanel";
-import { IdePortsPanel } from "./IdePortsPanel";
+import { IdeOutputPanel } from "@/features/ide/ui/IdeOutputPanel";
+import { IdePortsPanel } from "@/features/ide/ui/IdePortsPanel";
 import { IdeProblemsPanel } from "@/features/ide/ui/IdeProblemsPanel";
 
 // Lazy so xterm.js (~250KB) loads only when the terminal panel first opens.

@@ -15,8 +15,8 @@ import { Columns2, Plus, X } from "lucide-react";
 
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
 import { useIdeSyncConflicts, conflictCount } from "@/features/ide/model/ideSyncConflicts";
-import { IdeOutputPanel } from "@/widgets/ide-shell/ui/IdeOutputPanel";
-import { IdePortsPanel } from "@/widgets/ide-shell/ui/IdePortsPanel";
+import { IdeOutputPanel } from "@/features/ide/ui/IdeOutputPanel";
+import { IdePortsPanel } from "@/features/ide/ui/IdePortsPanel";
 import { IdeProblemsPanel } from "@/features/ide/ui/IdeProblemsPanel";
 import { DOCK_TABS, clampDockHeight, type DockTab } from "@/widgets/workbench/model/workbenchLayout";
 import { useWorkbenchStore } from "@/widgets/workbench/model/workbenchStore";

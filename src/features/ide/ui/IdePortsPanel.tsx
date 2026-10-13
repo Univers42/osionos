@@ -17,7 +17,7 @@ import { ExternalLink } from "lucide-react";
 import { useUserStore } from "@/features/auth";
 import { fetchSandboxPorts, openPortPreview, type SandboxPort } from "@/features/ide/model/idePorts";
 import { isSandboxOnline, useSandboxHealthStore } from "@/features/ide/model/sandboxHealthStore";
-import { SandboxUnavailable } from "@/features/ide/ui/SandboxUnavailable";
+import { SandboxUnavailable } from "./SandboxUnavailable";
 
 // Ponytail: fixed 5 s interval — a slow response can overlap the next tick and
 // land out of order; harmless for a listener list. Runs only while health is online.
