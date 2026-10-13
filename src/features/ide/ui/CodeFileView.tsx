@@ -100,7 +100,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     onFormat: () => formatRef.current(),
   });
 
-  // Run the CURRENT editor text. In IDE Workspace mode, run in the sandbox's REAL
+  // Run the CURRENT editor text. When the workspace is bound to a sandbox, run in its REAL
   // interactive PTY so stdin/input() work (the one-shot runner has no stdin →
   // input() gets EOF). Otherwise fall back to that stateless runner.
   const runNow = React.useCallback(() => {
