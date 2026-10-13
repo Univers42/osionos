@@ -39,17 +39,9 @@
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--osio-bg-page);
-  font-family: var(--page-font-family, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-family: var(--page-font-family, var(--osio-font-ui));
   position: relative;
   container-type: size;   /* powers PageOutlineRail 50cqh centering + @container narrow-hide */
-}
-
-.osionos-page--font-serif {
-  font-family: Georgia, "Times New Roman", serif;
-}
-
-.osionos-page--font-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
 .osionos-page--small-text {
@@ -57,7 +49,7 @@
 }
 
 .osionos-page--small-text .osionos-page-title {
-  font-size: calc(40px * var(--page-font-size-scale, 0.8));
+  font-size: calc(var(--osio-font-size-display) * var(--page-font-size-scale, 0.8));
 }
 
 /* ── Reading scale ────────────────────────────────────────────────────── */
@@ -1374,9 +1366,7 @@ button.osionos-page-breadcrumb:hover {
 .osionos-page-title {
   display: block;
   width: 100%;
-  font-size: 40px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: var(--osio-font-size-display);
   color: var(--osio-fg-default);
   outline: none;
   border: none;
@@ -1633,8 +1623,11 @@ button.osionos-page-breadcrumb:hover {
 /* ── Responsive (visual adjustments only — layout is fluid) ──────── */
 
 @media (max-width: 768px) {
+  /* Stays above the 30px reading h1 (3xl) at phone widths, so the title is
+     still the largest line. Ponytail: 8.5vw is eyeballed — a long title wraps
+     one line sooner on a 360px screen than at 30px. */
   .osionos-page-title {
-    font-size: 30px;
+    font-size: clamp(var(--osio-font-size-3xl), 8.5vw, var(--osio-font-size-display));
   }
 
   .osionos-page-icon {

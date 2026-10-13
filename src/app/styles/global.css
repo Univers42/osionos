@@ -17,6 +17,7 @@
    palettes other than the default. */
 @import "./tokens.generated.css";
 @import "./shell.css";
+@import "./type.css";
 /* The vendored database's own colours (tables, boards, charts) as references to
    the tokens above, plus its stock shadow and radius classes. */
 @import "./database-bridge.generated.css";
@@ -147,6 +148,39 @@
   unicode-range: U+1f6d9, U+1fa8b-1fa8d, U+1facc, U+1fadd, U+1faeb;
 }
 
+/* Metric-matched Newsreader fallback (over Times New Roman, which Liberation
+   Serif matches metric for metric) so the title and headings do not jump when
+   the woff2 arrives. Derived from Newsreader's hhea table (upm 2000, ascent
+   1470, descent 530, line gap 0) and from text measured in Chromium at 100px:
+   one English sentence of about 190 characters is 7985px wide in Newsreader 400 against
+   7625px in Liberation Serif 400 (x1.047), and 8362px in Newsreader 600 against
+   8097px in Liberation Serif 700 (x1.033). Overrides are metric / size-adjust,
+   the same formula as the Inter block below: 73.5 / 1.047 = 70.2%,
+   26.5 / 1.047 = 25.3%; 73.5 / 1.033 = 71.2%, 26.5 / 1.033 = 25.7%.
+   Ponytail: one English sentence stands in for a real glyph-frequency average,
+   so a different language or mostly capitals drifts a few percent; Georgia
+   (wider than Times) and any face a machine lacks are not matched at all; the
+   bold face also serves 500 and 600. The second family in --osio-font-heading
+   absorbs the miss. */
+@font-face {
+  font-family: "Newsreader Fallback";
+  font-weight: 400;
+  src: local("Times New Roman"), local("Liberation Serif");
+  size-adjust: 104.7%;
+  ascent-override: 70.2%;
+  descent-override: 25.3%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Newsreader Fallback";
+  font-weight: 700;
+  src: local("Times New Roman Bold"), local("Liberation Serif Bold");
+  size-adjust: 103.3%;
+  ascent-override: 71.2%;
+  descent-override: 25.7%;
+  line-gap-override: 0%;
+}
+
 /* Metric-matched Inter fallback (over Arial) to kill swap CLS. */
 @font-face {
   font-family: "Inter Fallback";
@@ -206,6 +240,17 @@
   --shadow-osio-modal: var(--osio-shadow-modal);
 }
 
+/* Sizes the stock Tailwind scale lacks: text-2xs, text-3xs, text-display. Static
+   so the variables stay in the output when no utility uses them yet. */
+@theme static {
+  --text-2xs: var(--osio-font-size-2xs);
+  --text-2xs--line-height: var(--osio-line-height-tight);
+  --text-3xs: var(--osio-font-size-3xs);
+  --text-3xs--line-height: var(--osio-line-height-tight);
+  --text-display: var(--osio-font-size-display);
+  --text-display--line-height: var(--osio-line-height-display);
+}
+
 :root {
   /* Tailwind's stock theme keys, mapped onto the tokens below. Unlayered on
      purpose, not in @theme: the vendored notion-database-sys stylesheet ships
@@ -254,9 +299,14 @@
      Mono (code). Web faces load via @font-face (self-hosted, see fonts.css); the
      system stacks below are metric-matched fallbacks so missing faces degrade
      gracefully with no layout shift. */
-  --osio-font-family-sans: "Inter Variable", "Inter Fallback", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Twemoji Mozilla", emoji;
-  --osio-font-family-serif: "Newsreader", Georgia, "Iowan Old Style", "Times New Roman", serif, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Twemoji Mozilla", emoji;
+  --osio-font-ui: "Inter Variable", "Inter Fallback", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Twemoji Mozilla", emoji;
+  --osio-font-heading: "Newsreader", "Newsreader Fallback", Georgia, "Iowan Old Style", "Times New Roman", serif, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Twemoji Mozilla", emoji;
+  --osio-font-display: var(--osio-font-heading);
+  --osio-font-family-sans: var(--osio-font-ui);
+  --osio-font-family-serif: var(--osio-font-heading);
   --osio-font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Consolas, Menlo, monospace, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Twemoji Mozilla", emoji;
+  --osio-font-size-3xs: 10px;
+  --osio-font-size-2xs: 11px;
   --osio-font-size-xs: 12px;
   --osio-font-size-sm: 14px;
   --osio-font-size-base: 14px;
@@ -264,13 +314,19 @@
   --osio-font-size-xl: 20px;
   --osio-font-size-2xl: 24px;
   --osio-font-size-3xl: 30px;
+  --osio-font-size-display: 40px;
   --osio-line-height-tight: 1.25;
+  --osio-line-height-snug: 1.375;
   --osio-line-height-normal: 1.5;
+  --osio-line-height-display: 1.2;
+  --osio-letter-spacing-heading: -0.01em;
+  --osio-letter-spacing-display: -0.02em;
 
   --osio-font-weight-normal: 400;
   --osio-font-weight-medium: 500;
   --osio-font-weight-semibold: 600;
   --osio-font-weight-bold: 700;
+  --osio-font-weight-display: 600;
 
   --osio-z-base: 0;
   --osio-z-raised: 10;
@@ -505,7 +561,7 @@
 html,
 body {
   height: 100%;
-  font-family: var(--osio-font-family-sans);
+  font-family: var(--osio-font-ui);
   color: var(--osio-fg-default);
   background: var(--osio-bg-page);
   -webkit-font-smoothing: antialiased;
@@ -540,10 +596,10 @@ body {
   box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--osio-fg-default) 9%, transparent);
 }
 
-/* Editorial serif headings. */
+/* Editorial serif headings: the same stack and tracking as osio-h1..h4. */
 :where(h1, h2, h3, h4) {
-  font-family: var(--osio-font-family-serif);
-  letter-spacing: -0.01em;
+  font-family: var(--osio-font-heading);
+  letter-spacing: var(--osio-letter-spacing-heading);
 }
 
 /* Scrollbar styling */

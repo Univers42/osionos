@@ -456,7 +456,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-2xl font-bold text-[var(--osio-fg-default)] leading-tight"
+          className="osio-h1 text-[var(--osio-fg-default)]"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 1")}
           onChange={onChange}
@@ -472,7 +472,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-xl font-semibold text-[var(--osio-fg-default)] leading-tight"
+          className="osio-h2 text-[var(--osio-fg-default)]"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 2")}
           onChange={onChange}
@@ -488,7 +488,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-lg font-semibold text-[var(--osio-fg-default)] leading-snug"
+          className="osio-h3 text-[var(--osio-fg-default)]"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 3")}
           onChange={onChange}
@@ -505,7 +505,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-base font-semibold text-[var(--osio-fg-default)] leading-snug"
+          className="osio-h4 text-[var(--osio-fg-default)]"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 4")}
           onChange={onChange}
@@ -809,7 +809,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <div className="flex-1 min-w-0">
             <EditableContent
               content={block.content}
-              className={`${getToggleHeadingClass(block.headingLevel)} text-[var(--osio-fg-muted)] leading-relaxed py-0.5 italic`}
+              className={`${getToggleHeadingClass(block.headingLevel)} text-[var(--osio-fg-muted)] py-0.5 italic`}
               style={editableStyle}
               placeholder="Quote… end a line with “— Source” to add a citation"
               onChange={onChange}
@@ -866,7 +866,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <div className="min-w-0 max-w-full flex-1">
             <EditableContent
               content={block.content}
-              className={`py-0.5 leading-relaxed break-words text-[var(--osio-fg-default)] ${getToggleHeadingClass(block.headingLevel)}`}
+              className={`py-0.5 break-words text-[var(--osio-fg-default)] ${getToggleHeadingClass(block.headingLevel)}`}
               style={editableStyle}
               placeholder={getBlockPlaceholder(block, "Type… '/' for commands · Enter to add blocks inside")}
               onChange={onChange}
