@@ -35,6 +35,9 @@ const isIntegerAtLeast = (min: number): ExtraKeyCheck => (value) =>
 const isMediaWidth: ExtraKeyCheck = (value) =>
   typeof value === "number" && Number.isFinite(value) && value > 0 && value <= 100;
 
+const isHeadingLevel: ExtraKeyCheck = (value) =>
+  typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 6;
+
 const isOneOf = (...allowed: string[]): ExtraKeyCheck => (value) =>
   typeof value === "string" && allowed.includes(value);
 
@@ -78,6 +81,13 @@ export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.
   layoutRole: isOneOf("header"),
   layoutConfig: isPlainRecord,
   layoutCells: isLayoutCells,
+  // Markdown carries a heading level only on a toggle ("##>"); a quote or a
+  // callout heading would lose it, so it rides the overlay for every type.
+  headingLevel: isHeadingLevel,
+  // Ponytail: the fields inside are not validated (only "a plain object"), so a
+  // hand-edited overlay can hand the renderer a nonsense width; it cannot reach
+  // the prototype. Markdown carries only the column alignments of a table.
+  tableConfig: isPlainRecord,
 });
 
 /** Is `key` one of the overlay's extra keys? Object.hasOwn: no inherited names. */
