@@ -18,6 +18,7 @@ import { planDuplicate } from "./duplicatePlan";
 import {
   canDeletePage,
   canDuplicatePage,
+  canEditPage,
   canMovePage,
   canReadPage,
   getTargetWorkspaceMoveVisibility,
@@ -407,7 +408,9 @@ export function createArchivePage(set: SetFn, get: GetFn) {
   return async (pageId: string, workspaceId: string, jwt: string) => {
     const page = get().pageById(pageId);
     const context = getCurrentPageAccessContext();
-    if (!page || !canDeletePage(page, context)) return;
+    // Archiving is a PATCH of archived_at, so it asks 'update' (bridge-api.mjs:3005),
+    // not 'delete': an editor who may write but not delete still trashes a page.
+    if (!page || !canEditPage(page, context)) return;
 
     const archivedAt = new Date().toISOString();
 
@@ -874,7 +877,8 @@ export function createRestorePage(set: SetFn, get: GetFn) {
   return async (pageId: string, workspaceId: string, jwt: string) => {
     const page = get().pageById(pageId);
     const context = getCurrentPageAccessContext();
-    if (!page || !canDeletePage(page, context)) return;
+    // Restoring clears archived_at with the same PATCH as archiving — 'update'.
+    if (!page || !canEditPage(page, context)) return;
 
     const pageJwt = pageApiJwtFromSessionToken(jwt);
 
