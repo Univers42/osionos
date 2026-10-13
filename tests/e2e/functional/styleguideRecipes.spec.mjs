@@ -98,4 +98,53 @@ test.describe("styleguide recipes", () => {
     ]);
     expect(bubble.got).toEqual(bubble.want);
   });
+
+  // Every component token resolves to the same value as the semantic token it
+  // aliases, so reading the semantic token directly would compute identically.
+  // Overriding the component token with a distinct value tells them apart.
+  test("the kit reads the component tokens rather than the semantic ones", async ({ page, baseURL }) => {
+    await openStyleguide(page, baseURL);
+    await page.evaluate(() => {
+      const root = document.documentElement.style;
+      root.setProperty("--osio-overlay-bg", "rgb(1, 2, 3)");
+      root.setProperty("--osio-overlay-radius", "23px");
+      root.setProperty("--osio-overlay-border", "rgb(4, 5, 6)");
+      root.setProperty("--osio-tooltip-bg", "rgb(7, 8, 9)");
+      root.setProperty("--osio-control-radius", "21px");
+      root.setProperty("--osio-field-radius", "19px");
+      root.setProperty("--osio-field-bg", "rgb(10, 11, 12)");
+    });
+    const menu = section(page, "Overlays").getByRole("menu");
+    expect(await computed(menu, "background-color")).toBe("rgb(1, 2, 3)");
+    expect(await computed(menu, "border-top-left-radius")).toBe("23px");
+    expect(await computed(menu, "border-top-color")).toBe("rgb(4, 5, 6)");
+
+    const save = section(page, "Primitives").getByRole("button", { name: "Save", exact: true });
+    expect(await computed(save, "border-top-left-radius")).toBe("21px");
+    await save.hover();
+    expect(await computed(page.getByRole("tooltip"), "background-color")).toBe("rgb(7, 8, 9)");
+  });
+
+  test("the kit Dropdown list and Input read the overlay and field tokens", async ({ page, baseURL }) => {
+    await openStyleguide(page, baseURL);
+    await page.evaluate(() => {
+      const root = document.documentElement.style;
+      root.setProperty("--osio-overlay-bg", "rgb(1, 2, 3)");
+      root.setProperty("--osio-overlay-padding", "11px");
+      root.setProperty("--osio-field-h", "37px");
+      root.setProperty("--osio-field-radius", "19px");
+      root.setProperty("--osio-field-bg", "rgb(10, 11, 12)");
+    });
+    const trigger = page.getByRole("combobox", { name: "Sample stage" });
+    expect(await computed(trigger, "height")).toBe("37px");
+    expect(await computed(trigger, "border-top-left-radius")).toBe("19px");
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    const input = section(page, "Primitives").getByPlaceholder("Type something…");
+    expect(await computed(input, "border-top-left-radius")).toBe("19px");
+    expect(await computed(input, "background-color")).toBe("rgb(10, 11, 12)");
+    const list = page.getByRole("listbox");
+    expect(await computed(list, "background-color")).toBe("rgb(1, 2, 3)");
+    expect(await computed(list, "padding-top")).toBe("11px");
+  });
 });

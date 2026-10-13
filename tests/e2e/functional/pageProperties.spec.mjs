@@ -106,6 +106,35 @@ test.describe("page properties", () => {
     await expect(properties(page).locator(".osio-chip")).toHaveText(["alpha", "beta", "gamma"]);
   });
 
+  test("a chosen select value is a pill chip", async ({ page, baseURL }) => {
+    await openWithProperties(page, baseURL);
+    const stage = properties(page).getByRole("combobox", { name: "Stage" });
+    await stage.click();
+    await page.getByRole("option", { name: "Doing" }).click();
+    await expect(stage).toHaveText("Doing");
+    expect(await computed(stage, "border-top-left-radius")).toBe("9999px");
+    expect(await computed(stage, "height")).toBe("22px");
+  });
+
+  test("on a phone the open lists stay attached to their triggers", async ({ page, baseURL }) => {
+    await openWithProperties(page, baseURL);
+    // Resized after the page exists: the phone layout opens on Home, not on the new page.
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const name of ["Stage", "Add to Tags"]) {
+      const trigger = properties(page).getByRole("combobox", { name });
+      await trigger.focus();
+      await page.keyboard.press("Enter");
+      const list = page.getByRole("listbox");
+      await expect(list).toBeVisible();
+      await expect.poll(async () => (await list.boundingBox()).x).toBeGreaterThan(0);
+      const [listBox, triggerBox] = [await list.boundingBox(), await trigger.boundingBox()];
+      expect(Math.abs(listBox.x - triggerBox.x)).toBeLessThanOrEqual(2);
+      expect(listBox.x + listBox.width).toBeLessThanOrEqual(390);
+      await page.keyboard.press("Escape");
+      await expect(list).toHaveCount(0);
+    }
+  });
+
   for (const mode of ["light", "dark"]) {
     test(`the date field is a field recipe and follows the ${mode} theme`, async ({ page, baseURL }) => {
       await page.addInitScript((stored) => localStorage.setItem("osionos:theme-mode", stored), mode);

@@ -74,7 +74,7 @@
 @utility osio-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--osio-space-1);
   height: var(--osio-chip-h);
   padding-inline: var(--osio-chip-px);
   border-radius: var(--osio-chip-radius);
