@@ -397,7 +397,7 @@ export function verifyBridgeRequest({ headers, payload, secret, now = Date.now()
 		throw Object.assign(new Error('Bridge assertion replay rejected.'), { status: 409 });
 	}
 	replayStore.set(normalizedPayload.jti, { expiresAt: now + timestampSkewMs });
-	return normalizedPayload;
+	return { ...normalizedPayload, subject: normalizedPayload.subject.toLowerCase() };
 }
 
 export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [], isAdmin = false }) {
@@ -460,7 +460,7 @@ export function verifyAppSessionToken(token, config, now = Date.now()) {
 		throw Object.assign(new Error('App session token has no workspace access.'), { status: 401 });
 	}
 	return {
-		userId: String(payload.sub),
+		userId: String(payload.sub).toLowerCase(),
 		workspaceIds,
 		roles: payload.roles && typeof payload.roles === 'object' && !Array.isArray(payload.roles) ? payload.roles : {},
 		isAdmin: payload.is_admin === true,
@@ -1215,7 +1215,7 @@ export function createUserSession(payload, config, persisted = null, now = Date.
 	};
 	// Org/teamspace workspaces (osionos_workspace_members) ride along so the
 	// app can hydrate + switch to them; owned ones stay private, rest shared.
-	const extras = memberWorkspaces.filter((entry) => entry?._id && entry._id !== workspace._id);
+	const extras = memberWorkspaces.filter((entry) => entry?._id && !sameId(entry._id, workspace._id));
 	const { token, expiresAt } = signAppSessionToken({ payload, workspace, config, now, memberWorkspaces: extras, isAdmin });
 	return {
 		expiresAt,
@@ -1233,8 +1233,8 @@ export function createUserSession(payload, config, persisted = null, now = Date.
 			userId,
 			accessToken: token,
 			refreshToken: '',
-			privateWorkspaces: [workspace, ...extras.filter((entry) => entry.ownerId === userId)],
-			sharedWorkspaces: extras.filter((entry) => entry.ownerId !== userId),
+			privateWorkspaces: [workspace, ...extras.filter((entry) => sameId(entry.ownerId, userId))],
+			sharedWorkspaces: extras.filter((entry) => !sameId(entry.ownerId, userId)),
 		},
 	};
 }
