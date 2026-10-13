@@ -44,6 +44,15 @@ interface Props {
   peek?: boolean;
 }
 
+/** One panel's content. Memoized on its props, which do not change when the
+ *  user switches panel: a switch only flips the wrapper's `hidden`, and the
+ *  panels behind it (the Explorer's whole page tree) do not render at all. */
+const PanelBody = React.memo(function PanelBody({ panel, onOpenSettings, onOpenTrash, onOpenConsole }: Omit<Props, "peek"> & { panel: ActivePanel }) {
+  if (panel === "files") return <FilesPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />;
+  const Lazy = LAZY_PANELS[panel as keyof typeof LAZY_PANELS];
+  return Lazy ? <Lazy /> : null;
+});
+
 /** Escape in a panel hands the keyboard back to the page being edited. */
 function returnFocusToContent(event: React.KeyboardEvent): void {
   if (event.key !== "Escape" || event.defaultPrevented) return;
@@ -74,11 +83,6 @@ export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, o
   }, []);
   if (!visited.has(activePanel)) setVisited(new Set(visited).add(activePanel));
 
-  const render = (panel: ActivePanel) => {
-    if (panel === "files") return <FilesPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />;
-    const Lazy = LAZY_PANELS[panel as keyof typeof LAZY_PANELS];
-    return Lazy ? <Lazy /> : null;
-  };
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--osio-bg-subtle)]" onKeyDown={returnFocusToContent}>
@@ -95,7 +99,9 @@ export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, o
       </div>
       {[...visited].map((panel) => (
         <div key={panel} data-sidebar-panel={panel} hidden={panel !== activePanel} className="flex min-h-0 flex-1 flex-col">
-          <React.Suspense fallback={null}>{render(panel)}</React.Suspense>
+          <React.Suspense fallback={null}>
+            <PanelBody panel={panel} onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />
+          </React.Suspense>
         </div>
       ))}
     </div>
