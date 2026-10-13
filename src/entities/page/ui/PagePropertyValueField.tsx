@@ -56,14 +56,19 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
 
   if ((property.type === "select" || property.type === "status") && property.options?.length) {
     return (
-      <Dropdown
-        variant="inline"
-        width="auto"
-        label={property.label}
-        value={stringValue(property.value)}
-        options={[NO_VALUE, ...property.options.map((option) => ({ value: option, label: option }))]}
-        onChange={onChange}
-      />
+      // -ml-1.5 cancels the trigger's own inset so its text lines up with the
+      // chips, the date field's border and plain-text values above and below.
+      <div className="-ml-1.5 min-w-0">
+        <Dropdown
+          variant="inline"
+          width="auto"
+          label={property.label}
+          placeholder="Empty"
+          value={stringValue(property.value)}
+          options={[NO_VALUE, ...property.options.map((option) => ({ value: option, label: option }))]}
+          onChange={onChange}
+        />
+      </div>
     );
   }
 

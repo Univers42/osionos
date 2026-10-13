@@ -137,4 +137,15 @@ test.describe("page configuration menu", () => {
     await expect(language).toBeVisible();
     await expect(language).toHaveText(chosen);
   });
+  test("Escape closes only the language list and keeps focus on its combobox", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await page.getByRole("button", { name: "Open page configuration" }).click();
+    const language = page.getByRole("combobox", { name: "Translation language" });
+    await language.click();
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("listbox")).toHaveCount(0);
+    await expect(language).toBeVisible();
+    await expect(language).toBeFocused();
+  });
 });
