@@ -25,7 +25,7 @@ import { useDevMode } from "@/shared/config/useDevMode";
 import { createCodeFileBlock } from "@/features/ide/model/codeFile";
 import { OsionosAppsSection } from "./OsionosAppsSection";
 import { RecentPageActions, RecentPageRow } from "./RecentPageRow";
-import { PageTreeItem } from "./PageTreeItem";
+import { PageTreeRows } from "./PageTreeItem";
 import { SidebarTreeToolbar } from "./SidebarTreeToolbar";
 import { useSidebarTreeDnd } from "../model/sidebarTreeDnd";
 import { byPageOrder } from "./pageTreeItem.helpers";
@@ -449,16 +449,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
       </SidebarSection>
 
       <SidebarSection label="Agents" onAdd={createAgentPage}>
-        {agentPageIds.map((pageId) => (
-          <PageTreeItem
-            key={pageId}
-            pageId={pageId}
-            workspaceId={activeWorkspaceId}
-            jwt={jwt}
-            depth={0}
-            activeId={activePageId}
-          />
-        ))}
+        <PageTreeRows pageIds={agentPageIds} workspaceId={activeWorkspaceId} jwt={jwt} depth={0} activeId={activePageId} />
         <SidebarNavItem
           icon={<Plus size={14} />}
           label="New agent"
@@ -506,16 +497,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
                 No pages yet
               </p>
             )}
-            {pageIds.map((pageId) => (
-              <PageTreeItem
-                key={pageId}
-                pageId={pageId}
-                workspaceId={ws._id}
-                jwt={jwt}
-                depth={0}
-                activeId={activePageId}
-              />
-            ))}
+            <PageTreeRows pageIds={pageIds} workspaceId={ws._id} jwt={jwt} depth={0} activeId={activePageId} />
             <SidebarNavItem
               icon={<FolderPlus size={14} />}
               label="New folder"
@@ -539,26 +521,8 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         }
       >
         <SectionDropZone visibility="shared" workspaceId={activeWorkspaceId} />
-        {ownedSharedPageIds.map((pageId) => (
-          <PageTreeItem
-            key={pageId}
-            pageId={pageId}
-            workspaceId={activeWorkspaceId}
-            jwt={jwt}
-            depth={0}
-            activeId={activePageId}
-          />
-        ))}
-        {sharedWorkspaceRootPageIds.map((pageId) => (
-          <PageTreeItem
-            key={pageId}
-            pageId={pageId}
-            workspaceId={activeWorkspaceId}
-            jwt={jwt}
-            depth={0}
-            activeId={activePageId}
-          />
-        ))}
+        <PageTreeRows pageIds={ownedSharedPageIds} workspaceId={activeWorkspaceId} jwt={jwt} depth={0} activeId={activePageId} />
+        <PageTreeRows pageIds={sharedWorkspaceRootPageIds} workspaceId={activeWorkspaceId} jwt={jwt} depth={0} activeId={activePageId} />
         {ownedSharedPageIds.length === 0 && sharedWorkspaceRootPageIds.length === 0 ? (
           <SidebarNavItem
             icon={<Plus size={14} className="text-[var(--osio-accent)]" />}

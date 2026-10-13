@@ -276,7 +276,7 @@ function insertPerfPage(page: PageEntry): ActivePage {
           page,
           ...existingPages.filter((existingPage) => !existingPage._id.startsWith(PERF_PAGE_ID_PREFIX)),
         ],
-      }, state.pageIdsByWorkspace),
+      }, state),
       showTrash: false,
       navigationPath: [],
     };
@@ -301,7 +301,7 @@ function ensurePerfContent(pageId: string, blocks: Block[]) {
         entry._id === pageId ? { ...entry, content: blocks } : entry
       ));
     }
-    return derivePageState(pages, state.pageIdsByWorkspace);
+    return derivePageState(pages, state);
   });
 }
 

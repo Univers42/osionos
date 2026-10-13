@@ -56,7 +56,9 @@ async function profileKeystrokeCase(page, editor, { seedPages = 0, caseName, raw
   console.log(formatTop(total, 40));
   writeReport(SPEC, caseName, { toPaint, totalMs, selfTop: self.slice(0, 60), totalTop: total.slice(0, 80) });
   writeFileSync(path.join(REPORT_DIR, rawName), `${JSON.stringify(profile)}\n`);
-  expect(await editor.textContent()).toContain("a".repeat(WARMUP_RUNS + PROFILE_RUNS));
+  const typed = "a".repeat(WARMUP_RUNS + PROFILE_RUNS);
+  if (await editor.evaluate((node) => node instanceof HTMLInputElement)) await expect(editor).toHaveValue(new RegExp(`${typed}$`));
+  else expect(await editor.textContent()).toContain(typed);
   expect(totalMs).toBeGreaterThan(0);
   expect(self.length).toBeGreaterThan(0);
   return toPaint;
@@ -123,5 +125,21 @@ test("keystroke CPU profile, workbench ON, default seed", async ({ page }) => {
     seedPages: 0,
     caseName: "workbenchOn.defaultSeed",
     rawName: "keystroke-profile.default.cpuprofile",
+  });
+});
+
+// The legacy page tree (workbench OFF) re-renders per sidebar row on a title keystroke
+// (titleTyping.spec.mjs): this case says which functions that time goes to.
+test("title keystroke CPU profile, workbench OFF, ~1000 pages", async ({ page }) => {
+  test.setTimeout(300_000);
+  await bootApp(page, { workbench: false });
+  await createNewWorkspacePage(page);
+  const title = page.getByLabel("Page title");
+  await title.waitFor();
+  await title.click();
+  await profileKeystrokeCase(page, title, {
+    seedPages: 1000,
+    caseName: "titleWorkbenchOff.pages1000",
+    rawName: "keystroke-profile.title-off-1000.cpuprofile",
   });
 });

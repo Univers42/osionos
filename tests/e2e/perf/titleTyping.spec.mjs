@@ -15,18 +15,19 @@
 // fields the page index is built from. The Files panel is the default, so the explorer is mounted,
 // as it is for a user renaming with the tree visible.
 // Budgets, measured 2026-10-13 (tracing OFF, n=30; floor = an unhandled key to the same frame):
-//   workbench ON,  default seed  : p95 31.4-31.8 ms (floor 30.6-30.9)           -> 38
-//   workbench ON,  ~10000 pages  : p95 31.1-31.8 ms (floor 31.0-31.2)           -> 38
-//   workbench OFF, ~1000 pages   : p95 390.9 ms, max 440.6 (floor 30.9)         -> 470
+//   workbench ON,  default seed  : p95 31.1-31.8 ms (floor 30.6-31.4)           -> 38
+//   workbench ON,  ~10000 pages  : p95 31.1-31.8 ms (floor 30.8-31.2)           -> 38
+//   workbench OFF, ~1000 pages   : p95 33.5 ms, median 29.5 (floor 30.8)        -> 60
+//   workbench OFF, ~5000 pages   : p95 110 ms, median 81.6, max 156 (floor 30.8) -> 330
 // The workbench cases render NO explorer rows offline (explorerRows 0 in the report): the
 // workspace:// mount that serves pages without a sandbox is not wired yet, so they measure the
-// store, header and tab strip, not the tree. The legacy page tree (workbench OFF) is linear in
-// the page count per key - p95 240 / 393 / 685 / 1834 ms at 500 / 1000 / 2000 / 5000 pages (n=5,
-// same day). A CPU profile at 2000 pages (10 keys) puts it in rendering: every PageTreeItem
-// re-renders (603 ms inclusive) and each renders a PageOptionsMenu (595 ms) - cost per rendered
-// row, not per selector (children are an O(1) lookup, pageTreeItem.helpers.ts). It predates
-// feat/ide (PageTreeItem/PageOptionsMenu are unchanged from develop) and is deleted with that
-// tree; its budget only stops it getting worse.
+// store, header and tab strip, not the tree.
+// The legacy page tree (workbench OFF) was linear in the page count per key: p95 240 / 393 / 685
+// / 1834 ms at 500 / 1000 / 2000 / 5000 pages. CPU profiles (keystrokeProfile.spec.mjs, "title
+// keystroke") gave three causes, all fixed: every keystroke rebuilt pagesIndex (derivePageState),
+// waking every subscriber to it; each row's closed options menu scanned every page per store
+// commit; and the recents update re-rendered the whole tree, whose rows were not memoized. What
+// is left at 5000 pages is per mounted row: each row's store selectors run on every commit.
 
 import { expect, test } from "@playwright/test";
 
@@ -37,7 +38,7 @@ test.use(PERF_USE);
 
 const SPEC = "titleTyping";
 const TARGET_MS = 16;
-const BUDGET = { workbenchOn: 38, pages10000: 38, workbenchOff1000: 470 };
+const BUDGET = { workbenchOn: 38, pages10000: 38, workbenchOff1000: 60, workbenchOff5000: 330 };
 
 async function openTitle(page, workbench) {
   await bootApp(page, { workbench });
@@ -78,4 +79,11 @@ test("title typing, workbench OFF (legacy page tree), ~1000 pages seeded", async
   const title = await openTitle(page, false);
   writeReport(SPEC, "seed1000off", { seeded: await page.evaluate(() => globalThis.__perfSeedPages(1000)) });
   await typeCase(page, title, "workbenchOff.pages1000", BUDGET.workbenchOff1000);
+});
+
+test("title typing, workbench OFF (legacy page tree), ~5000 pages seeded", async ({ page }) => {
+  test.setTimeout(300_000);
+  const title = await openTitle(page, false);
+  writeReport(SPEC, "seed5000off", { seeded: await page.evaluate(() => globalThis.__perfSeedPages(5000)) });
+  await typeCase(page, title, "workbenchOff.pages5000", BUDGET.workbenchOff5000);
 });

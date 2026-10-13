@@ -100,15 +100,15 @@ export const PageOptionsMenu: React.FC<Props> = ({
   const debugToolsEnabled = usePageDebugStore((s) => s.enabled);
   const toggleDebugTool = usePageDebugStore((s) => s.toggle);
 
-  const storeWorkspaceId = usePageStore((s) =>
-    Object.keys(s.pages).find((wsId) =>
-      s.pages[wsId].some((p) => p._id === pageId),
-    ),
-  );
+  // One menu is mounted per sidebar row, closed. Its selectors run on every store commit,
+  // so they must be O(1) and must not hand back the workspace array: a scan per row and a
+  // re-render per row made a title keystroke cost O(rows × pages) (titleTyping.spec.mjs).
+  const storeWorkspaceId = usePageStore((s) => s.pagesIndex[pageId]?.workspaceId);
 
   const workspaceId = providedWorkspaceId || storeWorkspaceId;
+  // Descendants only feed the archive/delete confirmation, so the array is read only then.
   const wsPages = usePageStore((s) =>
-    workspaceId
+    confirmationMode && workspaceId
       ? (s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES)
       : EMPTY_WORKSPACE_PAGES,
   );

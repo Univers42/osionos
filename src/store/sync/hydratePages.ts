@@ -69,7 +69,7 @@ function mergeWorkspace(workspaceId: string, rows: PageEntry[]): number {
     }
     pages[workspaceId] = bucket;
     if (seeds.length > 0) savePagesCache(pages, workspaceId);
-    return derivePageState(pages, state.pageIdsByWorkspace);
+    return derivePageState(pages, state);
   });
   if (seeds.length > 0) seedLedger(seeds);
   return seeds.length;

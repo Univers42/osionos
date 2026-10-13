@@ -113,7 +113,7 @@ export function openNotePage(entry: PageEntry): void {
   usePageStore.setState((s) => {
     const existing = s.pages[ws] ?? [];
     if (existing.some((p) => p._id === entry._id)) return {};
-    return derivePageState({ ...s.pages, [ws]: [...existing, entry] }, s.pageIdsByWorkspace);
+    return derivePageState({ ...s.pages, [ws]: [...existing, entry] }, s);
   });
   usePageStore.getState().openPage({
     id: entry._id,

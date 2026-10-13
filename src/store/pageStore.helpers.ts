@@ -33,7 +33,7 @@ const MAX_SIGNED_INT32 = 2147483647;
 const OBJECT_ID_RE = /^[a-f\d]{24}$/i;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-interface PageDerivedState {
+export interface PageDerivedState {
   pages: Record<string, PageEntry[]>;
   pageIdsByWorkspace: Record<string, string[]>;
   pagesIndex: Record<string, PageIndexEntry>;
@@ -159,26 +159,49 @@ export function loadPagesCache(): Record<string, PageEntry[]> {
   return migrateLegacyPagesCache();
 }
 
+export type PreviousPageDerivedState = Partial<Pick<PageDerivedState, "pageIdsByWorkspace" | "pagesIndex">>;
+
+/**
+ * Indexes `pages`. When no workspace's id sequence changed, the previous `pageIdsByWorkspace`
+ * and `pagesIndex` objects are returned as they are: subscribers to either (the sidebar's
+ * favourites, every tree row's selector) see the same reference and skip their re-render.
+ * Rebuilding `pagesIndex` on every title keystroke re-rendered every sidebar row
+ * (tests/e2e/perf/titleTyping.spec.mjs, 2026-10-13).
+ */
 export function derivePageState(
   pages: Record<string, PageEntry[]>,
-  previousPageIdsByWorkspace: Record<string, string[]> = {},
+  previous: PreviousPageDerivedState = {},
 ): PageDerivedState {
+  const previousPageIdsByWorkspace = previous.pageIdsByWorkspace ?? {};
   const pageIdsByWorkspace: Record<string, string[]> = {};
-  const pagesIndex: Record<string, PageIndexEntry> = {};
+  let unchanged = Object.keys(previousPageIdsByWorkspace).length === Object.keys(pages).length;
 
   for (const [workspaceId, workspacePages] of Object.entries(pages)) {
     const list = Array.isArray(workspacePages) ? workspacePages : [];
-    const pageIds = list.map((page, index) => {
-      pagesIndex[page._id] = { workspaceId, index };
-      return page._id;
-    });
+    const pageIds = list.map((page) => page._id);
     const previousPageIds = previousPageIdsByWorkspace[workspaceId];
-    pageIdsByWorkspace[workspaceId] = areStringArraysEqual(previousPageIds, pageIds)
-      ? previousPageIds
-      : pageIds;
+    if (areStringArraysEqual(previousPageIds, pageIds)) {
+      pageIdsByWorkspace[workspaceId] = previousPageIds;
+    } else {
+      pageIdsByWorkspace[workspaceId] = pageIds;
+      unchanged = false;
+    }
   }
 
-  return { pages, pageIdsByWorkspace, pagesIndex };
+  if (unchanged && previous.pageIdsByWorkspace && previous.pagesIndex) {
+    return { pages, pageIdsByWorkspace: previous.pageIdsByWorkspace, pagesIndex: previous.pagesIndex };
+  }
+  return { pages, pageIdsByWorkspace, pagesIndex: indexPageIds(pageIdsByWorkspace) };
+}
+
+function indexPageIds(pageIdsByWorkspace: Record<string, string[]>): Record<string, PageIndexEntry> {
+  const pagesIndex: Record<string, PageIndexEntry> = {};
+  for (const [workspaceId, pageIds] of Object.entries(pageIdsByWorkspace)) {
+    pageIds.forEach((pageId, index) => {
+      pagesIndex[pageId] = { workspaceId, index };
+    });
+  }
+  return pagesIndex;
 }
 
 function areStringArraysEqual(left: readonly string[] | undefined, right: readonly string[]): left is string[] {

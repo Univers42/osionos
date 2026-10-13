@@ -46,8 +46,10 @@ interface Props {
  * – Drag a row onto another: dropping on its middle nests it as a child; dropping
  *   on the top/bottom edge keeps it at the same depth (sibling, blue line).
  * – Hovering a collapsed folder mid-drag springs it open after a short dwell.
+ * Memoized on its primitive props: the tree re-renders on every title keystroke (recents
+ * change), and 1 000 rows re-rendering cost ~250 ms per key (tests/e2e/perf/titleTyping.spec.mjs).
  */
-export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth = 0, activeId }) => {
+export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspaceId, jwt, depth = 0, activeId }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -232,10 +234,9 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
         />
       </div>
 
-      {expanded && hasChildren &&
-        children.map((childId) => (
-          <PageTreeItem key={childId} pageId={childId} workspaceId={workspaceId} jwt={jwt} depth={depth + 1} activeId={activeId} />
-        ))}
+      {expanded && hasChildren && (
+        <PageTreeRows pageIds={children} workspaceId={workspaceId} jwt={jwt} depth={depth + 1} activeId={activeId} />
+      )}
 
       {contextMenu ? (
         <PageContextMenu
@@ -261,4 +262,24 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
       ) : null}
     </>
   );
-};
+});
+
+interface PageTreeRowsProps {
+  pageIds: readonly string[];
+  workspaceId: string;
+  jwt: string;
+  depth: number;
+  activeId?: string | null;
+}
+
+/** Sibling rows. Memoized so a parent re-render with the same (store-stable) id list
+ *  creates no elements at all — the sidebar re-renders on every title keystroke. */
+export const PageTreeRows = React.memo(function PageTreeRows({ pageIds, workspaceId, jwt, depth, activeId }: PageTreeRowsProps) {
+  return (
+    <>
+      {pageIds.map((pageId) => (
+        <PageTreeItem key={pageId} pageId={pageId} workspaceId={workspaceId} jwt={jwt} depth={depth} activeId={activeId} />
+      ))}
+    </>
+  );
+});

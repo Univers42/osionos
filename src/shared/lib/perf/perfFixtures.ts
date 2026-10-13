@@ -49,7 +49,7 @@ function addPages(entries: PageEntry[]): void {
   usePageStore.setState((state) => derivePageState({
     ...state.pages,
     [workspaceId]: [...(state.pages[workspaceId] ?? []), ...entries],
-  }, state.pageIdsByWorkspace));
+  }, state));
 }
 
 export function perfSeedPages(count: number): number {
