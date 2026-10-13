@@ -730,6 +730,20 @@ function pageRowsToEntries(rows) {
 	return Array.isArray(rows) ? rows.map(pageRowToEntry) : [];
 }
 
+/**
+ * Whether `userId` may read a page row: its owner, a listed collaborator, anyone
+ * in the workspace for a shared or public page, and anyone for a legacy page that
+ * predates owners. The same rule as the app's canReadPage (pageAccess.ts), so a
+ * member's private page in a shared workspace stays theirs on the wire too.
+ */
+export function isPageReadableBy(row, userId) {
+	const collaborators = safeJsonArray(row?.collaborators);
+	if (row?.visibility === 'shared' || row?.visibility === 'public') return true;
+	if (row?.owner_id != null && row.owner_id === userId) return true;
+	if (row?.owner_id == null && row?.visibility == null && collaborators.length === 0) return true;
+	return collaborators.some((entry) => entry && entry.userId === userId);
+}
+
 function pageCreateRowFromPayload(payload, authContext) {
 	const workspaceId = requireUuid(payload.workspaceId, 'workspaceId');
 	const parentPageId = optionalUuid(payload.parentPageId, 'parentPageId');
@@ -1781,7 +1795,7 @@ function pageSubresourceIdFromPath(pathname, subresource) {
 
 async function handlePageList(url, request, response, config, fetchImpl) {
 	const workspaceId = requireUuid(url.searchParams.get('workspaceId'), 'workspaceId');
-	await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
+	const access = await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
 	const isFullList = url.pathname === '/api/pages/all';
 	const filters = isFullList ? {} : {
 		databaseId: url.searchParams.has('databaseId')
@@ -1795,7 +1809,8 @@ async function handlePageList(url, request, response, config, fetchImpl) {
 	// Only the bulk /api/pages/all hydrate goes metadata-only (content loads lazily
 	// on page open); the filtered single-list path keeps '*' so nothing regresses.
 	const select = isFullList ? PAGE_LIST_SELECT : '*';
-	json(response, 200, pageRowsToEntries(await listPageRows(workspaceId, config, fetchImpl, filters, select)), config);
+	const rows = await listPageRows(workspaceId, config, fetchImpl, filters, select);
+	json(response, 200, pageRowsToEntries(rows.filter((row) => isPageReadableBy(row, access.userId))), config);
 	return true;
 }
 
@@ -1899,7 +1914,9 @@ async function handlePageRead(url, request, response, config, fetchImpl) {
 	if (!pageId) return false;
 	const row = await fetchPageRow(pageId, config, fetchImpl);
 	if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
-	await ownerOrWorkspaceAccess(request, row, 'read', config, fetchImpl);
+	const access = await ownerOrWorkspaceAccess(request, row, 'read', config, fetchImpl);
+	// Another member's private page answers like a missing one: its existence is private too.
+	if (!isPageReadableBy(row, access.userId)) throw Object.assign(new Error('Page not found.'), { status: 404 });
 	json(response, 200, pageRowToEntry(row), config);
 	return true;
 }
@@ -2191,12 +2208,13 @@ async function listWorkspaceDatabases(workspaceIds, config, fetchImpl) {
 }
 
 /** Owner-scoped page graph across `workspaceIds` (the note half of the data graph). */
-async function ownerScopedPageGraph(workspaceIds, userId, config, fetchImpl) {
+/** Every page the viewer can read, so a shared page's parent and links stay in the graph. */
+async function readablePageGraph(workspaceIds, userId, config, fetchImpl) {
 	const rows = [];
 	for (const workspaceId of workspaceIds) {
 		const wsRows = await listPageRows(workspaceId, config, fetchImpl, {});
 		for (const row of wsRows) {
-			if (row.owner_id == null || row.owner_id === userId) rows.push(row);
+			if (isPageReadableBy(row, userId)) rows.push(row);
 		}
 	}
 	return pagesToGraph(rows);
@@ -2232,7 +2250,7 @@ async function handleGraphData(url, request, response, config, fetchImpl) {
 		: requested
 			? (accessible.includes(requested) ? [requested] : [])
 			: authContext.workspaceIds;
-	const noteGraph = await ownerScopedPageGraph(workspaceIds, authContext.userId, config, fetchImpl);
+	const noteGraph = await readablePageGraph(workspaceIds, authContext.userId, config, fetchImpl);
 	const recordGraph = await workspaceRecordGraph(workspaceIds, config, fetchImpl);
 	json(response, 200, mergeGraphs(noteGraph, recordGraph), config);
 	return true;

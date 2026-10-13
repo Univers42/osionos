@@ -21,6 +21,7 @@ import {
 	createBridgeServer,
 	createBridgeHandoff,
 	createUserSession,
+	isPageReadableBy,
 	persistBridgeIdentity,
 	requireWorkspaceAccess,
 	searchPixabayVideos,
@@ -581,6 +582,50 @@ describe('osionos bridge receiver', () => {
 			if (!existsSync(file)) continue;
 			const content = readFileSync(file, 'utf8');
 			assert.doesNotMatch(content, /VITE_[A-Z0-9_]*(SERVICE_ROLE|JWT_SECRET|OSIONOS_BRIDGE_SHARED_SECRET|APP_SESSION_SECRET)/);
+		}
+	});
+});
+
+describe('a member\'s private page stays theirs in a shared workspace', () => {
+	const otherMember = '6a1e5f1c-8f0b-4f0e-9a43-6d0c2b7b1a11';
+	const otherPrivateId = '9e3c2a51-1d4f-4f7e-8c2a-1b6d0e9f7a01';
+	const otherSharedId = '9e3c2a51-1d4f-4f7e-8c2a-1b6d0e9f7a02';
+	const row = (id, visibility, extra = {}) => ({
+		id, workspace_id: workspaceId, parent_page_id: null, owner_id: otherMember, title: `${visibility} page of another member`,
+		visibility, collaborators: [], properties: [], content: [], archived_at: null,
+		created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', ...extra,
+	});
+
+	it('isPageReadableBy: owner, collaborator, shared, public and legacy pages are readable; another member\'s private page is not', () => {
+		const me = subject;
+		assert.equal(isPageReadableBy({ owner_id: me, visibility: 'private' }, me), true);
+		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: 'shared' }, me), true);
+		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: 'public' }, me), true);
+		assert.equal(isPageReadableBy({ owner_id: null, visibility: null, collaborators: [] }, me), true);
+		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: 'private', collaborators: [{ userId: me, role: 'viewer' }] }, me), true);
+		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: 'private' }, me), false);
+		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: null }, me), false);
+		assert.equal(isPageReadableBy({ owner_id: null, visibility: 'private' }, me), false);
+	});
+
+	it('the page list and a page read leave out another member\'s private page and keep their shared one', async () => {
+		const config = testBaasConfig();
+		const { pages, fetchImpl } = createMockBaasFetch();
+		pages.set(otherPrivateId, row(otherPrivateId, 'private'));
+		pages.set(otherSharedId, row(otherSharedId, 'shared'));
+		const server = createBridgeServer({ config, fetchImpl });
+		const baseUrl = await listen(server);
+		const headers = { authorization: `Bearer ${appSession(config).session.accessToken}` };
+		try {
+			const listed = await (await fetch(`${baseUrl}/api/pages/all?workspaceId=${workspaceId}`, { headers })).json();
+			const ids = listed.map((page) => page._id);
+			assert.equal(ids.includes(otherSharedId), true);
+			assert.equal(ids.includes(otherPrivateId), false);
+			assert.equal(ids.includes(childPageId), true);
+			assert.equal((await fetch(`${baseUrl}/api/pages/${otherPrivateId}`, { headers })).status, 404);
+			assert.equal((await fetch(`${baseUrl}/api/pages/${otherSharedId}`, { headers })).status, 200);
+		} finally {
+			await new Promise((resolveClose) => server.close(resolveClose));
 		}
 	});
 });

@@ -28,6 +28,7 @@ import { OsionosAppsSection } from "./OsionosAppsSection";
 import { PageTreeItem } from "./PageTreeItem";
 import { SidebarTreeToolbar } from "./SidebarTreeToolbar";
 import { useSidebarTreeDnd } from "../model/sidebarTreeDnd";
+import { isMyPrivatePage } from "../model/workspaceSpaces";
 import { PageOptionsMenu } from "@/features/page-management";
 import { byPageOrder } from "./pageTreeItem.helpers";
 import { usePageStore } from "@/store/usePageStore";
@@ -51,7 +52,8 @@ import {
 const EMPTY_PAGE_IDS: readonly string[] = [];
 const EMPTY_WORKSPACE_PAGES: readonly PageEntry[] = [];
 type PageStoreState = ReturnType<typeof usePageStore.getState>;
-type RootPageBucket = "agent" | "private" | "owned-shared" | "shared-workspace";
+/** "member-private" and "shared-workspace" split a workspace the user does not own. */
+type RootPageBucket = "agent" | "private" | "owned-shared" | "member-private" | "shared-workspace";
 
 export function selectPageAccessEntry(state: PageStoreState, pageId: string): PageEntry | null {
   const index = state.pagesIndex[pageId];
@@ -79,7 +81,9 @@ function selectRootPageIds(
       if (bucket === "agent") return page.surface === "agent";
       if (bucket === "private") return page.surface !== "agent" && page.surface !== "home" && page.visibility !== "shared";
       if (bucket === "owned-shared") return page.surface !== "agent" && page.surface !== "home" && page.visibility === "shared";
-      return page.surface !== "home";
+      const mine = accessContext ? isMyPrivatePage(page, accessContext.userId) : false;
+      if (bucket === "member-private") return mine;
+      return page.surface !== "home" && !mine;
     })
     .slice()
     .sort(byPageOrder)
@@ -298,7 +302,8 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
   const safeActiveUserId = activeUserId || "anonymous";
   const workspacePagesKey = activeWorkspaceId || "";
   const agentPageIds = usePageStore(useShallow((s) => selectRootPageIds(s.pages[workspacePagesKey] ?? EMPTY_WORKSPACE_PAGES, "agent", accessContext)));
-  const privatePageIds = usePageStore(useShallow((s) => selectRootPageIds(s.pages[workspacePagesKey] ?? EMPTY_WORKSPACE_PAGES, "private", accessContext)));
+  const privateBucket: RootPageBucket = sharedWorkspaces.length > 0 ? "member-private" : "private";
+  const privatePageIds = usePageStore(useShallow((s) => selectRootPageIds(s.pages[workspacePagesKey] ?? EMPTY_WORKSPACE_PAGES, privateBucket, accessContext)));
   const ownedSharedPageIds = usePageStore(useShallow((s) => selectRootPageIds(s.pages[workspacePagesKey] ?? EMPTY_WORKSPACE_PAGES, "owned-shared", accessContext)));
   const sharedWorkspaceRootPageIds = usePageStore(useShallow((s) => (
     sharedWorkspaces.length > 0

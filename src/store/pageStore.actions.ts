@@ -237,7 +237,11 @@ export function createAddPage(set: SetFn, get: GetFn) {
     if (!context?.workspaceIds.includes(workspaceId)) {
       return notifyCreateFailure("You don't have access to this workspace.");
     }
-    const targetVisibility = options.visibility ?? getTargetWorkspaceMoveVisibility(
+    // A page added under a private page is private too, even in a shared
+    // workspace: otherwise the child would be visible to members its parent hides.
+    const parent = parentPageId ? get().pages[workspaceId]?.find((page) => page._id === parentPageId) : undefined;
+    const inherited = parent?.visibility === "private" ? "private" : undefined;
+    const targetVisibility = options.visibility ?? inherited ?? getTargetWorkspaceMoveVisibility(
       workspaceId,
       context,
       "private",
