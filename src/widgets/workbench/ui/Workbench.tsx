@@ -24,8 +24,8 @@ import { DockSplitter } from "./DockSplitter";
 import { WorkbenchDock } from "./WorkbenchDock";
 import { WorkbenchStatusBar } from "./WorkbenchStatusBar";
 
-/** The unified region (flag `osio.workbench`): workspace grid over a resizable
- *  dock, one status bar. Replaces the nested IDE shell; rail and top bar stay App's. */
+/** The unified region: workspace grid over a resizable
+ *  dock, one status bar. The workbench is the only layout; rail and top bar stay App's. */
 export const Workbench: React.FC = () => {
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const dockOpen = useWorkbenchStore((s) => s.dockOpen);

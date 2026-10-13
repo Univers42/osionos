@@ -47,9 +47,9 @@ export interface MenuItemSpec {
 }
 
 /**
- * The View-menu items that exist only with the workbench flag ON, as two groups
- * (panel/status bar, then the dock tabs). The caller places them right after an item
- * that already ends a group, so the trailing separator closes the second group.
+ * The View-menu items for the workbench (panel/status bar, then the dock tabs).
+ * The caller places them right after an item that already ends a group, so the
+ * trailing separator closes the second group.
  */
 export function workbenchViewItems(actions: WorkbenchViewActionMap): MenuItemSpec[] {
   return [

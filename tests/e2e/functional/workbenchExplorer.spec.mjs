@@ -21,9 +21,6 @@ async function bootWorkbench(page) {
   page.on("console", (msg) => {
     if (msg.type() === "error" && !/Failed to load resource|ERR_|net::/i.test(msg.text())) errors.push(msg.text());
   });
-  await page.addInitScript(() => {
-    try { localStorage.setItem("osio.workbench", "1"); } catch { /* ignore */ }
-  });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.locator("[data-osio-workbench]").waitFor({ state: "visible", timeout: 60_000 });
   return errors;

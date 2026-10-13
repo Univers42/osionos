@@ -29,9 +29,7 @@ export type FeatureFlagName =
   | "osio.sqlrun"
   | "osio.publish"
   | "osio.draw"
-  | "osio.whiteboard"
-  | "osio.ide"
-  | "osio.workbench";
+  | "osio.whiteboard";
 
 /**
  * Resolution (URL -> localStorage -> env -> fallback) lives in @osionos/feature-flags.
@@ -180,22 +178,4 @@ export function isDrawEnabled(): boolean {
  *  localStorage key, or `VITE_OSIO_WHITEBOARD=0`. */
 export function isWhiteboardEnabled(): boolean {
   return isFeatureFlagEnabled("osio.whiteboard", true);
-}
-
-/** The IDE / Dev-Mode surface: line-based code files (`surface: "code"`), a
- *  Monaco editor, and (server-gated) a sandboxed run terminal. Default OFF —
- *  the whole feature is additive and must never affect block pages. Turn on via
- *  `?osio.ide=1`, the `osio.ide` localStorage key, or `VITE_OSIO_IDE=1`. Code
- *  EXECUTION is double-gated: this flag AND the bridge env `OSIONOS_RUNNER_URL`
- *  must both be set, so the flag alone can never open an execution path. */
-export function isIdeEnabled(): boolean {
-  return isFeatureFlagEnabled("osio.ide", false);
-}
-
-/** The unified workbench (one rail, one side panel, editor grid + bottom dock,
- *  one status bar) that replaces both the IDE-mode shell and the page chrome.
- *  Default ON; `?osio.workbench=0`, the `osio.workbench` localStorage key, or
- *  `VITE_OSIO_WORKBENCH=0` opts out for one release before the flag is removed. */
-export function isWorkbenchEnabled(): boolean {
-  return isFeatureFlagEnabled("osio.workbench", true);
 }

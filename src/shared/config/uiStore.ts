@@ -26,8 +26,7 @@ export type ActivePanel =
   | 'tasks'
   | 'public'
   | 'database'
-  // Workbench-only panels (gated by isWorkbenchEnabled). A persisted value
-  // with the flag off is mapped to 'files' by visiblePanel, so no version bump.
+  // Workbench panels (Source Control, Run, Problems).
   | 'scm'
   | 'run'
   | 'problems';

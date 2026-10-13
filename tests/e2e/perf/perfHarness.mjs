@@ -50,16 +50,15 @@ export function summarize(values) {
 }
 
 /** Opens the app (the workbench is the only layout); the perf globals come with the dev server. */
-export async function bootApp(page, { ide = false } = {}) {
-  await page.addInitScript(({ withIde }) => {
+export async function bootApp(page) {
+  await page.addInitScript(() => {
     try {
-      if (withIde) localStorage.setItem("osio.ide", "1");
       // A production build (PLAYWRIGHT_BUILD=production) only installs the perf fixtures behind this flag.
       localStorage.setItem("osio:perf", "1");
     } catch {
       /* ignore */
     }
-  }, { withIde: ide });
+  });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => typeof globalThis.__perfSeedPages === "function", null, { timeout: 60_000 });
 }

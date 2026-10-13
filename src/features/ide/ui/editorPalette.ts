@@ -134,7 +134,7 @@ export interface EditorColors {
 }
 
 /** Fallback chain per role: the surface token, else a color derived from what
- *  DID resolve. The IDE shell defines the syntax tokens at the palette level but
+ *  DID resolve. The workbench defines the syntax tokens at the palette level but
  *  not the `--osio-code-*` chrome (those live on the read-only code card), so
  *  the derived branch is the common path there. */
 export function resolveEditorColors(input: EditorTokenInput): EditorColors {

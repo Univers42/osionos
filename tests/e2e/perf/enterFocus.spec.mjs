@@ -89,7 +89,7 @@ async function enterThenType(page, caseName) {
   expect({ early: result.early, misplaced, blocks: result.texts.length }).toEqual({ early: 0, misplaced: 0, blocks: ENTERS + 1 });
 }
 
-test("Enter then a key, workbench ON: the key lands in the new block", async ({ page }) => {
+test("Enter then a key: the key lands in the new block", async ({ page }) => {
   test.setTimeout(120_000);
   await openEditor(page);
   await enterThenType(page, "workbenchOn");

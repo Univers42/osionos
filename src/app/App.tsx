@@ -32,8 +32,7 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPagePrune";
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
-import { LazyCanvasDebugRoute, LazyMainContent, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
-import { isWorkbenchEnabled } from "@/shared/config/featureFlags";
+import { LazyCanvasDebugRoute, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
 import { applyStoredAppearance } from "@/shared/config/theme";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
@@ -207,8 +206,6 @@ const App: React.FC = () => {
   // hides every chrome region off it. Session-only: a reload always exits zen.
   const zen = useZenMode((s) => s.zen);
 
-  const legacyRegion = <LazyMainContent />;
-
   // Database automations → app services: notify events become toasts; webhook
   // actions route through the bridge's SSRF-guarded proxy endpoint.
   useDatabaseAutomationBridge();
@@ -355,10 +352,9 @@ const App: React.FC = () => {
         {/* Floating trigger for when sidebar is closed */}
         <SidebarTrigger />
 
-        {/* Content area — the unified workbench when its flag is on, otherwise
-            the normal tabbed/splittable workspace grid. */}
+        {/* Content area — the unified workbench (grid + dock + status bar). */}
         <main className="flex-1 flex min-w-0 overflow-hidden relative">
-          {isWorkbenchEnabled() ? <LazyWorkbench /> : legacyRegion}
+          <LazyWorkbench />
         </main>
       </div>
 

@@ -20,9 +20,9 @@ test.use(PERF_USE);
 
 // Measured 2026-10-13, tracing off: p95 31.3-31.9 ms, median 30.9-31.5 ms (floor median
 // 31.0-31.5 ms: on the floor). Target 16 missed by method -> budget = 31.9 x 1.2 = 38.
-test("code page typing (Monaco), workbench ON", async ({ page }) => {
+test("code page typing (Monaco)", async ({ page }) => {
   test.setTimeout(180_000); // cold Vite compile of the Monaco chunk
-  await bootApp(page, { ide: true });
+  await bootApp(page);
   await page.locator("[data-osio-workbench]").waitFor({ state: "visible", timeout: 60_000 });
   const floor = await measureFloor(page);
   await page.evaluate(() => globalThis.__perfOpenCodePage());
