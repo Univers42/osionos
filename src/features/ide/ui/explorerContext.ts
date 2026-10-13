@@ -37,6 +37,9 @@ export type ExplorerContextValue = {
   cancelEdit(): void;
   moveTo(fromRel: string, targetDir: string): void;
   retry(dir: string): void;
+  /** Opens the page actions menu for the given row. The host widget wires the
+   *  actual PageContextMenu; the explorer only reports the request. */
+  openMenu(rel: string, row: ExplorerRow, at: { x: number; y: number }): void;
 };
 
 const ExplorerContext = createContext<ExplorerContextValue | null>(null);

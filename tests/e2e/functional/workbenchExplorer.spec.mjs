@@ -93,3 +93,68 @@ test("collapse all, import/export buttons, and honest delete copy", async ({ pag
 
   expect(errors).toEqual([]);
 });
+
+test("right-click first page row opens menu with Rename; Escape cancels and restores focus", async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = await bootWorkbench(page);
+  const pageRows = page.locator('[role="treeitem"][data-rel$=".omd"]');
+  const firstRow = pageRows.first();
+  await expect(firstRow).toBeVisible({ timeout: 10_000 });
+
+  // Right-click to open context menu
+  await firstRow.click({ button: "right" });
+
+  // Menu should be visible with role="menu"
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible({ timeout: 5_000 });
+
+  // Menu should contain a "Rename" item
+  const renameItem = menu.getByRole("menuitem", { name: "Rename" });
+  await expect(renameItem).toBeVisible();
+
+  // Choosing Rename starts the explorer's inline rename flow.
+  await renameItem.click();
+
+  // Inline rename input should appear (aria-label starts with "Rename")
+  const renameInput = page.locator('input[aria-label^="Rename"]');
+  await expect(renameInput).toBeVisible({ timeout: 5_000 });
+
+  // Press Escape to cancel
+  await renameInput.press("Escape");
+
+  // Input should be gone, focus back on the row
+  await expect(renameInput).not.toBeVisible({ timeout: 5_000 });
+  await expect(firstRow).toBeFocused({ timeout: 5_000 });
+
+  expect(errors).toEqual([]);
+});
+
+test("Shift+F10 on focused row opens menu; Escape closes it", async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = await bootWorkbench(page);
+  const pageRows = page.locator('[role="treeitem"][data-rel$=".omd"]');
+  const firstRow = pageRows.first();
+  await expect(firstRow).toBeVisible({ timeout: 10_000 });
+
+  // Focus the row
+  await firstRow.focus();
+  await expect(firstRow).toBeFocused();
+
+  // Press Shift+F10
+  await firstRow.press("Shift+F10");
+
+  // Menu should be visible
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible({ timeout: 5_000 });
+
+  // Press Escape to close (the menu holds focus once positioned).
+  await menu.press("Escape");
+
+  // Menu should be gone
+  await expect(menu).not.toBeVisible({ timeout: 5_000 });
+
+  // Focus should remain on the row
+  await expect(firstRow).toBeFocused({ timeout: 5_000 });
+
+  expect(errors).toEqual([]);
+});

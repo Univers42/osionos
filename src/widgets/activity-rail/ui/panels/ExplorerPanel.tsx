@@ -23,7 +23,9 @@ import { pageIdForEntry, pageIdForDir } from "../../model/workspaceEntry";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { useToastStore } from "@osionos/ui/primitives";
+import { ExplorerRowMenu } from "./ExplorerRowMenu";
 import type { ExplorerRowKind } from "@/features/ide/model/explorerRows";
+import type { ExplorerMenuRequest } from "@/features/ide/ui/useExplorerController";
 
 interface Props {
   onOpenSettings?: () => void;
@@ -39,10 +41,11 @@ const NOOP_OPEN = (): void => undefined;
  *  the VFS tree in place of SidebarPageTree and a compact Recents strip. */
 export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpenConsole, onOpenFile = NOOP_OPEN }) => {
   const explorerView = useExplorerView((s) => s.view);
-  const { activeWorkspaceId } = useFetchActiveWorkspacePages();
+  const { activeWorkspaceId, jwt } = useFetchActiveWorkspacePages();
   const { ops, importFolder, exportProject } = useWorkspaceFileOps();
   const workspaceName = useUserStore((s) => s.activeWorkspace()?.name ?? "project");
   const [showInviteCTA, setShowInviteCTA] = useState(true);
+  const [menu, setMenu] = useState<ExplorerMenuRequest | null>(null);
   const importRef = React.useRef<HTMLInputElement | null>(null);
 
   // `webkitdirectory` is a non-standard input attribute with no JSX typing; set
@@ -114,6 +117,7 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
               pageIdOf={pageIdOf}
               onImportFolder={() => importRef.current?.click()}
               onExportZip={onExportZip}
+              onRowMenu={setMenu}
             />
           </>
         )}
@@ -135,6 +139,14 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
         aria-hidden
         tabIndex={-1}
       />
+      {menu && (
+        <ExplorerRowMenu
+          request={menu}
+          workspaceId={activeWorkspaceId}
+          jwt={jwt}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
 };

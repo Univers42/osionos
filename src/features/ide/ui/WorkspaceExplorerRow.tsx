@@ -82,6 +82,13 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
   const active = useIsActivePage(pageId ?? "");
   const dnd = useRowDnd(rel, isDir ? rel : item.parentRel, renaming, pageId);
 
+  const onContextMenu = (event: React.MouseEvent): void => {
+    if (renaming) return;
+    event.preventDefault();
+    event.stopPropagation();
+    ctx.openMenu(rel, row, { x: event.clientX, y: event.clientY });
+  };
+
   return (
     <li
       {...placed(placement)}
@@ -99,6 +106,7 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
       <div
         {...dnd.props}
         onClick={() => ctx.activate(rel, row)}
+        onContextMenu={onContextMenu}
         style={indentOf(level)}
         className={
           "flex cursor-pointer items-center gap-1.5 py-[3px] pr-2 text-[13px] text-[var(--osio-code-fg)] " +

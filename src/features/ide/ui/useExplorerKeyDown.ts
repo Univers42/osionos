@@ -14,7 +14,7 @@ import React from "react";
 
 import { explorerKeyAction } from "../model/explorerKeys";
 import type { ExplorerRow, VisibleItem } from "../model/explorerRows";
-import type { ExplorerPending } from "./explorerContext";
+import type { ExplorerPending, ExplorerContextValue } from "./explorerContext";
 
 type Params = {
   visible: readonly VisibleItem[];
@@ -24,15 +24,20 @@ type Params = {
   focusRow: (rel: string) => void;
   activate: (rel: string, row: ExplorerRow) => void;
   setPending: (pending: ExplorerPending) => void;
+  rootRef: React.RefObject<HTMLElement | null>;
+  openMenu: ExplorerContextValue["openMenu"];
 };
 
 /** Applies the pure key map (explorerKeys.ts) to the tree. Keys typed into the
  *  inline input or pressed on a button belong to those controls, not the tree. */
 export function useExplorerKeyDown(params: Params) {
-  const { visible, tabbableRel, expanded, setOpen, focusRow, activate, setPending } = params;
+  const { visible, tabbableRel, expanded, setOpen, focusRow, activate, setPending, rootRef, openMenu } = params;
   return (event: React.KeyboardEvent): void => {
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLButtonElement) return;
-    const action = explorerKeyAction(event.key, visible, tabbableRel, expanded);
+    // Shift+F10 is the standard keyboard equivalent of right-click; map it to
+    // "ContextMenu" before the pure key map so the same logic runs.
+    const key = event.shiftKey && event.key === "F10" ? "ContextMenu" : event.key;
+    const action = explorerKeyAction(key, visible, tabbableRel, expanded);
     if (!action) return;
     event.preventDefault();
     const { rel } = action;
@@ -45,6 +50,17 @@ export function useExplorerKeyDown(params: Params) {
       case "activate": {
         const row = visible.find((item) => item.rel === rel)?.row;
         if (row) activate(rel, row);
+        break;
+      }
+      case "menu": {
+        const root = rootRef.current;
+        if (!root) return;
+        const rowEl = root.querySelector<HTMLElement>(`[data-rel="${CSS.escape(rel)}"]`);
+        if (!rowEl) return;
+        const row = visible.find((item) => item.rel === rel)?.row;
+        if (!row) return;
+        const rect = rowEl.getBoundingClientRect();
+        openMenu(rel, row, { x: rect.left + 16, y: rect.bottom });
         break;
       }
     }
