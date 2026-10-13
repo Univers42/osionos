@@ -181,7 +181,7 @@ export async function send(base, path, headers, init = {}) {
 export const post = (body) => ({ method: 'POST', body: JSON.stringify(body) });
 export const patch = (body) => ({ method: 'PATCH', body: JSON.stringify(body) });
 
-function teamPage(id, ownerId, visibility, title, text) {
+export function teamPage(id, ownerId, visibility, title, text) {
 	return {
 		id, workspace_id: IDS.team, owner_id: ownerId, visibility, title, collaborators: [], properties: [],
 		parent_page_id: null, archived_at: null, content: [{ id: `${id}-b1`, type: 'paragraph', content: text }],

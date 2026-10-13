@@ -157,10 +157,13 @@ async function addMember(config, fetchImpl, workspaceId, userId) {
 	});
 }
 
-/** POST /api/collaboration/:id/join {message?} — public joins, gated requests. */
+/**
+ * POST /api/collaboration/:id/join {message?} — public joins, gated requests. Only
+ * DISCOVERABLE workspaces take either; any other visibility answers like a missing one.
+ */
 async function joinCollaboration(deps, session, request, workspaceId, response, config) {
 	const workspace = await fetchWorkspace(config, deps.fetchImpl, workspaceId);
-	if (!workspace || workspace.visibility === 'confidential') throw httpError('Workspace not found.', 404);
+	if (!workspace || !DISCOVERABLE.has(workspace.visibility)) throw httpError('Workspace not found.', 404);
 	const payload = await readJsonBody(request);
 	if (workspace.visibility === 'public') {
 		await addMember(config, deps.fetchImpl, workspaceId, session.userId);

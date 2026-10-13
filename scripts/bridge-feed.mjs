@@ -350,6 +350,9 @@ export function createFeedHandler({ config, verifySession, fetchImpl = fetch, en
 			const session = verifySession(bearerToken(request), requestConfig);
 			const pageId = requireUuid(decodeURIComponent((commentOne ?? pageResource)[1]), 'pageId');
 			const route = `${method} ${commentOne ? 'comment' : pageResource[2]}`;
+			// Ponytail: a write on a hidden page answers 404 and stores nothing, while a write on an
+			// id with no osionos_pages row succeeds (2xx) and is stored like any feed item — so the
+			// write answer tells a caller who already holds an id whether it names a hidden page.
 			if ((FEED_READS.has(route) || FEED_WRITES.has(route)) && await isFeedPageHidden(deps, requestConfig, session, pageId)) {
 				if (FEED_WRITES.has(route)) throw httpError('Page not found.', 404);
 				return sendJson(response, 200, noActivityAnswer(deps, session, pageId, pageResource[2]), requestConfig);
