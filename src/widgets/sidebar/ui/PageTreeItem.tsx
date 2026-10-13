@@ -59,7 +59,7 @@ export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspace
   // mounted per visible page and every subscription re-runs on every store commit, so six
   // action selectors per row cost 6 x rows callbacks per keystroke (titleTyping.spec.mjs).
   const page = usePageStore(useShallow((s) => selectPageTreeEntry(s, pageId)));
-  const childPageIds = usePageStore(useShallow((s) => selectChildPageIds(s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES, pageId)));
+  const childPageIds = usePageStore(useShallow((s) => selectChildPageIds(s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES, pageId, workspaceId)));
   const accessContext = usePageAccessContext();
   const collapseToken = useSidebarTreeDnd((s) => s.collapseToken);
   const devMode = useDevMode((s) => s.dev);

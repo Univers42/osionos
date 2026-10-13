@@ -23,7 +23,7 @@ function titleEditSlowPath(count: number): () => unknown {
   return () => {
     flip = !flip;
     const pages = updatePageInState(state.pages, pageId, (page) => ({ ...page, title: flip ? "a" : "b" }));
-    return derivePageState(pages, state.pageIdsByWorkspace);
+    return derivePageState(pages, { pageIdsByWorkspace: state.pageIdsByWorkspace });
   };
 }
 
@@ -40,7 +40,7 @@ function titleEditFastPath(count: number): () => unknown {
 
 export const bench = defineBench("page store edit", [
   {
-    // 2026-10-13: median 588 µs, p95 0.75-1.53 ms (bash scripts/docker-run.sh test-bench
+    // 2026-10-13: median 588-624 µs, p95 0.73-1.53 ms (bash scripts/docker-run.sh test-bench
     // tests/bench/page-store-edit.bench.ts). The fallback path, and what every in-place edit
     // cost before replacePage.
     name: "title edit 10k (update + derive)",

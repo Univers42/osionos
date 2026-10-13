@@ -18,7 +18,7 @@
 //   workbench ON,  default seed  : p95 31.1-31.8 ms (floor 30.6-31.4)           -> 38
 //   workbench ON,  ~10000 pages  : p95 31.1-31.8 ms (floor 30.8-31.2)           -> 38
 //   workbench OFF, ~1000 pages   : p95 33.5 ms, median 29.5 (floor 30.8)        -> 60
-//   workbench OFF, ~5000 pages   : p95 81.5 ms, median 61.3 (floor 30.7)          -> 98
+//   workbench OFF, ~5000 pages   : p95 76.9 ms, median 54.6 (floor 31.0)        -> 92
 // The workbench cases render NO explorer rows offline (explorerRows 0 in the report): the
 // workspace:// mount that serves pages without a sandbox is not wired yet, so they measure the
 // store, header and tab strip, not the tree.
@@ -30,7 +30,10 @@
 // is left at 5000 pages is per mounted row: each row's store selectors run on every commit.
 // Then (p95 110 -> 81.5 ms at 5000): a title key was two store commits (updatePageTitle, then
 // the active-page patch) and each row subscribed to six store actions; now one commit, and rows
-// read actions at call time. Still linear: ~10 000 row subscriptions are notified per key.
+// read actions at call time. Then (median 61.3 -> 54.6 ms): the title textarea measured its own
+// height in a layout effect (a forced layout per key; CSS field-sizing now) and four root-section
+// selectors re-sorted every root on every commit (incrementalGrouping.ts reuses them).
+// Still linear: ~10 000 row subscriptions are notified per key.
 
 import { expect, test } from "@playwright/test";
 
@@ -41,7 +44,7 @@ test.use(PERF_USE);
 
 const SPEC = "titleTyping";
 const TARGET_MS = 16;
-const BUDGET = { workbenchOn: 38, pages10000: 38, workbenchOff1000: 60, workbenchOff5000: 98 };
+const BUDGET = { workbenchOn: 38, pages10000: 38, workbenchOff1000: 60, workbenchOff5000: 92 };
 
 async function openTitle(page, workbench) {
   await bootApp(page, { workbench });

@@ -10,8 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { usePageStore, type PageEntry } from "@/store/usePageStore";
+import type { PageEntry, usePageStore } from "@/store/usePageStore";
 import type { DropMode } from "../model/sidebarTreeDnd";
+import { canReadPage, type PageAccessContext } from "@/shared/lib/auth/pageAccess";
+import { createIncrementalGrouping } from "@/shared/lib/collections/incrementalGrouping";
 
 type PageStoreState = ReturnType<typeof usePageStore.getState>;
 
@@ -57,7 +59,6 @@ export function selectPageTreeEntry(state: PageStoreState, pageId: string): Page
   };
 }
 
-/** Ids of the direct, non-archived children of a parent page (folder or file). */
 /** Manual sibling order; null/undefined (e.g. brand-new pages) sort to the end. */
 export function pageOrder(page: Pick<PageEntry, "sortOrder">): number {
   return typeof page.sortOrder === "number" ? page.sortOrder : Number.MAX_SAFE_INTEGER;
@@ -68,32 +69,42 @@ export function byPageOrder(a: Pick<PageEntry, "sortOrder">, b: Pick<PageEntry, 
   return pageOrder(a) - pageOrder(b);
 }
 
-/** Children index, built ONCE per pages-array identity (the store replaces the
- *  array immutably on every commit). Before this, EVERY rendered tree row ran the
- *  full filter+sort over the whole workspace list on every store commit —
- *  O(rows × pages) per ~250ms typing commit. Now the first row to ask groups the
- *  list once; every other row this commit is an O(1) lookup. */
-const childrenIndexCache = new WeakMap<readonly PageEntry[], Map<string, string[]>>();
-const NO_CHILDREN: string[] = [];
+// The sidebar's indexes over a workspace's pages, keyed by workspace id. The store replaces the
+// pages array on every commit; createIncrementalGrouping keeps the previous result when only
+// titles or content changed (a keystroke), so neither index re-sorts per commit any more.
+const NO_PAGE_IDS: readonly string[] = [];
 
-function childrenIndexOf(pages: readonly PageEntry[]): Map<string, string[]> {
-  const cached = childrenIndexCache.get(pages);
-  if (cached) return cached;
-  const buckets = new Map<string, PageEntry[]>();
-  for (const page of pages) {
-    if (page.archivedAt || !page.parentPageId) continue;
-    const bucket = buckets.get(page.parentPageId);
-    if (bucket) bucket.push(page);
-    else buckets.set(page.parentPageId, [page]);
-  }
-  const index = new Map<string, string[]>();
-  for (const [parentId, children] of buckets) {
-    index.set(parentId, children.sort(byPageOrder).map((page) => page._id));
-  }
-  childrenIndexCache.set(pages, index);
-  return index;
+const childGroups = createIncrementalGrouping<PageEntry, null>(
+  (page) => (page.archivedAt || !page.parentPageId ? null : page.parentPageId),
+  byPageOrder,
+);
+
+/** Ids of the direct, non-archived children of a parent page (folder or file). */
+export function selectChildPageIds(pages: readonly PageEntry[], parentPageId: string, workspaceId: string): readonly string[] {
+  return childGroups(pages, null, workspaceId).get(parentPageId) ?? NO_PAGE_IDS;
 }
 
-export function selectChildPageIds(pages: readonly PageEntry[], parentPageId: string): string[] {
-  return childrenIndexOf(pages).get(parentPageId) ?? NO_CHILDREN;
+/** A sidebar section of root pages. "shared-workspace" is every readable root but Home. */
+export type RootPageBucket = "agent" | "private" | "owned-shared" | "shared-workspace";
+
+const rootSections = createIncrementalGrouping<PageEntry, PageAccessContext | null>((page, access) => {
+  if (page.parentPageId || page.archivedAt || !canReadPage(page, access)) return null;
+  if (page.surface === "agent" || page.surface === "home") return page.surface;
+  return page.visibility === "shared" ? "owned-shared" : "private";
+}, byPageOrder);
+
+const sharedWorkspaceRoots = createIncrementalGrouping<PageEntry, PageAccessContext | null>(
+  (page, access) => (page.parentPageId || page.archivedAt || page.surface === "home" || !canReadPage(page, access) ? null : "shared-workspace"),
+  byPageOrder,
+);
+
+/** Ids of the readable root pages of one sidebar section, in sibling order. */
+export function selectRootPageIds(
+  pages: readonly PageEntry[],
+  bucket: RootPageBucket,
+  access: PageAccessContext | null,
+  workspaceId: string,
+): readonly string[] {
+  const groups = bucket === "shared-workspace" ? sharedWorkspaceRoots(pages, access, workspaceId) : rootSections(pages, access, workspaceId);
+  return groups.get(bucket) ?? NO_PAGE_IDS;
 }
