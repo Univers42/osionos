@@ -15,6 +15,7 @@ import { Search, X, FileText, ChevronRight, Hash } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { isValidMove } from "@/store/pageStore.helpers";
+import { buildMoveBreadcrumbs } from "../model/moveBreadcrumbs";
 import type { PageEntry } from "@/entities/page";
 
 import styles from "./MovePageModal.module.scss";
@@ -177,25 +178,8 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
   );
 
   const buildBreadcrumbs = useCallback(
-    (pageId: string, workspaceId: string) => {
-      const path: string[] = [];
-      let currentId: string | null | undefined = pageId;
-
-      while (currentId) {
-        const page = allPages.find((p) => p._id === currentId);
-        if (page) {
-          path.unshift(page.title || "Untitled");
-          currentId = page.parentPageId;
-        } else {
-          currentId = null;
-        }
-      }
-
-      const ws = workspaces.find((w) => w._id === workspaceId);
-      if (ws) path.unshift(ws.name);
-
-      return path.join(" / ");
-    },
+    (pageId: string, workspaceId: string) =>
+      buildMoveBreadcrumbs(pageId, workspaceId, allPages, workspaces),
     [allPages, workspaces],
   );
 
