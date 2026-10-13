@@ -853,6 +853,32 @@ async function workspaceMemberRow(userId, workspaceId, config, fetchImpl) {
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
+/**
+ * The caller's own membership in a workspace their app token already lists. Asks the same
+ * RPC the workspace list uses, narrowed to that one id, and never falls back to the
+ * token's scope: a permission check must refuse when membership cannot be read, where a
+ * listing may still show what the token says.
+ */
+async function sessionWorkspaceMember(userId, workspaceId, config, fetchImpl) {
+	if (!config.baasUrl || !config.serviceKey) {
+		// Ponytail: with no BaaS configured there are no member rows to protect (local
+		// dev, tests without a backend); the token's workspaces are trusted as they are today.
+		return { role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] };
+	}
+	let rows;
+	try {
+		rows = await baasRest(config, fetchImpl, 'rpc/osionos_bridge_list_workspaces', {
+			method: 'POST',
+			body: { p_user_id: userId, p_workspace_ids: [workspaceId] },
+		});
+	} catch (error) {
+		throw Object.assign(new Error('Workspace access could not be verified.', { cause: error }), { status: 503 });
+	}
+	if (!Array.isArray(rows)) return null;
+	const row = rows.find((candidate) => sameId(candidate.workspace_id, workspaceId));
+	return row ? { role: row.workspace_role, permissions: row.permissions } : null;
+}
+
 export async function requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl = fetch) {
 	const normalizedWorkspaceId = requireUuid(workspaceId, 'workspaceId');
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
@@ -871,9 +897,7 @@ export async function requireWorkspaceAccess(request, workspaceId, permission, c
 			permissions: Array.isArray(member.permissions) ? member.permissions.filter((item) => typeof item === 'string') : [],
 		};
 	}
-	const workspaces = await listSessionWorkspaces(authContext, config, fetchImpl);
-	const workspace = workspaces.find((item) => item._id === normalizedWorkspaceId || item.id === normalizedWorkspaceId);
-	const member = workspace ? { role: workspace.role, permissions: workspace.permissions } : null;
+	const member = await sessionWorkspaceMember(authContext.userId, normalizedWorkspaceId, config, fetchImpl);
 	const requiredPermission = normalizePermission(permission);
 	if (!memberHasPermission(member, requiredPermission)) {
 		throw Object.assign(new Error('Workspace permission denied.'), { status: 403 });
