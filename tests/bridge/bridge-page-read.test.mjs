@@ -16,6 +16,7 @@ import {
 	canChangePageSharing,
 	canReadAsNonMember,
 	canReadPageRow,
+	canReadPageRowAsMember,
 	readablePageRows,
 	withoutForeignSharingChanges,
 } from '../../scripts/bridge-page-read.mjs';
@@ -139,4 +140,22 @@ describe('withoutForeignSharingChanges — the PATCH guard', () => {
 		withoutForeignSharingChanges(payload, stored, SELF);
 		assert.deepEqual(payload, { visibility: 'shared', title: 'x' });
 	});
+});
+
+describe('canReadPageRowAsMember — cross-workspace surfaces require membership too', () => {
+	const WS = 'c0c0c0c0-3333-4333-8333-c0c0c0c0c0c0';
+	const page = (visibility, ownerId = OTHER) => ({ workspace_id: WS, visibility, owner_id: ownerId, collaborators: [] });
+	const cases = [
+		['a member, shared page', page('shared'), [WS], true],
+		['a member, upper-case workspace id', page('shared'), [WS.toUpperCase()], true],
+		['a member, another member\'s private page', page('private'), [WS], false],
+		['a non-member, shared page', page('shared'), [], false],
+		['a non-member, public page', page('public'), ['dddddddd-4444-4444-8444-dddddddddddd'], false],
+		['a non-member, own private page', page('private', SELF), [], false],
+		['a malformed row', null, [WS], false],
+		['a row without a workspace', { visibility: 'public', owner_id: SELF }, [WS], false],
+	];
+	for (const [name, row, memberWorkspaceIds, expected] of cases) {
+		it(`${name} → ${expected}`, () => assert.equal(canReadPageRowAsMember(row, SELF, memberWorkspaceIds), expected));
+	}
 });

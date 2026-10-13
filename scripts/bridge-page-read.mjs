@@ -52,6 +52,15 @@ export function canReadPageRow(row, userId) {
 	return pageVisibility(row?.visibility) === 'shared' || canReadAsNonMember(row, userId);
 }
 
+/**
+ * Readable on a surface that spans workspaces (feed, profile gallery, graph): the caller
+ * belongs to the row's workspace AND canReadPageRow allows it, so a page shared with one
+ * workspace never reaches someone outside it. `memberWorkspaceIds`: the caller's workspaces.
+ */
+export function canReadPageRowAsMember(row, userId, memberWorkspaceIds) {
+	return [...memberWorkspaceIds].some((workspaceId) => sameId(workspaceId, row?.workspace_id)) && canReadPageRow(row, userId);
+}
+
 /** The rows of a PostgREST result the caller may read; [] for a non-array result. */
 export function readablePageRows(rows, userId) {
 	return Array.isArray(rows) ? rows.filter((row) => canReadPageRow(row, userId)) : [];
