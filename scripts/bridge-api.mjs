@@ -986,15 +986,36 @@ async function canNestUnder(authContext, parentPageId, config, fetchImpl) {
 	return canReadPageRowAsMember(parent, authContext.userId, members);
 }
 
+const MAX_PARENT_DEPTH = 64;
+
 /**
- * A page PATCH minus a parentPageId the caller may not nest under (added to `ignored`).
- * Checked only when it MOVES the page: the outbox resends the stored parent on every
- * edit, and a member may edit a page whose parent they cannot read.
+ * Whether `targetId` is `pageId` or below it, following parent_page_id upward (a cycle
+ * already stored above the target ends the walk at the first repeated id).
+ * Ponytail: gives up after MAX_PARENT_DEPTH hops and answers true, so a move under a
+ * page nested more than 64 levels deep is refused even when it would form no cycle.
+ */
+async function isInSubtreeOf(targetId, pageId, config, fetchImpl) {
+	const seen = new Set();
+	for (let id = targetId; id && !seen.has(id.toLowerCase());) {
+		if (sameId(id, pageId) || seen.size === MAX_PARENT_DEPTH) return true;
+		seen.add(id.toLowerCase());
+		id = (await fetchPageAuthRow(id, config, fetchImpl))?.parent_page_id;
+	}
+	return false;
+}
+
+/**
+ * A page PATCH minus a parentPageId the caller may not nest under, or one inside the
+ * page's own subtree (added to `ignored`). Checked only when it MOVES the page: the outbox
+ * resends the stored parent on every edit, and a member may edit a page whose parent they
+ * cannot read.
  */
 async function withoutUnreachableParent({ payload, ignored }, existing, authContext, config, fetchImpl) {
 	const target = optionalUuid(payload.parentPageId, 'parentPageId');
 	if (!target || sameId(target, existing.parent_page_id)) return { payload, ignored };
-	if (await canNestUnder(authContext, target, config, fetchImpl)) return { payload, ignored };
+	if (await canNestUnder(authContext, target, config, fetchImpl) && !await isInSubtreeOf(target, existing.id, config, fetchImpl)) {
+		return { payload, ignored };
+	}
 	const kept = { ...payload };
 	delete kept.parentPageId;
 	return { payload: kept, ignored: [...ignored, 'parentPageId'] };

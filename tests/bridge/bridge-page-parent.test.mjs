@@ -12,7 +12,8 @@
 
 // A page nests only under a parent the caller can read as a member of its workspace.
 // Creating under any other parent answers one 404, whatever the reason; a PATCH that
-// MOVES a page there drops the parentPageId key and still writes the rest of the edit.
+// MOVES a page there, or under itself or its own subtree, drops the parentPageId key
+// and still writes the rest of the edit.
 // A PATCH that resends the stored parent is not checked: the outbox resends it on every
 // edit, and a member may edit a page whose parent they cannot read.
 
@@ -25,16 +26,21 @@ const asB = sessionHeaders(config, IDS.userB, IDS.homeB);
 const OUTSIDE = 'a5a5a5a5-1111-4111-8111-a5a5a5a5a5a5';
 const CHILD = 'a7a7a7a7-1111-4111-8111-a7a7a7a7a7a7';
 const CONTENT = [{ id: 'edit-b1', type: 'paragraph', content: 'edited by B' }];
+const B_CHILD = 'b2b2b2b2-2222-4222-8222-b2b2b2b2b2b2';
+const B_GRANDCHILD = 'b3b3b3b3-2222-4222-8222-b3b3b3b3b3b3';
 const BAD_PARENTS = {
 	'a missing page': IDS.missing,
 	'a page the caller cannot read': IDS.privateA,
 	'a shared page in a workspace the caller is not a member of': OUTSIDE,
 };
+const OWN_SUBTREE = { 'the page itself': IDS.pageB, 'its own child': B_CHILD, 'its own grandchild': B_GRANDCHILD };
 
-/** B is an `update` member of the team; OUTSIDE is A's shared page in A's own workspace. */
+/** B is an `update` member of the team; OUTSIDE is A's shared page in A's own workspace; pageB → B_CHILD → B_GRANDCHILD. */
 function parentWorld() {
 	const world = teamWorld({ memberRole: 'editor' });
 	world.osionos_pages.push({ ...teamPage(OUTSIDE, IDS.userA, 'shared', 'A home page', 'home text'), workspace_id: IDS.homeA });
+	world.osionos_pages.push({ ...teamPage(B_CHILD, IDS.userB, 'private', 'B child', 'c'), parent_page_id: IDS.pageB });
+	world.osionos_pages.push({ ...teamPage(B_GRANDCHILD, IDS.userB, 'private', 'B grandchild', 'g'), parent_page_id: B_CHILD });
 	return world;
 }
 
@@ -71,7 +77,7 @@ describe('creating a page under a parent', () => {
 });
 
 describe('moving a page with PATCH parentPageId', () => {
-	for (const [name, parentPageId] of Object.entries(BAD_PARENTS)) {
+	for (const [name, parentPageId] of Object.entries({ ...BAD_PARENTS, ...OWN_SUBTREE })) {
 		it(`drops a move under ${name} and writes the rest of the edit`, async () => {
 			const mock = createPostgrestMock(parentWorld());
 			await withBridge(config, mock.fetchImpl, async (base) => {
@@ -91,6 +97,17 @@ describe('moving a page with PATCH parentPageId', () => {
 			assert.equal(moved.body.ignored, undefined);
 			assert.equal(mock.page(IDS.pageB).parent_page_id, IDS.sharedA);
 		});
+	});
+
+	it('moves a page under a page whose stored ancestors already loop', async () => {
+		const world = parentWorld();
+		world.osionos_pages.find((row) => row.id === IDS.sharedA).parent_page_id = OUTSIDE;
+		world.osionos_pages.find((row) => row.id === OUTSIDE).parent_page_id = IDS.sharedA;
+		const mock = createPostgrestMock(world);
+		const moved = await withBridge(config, mock.fetchImpl, (base) => send(base, `/api/pages/${IDS.pageB}`, asB, patch({ parentPageId: IDS.sharedA })));
+		assert.equal(moved.status, 200, moved.text);
+		assert.equal(moved.body.ignored, undefined);
+		assert.equal(mock.page(IDS.pageB).parent_page_id, IDS.sharedA);
 	});
 
 	it('stores the full outbox body for a shared page whose stored parent the caller cannot read', async () => {
