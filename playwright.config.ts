@@ -68,6 +68,10 @@ export default defineConfig({
   timeout: 60_000,
   expect: {
     timeout: 15_000,
+    // Ponytail: a screenshot is compared within a tolerance, so a change that
+    // moves fewer than one pixel in a thousand passes unseen. The tolerance is
+    // what lets one baseline hold across machines whose text edges differ.
+    toHaveScreenshot: { maxDiffPixelRatio: 0.001 },
   },
   workers: configuredWorkers ?? 1,
   shard: parseShard(process.env.PLAYWRIGHT_SHARD),
