@@ -19,7 +19,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { useSidebarTreeDnd } from "../../src/widgets/sidebar/model/sidebarTreeDnd.ts";
+import { useDragSession } from "../../src/store/dragSession.ts";
 
 // This runner's globalThis is not an EventTarget — give it one so the store's
 // window-level safety net is exercisable (the store reads the listener fns at
@@ -37,26 +37,26 @@ if (typeof globalThis.addEventListener !== "function") {
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
 
 test("drag state always resets after a drop, even when the source unmounted", async () => {
-  useSidebarTreeDnd.getState().beginTabDrag();
-  assert.equal(useSidebarTreeDnd.getState().dragKind, "tab");
+  useDragSession.getState().beginTabDrag();
+  assert.equal(useDragSession.getState().dragKind, "tab");
   // The browser delivers window-capture `drop` regardless of source unmount.
   globalThis.dispatchEvent(new Event("drop"));
   // Same tick: bubble-phase drop handlers must still see the active drag.
-  assert.equal(useSidebarTreeDnd.getState().dragKind, "tab", "reset is deferred past the event cycle");
+  assert.equal(useDragSession.getState().dragKind, "tab", "reset is deferred past the event cycle");
   await tick();
-  assert.equal(useSidebarTreeDnd.getState().dragKind, null, "wedge cleared without any dragend");
+  assert.equal(useDragSession.getState().dragKind, null, "wedge cleared without any dragend");
 });
 
 test("cancelled drags (dragend, no drop) reset too; safety re-arms per drag", async () => {
-  useSidebarTreeDnd.getState().beginDrag("page-1");
-  assert.equal(useSidebarTreeDnd.getState().dragKind, "page");
+  useDragSession.getState().beginDrag("page-1");
+  assert.equal(useDragSession.getState().dragKind, "page");
   globalThis.dispatchEvent(new Event("dragend"));
   await tick();
-  assert.equal(useSidebarTreeDnd.getState().dragKind, null);
-  assert.equal(useSidebarTreeDnd.getState().draggingId, null);
+  assert.equal(useDragSession.getState().dragKind, null);
+  assert.equal(useDragSession.getState().draggingId, null);
   // A second drag must arm a fresh one-shot safety net.
-  useSidebarTreeDnd.getState().beginTabDrag();
+  useDragSession.getState().beginTabDrag();
   globalThis.dispatchEvent(new Event("drop"));
   await tick();
-  assert.equal(useSidebarTreeDnd.getState().dragKind, null);
+  assert.equal(useDragSession.getState().dragKind, null);
 });

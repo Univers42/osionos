@@ -11,17 +11,17 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { ChevronDown, ChevronRight, FileCode2, FileText, Folder, FolderOpen } from "lucide-react";
+import { useDragSession } from "@/store/dragSession";
+import { useIsActivePage } from "@/store/activePageFlag";
 
-import { languageForFileName } from "../model/ideLanguages";
 import type { VisibleItem } from "../model/explorerRows";
 import { useExplorer } from "./explorerContext";
 import { IdeInlineInput } from "./IdeInlineInput";
+import { ExplorerRowIcon } from "./ExplorerRowIcon";
 
 export const EXPLORER_DRAG_MIME = "application/x-osio-workspace-path";
 /** Height the virtualizer assumes before a line is measured (a plain row's height). */
 export const EXPLORER_ROW_HEIGHT_PX = 22;
-const ICON = "shrink-0";
 // Same indent grid as IdeInlineInput (8px gutter + 12px per level) so inline rows line up.
 const INDENT_BASE_PX = 8;
 const INDENT_STEP_PX = 12;
@@ -38,37 +38,21 @@ const placed = ({ index, start, measure }: LinePlacement) => ({
 
 const ROW_FOCUS = "list-none outline-none [&:focus-visible>div]:outline [&:focus-visible>div]:outline-2 [&:focus-visible>div]:-outline-offset-2 [&:focus-visible>div]:outline-[var(--osio-accent)]";
 
-const RowIcon: React.FC<{ item: VisibleItem; open: boolean }> = ({ item, open }) => {
-  const { kind, name } = item.row;
-  if (kind === "dir") {
-    const Chevron = open ? ChevronDown : ChevronRight;
-    const FolderIcon = open ? FolderOpen : Folder;
-    return (
-      <>
-        <Chevron size={14} className={`${ICON} opacity-70`} />
-        <FolderIcon size={14} className={ICON} />
-      </>
-    );
-  }
-  // 14px spacer keeps files aligned with folder labels.
-  return (
-    <>
-      <span className="w-[14px] shrink-0" aria-hidden="true" />
-      {kind === "page"
-        ? <FileText size={13} className={ICON} />
-        : <FileCode2 size={13} className={ICON} style={{ color: languageForFileName(name).accent }} />}
-    </>
-  );
-};
-
 /** Drag source + drop target props for one row; a drop lands in the row itself
  *  when it is a folder, otherwise in its folder. */
-function useRowDnd(rel: string, dropDir: string, renaming: boolean) {
+function useRowDnd(rel: string, dropDir: string, renaming: boolean, pageId: string | undefined) {
   const { moveTo } = useExplorer();
   const [dragOver, setDragOver] = React.useState(false);
   const props = {
     draggable: !renaming,
-    onDragStart: (event: React.DragEvent) => { event.dataTransfer.setData(EXPLORER_DRAG_MIME, rel); event.dataTransfer.effectAllowed = "move"; },
+    onDragStart: (event: React.DragEvent) => {
+      event.dataTransfer.setData(EXPLORER_DRAG_MIME, rel);
+      event.dataTransfer.effectAllowed = "move";
+      if (pageId) {
+        event.dataTransfer.setData("text/plain", pageId);
+        useDragSession.getState().beginDrag(pageId);
+      }
+    },
     onDragOver: (event: React.DragEvent) => {
       if (!event.dataTransfer.types.includes(EXPLORER_DRAG_MIME)) return;
       event.preventDefault();
@@ -82,6 +66,7 @@ function useRowDnd(rel: string, dropDir: string, renaming: boolean) {
       const from = event.dataTransfer.getData(EXPLORER_DRAG_MIME);
       if (from && from !== rel) moveTo(from, dropDir);
     },
+    onDragEnd: () => useDragSession.getState().endDrag(),
   };
   return { props, dragOver };
 }
@@ -93,7 +78,9 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
   const isDir = row.kind === "dir";
   const open = isDir && ctx.expanded.has(rel);
   const renaming = ctx.pending?.type === "rename" && ctx.pending.rel === rel;
-  const dnd = useRowDnd(rel, isDir ? rel : item.parentRel, renaming);
+  const pageId = ctx.pageIdOf?.(rel, row.kind);
+  const active = useIsActivePage(pageId ?? "");
+  const dnd = useRowDnd(rel, isDir ? rel : item.parentRel, renaming, pageId);
 
   return (
     <li
@@ -104,7 +91,7 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
       aria-setsize={item.setSize}
       aria-posinset={item.posInSet}
       aria-expanded={isDir ? open : undefined}
-      aria-selected={ctx.activeRel === rel}
+      aria-selected={active}
       tabIndex={ctx.tabbableRel === rel ? 0 : -1}
       onFocus={(event) => { if (event.target === event.currentTarget) ctx.focusRow(rel); }}
       className={ROW_FOCUS}
@@ -115,11 +102,11 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
         style={indentOf(level)}
         className={
           "flex cursor-pointer items-center gap-1.5 py-[3px] pr-2 text-[13px] text-[var(--osio-code-fg)] " +
-          (ctx.activeRel === rel ? "bg-[var(--osio-code-active-line)] " : "hover:bg-[var(--osio-code-btn-hover)] ") +
+          (active ? "bg-[var(--osio-code-active-line)] " : "hover:bg-[var(--osio-code-btn-hover)] ") +
           (dnd.dragOver ? "outline outline-1 outline-[var(--osio-accent)]" : "")
         }
       >
-        <RowIcon item={item} open={open} />
+        <ExplorerRowIcon item={item} open={open} pageId={pageId} />
         {renaming ? (
           <IdeInlineInput
             initialValue={row.name}

@@ -26,12 +26,12 @@ import { EXPLORER_DRAG_MIME } from "./WorkspaceExplorerRow";
 export type ExplorerControllerProps = {
   ops: WorkspaceFileOps;
   onOpen: (relPath: string, kind: "page" | "code") => void;
-  activeRel?: string;
+  pageIdOf?: (rel: string, kind: "dir" | "page" | "code") => string | undefined;
 };
 
 /** Wires tree state, focus, mutations and keys into the context value the rows
  *  read plus the root-level handlers. No JSX: WorkspaceExplorer only lays out. */
-export function useExplorerController({ ops, onOpen, activeRel }: ExplorerControllerProps) {
+export function useExplorerController({ ops, onOpen, pageIdOf }: ExplorerControllerProps) {
   const tree = useExplorerTree(ops);
   const actions = useExplorerActions({ ops, tree, onOpen });
   const { pending, setPending } = actions;
@@ -54,7 +54,7 @@ export function useExplorerController({ ops, onOpen, activeRel }: ExplorerContro
   };
 
   const value: ExplorerContextValue = {
-    dirs: tree.dirs, expanded: tree.expanded, tabbableRel, activeRel, pending,
+    dirs: tree.dirs, expanded: tree.expanded, tabbableRel, pageIdOf, pending,
     focusRow, activate, cancelEdit,
     submitCreate: actions.submitCreate,
     submitRename: actions.submitRename,

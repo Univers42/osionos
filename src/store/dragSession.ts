@@ -1,12 +1,12 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   sidebarTreeDnd.ts                                  :+:      :+:    :+:   */
+/*   dragSession.ts                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/06/08 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/08 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -27,7 +27,7 @@ export type DropMode = "inside" | "before" | "after";
 /** What kind of payload is mid-drag, so panes only react to relevant drags. */
 export type DragKind = "page" | "tab" | null;
 
-interface SidebarTreeDndState {
+interface DragSessionState {
   /** Id of the row currently being dragged (null when idle). */
   draggingId: string | null;
   /** What is being dragged across the workspace (sidebar page vs. a pane tab). */
@@ -72,7 +72,7 @@ function armDragEndSafety(endDrag: () => void): void {
   globalThis.addEventListener("dragend", finish, true);
 }
 
-export const useSidebarTreeDnd = create<SidebarTreeDndState>((set, get) => ({
+export const useDragSession = create<DragSessionState>((set, get) => ({
   draggingId: null,
   dragKind: null,
   dropTargetId: null,

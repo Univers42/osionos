@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { SidebarFooter } from "@/widgets/sidebar/ui/SidebarFooter";
 import { FolderRail } from "@/widgets/home-variants/ui/HomeWorkspaceParts";
 import { WorkspaceExplorer } from "@/features/ide/ui/WorkspaceExplorer";
@@ -19,6 +19,9 @@ import { ExplorerRecents } from "./ExplorerRecents";
 import { ExplorerViewSwitch } from "./ExplorerViewSwitch";
 import { useExplorerView } from "../../model/explorerView";
 import { useFetchActiveWorkspacePages } from "../../model/useFetchActiveWorkspacePages";
+import { pageIdForEntry, pageIdForDir } from "../../model/workspaceEntry";
+import { usePageStore } from "@/store/usePageStore";
+import type { ExplorerRowKind } from "@/features/ide/model/explorerRows";
 
 interface Props {
   onOpenSettings?: () => void;
@@ -38,6 +41,15 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
   const { ops } = useWorkspaceFileOps();
   const [showInviteCTA, setShowInviteCTA] = useState(true);
 
+  const pageIdOf = useCallback(
+    (rel: string, kind: ExplorerRowKind): string | undefined => {
+      const pages = usePageStore.getState().pages[activeWorkspaceId] ?? [];
+      if (kind === "dir") return pageIdForDir(activeWorkspaceId, pages, rel);
+      return pageIdForEntry(activeWorkspaceId, pages, rel);
+    },
+    [activeWorkspaceId],
+  );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ExplorerViewSwitch />
@@ -52,7 +64,7 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
         ) : (
           <>
             <ExplorerRecents activeWorkspaceId={activeWorkspaceId} />
-            <WorkspaceExplorer ops={ops} onOpen={onOpenFile} />
+            <WorkspaceExplorer ops={ops} onOpen={onOpenFile} pageIdOf={pageIdOf} />
           </>
         )}
       </nav>
