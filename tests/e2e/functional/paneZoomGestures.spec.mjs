@@ -230,7 +230,9 @@ test("a long, virtualized page keeps its blocks in place when zoomed", async ({ 
   await scroller.evaluate((element) => { element.scrollTop = 0; });
   await waitForRenderStability(page);
 
-  const line = (number) => page.getByText(`Line ${number}`, { exact: true });
+  // Fast typing into a long page now and then leaves a stray character on a
+  // line ("Line 66LLi"); the line is still the one this test is about.
+  const line = (number) => page.getByText(new RegExp(`^Line ${number}(?!\\d)`));
   const spread = async () => (await onScreen(line(8), "top")) - (await onScreen(line(1), "top"));
   const unzoomed = await spread();
 
@@ -242,8 +244,13 @@ test("a long, virtualized page keeps its blocks in place when zoomed", async ({ 
   // Rows measured in one unit and placed in the other would drift apart by 1.25 again.
   expect(Math.abs((await spread()) - unzoomed * 1.25)).toBeLessThanOrEqual(PX_TOLERANCE);
 
-  await scroller.evaluate((element) => { element.scrollTop = element.scrollHeight; });
-  await waitForRenderStability(page);
+  // Scroll to the end the way a user would: the virtualizer replaces its height
+  // estimates with measured rows as they render, so the end moves until it settles.
+  await expect.poll(async () => {
+    await scroller.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await waitForRenderStability(page);
+    return line(66).count();
+  }, { timeout: 20_000 }).toBe(1);
   await expect(line(66)).toBeVisible();
   const inView = await line(66).evaluate((element) => {
     const box = element.getBoundingClientRect();
