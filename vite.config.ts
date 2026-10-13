@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { defineConfig, loadEnv } from 'vite';
 import { lucideIconChunks } from './scripts/vite/lucideIconChunks';
+import { vendorChunkOf } from './scripts/vite/vendorChunks';
 
 // Single source of truth for where the markdown engine lives on disk. Relocating
 // it (e.g. into packages/ as a submodule) is a one-line change here plus the
@@ -201,17 +202,12 @@ export default defineConfig(({ mode }) => {
             // dynamicIconImports (the icon picker, page icons) loads (scripts/vite/lucideIconChunks.ts).
             const lucideChunk = lucide.chunkOf(id);
             if (lucideChunk) return lucideChunk;
-            if (/[/\\](react|react-dom|scheduler|use-sync-external-store)[/\\]/.test(id)) return 'vendor-react';
             // NOT monaco-editor: a manual chunk absorbs its modules' static deps, and
             // Monaco's core has dynamic imports, so Vite's preload helper landed in
             // that chunk and every chunk using the helper — the entry included —
             // imported 3.3 MB of Monaco (measured 2026-09-19). Left to the import
             // graph, Monaco is reachable only through the lazy IDE editor.
-            if (/[/\\](motion|framer-motion|motion-dom)[/\\]/.test(id)) return 'vendor-motion';
-            if (id.includes('@univers42')) return 'vendor-ui-collection';
-            if (/[/\\]date-fns[/\\]/.test(id)) return 'vendor-date-fns';
-            if (/[/\\]@tanstack[/\\]/.test(id)) return 'vendor-tanstack';
-            return undefined;
+            return vendorChunkOf(id);
           },
         },
       },

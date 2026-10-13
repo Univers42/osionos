@@ -35,6 +35,11 @@ interface AstNode {
 const LUCIDE_SOURCE = "lucide-react";
 const ICON_FILE = /[/\\]lucide-react[/\\]dist[/\\]esm[/\\]icons[/\\]([^/\\]+)\.js$/;
 const BARREL_FILE = /[/\\]lucide-react[/\\]dist[/\\]esm[/\\]lucide-react\.js$/;
+// The runtime every icon module imports. Left unassigned, Rollup put it in whichever bucket it met
+// first (measured 2026-10-13: bucket 18), and the eager static icons then imported that whole
+// ~27 KB bucket for ~1.8 KB of runtime. It goes where the eager icons are.
+const RUNTIME_FILE =
+  /[/\\]lucide-react[/\\]dist[/\\]esm[/\\](?:Icon|createLucideIcon|defaultAttributes|shared[/\\]src[/\\]utils)\.js$/;
 const ICON_BUCKETS = 32;
 export const STATIC_ICON_CHUNK = "vendor-lucide-static";
 
@@ -89,7 +94,8 @@ function bucketOf(stem: string): string {
 /**
  * The plugin records lucide names as Rollup parses each module; `chunkOf` (called from
  * manualChunks, after every module was parsed) places an icon file: static chunk when some
- * module imports it by name, else its hash bucket; undefined for anything that is not an icon.
+ * module imports it by name, else its hash bucket. The icon runtime goes to the static chunk;
+ * anything else (the barrel, dynamicIconImports) is undefined.
  */
 export function lucideIconChunks(): { plugin: Plugin; chunkOf: (id: string) => string | undefined } {
   const usedNames = new Set<string>();
@@ -109,6 +115,7 @@ export function lucideIconChunks(): { plugin: Plugin; chunkOf: (id: string) => s
     },
   };
   const chunkOf = (id: string): string | undefined => {
+    if (RUNTIME_FILE.test(id)) return STATIC_ICON_CHUNK;
     const stem = ICON_FILE.exec(id)?.[1];
     if (!stem) return undefined;
     staticStems ??= new Set([...usedNames].flatMap((name) => barrel.get(name) ?? []));

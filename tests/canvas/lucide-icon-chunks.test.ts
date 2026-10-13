@@ -67,5 +67,14 @@ test("an icon used by name goes to the static chunk, the rest stay in stable buc
   const bucket = chunkOf(`${ICONS_DIR}/icons/plus.js`);
   assert.match(bucket ?? "", /^vendor-lucide-\d+$/);
   assert.equal(chunkOf(`${ICONS_DIR}/icons/plus.js`), bucket);
-  assert.equal(chunkOf(`${ICONS_DIR}/createLucideIcon.js`), undefined);
+});
+
+test("the icon runtime sits with the eager static icons; lazy entry points follow the graph", () => {
+  const { chunkOf } = lucideIconChunks();
+  for (const file of ["Icon.js", "createLucideIcon.js", "defaultAttributes.js", "shared/src/utils.js"]) {
+    assert.equal(chunkOf(`${ICONS_DIR}/${file}`), STATIC_ICON_CHUNK, file);
+  }
+  for (const file of ["lucide-react.js", "dynamicIconImports.js", "DynamicIcon.js"]) {
+    assert.equal(chunkOf(`${ICONS_DIR}/${file}`), undefined, file);
+  }
 });
