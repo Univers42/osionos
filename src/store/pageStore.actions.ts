@@ -16,6 +16,7 @@ import { pageApiJwtFromSessionToken } from "@/features/auth/model/userStore.help
 import {
   canDeletePage,
   canDuplicatePage,
+  canEditPage,
   canMovePage,
   canReadPage,
   getTargetWorkspaceMoveVisibility,
@@ -31,12 +32,15 @@ import {
   getAllDescendantIds,
   savePagesCache,
   derivePageState,
-  mergeWorkspacePages,
   isValidMove,
   nextDuplicateTitle,
   instantiateTemplateContent,
 } from "./pageStore.helpers";
 import { replacePage } from "./replacePage";
+import { loadLedger, saveLedger } from "@osionos/outbox-ledger";
+import { applyServerPages } from "./sync/applyServerPages";
+import { resolveFetchedPage } from "./sync/mergeServerPages";
+import { PAGE_OUTBOX_KEY, pageStamp } from "./sync/pageStamp";
 import type { AddPageOptions, PageEntry, PageStore, ActivePage, PageRecurrence } from "@/entities/page";
 
 type SetFn = (
@@ -154,16 +158,12 @@ export function createFetchPages(set: SetFn, get: GetFn) {
         pageJwt,
       );
       lastFetchedAt.set(workspaceId, Date.now()); // stamp only after a confirmed pull
+      if (Array.isArray(data)) applyServerPages(set, workspaceId, data, true);
       set((s) => ({
-        ...derivePageState({
-          ...s.pages,
-          [workspaceId]: mergeWorkspacePages(s.pages[workspaceId], data),
-        }, s),
         loadingIds: new Set(
           [...s.loadingIds].filter((id) => id !== workspaceId),
         ),
       }));
-      savePagesCache(get().pages, workspaceId);
     } catch {
       set((s) => ({
         loadingIds: new Set(
@@ -184,29 +184,28 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
     try {
       const fullPage = await api.get<PageEntry>(`/api/pages/${pageId}`, pageJwt);
       if (!fullPage) return;
-      set((s) => ({
-        ...replacePage(s, pageId, (p) => {
-          // Last-write-wins (same rule as hydratePages.mergePage): a background
-          // fetch (search index, export prefetch, lazy mount) must never apply a
-          // STALE server copy over newer local edits — e.g. a rename still inside
-          // the outbox debounce window. ISO strings compare lexicographically.
-          const serverNewer = (fullPage.updatedAt ?? "") > (p.updatedAt ?? "");
-          return {
-            ...p,
-            // Filling missing content is this fetch's whole purpose — always take it.
-            content: p.content === undefined || serverNewer ? (fullPage.content ?? p.content) : p.content,
-            title: serverNewer ? (fullPage.title ?? p.title) : p.title,
-            icon: serverNewer ? (fullPage.icon ?? p.icon) : p.icon,
-            cover: serverNewer ? (fullPage.cover ?? p.cover) : p.cover,
-            updatedAt: serverNewer ? (fullPage.updatedAt ?? p.updatedAt) : p.updatedAt,
-          };
-        }),
-      }));
+      // Decided on the page as it is NOW: an edit typed while the request was in flight must
+      // stay unpublished-and-pending, never be recorded as the server's copy.
+      const current = get().pageById(pageId);
+      if (!current) return;
+      const ledger = loadLedger(PAGE_OUTBOX_KEY);
+      const resolved = resolveFetchedPage(
+        current,
+        fullPage,
+        ledger,
+        context !== null && canEditPage(current, context),
+      );
+      if (!resolved) return;
+      set((s) => replacePage(s, pageId, () => resolved.page));
       savePagesCache(get().pages, page.workspaceId);
+      if (resolved.recordSynced) {
+        ledger[pageId] = pageStamp(resolved.page);
+        saveLedger(PAGE_OUTBOX_KEY, ledger);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         // The page is gone server-side — a stale localStorage ghost the additive
-        // hydrate (hydratePages.mergeWorkspace) never prunes. Evict it from the
+        // hydrate (sync/applyServerPages) never prunes. Evict it from the
         // store + cache so it stops being re-fetched in a loop and drops out of
         // the sidebar/tree instead of flooding the console with 404s.
         set((s) => {

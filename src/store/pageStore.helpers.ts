@@ -14,6 +14,7 @@ import type { Block, BlockType } from "@/entities/block";
 import type { SeedPage } from "../data/seedPages";
 import type { ActivePage, PageEntry, PageIndexEntry } from "@/entities/page";
 import { timed } from "@osionos/perf-probe";
+import { canEditPage, type PageAccessContext } from "@/shared/lib/auth/pageAccess";
 
 const RECENTS_KEY = "pg:recents";
 const ACTIVE_PAGE_KEY = "pg:activePage";
@@ -50,6 +51,17 @@ export function isUuidId(id: string): boolean {
 
 export function isPersistedPageId(id: string): boolean {
   return isMongoId(id) || isUuidId(id);
+}
+
+/** A saved page whose body has not been fetched: an edit now would publish over the server's body. */
+export function isContentUnloaded(page: PageEntry): boolean {
+  return page.content === undefined && isPersistedPageId(page._id);
+}
+
+/** The body writers' gate: edit access AND a loaded body. A writer on an unloaded page would
+ *  build on an empty body and publish it over the server's. */
+export function canEditBody(page: PageEntry | undefined, context: PageAccessContext | null): page is PageEntry {
+  return page !== undefined && !isContentUnloaded(page) && canEditPage(page, context);
 }
 
 /**
@@ -393,39 +405,6 @@ function cancelIdlePagesCacheFlush() {
   }
 
   pendingPagesCacheIdleHandle = null;
-}
-
-export function mergeWorkspacePages(
-  existingPages: PageEntry[] | undefined,
-  incomingPages: PageEntry[],
-): PageEntry[] {
-  const previousPages = existingPages ?? [];
-  if (incomingPages.length === 0) return previousPages;
-
-  const cachedById = new Map(
-    previousPages.map((page) => [page._id, page] as const),
-  );
-  const mergedPages = incomingPages.map((page) => {
-    const cachedPage = cachedById.get(page._id);
-    if (!cachedPage) return page;
-    return {
-      ...cachedPage,
-      ...page,
-      content: page.content ?? cachedPage.content,
-    };
-  });
-
-  const incomingIds = new Set(incomingPages.map((page) => page._id));
-  for (const cachedPage of previousPages) {
-    if (incomingIds.has(cachedPage._id)) continue;
-    // The incoming list is authoritative (GET /api/pages/all). A cached page it
-    // omits was deleted server-side — keep it ONLY if it's an unsynced local page
-    // (temp id); drop persisted ghosts so deletions reconcile instead of
-    // resurrecting (the duplicate-cleanup 404 flood / phantom rows).
-    if (!isPersistedPageId(cachedPage._id)) mergedPages.push(cachedPage);
-  }
-
-  return mergedPages;
 }
 
 /**

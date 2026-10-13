@@ -31,6 +31,7 @@ import {
   applyBlockIndent,
   applyBlockOutdent,
   applyBlockTypeChange,
+  canEditBody,
 } from "./pageStore.helpers";
 import { replacePage } from "./replacePage";
 import { patchActivePageSlice } from "./activePageMetadata";
@@ -227,7 +228,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
   updateBlock: (pageId, blockId, updates) => {
     timed("updateBlock", () => {
       const page = get().pageById(pageId);
-      if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+      if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
       set((s) => {
         const next = replacePage(s, pageId, withTimestamp(applyBlockUpdate(blockId, updates)));
@@ -243,7 +244,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   insertBlock: (pageId, afterBlockId, block) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
       const next = replacePage(s, pageId, withTimestamp(applyBlockInsert(afterBlockId, block)));
@@ -258,7 +259,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   deleteBlock: (pageId, blockId) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
       const next = replacePage(s, pageId, withTimestamp(applyBlockDelete(blockId)));
@@ -273,7 +274,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   moveBlock: (pageId, blockId, targetIndex, parentBlockId = null) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
       const next = replacePage(s, pageId, withTimestamp(applyBlockMove(blockId, targetIndex, parentBlockId)));
@@ -288,7 +289,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   moveBlockAcrossTree: (pageId, blockId, targetParentBlockId, targetIndex) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
       const next = replacePage(s, pageId, withTimestamp(
@@ -305,7 +306,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   indentBlock: (pageId, blockId) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
       const next = replacePage(s, pageId, withTimestamp(applyBlockIndent(blockId)));
@@ -320,7 +321,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   outdentBlock: (pageId, blockId) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
       const next = replacePage(s, pageId, withTimestamp(applyBlockOutdent(blockId)));
@@ -335,7 +336,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
 
   changeBlockType: (pageId, blockId, newType) => {
     const page = get().pageById(pageId);
-    if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+    if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
     set((s) => {
       const next = replacePage(s, pageId, withTimestamp(applyBlockTypeChange(blockId, newType)));
@@ -351,7 +352,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
   updatePageContent: (pageId, blocks) => {
     timed("updatePageContent", () => {
       const page = get().pageById(pageId);
-      if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
+      if (!canEditBody(page, getCurrentPageAccessContext())) return;
 
       set((s) => {
         const next = replacePage(s, pageId, withTimestamp(applyPageContentUpdate(blocks)));
