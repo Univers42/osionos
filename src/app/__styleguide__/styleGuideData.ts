@@ -61,3 +61,63 @@ export const BLOCK_TINTS = [
   "pink",
   "red",
 ] as const;
+
+export const RADIUS_TOKENS = [
+  "--osio-radius-xs",
+  "--osio-radius-sm",
+  "--osio-radius",
+  "--osio-radius-lg",
+  "--osio-radius-chip",
+  "--osio-radius-control",
+  "--osio-radius-card",
+  "--osio-radius-panel",
+  "--osio-radius-overlay",
+  "--osio-radius-full",
+] as const;
+
+export const ELEVATION_TOKENS = [
+  "--osio-e0",
+  "--osio-e1",
+  "--osio-e2",
+  "--osio-e3",
+  "--osio-e4",
+  "--osio-e5",
+] as const;
+
+export const DURATION_TOKENS = [
+  "--osio-dur-instant",
+  "--osio-dur-fast",
+  "--osio-dur-base",
+  "--osio-dur-slow",
+] as const;
+
+export const EASING_TOKENS = [
+  "--osio-ease-standard",
+  "--osio-ease-out",
+  "--osio-ease-emphasized",
+  "--osio-ease-decelerate",
+  "--osio-ease-accelerate",
+  "--osio-ease-spring",
+] as const;
+
+export const CONTROL_HEIGHT_TOKENS = [
+  "--osio-control-h-xs",
+  "--osio-control-h-sm",
+  "--osio-control-h-md",
+  "--osio-control-h-lg",
+] as const;
+
+export const SPACE_TOKENS = [
+  "--osio-space-1",
+  "--osio-space-2",
+  "--osio-space-3",
+  "--osio-space-4",
+  "--osio-space-5",
+  "--osio-space-6",
+  "--osio-space-7",
+  "--osio-space-8",
+  "--osio-space-9",
+  "--osio-space-10",
+  "--osio-space-11",
+  "--osio-space-12",
+] as const;
