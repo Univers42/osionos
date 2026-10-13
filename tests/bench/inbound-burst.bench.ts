@@ -19,11 +19,13 @@
 // before inboundDrain, one create per event cost one index + tables rebuild — 11 922.86 ms per
 // 500-create burst. The drain alone batched one socket message: 578.80 ms at 20 lines per
 // message, 11 570.15 ms at one line per message (one flush per create). With the flush window
-// (C3b5 P1), which batches across messages: 61.37 ms at 20 lines per message, 60.03 ms at one;
-// one full flush (256 creates over 64 directories) 20.87 ms. Edits 528.52 ms (449.25 ms before
-// P3': its page-hash read-back costs ~0.12 ms per apply or create — A/B with it off: edits
-// 457.83 ms, one flush 16.19 ms). New directories are made one at a time (ensureDirPage):
-// 500 files in 50 new directories 1 296.08 ms, reported without a budget.
+// (C3b5 P1), which batches across messages, on the C3b5 tree (8b99346): 66.61 ms at 20 lines
+// per message, 59.02 ms at one; one full flush (256 creates over 64 directories) 25.14 ms.
+// Edits 503.54 ms (449.25 ms before P3'). The P3' page-hash read-back, A/B on b1c46b5: edits
+// 528.52 ms with it, 457.83 ms without; one flush 20.87 vs 16.19 ms. Not separable from
+// noise with single runs: 8b99346 measured edits 503.54 then 554.03 ms back to back. New
+// directories are made one at a time (ensureDirPage): 500 files in 50 new directories
+// 1 329.09 ms, reported without a budget.
 //
 // Ponytail: arrival is modelled as `perMessage` lines per socket message, one macrotask
 // apart; the real fs-agent framing is not measured here. The flush window runs on real
@@ -143,15 +145,15 @@ async function oneFullFlush(): Promise<BurstRun> {
 }
 
 export const bench = defineBench("inbound burst", [
-  // 2026-10-13: p95 17.29 µs, total 61.37 ms. Per event ≈5× (sub-0.1 ms is noise-dominated); total = the window.
+  // 2026-10-13: p95 16.60 µs, total 66.61 ms. Per event ≈5× (sub-0.1 ms is noise-dominated); total = the window.
   { name: "500 creates into 10k pages, 20 lines/message", budgetNs: 100_000, totalBudgetNs: 1_500_000_000, setup: () => createBurst(20) },
-  // 2026-10-13: p95 20.45 µs, total 60.03 ms (11 570.15 ms before the flush window).
+  // 2026-10-13: p95 18.56 µs, total 59.02 ms (11 570.15 ms before the flush window).
   { name: "500 creates into 10k pages, 1 line/message", budgetNs: 100_000, totalBudgetNs: 1_500_000_000, setup: () => createBurst(1) },
-  // 2026-10-13: p95 1.87 ms, total 528.52 ms; 3× → 6 ms per event, the total capped at the 1.5 s window.
+  // 2026-10-13: p95 1.82 ms, total 503.54 ms; 3× → 6 ms per event, the total capped at the 1.5 s window.
   { name: "500 edits in 10k pages, 20 lines/message", budgetNs: 6_000_000, totalBudgetNs: 1_500_000_000, setup: () => editBurst(20) },
-  // 2026-10-13: 20.87 ms; the budget is C3b5 C1.4's 50 ms per flush (p95 of 5 runs = their max).
+  // 2026-10-13: 25.14 ms; the budget is C3b5 C1.4's 50 ms per flush (p95 of 5 runs = their max).
   { name: "one flush: 256 creates over 64 existing dirs", budgetNs: 50_000_000, totalBudgetNs: 50_000_000, setup: oneFullFlush },
-  // 2026-10-13: p95 22.33 ms (a folder create), total 1 296.08 ms — reported, not gated (C1.4).
+  // 2026-10-13: p95 22.77 ms (a folder create), total 1 329.09 ms — reported, not gated (C1.4).
   {
     name: "500 creates in 50 new dirs, 1 line/msg (report only)", budgetNs: Number.POSITIVE_INFINITY, totalBudgetNs: Number.POSITIVE_INFINITY,
     setup: () => createBurst(1, (at) => `New ${at % 50}/Note ${at}.omd`),
