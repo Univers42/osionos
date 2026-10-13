@@ -9,7 +9,7 @@ import fs from "node:fs";
 
 import { expect, test } from "@playwright/test";
 
-import { activateFirstEditor, clearAndTypePageTitle, openFreshPage, pageTitleEditor, pasteText, waitForRenderStability } from "../../browser/core/app.mjs";
+import { activateFirstEditor, clearAndTypePageTitle, explorerRow, openFreshPage, pageTitleEditor, pasteText, waitForRenderStability } from "../../browser/core/app.mjs";
 import { BASE, VIEW, expectNewGraph, installStub, stubLog } from "./support.mjs";
 
 const LEGACY_CANVAS = "canvas.osio-graph__fg";
@@ -33,7 +33,7 @@ async function createPage(page, baseURL, title) {
 
 // The page's row in the sidebar tree: the page context menu (Open with …) lives there.
 function treeRow(page, title) {
-  return page.locator('button[title^="Double-click to rename"]', { hasText: title });
+  return explorerRow(page, title);
 }
 
 async function openFromRail(page) {

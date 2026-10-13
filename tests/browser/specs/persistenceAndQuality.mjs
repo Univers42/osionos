@@ -16,16 +16,13 @@ import {
   activateFirstEditor,
   clearAndType,
   clearAndTypePageTitle,
+  explorerRow,
   focusEditorEnd,
   getEditors,
   pageTitleEditor,
 } from "../core/app.mjs";
 import { defineScenario } from "../core/scenario.mjs";
 import { runLocalCommand } from "../core/system.mjs";
-
-function escapeRegex(value) {
-  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-}
 
 function sidebarNewPageButton(page) {
   return page.locator('button[title="New page"]').first();
@@ -49,15 +46,12 @@ async function openPageFromSidebar(page, title) {
   }
 
   await waitForSidebarReady(page);
-  const button = page
-    .locator("nav button")
-    .filter({ hasText: new RegExp(escapeRegex(title), "i") })
-    .first();
+  const button = explorerRow(page, title);
 
   try {
     await button.waitFor({ state: "visible", timeout: 10_000 });
   } catch {
-    throw new Error(`Could not find sidebar entry for page "${title}" after reload`);
+    throw new Error(`Could not find explorer entry for page "${title}" after reload`);
   }
 
   await button.scrollIntoViewIfNeeded();
@@ -66,7 +60,7 @@ async function openPageFromSidebar(page, title) {
   try {
     await expect(pageTitleEditor(page)).toContainText(title, { timeout: 10_000 });
   } catch {
-    throw new Error(`Sidebar entry for "${title}" was visible but did not open the page editor`);
+    throw new Error(`Explorer entry for "${title}" was visible but did not open the page editor`);
   }
 }
 

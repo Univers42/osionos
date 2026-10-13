@@ -12,6 +12,8 @@
 
 import { expect, test } from "@playwright/test";
 
+import { explorerRow, openFreshPage } from "../../browser/core/app.mjs";
+
 async function bootWorkbench(page) {
   const errors = [];
   page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
@@ -155,6 +157,56 @@ test("Shift+F10 on focused row opens menu; Escape closes it", async ({ page }) =
 
   // Focus should remain on the row
   await expect(firstRow).toBeFocused({ timeout: 5_000 });
+
+  expect(errors).toEqual([]);
+});
+
+test("Duplicate in the row menu adds a copy next to the page", async ({ page, baseURL }) => {
+  test.setTimeout(120_000);
+  const errors = await bootWorkbench(page);
+  await openFreshPage(page, baseURL);
+
+  const title = `Dup Source ${Date.now()}`;
+  const titleBox = page.getByRole("textbox", { name: "Page title" });
+  await titleBox.click();
+  await titleBox.fill(title);
+
+  const row = explorerRow(page, title);
+  await expect(row).toBeVisible({ timeout: 10_000 });
+  await row.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Duplicate", exact: true }).click();
+
+  await expect(explorerRow(page, `${title} (1)`)).toBeVisible({ timeout: 10_000 });
+
+  expect(errors).toEqual([]);
+});
+
+test("Add child page in the row menu creates and opens a child", async ({ page, baseURL }) => {
+  test.setTimeout(120_000);
+  const errors = await bootWorkbench(page);
+  await openFreshPage(page, baseURL);
+
+  const parent = `Child Parent ${Date.now()}`;
+  const titleBox = page.getByRole("textbox", { name: "Page title" });
+  await titleBox.click();
+  await titleBox.fill(parent);
+
+  // Give the parent a child so its row becomes an expandable folder, then open it.
+  const parentRow = explorerRow(page, parent);
+  await expect(parentRow).toBeVisible({ timeout: 10_000 });
+  await parentRow.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Add child page", exact: true }).click();
+  await expect(parentRow).toHaveAttribute("aria-expanded", "false", { timeout: 10_000 });
+  await parentRow.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(parentRow).toHaveAttribute("aria-expanded", "true");
+
+  // A second child is created and opened: the title box shows its "Untitled" name.
+  await parentRow.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Add child page", exact: true }).click();
+  await expect(titleBox).toBeVisible({ timeout: 10_000 });
+  await expect(titleBox).toHaveValue("Untitled");
+  await expect(parentRow).toHaveAttribute("aria-expanded", "true");
 
   expect(errors).toEqual([]);
 });

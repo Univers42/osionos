@@ -48,7 +48,7 @@ async function openImageUploadDialog(page, baseURL) {
 test.describe("upload an image from the computer", () => {
   test("a small local image embeds and renders", async ({ page, baseURL }) => {
     await openImageUploadDialog(page, baseURL);
-    await page.locator('input[type="file"]').setInputFiles({
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
       name: "tiny.png",
       mimeType: "image/png",
       buffer: TINY_PNG,
@@ -65,7 +65,7 @@ test.describe("upload an image from the computer", () => {
 
     await openImageUploadDialog(page, baseURL);
     const big = Buffer.concat([TINY_PNG, Buffer.alloc(6 * 1024 * 1024, 7)]);
-    await page.locator('input[type="file"]').setInputFiles({
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
       name: "photo.png",
       mimeType: "image/png",
       buffer: big,

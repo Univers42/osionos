@@ -27,7 +27,9 @@ export type MenuActionId =
   | "copy-relative-path"
   | "rename"
   | "delete"
+  | "duplicate"
   // file only
+  | "add-child"
   | "open-with"
   | "open"
   | "open-raw"
@@ -35,6 +37,7 @@ export type MenuActionId =
   | "open-to-side"
   | "share"
   | "copy-remote-url"
+  | "export"
   | "export-diagram"
   | "select-for-compare"
   | "open-changes"

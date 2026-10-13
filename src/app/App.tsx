@@ -50,6 +50,7 @@ import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDa
 import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
 import { ToastViewport } from "@osionos/ui/primitives";
 import { ShareHost } from "@/features/share/ShareHost";
+import { ExportHost } from "@/features/page-export/ui/ExportHost";
 import { TopBar } from "@/widgets/top-bar";
 import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
 
@@ -365,6 +366,7 @@ const App: React.FC = () => {
       {settingsOpen && <LazySettingsCenter initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />}
       <ToastViewport />
       <ShareHost />
+      <ExportHost />
       <ContactDock />
       <QuickCaptureModal />
       <WorkspaceIntentModal />
