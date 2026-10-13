@@ -55,7 +55,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
   const [expanded, setExpanded] = useState(!block.collapsed);
   const updateBlock = usePageStore((s) => s.updateBlock);
   const summaryClassName = [
-    "text-[var(--osio-fg-default)] leading-relaxed py-0.5",
+    "text-[var(--osio-fg-default)] py-0.5",
     getToggleHeadingClass(block.headingLevel),
   ].join(" ");
   const commitBlockUpdate = useCallback(

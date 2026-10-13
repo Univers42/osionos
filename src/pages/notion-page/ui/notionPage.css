@@ -39,17 +39,9 @@
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--osio-bg-page);
-  font-family: var(--page-font-family, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-family: var(--page-font-family, var(--osio-font-ui));
   position: relative;
   container-type: size;   /* powers PageOutlineRail 50cqh centering + @container narrow-hide */
-}
-
-.osionos-page--font-serif {
-  font-family: Georgia, "Times New Roman", serif;
-}
-
-.osionos-page--font-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
 .osionos-page--small-text {
@@ -57,7 +49,7 @@
 }
 
 .osionos-page--small-text .osionos-page-title {
-  font-size: calc(40px * var(--page-font-size-scale, 0.8));
+  font-size: calc(var(--osio-font-size-display) * var(--page-font-size-scale, 0.8));
 }
 
 /* ── Reading scale ────────────────────────────────────────────────────── */
@@ -1374,9 +1366,11 @@ button.osionos-page-breadcrumb:hover {
 .osionos-page-title {
   display: block;
   width: 100%;
-  font-size: 40px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-family: var(--osio-font-display);
+  font-size: var(--osio-font-size-display);
+  font-weight: var(--osio-font-weight-display);
+  line-height: var(--osio-line-height-display);
+  letter-spacing: var(--osio-letter-spacing-display);
   color: var(--osio-fg-default);
   outline: none;
   border: none;
@@ -1634,7 +1628,7 @@ button.osionos-page-breadcrumb:hover {
 
 @media (max-width: 768px) {
   .osionos-page-title {
-    font-size: 30px;
+    font-size: var(--osio-font-size-3xl);
   }
 
   .osionos-page-icon {

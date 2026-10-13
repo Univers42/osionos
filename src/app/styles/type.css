@@ -1,0 +1,39 @@
+/* The one source of heading typography. An editable block, its read-only twin
+   and a toggle summary all take their look from these four utilities, so the
+   three can no longer drift apart. Sizes go through the Tailwind text keys, not
+   the raw size tokens, because the page's reading scale (notionPage.css) steps
+   those keys up inside a document: an h1 is 24px in chrome and 30px in a page.
+   Margins are not here on purpose: the editor's block wrapper owns spacing and
+   only the read-only renderer adds its own. */
+
+@utility osio-h1 {
+  font-family: var(--osio-font-heading);
+  font-size: var(--text-2xl);
+  font-weight: var(--osio-font-weight-semibold);
+  line-height: var(--osio-line-height-tight);
+  letter-spacing: var(--osio-letter-spacing-heading);
+}
+
+@utility osio-h2 {
+  font-family: var(--osio-font-heading);
+  font-size: var(--text-xl);
+  font-weight: var(--osio-font-weight-semibold);
+  line-height: var(--osio-line-height-tight);
+  letter-spacing: var(--osio-letter-spacing-heading);
+}
+
+@utility osio-h3 {
+  font-family: var(--osio-font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--osio-font-weight-semibold);
+  line-height: var(--osio-line-height-snug);
+  letter-spacing: var(--osio-letter-spacing-heading);
+}
+
+@utility osio-h4 {
+  font-family: var(--osio-font-heading);
+  font-size: var(--text-base);
+  font-weight: var(--osio-font-weight-semibold);
+  line-height: var(--osio-line-height-snug);
+  letter-spacing: var(--osio-letter-spacing-heading);
+}
