@@ -104,9 +104,11 @@ export function usePageSync(): void {
           const page = payloads.get(id);
           const stamp = desired.get(id);
           if (!page || stamp === undefined) continue;
-          const result = await publishPage(page);
+          const { result } = await publishPage(page);
           if (result === "ok") { ledger[id] = stamp; continue; } // advance ONLY on confirm
-          if (result === "gone") { delete ledger[id]; continue; } // deleted/unowned → forget it
+          // A deleted page (404) and a refused edit (403) are both unsendable,
+          // so both leave the ledger without retry; the refused copy is wired next.
+          if (result === "gone" || result === "refused") { delete ledger[id]; continue; }
           // Transient (offline / 5xx / 429): STOP. Hammering the rest of the batch is what
           // turns a rate-limited server into a self-sustaining 429/502 storm. Back off and
           // resume next cycle — the pages already confirmed above stay advanced.
