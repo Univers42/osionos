@@ -71,8 +71,38 @@ function echoRow(entry: EntryMatch, ctx: WriteContext): InboundStep[] | null {
 
 /** R6-R8: a write onto a name no page owns — a page file, a folder meta, or code. */
 async function unclaimedRow(name: string, fid: string | undefined, ctx: WriteContext): Promise<InboundStep[]> {
-  if (!isPageFileName(name)) return [{ op: "create", path: ctx.path, text: ctx.text, hash: ctx.hash, kind: "code" }];
+  if (!isPageFileName(name)) return codeFileRow(ctx);
   return isFolderMetaName(name) ? folderMetaRow(fid, ctx) : pageFileRow(fid, ctx);
+}
+
+/**
+ * R8 + R6b for code (Q2). A code file has no id, so `X/rel` is code page Q moved
+ * only when a pending deleted directory D holds Q at `D/rel` and the ledger's hash
+ * there equals the event's — then Q relocates like a page file; else a new page.
+ * The longest `rel` is tried first, so `X/util/a.ts` is `D/util/a.ts`, not a
+ * same-text `E/a.ts`. O(depth² × pending dirs) map lookups.
+ * Ponytail: a code file edited inside the move window (hash differs from the
+ * ledger) is created as a new page, and the original archives with its old
+ * directory — a duplicate plus a trash entry, never a loss.
+ */
+async function codeFileRow(ctx: WriteContext): Promise<InboundStep[]> {
+  const segments = ctx.path.split("/");
+  for (let cut = 1; cut < segments.length; cut += 1) {
+    const rel = segments.slice(cut);
+    for (const deleted of ctx.view.pendingDeletedDirs()) {
+      const moved = movedCodePage([...deleted.dir.split("/"), ...rel], ctx);
+      const evidence = moved === undefined ? undefined : ctx.view.moveEvidence(moved);
+      if (moved !== undefined && evidence !== undefined) return relocate(moved, evidence, ctx);
+    }
+  }
+  return [copyOf(ctx)];
+}
+
+/** The live code page whose file sits exactly at `segments` with the event's hash agreed there. O(depth). */
+function movedCodePage(segments: readonly string[], ctx: WriteContext): string | undefined {
+  const entry = ctx.view.entryAt(segments);
+  if (entry === undefined || "caseOf" in entry || entry.role !== "code-file") return undefined;
+  return ctx.view.syncedHashOf(segments.join("/")) === ctx.hash ? entry.pageId : undefined;
 }
 
 /**

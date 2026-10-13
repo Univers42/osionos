@@ -14,7 +14,7 @@
 // id means the page was renamed, a directory above it was renamed, or neither (a
 // `cp`): `relocate` tells them apart; `decide`, `copyOf` and the skips end them.
 
-import { isFolderMetaName } from "@/features/page-file/model/pageFileCodec";
+import { isFolderMetaName, isPageFileName } from "@/features/page-file/model/pageFileCodec";
 import { decideInboundWrite } from "./ideSyncEngine";
 import { sha16 } from "./ideFsEcho";
 
@@ -158,9 +158,11 @@ export async function decide(pageId: string, lastSynced: string | null, ctx: Wri
   return [{ op: "record", path: ctx.path, hash: ctx.hash }];
 }
 
-/** The copy: a new page from the text minus its front-matter id line. O(len(text)). */
+/** The copy: a new page from the text minus its front-matter id line, or a code
+ *  page from the bytes as they are (a code file has no front matter). O(len(text)). */
 export function copyOf(ctx: WriteContext): InboundStep {
-  return { op: "create", path: ctx.path, text: withoutIdLine(ctx.text), hash: ctx.hash, kind: "page" };
+  const isPage = isPageFileName(ctx.path.slice(ctx.path.lastIndexOf("/") + 1));
+  return { op: "create", path: ctx.path, text: isPage ? withoutIdLine(ctx.text) : ctx.text, hash: ctx.hash, kind: isPage ? "page" : "code" };
 }
 
 /**

@@ -20,7 +20,7 @@ import test from "node:test";
 import { sha16 } from "../../src/features/ide/model/ideFsEcho.ts";
 import { useIdeOutputBus } from "../../src/features/ide/model/ideOutputBus.ts";
 import { recordSyncedHash, syncedHashOf } from "../../src/features/ide/model/ideSyncEngine.ts";
-import { blockPage, execWorld, folderPage, putFile } from "./fixtures/inboundWorld.ts";
+import { blockPage, codePage, execWorld, folderPage, putFile } from "./fixtures/inboundWorld.ts";
 import type { PageEntry } from "../../src/entities/page/model/types.ts";
 
 const said = (fragment: string): boolean => useIdeOutputBus.getState().lines.some((line) => line.text.includes(fragment));
@@ -122,6 +122,17 @@ test("B2: mv src lib ⇒ the folder keeps its id and every agreement under src f
     assert.equal(syncedHashOf(world.workspaceId, `src/${name}`), null, name);
     assert.equal(syncedHashOf(world.workspaceId, `lib/${name}`), await sha16(world.textOf(id)), name);
   }
+});
+
+test("Q2: mv src lib with the code file arriving first ⇒ the folder moves on it; no duplicate code page", async () => {
+  const world = await synced([folderPage("F", "src"), codePage("m", "main.ts", "print(1)\n", "F"), blockPage("a", "A", "F")]);
+  await world.shellDelete("src");
+  for (const [name, id] of [["main.ts", "m"], ["_folder.omd", "F"], ["A.omd", "a"]]) await world.shellWrite(`lib/${name}`, world.textOf(id));
+  await world.elapse();
+  assert.equal(world.store.pages().length, 3);
+  assert.equal(world.pageOf("F")?.title, "lib");
+  assert.deepEqual(world.session.view.pageState("m"), { status: "live", path: "lib/main.ts", filePath: "lib/main.ts", isFolder: false, parentId: "F" });
+  assert.equal(syncedHashOf(world.workspaceId, "lib/main.ts"), await sha16(world.textOf("m")));
 });
 
 test("B4: a move that fails after its archive was cancelled says where the file sits unsynced, and records nothing", async () => {

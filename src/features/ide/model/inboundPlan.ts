@@ -76,6 +76,8 @@ export interface InboundView {
   /** The text the app would write for this page's own file (.omd, _folder.omd,
    *  code body). */
   localText(pageId: string): Promise<string>;
+  /** Every directory a pending delete named (Q2's code-file move inference). */
+  pendingDeletedDirs(): readonly { dir: string; role: DirRole; ownerId: string }[];
 }
 
 export type InboundStep =

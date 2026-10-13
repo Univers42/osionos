@@ -44,8 +44,6 @@ export interface ExecView extends InboundView {
   ownerOfDir(dirPath: string): string | undefined;
   /** The children directory of a non-folder page that HAS children in the index. O(1). */
   childrenDirOf(pageId: string): string | undefined;
-  /** Every pending deleted directory (Q2's code-file move inference). */
-  pendingDeletedDirs(): readonly { dir: string; role: "children-dir" | "folder-dir"; ownerId: string }[];
 }
 
 export function createInboundView(deps: InboundViewDeps): ExecView {

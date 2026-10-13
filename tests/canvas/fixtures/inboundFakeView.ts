@@ -96,6 +96,7 @@ export function viewOf(specs: readonly FakePageSpec[]): FakeView {
     childrenOf: (entryId) => table.pages.filter((page) => !page.archived && page.parentId === entryId.replace(/#dir$/, ""))
       .map((page) => ({ pageId: page.pageId, path: page.path })),
     localText: (pageId) => Promise.resolve(pageOf(table, pageId)?.text ?? ""),
+    pendingDeletedDirs: () => table.deletedDirs.map((dir) => ({ dir: dir.path, role: dir.role, ownerId: dir.ownerId })),
   };
 }
 
@@ -167,10 +168,8 @@ function applyStep(table: FakeTable, step: InboundStep): void {
   else if (step.op === "move") movePages(table, step);
   else if (step.op === "restore" && page !== undefined) { page.archived = false; table.inboundArchived.delete(step.pageId); }
   else if (step.op === "apply" && page !== undefined) { page.text = step.text; table.ledger.set(step.path, step.hash); }
-  else if (step.op === "create") {
-    table.pages.push({ pageId: `fresh-${table.pages.length}`, path: step.path, filePath: step.path, isFolder: false,
-      isCode: step.kind === "code", parentId: undefined, archived: false, text: step.text });
-  }
+  else if (step.op === "create") table.pages.push({ pageId: `fresh-${table.pages.length}`, path: step.path, filePath: step.path,
+    isFolder: false, isCode: step.kind === "code", parentId: undefined, archived: false, text: step.text });
 }
 
 /** A page's children directory travels with it: a folder move shifts everything
