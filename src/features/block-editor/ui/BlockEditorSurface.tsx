@@ -19,6 +19,7 @@ import type { Block } from "@/entities/block";
 import { flattenColumns, isParentable, selfRendersChildren } from "@/entities/block";
 import {
 	estimateBlockHeight,
+	measureScrollMargin,
 	ROOT_BLOCK_VIRTUALIZATION_OVERSCAN,
 	ROOT_BLOCK_VIRTUALIZATION_THRESHOLD,
 } from "@/entities/block/model/blockVirtualization";
@@ -46,6 +47,7 @@ import { useEditorCommandBus, type EditorHandle } from "../model/editorCommandBu
 import { isTextEntryTarget } from "../model/marqueeGeometry";
 import { expandSelectionWithDescendants, removeBlocksFromTree } from "@/entities/block/model/blockTreeUtils";
 import { isBlockSelectEnabled } from "@/shared/config/featureFlags";
+import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import { usePageContextMenu } from "../model/usePageContextMenu";
 
 // useEvent: an identity-STABLE wrapper whose call always runs the latest fn. The
@@ -335,12 +337,6 @@ function getDropIndicatorClassName(position: Exclude<DropPosition, null>) {
 
 function resolveScrollElement(root: HTMLElement | null): HTMLElement | null {
 	return root?.closest<HTMLElement>(".osionos-page") ?? null;
-}
-
-function measureScrollMargin(root: HTMLElement, scrollElement: HTMLElement): number {
-	const rootRect = root.getBoundingClientRect();
-	const scrollRect = scrollElement.getBoundingClientRect();
-	return Math.max(0, rootRect.top - scrollRect.top + scrollElement.scrollTop);
 }
 
 function getVirtualFocusBlockId(event: Event): string | null {
@@ -1361,7 +1357,7 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		const styles = getComputedStyle(leaf);
 		let line = Number.parseFloat(styles.lineHeight);
 		if (Number.isNaN(line)) line = Number.parseFloat(styles.fontSize) * 1.5;
-		const leafTop = leaf.getBoundingClientRect().top - article.getBoundingClientRect().top;
+		const leafTop = toCssPx(leaf.getBoundingClientRect().top - article.getBoundingClientRect().top, article);
 		const top = leafTop + (line - handle.offsetHeight) / 2;
 		handle.style.top = `${Math.max(0, Math.round(top))}px`;
 		// block.type is a real dep: /image converts paragraph -> image UNDER THE

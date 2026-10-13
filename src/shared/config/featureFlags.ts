@@ -12,6 +12,8 @@
 
 import { createFeatureFlags } from "@osionos/feature-flags";
 
+import { supportsCssZoom } from "@/shared/lib/dom/cssZoom";
+
 export type FeatureFlagName =
   | "osio.canvas.v2"
   | "osio.profile.template"
@@ -30,7 +32,8 @@ export type FeatureFlagName =
   | "osio.publish"
   | "osio.draw"
   | "osio.whiteboard"
-  | "osio.ide";
+  | "osio.ide"
+  | "osio.panezoom";
 
 /**
  * Resolution (URL -> localStorage -> env -> fallback) lives in @osionos/feature-flags.
@@ -189,4 +192,16 @@ export function isWhiteboardEnabled(): boolean {
  *  must both be set, so the flag alone can never open an execution path. */
 export function isIdeEnabled(): boolean {
   return isFeatureFlagEnabled("osio.ide", false);
+}
+
+/** Per-pane zoom: Ctrl +/-/0 and Ctrl+wheel zoom the selected split instead of
+ *  the whole page (`widgets/workspace-grid/model/paneZoom.ts`). Default ON; the
+ *  flag is a kill-switch because the zoom changes the unit every pointer gesture
+ *  inside a pane is measured in (`shared/lib/dom/cssZoom.ts`). Off, or in a
+ *  browser that cannot report an element's zoom, those keys and the wheel are
+ *  the browser's again and every pane renders at 100%. Disable via
+ *  `?osio.panezoom=0`, the `osio.panezoom` localStorage key, or
+ *  `VITE_OSIO_PANEZOOM=0`. */
+export function isPaneZoomEnabled(): boolean {
+  return supportsCssZoom() && isFeatureFlagEnabled("osio.panezoom", true);
 }

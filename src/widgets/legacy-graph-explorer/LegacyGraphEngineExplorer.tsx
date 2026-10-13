@@ -115,6 +115,7 @@ export function LegacyGraphEngineExplorer(): ReactElement {
 
   return (
     <div
+      data-osio-fixed-scale
       className="relative h-full min-h-0 w-full"
       onMouseMove={(e) => {
         cursorRef.current = { x: e.clientX, y: e.clientY };

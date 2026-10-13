@@ -1,11 +1,26 @@
+import { isPaneZoomEnabled } from "@/shared/config/featureFlags";
 import { useZenMode } from "@/shared/config/useZenMode";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { usePalette } from "@/widgets/top-bar/model/usePalette";
+import { findPane } from "@/widgets/workspace-grid/model/layoutTree";
+import { getSelectedPaneId, type PaneZoomChange } from "@/widgets/workspace-grid/model/paneZoom";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 
 import type { Command } from "../types";
 
 /** App-shell commands — the same actions the top bar already exposes, wrapped. */
+/** The selected pane, if it is still open. Null hands the key back to the browser. */
+function zoomablePaneId(): string | null {
+  if (!isPaneZoomEnabled()) return null;
+  const paneId = getSelectedPaneId();
+  return paneId && findPane(useWorkspaceLayout.getState().root, paneId) ? paneId : null;
+}
+
+function zoomSelectedPane(change: PaneZoomChange): void {
+  const paneId = zoomablePaneId();
+  if (paneId) useWorkspaceLayout.getState().zoomPane(paneId, change);
+}
+
 export const APP_COMMANDS: Command[] = [
   { id: "openSearch", title: "Search", category: "App", run: () => usePalette.getState().openSearch() },
   { id: "openPalette", title: "Command palette", category: "App", run: () => usePalette.getState().openCommand() },
@@ -36,4 +51,7 @@ export const APP_COMMANDS: Command[] = [
       layout.splitActivePane(layout.activePaneId, "row");
     },
   },
+  { id: "zoomPaneIn", title: "Zoom in (selected pane)", category: "App", enabled: () => zoomablePaneId() !== null, run: () => zoomSelectedPane("in") },
+  { id: "zoomPaneOut", title: "Zoom out (selected pane)", category: "App", enabled: () => zoomablePaneId() !== null, run: () => zoomSelectedPane("out") },
+  { id: "zoomPaneReset", title: "Reset zoom (selected pane)", category: "App", enabled: () => zoomablePaneId() !== null, run: () => zoomSelectedPane("reset") },
 ];

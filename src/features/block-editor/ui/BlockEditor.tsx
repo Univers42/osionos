@@ -48,6 +48,7 @@ import { SqlRunButton } from "@/features/sql-runner/ui/SqlRunButton";
 import { CodeGutter } from "@/entities/block/ui/CodeGutter";
 import { getToggleHeadingClass } from "@/entities/block/model/toggleHeading";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
+import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
 import { LayoutBlockEditor } from "./canvas";
@@ -215,7 +216,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     // const + mutual closure capture: `up`/`cancel` reference each other but
     // only CALL at event time, well after all three initializers ran.
     const move = (ev: PointerEvent) => {
-      const newPx = startHeightPx + ev.clientY - startY;
+      const newPx = startHeightPx + toCssPx(ev.clientY - startY, codeBodyRef.current);
       latestLines = Math.max(CODE_MIN_LINES, Math.round((newPx - CODE_LINE_HEIGHT) / CODE_LINE_HEIGHT));
       setDragHeightLines(latestLines);
     };
@@ -722,10 +723,12 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           {codeBlockHeader}
           <div ref={codeBodyRef} className="overflow-hidden rounded-b-xl">
             {isRenderable && codeView === "preview" ? (
-              <MermaidDiagram
-                chart={block.content}
-                codeTheme={block.codeTheme ?? "dark"}
-              />
+              <div data-osio-fixed-scale>
+                <MermaidDiagram
+                  chart={block.content}
+                  codeTheme={block.codeTheme ?? "dark"}
+                />
+              </div>
             ) : (
               <div
                 className="relative"
