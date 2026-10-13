@@ -154,7 +154,6 @@ function suffixed(base: string, k: number, isCode: boolean): string {
  */
 export function fileNameForPage(page: PageEntry, siblings: readonly PageEntry[]): string {
   const others = siblings.filter((p) => p._id !== page._id);
-  // Include page even if archived by temporarily clearing archivedAt for naming
   const pageForNaming = page.archivedAt ? { ...page, archivedAt: null } : page;
   const all = [...others, pageForNaming];
   const names = assignSiblingNames(all);
@@ -176,11 +175,9 @@ export function pathForEntry(
   let currentId: string | undefined = pageId;
   let isFirst = true;
   const siblingCache = new Map<string, Map<string, SiblingName>>();
-
   while (currentId) {
     if (visited.has(currentId)) return "";
     visited.add(currentId);
-
     const page = resolve(currentId);
     if (!page || page.archivedAt) return "";
 
