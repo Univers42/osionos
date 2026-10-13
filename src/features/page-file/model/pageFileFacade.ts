@@ -44,6 +44,8 @@ export interface PageFileStore {
   access(): object | null;
   canRead(page: PageEntry): boolean;
   canEdit(page: PageEntry): boolean;
+  /** Owner-only: may this user change who sees the page (pinFilePatch). */
+  canChangeSharing(page: PageEntry): boolean;
   /** Fetch a page body the store has not hydrated yet. */
   loadContent(pageId: string): Promise<void>;
   subscribe(listener: (state: unknown, prevState: unknown) => void): () => void;

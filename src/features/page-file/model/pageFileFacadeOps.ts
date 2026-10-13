@@ -15,6 +15,7 @@ import type { PageFacadeEntry } from "@/features/ide/vfs/pageProvider";
 import { codeBlockOf, createCodeFileBlock } from "@/features/ide/model/codeFile";
 import { languageForFileName } from "@/features/ide/model/ideLanguages";
 import { fileToPage, isPageFileName } from "./pageFileCodec";
+import { pinFilePatch } from "./pinFilePatch";
 import { assignSiblingNames, kindOfPage, titleFromFileName, type SiblingName } from "./pagePaths";
 import { CODE_DIR_SUFFIX, META_SUFFIX, ownerOf } from "./pageFileFacadeTables";
 import { FOLDER_META_NAME } from "./types";
@@ -148,7 +149,7 @@ export async function writePage(ctx: OpContext, id: string, text: string): Promi
     return ctx.deps.updateBlock(page._id, block.id, { content: text });
   }
   const parsed = fileToPage(text, page);
-  ctx.deps.patchPage(page._id, parsed.patch);
+  ctx.deps.patchPage(page._id, pinFilePatch(parsed.patch, ctx.deps.canChangeSharing(page)));
   ctx.deps.updatePageContent(page._id, parsed.content);
 }
 

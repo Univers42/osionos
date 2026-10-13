@@ -76,6 +76,7 @@ export function createFixtureStore(workspaceId: string): FixtureStore {
     access: () => access,
     canRead: (_page: PageEntry) => true,
     canEdit: (_page: PageEntry) => true,
+    canChangeSharing: (_page: PageEntry) => true,
     // Hydrating swaps the array (like the real store) but does not notify: a
     // fetched body is not a tree change.
     loadContent: async (pageId: string) => {

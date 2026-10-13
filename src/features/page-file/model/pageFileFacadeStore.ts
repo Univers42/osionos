@@ -12,7 +12,7 @@
 
 import { API_BASE, getActivePageJwt } from "@/shared/api/client";
 import { usePageStore } from "@/store/usePageStore";
-import { canEditPage, canReadPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
+import { canChangePageVisibility, canEditPage, canReadPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { sanitizeSegment } from "@/features/ide/model/idePaths";
 
 import type { PageFacade } from "@/features/ide/vfs/pageProvider";
@@ -36,6 +36,7 @@ export function pageFileFacade(workspaceId: string): PageFacade {
     access: context,
     canRead: (page) => canReadPage(page, context()),
     canEdit: (page) => canEditPage(page, context()),
+    canChangeSharing: (page) => canChangePageVisibility(page, context()),
     loadContent: async (pageId) => {
       if (API_BASE && jwt()) await store().fetchPageContent(pageId, jwt());
     },
