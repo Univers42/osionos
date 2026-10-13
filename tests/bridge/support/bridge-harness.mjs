@@ -150,10 +150,14 @@ export function harnessConfig() {
 	});
 }
 
-/** JSON request headers carrying an app session for `userId`, whose private workspace is `homeWorkspaceId`. */
-export function sessionHeaders(config, userId, homeWorkspaceId) {
+/**
+ * JSON request headers carrying an app session for `userId`, whose private workspace is
+ * `homeWorkspaceId`; `memberWorkspaceIds` ride along in the token as shared workspaces.
+ */
+export function sessionHeaders(config, userId, homeWorkspaceId, memberWorkspaceIds = []) {
 	const payload = validateBridgePayload({ provider: 'prismatica', subject: userId, email: 'member@example.com', name: 'Member', jti: randomUUID() });
-	const session = createUserSession(payload, config, { workspaceId: homeWorkspaceId, workspaceName: 'Home', workspaceSlug: 'home' });
+	const persisted = { workspaceId: homeWorkspaceId, workspaceName: 'Home', workspaceSlug: 'home' };
+	const session = createUserSession(payload, config, persisted, Date.now(), memberWorkspaceIds.map((id) => ({ _id: id, role: 'member' })));
 	return { authorization: `Bearer ${session.session.accessToken}`, 'content-type': 'application/json' };
 }
 

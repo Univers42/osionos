@@ -20,7 +20,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
-import { canChangePageSharing, canReadAsNonMember, canReadPageRow, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
+import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
 import { publishRealtime } from './bridge-social-core.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
@@ -2235,14 +2235,12 @@ async function listWorkspaceDatabases(workspaceIds, config, fetchImpl) {
 	}
 }
 
-/** Owner-scoped page graph across `workspaceIds` (the note half of the data graph). */
-async function ownerScopedPageGraph(workspaceIds, userId, config, fetchImpl) {
+/** Page graph across `workspaceIds` — the caller's own workspaces — of the pages the caller may read. */
+async function readablePageGraph(workspaceIds, userId, config, fetchImpl) {
 	const rows = [];
 	for (const workspaceId of workspaceIds) {
 		const wsRows = await listPageRows(workspaceId, config, fetchImpl, {});
-		for (const row of wsRows) {
-			if (row.owner_id == null || row.owner_id === userId) rows.push(row);
-		}
+		rows.push(...wsRows.filter((row) => canReadPageRowAsMember(row, userId, workspaceIds)));
 	}
 	return pagesToGraph(rows);
 }
@@ -2277,7 +2275,7 @@ async function handleGraphData(url, request, response, config, fetchImpl) {
 		: requested
 			? (accessible.includes(requested) ? [requested] : [])
 			: authContext.workspaceIds;
-	const noteGraph = await ownerScopedPageGraph(workspaceIds, authContext.userId, config, fetchImpl);
+	const noteGraph = await readablePageGraph(workspaceIds, authContext.userId, config, fetchImpl);
 	const recordGraph = await workspaceRecordGraph(workspaceIds, config, fetchImpl);
 	json(response, 200, mergeGraphs(noteGraph, recordGraph), config);
 	return true;
@@ -2637,14 +2635,7 @@ async function handleGraphPages(url, request, response, config, fetchImpl) {
 		: requested
 			? (authContext.workspaceIds.includes(requested) ? [requested] : [])
 			: authContext.workspaceIds;
-	const rows = [];
-	for (const workspaceId of workspaceIds) {
-		const wsRows = await listPageRows(workspaceId, config, fetchImpl, {});
-		for (const row of wsRows) {
-			if (row.owner_id == null || row.owner_id === authContext.userId) rows.push(row);
-		}
-	}
-	json(response, 200, pagesToGraph(rows), config);
+	json(response, 200, await readablePageGraph(workspaceIds, authContext.userId, config, fetchImpl), config);
 	return true;
 }
 

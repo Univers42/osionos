@@ -17,6 +17,7 @@ import {
 	canReadAsNonMember,
 	canReadPageRow,
 	canReadPageRowAsMember,
+	isOwnerOrCollaborator,
 	readablePageRows,
 	withoutForeignSharingChanges,
 } from '../../scripts/bridge-page-read.mjs';
@@ -157,5 +158,21 @@ describe('canReadPageRowAsMember — cross-workspace surfaces require membership
 	];
 	for (const [name, row, memberWorkspaceIds, expected] of cases) {
 		it(`${name} → ${expected}`, () => assert.equal(canReadPageRowAsMember(row, SELF, memberWorkspaceIds), expected));
+	}
+});
+
+describe('isOwnerOrCollaborator — the agent reads only the caller\'s own and shared-with-them pages', () => {
+	const cases = [
+		['the owner', { visibility: 'private', owner_id: SELF }, true],
+		['the owner, upper-case id', { visibility: 'private', owner_id: SELF.toUpperCase() }, true],
+		['a collaborator with a role', { visibility: 'private', owner_id: OTHER, collaborators: [{ userId: SELF, role: 'viewer' }] }, true],
+		['a collaborator without a role', { visibility: 'private', owner_id: OTHER, collaborators: [{ userId: SELF, role: null }] }, false],
+		['another user\'s shared page', { visibility: 'shared', owner_id: OTHER }, false],
+		['another user\'s public page', { visibility: 'public', owner_id: OTHER }, false],
+		['an ownerless shared page', { visibility: 'shared', owner_id: null }, false],
+		['a malformed row', null, false],
+	];
+	for (const [name, row, expected] of cases) {
+		it(`${name} → ${expected}`, () => assert.equal(isOwnerOrCollaborator(row, SELF), expected));
 	}
 });

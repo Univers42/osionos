@@ -21,7 +21,8 @@
  * Dependency-free like the other bridge-*.mjs (Node built-ins only): the
  * Anthropic Messages API is called with the built-in `fetch` (no
  * @anthropic-ai/sdk), and tools run bridge-native via rest() rather than an MCP
- * stdio server. Tools are scoped to the caller's own workspaces.
+ * stdio server. Tools are scoped to the caller's own workspaces, and page reads to
+ * pages the caller owns or collaborates on (never ownerless or other users' pages).
  *
  * Graceful by design: a missing ANTHROPIC_API_KEY responds 200 SSE with one
  * `error` frame then ends, and any upstream failure becomes an `error` event —
@@ -36,6 +37,7 @@ import {
 	rest,
 	safeText,
 } from './bridge-social-core.mjs';
+import { isOwnerOrCollaborator } from './bridge-page-read.mjs';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -164,12 +166,14 @@ async function toolSearchPages(deps, session, input) {
 	const rows = await rest(
 		deps.config,
 		deps.fetchImpl,
-		`osionos_pages?workspace_id=in.(${ids.join(',')})&select=id,title,workspace_id,content,updated_at,created_at,archived_at,owner_id&order=updated_at.desc&limit=200`,
+		`osionos_pages?workspace_id=in.(${ids.join(',')})&select=id,title,workspace_id,content,updated_at,created_at,archived_at,owner_id,visibility,collaborators&order=updated_at.desc&limit=200`,
 	);
 	const matches = [];
 	for (const row of Array.isArray(rows) ? rows : []) {
 		if (row.archived_at) continue;
-		if (row.owner_id != null && row.owner_id !== session.userId) continue; // never leak another user's pages
+		// Only the caller's own and shared-with-them pages reach the model: anything else it reads
+		// can carry instructions (prompt injection) or be repeated to a third party.
+		if (!isOwnerOrCollaborator(row, session.userId)) continue;
 		let haystack = String(row.title ?? '').toLowerCase();
 		try {
 			haystack += '\n' + JSON.stringify(row.content ?? '').toLowerCase();
@@ -184,11 +188,11 @@ async function toolGetPage(deps, session, input) {
 	const pageId = safeText(input?.pageId, 80);
 	if (!UUID_REGEX.test(pageId)) throw httpError('pageId must be a UUID.', 422);
 	const ids = await callerWorkspaceIds(deps, session);
-	const rows = await rest(deps.config, deps.fetchImpl, `osionos_pages?id=eq.${pageId}&select=id,title,workspace_id,content,owner_id&limit=1`);
+	const rows = await rest(deps.config, deps.fetchImpl, `osionos_pages?id=eq.${pageId}&select=id,title,workspace_id,content,owner_id,visibility,collaborators&limit=1`);
 	const row = Array.isArray(rows) ? rows[0] : null;
 	if (!row) throw httpError('Page not found.', 404);
 	if (!ids.includes(row.workspace_id)) throw httpError('You do not have access to this page.', 403);
-	if (row.owner_id != null && row.owner_id !== session.userId) throw httpError('You do not have access to this page.', 403);
+	if (!isOwnerOrCollaborator(row, session.userId)) throw httpError('You do not have access to this page.', 403);
 	const blocks = Array.isArray(row.content) ? row.content : [];
 	return {
 		page: {

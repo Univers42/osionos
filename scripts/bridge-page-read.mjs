@@ -42,9 +42,14 @@ function isPageCollaborator(row, userId) {
 	return collaborators.some((entry) => entry !== null && typeof entry === 'object' && entry.role != null && sameId(entry.userId, userId));
 }
 
+/** The caller owns the page or is one of its collaborators — whatever its visibility. */
+export function isOwnerOrCollaborator(row, userId) {
+	return isPageOwner(row, userId) || isPageCollaborator(row, userId);
+}
+
 /** Readable without workspace membership (the marketplace): public, owned, or shared with the caller. */
 export function canReadAsNonMember(row, userId) {
-	return pageVisibility(row?.visibility) === 'public' || isPageOwner(row, userId) || isPageCollaborator(row, userId);
+	return pageVisibility(row?.visibility) === 'public' || isOwnerOrCollaborator(row, userId);
 }
 
 /** Readable by a member of the row's workspace: shared with the workspace, or readable without membership. */
