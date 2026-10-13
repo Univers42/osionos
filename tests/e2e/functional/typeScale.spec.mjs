@@ -155,6 +155,15 @@ test.describe("type scale", () => {
     expect(look.letterSpacing).toBe("-0.8px");
   });
 
+  test("on a phone the title stays a step above the 30px reading h1", async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openFreshPage(page, baseURL);
+    const title = page.getByRole("textbox", { name: "Page title" });
+    const { fontSize } = await styleOf(title, "fontSize");
+    expect(Number.parseFloat(fontSize)).toBeGreaterThan(30);
+    expect(Number.parseFloat(fontSize)).toBeLessThanOrEqual(40);
+  });
+
   // The title textarea pins its own height (PageTitle measures scrollHeight), so
   // its box cannot show a font swap. Measure unpinned copies in the title's class
   // instead: a wrapped block for line count and height, a nowrap span for width.
@@ -252,7 +261,19 @@ test.describe("type scale", () => {
   test("sidebar section labels are sentence case, one style", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     const recents = page.getByRole("button", { name: "Recents", exact: true }).locator("span").first();
-    const look = await styleOf(recents, "textTransform", "letterSpacing", "fontWeight", "fontSize");
-    expect(look).toEqual({ textTransform: "none", letterSpacing: "normal", fontWeight: "500", fontSize: "12px" });
+    const panelTitle = page.getByText("Explorer", { exact: true });
+    const look = ["textTransform", "letterSpacing", "fontWeight", "fontSize"];
+    const sectionLook = await styleOf(recents, ...look);
+    expect(sectionLook).toEqual({ textTransform: "none", letterSpacing: "normal", fontWeight: "500", fontSize: "12px" });
+    // The panel title is a section label too: it must not shout above its sections.
+    expect(await styleOf(panelTitle, ...look)).toEqual(sectionLook);
+  });
+
+  test("sidebar action rows are as tall as page rows", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    const heightOf = (locator) => locator.evaluate((element) => element.getBoundingClientRect().height);
+    const pageRow = page.getByRole("button", { name: /Getting Started/ }).first();
+    const sharedRow = page.getByRole("button", { name: "Start collaborating" });
+    expect(await heightOf(sharedRow)).toBe(await heightOf(pageRow));
   });
 });

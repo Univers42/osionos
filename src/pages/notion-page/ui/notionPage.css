@@ -1623,8 +1623,11 @@ button.osionos-page-breadcrumb:hover {
 /* ── Responsive (visual adjustments only — layout is fluid) ──────── */
 
 @media (max-width: 768px) {
+  /* Stays above the 30px reading h1 (3xl) at phone widths, so the title is
+     still the largest line. Ponytail: 8.5vw is eyeballed — a long title wraps
+     one line sooner on a 360px screen than at 30px. */
   .osionos-page-title {
-    font-size: var(--osio-font-size-3xl);
+    font-size: clamp(var(--osio-font-size-3xl), 8.5vw, var(--osio-font-size-display));
   }
 
   .osionos-page-icon {
