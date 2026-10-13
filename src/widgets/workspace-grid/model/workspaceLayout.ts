@@ -17,7 +17,7 @@ import {
   type LayoutNode, type PaneNode, type WorkspaceTab,
 } from "./layoutTree";
 import { pruneTabsForPages, removePane, setSizes, splitPane } from "./layoutMutations";
-import { freshLayout, layoutScope, loadLayout, saveLayout } from "./layoutPersist";
+import { emptyLayout, freshLayout, layoutScope, loadLayout, saveLayout } from "./layoutPersist";
 import { activePageToTab } from "./pageToTab";
 import { mirrorActiveTab } from "./layoutSync";
 import { normalizePaneZoom, stepPaneZoom, withPaneZoom, type PaneZoomChange } from "./paneZoom";
@@ -70,6 +70,12 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
     set({ root, activePaneId });
     saveLayout({ root, activePaneId }, get().scope);
     if (mirror !== false) mirrorActiveTab(mirror);
+  }
+
+  /** The last tab or pane closed: an empty workspace, not Home reopened behind the user's back. */
+  function closeEverything(): void {
+    const empty = emptyLayout();
+    commit(empty.root, empty.activePaneId, null);
   }
 
   function focusInPane(paneId: string, tabId: string, mirror: boolean): void {
@@ -183,7 +189,7 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
         return commit(root, state.activePaneId, activeTabOf(root, state.activePaneId));
       }
       const removed = removePane(state.root, paneId);
-      if (!removed) { const fresh = freshLayout(); return commit(fresh.root, fresh.activePaneId, activeTabOf(fresh.root, fresh.activePaneId)); }
+      if (!removed) return closeEverything();
       const activePaneId = findPane(removed, state.activePaneId) ? state.activePaneId : (collectPanes(removed)[0]?.id ?? "");
       commit(removed, activePaneId, activeTabOf(removed, activePaneId));
     },
@@ -193,10 +199,7 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
       const state = get();
       const result = pruneTabsForPages(state.root, state.activePaneId, (t) => Boolean(t.pageId) && pageIds.has(t.pageId));
       if (result === null) return; // no open tab matched
-      if (result === "empty") {
-        const fresh = freshLayout();
-        return commit(fresh.root, fresh.activePaneId, activeTabOf(fresh.root, fresh.activePaneId));
-      }
+      if (result === "empty") return closeEverything();
       commit(result.root, result.activePaneId, activeTabOf(result.root, result.activePaneId));
     },
 
@@ -266,7 +269,7 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
 
     closePane: (paneId) => {
       const removed = removePane(get().root, paneId);
-      if (!removed) { const fresh = freshLayout(); return commit(fresh.root, fresh.activePaneId, activeTabOf(fresh.root, fresh.activePaneId)); }
+      if (!removed) return closeEverything();
       const activePaneId = collectPanes(removed)[0]?.id ?? "";
       commit(removed, activePaneId, activeTabOf(removed, activePaneId));
     },

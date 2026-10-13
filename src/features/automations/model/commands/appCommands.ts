@@ -5,6 +5,7 @@ import { usePalette } from "@/widgets/top-bar/model/usePalette";
 import { findPane } from "@/widgets/workspace-grid/model/layoutTree";
 import { getSelectedPaneId, type PaneZoomChange } from "@/widgets/workspace-grid/model/paneZoom";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { startNewPage } from "@/widgets/workspace-grid/model/startActions";
 
 import type { Command } from "../types";
 
@@ -24,6 +25,7 @@ function zoomSelectedPane(change: PaneZoomChange): void {
 export const APP_COMMANDS: Command[] = [
   { id: "openSearch", title: "Search", category: "App", run: () => usePalette.getState().openSearch() },
   { id: "openPalette", title: "Command palette", category: "App", run: () => usePalette.getState().openCommand() },
+  { id: "newPage", title: "New page", category: "App", run: () => void startNewPage() },
   {
     id: "toggleZenMode",
     title: "Toggle Zen mode",
