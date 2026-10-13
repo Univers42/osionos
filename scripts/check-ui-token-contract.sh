@@ -34,7 +34,7 @@ CONTRACT="${1:-packages/osionos-ui/tokens.css}"
 if [ "$#" -ge 2 ]; then
 	shift
 else
-	set -- src/app/styles/global.css src/app/styles/tokens.generated.css
+	set -- src/app/styles/global.css src/app/styles/tokens.generated.css src/app/styles/recipes.css
 fi
 
 for file in "$CONTRACT" "$@"; do

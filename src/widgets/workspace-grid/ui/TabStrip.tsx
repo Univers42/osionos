@@ -142,13 +142,13 @@ export const TabStrip: React.FC<{ pane: PaneNode; zoom: number }> = ({ pane, zoo
             {zoomPercent}%
           </button>
         )}
-        <IconButton size="sm" title="Split right" onClick={() => splitActivePane(pane.id, "row")}>
+        <IconButton size="sm" label="Split right" title="Split right" onClick={() => splitActivePane(pane.id, "row")}>
           <SplitSquareHorizontal size={14} />
         </IconButton>
-        <IconButton size="sm" title="Split down" onClick={() => splitActivePane(pane.id, "column")}>
+        <IconButton size="sm" label="Split down" title="Split down" onClick={() => splitActivePane(pane.id, "column")}>
           <SplitSquareVertical size={14} />
         </IconButton>
-        <IconButton size="sm" title="Close pane" onClick={() => closePane(pane.id)}>
+        <IconButton size="sm" label="Close pane" title="Close pane" onClick={() => closePane(pane.id)}>
           <X size={14} />
         </IconButton>
       </div>
