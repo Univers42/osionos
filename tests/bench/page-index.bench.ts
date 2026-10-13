@@ -14,6 +14,7 @@ import type { Block } from "../../src/entities/block/model/types.ts";
 import type { PageEntry } from "../../src/entities/page/model/types.ts";
 import { buildPageIndex, type PageIndex, type PageIndexEntry } from "../../src/features/page-file/model/pageIndex.ts";
 import { pageIndexFor } from "../../src/features/page-file/model/pageIndexCache.ts";
+import { sanitizeSegment } from "../../src/features/ide/model/idePaths.ts";
 import { generatedTree } from "../canvas/page-tree-fixtures.ts";
 import { defineBench } from "./harness.ts";
 
@@ -41,36 +42,80 @@ function deepestEntry(index: PageIndex): PageIndexEntry {
   return index.entries.reduce((best, entry) => (entry.path.length > best.path.length ? entry : best));
 }
 
+/**
+ * Same shape as generatedTree but every title is distinct ("Title 0", …): the common real
+ * case, where no sibling collides and every title takes sanitize's fast path.
+ * O(count), setup only.
+ */
+function uniqueTitleTree(count: number): PageEntry[] {
+  return generatedTree(count).map((entry, index) => ({ ...entry, title: `Title ${index}` }));
+}
+
 export const bench = defineBench("page index", [
   {
-    // 2026-10-13: p95 2.39 ms (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
+    // 2026-10-13: p95 904.69 µs (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
     name: "buildPageIndex 1k",
-    budgetNs: 7_200_000,
+    budgetNs: 2_800_000,
     setup: () => {
       const pages = generatedTree(1_000);
       return () => buildPageIndex(pages);
     },
   },
   {
-    // 2026-10-13: p95 23.13 ms (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
+    // 2026-10-13: p95 9.56 ms (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
     name: "buildPageIndex 10k",
-    budgetNs: 70_000_000,
+    budgetNs: 29_000_000,
     setup: () => {
       const pages = generatedTree(10_000);
       return () => buildPageIndex(pages);
     },
   },
   {
-    // 2026-10-13: p95 132.91 ms (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
+    // 2026-10-13: p95 68.80 ms (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
     name: "buildPageIndex 50k",
-    budgetNs: 400_000_000,
+    budgetNs: 210_000_000,
     setup: () => {
       const pages = generatedTree(50_000);
       return () => buildPageIndex(pages);
     },
   },
   {
-    // 2026-10-13: p95 6.4 ns (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
+    // 2026-10-13: p95 8.67 ms (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
+    name: "buildPageIndex 10k unique titles",
+    budgetNs: 27_000_000,
+    setup: () => {
+      const pages = uniqueTitleTree(10_000);
+      return () => buildPageIndex(pages);
+    },
+  },
+  {
+    // 2026-10-13: p95 218.73 µs (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
+    name: "sanitizeSegment: 10k clean titles",
+    budgetNs: 660_000,
+    setup: () => {
+      const titles = Array.from({ length: 10_000 }, (_, index) => `Title ${index}`);
+      return () => {
+        let total = 0;
+        for (const title of titles) total += sanitizeSegment(title).length;
+        return total;
+      };
+    },
+  },
+  {
+    // 2026-10-13: p95 34.58 ms (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
+    name: "sanitizeSegment: 10k dirty titles",
+    budgetNs: 104_000_000,
+    setup: () => {
+      const titles = Array.from({ length: 10_000 }, (_, index) => `  a/${index}..b\t`);
+      return () => {
+        let total = 0;
+        for (const title of titles) total += sanitizeSegment(title).length;
+        return total;
+      };
+    },
+  },
+  {
+    // 2026-10-13: p95 6.3 ns (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
     name: "pageIndexFor same array 10k",
     budgetNs: 20,
     setup: () => {
@@ -79,30 +124,30 @@ export const bench = defineBench("page index", [
     },
   },
   {
-    // 2026-10-13: p95 22.98 µs (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
+    // 2026-10-13: p95 14.36 µs (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
     name: "pageIndexFor content edit 10k",
-    budgetNs: 69_000,
+    budgetNs: 44_000,
     setup: () => {
       const blocks: Block[] = [{ id: "b1", type: "paragraph", content: "one keystroke" }];
       return alternating("bench-content", pairOf(generatedTree(10_000), { content: blocks }));
     },
   },
   {
-    // 2026-10-13: p95 2.11 ms (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
+    // 2026-10-13: p95 1.31 ms (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
     name: "pageIndexFor title edit 1k",
-    budgetNs: 6_300_000,
+    budgetNs: 4_000_000,
     setup: () => alternating("bench-title-1k", pairOf(generatedTree(1_000), { title: "retitled" })),
   },
   {
-    // 2026-10-13: p95 21.87 ms (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
+    // 2026-10-13: p95 10.91 ms (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
     name: "pageIndexFor title edit 10k",
-    budgetNs: 66_000_000,
+    budgetNs: 33_000_000,
     setup: () => alternating("bench-title-10k", pairOf(generatedTree(10_000), { title: "retitled" })),
   },
   {
-    // 2026-10-13: p95 30.9 ns (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
+    // 2026-10-13: p95 18.7 ns (bash scripts/docker-run.sh test-bench tests/bench/page-index.bench.ts)
     name: "idForPath+pathForId 10k",
-    budgetNs: 93,
+    budgetNs: 60,
     setup: () => {
       const index = buildPageIndex(generatedTree(10_000));
       const entry = deepestEntry(index);
