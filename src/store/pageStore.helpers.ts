@@ -19,6 +19,10 @@ const RECENTS_KEY = "pg:recents";
 const ACTIVE_PAGE_KEY = "pg:activePage";
 const LEGACY_PAGE_CACHE_KEYS = ["osio:pages", "pg:pages"];
 const PAGE_CACHE_WORKSPACE_PREFIX = "osio:pages:";
+/** localStorage key of the page outbox ledger. It shares the cache's prefix, so the cache must
+ *  never read it as a workspace nor write over it (it once loaded as workspace "outbox" = [] and an
+ *  unscoped savePagesCache stored "[]" there, wiping every sync confirmation). */
+export const PAGE_OUTBOX_KEY = "osio:pages:outbox";
 const PAGE_CACHE_SAVE_DEBOUNCE_MS = 750;
 const PAGE_CACHE_IDLE_FALLBACK_MS = 50;
 const DUPLICATE_TITLE_SUFFIX_RE = /^(.*)\((\d{1,10})\)$/;
@@ -242,6 +246,7 @@ export function flushScheduledPagesCachePersist() {
     try {
       for (const workspaceId of workspaceIds) {
         const workspacePages = pages[workspaceId];
+        if (workspaceCacheKey(workspaceId) === PAGE_OUTBOX_KEY) continue;
         if (workspacePages) {
           localStorage.setItem(workspaceCacheKey(workspaceId), JSON.stringify(workspacePages));
         } else {
@@ -267,7 +272,7 @@ function loadSplitPagesCache(): Record<string, PageEntry[]> {
   try {
     for (let index = 0; index < localStorage.length; index += 1) {
       const key = localStorage.key(index);
-      if (!key?.startsWith(PAGE_CACHE_WORKSPACE_PREFIX)) continue;
+      if (!key?.startsWith(PAGE_CACHE_WORKSPACE_PREFIX) || key === PAGE_OUTBOX_KEY) continue;
       const workspaceId = key.slice(PAGE_CACHE_WORKSPACE_PREFIX.length);
       const parsed = JSON.parse(localStorage.getItem(key) ?? "[]");
       pages[workspaceId] = Array.isArray(parsed) ? (parsed as PageEntry[]) : [];
