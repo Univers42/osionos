@@ -15,6 +15,7 @@ import { useWorkspaceLayout } from "../model/workspaceLayout";
 import type { LayoutNode, SplitNode } from "../model/layoutTree";
 import { PaneView } from "./PaneView";
 import { PaneSplitter } from "./PaneSplitter";
+import { usePaneZoomGestures } from "./usePaneZoomGestures";
 
 const MIN_PANE_PERCENT = 8;
 
@@ -115,6 +116,7 @@ const SplitView: React.FC<{ split: SplitNode }> = ({ split }) => {
 /** The whole editor area: a resizable grid of tabbed panes (VSCode-style). */
 export const WorkspaceGrid: React.FC = () => {
   const root = useWorkspaceLayout((s) => s.root);
+  usePaneZoomGestures();
   return (
     <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden bg-[var(--osio-bg-page)]">
       <LayoutNodeView node={root} />

@@ -76,7 +76,9 @@ export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
         </button>
       </div>
       {isMermaid ? (
-        <MermaidDiagram chart={block.content} codeTheme={block.codeTheme ?? "dark"} />
+        <div data-osio-fixed-scale>
+          <MermaidDiagram chart={block.content} codeTheme={block.codeTheme ?? "dark"} />
+        </div>
       ) : (
         <div className="flex">
           {showLineNumbers && (

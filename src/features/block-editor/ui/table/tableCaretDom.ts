@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import { focusEditableBlock } from "@/features/block-editor/model/blockDomFocus";
+import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import type { CaretPlacement } from "./tableTypes";
 
 /** Focuses a cell's editor and places the caret; returns false if absent. */
@@ -107,14 +108,14 @@ export function stopPointerDrag(move: (event: PointerEvent) => void, up: () => v
 }
 
 // Maps a pointer Y to the row slot it would drop into and the indicator's Y
-// (relative to the table root) drawn at that slot boundary.
+// (relative to the table root, in the root's CSS px) drawn at that slot boundary.
 export function resolveRowDropSlot(table: HTMLElement | null, root: HTMLElement | null, clientY: number): { slot: number; indicatorY: number } {
   const rows = table ? Array.from(table.querySelectorAll<HTMLElement>("tbody > tr")) : [];
   const rootTop = root?.getBoundingClientRect().top ?? 0;
   for (let index = 0; index < rows.length; index += 1) {
     const rect = rows[index].getBoundingClientRect();
-    if (clientY < rect.top + rect.height / 2) return { slot: index, indicatorY: rect.top - rootTop };
+    if (clientY < rect.top + rect.height / 2) return { slot: index, indicatorY: toCssPx(rect.top - rootTop, root) };
   }
   const lastRect = rows.at(-1)?.getBoundingClientRect();
-  return { slot: rows.length, indicatorY: lastRect ? lastRect.bottom - rootTop : 0 };
+  return { slot: rows.length, indicatorY: lastRect ? toCssPx(lastRect.bottom - rootTop, root) : 0 };
 }
