@@ -14,6 +14,7 @@ import React from "react";
 
 import { useUserStore } from "@/features/auth";
 import { useIdeFsSync } from "@/features/ide/model/useIdeFsSync";
+import { usePageFileWriter } from "@/features/page-file/model/usePageFileWriter";
 import { useSandboxHealthProbe } from "@/features/ide/model/sandboxHealthStore";
 import { MainContent } from "@/widgets/page-renderer/ui/MainContent";
 import { useDockHotkeys } from "@/widgets/workbench/model/useDockHotkeys";
@@ -34,6 +35,7 @@ export const Workbench: React.FC = () => {
   // Always enabled: unlike the legacy shell there is no per-workspace IDE mode;
   // the hook itself no-ops without a bridge URL or workspace.
   useIdeFsSync(workspaceId, true);
+  usePageFileWriter(workspaceId, true);
   useDockHotkeys();
   useOpenDockOnRunRequest();
 

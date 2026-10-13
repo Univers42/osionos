@@ -32,6 +32,8 @@ export type SyncLedgerStore = {
   get(workspaceId: string, relPath: string): string | undefined;
   set(workspaceId: string, relPath: string, hash: string): void;
   delete(workspaceId: string, relPath: string): void;
+  /** Re-key every path under `fromDir/` to `toDir/` (a renamed directory). O(paths). */
+  moveDir(workspaceId: string, fromDir: string, toDir: string): void;
   /** Write pending changes synchronously (pagehide, tests). */
   flush(): void;
 };
@@ -154,6 +156,14 @@ export function createSyncLedgerStore(opts: { storage: LedgerStorage | null; deb
     },
     delete(workspaceId, relPath) {
       if (pathsOf(workspaceId).delete(relPath)) touched(workspaceId);
+    },
+    moveDir(workspaceId, fromDir, toDir) {
+      const paths = pathsOf(workspaceId);
+      const prefix = `${fromDir}/`;
+      const moved = [...paths].filter(([relPath]) => relPath.startsWith(prefix));
+      for (const [relPath] of moved) paths.delete(relPath);
+      for (const [relPath, hash] of moved) setNewest(paths, toDir + relPath.slice(fromDir.length), hash, MAX_LEDGER_PATHS);
+      if (moved.length > 0) touched(workspaceId);
     },
     flush,
   };

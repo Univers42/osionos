@@ -30,6 +30,11 @@ export function clearSyncedHash(workspaceId: string, relPath: string): void {
   syncLedgerStore().delete(workspaceId, relPath);
 }
 
+/** A directory renamed in the sandbox: every agreement under it follows. */
+export function moveSyncedDir(workspaceId: string, fromDir: string, toDir: string): void {
+  syncLedgerStore().moveDir(workspaceId, fromDir, toDir);
+}
+
 export function syncedHashOf(workspaceId: string, relPath: string): string | null {
   return syncLedgerStore().get(workspaceId, relPath) ?? null;
 }

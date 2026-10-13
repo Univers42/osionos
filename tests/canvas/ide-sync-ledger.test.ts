@@ -76,6 +76,16 @@ test("ledger: ideSyncEngine hydrates lazily and persists every record/clear (pub
   configureSyncLedgerStorage(null);
 });
 
+test("ledger: moveDir re-keys exactly the paths under the dir, and persists", () => {
+  const disk = fakeStorage();
+  const store = createSyncLedgerStore({ storage: disk });
+  store.set("ws1", "Road/Q3.omd", "h-q3");
+  store.set("ws1", "Road/deep/x.ts", "h-x");
+  store.set("ws1", "Roadmap.omd", "h-sibling");
+  store.moveDir("ws1", "Road", "Lane");
+  store.flush();
+  assert.deepEqual(stored(disk), { ws1: { "Roadmap.omd": "h-sibling", "Lane/Q3.omd": "h-q3", "Lane/deep/x.ts": "h-x" } });
+});
 test("ledger: corrupted JSON starts empty and is overwritten on the next write", () => {
   const disk = fakeStorage("{not json");
   const store = createSyncLedgerStore({ storage: disk });
