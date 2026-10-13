@@ -95,9 +95,10 @@ function subscribeToTreeChanges(deps: PageFileStore, views: ReadableViews, onCha
  * through `workspace://<ws>/<path>`, online or degraded, from the SAME tree.
  * O(1) by id or name, O(children) per listing, O(depth) per walk; the memoised
  * views live in pageFileFacadeViews.ts and the mutating operations in pageFileFacadeOps.ts.
+ * Pass `views` to share one slice cache with another reader of the same store (the
+ * inbound view): two caches would each pay the O(n) readable filter per store change.
  */
-export function createPageFileFacade(deps: PageFileStore): PageFacade {
-  const views = createReadableViews(deps);
+export function createPageFileFacade(deps: PageFileStore, views: ReadableViews = createReadableViews(deps)): PageFacade {
   const dirOf: DirLookup = (parentId) => views.tablesFor().dirs.get(ownerOf(parentId));
   const ctx = operationContext(deps, views, dirOf);
 
