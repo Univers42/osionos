@@ -58,7 +58,7 @@ function readTokens(host: HTMLElement): EditorTokenInput {
 
 /** The monospace stack the editor should use, resolved from the same host. */
 export function editorFontFamily(host: HTMLElement): string {
-  const mono = getComputedStyle(host).getPropertyValue("--osio-font-mono").trim();
+  const mono = getComputedStyle(host).getPropertyValue("--osio-font-family-mono").trim();
   return mono || MONO_FALLBACK;
 }
 

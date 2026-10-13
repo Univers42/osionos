@@ -32,7 +32,7 @@ export const IdeTerminal: React.FC<{ termId?: string }> = ({ termId = "0" }) => 
     const t = new Terminal({
       cursorBlink: true,
       fontSize: 12,
-      fontFamily: 'var(--osio-code-font, "JetBrains Mono", ui-monospace, monospace)',
+      fontFamily: 'var(--osio-font-family-mono)',
       scrollback: 5000,
       theme: { background: "#00000000" }, // inherit the panel's --osio-code-bg
     });

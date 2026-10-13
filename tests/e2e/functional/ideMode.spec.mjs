@@ -39,6 +39,16 @@ test("the flag is a hard gate: no IDE affordance when osio.ide is off", async ({
   await expect(page.locator("[data-osio-ide-shell]")).toHaveCount(0);
 });
 
+test("the IDE shell paints its own code surface, not the page showing through", async ({ page }) => {
+  test.setTimeout(90_000);
+  await bootWithFlag(page);
+  await enterIdeMode(page);
+  // Its background is a --osio-code-* token; those were defined only inside a
+  // code block's card, so the shell resolved none and was transparent.
+  const background = await page.locator("[data-osio-ide-shell]").evaluate((shell) => getComputedStyle(shell).backgroundColor);
+  expect(background).not.toBe("rgba(0, 0, 0, 0)");
+});
+
 test("enter IDE mode, create a code file, switch panels, and exit", async ({ page }) => {
   test.setTimeout(90_000);
   await bootWithFlag(page);

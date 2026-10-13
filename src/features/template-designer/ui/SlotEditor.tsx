@@ -39,7 +39,7 @@ export const SlotEditor: React.FC<Props> = ({ slot, bindKeys, onChange, onRemove
       e.preventDefault();
       onDropOnto();
     }}
-    className="flex items-center gap-1.5 rounded-md border border-[var(--osio-border-subtle)] bg-[var(--osio-bg-page)] px-1.5 py-1.5"
+    className="flex items-center gap-1.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-page)] px-1.5 py-1.5"
   >
     <GripVertical size={14} className="shrink-0 cursor-grab text-[var(--osio-fg-subtle)]" aria-hidden="true" />
     <select aria-label="Slot kind" className={SELECT} value={slot.kind} onChange={(e) => onChange({ kind: e.target.value as HeaderSlotKind })}>

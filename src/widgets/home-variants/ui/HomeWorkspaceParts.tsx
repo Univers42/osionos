@@ -22,7 +22,7 @@ import { useWorkspaceNav } from "@/widgets/database-view/model/workspaceNav";
 import { ensureWorkspaceGalleryPage } from "@/widgets/database-view/model/workspaceDatabasePage";
 
 const RAIL_BTN =
-  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] data-[active=true]:bg-[var(--osio-bg-active)] data-[active=true]:font-medium";
+  "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] data-[active=true]:bg-[var(--osio-bg-muted)] data-[active=true]:font-medium";
 
 /** Left rail listing folders; clicking one scopes the Files gallery to it. */
 export const FolderRail: React.FC = () => {

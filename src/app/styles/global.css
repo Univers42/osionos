@@ -1600,8 +1600,10 @@ body {
 /* The snippet card always renders on a dark surface for maximum contrast and
    a polished, focused look, so its palette is fixed (bright) and independent
    of the page light/dark theme. Tokens live on the card itself (they only
-   apply here) and inherit to its descendants. */
-.osio-code-card {
+   apply here) and inherit to its descendants. The IDE's surfaces are not
+   cards but carry the same data-code-theme, so they get the same tokens. */
+.osio-code-card,
+[data-code-theme] {
   --osio-code-bg: #0d1117;
   --osio-code-header-bg: rgba(255, 255, 255, 0.025);
   --osio-code-border: #2a313a;
@@ -1630,7 +1632,8 @@ body {
 }
 
 /* Optional light variant of the card (per-block toggle). */
-.osio-code-card[data-code-theme="light"] {
+.osio-code-card[data-code-theme="light"],
+[data-code-theme="light"] {
   --osio-code-bg: #fbfcfd;
   --osio-code-header-bg: rgba(13, 17, 23, 0.025);
   --osio-code-border: #d0d7de;
