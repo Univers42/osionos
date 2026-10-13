@@ -26,7 +26,8 @@ interface TopBarProps {
   onOpenSettings: (tab?: SettingsTab) => void;
 }
 
-/** Global VSCode-style top bar: logo · menus · command/search · update · window controls. */
+/** Global VSCode-style top bar: menus · command/search · update · window controls.
+ *  No brand label: it did nothing, and the user knows which app they are in. */
 export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
   useTopBarHotkeys();
   const ctx = useMemo(() => ({ openSettings: onOpenSettings }), [onOpenSettings]);
@@ -38,12 +39,6 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
       data-testid="app-topbar"
       className="flex h-[var(--osio-topbar-h)] shrink-0 items-center gap-1.5 border-b border-[var(--osio-topbar-border)] bg-[var(--osio-topbar-bg)] px-2"
     >
-
-      <span className="hidden md:flex shrink-0 select-none items-center gap-1.5 pl-1 pr-1.5" aria-label="osionos">
-        <span aria-hidden className="h-4 w-4 rounded-[5px] bg-[var(--osio-accent)]" />
-        <span className="text-sm font-semibold tracking-tight text-[var(--osio-fg-default)]">osionos</span>
-      </span>
-
       <div className="hidden md:block">
         <TopBarMenu groups={menus} />
       </div>
