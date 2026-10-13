@@ -163,6 +163,9 @@ async function toolSearchPages(deps, session, input) {
 	if (!query) throw httpError('query is required.', 422);
 	const ids = await callerWorkspaceIds(deps, session);
 	if (ids.length === 0) return { query, count: 0, pages: [] };
+	// Ponytail: limit=200 takes the most recently updated pages across the caller's workspaces
+	// BEFORE the owner/collaborator filter below, so a caller whose pages are not among those
+	// 200 gets 0 matches even when their own pages contain the query.
 	const rows = await rest(
 		deps.config,
 		deps.fetchImpl,
