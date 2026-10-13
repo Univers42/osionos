@@ -34,6 +34,8 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
   const menus = useMemo(() => buildMenus(ctx), [ctx]);
   const commands = useMemo(() => buildCommands(ctx), [ctx]);
 
+  // The bar sits on the canvas: UpdateButton's ring offset reads --osio-topbar-bg,
+  // whose :root default in global.css is outside the shell phase's territory.
   return (
     <header
       data-testid="app-topbar"

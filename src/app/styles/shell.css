@@ -39,8 +39,15 @@
     --osio-pane-border: transparent;
     --osio-pane-shadow: none;
     --osio-pane-seam: var(--osio-border-default);
-  --osio-sidebar-border-end: var(--osio-border-default);
+    --osio-sidebar-border-end: var(--osio-border-default);
   }
+}
+
+/* The hand-written palettes set --osio-bg-page to the paper tone and the canvas
+   to the same value, so a page would turn the card two-tone. Inside a pane the
+   page is the card in every palette. */
+[data-osio-pane] {
+  --osio-bg-page: var(--osio-bg-surface);
 }
 
 [data-osio-pane-active] {

@@ -135,6 +135,36 @@ test.describe("calm canvas shell", () => {
     expect(await style(second, "outlineStyle")).toBe("none");
   });
 
+  test("the page inside a pane equals the card in a hand-written palette", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await page.evaluate(() => { document.documentElement.dataset.palette = "nord"; });
+    const card = await style(pane(page).first(), "backgroundColor");
+    // The topmost opaque layer below the header is what the eye reads as the page.
+    const topmostLayer = await pane(page).first().evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const layers = document.elementsFromPoint(box.left + box.width / 2, box.top + box.height * 0.7);
+      return layers.map((l) => getComputedStyle(l).backgroundColor).find((c) => c !== "rgba(0, 0, 0, 0)");
+    });
+    expect(topmostLayer).toBe(card);
+    expect(card).not.toBe(await style(page.getByTestId("app-shell"), "backgroundColor"));
+  });
+
+  test("edge to edge, the splitter and the sidebar handle keep a 4px hit area", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await splitRight(page);
+    await page.evaluate(() => { document.documentElement.dataset.density = "compact"; });
+    const splitter = page.locator("[data-pane-splitter]");
+    const handle = page.getByRole("separator", { name: "Resize sidebar" });
+    for (const target of [splitter, handle]) {
+      expect(parseFloat(await target.evaluate((el) => getComputedStyle(el, "::before").width))).toBeGreaterThanOrEqual(4);
+      const box = await target.boundingBox();
+      for (const offset of [-2, 2]) {
+        const hit = await target.evaluate((el, x) => document.elementFromPoint(x, el.getBoundingClientRect().top + 40) === el, box.x + offset);
+        expect(hit).toBe(true);
+      }
+    }
+  });
+
   test("the active tab has no accent underline", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     const tab = page.locator("[data-tab-id][data-active]").first();
