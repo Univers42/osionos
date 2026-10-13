@@ -62,7 +62,8 @@ export interface PageFileStore {
 
 type DirLookup = (parentId: string | null) => PageDir | undefined;
 
-function operationContext(deps: PageFileStore, views: ReadableViews, dirOf: DirLookup): OpContext {
+/** The context every mutating operation runs in; `dirOf` defaults to the live tables. */
+export function operationContext(deps: PageFileStore, views: ReadableViews, dirOf: DirLookup = (parentId) => views.tablesFor().dirs.get(ownerOf(parentId))): OpContext {
   return {
     deps,
     pageById: views.pageById,

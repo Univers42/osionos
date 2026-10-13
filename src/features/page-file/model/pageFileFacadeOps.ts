@@ -68,14 +68,14 @@ function assertNotMeta(id: string, operation: string): void {
 /** `_folder.omd` is reserved in EVERY directory (assignSiblingNames seeds `claimed` with it), so a
  *  page by that name is only reachable under the ` (2)` the index gives it. The test is on the
  *  SANITIZED name, never on `claimedIn`: it holds where no claimed table exists at all. O(len). */
-function assertNotFolderMeta(deps: PageFileStore, name: string): void {
+export function assertNotFolderMeta(deps: PageFileStore, name: string): void {
   if (deps.toSegment(name).toLowerCase() === FOLDER_META_NAME.toLowerCase()) {
     throw fsError("Unsupported", undefined, "a folder's meta file is created with its folder");
   }
 }
 
 /** The two names the page index (assignSiblingNames) reserves for the new page: its own and its child dir. */
-function reservedNames(input: CreateInput, wanted: string): string[] {
+export function reservedNames(input: CreateInput, wanted: string): string[] {
   const own = wanted.toLowerCase();
   if (input.kind === "dir") return [own];
   return [own, isPageFileName(input.title) ? titleFromFileName(own) : `${own}${CODE_DIR_SUFFIX}`];
@@ -86,7 +86,7 @@ function reservedNames(input: CreateInput, wanted: string): string[] {
  *  the new page taking a ` (2)` AND displacing an earlier creator whose id sorts later. `created`
  *  is EXCLUDED from its own siblings, so a rename/move candidate reports nothing when nothing
  *  collides — a case-only rename included. O(n + s log s): n pages filtered, s siblings sorted. */
-function displacesSiblings(ctx: OpContext, created: PageEntry, parentId: string | null): boolean {
+export function displacesSiblings(ctx: OpContext, created: PageEntry, parentId: string | null): boolean {
   const others = ctx.deps.pages().filter((p) => p._id !== created._id && (p.parentPageId ?? null) === parentId && ctx.pageById(p._id) !== undefined);
   const without = assignSiblingNames(others);
   const withNew = assignSiblingNames([...others, created]);
