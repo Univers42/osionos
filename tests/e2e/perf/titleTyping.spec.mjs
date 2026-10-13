@@ -22,9 +22,11 @@
 // workspace:// mount that serves pages without a sandbox is not wired yet, so they measure the
 // store, header and tab strip, not the tree. The legacy page tree (workbench OFF) is linear in
 // the page count per key - p95 240 / 393 / 685 / 1834 ms at 500 / 1000 / 2000 / 5000 pages (n=5,
-// same day) - because every PageTreeItem re-renders and each row's selectChildPageIds scans the
-// whole workspace (O(n^2) selector work); it predates feat/ide and is deleted with that tree.
-// Its budget only stops it getting worse.
+// same day). A CPU profile at 2000 pages (10 keys) puts it in rendering: every PageTreeItem
+// re-renders (603 ms inclusive) and each renders a PageOptionsMenu (595 ms) - cost per rendered
+// row, not per selector (children are an O(1) lookup, pageTreeItem.helpers.ts). It predates
+// feat/ide (PageTreeItem/PageOptionsMenu are unchanged from develop) and is deleted with that
+// tree; its budget only stops it getting worse.
 
 import { expect, test } from "@playwright/test";
 
