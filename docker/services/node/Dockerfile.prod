@@ -20,6 +20,7 @@ COPY index.html tsconfig.json tsconfig.markdown-engine.json vite.config.ts eslin
 COPY src ./src
 COPY packages ./packages
 COPY config ./config
+COPY scripts/vite ./scripts/vite
 
 ARG VITE_API_URL=""
 ARG VITE_APP_VERSION="dev"
