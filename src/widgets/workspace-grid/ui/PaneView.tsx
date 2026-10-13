@@ -17,6 +17,7 @@ import { useWorkspaceLayout } from "../model/workspaceLayout";
 import type { PaneNode } from "../model/layoutTree";
 import { normalizePaneZoom } from "../model/paneZoom";
 import { TabStrip } from "./TabStrip";
+import { EmptyWorkspace } from "./EmptyWorkspace";
 import { PaneDropOverlay } from "./PaneDropOverlay";
 import { usePaneDnd } from "./usePaneDnd";
 
@@ -103,9 +104,7 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
             <div className="h-full bg-[var(--osio-bg-page)]" aria-busy="true" />
           )
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-[var(--osio-fg-subtle)]">
-            Drag a page here
-          </div>
+          <EmptyWorkspace />
         )}
         {/* During an external tab/page drag, a transparent capture layer sits ABOVE
             the editor so every region (incl. the bottom) drops onto the pane — the

@@ -138,7 +138,14 @@ export function communityTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: COMMUNITY_TAB_ID, workspaceId: "", kind: "community", title: "Communities", icon: "icon:users" };
 }
 
-/** A single pane with just the Home tab — the default and the empty-tree reset. */
+/** One pane with no tab: what is left after the user closes everything. The
+ *  pane shows the empty-workspace start screen; nothing is opened for them. */
+export function emptyLayout(): { root: PaneNode; activePaneId: string } {
+  const pane: PaneNode = { type: "pane", id: genId("pane"), tabs: [], activeTabId: null };
+  return { root: pane, activePaneId: pane.id };
+}
+
+/** A single pane with just the Home tab — what a workspace opens on the first time. */
 export function freshLayout(): { root: PaneNode; activePaneId: string } {
   const tab = homeTab();
   const pane: PaneNode = { type: "pane", id: genId("pane"), tabs: [tab], activeTabId: tab.tabId };
