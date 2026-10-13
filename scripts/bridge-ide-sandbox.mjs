@@ -51,7 +51,43 @@ function jsonReply(response, status, body, config) {
 export const SANDBOX_SOFT_MAX_MS = 4 * 60 * 60 * 1000;
 export const SANDBOX_HARD_MAX_MS = 3 * SANDBOX_SOFT_MAX_MS;
 const HARD_CAP = 'SANDBOX_HARD_CAP';
+const SANDBOX_CAP = 'SANDBOX_CAP';
 const provisioning = new Map(); // containerName → in-flight provision (one per box)
+
+/** How many boxes may run at once on this host (`OSIONOS_IDE_MAX_BOXES`, an integer 1–50).
+ *  Ponytail: the default 2 matches a 3 GiB sandbox group with 1 GiB boxes; a host with another
+ *  group size needs the env set, and too high a value only moves the refusal into the kernel
+ *  (OOM kills inside the group). */
+export function maxRunningBoxes(env) {
+  const raw = String(env?.OSIONOS_IDE_MAX_BOXES ?? '').trim();
+  const n = /^\d{1,2}$/.test(raw) ? Number(raw) : 0;
+  return n >= 1 && n <= 50 ? n : 2;
+}
+
+// Counting the running boxes and starting one is a critical section: two different boxes
+// provisioned at once must not both pass the count. The invariant is one bridge process per
+// sandbox daemon (ensureSandbox), so a process-wide chain is enough. A rejected step must not
+// poison the chain for the next caller.
+let startQueue = Promise.resolve();
+function serializeStart(fn) {
+  const run = startQueue.then(fn);
+  startQueue = run.catch(() => {});
+  return run;
+}
+
+/** Count, then create + start, inside the chain. A box that already runs never gets here. */
+function startWithinCap(env, names, docker) {
+  return serializeStart(async () => {
+    const running = (await docker.listManaged()).filter((c) => c?.State === 'running').length;
+    if (running >= maxRunningBoxes(env)) {
+      throw Object.assign(new Error('All IDE sandboxes are in use; try again in a few minutes.'), { status: 503, code: SANDBOX_CAP });
+    }
+    await docker.ensureVolume(names.volumeName);
+    await createOrAdopt(docker, names, env);
+    await docker.start(names.containerName);
+    return { status: 'running', reused: false };
+  });
+}
 
 /** True when a STOPPED container had run for the whole hard lifetime (the reaper's cap). */
 function stoppedAtHardCap(container, hardMaxMs) {
@@ -84,10 +120,7 @@ async function provision(env, names, { passive, docker, hardMaxMs }) {
     if (again?.State?.Running) return { status: 'running', reused: true };
     if (again) await docker.remove(names.containerName);
   }
-  await docker.ensureVolume(names.volumeName);
-  await createOrAdopt(docker, names, env);
-  await docker.start(names.containerName);
-  return { status: 'running', reused: false };
+  return startWithinCap(env, names, docker);
 }
 
 /** Ensure the per-(user,workspace) sandbox container exists and runs. Shared by the
@@ -174,7 +207,10 @@ export function createIdeSandboxHandler({ config, verifySession, env = process.e
       const result = await ensureContainer(names);
       jsonReply(response, 200, { ok: true, sandbox: names.digest, ...result }, requestConfig);
     } catch (error) {
-      jsonReply(response, 502, { ok: false, message: 'Sandbox backend unavailable.' }, requestConfig);
+      // The cap is the one refusal the user can act on (wait), so it keeps its status and
+      // message; every other failure stays generic.
+      if (error?.code === SANDBOX_CAP) jsonReply(response, 503, { ok: false, message: error.message }, requestConfig);
+      else jsonReply(response, 502, { ok: false, message: 'Sandbox backend unavailable.' }, requestConfig);
     }
     return true;
   };

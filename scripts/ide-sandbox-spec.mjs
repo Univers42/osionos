@@ -63,6 +63,10 @@ export function deriveNames(userId, workspaceId) {
   return { digest, containerName, volumeName };
 }
 
+/** Under host-wide memory pressure the kernel kills the highest oom_score_adj first: a box,
+ *  never the databases that share the host (they run at the default 0). */
+export const SANDBOX_OOM_SCORE_ADJ = 500;
+
 const PROXY_URL = "http://ide-egress:8080";
 
 /** The fixed container-create body. Hardening (conditions 5,14,15) is baked in;
@@ -99,6 +103,7 @@ export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, vol
       PidsLimit: pidsLimit,
       Memory: memoryBytes,
       MemorySwap: memoryBytes, // no swap headroom beyond mem
+      OomScoreAdj: SANDBOX_OOM_SCORE_ADJ,
       NanoCpus: nanoCpus,
       Ulimits: [
         { Name: "core", Soft: 0, Hard: 0 },   // no core dumps (condition 14)
