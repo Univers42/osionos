@@ -39,7 +39,9 @@ for (const mode of ["light", "dark"]) {
 
     test("a page with an inline database", async ({ page }) => {
       const block = await insertInlineDatabase(page);
-      await expect(block).toBeVisible();
+      // The block shows a loading state first; the table's own controls come
+      // with its lazy chunk, so once they render the table is what is shot.
+      await expect(block.locator('[aria-label="Add property"]')).toBeVisible();
       await settle(page);
       await expect(page).toHaveScreenshot(`inline-database-${mode}.png`);
     });
@@ -56,7 +58,8 @@ for (const mode of ["light", "dark"]) {
     test("the settings modal", async ({ page, baseURL }) => {
       await openFreshPage(page, baseURL);
       await page.getByRole("button", { name: "Settings", exact: true }).first().click();
-      await expect(page.getByRole("tab").first()).toBeVisible();
+      // The shell's own tab strip is made of tabs too: wait for one only settings has.
+      await expect(page.getByRole("tab", { name: "osionos MCP" })).toBeVisible();
       await settle(page);
       await expect(page).toHaveScreenshot(`settings-${mode}.png`);
     });
