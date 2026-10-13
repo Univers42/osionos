@@ -257,6 +257,10 @@ export function useSlashSelect({
         updateBlock(pageId, blockId, { content: cleanContent || "E = mc^2" });
       }
 
+      // A new type re-mounts the editable (a list marker, a toggle wrapper): refocus it on the
+      // next frame, at the START: placing it at the end left "/quote" in the converted block's
+      // DOM (blockCreation.spec "pressing Enter on /quote" failed that way on 2026-10-13).
+      focusBlock(blockId);
     },
     [
       pageId,
