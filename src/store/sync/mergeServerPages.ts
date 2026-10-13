@@ -59,6 +59,8 @@ export interface MergeServerPagesOptions {
   /** The rows are the server's whole list: a saved page missing from it was deleted there. */
   authoritative: boolean;
   isClean: (page: PageEntry) => boolean;
+  /** Pages a refused-edit recovery still owns: their local copy wins whatever the row says. */
+  recovering?: ReadonlySet<string>;
 }
 
 export interface MergedServerPages {
@@ -82,6 +84,8 @@ export function mergeServerPages(
   const localById = new Map(local.map((page) => [page._id, page] as const));
   const take = (row: PageEntry): PageEntry => {
     const current = localById.get(row._id);
+    // A newer server copy would overwrite the only copy of the edit the bridge refused.
+    if (current && options.recovering?.has(row._id)) return current;
     const merged = mergeServerPage(current, row, options.isClean);
     if (!merged) return current ?? row;
     serverWon.push(merged);

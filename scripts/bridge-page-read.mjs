@@ -12,7 +12,7 @@
 
 /**
  * Page READ and SHARING authorization on raw osionos_pages rows — the server half of
- * the client's canReadPage / canChangePageVisibility (src/shared/lib/auth/pageAccess.ts).
+ * the client's canReadPage / canMovePage (src/shared/lib/auth/pageAccess.ts).
  * Callers still run the workspace gate first (requireWorkspaceAccess /
  * ownerOrWorkspaceAccess), or use canReadPageRowAsMember on surfaces that span
  * workspaces; this decides what a member of that workspace may see.
