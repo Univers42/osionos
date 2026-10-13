@@ -3,15 +3,18 @@
 //
 //   node scripts/build-tokens.mjs           write the stylesheet
 //   node scripts/build-tokens.mjs --check   fail if the committed stylesheet is
-//                                           stale, or a palette fails contrast
+//                                           stale, or a palette fails contrast,
+//                                           or the database bridge is stale or
+//                                           misses a vendored colour
 //
 // Run from the app's root. Both forms refuse a palette that fails contrast, so
 // an unreadable colour can be neither written nor committed.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 import { resolveTokens } from "./tokens/aliases.mjs";
 import { contrastFailures } from "./tokens/contrast.mjs";
+import { BRIDGE_STYLESHEET, renderBridge, VENDORED_THEME } from "./tokens/databaseBridge.mjs";
 import { MODES, PALETTES } from "./tokens/palettes.mjs";
 import { modeTokens } from "./tokens/ramps.mjs";
 import { GENERATED_STYLESHEET, renderStylesheet } from "./tokens/stylesheet.mjs";
@@ -40,6 +43,24 @@ function isCommitted(stylesheet) {
 
 if (reportContrast() > 0) {
   console.error("\nA text colour is too close to its background. Change the seed or the tone table in scripts/tokens/.");
+  process.exit(1);
+}
+
+// The database bridge is a second output of the same run: a vendored colour
+// the table does not map, or a committed bridge that is stale, fails here too.
+const bridge = renderBridge(readFileSync(VENDORED_THEME, "utf8"));
+if (bridge.unmapped.length > 0) {
+  console.error(`✗ ${VENDORED_THEME} declares colours the database bridge does not map:\n  ${bridge.unmapped.join("\n  ")}`);
+  console.error("\nMap each in the ROLES table of scripts/tokens/databaseBridge.mjs.");
+  process.exit(1);
+}
+if (!process.argv.includes("--check")) {
+  writeFileSync(BRIDGE_STYLESHEET, bridge.css);
+  console.log(`✓ wrote ${BRIDGE_STYLESHEET}`);
+} else if (existsSync(BRIDGE_STYLESHEET) && readFileSync(BRIDGE_STYLESHEET, "utf8") === bridge.css) {
+  console.log(`✓ database bridge: ${BRIDGE_STYLESHEET} maps every vendored colour.`);
+} else {
+  console.error(`✗ ${BRIDGE_STYLESHEET} is not what the vendored theme generates. Run \`npm run tokens\` and commit the result.`);
   process.exit(1);
 }
 
