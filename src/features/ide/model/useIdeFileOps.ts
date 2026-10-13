@@ -17,11 +17,9 @@ import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { codeBlockOf, createCodeFileBlock } from "./codeFile";
 import { languageForFileName } from "./ideLanguages";
-import { readImportFiles } from "./importFolder";
-import { buildImportPlan } from "./idePaths";
 import { pagePathOf } from "./pagePathOf";
 import { mirrorSandboxDelete, mirrorSandboxRename } from "./sandboxMirrorOps";
-import { exportIdeProjectZip } from "./exportZip";
+import { useWorkspaceImportExport } from "./useWorkspaceImportExport";
 
 /**
  * File operations for the IDE explorer, bound to the active workspace + session
@@ -88,38 +86,7 @@ export function useIdeFileOps() {
     [workspaceId],
   );
 
-  const importFolder = useCallback(
-    async (files: File[], parentId?: string): Promise<number> => {
-      const plan = buildImportPlan(
-        (await readImportFiles(files)).map((file) => ({ relPath: file.relPath, content: file.content })),
-      );
-      const store = usePageStore.getState();
-      const folderIdByPath = new Map<string, string>();
-      let created = 0;
-      for (const entry of plan) {
-        const name = entry.segments[entry.segments.length - 1];
-        const parentPath = entry.segments.slice(0, -1).join("/");
-        const parent = parentPath ? folderIdByPath.get(parentPath) : parentId;
-        if (entry.kind === "folder") {
-          const page = await store.addPage(workspaceId, name, jwt, parent, { surface: "folder" });
-          if (page) { folderIdByPath.set(entry.segments.join("/"), page._id); created += 1; }
-        } else {
-          const page = await store.addPage(workspaceId, name, jwt, parent, {
-            surface: "code",
-            content: [createCodeFileBlock(name, entry.content ?? "")],
-          });
-          if (page) created += 1;
-        }
-      }
-      return created;
-    },
-    [workspaceId, jwt],
-  );
-
-  const exportProject = useCallback(
-    (projectName: string) => exportIdeProjectZip(usePageStore.getState().pages[workspaceId] ?? [], projectName),
-    [workspaceId],
-  );
+  const { importFolder, exportProject } = useWorkspaceImportExport();
 
   return { workspaceId, newFile, newFolder, rename, remove, move, importFolder, exportProject };
 }
