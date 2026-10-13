@@ -44,13 +44,15 @@ test("Ctrl+J toggles the dock; tabs and splitter work by keyboard", async ({ pag
   await page.keyboard.press("Control+j");
   await expect(dock).toBeVisible();
 
-  const terminal = page.getByRole("tab", { name: "Terminal" });
+  // The dock's own tablist: the activity rail beside the panel has a Problems tab too.
+  const tabs = page.getByRole("tablist", { name: "Panel tabs" });
+  const terminal = tabs.getByRole("tab", { name: "Terminal" });
   await expect(terminal).toHaveAttribute("aria-selected", "true");
   await terminal.focus();
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("tab", { name: "Problems" })).toHaveAttribute("aria-selected", "true");
+  await expect(tabs.getByRole("tab", { name: "Problems" })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("End");
-  await expect(page.getByRole("tab", { name: "Ports" })).toHaveAttribute("aria-selected", "true");
+  await expect(tabs.getByRole("tab", { name: "Ports" })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("Home");
   await expect(terminal).toHaveAttribute("aria-selected", "true");
 

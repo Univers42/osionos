@@ -62,6 +62,10 @@ const webServerCommand = productionBuild
 // OFF. A default build runs tests/e2e/graph-studio-off; a VITE_LEGACY_SECOND_BRAIN=true build
 // (CI's gate-on job) runs the specs that need the legacy view instead.
 const legacySecondBrainOn = process.env.VITE_LEGACY_SECOND_BRAIN === "true";
+// The perf specs time input -> paint and a busy machine inflates their p95 (perfHarness.mjs):
+// they run only through their own runner (`test:e2e:perf`, one worker), never in the
+// parallel suite next to other tests.
+const perfRun = process.env.PLAYWRIGHT_PERF === "1";
 const LEGACY_ON_SPECS = [
   "legacy-second-brain-gate.spec.mjs",
   "legacy-graph-engine-audit.spec.mjs",
@@ -77,7 +81,10 @@ const chromiumExecutablePath = process.env.PW_CHROMIUM_PATH || undefined;
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testIgnore: legacySecondBrainOn ? ["**/graph-studio-off/**"] : LEGACY_ON_SPECS.map((spec) => `**/${spec}`),
+  testIgnore: [
+    ...(legacySecondBrainOn ? ["**/graph-studio-off/**"] : LEGACY_ON_SPECS.map((spec) => `**/${spec}`)),
+    ...(perfRun ? [] : ["**/perf/**"]),
+  ],
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,

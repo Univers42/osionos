@@ -57,8 +57,8 @@ test.describe("wiki pages", () => {
     await waitForRenderStability(page);
 
     await expect(page.getByTestId("page-icon-toggle-picker")).toHaveText("📕");
-    // The sidebar row shows the wiki's own icon, not the default book.
-    await expect(page.getByRole("button", { name: `📕 ${title}`, exact: true })).toHaveCount(1);
+    // The explorer row shows the wiki's own icon, not the default book.
+    await expect(page.getByRole("treeitem", { name: `📕 ${title}` })).toHaveCount(1);
   });
 
   test("a wiki lists its pages, and New page adds one under it", async ({ page, baseURL }) => {

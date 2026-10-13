@@ -51,8 +51,7 @@ function collectErrors(page) {
 test("each rail panel shows its title and renders without errors", async ({ page, baseURL }) => {
   const errors = collectErrors(page);
   await open(page, baseURL, { persistedPanel: undefined });
-  // The app opens with the side panel expanded; the rail shows once it is collapsed.
-  await page.getByRole("button", { name: "Collapse to rail" }).click();
+  // The rail sits beside the panel, so every Workbench tab is reachable directly.
   const rail = page.getByRole("tablist", RAIL);
 
   for (const name of PANELS) {
@@ -61,7 +60,6 @@ test("each rail panel shows its title and renders without errors", async ({ page
     await button.click();
     await expect(page.locator("span.uppercase", { hasText: name })).toBeVisible();
     await page.waitForTimeout(500); // lazy panel chunk + first render
-    await page.getByRole("button", { name: "Collapse to rail" }).click();
   }
   expect(errors).toEqual([]);
 });

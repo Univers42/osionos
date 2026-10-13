@@ -35,7 +35,7 @@ run_inside_container() {
     test-e2e) exec pnpm exec playwright test "$@" ;;
     test-e2e-serial) exec pnpm exec playwright test --workers=1 "$@" ;;
     test-e2e-smoke) exec pnpm exec playwright test tests/e2e/smoke "$@" ;;
-    test-e2e-perf) exec pnpm exec playwright test tests/e2e/perf --workers=1 "$@" ;;
+    test-e2e-perf) PLAYWRIGHT_PERF=1 exec pnpm exec playwright test tests/e2e/perf --workers=1 "$@" ;;
     test-canvas) exec node --experimental-strip-types --experimental-loader ./tests/canvas/ts-extension-loader.mjs --test tests/canvas/*.test.ts "$@" ;;
     test-doctor) exec node tests/test-env-doctor.mjs "$@" ;;
     test-bridge) exec node --test tests/bridge/*.test.mjs "$@" ;;
@@ -93,7 +93,7 @@ case "${COMMAND}" in
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests pnpm exec playwright test tests/e2e/smoke "$@"
     ;;
   test-e2e-perf)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests pnpm exec playwright test tests/e2e/perf --workers=1 "$@"
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e PLAYWRIGHT_PERF=1 browser-tests pnpm exec playwright test tests/e2e/perf --workers=1 "$@"
     ;;
   test-canvas)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh test-canvas "$@"

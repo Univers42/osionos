@@ -24,9 +24,12 @@ const SPEC = "railPanels";
 const PANELS = ["Source Control", "Problems"];
 const FIRST_OPEN_LOADS = 8;
 // Measured 2026-10-13 (p95): first open 29.8-31.9 ms over 8 loads (target 50 -> PASS, budget =
-// target as 2x would exceed it); re-open 22.7-24.1 ms vs target 16 (floor median 21 ms) ->
-// FINDING, budget = 24.1 x 1.2 = 29.
-const BUDGET = { firstOpen: 50, reopen: 29 };
+// target as 2x would exceed it); re-open 22.7-24.1 ms vs target 16 (floor median 21 ms).
+// Re-measured 2026-10-14 (production build, one worker): re-open p95 31.3 ms, median 30.8 ms =
+// the floor median 30.8 ms, i.e. no work above the frame floor (an opened panel stays mounted and
+// a re-open only unhides it). 29 sat below this host's floor; budget = 31.3 x 1.2 = 38, the
+// method codeTyping and dockToggle use for floor-bound cases.
+const BUDGET = { firstOpen: 50, reopen: 38 };
 const RAIL = { name: "Activity bar" };
 
 async function collapseToRail(page) {

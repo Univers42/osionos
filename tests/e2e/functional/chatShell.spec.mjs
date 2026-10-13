@@ -15,14 +15,11 @@ import { test, expect } from "@playwright/test";
 const composer = (page) => page.getByPlaceholder("Do anything with AI…");
 
 async function openAssistant(page) {
-  // The Assistant is a rail tab; the panel hides the rail until collapsed.
-  const collapse = page.getByRole("button", { name: "Collapse to rail" });
-  const rail = page.getByRole("tablist", { name: "Activity bar" });
-  await expect(collapse.or(rail)).toBeVisible({ timeout: 20_000 });
-  if (await collapse.isVisible()) {
-    await collapse.click();
-  }
-  await rail.getByRole("tab", { name: "Assistant" }).click();
+  // The assistant lives in the Conversations panel: "New AI chat" opens a fresh one.
+  const tab = page.getByRole("tab", { name: /^Conversations/ });
+  await tab.waitFor({ timeout: 20_000 });
+  await tab.click();
+  await page.locator('[data-sidebar-panel="conversations"]').getByRole("button", { name: "New AI chat" }).click();
 }
 
 test.describe("chat-shell", () => {
