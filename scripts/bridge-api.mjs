@@ -983,12 +983,15 @@ function parentPageNotFound() {
 /**
  * Whether the caller may nest a page under `parentPageId`: it exists and they read it as
  * a member of its workspace (canReadPageRowAsMember). `authContext`: userId + workspaceIds.
+ * Both reads run whatever the parent is, so a missing parent costs the same calls as an
+ * unreadable one.
  */
 async function canNestUnder(authContext, parentPageId, config, fetchImpl) {
-	const parent = await fetchPageAuthRow(parentPageId, config, fetchImpl);
-	if (!parent) return false;
-	const members = [...authContext.workspaceIds, ...await memberWorkspaceIds(authContext.userId, config, fetchImpl)];
-	return canReadPageRowAsMember(parent, authContext.userId, members);
+	const [parent, memberIds] = await Promise.all([
+		fetchPageAuthRow(parentPageId, config, fetchImpl),
+		memberWorkspaceIds(authContext.userId, config, fetchImpl),
+	]);
+	return parent !== null && canReadPageRowAsMember(parent, authContext.userId, [...authContext.workspaceIds, ...memberIds]);
 }
 
 const MAX_PARENT_DEPTH = 64;

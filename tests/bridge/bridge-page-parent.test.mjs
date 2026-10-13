@@ -64,6 +64,17 @@ describe('creating a page under a parent', () => {
 		});
 	});
 
+	it('makes the same PostgREST calls for every parent the caller may not nest under', async () => {
+		const sequences = [];
+		for (const parentPageId of Object.values(BAD_PARENTS)) {
+			const mock = createPostgrestMock(parentWorld());
+			await withBridge(config, mock.fetchImpl, (base) => send(base, '/api/pages', asB, post({ workspaceId: IDS.team, title: 'Nested', parentPageId })));
+			sequences.push(mock.calls.map((call) => `${call.method} ${call.table}?${String(call.params).replaceAll(parentPageId, '<parent>')}`));
+		}
+		assert.deepEqual(sequences[1], sequences[0]);
+		assert.deepEqual(sequences[2], sequences[0]);
+	});
+
 	it('creates a page under a parent the caller can read, and at the root', async () => {
 		const mock = createPostgrestMock(parentWorld());
 		await withBridge(config, mock.fetchImpl, async (base) => {
