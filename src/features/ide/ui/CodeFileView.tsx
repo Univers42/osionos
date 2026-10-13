@@ -20,7 +20,7 @@ import { codeBlockOf, createCodeFileBlock } from "../model/codeFile";
 import { languageById, languageForFileName } from "../model/ideLanguages";
 import { useCodeRunner } from "../model/useCodeRunner";
 import { canFormat, formatCode } from "../model/formatCode";
-import { pathForPage } from "../model/idePaths";
+import { pagePathOf } from "../model/pagePathOf";
 import { isSandboxBound, revealTerminal, useSandboxBound } from "../model/useSandboxBinding";
 import { ideFsWrite } from "../model/ideFsClient";
 import { recordSyncedHash } from "../model/ideSyncEngine";
@@ -31,8 +31,6 @@ import type { IDisposable } from "../model/monacoRuntime";
 import { replaceEditorText, useMonacoEditor, type EditorStatus } from "./useMonacoEditor";
 import { RunConsole } from "./RunConsole";
 import "./monacoEditor.css";
-
-const resolvePage = (id: string) => usePageStore.getState().pageById(id);
 
 /**
  * The IDE editor for a `surface: "code"` page. Monaco owns the document
@@ -82,7 +80,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     usePageStore.getState().updateBlock(pageId, blockId, { content });
     const wsId = useUserStore.getState().activeWorkspace()?._id ?? "";
     if (wsId && isSandboxBound(wsId)) {
-      void ideFsWrite(wsId, pathForPage(pageId, resolvePage), content);
+      void ideFsWrite(wsId, pagePathOf(pageId), content);
     }
   }, [pageId, blockId]);
 
@@ -94,7 +92,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     pageId,
     blockId,
     monacoId: lang.monacoId,
-    uri: `file:///workspace/${pathForPage(pageId, resolvePage)}`,
+    uri: `file:///workspace/${pagePathOf(pageId)}`,
     readInitialText: () => codeBlockOf(usePageStore.getState().pageById(pageId))?.content ?? "",
     onSave: save,
     onStatus: setStatus,
@@ -110,7 +108,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     if (source === undefined) return;
     const wsId = useUserStore.getState().activeWorkspace()?._id ?? "";
     if (wsId && isSandboxBound(wsId) && lang.runnable && lang.runCmd) {
-      const relPath = pathForPage(pageId, resolvePage);
+      const relPath = pagePathOf(pageId);
       const shellPath = `'/workspace/${relPath.replace(/'/g, "'\\''")}'`;
       const command = lang.runCmd.replaceAll("{file}", shellPath);
       revealTerminal(); // reveal/connect the terminal
@@ -189,7 +187,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     void import("../model/lspMonaco").then(async ({ attachLsp }) => {
       const model = editorRef.current?.getModel();
       if (!active || !model) return;
-      const handle = await attachLsp(model, languageId, lang.monacoId, `file:///workspace/${pathForPage(pageId, resolvePage)}`, workspaceId);
+      const handle = await attachLsp(model, languageId, lang.monacoId, `file:///workspace/${pagePathOf(pageId)}`, workspaceId);
       if (!active) { handle?.dispose(); return; }
       attached = handle;
     });

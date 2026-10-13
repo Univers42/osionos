@@ -16,7 +16,7 @@ import { AlertCircle, AlertTriangle, Info } from "lucide-react";
 import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { buildIdeFileTree, flattenIdeTree } from "@/features/ide/model/ideFileTree";
-import { pathForPage } from "@/features/ide/model/idePaths";
+import { pagePathOf } from "@/features/ide/model/pagePathOf";
 import { useDiagnosticsStore, type IdeDiagnostic } from "@/features/ide/model/diagnosticsStore";
 import { useIdeRevealBus } from "@/features/ide/model/ideRevealBus";
 
@@ -41,7 +41,7 @@ export const IdeProblemsPanel: React.FC = () => {
     const map = new Map<string, { id: string; title: string }>();
     for (const node of flattenIdeTree(buildIdeFileTree(pages))) {
       if (node.isFolder) continue;
-      map.set(pathForPage(node.page._id, (id) => usePageStore.getState().pageById(id)), {
+      map.set(pagePathOf(node.page._id), {
         id: node.page._id,
         title: node.page.title,
       });

@@ -20,11 +20,11 @@ export interface IdeFlatFile {
   content: string;
 }
 
-/** Workspace-relative path for a single page, walking its folder ancestors with
- *  the SAME sanitized segments collectTreeFiles produces — so an LSP document
- *  URI (P5) matches what materialize (P4) writes to disk, and the open buffer
- *  shadows the on-disk file for cross-file resolution. `resolve` is a page-by-id
- *  lookup (usePageStore.pageById). */
+/** Legacy path algorithm, kept as the oracle of the equality tests
+ *  (page-path-of, page-file-paths); app code uses pagePathOf. It walks folder
+ *  ancestors only (a code page under a block page loses that ancestor) and
+ *  resolves sibling collisions differently from the page index. `resolve` is a
+ *  page-by-id lookup (usePageStore.pageById). */
 export function pathForPage(pageId: string, resolve: (id: string) => PageEntry | undefined): string {
   const segments: string[] = [];
   const seen = new Set<string>();
