@@ -1410,6 +1410,8 @@ export async function trackUnsplashDownload(downloadLocation, config = configFro
 const MEDIA_SEARCH_LIMIT = { capacity: 40, refillPerSec: 2 };
 const MEDIA_DOWNLOAD_LIMIT = { capacity: 10, refillPerSec: 0.2 };
 const MEDIA_DOWNLOAD_BODY_LIMIT_BYTES = 2048;
+// Pixabay allows 100 requests a minute per key, all users together; stay under it.
+const PIXABAY_UPSTREAM_LIMIT = { capacity: 90, refillPerSec: 1.5 };
 
 /**
  * Admits a media request: a signed-in user, within their rate limit. These
@@ -1497,6 +1499,8 @@ async function searchCoverVideos(options = {}, config = configFromEnv(), fetchIm
 	const hit = coverVideoCache.get(key);
 	if (hit && Date.now() - hit.at < COVER_VIDEO_TTL_MS) return hit.payload;
 
+	// Only a cache miss reaches Pixabay, so only a miss spends the shared allowance.
+	takeToken('media-upstream:pixabay', PIXABAY_UPSTREAM_LIMIT);
 	const payload = await searchPixabayVideos(options, config, fetchImpl);
 	if (coverVideoCache.size > 200) coverVideoCache.clear();
 	coverVideoCache.set(key, { at: Date.now(), payload });

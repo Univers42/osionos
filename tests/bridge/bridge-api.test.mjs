@@ -737,6 +737,27 @@ describe('media routes spend provider keys, so they need a signed-in user', () =
 		assert.deepEqual(await trackUnsplashDownload(DOWNLOAD, config, async () => new Response('{"url":"https://unsplash.com/photos/x"}')), { ok: true });
 	});
 
+	it('keeps all users together under Pixabay\'s per-key limit, counting only cache misses', async () => {
+		const config = mediaConfig();
+		let upstreamCalls = 0;
+		const videos = () => new Response(JSON.stringify({ totalHits: 0, hits: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+		await withBridge(config, () => { upstreamCalls += 1; return videos(); }, async (baseUrl) => {
+			const statuses = [];
+			// Different users, different queries: each one misses the cache.
+			for (let query = 0; query < 120 && statuses.at(-1) !== 429; query += 1) {
+				const user = bearer(config, { user: randomUUID() });
+				statuses.push((await fetch(`${baseUrl}/api/media/pixabay/videos?query=upstream-${query}`, { headers: user })).status);
+			}
+			assert.equal(statuses.at(-1), 429);
+			assert.ok(statuses.slice(0, -1).every((status) => status === 200));
+			// The allowance is per process, and an earlier test in this file already spent some of it.
+			assert.ok(upstreamCalls > 80 && upstreamCalls <= 90, `asked Pixabay ${upstreamCalls} times`);
+			// A cached query costs nothing upstream, so it is still answered.
+			const cached = await fetch(`${baseUrl}/api/media/pixabay/videos?query=upstream-0`, { headers: bearer(config, { user: randomUUID() }) });
+			assert.equal(cached.status, 200);
+		});
+	});
+
 	it('falls back to Openverse when the Unsplash quota is spent, but not when Unsplash is broken', async () => {
 		const config = mediaConfig();
 		const openverse = () => new Response(JSON.stringify({ result_count: 1, results: [{ id: 'cc-1', title: 'Free photo', url: 'https://cdn.example/cc-1.jpg', creator: 'Someone' }] }), { status: 200 });
