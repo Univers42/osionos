@@ -1,16 +1,15 @@
 // What the browser ends up with, not what the generator printed. The generated
-// stylesheet has to be bundled, has to be the only definition of the default
-// palette, has to lose to the seven palettes that are still hand-written, and
-// has to hand script readers (Monaco, the graph engine) a literal colour.
+// stylesheet has to be bundled, has to be the only definition of every palette,
+// has to give each palette's block precedence over the default's, and has to
+// hand script readers (Monaco, the graph engine) a literal colour.
 
 import { expect, test } from "@playwright/test";
 
-import { resolveTokens } from "../../../scripts/tokens/aliases.mjs";
+import { resolvedTokens } from "../../../scripts/tokens/aliases.mjs";
 import { MODES, PALETTES } from "../../../scripts/tokens/palettes.mjs";
-import { modeTokens } from "../../../scripts/tokens/ramps.mjs";
 
 const [defaultPalette] = PALETTES;
-const generated = (mode) => resolveTokens(modeTokens(defaultPalette, mode));
+const generated = (mode, palette = defaultPalette) => resolvedTokens(palette, mode);
 
 async function openStyleguide(page, baseURL, { mode, palette = defaultPalette.id }) {
   await page.addInitScript(([storedMode, storedPalette]) => {
@@ -58,27 +57,18 @@ test.describe("token engine", () => {
     expect(await computedTokens(page, Object.keys(expected), "#dark-island")).toEqual(expected);
   });
 
-  test("the hand-written palettes still override the default, and their derived colours follow them", async ({ page, baseURL }) => {
+  test("every other palette paints exactly what its seeds and pins produce", async ({ page, baseURL }) => {
     await openStyleguide(page, baseURL, { mode: "light" });
-    const others = (await paletteIds(page)).filter((id) => id !== defaultPalette.id);
-    expect(others.length).toBeGreaterThan(0);
-    const names = [
-      "--osio-bg-page", "--osio-bg-canvas", "--osio-accent", "--osio-accent-text", "--osio-link",
-      "--osio-border-default", "--osio-graph-card-border", "--osio-fg-muted", "--osio-graph-ink-muted",
-    ];
+    const others = PALETTES.filter((palette) => palette.id !== defaultPalette.id);
+    expect(await paletteIds(page)).toEqual(PALETTES.map((palette) => palette.id));
     for (const palette of others) {
       for (const mode of MODES) {
         await page.evaluate(([nextPalette, nextMode]) => {
           document.documentElement.dataset.palette = nextPalette;
           document.documentElement.dataset.theme = nextMode;
-        }, [palette, mode]);
-        const tokens = await computedTokens(page, names);
-        const label = `${palette}/${mode}`;
-        expect.soft(tokens["--osio-accent"], `${label} keeps its own accent`).not.toBe(generated(mode)["--osio-accent"]);
-        expect.soft(tokens["--osio-bg-canvas"], `${label} canvas`).toBe(tokens["--osio-bg-page"]);
-        expect.soft(tokens["--osio-link"], `${label} link`).toBe(tokens["--osio-accent-text"]);
-        expect.soft(tokens["--osio-graph-card-border"], `${label} graph card border`).toBe(tokens["--osio-border-default"]);
-        expect.soft(tokens["--osio-graph-ink-muted"], `${label} graph muted ink`).toBe(tokens["--osio-fg-muted"]);
+        }, [palette.id, mode]);
+        const expected = generated(mode, palette);
+        expect.soft(await computedTokens(page, Object.keys(expected)), `${palette.id}/${mode}`).toEqual(expected);
       }
     }
   });

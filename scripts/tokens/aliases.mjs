@@ -5,6 +5,8 @@
 // An alias may point at another alias. That is deliberate where two names must
 // never drift apart: the Update button and links are the accent.
 
+import { modeTokens, pinsOf } from "./ramps.mjs";
+
 export const ALIASES = {
   "--osio-bg-canvas": "--osio-n-0",
   "--osio-bg-surface": "--osio-n-1",
@@ -57,11 +59,17 @@ export const ALIASES = {
   "--osio-graph-note": "--osio-warning",
 };
 
-/** `tokens` plus every alias, each resolved to the literal colour it ends at; throws on a dangling or circular alias. */
-export function resolveTokens(tokens) {
+/**
+ * `tokens` plus every alias, each resolved to the literal colour it ends at; throws on a dangling or circular alias.
+ * `aliasPins` replace aliases outright, as a palette's own block outranks the shared alias block in the cascade;
+ * an alias that points at a pinned alias follows the pin, as it does in the browser.
+ */
+export function resolveTokens(tokens, aliasPins = {}) {
   const shadowed = Object.keys(ALIASES).filter((name) => name in tokens);
   if (shadowed.length > 0) throw new Error(`defined both as a colour and as an alias: ${shadowed.join(", ")}`);
-  const resolved = { ...tokens };
+  const unknown = Object.keys(aliasPins).filter((name) => !(name in ALIASES));
+  if (unknown.length > 0) throw new Error(`pinned ${unknown.join(", ")}, which is neither a generated token nor an alias`);
+  const resolved = { ...tokens, ...aliasPins };
   const follow = (name, seen) => {
     if (name in resolved) return resolved[name];
     const target = ALIASES[name];
@@ -72,3 +80,12 @@ export function resolveTokens(tokens) {
   for (const name of Object.keys(ALIASES)) resolved[name] = follow(name, [name]);
   return resolved;
 }
+
+/** The pins of `palette` for `mode` that name an alias rather than a generated token. */
+export function aliasPinsOf(palette, mode) {
+  const generated = modeTokens(palette, mode);
+  return Object.fromEntries(Object.entries(pinsOf(palette, mode)).filter(([name]) => !(name in generated)));
+}
+
+/** Every token and alias of `palette` in `mode`, resolved to its literal value. */
+export const resolvedTokens = (palette, mode) => resolveTokens(modeTokens(palette, mode), aliasPinsOf(palette, mode));
