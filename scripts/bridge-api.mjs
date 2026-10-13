@@ -2076,8 +2076,27 @@ async function handleMarketplacePublish(request, response, config, fetchImpl) {
 		body: { properties: props, visibility: 'public', updated_at: new Date().toISOString() },
 		prefer: 'return=representation',
 	});
+	await publishAppChildren(pageId, authContext.userId, config, fetchImpl);
 	json(response, 200, pageRowToEntry(Array.isArray(updated) ? updated[0] : updated), config);
 	return true;
+}
+
+/**
+ * An app's own pages (Details, Features, …) are created private, so publishing the app
+ * also makes public its DIRECT children that the publisher owns in the marketplace
+ * workspace. A child owned by anyone else is never touched.
+ */
+async function publishAppChildren(appId, userId, config, fetchImpl) {
+	const children = await baasRest(config, fetchImpl, `osionos_pages?${postgrestQuery({ parent_page_id: `eq.${appId}`, select: 'id,owner_id,workspace_id' })}`);
+	const ids = (Array.isArray(children) ? children : [])
+		.filter((child) => child.workspace_id === MARKETPLACE_WORKSPACE_ID && canChangePageSharing(child, userId))
+		.map((child) => child.id);
+	if (ids.length === 0) return;
+	await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(ids)}`, {
+		method: 'PATCH',
+		body: { visibility: 'public', updated_at: new Date().toISOString() },
+		prefer: 'return=minimal',
+	});
 }
 
 /** Default property set for a freshly created draft app. */

@@ -29,7 +29,11 @@ const APPS = {
 	draftB: 'b4b4b4b4-2222-4222-8222-b4b4b4b4b4b4',
 	draftA: 'a5a5a5a5-1111-4111-8111-a5a5a5a5a5a5',
 	ownerless: 'e0e0e0e0-5555-4555-8555-e0e0e0e0e0e0',
+	childA: 'a9a9a9a9-1111-4111-8111-a9a9a9a9a9a9',
+	childC: 'c9c9c9c9-3333-4333-8333-c9c9c9c9c9c9',
+	childOutside: 'a0a9a0a9-1111-4111-8111-a0a9a0a9a0a9',
 };
+const USER_C = 'c3c3c3c3-3333-4333-8333-c3c3c3c3c3c3';
 const DB = 'f0f0f0f0-6666-4666-8666-f0f0f0f0f0f0';
 
 function marketRow(id, ownerId, visibility, parentId = MARKET_DB) {
@@ -133,6 +137,23 @@ describe('SEC1 marketplace', () => {
 			const result = await send(base, '/api/marketplace/publish', asB, post({ pageId: APPS.draftB }));
 			assert.equal(result.status, 200, result.text);
 			assert.equal(mock.page(APPS.draftB).visibility, 'public');
+		});
+	});
+
+	it('publishes the app\'s own children with it, never a child owned by someone else', async () => {
+		const world = marketWorld();
+		const outside = { ...marketRow(APPS.childOutside, IDS.userA, 'private', APPS.draftA), workspace_id: IDS.team };
+		world.osionos_pages.push(marketRow(APPS.childA, IDS.userA, 'private', APPS.draftA), marketRow(APPS.childC, USER_C, 'private', APPS.draftA), outside);
+		const mock = createPostgrestMock(world);
+		const untouched = [APPS.childC, APPS.childOutside].map((id) => structuredClone(mock.page(id)));
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const published = await send(base, '/api/marketplace/publish', asA, post({ pageId: APPS.draftA }));
+			assert.equal(published.status, 200, published.text);
+			assert.equal(mock.page(APPS.childA).visibility, 'public');
+			assert.deepEqual([APPS.childC, APPS.childOutside].map((id) => mock.page(id)), untouched);
+			const app = await send(base, `/api/marketplace/apps/${APPS.draftA}`, asB);
+			assert.equal(app.status, 200, app.text);
+			assert.deepEqual(app.body.children.map((child) => child._id), [APPS.childA]);
 		});
 	});
 
