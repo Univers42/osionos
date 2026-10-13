@@ -58,19 +58,20 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({ store, onAddCell, 
           <span>Templates</span>
         </button>
         {templatesOpen ? (
-          <div className="osionos-layout-cell-menu osio-canvas-v2-template-menu" role="menu" aria-label="Layout templates">
+          <div className="osio-surface-overlay absolute right-0 top-full z-[var(--osio-z-popover)] min-w-[220px]" role="menu" aria-label="Layout templates">
             {CANVAS_TEMPLATES.map((template) => (
               <button
                 key={template.kind}
                 type="button"
                 role="menuitem"
+                className="osio-menu-item"
                 onClick={() => {
                   onApplyTemplate(template.kind);
                   setTemplatesOpen(false);
                 }}
               >
                 <span aria-hidden>{template.glyph}</span> {template.label}
-                <small>{template.description}</small>
+                <small className="text-2xs text-[var(--osio-fg-muted)]">{template.description}</small>
               </button>
             ))}
           </div>

@@ -190,66 +190,56 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
   return createPortal(
     <div
       ref={ref}
-      className="fixed z-[var(--osio-z-popover)] flex w-72 overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl"
+      data-testid="page-selector-menu"
+      className="osio-surface-overlay fixed z-[var(--osio-z-popover)] flex w-72 flex-col overflow-hidden"
       style={menuStyle}
     >
-      <div className="flex flex-1 flex-col">
-        <div className="max-h-[26rem] overflow-y-auto py-1.5">
-          <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
-            Link to page
-          </p>
-          {selectorOptions.map((option, idx) => {
-            const isActive = idx === effectiveActiveIdx;
-            let Icon = FileText;
-            if (option.kind === "create") {
-              Icon = FilePlus2;
-            } else if (option.isDatabase) {
-              Icon = Database;
-            }
-            const label =
-              option.kind === "create"
-                ? `Create page "${option.title}"`
-                : option.title;
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <p className="osio-menu-label">Link to page</p>
+        {selectorOptions.map((option, idx) => {
+          const isActive = idx === effectiveActiveIdx;
+          let Icon = FileText;
+          if (option.kind === "create") {
+            Icon = FilePlus2;
+          } else if (option.isDatabase) {
+            Icon = Database;
+          }
+          const label =
+            option.kind === "create"
+              ? `Create page "${option.title}"`
+              : option.title;
 
-            return (
-              <button
-                key={
-                  option.kind === "create"
-                    ? `create:${option.title}`
-                    : option.pageId
+          return (
+            <button
+              key={
+                option.kind === "create"
+                  ? `create:${option.title}`
+                  : option.pageId
+              }
+              type="button"
+              className="osio-menu-item"
+              data-active={isActive}
+              onMouseEnter={() => setActiveIdx(idx)}
+              onClick={() => {
+                if (option.kind === "create") {
+                  onCreate(option.title);
+                  return;
                 }
-                type="button"
-                className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${
-                  isActive
-                    ? "bg-[var(--osio-bg-hover)]"
-                    : "hover:bg-[var(--osio-bg-hover)]"
-                }`}
-                onMouseEnter={() => setActiveIdx(idx)}
-                onClick={() => {
-                  if (option.kind === "create") {
-                    onCreate(option.title);
-                    return;
-                  }
 
-                  onSelect(option.pageId);
-                }}
-              >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--osio-bg-subtle)] text-base">
-                  {option.kind === "page" && option.icon ? (
-                    option.icon
-                  ) : (
-                    <Icon className="h-3.5 w-3.5 text-[var(--osio-fg-muted)]" />
-                  )}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm text-[var(--osio-fg-default)]">
-                    {label}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                onSelect(option.pageId);
+              }}
+            >
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--osio-radius-sm)] bg-[var(--osio-bg-subtle)] text-sm">
+                {option.kind === "page" && option.icon ? (
+                  option.icon
+                ) : (
+                  <Icon className="h-3.5 w-3.5 text-[var(--osio-fg-muted)]" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>,
     document.body,

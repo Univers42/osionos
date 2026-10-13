@@ -36,14 +36,6 @@ interface BlockContextMenuProps {
   width?: number;
 }
 
-function getItemClassName(item: BlockContextMenuItem) {
-  const base = "relative flex w-full items-center gap-3 px-3 py-1.5 text-left transition-colors";
-  if (item.danger) return `${base} text-[var(--osio-danger)] hover:bg-[var(--osio-bg-subtle)]`;
-  if (item.active) return `${base} bg-[var(--osio-bg-hover)] text-[var(--osio-fg-default)]`;
-  if (item.disabled) return `${base} cursor-default text-[var(--osio-fg-subtle)]`;
-  return `${base} cursor-pointer text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]`;
-}
-
 interface SubmenuButtonProps {
   parentLabel: string;
   item: BlockContextMenuItem;
@@ -66,12 +58,10 @@ const SubmenuButton: React.FC<SubmenuButtonProps> = ({
       type="button"
       onClick={handleClick}
       disabled={item.disabled}
-      className={[
-        "flex w-full items-center gap-3 px-3 py-1.5 text-left text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] disabled:cursor-default disabled:text-[var(--osio-fg-subtle)] disabled:hover:bg-transparent",
-        item.active ? "bg-[var(--osio-bg-hover)]" : "",
-      ].join(" ")}
+      className="osio-menu-item"
+      data-active={item.active || undefined}
     >
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-muted)]">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--osio-radius-sm)] bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-muted)]">
         {item.icon}
       </span>
       <span className="flex-1 text-sm">{item.label}</span>
@@ -123,7 +113,7 @@ const SubmenuPanel: React.FC<SubmenuPanelProps> = ({
   return (
     <div
       data-submenu-panel
-      className="overflow-y-auto rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-xl"
+      className="osio-surface-overlay overflow-y-auto"
       style={style}
     >
       {items.map((subItem, index) => (
@@ -162,78 +152,80 @@ const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
 
   return (
     <aside
-      className="fixed overflow-y-auto rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-3 shadow-xl"
+      className="osio-surface-overlay fixed overflow-y-auto"
       style={{ ...style, width: PROFILE_PANEL_WIDTH, zIndex: 10003 }}
       aria-label="Color profile properties"
     >
-      <div className="mb-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--osio-fg-subtle)]">
-          Color Profiles
-        </p>
-        <p className="text-sm text-[var(--osio-fg-default)]">
-          Reusable foreground and background pairs.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-3">
-        <label className="block text-xs font-medium text-[var(--osio-fg-muted)]">
-          <span>Name</span>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
-          />
-        </label>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="text-xs font-medium text-[var(--osio-fg-muted)]">
-            <span>Text</span>
-            <input
-              type="color"
-              value={textColor}
-              onChange={(event) => setTextColor(event.target.value)}
-              className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-transparent"
-            />
-          </label>
-          <label className="text-xs font-medium text-[var(--osio-fg-muted)]">
-            <span>Background</span>
-            <input
-              type="color"
-              value={backgroundColor}
-              onChange={(event) => setBackgroundColor(event.target.value)}
-              className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-transparent"
-            />
-          </label>
+      <div className="p-2">
+        <div className="mb-3">
+          <p className="text-xs font-medium text-[var(--osio-fg-muted)]">
+            Color profiles
+          </p>
+          <p className="text-sm text-[var(--osio-fg-default)]">
+            Reusable foreground and background pairs.
+          </p>
         </div>
-        <button
-          type="submit"
-          className="w-full rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--osio-accent-fg)] transition-opacity hover:opacity-90"
-        >
-          + Save profile
-        </button>
-      </form>
 
-      <div className="mt-3 space-y-1">
-        {profiles.map((profile) => (
-          <div
-            key={profile.id}
-            className="flex items-center gap-2 rounded-lg border border-[var(--osio-border-default)] px-2 py-1.5"
-          >
-            <span
-              className="h-5 w-5 rounded border border-[var(--osio-border-default)]"
-              style={{ backgroundColor: profile.backgroundColor }}
+        <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-3">
+          <label className="block text-xs font-medium text-[var(--osio-fg-muted)]">
+            <span>Name</span>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
             />
-            <span className="min-w-0 flex-1 truncate text-sm text-[var(--osio-fg-default)]">
-              {profile.name}
-            </span>
-            <button
-              type="button"
-              className="rounded px-1.5 py-1 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-              onClick={() => removeProfile(profile.id)}
-            >
-              Remove
-            </button>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs font-medium text-[var(--osio-fg-muted)]">
+              <span>Text</span>
+              <input
+                type="color"
+                value={textColor}
+                onChange={(event) => setTextColor(event.target.value)}
+                className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-transparent"
+              />
+            </label>
+            <label className="text-xs font-medium text-[var(--osio-fg-muted)]">
+              <span>Background</span>
+              <input
+                type="color"
+                value={backgroundColor}
+                onChange={(event) => setBackgroundColor(event.target.value)}
+                className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-transparent"
+              />
+            </label>
           </div>
-        ))}
+          <button
+            type="submit"
+            className="w-full rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--osio-accent-fg)] transition-opacity hover:opacity-90"
+          >
+            + Save profile
+          </button>
+        </form>
+
+        <div className="mt-3 space-y-1">
+          {profiles.map((profile) => (
+            <div
+              key={profile.id}
+              className="flex items-center gap-2 rounded-lg border border-[var(--osio-border-default)] px-2 py-1.5"
+            >
+              <span
+                className="h-5 w-5 rounded border border-[var(--osio-border-default)]"
+                style={{ backgroundColor: profile.backgroundColor }}
+              />
+              <span className="min-w-0 flex-1 truncate text-sm text-[var(--osio-fg-default)]">
+                {profile.name}
+              </span>
+              <button
+                type="button"
+                className="rounded px-1.5 py-1 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+                onClick={() => removeProfile(profile.id)}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     </aside>
   );
@@ -310,14 +302,17 @@ const MenuItemRow: React.FC<MenuItemRowProps> = ({
         }
         item.onClick();
       }}
-      className={getItemClassName(item)}
+      className="osio-menu-item"
+      data-active={item.active || undefined}
+      data-tone={item.danger ? "danger" : undefined}
+      aria-disabled={item.disabled || undefined}
     >
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-muted)]">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--osio-radius-sm)] bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-muted)]">
         {item.icon}
       </span>
       <span className="min-w-0 flex-1 text-sm">{item.label}</span>
       {item.shortcut ? (
-        <span className="text-xs text-[var(--osio-fg-subtle)]">
+        <span className="text-xs text-[var(--osio-fg-muted)]">
           {item.shortcut}
         </span>
       ) : null}
@@ -418,7 +413,8 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
       />
       <div
         ref={ref}
-        className="fixed overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-2 shadow-xl"
+        data-testid="block-context-menu"
+        className="osio-surface-overlay fixed overflow-hidden"
         style={{
           top: position.top,
           left: position.left,
@@ -427,22 +423,20 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
           zIndex: 10001,
         }}
       >
-        <div className="px-2 pb-2">
+        <div className="pb-1">
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             aria-label="Search actions"
             placeholder="Search actions…"
-            className="h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)] focus:border-[var(--osio-accent)]"
+            className="osio-field w-full px-2 text-sm placeholder:text-[var(--osio-fg-subtle)]"
           />
         </div>
         <div className="max-h-[400px] overflow-y-auto" role="menu">
         {visibleSections.map((section, index) => (
           <div key={`${section.label ?? "section"}-${index}`}>
             {section.label ? (
-              <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
-                {section.label}
-              </p>
+              <p className="osio-menu-label">{section.label}</p>
             ) : null}
             {section.items.map((item) => (
               <MenuItemRow
@@ -455,12 +449,13 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
               />
             ))}
             {index < visibleSections.length - 1 ? (
-              <div className="my-1 border-t border-[var(--osio-border-default)]" />
+              <div className="osio-menu-separator" />
             ) : null}
           </div>
         ))}
         </div>
-        <div className="mt-1 border-t border-[var(--osio-border-default)] px-3 pt-2 text-xs leading-4 text-[var(--osio-fg-subtle)]">
+        <div className="osio-menu-separator" />
+        <div className="px-2 pb-1 text-xs leading-4 text-[var(--osio-fg-muted)]">
           <div>Last edited by current user</div>
           <div>Today</div>
         </div>
