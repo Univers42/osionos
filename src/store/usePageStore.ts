@@ -430,7 +430,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
     const page = get().pageById(pageId);
     if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
 
-    set((s) => {
+    set((s) => timed("updatePageTitle", () => {
       const pages = updatePageInState(
         s.pages,
         pageId,
@@ -444,7 +444,7 @@ export const usePageStore = create<PageStore>((set, get) => ({
         ...derivePageState(pages, s.pageIdsByWorkspace),
         pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
       };
-    });
+    }));
     persistPageTitle(pageId, title);
     notifyTabsOfPagePatch(pageId, { title });
   },
