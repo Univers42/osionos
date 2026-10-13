@@ -53,7 +53,7 @@ export default {
     "--osio-n-7": "#404959",
     "--osio-n-8": "#4C566A",
     "--osio-n-9": "#B2BCD0",
-    "--osio-n-10": "#B3BCCD",
+    "--osio-n-10": "#C3CCDD",
     "--osio-n-11": "#ECEFF4",
     "--osio-n-12": "#F5F8FC",
     "--osio-a-solid": "#88C0D0",

@@ -698,7 +698,7 @@
   --osio-n-7: #404959;
   --osio-n-8: #4C566A;
   --osio-n-9: #B2BCD0;
-  --osio-n-10: #B3BCCD;
+  --osio-n-10: #C3CCDD;
   --osio-n-11: #ECEFF4;
   --osio-n-12: #F5F8FC;
   --osio-a-solid: #88C0D0;
@@ -740,7 +740,7 @@
   --osio-graph-node-shadow: rgba(0, 0, 0, 0.45);
   --osio-graph-halo: rgba(46, 52, 64, 0.85);
   --osio-graph-card-shadow: rgba(0, 0, 0, 0.55);
-  --osio-graph-edge: rgba(179, 188, 205, 0.26);
+  --osio-graph-edge: rgba(195, 204, 221, 0.26);
   --osio-graph-edge-tag: rgba(159, 197, 222, 0.16);
   --osio-graph-edge-hier: rgba(159, 197, 222, 0.78);
   --osio-graph-overlay-bg: rgba(38, 43, 52, 0.74);
@@ -773,7 +773,7 @@
   --osio-n-7: #E4DDC7;
   --osio-n-8: #D2C9AF;
   --osio-n-9: #50666E;
-  --osio-n-10: #50666D;
+  --osio-n-10: #465B62;
   --osio-n-11: #2E4A52;
   --osio-n-12: #002B36;
   --osio-a-solid: #1A72B8;
@@ -808,8 +808,8 @@
   --osio-graph-field-warm: rgba(26, 114, 184, 0.05);
   --osio-shadow-rgb: 45 32 9;
   --osio-graph-bg-1: #F2EBD7;
-  --osio-graph-grain: rgba(80, 102, 109, 0.05);
-  --osio-graph-vignette: rgba(80, 102, 109, 0.07);
+  --osio-graph-grain: rgba(70, 91, 98, 0.05);
+  --osio-graph-vignette: rgba(70, 91, 98, 0.07);
   --osio-graph-node-backing: rgba(255, 251, 240, 1);
   --osio-graph-node-rim: rgba(45, 32, 9, 0.12);
   --osio-graph-node-shadow: rgba(45, 32, 9, 0.22);
@@ -847,7 +847,7 @@
   --osio-n-7: #104A59;
   --osio-n-8: #1C5D6D;
   --osio-n-9: #A1B5BD;
-  --osio-n-10: #A4B5B7;
+  --osio-n-10: #B4C5C7;
   --osio-n-11: #ABB6B3;
   --osio-n-12: #EEE8D5;
   --osio-a-solid: #3D97D4;
@@ -889,7 +889,7 @@
   --osio-graph-node-shadow: rgba(0, 0, 0, 0.45);
   --osio-graph-halo: rgba(0, 43, 54, 0.85);
   --osio-graph-card-shadow: rgba(0, 0, 0, 0.55);
-  --osio-graph-edge: rgba(164, 181, 183, 0.26);
+  --osio-graph-edge: rgba(180, 197, 199, 0.26);
   --osio-graph-edge-tag: rgba(216, 185, 155, 0.16);
   --osio-graph-edge-hier: rgba(216, 185, 155, 0.78);
   --osio-graph-overlay-bg: rgba(0, 31, 39, 0.74);
@@ -921,7 +921,7 @@
   --osio-n-7: #E4E2F0;
   --osio-n-8: #D0CDE6;
   --osio-n-9: #5E6283;
-  --osio-n-10: #565A7C;
+  --osio-n-10: #535779;
   --osio-n-11: #1A1B33;
   --osio-n-12: #12122A;
   --osio-a-solid: #7C5CD3;
@@ -956,8 +956,8 @@
   --osio-graph-field-warm: rgba(124, 92, 211, 0.05);
   --osio-shadow-rgb: 20 32 65;
   --osio-graph-bg-1: #E9E7F5;
-  --osio-graph-grain: rgba(86, 90, 124, 0.05);
-  --osio-graph-vignette: rgba(86, 90, 124, 0.07);
+  --osio-graph-grain: rgba(83, 87, 121, 0.05);
+  --osio-graph-vignette: rgba(83, 87, 121, 0.07);
   --osio-graph-node-backing: rgba(255, 255, 255, 1);
   --osio-graph-node-rim: rgba(20, 32, 65, 0.12);
   --osio-graph-node-shadow: rgba(20, 32, 65, 0.22);
@@ -1069,7 +1069,7 @@
   --osio-n-7: #EDE6DF;
   --osio-n-8: #DFDAD9;
   --osio-n-9: #696583;
-  --osio-n-10: #696581;
+  --osio-n-10: #5E5A76;
   --osio-n-11: #575279;
   --osio-n-12: #403D55;
   --osio-a-solid: #7C6699;
@@ -1104,8 +1104,8 @@
   --osio-graph-field-warm: rgba(124, 102, 153, 0.05);
   --osio-shadow-rgb: 42 32 25;
   --osio-graph-bg-1: #F2E9E1;
-  --osio-graph-grain: rgba(105, 101, 129, 0.05);
-  --osio-graph-vignette: rgba(105, 101, 129, 0.07);
+  --osio-graph-grain: rgba(94, 90, 118, 0.05);
+  --osio-graph-vignette: rgba(94, 90, 118, 0.07);
   --osio-graph-node-backing: rgba(255, 250, 243, 1);
   --osio-graph-node-rim: rgba(42, 32, 25, 0.12);
   --osio-graph-node-shadow: rgba(42, 32, 25, 0.22);
@@ -1143,7 +1143,7 @@
   --osio-n-7: #2D2A45;
   --osio-n-8: #423E55;
   --osio-n-9: #918DA9;
-  --osio-n-10: #918DAB;
+  --osio-n-10: #9E9AB9;
   --osio-n-11: #E0DEF4;
   --osio-n-12: #F4F2FC;
   --osio-a-solid: #C4A7E7;
@@ -1185,7 +1185,7 @@
   --osio-graph-node-shadow: rgba(0, 0, 0, 0.45);
   --osio-graph-halo: rgba(25, 23, 36, 0.85);
   --osio-graph-card-shadow: rgba(0, 0, 0, 0.55);
-  --osio-graph-edge: rgba(145, 141, 171, 0.26);
+  --osio-graph-edge: rgba(158, 154, 185, 0.26);
   --osio-graph-edge-tag: rgba(222, 181, 162, 0.16);
   --osio-graph-edge-hier: rgba(222, 181, 162, 0.78);
   --osio-graph-overlay-bg: rgba(21, 19, 31, 0.74);

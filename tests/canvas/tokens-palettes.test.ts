@@ -9,6 +9,7 @@ import test from "node:test";
 import { ALIASES, resolvedTokens, resolveTokens } from "../../scripts/tokens/aliases.mjs";
 import { CONTRAST_PAIRS, contrastFailures } from "../../scripts/tokens/contrast.mjs";
 import { MODES, PALETTES } from "../../scripts/tokens/palettes.mjs";
+import { contrastRatio } from "../../scripts/tokens/oklch.mjs";
 import { modeTokens } from "../../scripts/tokens/ramps.mjs";
 import { GENERATED_STYLESHEET, renderStylesheet } from "../../scripts/tokens/stylesheet.mjs";
 import { malformedTokens } from "../../scripts/tokens/validity.mjs";
@@ -121,3 +122,25 @@ test("the colours kept outside the stylesheet match the generated palette", () =
   assert.ok(readAppFile("public/favicon.svg").includes(`fill="${light["--osio-accent"]}"`), "favicon");
   assert.ok(readAppFile("src/features/auth/ui/Portal.tsx").includes(`fill="${light["--osio-accent"]}"`), "sign-in brand mark");
 });
+
+// Muted and subtle text are two tiers: when they are the same colour, a caption and a
+// placeholder look alike and the hierarchy is gone. 1.14 is just under Calm's dark step
+// (1.147, muted over subtle); the tiers had collapsed to 1.001-1.003 in Solarized, Rosé
+// Pine and Nord dark. Three light modes step less and are listed until their source moves:
+// Calm and Ember (n-9/n-10 are generated in ramps.mjs, 1.028) and Maximal (its hand-tuned
+// muted is pinned by tokens-palettes-output.test.ts, 1.090).
+const MIN_TEXT_TIER_STEP = 1.14;
+const NARROW_TIERS = new Set(["warm light", "ember light", "maximal light"]);
+
+for (const palette of PALETTES) {
+  for (const mode of MODES) {
+    if (NARROW_TIERS.has(`${palette.id} ${mode}`)) continue;
+    test(`palette "${palette.id}" ${mode}: muted text is a visible step from subtle text, and the stronger of the two`, () => {
+      const tokens = resolvedTokens(palette, mode);
+      const surface = tokens["--osio-bg-surface"];
+      const step = contrastRatio(tokens["--osio-fg-muted"], tokens["--osio-fg-subtle"]);
+      assert.ok(step >= MIN_TEXT_TIER_STEP, `muted and subtle differ by only ${step.toFixed(3)}`);
+      assert.ok(contrastRatio(tokens["--osio-fg-muted"], surface) > contrastRatio(tokens["--osio-fg-subtle"], surface));
+    });
+  }
+}
