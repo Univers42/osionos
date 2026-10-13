@@ -12,7 +12,8 @@
 
 // Re-opening a record refreshes only what the note mirrors from the record (title,
 // properties); what people wrote in the note — and who may read it — survives every
-// /open and every sub-item create.
+// /open and every sub-item create. A sub-item nests only under a note the caller could
+// create a page under.
 // Ponytail: the in-memory PostgREST models on_conflict + resolution=ignore-duplicates;
 // a live PostgREST's upsert behaviour is not exercised here.
 
@@ -28,6 +29,13 @@ const DB = 'f0f0f0f0-6666-4666-8666-f0f0f0f0f0f0';
 const OPEN = `/api/records/${DB}/tasks/7/open`;
 const NOTE_ID = recordNoteId(DB, 'tasks', '7');
 const WRITTEN = [{ id: 'note-b1', type: 'paragraph', content: 'written in the note' }];
+/** A's note from before notes were created shared: private, in the mount's workspace. */
+const LEGACY_NOTE = {
+	id: NOTE_ID, workspace_id: IDS.team, owner_id: IDS.userA, visibility: 'private', parent_page_id: null,
+	database_id: `baas:${DB}:tasks`, title: 'Row seven', icon: 'icon:database', surface: 'page', collaborators: [],
+	properties: [{ key: 'title', label: 'Title', type: 'text', value: 'Row seven' }, { key: 'status', label: 'Status', type: 'text', value: 'open' }],
+	content: WRITTEN, archived_at: null, created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z',
+};
 
 function recordWorld(notes = []) {
 	const world = teamWorld();
@@ -68,13 +76,7 @@ describe('record notes keep what people wrote in them', () => {
 	});
 
 	it('keeps a legacy private note private when another member opens it', async () => {
-		const legacy = {
-			id: NOTE_ID, workspace_id: IDS.team, owner_id: IDS.userA, visibility: 'private', parent_page_id: null,
-			database_id: `baas:${DB}:tasks`, title: 'Row seven', icon: 'icon:database', surface: 'page', collaborators: [],
-			properties: [{ key: 'title', label: 'Title', type: 'text', value: 'Row seven' }, { key: 'status', label: 'Status', type: 'text', value: 'open' }],
-			content: WRITTEN, archived_at: null, created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z',
-		};
-		const { mock } = recordWorld([legacy]);
+		const { mock } = recordWorld([LEGACY_NOTE]);
 		await withBridge(config, mock.fetchImpl, async (base) => {
 			await send(base, OPEN, asB, { method: 'POST' });
 			const read = await send(base, `/api/pages/${NOTE_ID}`, asB);
@@ -156,5 +158,33 @@ describe('opening a record answers like reading its note', () => {
 			assert.deepEqual(opened.body, read.body);
 			assert.deepEqual(opened.body.content, WRITTEN);
 		});
+	});
+});
+
+describe('a record sub-item nests only under a note the caller can read', () => {
+	const SUBITEM = `/api/records/${DB}/tasks/7/subitems`;
+	const REFUSED = {
+		'another member\'s private note': LEGACY_NOTE,
+		'a shared note its owner moved to a workspace the caller is not in': { ...LEGACY_NOTE, visibility: 'shared', workspace_id: IDS.homeA },
+	};
+	for (const [name, note] of Object.entries(REFUSED)) {
+		it(`answers a sub-item under ${name} like a page create under it, and inserts nothing`, async () => {
+			const { mock } = recordWorld([note]);
+			const pageCount = mock.rows('osionos_pages').length;
+			await withBridge(config, mock.fetchImpl, async (base) => {
+				const sub = await send(base, SUBITEM, asB, post({ workspaceId: IDS.homeB, title: 'Sub' }));
+				const nested = await send(base, '/api/pages', asB, post({ workspaceId: IDS.homeB, title: 'Sub', parentPageId: NOTE_ID }));
+				assert.equal(sub.status, 404, sub.text);
+				assert.deepEqual([sub.status, sub.body], [nested.status, nested.body]);
+				assert.equal(mock.rows('osionos_pages').length, pageCount);
+			});
+		});
+	}
+
+	it('creates a sub-item under a shared note another member owns', async () => {
+		const { mock } = recordWorld([{ ...LEGACY_NOTE, visibility: 'shared' }]);
+		const sub = await withBridge(config, mock.fetchImpl, (base) => send(base, SUBITEM, asB, post({ workspaceId: IDS.homeB, title: 'Sub' })));
+		assert.equal(sub.status, 201, sub.text);
+		assert.equal(sub.body.parentPageId, NOTE_ID);
 	});
 });

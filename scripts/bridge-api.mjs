@@ -975,6 +975,11 @@ async function readablePageAccess(request, pageId, permission, config, fetchImpl
 	return { authContext, row };
 }
 
+/** The one answer for every parent a page may not be nested under, whatever the reason. */
+function parentPageNotFound() {
+	return Object.assign(new Error('Parent page not found.'), { status: 404 });
+}
+
 /**
  * Whether the caller may nest a page under `parentPageId`: it exists and they read it as
  * a member of its workspace (canReadPageRowAsMember). `authContext`: userId + workspaceIds.
@@ -2547,6 +2552,11 @@ async function handleRecordSubitemCreate(match, request, response, config, fetch
 	const safe = payload && typeof payload === 'object' ? payload : {};
 	const access = await requireWorkspaceAccess(request, safe.workspaceId, 'create', config, fetchImpl);
 	const { noteId } = await ensureRecordNote(dbId, table, pk, request, config, fetchImpl);
+	// The sub-item nests under the note: a note the caller cannot read (or reach through its
+	// workspace) refuses it with the page create's parent 404.
+	await readablePageAccess(request, noteId, 'read', config, fetchImpl).catch((error) => {
+		throw error?.status === 403 || error?.status === 404 ? parentPageNotFound() : error;
+	});
 	const body = recordSubitemNoteBody({
 		id: randomUUID(),
 		parentNoteId: noteId,
@@ -2891,9 +2901,7 @@ async function handlePageCreate(request, response, config, fetchImpl) {
 	const workspaceId = requireUuid(payload.workspaceId, 'workspaceId');
 	const authContext = await requireWorkspaceAccess(request, workspaceId, 'create', config, fetchImpl);
 	const parentPageId = optionalUuid(payload.parentPageId, 'parentPageId');
-	if (parentPageId && !await canNestUnder(authContext, parentPageId, config, fetchImpl)) {
-		throw Object.assign(new Error('Parent page not found.'), { status: 404 });
-	}
+	if (parentPageId && !await canNestUnder(authContext, parentPageId, config, fetchImpl)) throw parentPageNotFound();
 	const rows = await baasRest(config, fetchImpl, 'osionos_pages', {
 		method: 'POST',
 		body: pageCreateRowFromPayload(payload, authContext),
