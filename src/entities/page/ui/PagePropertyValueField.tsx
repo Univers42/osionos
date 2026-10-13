@@ -11,7 +11,9 @@
 /* ************************************************************************** */
 
 import React from "react";
+import { X } from "lucide-react";
 
+import { Dropdown, type DropdownOption } from "@/shared/ui";
 import type { PagePropertyEntry } from "../model/types";
 import { asStringArray } from "./pageProperties.helpers";
 
@@ -24,8 +26,18 @@ interface Props {
 const INPUT_CLASS =
   "w-full bg-transparent outline-none text-sm text-[var(--osio-fg-default)] placeholder:text-[var(--osio-fg-subtle)]";
 
+// px-2 only: every other box property comes from the osio-field recipe, so the
+// two never compete for one property.
+const DATE_CLASS = "osio-field w-auto px-2 text-sm";
+
+const NO_VALUE: DropdownOption<string> = { value: "", label: "Empty" };
+
 /** Editable value cell for a single page property (relation is handled by PageRelationField). */
 export const PagePropertyValueField: React.FC<Props> = ({ property, editable, onChange }) => {
+  if (property.type === "multi_select") {
+    return <MultiSelectField property={property} editable={editable} onChange={onChange} />;
+  }
+
   if (!editable) {
     return <span className="text-sm text-[var(--osio-fg-muted)]">{stringValue(property.value) || "Empty"}</span>;
   }
@@ -44,27 +56,19 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
 
   if ((property.type === "select" || property.type === "status") && property.options?.length) {
     return (
-      <select
-        aria-label={property.label}
-        value={stringValue(property.value)}
-        onChange={(event) => onChange(event.target.value)}
-        className={INPUT_CLASS}
-      >
-        <option value="">—</option>
-        {property.options.map((option) => <option key={option} value={option}>{option}</option>)}
-      </select>
-    );
-  }
-
-  if (property.type === "multi_select") {
-    return (
-      <input
-        aria-label={property.label}
-        value={asStringArray(property.value).join(", ")}
-        placeholder="Comma, separated, tags"
-        onChange={(event) => onChange(event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean))}
-        className={INPUT_CLASS}
-      />
+      // The empty state is an inline trigger; -ml-1.5 cancels its inset so the
+      // text lines up with the chips and the date field's border above and below.
+      <div className={`min-w-0${stringValue(property.value) ? "" : " -ml-1.5"}`}>
+        <Dropdown
+          variant={stringValue(property.value) ? "chip" : "inline"}
+          width="auto"
+          label={property.label}
+          placeholder="Empty"
+          value={stringValue(property.value)}
+          options={[NO_VALUE, ...property.options.map((option) => ({ value: option, label: option }))]}
+          onChange={onChange}
+        />
+      </div>
     );
   }
 
@@ -80,8 +84,58 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
           ? (event.target.value === "" ? null : Number(event.target.value))
           : event.target.value)
       }
-      className={INPUT_CLASS}
+      className={property.type === "date" ? DATE_CLASS : INPUT_CLASS}
     />
+  );
+};
+
+/** Chips for the chosen values; the unchosen options come from a dropdown, and a property with no options takes free text. */
+const MultiSelectField: React.FC<Props> = ({ property, editable, onChange }) => {
+  const chosen = asStringArray(property.value);
+  const remaining = (property.options ?? []).filter((option) => !chosen.includes(option));
+
+  if (editable && !property.options?.length) {
+    return (
+      <input
+        aria-label={property.label}
+        value={chosen.join(", ")}
+        placeholder="Comma, separated, tags"
+        onChange={(event) => onChange(event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean))}
+        className={INPUT_CLASS}
+      />
+    );
+  }
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1">
+      {chosen.length === 0 && !editable ? <span className="text-sm text-[var(--osio-fg-muted)]">Empty</span> : null}
+      {chosen.map((tag) => (
+        <span key={tag} className="osio-chip">
+          {tag}
+          {editable ? (
+            <button
+              type="button"
+              aria-label={`Remove ${tag}`}
+              onClick={() => onChange(chosen.filter((value) => value !== tag))}
+              className="-mr-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+            >
+              <X size={10} />
+            </button>
+          ) : null}
+        </span>
+      ))}
+      {editable && remaining.length > 0 ? (
+        <Dropdown
+          variant="inline"
+          width="auto"
+          label={`Add to ${property.label}`}
+          placeholder="Add"
+          value=""
+          options={remaining.map((option) => ({ value: option, label: option }))}
+          onChange={(option) => onChange([...chosen, option])}
+        />
+      ) : null}
+    </div>
   );
 };
 

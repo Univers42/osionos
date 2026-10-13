@@ -5,6 +5,8 @@
 
 import { expect, test } from "@playwright/test";
 
+import { computed, openStyleguide, section, tokenValue } from "../support/styleguideHelpers.mjs";
+
 const SECTIONS = [
   "Surfaces",
   "Text",
@@ -22,12 +24,6 @@ const SECTIONS = [
 ];
 
 const html = (page) => page.locator("html");
-const section = (page, name) => page.getByRole("region", { name, exact: true });
-
-async function openStyleguide(page, baseURL) {
-  await page.goto(`${baseURL}/__styleguide`, { waitUntil: "domcontentloaded" });
-  await page.getByTestId("styleguide").waitFor();
-}
 
 /** Every sample of one token family in a section must compute the CSS
  *  property it demonstrates to what a fresh element given var(token) computes. */
@@ -155,21 +151,6 @@ test.describe("styleguide", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 });
-
-/** What a fresh element given var(token) computes for one CSS property. */
-async function tokenValue(page, property, token) {
-  return page.evaluate(([cssProperty, name]) => {
-    const probe = document.createElement("div");
-    probe.style.setProperty(cssProperty, `var(${name})`);
-    document.body.append(probe);
-    const value = getComputedStyle(probe).getPropertyValue(cssProperty);
-    probe.remove();
-    return value;
-  }, [property, token]);
-}
-
-const computed = (locator, property) =>
-  locator.evaluate((element, name) => getComputedStyle(element).getPropertyValue(name), property);
 
 /** Tab onto the tooltip's trigger: only a keyboard focus opens a tooltip at once. */
 async function tabToSave(page) {

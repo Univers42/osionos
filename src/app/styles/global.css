@@ -11,13 +11,14 @@
 /* ************************************************************************** */
 
 @import "tailwindcss";
-/* Every colour that is seeded per palette (surfaces, text, borders, accent,
-   status, block tints, syntax). What is left in this file is what is not
-   generated yet: shadows, overlays, the graph's neutral inks, and the seven
-   palettes other than the default. */
+/* Every colour that differs by palette or mode (surfaces, text, borders, accent,
+   status, block tints, syntax, shadow tint, scrim, graph inks), for all nine
+   palettes. This file keeps what is the same in every palette: geometry, type,
+   motion and the shape of the shadows. */
 @import "./tokens.generated.css";
 @import "./shell.css";
 @import "./type.css";
+@import "./recipes.css";
 /* The vendored database's own colours (tables, boards, charts) as references to
    the tokens above, plus its stock shadow and radius classes. */
 @import "./database-bridge.generated.css";

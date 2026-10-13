@@ -94,7 +94,7 @@ export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, o
           {PANEL_TITLES[activePanel]}
         </span>
         {peek ? (
-          <IconButton aria-label="Keep the sidebar open" title="Keep the sidebar open" onClick={toggleDocked}>
+          <IconButton label="Keep the sidebar open" title="Keep the sidebar open" onClick={toggleDocked}>
             <Pin size={14} />
           </IconButton>
         ) : null}

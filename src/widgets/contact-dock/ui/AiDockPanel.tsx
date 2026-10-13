@@ -76,7 +76,7 @@ export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
       <header className="flex min-h-11 shrink-0 items-center gap-[var(--osio-space-2)] border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-[var(--osio-space-3)]">
         <Sparkles size={16} className="text-[var(--osio-accent)]" aria-hidden="true" />
         <span className="flex-1 truncate text-sm font-semibold text-[var(--osio-fg-default)]">Assistant</span>
-        <IconButton size="sm" aria-label="Close assistant" onClick={onClose}>
+        <IconButton size="sm" label="Close assistant" onClick={onClose}>
           <X size={15} aria-hidden="true" />
         </IconButton>
       </header>

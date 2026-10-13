@@ -58,10 +58,10 @@ export const DockPanel: React.FC<DockPanelProps> = ({ onCollapse }) => {
     >
       <header className="flex min-h-11 shrink-0 items-center gap-[var(--osio-space-2)] border-b border-[var(--osio-border-default)] px-[var(--osio-space-3)]">
         <span className="flex-1 text-sm font-semibold text-[var(--osio-fg-default)]">Messaging</span>
-        <IconButton size="sm" aria-label="Start a new chat" onClick={() => setPickerOpen((o) => !o)}>
+        <IconButton size="sm" label="Start a new chat" onClick={() => setPickerOpen((o) => !o)}>
           <Plus size={16} aria-hidden="true" />
         </IconButton>
-        <IconButton size="sm" aria-label="Collapse messaging" onClick={onCollapse}>
+        <IconButton size="sm" label="Collapse messaging" onClick={onCollapse}>
           <X size={16} aria-hidden="true" />
         </IconButton>
       </header>
