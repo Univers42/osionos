@@ -18,6 +18,7 @@
  * is absent or there are no channels.
  */
 
+import { matchingByName } from "@/shared/lib/text/matchingByName";
 import React, { useState } from 'react';
 import { Hash, Plus, Video } from 'lucide-react';
 
@@ -44,7 +45,8 @@ function openChannelTab(channel: ChatChannel) {
   });
 }
 
-export const ChannelList: React.FC = () => {
+/** `filter` narrows the list by name (case-insensitive); empty shows all. */
+export const ChannelList: React.FC<{ filter?: string }> = ({ filter = "" }) => {
   const { channels, available, reload } = useWorkspaceChannels();
   const counts = useUnreadStore((s) => s.counts);
   const [createOpen, setCreateOpen] = useState(false);
@@ -67,7 +69,7 @@ export const ChannelList: React.FC = () => {
       </div>
       <CreateChannelModal open={createOpen} onClose={() => setCreateOpen(false)} onCreated={reload} />
       <ul className="mt-1 space-y-0.5">
-        {channels.map((channel) => (
+        {matchingByName(channels, filter).map((channel) => (
           <li key={channel.id}>
             <button
               type="button"

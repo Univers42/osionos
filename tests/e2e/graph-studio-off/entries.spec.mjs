@@ -37,8 +37,7 @@ function treeRow(page, title) {
 }
 
 async function openFromRail(page) {
-  // The icon rail exists only while the sidebar is collapsed to it (sidebarRail.spec.mjs).
-  await page.getByRole("button", { name: "Collapse to rail" }).click();
+  // The rail is always beside the panel (sidebarRail.spec.mjs).
   await page.getByRole("tablist", { name: "Activity bar" }).getByRole("tab", { name: "Home", exact: true }).click();
   await page.getByRole("menuitem", { name: "Second Brain" }).click();
 }

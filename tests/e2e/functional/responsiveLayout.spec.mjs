@@ -47,16 +47,10 @@ async function closeSidebar(page) {
 		return aside.getBoundingClientRect().width > 100;
 	});
 	if (isExpanded) {
-		const closeBtn = page.locator('button[title="Close sidebar"]');
-		const collapseBtn = page.locator('button[aria-label="Collapse to rail"]');
-		const mainToggle = page.locator('button[aria-label="Toggle sidebar"]');
-
-		if (await closeBtn.count() > 0 && await closeBtn.first().isVisible()) {
-			await closeBtn.first().click({ force: true, timeout: 5000 }).catch(() => {});
-		} else if (await collapseBtn.count() > 0 && await collapseBtn.first().isVisible()) {
-			await collapseBtn.first().click({ force: true, timeout: 5000 }).catch(() => {});
-		} else if (await mainToggle.count() > 0 && await mainToggle.first().isVisible()) {
-			await mainToggle.first().click({ force: true, timeout: 5000 }).catch(() => {});
+		// Fold the panel: click the active rail icon (the rail stays, 48px).
+		const active = page.locator('[role="tablist"][aria-label="Activity bar"] [role="tab"][aria-selected="true"]');
+		if (await active.count() > 0) {
+			await active.first().click({ force: true, timeout: 5000 }).catch(() => {});
 		}
 		await page.waitForTimeout(400);
 	}

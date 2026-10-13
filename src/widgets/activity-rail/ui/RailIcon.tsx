@@ -23,20 +23,27 @@ interface Props {
   active?: boolean;
   /** Unread count → a small accent pill on the icon (e.g. pending invitations). */
   badge?: number;
+  /** The bound keys ("Ctrl + Alt + E"), shown in the tooltip. */
+  keys?: string;
   onClick: () => void;
+  /** The pointer rests on the icon or it gets focus: a click is likely next. */
+  onIntent?: () => void;
 }
 
 /** One activity-rail button: an icon with a left accent bar when active.
  *  Icon-only, so it carries both aria-label and title (no Tooltip primitive). */
-export const RailIcon: React.FC<Props> = ({ label, Icon, iconValue, active = false, badge = 0, onClick }) => (
+export const RailIcon: React.FC<Props> = ({ label, Icon, iconValue, active = false, badge = 0, keys, onClick, onIntent }) => (
   <button
     type="button"
     role="tab"
     aria-selected={active}
     aria-label={badge > 0 ? `${label} (${badge} new)` : label}
-    title={label}
+    title={keys ? `${label} (${keys})` : label}
+    aria-keyshortcuts={keys ? keys.replaceAll(" + ", "+").replace("Ctrl", "Control") : undefined}
     data-active={active || undefined}
     onClick={onClick}
+    onPointerEnter={onIntent}
+    onFocus={onIntent}
     className={cx(
       "relative grid h-10 w-10 place-items-center rounded-md transition-colors duration-[120ms]",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-subtle)]",

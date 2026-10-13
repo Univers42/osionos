@@ -6,6 +6,8 @@ import { findPane } from "@/widgets/workspace-grid/model/layoutTree";
 import { getSelectedPaneId, type PaneZoomChange } from "@/widgets/workspace-grid/model/paneZoom";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { startNewPage } from "@/widgets/workspace-grid/model/startActions";
+import { openAndFocusPanel } from "@/widgets/activity-rail/model/panelFocus";
+import { useUIStore } from "@/shared/config/uiStore";
 
 import type { Command } from "../types";
 
@@ -26,6 +28,10 @@ export const APP_COMMANDS: Command[] = [
   { id: "openSearch", title: "Search", category: "App", run: () => usePalette.getState().openSearch() },
   { id: "openPalette", title: "Command palette", category: "App", run: () => usePalette.getState().openCommand() },
   { id: "newPage", title: "New page", category: "App", run: () => void startNewPage() },
+  { id: "toggleSidebar", title: "Show or hide the sidebar", category: "App", run: () => useUIStore.getState().toggleDocked() },
+  { id: "openSearchPanel", title: "Search panel", category: "App", run: () => openAndFocusPanel("search") },
+  { id: "focusExplorer", title: "Explorer", category: "App", run: () => openAndFocusPanel("files") },
+  { id: "focusConversations", title: "Conversations", category: "App", run: () => openAndFocusPanel("conversations") },
   {
     id: "toggleZenMode",
     title: "Toggle Zen mode",

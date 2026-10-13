@@ -31,6 +31,11 @@ export const DEFAULT_AUTOMATIONS: Automation[] = [
   shortcut("open-search", "Search", "mod+k", "openSearch", "always"),
   // Ctrl+N is the browser's new window and cannot be taken; Alt makes it ours.
   shortcut("new-page", "New page", "mod+alt+n", "newPage", "always"),
+  // Ctrl+B is Bold and Ctrl+\ splits a pane, so the sidebar joins the Ctrl+Alt family.
+  shortcut("toggle-sidebar", "Show or hide the sidebar", "mod+alt+b", "toggleSidebar", "always"),
+  shortcut("open-search-panel", "Search panel", "mod+shift+f", "openSearchPanel", "always"),
+  shortcut("focus-explorer", "Explorer", "mod+alt+e", "focusExplorer", "always"),
+  shortcut("focus-conversations", "Conversations", "mod+alt+m", "focusConversations", "always"),
   // A CHORD (VSCode style): Ctrl+K then Ctrl+Z, keeping Ctrl held. Step 2 carries a
   // modifier on purpose — a bare "z" would collide with typing "z" into the Search
   // box that step 1 opens. mod+k keeps working as Search; the chord costs nothing.

@@ -1,0 +1,58 @@
+/* The 6px strip on the left edge that reveals a hidden sidebar, and the
+   overlay it reveals. Only transform and opacity animate: the compositor does
+   the work and the page under it is never laid out again. */
+
+.edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  z-index: var(--osio-z-sidebar);
+}
+
+/* While the reveal delay runs, a thin accent line says something is coming. */
+.edge::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: var(--osio-accent);
+  opacity: 0;
+  transition: opacity 250ms var(--osio-ease-standard);
+}
+
+.edge[data-arming]::after {
+  opacity: 0.6;
+}
+
+.overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: var(--osio-z-popover);
+  display: flex;
+  box-shadow: var(--osio-shadow-modal);
+  transform: translateX(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 160ms var(--osio-ease-standard),
+    opacity 160ms var(--osio-ease-standard);
+}
+
+.overlay[data-open] {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge::after,
+  .overlay {
+    transition: none;
+  }
+}

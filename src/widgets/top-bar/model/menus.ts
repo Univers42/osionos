@@ -127,7 +127,7 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
     },
     {
       id: "view", label: "View", items: [
-        { id: "view.sidebar", label: "Toggle sidebar", run: () => useUIStore.getState().toggleSidebar() },
+        { id: "view.sidebar", label: "Show or hide the sidebar", accelerator: "Ctrl+Alt+B", run: () => useUIStore.getState().toggleDocked() },
         { id: "view.theme", label: "Toggle theme", run: toggleTheme, separatorAfter: true },
         { id: "view.home", label: "Home", run: () => layout().openTab(homeTab()) },
         { id: "view.trash", label: "Trash", run: () => layout().openTab(trashTab()) },
