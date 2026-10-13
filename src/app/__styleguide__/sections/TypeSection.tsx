@@ -2,27 +2,16 @@ import React from "react";
 
 import { StyleGuideSection } from "./StyleGuideSection";
 
-const DISPLAY_LOOK: React.CSSProperties = {
-  fontFamily: "var(--osio-font-display)",
-  fontWeight: "var(--osio-font-weight-display)",
-  letterSpacing: "var(--osio-letter-spacing-display)",
-};
-
 /* The samples are <p>, not <h1-4>: a real heading here would join the page outline. */
-
-/** A caption naming the token behind a sample, so the guide documents the scale. */
-const Caption: React.FC<{ children: string }> = ({ children }) => (
-  <span className="text-2xs text-[var(--osio-fg-subtle)]">{children}</span>
-);
 
 export const TypeSection: React.FC = () => (
   <StyleGuideSection title="Typography">
     <div className="space-y-3">
       <div>
-        <p className="text-display text-[var(--osio-fg-strong)]" style={DISPLAY_LOOK}>
+        <p className="osio-display text-display text-[var(--osio-fg-strong)]">
           Display title
         </p>
-        <Caption>display - Newsreader 600, --osio-font-size-display</Caption>
+        <span className="text-2xs text-[var(--osio-fg-subtle)]">display - Newsreader 600, --osio-font-size-display</span>
       </div>
       <p className="osio-h1 text-[var(--osio-fg-strong)]">Heading one</p>
       <p className="osio-h2 text-[var(--osio-fg-strong)]">Heading two</p>

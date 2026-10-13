@@ -1366,11 +1366,7 @@ button.osionos-page-breadcrumb:hover {
 .osionos-page-title {
   display: block;
   width: 100%;
-  font-family: var(--osio-font-display);
   font-size: var(--osio-font-size-display);
-  font-weight: var(--osio-font-weight-display);
-  line-height: var(--osio-line-height-display);
-  letter-spacing: var(--osio-letter-spacing-display);
   color: var(--osio-fg-default);
   outline: none;
   border: none;

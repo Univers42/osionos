@@ -155,24 +155,38 @@ test.describe("type scale", () => {
     expect(look.letterSpacing).toBe("-0.8px");
   });
 
-  test("loading Newsreader does not move the title: its height is the same before and after fonts are ready", async ({ page, baseURL }) => {
+  // The title textarea pins its own height (PageTitle measures scrollHeight), so
+  // its box cannot show a font swap. Measure unpinned copies in the title's class
+  // instead: a wrapped block for line count and height, a nowrap span for width.
+  test("loading Newsreader does not move the title: the fallback wraps and measures like it", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
-    const title = page.getByRole("textbox", { name: "Page title" });
     await page.evaluate(() => document.fonts.ready);
     const fallbackDeclared = await page.evaluate(() =>
       [...document.fonts].some((face) => face.family.replaceAll('"', "") === "Newsreader Fallback"),
     );
     expect(fallbackDeclared).toBe(true);
-    const heightWithFont = (await title.boundingBox()).height;
-    // The Fallback is what paints until the woff2 arrives; ask for it directly.
-    const heightWithFallback = await title.evaluate((element) => {
-      const before = element.style.fontFamily;
-      element.style.fontFamily = '"Newsreader Fallback"';
-      const height = element.getBoundingClientRect().height;
-      element.style.fontFamily = before;
-      return height;
-    });
-    expect(Math.abs(heightWithFont - heightWithFallback)).toBeLessThanOrEqual(1);
+    const sentence = "Quarterly planning notes for the product launch and the retrospective";
+    const measured = await page.evaluate((text) => {
+      const measure = (family) => {
+        const block = document.createElement("div");
+        block.className = "osionos-page-title";
+        block.style.cssText = `position:absolute;visibility:hidden;width:520px;font-family:${family}`;
+        const line = document.createElement("span");
+        line.style.whiteSpace = "nowrap";
+        line.textContent = text;
+        block.append(line);
+        document.body.append(block);
+        const width = line.getBoundingClientRect().width;
+        line.replaceWith(text);
+        const height = block.getBoundingClientRect().height;
+        block.remove();
+        return { width, height };
+      };
+      return { real: measure("var(--osio-font-heading)"), fallback: measure('"Newsreader Fallback"') };
+    }, sentence);
+    expect(Math.abs(measured.real.height - measured.fallback.height)).toBeLessThanOrEqual(1);
+    // Ponytail: the calibration is one width ratio; 3% is the tolerance, not a guarantee.
+    expect(Math.abs(measured.fallback.width / measured.real.width - 1)).toBeLessThanOrEqual(0.03);
   });
 
   test("an editable heading is set in the heading family, not the body one", async ({ page, baseURL }) => {
@@ -201,11 +215,17 @@ test.describe("type scale", () => {
   test("an editable heading and its read-only twin look identical", async ({ page, baseURL }) => {
     const { heading } = await typeHeadingThenParagraph(page, baseURL);
     const editable = await headingLook(heading);
+    const editableSize = await fontSizeOf(heading);
+    const editableScale = await resolved(page, "font-size", "var(--text-2xl)", ".osionos-page-body");
     await page.getByRole("button", { name: "Open page configuration" }).click();
     await page.getByRole("button", { name: "Raw / code mode" }).click();
     const readOnly = page.locator('[data-raw-mode] h1[data-block-type="heading_1"]').first();
     await readOnly.waitFor();
     expect(await headingLook(readOnly)).toEqual(editable);
+    // Same size key, resolved where each twin lives: 30px in the reading scale,
+    // 24px outside it. Equal keys, not equal pixels, is the parity that holds.
+    expect(await fontSizeOf(readOnly)).toBe(await resolved(page, "font-size", "var(--text-2xl)", "[data-raw-mode]"));
+    expect(editableSize).toBe(editableScale);
   });
 
   test("text-2xs, text-3xs and text-display resolve to the type tokens", async ({ page, baseURL }) => {
