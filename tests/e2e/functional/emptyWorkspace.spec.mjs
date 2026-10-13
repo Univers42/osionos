@@ -22,7 +22,8 @@ const tabs = (page) => page.locator("[data-tab-id]");
 
 async function closeAllTabs(page) {
   for (let guard = 0; guard < 10 && (await tabs(page).count()) > 0; guard += 1) {
-    await page.getByRole("button", { name: /^Close / }).first().click({ force: true });
+    // The tab's own close button, never another "Close …" control in the shell.
+    await tabs(page).first().getByTitle("Close tab").click({ force: true });
     await waitForRenderStability(page);
   }
   await expect(tabs(page)).toHaveCount(0);
