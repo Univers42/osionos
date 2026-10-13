@@ -155,3 +155,135 @@ test.describe("styleguide", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 });
+
+/** What a fresh element given var(token) computes for one CSS property. */
+async function tokenValue(page, property, token) {
+  return page.evaluate(([cssProperty, name]) => {
+    const probe = document.createElement("div");
+    probe.style.setProperty(cssProperty, `var(${name})`);
+    document.body.append(probe);
+    const value = getComputedStyle(probe).getPropertyValue(cssProperty);
+    probe.remove();
+    return value;
+  }, [property, token]);
+}
+
+const computed = (locator, property) =>
+  locator.evaluate((element, name) => getComputedStyle(element).getPropertyValue(name), property);
+
+/** Tab onto the tooltip's trigger: only a keyboard focus opens a tooltip at once. */
+async function tabToSave(page) {
+  const primitives = section(page, "Primitives");
+  const save = primitives.getByRole("button", { name: "Save", exact: true });
+  await primitives.getByRole("checkbox", { name: "Some selected", exact: true }).focus();
+  await page.keyboard.press("Tab");
+  await expect(save).toBeFocused();
+  return save;
+}
+
+test.describe("styleguide primitives", () => {
+  test("an avatar shows initials on its owner's tint, the image when it loads, and initials again when it fails", async ({ page, baseURL }) => {
+    await openStyleguide(page, baseURL);
+    const primitives = section(page, "Primitives");
+    const initials = primitives.getByRole("img", { name: "Ada Lovelace", exact: true });
+    await expect(initials).toHaveText("AL");
+    expect(await computed(initials, "background-color")).toBe(await tokenValue(page, "background-color", "--osio-block-tint-red-bg"));
+    expect(await computed(initials, "color")).toBe(await tokenValue(page, "color", "--osio-block-tint-red-fg"));
+
+    const pictured = primitives.getByRole("img", { name: "Margaret Hamilton", exact: true });
+    await expect(pictured.locator("img")).toBeVisible();
+    await expect(pictured).toHaveText("");
+
+    const broken = primitives.getByRole("img", { name: "Linus Torvalds", exact: true });
+    await expect(broken).toHaveText("LT");
+    await expect(broken.locator("img")).toHaveCount(0);
+  });
+
+  test("key caps read the smallest radius token", async ({ page, baseURL }) => {
+    await openStyleguide(page, baseURL);
+    const keys = section(page, "Primitives").locator("kbd");
+    await expect(keys).toHaveText(["Ctrl", "K"]);
+    expect(await computed(keys.first(), "border-radius")).toBe(await tokenValue(page, "border-radius", "--osio-radius-xs"));
+  });
+
+  test("a checkbox toggles by its label and by the keyboard, and shows its focus ring", async ({ page, baseURL }) => {
+    await openStyleguide(page, baseURL);
+    const primitives = section(page, "Primitives");
+    const subscribe = primitives.getByRole("checkbox", { name: "Subscribe", exact: true });
+    const box = subscribe.locator("xpath=following-sibling::span[1]");
+    await expect(subscribe).not.toBeChecked();
+    await primitives.getByText("Subscribe", { exact: true }).click();
+    await expect(subscribe).toBeChecked();
+    const accent = await tokenValue(page, "background-color", "--osio-accent");
+    await expect.poll(() => computed(box, "background-color")).toBe(accent);
+    await subscribe.press("Space");
+    await expect(subscribe).not.toBeChecked();
+    await expect.poll(() => computed(box, "outline-width")).toBe("2px");
+    expect(await computed(box, "outline-style")).toBe("solid");
+  });
+
+  test("a mixed checkbox stays mixed when its owner keeps it so, and a disabled one is disabled", async ({ page, baseURL }) => {
+    await openStyleguide(page, baseURL);
+    const primitives = section(page, "Primitives");
+    const mixed = primitives.getByRole("checkbox", { name: "Some selected", exact: true });
+    await expect(mixed).toHaveJSProperty("indeterminate", true);
+    await primitives.getByText("Some selected", { exact: true }).click();
+    await expect(mixed).toHaveJSProperty("indeterminate", true);
+    await expect(mixed).not.toBeChecked();
+    const locked = primitives.getByRole("checkbox", { name: "Locked", exact: true });
+    await expect(locked).toBeDisabled();
+    await expect(locked).toBeChecked();
+  });
+
+  test("a tooltip opens on keyboard focus, describes its trigger, and closes on Escape", async ({ page, baseURL }) => {
+    await openStyleguide(page, baseURL);
+    const tooltip = page.getByRole("tooltip");
+    await expect(tooltip).toHaveCount(0);
+    const save = await tabToSave(page);
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toHaveText("Saves the page");
+    await expect(save).toHaveAttribute("aria-describedby", await tooltip.getAttribute("id"));
+    expect(await computed(tooltip, "z-index")).toBe(await tokenValue(page, "z-index", "--osio-z-toast"));
+    await page.keyboard.press("Escape");
+    await expect(tooltip).toHaveCount(0);
+    await expect(save).not.toHaveAttribute("aria-describedby");
+  });
+
+  test("a tooltip opens centred above its trigger on hover, and a press closes it", async ({ page, baseURL }) => {
+    await openStyleguide(page, baseURL);
+    const save = section(page, "Primitives").getByRole("button", { name: "Save", exact: true });
+    const tooltip = page.getByRole("tooltip");
+    await save.hover();
+    await expect(tooltip).toBeVisible();
+    const bubble = await tooltip.boundingBox();
+    const anchor = await save.boundingBox();
+    expect(Math.abs(bubble.y + bubble.height + 6 - anchor.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(bubble.x + bubble.width / 2 - (anchor.x + anchor.width / 2))).toBeLessThanOrEqual(1);
+    await page.mouse.down();
+    await expect(tooltip).toHaveCount(0);
+    await page.mouse.up();
+  });
+
+  test("clicking a trigger with the mouse does not leave its tooltip up", async ({ page, baseURL }) => {
+    await page.clock.install();
+    await openStyleguide(page, baseURL);
+    await section(page, "Primitives").getByRole("button", { name: "Save", exact: true }).click();
+    await page.clock.runFor(2000);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+  });
+
+  test("a tooltip follows its trigger when the page scrolls under it", async ({ page, baseURL }) => {
+    await openStyleguide(page, baseURL);
+    const tooltip = page.getByRole("tooltip");
+    const save = await tabToSave(page);
+    await expect(tooltip).toBeVisible();
+    const before = await save.boundingBox();
+    await page.getByTestId("styleguide").evaluate((element) => element.scrollBy(0, -48));
+    await expect.poll(async () => (await save.boundingBox()).y).toBeGreaterThan(before.y + 40);
+    await expect.poll(async () => {
+      const bubble = await tooltip.boundingBox();
+      const anchor = await save.boundingBox();
+      return bubble && anchor ? Math.abs(bubble.y + bubble.height + 6 - anchor.y) : Number.NaN;
+    }).toBeLessThanOrEqual(1);
+  });
+});

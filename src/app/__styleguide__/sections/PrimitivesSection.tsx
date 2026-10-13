@@ -1,6 +1,7 @@
 import React from "react";
 
 import { Badge, Button, Card, Input } from "@/shared/ui";
+import { AvatarSamples, CheckboxSamples, KeySamples, TooltipSample } from "./ControlSamples";
 import { StyleGuideSection } from "./StyleGuideSection";
 
 export const PrimitivesSection: React.FC = () => (
@@ -26,6 +27,10 @@ export const PrimitivesSection: React.FC = () => (
         description="A docs-style nav card with hover affordance."
         onClick={() => undefined}
       />
+      <AvatarSamples />
+      <KeySamples />
+      <CheckboxSamples />
+      <TooltipSample />
     </div>
   </StyleGuideSection>
 );
