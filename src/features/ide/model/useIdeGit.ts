@@ -15,20 +15,30 @@ import { useCallback, useState } from "react";
 import { API_BASE, getActivePageJwt } from "@/shared/api/client";
 import { useUserStore } from "@/features/auth";
 
-export interface GitFileStatus {
-  path: string;
-  /** Two-char porcelain code (e.g. " M", "??", "A "). */
-  code: string;
-}
+import { parseGitStatus, type GitFileStatus } from "./gitBranch";
 
-/** Parse `git status --porcelain` output into changed files. */
-export function parseGitStatus(output: string): GitFileStatus[] {
-  const files: GitFileStatus[] = [];
-  for (const line of output.split("\n")) {
-    if (line.length < 4) continue;
-    files.push({ code: line.slice(0, 2), path: line.slice(3).trim() });
-  }
-  return files;
+export { parseGitStatus, type GitFileStatus } from "./gitBranch";
+
+export type SandboxGitReply =
+  | { kind: "ok"; ok: boolean; output: string }
+  /** No session or API, or the bridge says the sandbox is off (404/409). */
+  | { kind: "unavailable" }
+  /** The bridge refused the command; `message` is its reason. */
+  | { kind: "failed"; message: string };
+
+/** One `POST /api/ide/git` exec. A network error throws, as it always has. */
+export async function runSandboxGit(workspaceId: string, argv: readonly string[], pat?: string): Promise<SandboxGitReply> {
+  const jwt = getActivePageJwt();
+  if (!API_BASE || !jwt) return { kind: "unavailable" };
+  const res = await fetch(`${API_BASE}/api/ide/git`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+    body: JSON.stringify({ workspaceId, argv, pat }),
+  });
+  if (res.status === 404 || res.status === 409) return { kind: "unavailable" };
+  const data = (await res.json().catch(() => ({}))) as { ok?: boolean; output?: string; message?: string };
+  if (!res.ok) return { kind: "failed", message: data.message ?? `git failed (${res.status})` };
+  return { kind: "ok", ok: Boolean(data.ok), output: String(data.output ?? "") };
 }
 
 /**
@@ -46,25 +56,17 @@ export function useIdeGit() {
 
   const call = useCallback(
     async (argv: string[], pat?: string): Promise<{ ok: boolean; output: string } | null> => {
-      const jwt = getActivePageJwt();
-      if (!API_BASE || !jwt) { setConnected(false); return null; }
-      const res = await fetch(`${API_BASE}/api/ide/git`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
-        body: JSON.stringify({ workspaceId, argv, pat }),
-      });
-      if (res.status === 404 || res.status === 409) { setConnected(false); return null; }
-      setConnected(true);
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; output?: string; message?: string };
-      if (!res.ok) { setError(data.message ?? `git failed (${res.status})`); return null; }
-      return { ok: Boolean(data.ok), output: String(data.output ?? "") };
+      const reply = await runSandboxGit(workspaceId, argv, pat);
+      setConnected(reply.kind !== "unavailable");
+      if (reply.kind === "failed") setError(reply.message);
+      return reply.kind === "ok" ? { ok: reply.ok, output: reply.output } : null;
     },
     [workspaceId],
   );
 
   const refresh = useCallback(async () => {
     setBusy(true); setError(null);
-    const result = await call(["git", "status", "--porcelain"]);
+    const result = await call(["git", "status", "--porcelain", "-b"]);
     if (result) setFiles(parseGitStatus(result.output));
     setBusy(false);
   }, [call]);
