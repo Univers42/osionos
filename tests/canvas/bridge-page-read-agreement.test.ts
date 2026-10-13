@@ -64,15 +64,12 @@ function clientAnswer(row: Row): boolean | "throws" {
   }
 }
 
-// UUIDs are case-insensitive; the bridge folds case, the client does not.
-const foldOwnerCase = (row: Row): Row => ({ ...row, owner_id: typeof row.owner_id === "string" ? row.owner_id.toLowerCase() : row.owner_id });
-
 test("bridge canReadPageRow agrees with client canReadPage on all 160 table rows", () => {
   let agreed = 0;
   let clientThrew = 0;
   for (const { label, collaborators, row } of tableRows()) {
     const server = canReadPageRow(row, SELF);
-    const client = clientAnswer(foldOwnerCase(row));
+    const client = clientAnswer(row);
     if (client === "throws") {
       // The client dereferences a null collaborator entry; the bridge skips it and answers as for [].
       assert.equal(collaborators, "[null]", label);
@@ -83,11 +80,11 @@ test("bridge canReadPageRow agrees with client canReadPage on all 160 table rows
     assert.equal(server, client, label);
     agreed += 1;
   }
-  assert.deepEqual({ agreed, clientThrew }, { agreed: 154, clientThrew: 6 });
+  assert.deepEqual({ agreed, clientThrew }, { agreed: 160, clientThrew: 0 });
 });
 
-test("the one deliberate difference: an upper-case owner id reads on the bridge, not on the client", () => {
+test("an upper-case owner id reads on the bridge and on the client", () => {
   const row = { id: "p1", workspace_id: WORKSPACE, visibility: "private", owner_id: SELF.toUpperCase(), collaborators: [] };
   assert.equal(canReadPageRow(row, SELF), true);
-  assert.equal(clientAnswer(row), false);
+  assert.equal(clientAnswer(row), true);
 });

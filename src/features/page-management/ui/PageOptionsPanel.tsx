@@ -39,6 +39,7 @@ import { useUserStore } from "@/features/auth";
 import {
   canDeletePage,
   canDuplicatePage,
+  canEditPage,
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
@@ -238,7 +239,9 @@ export const PageOptionsPanel: React.FC<Props> = ({
 
     if (
       !currentPage ||
-      !canDeletePage(currentPage, getCurrentPageAccessContext())
+      // "Move to Trash" only PATCHes archived_at, so it asks 'update' like the store's
+      // archive does — an editor without 'delete' still trashes a page.
+      !canEditPage(currentPage, getCurrentPageAccessContext())
     ) {
       closeConfirmation();
       return;

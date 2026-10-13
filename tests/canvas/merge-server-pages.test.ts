@@ -119,6 +119,19 @@ test("mergeServerPages authoritative: server order, saved pages it omits dropped
   assert.deepEqual(result.serverWon, []);
 });
 
+test("mergeServerPages: a page under refused-edit recovery keeps its local copy in both modes", () => {
+  // The local copy holds the only copy of the edit the bridge refused; a newer row must not win.
+  const refused = page({ content: body("refused edit") });
+  const other = page({ _id: Q, content: body("q"), updatedAt: T1 });
+  const rows = [page({ content: body("C2"), updatedAt: T3 }), page({ _id: Q, content: body("q2"), updatedAt: T3 })];
+  for (const authoritative of [false, true]) {
+    const result = mergeServerPages([refused, other], rows, { authoritative, isClean: always, recovering: new Set([P]) });
+    assert.equal(result.pages[0], refused, `authoritative=${authoritative}`);
+    assert.deepEqual(result.pages[1].content, body("q2"), "an ordinary page still merges");
+    assert.deepEqual(result.serverWon.map((entry) => entry._id), [Q]);
+  }
+});
+
 test("mergeServerPages authoritative: an empty list (an outage answering []) changes nothing", () => {
   const local = [page({ content: body("C1") })];
   const result = mergeServerPages(local, [], { authoritative: true, isClean: always });

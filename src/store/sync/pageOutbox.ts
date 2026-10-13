@@ -15,16 +15,15 @@
  * (PATCH /api/pages/:id → osionos_pages). The bridge applies fields per-key, so we send
  * the full editable record (title, parent, workspace, visibility, icon, cover, properties)
  * and OMIT `content` only when it is not loaded (never wiping server content). Never
- * throws — it returns a result the orchestrator uses to advance / forget / retry:
- *   "ok"     → written; advance the ledger.
- *   "gone"   → 404/403 (deleted or not owned server-side); forget it, keep the local copy.
- *   "failed" → transient (offline / 5xx / 401 / no session); leave pending and retry.
+ * throws — it returns a result the orchestrator uses to advance / forget / retry; the four
+ * results ("ok" / "refused" / "gone" / "failed") are defined in ./publishResult.
  */
 
 import { api, ApiError, API_BASE, getActivePageJwt } from "@/shared/api/client";
 import type { PageEntry } from "@/entities/page";
+import { ignoredFrom, publishResultFor, type PublishResult } from "./publishResult";
 
-export type PublishResult = "ok" | "gone" | "failed";
+export type { PublishResult };
 
 /** The editable fields the bridge persists; `content` only when it is actually loaded. */
 function pageToPatchBody(page: PageEntry): Record<string, unknown> {
@@ -60,17 +59,14 @@ function pageToPatchBody(page: PageEntry): Record<string, unknown> {
   return body;
 }
 
-export async function publishPage(page: PageEntry): Promise<PublishResult> {
+export async function publishPage(page: PageEntry): Promise<{ result: PublishResult; ignored: string[] }> {
   const jwt = getActivePageJwt();
-  if (!jwt) return "failed"; // not signed in yet → stay pending, retry on the timer
+  if (!jwt) return { result: "failed", ignored: [] }; // not signed in yet → stay pending, retry on the timer
   try {
-    await api.patch(`/api/pages/${encodeURIComponent(page._id)}`, pageToPatchBody(page), jwt);
-    return "ok";
+    const body = await api.patch<unknown>(`/api/pages/${encodeURIComponent(page._id)}`, pageToPatchBody(page), jwt);
+    return { result: "ok", ignored: ignoredFrom(body) };
   } catch (error) {
-    if (error instanceof ApiError && (error.status === 404 || error.status === 403)) {
-      return "gone";
-    }
-    return "failed";
+    return { result: error instanceof ApiError ? publishResultFor(error.status) : "failed", ignored: [] };
   }
 }
 

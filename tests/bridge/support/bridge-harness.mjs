@@ -104,8 +104,24 @@ function workspaceRpc(body) {
 	}));
 }
 
+/**
+ * `realWorkspaceRpc`: the function answers from the seeded osionos_workspace_members rows —
+ * one entry per requested id the user is a member of, so a workspace the token lists but
+ * nobody is a member of stays empty and a viewer stays a viewer.
+ */
+function workspaceMemberRpc(body, table) {
+	const members = table('osionos_workspace_members');
+	return (body.p_workspace_ids ?? [])
+		.map((workspaceId) => members.find((member) => sameText(member.user_id, body.p_user_id) && sameText(member.workspace_id, workspaceId)))
+		.filter((member) => member !== undefined)
+		.map((member) => ({
+			workspace_id: member.workspace_id, owner_id: body.p_user_id, workspace_name: 'Home', workspace_slug: 'home',
+			workspace_settings: { plan: 'Bridge' }, workspace_role: member.role, permissions: member.permissions,
+		}));
+}
+
 /** seed: { table: rows[] }, records: { 'dbId/table': rows[] }, failWhen(call) → { status, body } | null. */
-export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => null } = {}) {
+export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => null, realWorkspaceRpc = false } = {}) {
 	const tables = new Map(Object.entries(seed).map(([name, rows]) => [name, rows.map((row) => structuredClone(row))]));
 	const table = (name) => tables.get(name) ?? tables.set(name, []).get(name);
 	const calls = [];
@@ -129,7 +145,9 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		calls.push(call);
 		const failure = failWhen(call);
 		if (failure) return jsonResponse(failure.body, failure.status);
-		if (name === 'rpc/osionos_bridge_list_workspaces') return jsonResponse(workspaceRpc(body));
+		if (name === 'rpc/osionos_bridge_list_workspaces') {
+			return jsonResponse(realWorkspaceRpc ? workspaceMemberRpc(body, table) : workspaceRpc(body));
+		}
 		if (method === 'GET') return jsonResponse(readRows(table(name), parsed.searchParams));
 		const written = writeRows(table(name), method, parsed.searchParams, body, prefer);
 		if (!written) return jsonResponse({ code: '23505', message: 'duplicate key' }, 409);

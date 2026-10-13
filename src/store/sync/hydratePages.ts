@@ -16,7 +16,8 @@
  * for every accessible workspace and restore/refresh them so a page survives a cache
  * clear or shows up on a fresh device. Owner/visibility scoping is enforced by the bridge.
  *
- * Merge policy = `mergeServerPages` (additive: a hydrate never removes pages). We SEED the
+ * Merge policy = `mergeServerPages` (additive: a hydrate never removes pages; a page the
+ * outbox is RECOVERING keeps its local copy, see applyServerPages). We SEED the
  * outbox ledger — atomically, from the post-merge value captured inside the state update —
  * for every page the server copy was taken for, so a freshly-hydrated page is not
  * pointlessly re-published; we never seed a page the local copy won (it may carry a pending

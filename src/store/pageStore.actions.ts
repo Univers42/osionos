@@ -10,9 +10,12 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { api, ApiError } from "@/shared/api/client";
+import { api, ApiError, getActivePageJwt } from "@/shared/api/client";
 import { notifyCreateFailure } from "./pageCreateFeedback";
 import { pageApiJwtFromSessionToken } from "@/features/auth/model/userStore.helpers";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
+import { planDuplicate } from "./duplicatePlan";
+import { evictPageFromState } from "./evictLocalPage";
 import {
   canDeletePage,
   canDuplicatePage,
@@ -41,6 +44,11 @@ import { loadLedger, saveLedger } from "@osionos/outbox-ledger";
 import { applyServerPages } from "./sync/applyServerPages";
 import { resolveFetchedPage } from "./sync/mergeServerPages";
 import { PAGE_OUTBOX_KEY, pageStamp } from "./sync/pageStamp";
+import {
+  cascadeIdsFrom,
+  applyArchived,
+  applyDeleted,
+} from "./pageCascadeResult";
 import type { AddPageOptions, PageEntry, PageStore, ActivePage, PageRecurrence } from "@/entities/page";
 
 type SetFn = (
@@ -207,15 +215,10 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
         // The page is gone server-side — a stale localStorage ghost the additive
         // hydrate (sync/applyServerPages) never prunes. Evict it from the
         // store + cache so it stops being re-fetched in a loop and drops out of
-        // the sidebar/tree instead of flooding the console with 404s.
-        set((s) => {
-          const wsPages = s.pages[page.workspaceId] ?? [];
-          const pages = { ...s.pages, [page.workspaceId]: wsPages.filter((p) => p._id !== pageId) };
-          return {
-            ...derivePageState(pages, s),
-            activePage: s.activePage && s.activePage.id === pageId ? null : s.activePage,
-          };
-        });
+        // the sidebar/tree instead of flooding the console with 404s. The rule
+        // itself lives in ./evictLocalPage (shared with the refused-edit
+        // recovery): actions cannot import the store, usePageStore imports them.
+        set((s) => evictPageFromState(s, page.workspaceId, pageId));
         savePagesCache(get().pages, page.workspaceId);
         return;
       }
@@ -404,36 +407,42 @@ export function createArchivePage(set: SetFn, get: GetFn) {
   return async (pageId: string, workspaceId: string, jwt: string) => {
     const page = get().pageById(pageId);
     const context = getCurrentPageAccessContext();
-    if (!page || !canDeletePage(page, context)) return;
+    // Archiving is a PATCH of archived_at, so it asks 'update' (bridge-api.mjs:3005),
+    // not 'delete': an editor who may write but not delete still trashes a page.
+    if (!page || !canEditPage(page, context)) return;
 
     const archivedAt = new Date().toISOString();
-
     const pageJwt = pageApiJwtFromSessionToken(jwt);
 
     if (pageJwt && isPersistedPageId(pageId)) {
-      try {
-        await api.patch(`/api/pages/${pageId}`, { archivedAt }, pageJwt);
-      } catch {
-        /* silent */
-      }
+      await applyCascadeOperation({
+        set,
+        get,
+        pageId,
+        workspaceId,
+        apiCall: () => api.patch(`/api/pages/${pageId}`, { archivedAt }, pageJwt),
+        field: "cascadedIds",
+        archivedAt,
+        toastTitle: `Couldn't move “${page.title || "Untitled"}” to Trash`,
+      });
+      return;
     }
 
+    // No JWT or local-only page: keep today's local-only behaviour (all local descendants change)
+    const wsPages = get().pages[workspaceId] ?? [];
+    const descendantIds = getAllDescendantIds(wsPages, pageId);
+    const archivedIds = new Set([pageId, ...descendantIds]);
+
     set((s) => {
-      const wsPages = s.pages[workspaceId] ?? [];
-      const descendantIds = getAllDescendantIds(wsPages, pageId);
-      const archivedIds = new Set([pageId, ...descendantIds]);
+      const currentWsPages = s.pages[workspaceId] ?? [];
+      const nextPages = applyArchived(currentWsPages, archivedIds, archivedAt);
 
       const newRecents = s.recents.filter((r) => !archivedIds.has(r.id));
       if (newRecents.length !== s.recents.length) {
         saveRecents(newRecents);
       }
 
-      const pages = {
-          ...s.pages,
-          [workspaceId]: wsPages.map((p) =>
-            archivedIds.has(p._id) ? { ...p, archivedAt } : p,
-          ),
-        };
+      const pages = { ...s.pages, [workspaceId]: nextPages };
 
       return {
         ...derivePageState(pages, s),
@@ -444,87 +453,266 @@ export function createArchivePage(set: SetFn, get: GetFn) {
   };
 }
 
+/**
+ * Applies a cascade operation (archive, restore, or delete) using server-returned IDs.
+ * On API failure, pushes an error toast and makes NO local changes.
+ * O(n) where n is the number of pages in the workspace.
+ */
+async function applyCascadeOperation(options: {
+  set: SetFn;
+  get: GetFn;
+  pageId: string;
+  workspaceId: string;
+  apiCall: () => Promise<unknown>;
+  field: "cascadedIds" | "deletedIds";
+  archivedAt: string | null;
+  toastTitle: string;
+}): Promise<void> {
+  const { set, get, pageId, workspaceId, apiCall, field, archivedAt, toastTitle } = options;
+
+  let body: unknown;
+  try {
+    body = await apiCall();
+  } catch {
+    useToastStore.getState().push({
+      kind: "error",
+      title: toastTitle,
+      description: "The server did not complete the request. Try again.",
+    });
+    return;
+  }
+
+  const wsPages = get().pages[workspaceId] ?? [];
+  const localDescendantIds = getAllDescendantIds(wsPages, pageId);
+  const ids = cascadeIdsFrom(body, pageId, localDescendantIds, field);
+  const idSet = new Set(ids);
+
+  set((s) => {
+    const currentWsPages = s.pages[workspaceId] ?? [];
+
+    let nextPages: PageEntry[];
+    if (field === "cascadedIds") {
+      nextPages = applyArchived(currentWsPages, idSet, archivedAt);
+    } else {
+      nextPages = applyDeleted(currentWsPages, idSet);
+    }
+
+    // A restore (archivedAt null) brings pages back; only trash and delete leave Recents.
+    const leavesRecents = field === "deletedIds" || archivedAt !== null;
+    const newRecents = leavesRecents ? s.recents.filter((r) => !idSet.has(r.id)) : s.recents;
+    if (newRecents.length !== s.recents.length) {
+      saveRecents(newRecents);
+    }
+
+    const pages = { ...s.pages, [workspaceId]: nextPages };
+    const nextState: Partial<PageStore> = {
+      ...derivePageState(pages, s),
+      recents: newRecents,
+    };
+
+    if (field === "deletedIds" && s.activePage && idSet.has(s.activePage.id)) {
+      nextState.activePage = null;
+    }
+
+    return nextState;
+  });
+
+  savePagesCache(get().pages, workspaceId);
+}
+
+/**
+ * Build the recents entry for a duplicated root so both copy paths
+ * land on the same selection instead of diverging over time.
+ * O(1) time and space.
+ */
+function duplicateActivePage(workspaceId: string, page: PageEntry): ActivePage {
+  return {
+    id: page._id,
+    workspaceId,
+    kind: "page",
+    title: page.title,
+    icon: page.icon,
+  };
+}
+
+/**
+ * Make a server-created root active; addPage already stored the pages
+ * so only the selection and recents need updating here.
+ * O(1) over the capped recents list.
+ */
+function activateDuplicateRoot(set: SetFn, workspaceId: string, root: PageEntry): void {
+  const active = duplicateActivePage(workspaceId, root);
+  set((s) => {
+    const recents = addRecent(s.recents, active);
+    saveRecents(recents);
+    return { activePage: active, recents };
+  });
+}
+
+/**
+ * Resolve the bridge parent for one planned step. The root keeps its
+ * original parent so the copy lands beside the source; a child uses
+ * the already-created server id so the hierarchy survives the copy.
+ * O(1) time.
+ */
+function resolveDuplicateParent(
+  parentSourceId: string | null,
+  source: PageEntry,
+  serverIds: Map<string, string>,
+): string | undefined {
+  if (parentSourceId === null) {
+    return source.parentPageId ?? undefined;
+  }
+  return serverIds.get(parentSourceId);
+}
+
+/**
+ * Clone the subtree with fresh local ids for sessions without a bridge.
+ * Local ids never reach the server, which is why signed-in copies must
+ * take the server path instead.
+ * O(n) time and space over wsPages.
+ */
+function buildLocalClones(options: {
+  wsPages: PageEntry[];
+  pageId: string;
+  workspaceId: string;
+}): { clonedPages: PageEntry[]; newRootId: string; newRootPage: PageEntry | undefined } {
+  const context = getCurrentPageAccessContext();
+  const descendantIds = getAllDescendantIds(options.wsPages, options.pageId);
+  const allIdsToClone = [options.pageId, ...descendantIds];
+  const pagesToClone = options.wsPages.filter((p) => allIdsToClone.includes(p._id));
+  const idMap: Record<string, string> = {};
+  allIdsToClone.forEach((id) => {
+    idMap[id] = localId();
+  });
+  const clonedPages: PageEntry[] = pagesToClone.map((p) => {
+    const newId = idMap[p._id];
+    const isRoot = p._id === options.pageId;
+    return {
+      ...p,
+      _id: newId,
+      title: isRoot ? nextDuplicateTitle(p.title) : p.title,
+      ownerId: context?.userId ?? p.ownerId ?? null,
+      visibility: getTargetWorkspaceMoveVisibility(options.workspaceId, context, p.visibility),
+      collaborators: [],
+      parentPageId: p.parentPageId ? (idMap[p.parentPageId] ?? p.parentPageId) : p.parentPageId,
+    };
+  });
+  const newRootId = idMap[options.pageId];
+  const newRootPage = clonedPages.find((p) => p._id === newRootId);
+  return { clonedPages, newRootId, newRootPage };
+}
+
+/**
+ * Insert local clones beside the source and activate the copy.
+ * This keeps signed-out sessions working without any bridge call.
+ * O(n) for the clone build plus O(n) for the insert.
+ */
+function duplicateLocally(options: {
+  set: SetFn;
+  get: GetFn;
+  pageId: string;
+  workspaceId: string;
+}): string | null {
+  const wsPages = options.get().pages[options.workspaceId] ?? [];
+  const built = buildLocalClones({ wsPages, pageId: options.pageId, workspaceId: options.workspaceId });
+  const { pageId, workspaceId } = options;
+  const { clonedPages, newRootId, newRootPage } = built;
+  options.set((s) => {
+    const currentWsPages = s.pages[workspaceId] ?? [];
+    const rootIdx = currentWsPages.findIndex((p) => p._id === pageId);
+    const nextPages = [...currentWsPages];
+    // Keep the copy beside the source so the tree order matches expectation.
+    nextPages.splice(rootIdx + 1, 0, ...clonedPages);
+    const nextAllPages = { ...s.pages, [workspaceId]: nextPages };
+    savePagesCache(nextAllPages, workspaceId);
+    if (newRootPage) {
+      const newActivePage = duplicateActivePage(workspaceId, newRootPage);
+      const recents = addRecent(s.recents, newActivePage);
+      saveRecents(recents);
+      return { ...derivePageState(nextAllPages, s), activePage: newActivePage, recents };
+    }
+    return derivePageState(nextAllPages, s);
+  });
+  return newRootId;
+}
+
+/**
+ * Tell the user a server copy stopped partway; pages already made stay.
+ * O(1) time.
+ */
+function notifyDuplicateFailure(rootTitle: string): void {
+  useToastStore.getState().push({
+    kind: "error",
+    title: `Couldn't duplicate “${rootTitle}”`,
+    description: "Some pages may have been copied. Try again.",
+  });
+}
+
+interface DuplicateServerOptions {
+  get: GetFn;
+  set: SetFn;
+  pageId: string;
+  workspaceId: string;
+  sessionJwt: string;
+}
+
+/**
+ * Replay the duplicate plan through the bridge, parent before child.
+ * Server-minted ids survive the next hydrate, unlike local ids.
+ * O(n) over the subtree plus one bridge call per copied page.
+ */
+async function duplicateViaServer(options: DuplicateServerOptions): Promise<string | null> {
+  const wsPages = options.get().pages[options.workspaceId] ?? [];
+  const byId = new Map<string, PageEntry>(wsPages.map((page): [string, PageEntry] => [page._id, page]));
+  const root = byId.get(options.pageId);
+  const rootTitle = root ? root.title : "";
+  const plan = planDuplicate(wsPages, options.pageId);
+  const serverIds = new Map<string, string>();
+  let rootServerId: string | null = null;
+  let createdRoot: PageEntry | null = null;
+  for (const step of plan) {
+    const source = byId.get(step.sourceId);
+    if (source === undefined) continue;
+    const parentSourceId = step.parentSourceId;
+    const title = parentSourceId === null ? nextDuplicateTitle(source.title) : source.title;
+    const parentPageId = resolveDuplicateParent(parentSourceId, source, serverIds);
+    if (parentSourceId !== null && parentPageId === undefined) continue;
+    const created = await options.get().addPage(options.workspaceId, title, options.sessionJwt, parentPageId, {
+      content: source.content,
+      icon: source.icon,
+      surface: source.surface,
+      // Same visibility rule as the local copy, so a shared page's copy stays shared.
+      visibility: getTargetWorkspaceMoveVisibility(options.workspaceId, getCurrentPageAccessContext(), source.visibility),
+    });
+    if (created === null) {
+      notifyDuplicateFailure(rootTitle);
+      return rootServerId;
+    }
+    serverIds.set(step.sourceId, created._id);
+    if (parentSourceId === null) {
+      rootServerId = created._id;
+      createdRoot = created;
+    }
+  }
+  if (createdRoot !== null) activateDuplicateRoot(options.set, options.workspaceId, createdRoot);
+  return rootServerId;
+}
+
 export function createDuplicatePage(set: SetFn, get: GetFn) {
-  return async (
-    pageId: string,
-    workspaceId: string,
-  ): Promise<string | null> => {
+  return async (pageId: string, workspaceId: string): Promise<string | null> => {
     const context = getCurrentPageAccessContext();
-    const state = get();
-    const wsPages = state.pages[workspaceId] ?? [];
+    const wsPages = get().pages[workspaceId] ?? [];
     const rootPage = wsPages.find((p) => p._id === pageId);
     if (!rootPage || !canDuplicatePage(rootPage, context)) return null;
-
-    const descendantIds = getAllDescendantIds(wsPages, pageId);
-    const allIdsToClone = [pageId, ...descendantIds];
-    const pagesToClone = wsPages.filter((p) => allIdsToClone.includes(p._id));
-
-    // ID mapping: oldId -> newId
-    const idMap: Record<string, string> = {};
-    allIdsToClone.forEach((id) => {
-      idMap[id] = localId();
-    });
-
-    const clonedPages: PageEntry[] = pagesToClone.map((p) => {
-      const newId = idMap[p._id];
-      const isRoot = p._id === pageId;
-      return {
-        ...p,
-        _id: newId,
-        title: isRoot ? nextDuplicateTitle(p.title) : p.title,
-        ownerId: context?.userId ?? p.ownerId ?? null,
-        visibility: getTargetWorkspaceMoveVisibility(
-          workspaceId,
-          context,
-          p.visibility,
-        ),
-        collaborators: [],
-        parentPageId: p.parentPageId
-          ? (idMap[p.parentPageId] ?? p.parentPageId)
-          : p.parentPageId,
-      };
-    });
-
-    const newRootId = idMap[pageId];
-    const newRootPage = clonedPages.find((p) => p._id === newRootId);
-
-    set((s) => {
-      const currentWsPages = s.pages[workspaceId] ?? [];
-      const rootIdx = currentWsPages.findIndex((p) => p._id === pageId);
-
-      const nextPages = [...currentWsPages];
-      // Insert cloned pages after the original root page
-      nextPages.splice(rootIdx + 1, 0, ...clonedPages);
-
-      const nextAllPages = {
-        ...s.pages,
-        [workspaceId]: nextPages,
-      };
-      savePagesCache(nextAllPages, workspaceId);
-
-      if (newRootPage) {
-        const newActivePage: ActivePage = {
-          id: newRootPage._id,
-          workspaceId,
-          kind: "page",
-          title: newRootPage.title,
-          icon: newRootPage.icon,
-        };
-
-        const recents = addRecent(s.recents, newActivePage);
-        saveRecents(recents);
-
-        return {
-          ...derivePageState(nextAllPages, s),
-          activePage: newActivePage,
-          recents,
-        };
-      }
-
-      return derivePageState(nextAllPages, s);
-    });
-
-    return newRootId;
+    // Local ids vanish on the next hydrate when signed in, so a persisted
+    // root must be replayed through the bridge parent-before-child.
+    const sessionJwt = getActivePageJwt();
+    const apiJwt = pageApiJwtFromSessionToken(sessionJwt);
+    if (apiJwt !== "" && sessionJwt && !pageId.startsWith("local-page-")) {
+      return duplicateViaServer({ get, set, pageId, workspaceId, sessionJwt });
+    }
+    return duplicateLocally({ set, get, pageId, workspaceId });
   };
 }
 
@@ -759,32 +947,35 @@ export function createRestorePage(set: SetFn, get: GetFn) {
   return async (pageId: string, workspaceId: string, jwt: string) => {
     const page = get().pageById(pageId);
     const context = getCurrentPageAccessContext();
-    if (!page || !canDeletePage(page, context)) return;
+    // Restoring clears archived_at with the same PATCH as archiving — 'update'.
+    if (!page || !canEditPage(page, context)) return;
 
     const pageJwt = pageApiJwtFromSessionToken(jwt);
 
     if (pageJwt && isPersistedPageId(pageId)) {
-      try {
-        await api.patch(`/api/pages/${pageId}`, { archivedAt: null }, pageJwt);
-      } catch {
-        /* silent */
-      }
+      await applyCascadeOperation({
+        set,
+        get,
+        pageId,
+        workspaceId,
+        apiCall: () => api.patch(`/api/pages/${pageId}`, { archivedAt: null }, pageJwt),
+        field: "cascadedIds",
+        archivedAt: null,
+        toastTitle: `Couldn't restore “${page.title || "Untitled"}”`,
+      });
+      return;
     }
 
-    // Update state: restore page and descendants
+    // No JWT or local-only page: keep today's local-only behaviour (all local descendants change)
+    const wsPages = get().pages[workspaceId] ?? [];
+    const descendantIds = getAllDescendantIds(wsPages, pageId);
+    const restoredIds = new Set([pageId, ...descendantIds]);
+
     set((s) => {
-      const wsPages = s.pages[workspaceId] ?? [];
-      const descendantIds = getAllDescendantIds(wsPages, pageId);
-      const restoredIds = new Set([pageId, ...descendantIds]);
+      const currentWsPages = s.pages[workspaceId] ?? [];
+      const nextPages = applyArchived(currentWsPages, restoredIds, null);
 
-      const pages = {
-          ...s.pages,
-          [workspaceId]: wsPages.map((p) =>
-            restoredIds.has(p._id) ? { ...p, archivedAt: null } : p,
-          ),
-        };
-
-      return derivePageState(pages, s);
+      return derivePageState({ ...s.pages, [workspaceId]: nextPages }, s);
     });
     savePagesCache(get().pages, workspaceId);
   };
@@ -803,33 +994,40 @@ export function createDeletePage(set: SetFn, get: GetFn) {
     const pageJwt = pageApiJwtFromSessionToken(jwt);
 
     if (pageJwt && isPersistedPageId(pageId)) {
-      try {
-        await api.delete(`/api/pages/${pageId}`, pageJwt);
-      } catch {
-        /* silent */
-      }
+      await applyCascadeOperation({
+        set,
+        get,
+        pageId,
+        workspaceId,
+        apiCall: () => api.delete(`/api/pages/${pageId}`, pageJwt),
+        field: "deletedIds",
+        archivedAt: null,
+        toastTitle: `Couldn't delete “${page.title || "Untitled"}”`,
+      });
+      return;
     }
 
-    set((s) => {
-      const wsPages = s.pages[workspaceId] ?? [];
-      const descendantIds = getAllDescendantIds(wsPages, pageId);
-      const deletedIds = new Set([pageId, ...descendantIds]);
-      const recents = s.recents.filter((recent) => !deletedIds.has(recent.id));
+    // No JWT or local-only page: keep today's local-only behaviour (all local descendants change)
+    const wsPages = get().pages[workspaceId] ?? [];
+    const descendantIds = getAllDescendantIds(wsPages, pageId);
+    const deletedIds = new Set([pageId, ...descendantIds]);
 
-      if (recents.length !== s.recents.length) {
-        saveRecents(recents);
+    set((s) => {
+      const currentWsPages = s.pages[workspaceId] ?? [];
+      const nextPages = applyDeleted(currentWsPages, deletedIds);
+
+      const newRecents = s.recents.filter((r) => !deletedIds.has(r.id));
+      if (newRecents.length !== s.recents.length) {
+        saveRecents(newRecents);
       }
 
-      const pages = {
-          ...s.pages,
-          [workspaceId]: wsPages.filter((p) => !deletedIds.has(p._id)),
-        };
+      const pages = { ...s.pages, [workspaceId]: nextPages };
 
       return {
         ...derivePageState(pages, s),
         activePage:
           s.activePage && deletedIds.has(s.activePage.id) ? null : s.activePage,
-        recents,
+        recents: newRecents,
       };
     });
     savePagesCache(get().pages, workspaceId);
