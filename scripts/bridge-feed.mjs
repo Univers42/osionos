@@ -44,6 +44,7 @@ import {
 	emitNotifications,
 	httpError,
 	identitySummaries,
+	memberWorkspacesAmong,
 	orgWorkspaceId,
 	publishRealtime,
 	readJsonBody,
@@ -53,6 +54,7 @@ import {
 	sendJson,
 } from './bridge-social-core.mjs';
 import { shareToDmChannel } from './bridge-chat.mjs';
+import { canReadPageRowAsMember } from './bridge-page-read.mjs';
 
 const MAX_DISTINCT_REACTIONS = 20;
 const SHARE_TARGETS = new Set(['profile', 'link', 'dm']);
@@ -65,8 +67,38 @@ async function feedWorkspaceId(deps, config, session, pageId) {
 	} catch {
 		// page lives outside osionos_pages (live database rows) — fall through
 	}
+	return fallbackFeedWorkspaceId(deps, session);
+}
+
+function fallbackFeedWorkspaceId(deps, session) {
 	return orgWorkspaceId(deps.env) || session.workspaceIds?.[0] || 'unknown';
 }
+
+/**
+ * True when `pageId` is an osionos page the session may not see on the feed (it must be
+ * a member of the page's workspace AND allowed to read the page).
+ * Ponytail: an id with no osionos_pages row is taken for a live-database record and stays
+ * visible as before — that record's mount access is NOT checked, and a deleted page's id
+ * cannot be told apart from such a record.
+ */
+async function isFeedPageHidden(deps, config, session, pageId) {
+	const rows = await rest(config, deps.fetchImpl, `osionos_pages?id=eq.${pageId}&select=workspace_id,owner_id,visibility,collaborators&limit=1`);
+	const row = Array.isArray(rows) ? rows[0] : null;
+	if (!row) return false;
+	const members = await memberWorkspacesAmong(config, deps.fetchImpl, session, [row.workspace_id]);
+	return !canReadPageRowAsMember(row, session.userId, members);
+}
+
+// What each feed GET answers for an id nobody has engaged with — and so for a hidden page.
+function noActivityAnswer(deps, session, pageId, resource) {
+	if (resource === 'likes') return { ok: true, pageId, count: 0, likedByMe: false };
+	if (resource === 'reactions') return { ok: true, pageId, reactions: [], commentCount: 0, workspaceId: fallbackFeedWorkspaceId(deps, session) };
+	if (resource === 'comments') return { ok: true, pageId, comments: [] };
+	return { count: 0 };
+}
+
+const FEED_READS = new Set(['GET likes', 'GET reactions', 'GET comments', 'GET share']);
+const FEED_WRITES = new Set(['POST like', 'DELETE like', 'POST reactions', 'DELETE reactions', 'POST comments', 'POST share', 'PUT comment', 'DELETE comment']);
 
 async function publishFeedEvent(deps, config, session, pageId, kind) {
 	const workspaceId = await feedWorkspaceId(deps, config, session, pageId);
@@ -316,14 +348,18 @@ export function createFeedHandler({ config, verifySession, fetchImpl = fetch, en
 		const method = (request.method || 'GET').toUpperCase();
 		try {
 			const session = verifySession(bearerToken(request), requestConfig);
+			const pageId = requireUuid(decodeURIComponent((commentOne ?? pageResource)[1]), 'pageId');
+			const route = `${method} ${commentOne ? 'comment' : pageResource[2]}`;
+			if ((FEED_READS.has(route) || FEED_WRITES.has(route)) && await isFeedPageHidden(deps, requestConfig, session, pageId)) {
+				if (FEED_WRITES.has(route)) throw httpError('Page not found.', 404);
+				return sendJson(response, 200, noActivityAnswer(deps, session, pageId, pageResource[2]), requestConfig);
+			}
 			if (commentOne) {
-				const pageId = requireUuid(decodeURIComponent(commentOne[1]), 'pageId');
 				const commentId = requireUuid(decodeURIComponent(commentOne[2]), 'commentId');
 				if (method === 'PUT') return await updateComment(deps, session, request, pageId, commentId, response, requestConfig);
 				if (method === 'DELETE') return await deleteComment(deps, session, pageId, commentId, response, requestConfig);
 				return sendJson(response, 405, { ok: false, message: `Method ${method} is not supported here.` }, requestConfig);
 			}
-			const pageId = requireUuid(decodeURIComponent(pageResource[1]), 'pageId');
 			const resource = pageResource[2];
 			if (resource === 'likes' && method === 'GET') return await getLikes(deps, session, pageId, response, requestConfig);
 			if (resource === 'like' && method === 'POST') return await setLike(deps, session, pageId, true, response, requestConfig);
