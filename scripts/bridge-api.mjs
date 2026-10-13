@@ -817,14 +817,7 @@ function memberHasPermission(member, permission) {
 	return permissions.includes('admin') || permissions.includes(permission);
 }
 
-/**
- * Page-level authorization (defence in depth on top of requireWorkspaceAccess). A page
- * may be mutated by its OWNER, a workspace owner/admin, a workspace member holding the
- * 'update' permission (org/teamspace editors — parity with the client's canEditPage rule
- * now that sessions carry shared workspaces), or an explicit page collaborator with
- * editor/owner role. Read-only members (viewer role) are already rejected by the
- * requireWorkspaceAccess permission gate before this runs.
- */
+/** Page-level part of canWritePageRow; the client mirrors the whole rule as canWritePage (tests/canvas/bridge-page-write-agreement.test.ts). */
 function mayModifyPage(existing, access) {
 	const ownProps = Array.isArray(existing.properties) ? existing.properties : [];
 	const isPublished = ownProps.some((p) => p && p.key === 'published' && (p.value === true || p.value === 'true'));
@@ -984,6 +977,14 @@ function mayMutatePage(row, userId, memberAccess) {
 	if (!canReadPageRow(row, userId)) return false;
 	if (sameId(row.owner_id, userId)) return true;
 	return memberAccess !== null && mayModifyPage(row, memberAccess);
+}
+
+/** The page write rule (PATCH/DELETE): what the routes enforce, as one predicate. O(c), c = collaborators. */
+export function canWritePageRow(row, userId, member, permission) {
+	if (sameId(row?.owner_id, userId)) return true;
+	return canReadPageRow(row, userId)
+		&& memberHasPermission(member, permission)
+		&& mayModifyPage(row, { ...member, userId });
 }
 
 /**
