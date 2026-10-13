@@ -121,8 +121,9 @@ export function recordNotePageBody({ dbId, table, pk, row, engine, workspaceId, 
 }
 
 // What a note takes from its record. Everything else — content, icon, cover, parent,
-// collaborators, owner, archived_at — belongs to the people writing in the note.
-const RECORD_DERIVED_FIELDS = ['title', 'properties', 'visibility'];
+// visibility, collaborators, owner, archived_at — belongs to the people writing in the
+// note: a note starts 'shared' and only its owner changes who may read it.
+const RECORD_DERIVED_FIELDS = ['title', 'properties'];
 
 /**
  * The record-derived fields of `fresh` (a recordNotePageBody) that differ from the

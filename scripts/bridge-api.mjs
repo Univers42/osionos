@@ -825,17 +825,20 @@ function memberHasPermission(member, permission) {
  * editor/owner role. Read-only members (viewer role) are already rejected by the
  * requireWorkspaceAccess permission gate before this runs.
  */
-function requirePageOwnership(existing, access) {
+function mayModifyPage(existing, access) {
 	const ownProps = Array.isArray(existing.properties) ? existing.properties : [];
 	const isPublished = ownProps.some((p) => p && p.key === 'published' && (p.value === true || p.value === 'true'));
-	if (!isPublished && existing.owner_id == null) return; // legacy / unowned page — the workspace gate suffices (NOT for published apps)
-	if (sameId(existing.owner_id, access.userId)) return; // the page owner
-	if (access.role === 'owner' || access.role === 'admin') return; // workspace owner/admin
-	if (Array.isArray(access.permissions) && access.permissions.includes('update')) return; // shared-workspace editor
+	if (!isPublished && existing.owner_id == null) return true; // legacy / unowned page — the workspace gate suffices (NOT for published apps)
+	if (sameId(existing.owner_id, access.userId)) return true; // the page owner
+	if (access.role === 'owner' || access.role === 'admin') return true; // workspace owner/admin
+	if (Array.isArray(access.permissions) && access.permissions.includes('update')) return true; // shared-workspace editor
 	const collaborators = Array.isArray(existing.collaborators) ? existing.collaborators : [];
 	const role = collaborators.find((entry) => entry && sameId(entry.userId, access.userId))?.role;
-	if (role === 'editor' || role === 'owner') return; // explicit page collaborator
-	throw Object.assign(new Error('You do not have permission to modify this page.'), { status: 403 });
+	return role === 'editor' || role === 'owner'; // explicit page collaborator
+}
+
+function requirePageOwnership(existing, access) {
+	if (!mayModifyPage(existing, access)) throw Object.assign(new Error('You do not have permission to modify this page.'), { status: 403 });
 }
 
 /** osionos_workspace_members row for (user, workspace) — org/teamspace membership. */
@@ -900,11 +903,14 @@ async function fetchPageRowIfUuid(pageId, config, fetchImpl) {
 // collaborators; requirePageOwnership: owner_id/properties/collaborators;
 // ownerOrWorkspaceAccess: owner_id/workspace_id; the workspace-change guard:
 // workspace_id; withoutForeignSharingChanges: owner_id/visibility/collaborators/
-// workspace_id; handlePageArchiveCascade: id/workspace_id), and nothing else. Skips
-// the heavy content JSONB + search_doc tsvector that fetchPageRow's select:'*' pulls.
+// workspace_id; handlePageArchiveCascade: id/workspace_id; withoutUnreachableParent:
+// parent_page_id), and nothing else. Skips the heavy content JSONB + search_doc
+// tsvector that fetchPageRow's select:'*' pulls.
+const PAGE_AUTH_SELECT = 'id,owner_id,workspace_id,visibility,properties,collaborators,parent_page_id';
+
 async function fetchPageAuthRow(pageId, config, fetchImpl) {
 	const id = requireUuid(pageId, 'pageId');
-	const query = postgrestQuery({ id: `eq.${id}`, select: 'id,owner_id,workspace_id,visibility,properties,collaborators', limit: '1' });
+	const query = postgrestQuery({ id: `eq.${id}`, select: PAGE_AUTH_SELECT, limit: '1' });
 	const rows = await baasRest(config, fetchImpl, `osionos_pages?${query}`);
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
@@ -935,6 +941,27 @@ async function ownerOrWorkspaceAccess(request, row, permission, config, fetchImp
 	return requireWorkspaceAccess(request, row.workspace_id, permission, config, fetchImpl);
 }
 
+/** The caller's own membership context in `workspaceId` holding `permission`, or null when they lack it. */
+async function memberAccessOrNull(request, workspaceId, permission, config, fetchImpl) {
+	try {
+		return await requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl);
+	} catch (error) {
+		if (error?.status === 403) return null;
+		throw error;
+	}
+}
+
+/**
+ * The direct PATCH/DELETE route's decision for `row` as a boolean: readable, then owned
+ * by the caller or reached through `memberAccess` (the caller's own membership holding
+ * the route's permission; null when they lack it), then mayModifyPage.
+ */
+function mayMutatePage(row, userId, memberAccess) {
+	if (!canReadPageRow(row, userId)) return false;
+	if (sameId(row.owner_id, userId)) return true;
+	return memberAccess !== null && mayModifyPage(row, memberAccess);
+}
+
 /**
  * A page the caller may READ, with their access context — or the SAME 404 a missing id
  * gets, so another member's private page is indistinguishable from a nonexistent one.
@@ -946,6 +973,60 @@ async function readablePageAccess(request, pageId, permission, config, fetchImpl
 	const row = requireReadablePage(await fetchPageRow(pageId, config, fetchImpl), token.userId);
 	const authContext = await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl);
 	return { authContext, row };
+}
+
+/** The one answer for every parent a page may not be nested under, whatever the reason. */
+function parentPageNotFound() {
+	return Object.assign(new Error('Parent page not found.'), { status: 404 });
+}
+
+/**
+ * Whether the caller may nest a page under `parentPageId`: it exists and they read it as
+ * a member of its workspace (canReadPageRowAsMember). `authContext`: userId + workspaceIds.
+ * Both reads run whatever the parent is, so a missing parent costs the same calls as an
+ * unreadable one.
+ */
+async function canNestUnder(authContext, parentPageId, config, fetchImpl) {
+	const [parent, memberIds] = await Promise.all([
+		fetchPageAuthRow(parentPageId, config, fetchImpl),
+		memberWorkspaceIds(authContext.userId, config, fetchImpl),
+	]);
+	return parent !== null && canReadPageRowAsMember(parent, authContext.userId, [...authContext.workspaceIds, ...memberIds]);
+}
+
+const MAX_PARENT_DEPTH = 64;
+
+/**
+ * Whether `targetId` is `pageId` or below it, following parent_page_id upward (a cycle
+ * already stored above the target ends the walk at the first repeated id).
+ * Ponytail: gives up after MAX_PARENT_DEPTH hops and answers true, so a move under a
+ * page nested more than 64 levels deep is refused even when it would form no cycle.
+ */
+async function isInSubtreeOf(targetId, pageId, config, fetchImpl) {
+	const seen = new Set();
+	for (let id = targetId; id && !seen.has(id.toLowerCase());) {
+		if (sameId(id, pageId) || seen.size === MAX_PARENT_DEPTH) return true;
+		seen.add(id.toLowerCase());
+		id = (await fetchPageAuthRow(id, config, fetchImpl))?.parent_page_id;
+	}
+	return false;
+}
+
+/**
+ * A page PATCH minus a parentPageId the caller may not nest under, or one inside the
+ * page's own subtree (added to `ignored`). Checked only when it MOVES the page: the outbox
+ * resends the stored parent on every edit, and a member may edit a page whose parent they
+ * cannot read.
+ */
+async function withoutUnreachableParent({ payload, ignored }, existing, authContext, config, fetchImpl) {
+	const target = optionalUuid(payload.parentPageId, 'parentPageId');
+	if (!target || sameId(target, existing.parent_page_id)) return { payload, ignored };
+	if (await canNestUnder(authContext, target, config, fetchImpl) && !await isInSubtreeOf(target, existing.id, config, fetchImpl)) {
+		return { payload, ignored };
+	}
+	const kept = { ...payload };
+	delete kept.parentPageId;
+	return { payload: kept, ignored: [...ignored, 'parentPageId'] };
 }
 
 /** `row` when the caller may read it; otherwise the SAME 404 a missing id gets. */
@@ -1030,7 +1111,8 @@ async function listSessionWorkspaces(authContext, config, fetchImpl) {
 	}
 }
 
-function descendantPageIds(rows, parentId) {
+/** Breadth-first descendants of `parentId`; a page `keep` refuses is left out with its whole subtree. */
+function descendantPageIds(rows, parentId, keep = () => true) {
 	const childrenByParent = new Map();
 	for (const row of rows) {
 		if (!row.parent_page_id) continue;
@@ -1041,10 +1123,11 @@ function descendantPageIds(rows, parentId) {
 	const result = [];
 	const pending = [...(childrenByParent.get(parentId) ?? [])];
 	const seen = new Set([parentId]);
-	while (pending.length > 0) {
-		const id = pending.shift();
+	for (let next = 0; next < pending.length; next += 1) {
+		const id = pending[next];
 		if (!id || seen.has(id)) continue;
 		seen.add(id);
+		if (!keep(id)) continue;
 		result.push(id);
 		pending.push(...(childrenByParent.get(id) ?? []));
 	}
@@ -2058,13 +2141,16 @@ async function handleMarketplaceInstalledWrite(request, response, config, fetchI
 	return true;
 }
 
-/** Publish an app record the caller owns into the marketplace (public + published-locked). */
+/**
+ * Publish an app record the caller owns into the marketplace (public + published-locked).
+ * An app the caller cannot read answers like a missing one; a readable one they do not own is a 403.
+ */
 async function handleMarketplacePublish(request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const pageId = requireUuid(payload.pageId, 'pageId');
 	const row = await fetchPageRow(pageId, config, fetchImpl);
-	if (!row || row.workspace_id !== MARKETPLACE_WORKSPACE_ID) throw Object.assign(new Error('Page not found.'), { status: 404 });
+	if (!isReadableMarketplaceRow(row, authContext.userId)) throw Object.assign(new Error('Page not found.'), { status: 404 });
 	if (!canChangePageSharing(row, authContext.userId)) {
 		throw Object.assign(new Error('Only the owner can publish this app.'), { status: 403 });
 	}
@@ -2151,13 +2237,16 @@ async function handleMarketplaceCreate(request, response, config, fetchImpl) {
 	return true;
 }
 
-/** Owner-only edit of a draft app's title / icon / properties. */
+/**
+ * Owner-only edit of a draft app's title / icon / properties. An app the caller cannot
+ * read answers like a missing one; a readable one they do not own is a 403.
+ */
 async function handleMarketplaceUpdate(appId, request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const id = requireUuid(appId, 'appId');
 	const row = await fetchPageRow(id, config, fetchImpl);
-	if (!row || row.workspace_id !== MARKETPLACE_WORKSPACE_ID) throw Object.assign(new Error('App not found.'), { status: 404 });
-	if (row.owner_id !== authContext.userId) throw Object.assign(new Error('Only the owner can edit this app.'), { status: 403 });
+	if (!isReadableMarketplaceRow(row, authContext.userId)) throw Object.assign(new Error('App not found.'), { status: 404 });
+	if (!sameId(row.owner_id, authContext.userId)) throw Object.assign(new Error('Only the owner can edit this app.'), { status: 403 });
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const patch = { updated_at: new Date().toISOString() };
 	if (hasOwn(payload, 'title')) patch.title = safeText(payload.title, 200) || 'New app';
@@ -2402,19 +2491,23 @@ async function ensureRecordNote(dbId, table, pk, request, config, fetchImpl) {
 }
 
 async function fetchRecordNoteMirror(noteId, config, fetchImpl) {
-	const query = postgrestQuery({ id: `eq.${noteId}`, select: 'id,title,properties,visibility', limit: '1' });
+	const query = postgrestQuery({ id: `eq.${noteId}`, select: 'id,title,properties', limit: '1' });
 	const rows = await baasRest(config, fetchImpl, `osionos_pages?${query}`);
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
-/** POST /api/records/:dbId/:table/:pk/open — resolve-or-create the linked note (idempotent). */
+/**
+ * POST /api/records/:dbId/:table/:pk/open — resolve-or-create the linked note (idempotent),
+ * then answer exactly what GET /api/pages/<noteId> answers the caller.
+ */
 async function handleRecordOpen(match, request, response, config, fetchImpl) {
 	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
 	const table = safeText(decodeURIComponent(match[2]), 120);
 	const pk = safeText(decodeURIComponent(match[3]), 220);
 	if (!table || !pk) throw Object.assign(new Error('table and pk are required.'), { status: 422 });
 	const { noteId } = await ensureRecordNote(dbId, table, pk, request, config, fetchImpl);
-	json(response, 200, pageRowToEntry(await fetchPageRow(noteId, config, fetchImpl)), config);
+	const { row } = await readablePageAccess(request, noteId, 'read', config, fetchImpl);
+	json(response, 200, pageRowToEntry(row), config);
 	return true;
 }
 
@@ -2462,6 +2555,11 @@ async function handleRecordSubitemCreate(match, request, response, config, fetch
 	const safe = payload && typeof payload === 'object' ? payload : {};
 	const access = await requireWorkspaceAccess(request, safe.workspaceId, 'create', config, fetchImpl);
 	const { noteId } = await ensureRecordNote(dbId, table, pk, request, config, fetchImpl);
+	// The sub-item nests under the note: a note the caller cannot read (or reach through its
+	// workspace) refuses it with the page create's parent 404.
+	await readablePageAccess(request, noteId, 'read', config, fetchImpl).catch((error) => {
+		throw error?.status === 403 || error?.status === 404 ? parentPageNotFound() : error;
+	});
 	const body = recordSubitemNoteBody({
 		id: randomUUID(),
 		parentNoteId: noteId,
@@ -2725,7 +2823,7 @@ async function handlePageBacklinks(url, request, response, config, fetchImpl) {
 	const linkRows = await baasRest(config, fetchImpl, `osionos_page_links?target_page_id=eq.${pageId}&${inWorkspace}&select=source_page_id`);
 	const sourceIds = [...new Set((Array.isArray(linkRows) ? linkRows : []).map((r) => r.source_page_id).filter((id) => id && id !== pageId))];
 	const linked = sourceIds.length
-		? backlinkRefsFromRows(readablePageRows(await baasRest(config, fetchImpl, `osionos_pages?id=in.(${sourceIds.join(',')})&archived_at=is.null&select=${BACKLINK_SELECT}`), authContext.userId))
+		? backlinkRefsFromRows(readablePageRows(await baasRest(config, fetchImpl, `osionos_pages?id=in.(${sourceIds.join(',')})&${inWorkspace}&archived_at=is.null&select=${BACKLINK_SELECT}`), authContext.userId))
 		: [];
 	const title = String(row.title || '').trim();
 	let mentions = [];
@@ -2805,6 +2903,8 @@ async function handlePageCreate(request, response, config, fetchImpl) {
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const workspaceId = requireUuid(payload.workspaceId, 'workspaceId');
 	const authContext = await requireWorkspaceAccess(request, workspaceId, 'create', config, fetchImpl);
+	const parentPageId = optionalUuid(payload.parentPageId, 'parentPageId');
+	if (parentPageId && !await canNestUnder(authContext, parentPageId, config, fetchImpl)) throw parentPageNotFound();
 	const rows = await baasRest(config, fetchImpl, 'osionos_pages', {
 		method: 'POST',
 		body: pageCreateRowFromPayload(payload, authContext),
@@ -2829,23 +2929,31 @@ async function handleWorkspaceValidate(request, response, config, fetchImpl) {
 }
 
 /**
- * The descendants of `row` the caller may read — the only ones an archive, restore or
- * delete cascades to. Auth columns are fetched for the descendant ids only.
- * Ponytail: an unreadable child of a deleted page survives only through the
+ * The descendants an archive, restore or delete of `row` cascades to: exactly those the
+ * caller's own PATCH/DELETE of that page would accept (mayMutatePage), judged with their
+ * membership in the workspace — never with the owner context `row` was reached through.
+ * The walk stops at the first page it skips, which keeps that page's subtree together.
+ * Auth columns are fetched for the descendant ids only; a descendant whose row is no
+ * longer in `row`'s workspace by then (moved between the two reads) is skipped.
+ * Ponytail: a skipped child of a deleted page survives only through the
  * parent_page_id ON DELETE SET NULL in models/osionos-bridge-migration.sql — not
  * verified on live databases; one without it rejects or cascades the parent DELETE.
  */
-async function readableDescendantIds(row, userId, config, fetchImpl) {
+async function cascadeDescendantIds(request, row, permission, config, fetchImpl) {
+	const { userId } = verifyAppSessionToken(bearerToken(request), config);
 	const refs = await listWorkspacePageRefs(row.workspace_id, config, fetchImpl);
 	const descendantIds = descendantPageIds(refs, row.id);
 	if (descendantIds.length === 0) return [];
-	const authRows = await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(descendantIds)}&select=id,owner_id,visibility,collaborators`);
-	const readable = new Set(readablePageRows(authRows, userId).map((descendant) => descendant.id));
-	return descendantIds.filter((id) => readable.has(id));
+	const authRows = await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(descendantIds)}&select=${PAGE_AUTH_SELECT}`);
+	const byId = new Map((Array.isArray(authRows) ? authRows : []).map((descendant) => [descendant.id, descendant]));
+	const needsMembership = [...byId.values()].some((descendant) => !sameId(descendant.owner_id, userId));
+	const memberAccess = needsMembership ? await memberAccessOrNull(request, row.workspace_id, permission, config, fetchImpl) : null;
+	const keep = (descendant) => descendant !== undefined && sameId(descendant.workspace_id, row.workspace_id) && mayMutatePage(descendant, userId, memberAccess);
+	return descendantPageIds(refs, row.id, (id) => keep(byId.get(id)));
 }
 
-async function handlePageArchiveCascade(row, archivedAt, userId, config, fetchImpl) {
-	const descendantIds = await readableDescendantIds(row, userId, config, fetchImpl);
+async function handlePageArchiveCascade(request, row, archivedAt, config, fetchImpl) {
+	const descendantIds = await cascadeDescendantIds(request, row, 'update', config, fetchImpl);
 	if (descendantIds.length === 0) return;
 	await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(descendantIds)}`, {
 		method: 'PATCH',
@@ -2875,7 +2983,8 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	const requested = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	// Only the owner changes who may read the page; a non-owner's sharing keys are dropped
 	// (listed in `ignored` when they differed) while the rest of the edit is still written.
-	const { payload, ignored } = withoutForeignSharingChanges(requested, existing, access.userId);
+	const sharingChecked = withoutForeignSharingChanges(requested, existing, access.userId);
+	const { payload, ignored } = await withoutUnreachableParent(sharingChecked, existing, access, config, fetchImpl);
 	if (Object.keys(payload).length === 0 && Object.keys(requested).length > 0) {
 		json(response, 200, { ok: true, ignored }, config); // nothing left to write — not even updated_at
 		return true;
@@ -2895,7 +3004,7 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 		prefer: 'return=minimal',
 	});
 	if (hasOwn(updateRow, 'archived_at')) {
-		await handlePageArchiveCascade(existing, updateRow.archived_at, userId, config, fetchImpl);
+		await handlePageArchiveCascade(request, existing, updateRow.archived_at, config, fetchImpl);
 	}
 	// updated_at is stamped by pageUpdateRowFromPayload (no BEFORE-UPDATE trigger on
 	// osionos_pages), so the value we wrote IS the stored value — authoritative.
@@ -3283,7 +3392,7 @@ async function handlePageDelete(url, request, response, config, fetchImpl) {
 	const row = requireReadablePage(await fetchPageAuthRow(pageId, config, fetchImpl), userId);
 	const access = await ownerOrWorkspaceAccess(request, row, 'delete', config, fetchImpl);
 	requirePageOwnership(row, access);
-	const ids = [pageId, ...await readableDescendantIds(row, userId, config, fetchImpl)];
+	const ids = [pageId, ...await cascadeDescendantIds(request, row, 'delete', config, fetchImpl)];
 	await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(ids)}`, {
 		method: 'DELETE',
 		prefer: 'return=minimal',
