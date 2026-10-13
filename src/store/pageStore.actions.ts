@@ -40,6 +40,11 @@ import {
   nextDuplicateTitle,
   instantiateTemplateContent,
 } from "./pageStore.helpers";
+import {
+  cascadeIdsFrom,
+  applyArchived,
+  applyDeleted,
+} from "./pageCascadeResult";
 import type { AddPageOptions, PageEntry, PageStore, ActivePage, PageRecurrence } from "@/entities/page";
 
 type SetFn = (
@@ -413,33 +418,37 @@ export function createArchivePage(set: SetFn, get: GetFn) {
     if (!page || !canEditPage(page, context)) return;
 
     const archivedAt = new Date().toISOString();
-
     const pageJwt = pageApiJwtFromSessionToken(jwt);
 
     if (pageJwt && isPersistedPageId(pageId)) {
-      try {
-        await api.patch(`/api/pages/${pageId}`, { archivedAt }, pageJwt);
-      } catch {
-        /* silent */
-      }
+      await applyCascadeOperation({
+        set,
+        get,
+        pageId,
+        workspaceId,
+        apiCall: () => api.patch(`/api/pages/${pageId}`, { archivedAt }, pageJwt),
+        field: "cascadedIds",
+        archivedAt,
+        toastTitle: `Couldn't move “${page.title || "Untitled"}” to Trash`,
+      });
+      return;
     }
 
+    // No JWT or local-only page: keep today's local-only behaviour (all local descendants change)
+    const wsPages = get().pages[workspaceId] ?? [];
+    const descendantIds = getAllDescendantIds(wsPages, pageId);
+    const archivedIds = new Set([pageId, ...descendantIds]);
+
     set((s) => {
-      const wsPages = s.pages[workspaceId] ?? [];
-      const descendantIds = getAllDescendantIds(wsPages, pageId);
-      const archivedIds = new Set([pageId, ...descendantIds]);
+      const currentWsPages = s.pages[workspaceId] ?? [];
+      const nextPages = applyArchived(currentWsPages, archivedIds, archivedAt);
 
       const newRecents = s.recents.filter((r) => !archivedIds.has(r.id));
       if (newRecents.length !== s.recents.length) {
         saveRecents(newRecents);
       }
 
-      const pages = {
-          ...s.pages,
-          [workspaceId]: wsPages.map((p) =>
-            archivedIds.has(p._id) ? { ...p, archivedAt } : p,
-          ),
-        };
+      const pages = { ...s.pages, [workspaceId]: nextPages };
 
       return {
         ...derivePageState(pages, s.pageIdsByWorkspace),
@@ -448,6 +457,73 @@ export function createArchivePage(set: SetFn, get: GetFn) {
     });
     savePagesCache(get().pages, workspaceId);
   };
+}
+
+/**
+ * Applies a cascade operation (archive, restore, or delete) using server-returned IDs.
+ * On API failure, pushes an error toast and makes NO local changes.
+ * O(n) where n is the number of pages in the workspace.
+ */
+async function applyCascadeOperation(options: {
+  set: SetFn;
+  get: GetFn;
+  pageId: string;
+  workspaceId: string;
+  apiCall: () => Promise<unknown>;
+  field: "cascadedIds" | "deletedIds";
+  archivedAt: string | null;
+  toastTitle: string;
+}): Promise<void> {
+  const { set, get, pageId, workspaceId, apiCall, field, archivedAt, toastTitle } = options;
+
+  let body: unknown;
+  try {
+    body = await apiCall();
+  } catch {
+    useToastStore.getState().push({
+      kind: "error",
+      title: toastTitle,
+      description: "The server did not complete the request. Try again.",
+    });
+    return;
+  }
+
+  const wsPages = get().pages[workspaceId] ?? [];
+  const localDescendantIds = getAllDescendantIds(wsPages, pageId);
+  const ids = cascadeIdsFrom(body, pageId, localDescendantIds, field);
+  const idSet = new Set(ids);
+
+  set((s) => {
+    const currentWsPages = s.pages[workspaceId] ?? [];
+
+    let nextPages: PageEntry[];
+    if (field === "cascadedIds") {
+      nextPages = applyArchived(currentWsPages, idSet, archivedAt);
+    } else {
+      nextPages = applyDeleted(currentWsPages, idSet);
+    }
+
+    // A restore (archivedAt null) brings pages back; only trash and delete leave Recents.
+    const leavesRecents = field === "deletedIds" || archivedAt !== null;
+    const newRecents = leavesRecents ? s.recents.filter((r) => !idSet.has(r.id)) : s.recents;
+    if (newRecents.length !== s.recents.length) {
+      saveRecents(newRecents);
+    }
+
+    const pages = { ...s.pages, [workspaceId]: nextPages };
+    const nextState: Partial<PageStore> = {
+      ...derivePageState(pages, s.pageIdsByWorkspace),
+      recents: newRecents,
+    };
+
+    if (field === "deletedIds" && s.activePage && idSet.has(s.activePage.id)) {
+      nextState.activePage = null;
+    }
+
+    return nextState;
+  });
+
+  savePagesCache(get().pages, workspaceId);
 }
 
 /**
@@ -883,27 +959,29 @@ export function createRestorePage(set: SetFn, get: GetFn) {
     const pageJwt = pageApiJwtFromSessionToken(jwt);
 
     if (pageJwt && isPersistedPageId(pageId)) {
-      try {
-        await api.patch(`/api/pages/${pageId}`, { archivedAt: null }, pageJwt);
-      } catch {
-        /* silent */
-      }
+      await applyCascadeOperation({
+        set,
+        get,
+        pageId,
+        workspaceId,
+        apiCall: () => api.patch(`/api/pages/${pageId}`, { archivedAt: null }, pageJwt),
+        field: "cascadedIds",
+        archivedAt: null,
+        toastTitle: `Couldn't restore “${page.title || "Untitled"}”`,
+      });
+      return;
     }
 
-    // Update state: restore page and descendants
+    // No JWT or local-only page: keep today's local-only behaviour (all local descendants change)
+    const wsPages = get().pages[workspaceId] ?? [];
+    const descendantIds = getAllDescendantIds(wsPages, pageId);
+    const restoredIds = new Set([pageId, ...descendantIds]);
+
     set((s) => {
-      const wsPages = s.pages[workspaceId] ?? [];
-      const descendantIds = getAllDescendantIds(wsPages, pageId);
-      const restoredIds = new Set([pageId, ...descendantIds]);
+      const currentWsPages = s.pages[workspaceId] ?? [];
+      const nextPages = applyArchived(currentWsPages, restoredIds, null);
 
-      const pages = {
-          ...s.pages,
-          [workspaceId]: wsPages.map((p) =>
-            restoredIds.has(p._id) ? { ...p, archivedAt: null } : p,
-          ),
-        };
-
-      return derivePageState(pages, s.pageIdsByWorkspace);
+      return derivePageState({ ...s.pages, [workspaceId]: nextPages }, s.pageIdsByWorkspace);
     });
     savePagesCache(get().pages, workspaceId);
   };
@@ -922,33 +1000,40 @@ export function createDeletePage(set: SetFn, get: GetFn) {
     const pageJwt = pageApiJwtFromSessionToken(jwt);
 
     if (pageJwt && isPersistedPageId(pageId)) {
-      try {
-        await api.delete(`/api/pages/${pageId}`, pageJwt);
-      } catch {
-        /* silent */
-      }
+      await applyCascadeOperation({
+        set,
+        get,
+        pageId,
+        workspaceId,
+        apiCall: () => api.delete(`/api/pages/${pageId}`, pageJwt),
+        field: "deletedIds",
+        archivedAt: null,
+        toastTitle: `Couldn't delete “${page.title || "Untitled"}”`,
+      });
+      return;
     }
 
-    set((s) => {
-      const wsPages = s.pages[workspaceId] ?? [];
-      const descendantIds = getAllDescendantIds(wsPages, pageId);
-      const deletedIds = new Set([pageId, ...descendantIds]);
-      const recents = s.recents.filter((recent) => !deletedIds.has(recent.id));
+    // No JWT or local-only page: keep today's local-only behaviour (all local descendants change)
+    const wsPages = get().pages[workspaceId] ?? [];
+    const descendantIds = getAllDescendantIds(wsPages, pageId);
+    const deletedIds = new Set([pageId, ...descendantIds]);
 
-      if (recents.length !== s.recents.length) {
-        saveRecents(recents);
+    set((s) => {
+      const currentWsPages = s.pages[workspaceId] ?? [];
+      const nextPages = applyDeleted(currentWsPages, deletedIds);
+
+      const newRecents = s.recents.filter((r) => !deletedIds.has(r.id));
+      if (newRecents.length !== s.recents.length) {
+        saveRecents(newRecents);
       }
 
-      const pages = {
-          ...s.pages,
-          [workspaceId]: wsPages.filter((p) => !deletedIds.has(p._id)),
-        };
+      const pages = { ...s.pages, [workspaceId]: nextPages };
 
       return {
         ...derivePageState(pages, s.pageIdsByWorkspace),
         activePage:
           s.activePage && deletedIds.has(s.activePage.id) ? null : s.activePage,
-        recents,
+        recents: newRecents,
       };
     });
     savePagesCache(get().pages, workspaceId);
