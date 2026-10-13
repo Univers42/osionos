@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// Generates the app's colour tokens from the seeds in scripts/tokens/palettes.mjs.
+// Generates the app's colour tokens from the seeds in scripts/tokens/palettes.mjs
+// and the accent presets in scripts/tokens/accents.mjs.
 //
 //   node scripts/build-tokens.mjs           write every generated file
 //   node scripts/build-tokens.mjs --check   fail if a committed file is stale,
 //                                           a palette fails its contrast level,
+//                                           an accent preset or custom hue is unreadable on a palette,
 //                                           a value is not a usable colour, or
 //                                           the vendored database declares a
 //                                           colour the bridge does not map
@@ -13,6 +15,13 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 
+import {
+  accentProblems,
+  GENERATED_ACCENT_REGISTRY,
+  GENERATED_ACCENT_STYLESHEET,
+  renderAccentRegistry,
+  renderAccentStylesheet,
+} from "./tokens/accents.mjs";
 import { resolvedTokens } from "./tokens/aliases.mjs";
 import { contrastFailures } from "./tokens/contrast.mjs";
 import { BRIDGE_STYLESHEET, renderBridge, VENDORED_THEME } from "./tokens/databaseBridge.mjs";
@@ -36,6 +45,10 @@ function reportProblems() {
         failed += 1;
       }
     }
+  }
+  for (const problem of accentProblems()) {
+    console.error(`✗ accent ${problem}`);
+    failed += 1;
   }
   return failed;
 }
@@ -66,6 +79,8 @@ if (bridge.unmapped.length > 0) {
 const OUTPUTS = [
   { path: GENERATED_STYLESHEET, render: renderStylesheet },
   { path: GENERATED_REGISTRY, render: renderRegistry },
+  { path: GENERATED_ACCENT_STYLESHEET, render: renderAccentStylesheet },
+  { path: GENERATED_ACCENT_REGISTRY, render: renderAccentRegistry },
   { path: BRIDGE_STYLESHEET, render: () => bridge.css },
 ];
 
