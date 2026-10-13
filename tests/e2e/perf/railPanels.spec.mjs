@@ -54,7 +54,7 @@ test("rail first open (lazy chunk) per panel", async ({ page }) => {
         localStorage.setItem("ui-storage", JSON.stringify({ state: { activePanel: "explorer" }, version: 1 }));
       } catch { /* ignore */ }
     });
-    await bootApp(page, { workbench: true });
+    await bootApp(page);
     await page.locator("[data-osio-workbench]").waitFor({ state: "visible", timeout: 60_000 });
     await collapseToRail(page);
     for (const name of PANELS) {
@@ -69,7 +69,7 @@ test("rail first open (lazy chunk) per panel", async ({ page }) => {
 
 test("rail re-open (chunk loaded) per panel", async ({ page }) => {
   test.setTimeout(180_000);
-  await bootApp(page, { workbench: true });
+  await bootApp(page);
   await page.locator("[data-osio-workbench]").waitFor({ state: "visible", timeout: 60_000 });
   const floor = await measureFloor(page);
   await collapseToRail(page);

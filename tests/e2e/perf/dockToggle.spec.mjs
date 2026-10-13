@@ -22,7 +22,7 @@ test.use(PERF_USE);
 // makes p95 bimodal (1 or 2 frames). Target 16 missed -> budget = 32.2 x 1.2 = 39.
 test("Ctrl+J dock open, workbench ON", async ({ page }) => {
   test.setTimeout(120_000);
-  await bootApp(page, { workbench: true });
+  await bootApp(page);
   await page.locator("[data-osio-workbench]").waitFor({ state: "visible", timeout: 60_000 });
   const floor = await measureFloor(page);
   const dock = page.getByTestId("workbench-dock");

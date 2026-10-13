@@ -30,8 +30,8 @@ const WARMUP_RUNS = 5;
 const PROFILE_RUNS = 40;
 
 // Copied from typing.spec.mjs (specs stay standalone): open a block page and focus its editor.
-async function openEditor(page, workbench) {
-  await bootApp(page, { workbench });
+async function openEditor(page) {
+  await bootApp(page);
   await createNewWorkspacePage(page);
   const editor = page.locator('[role="textbox"][aria-multiline="true"]').first();
   const empty = page.getByRole("button", { name: /Click here to start writing/i });
@@ -110,7 +110,7 @@ test("aggregateProfile attributes self and total ms, recursion once", () => {
 
 test("keystroke CPU profile, workbench ON, ~2000 pages", async ({ page }) => {
   test.setTimeout(180_000);
-  const editor = await openEditor(page, true);
+  const editor = await openEditor(page);
   await profileKeystrokeCase(page, editor, {
     seedPages: 2000,
     caseName: "workbenchOn.pages2000",
@@ -120,26 +120,10 @@ test("keystroke CPU profile, workbench ON, ~2000 pages", async ({ page }) => {
 
 test("keystroke CPU profile, workbench ON, default seed", async ({ page }) => {
   test.setTimeout(180_000);
-  const editor = await openEditor(page, true);
+  const editor = await openEditor(page);
   await profileKeystrokeCase(page, editor, {
     seedPages: 0,
     caseName: "workbenchOn.defaultSeed",
     rawName: "keystroke-profile.default.cpuprofile",
-  });
-});
-
-// The legacy page tree (workbench OFF) re-renders per sidebar row on a title keystroke
-// (titleTyping.spec.mjs): this case says which functions that time goes to.
-test("title keystroke CPU profile, workbench OFF, ~5000 pages", async ({ page }) => {
-  test.setTimeout(300_000);
-  await bootApp(page, { workbench: false });
-  await createNewWorkspacePage(page);
-  const title = page.getByLabel("Page title");
-  await title.waitFor();
-  await title.click();
-  await profileKeystrokeCase(page, title, {
-    seedPages: 5000,
-    caseName: "titleWorkbenchOff.pages5000",
-    rawName: "keystroke-profile.title-off-5000.cpuprofile",
   });
 });

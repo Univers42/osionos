@@ -22,7 +22,7 @@ test.use(PERF_USE);
 // 31.0-31.5 ms: on the floor). Target 16 missed by method -> budget = 31.9 x 1.2 = 38.
 test("code page typing (Monaco), workbench ON", async ({ page }) => {
   test.setTimeout(180_000); // cold Vite compile of the Monaco chunk
-  await bootApp(page, { workbench: true, ide: true });
+  await bootApp(page, { ide: true });
   await page.locator("[data-osio-workbench]").waitFor({ state: "visible", timeout: 60_000 });
   const floor = await measureFloor(page);
   await page.evaluate(() => globalThis.__perfOpenCodePage());

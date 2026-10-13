@@ -10,7 +10,7 @@
 //                                                                            //
 // ************************************************************************** //
 
-// Survey of everyday interactions, input -> painted frame, on the DEFAULT path (workbench OFF).
+// Survey of everyday interactions, input -> painted frame, on the DEFAULT path (workbench ON).
 // One CPU profile per case lands in test-results/perf/interactions.<case>.cpuprofile.
 //
 // Ponytail: dev build + React StrictMode inflate every number against production; the browser
@@ -22,7 +22,7 @@
 
 import { test, expect } from "@playwright/test";
 
-import { activateFirstEditor, createNewWorkspacePage, getEditors, slashMenu, waitForRenderStability } from "../../browser/core/app.mjs";
+import { activateFirstEditor, createNewWorkspacePage, explorerRow, getEditors, slashMenu, waitForRenderStability } from "../../browser/core/app.mjs";
 import { runInteraction } from "./interactionRun.mjs";
 import { PERF_USE, bootApp, measureFloor, writeReport } from "./perfHarness.mjs";
 
@@ -56,27 +56,29 @@ const ROADMAP = { title: "Project Roadmap", text: "Roadmap — Q2 2026" };
 const BLOCK = "[data-block-id]";
 const SLASH_MENU = '[data-testid="slash-command-menu"]';
 
-const sidebarRow = (page, title) => page.locator("span.truncate", { hasText: new RegExp(`^${title}$`) }).first();
 const blockWith = (page, text) => page.locator(BLOCK, { hasText: text }).first();
 
 async function boot(page) {
-  await bootApp(page, { workbench: false });
-  await sidebarRow(page, START.title).waitFor({ state: "visible", timeout: 30_000 });
+  await bootApp(page);
+  await explorerRow(page, START.title).waitFor({ state: "visible", timeout: 30_000 });
   return measureFloor(page);
 }
 
 async function openAndWait(page, target) {
-  await sidebarRow(page, target.title).click();
+  await explorerRow(page, target.title).click();
   await expect(blockWith(page, target.text)).toBeVisible();
 }
 
 async function pageSwitchCase(page, name, seedPages = 0) {
   const floor = await boot(page);
-  if (seedPages > 0) writeReport(SPEC, `${name}.seed`, { seeded: await page.evaluate((n) => globalThis.__perfSeedPages(n), seedPages) });
+  if (seedPages > 0) {
+    const result = await page.evaluate((n) => globalThis.__perfSeedFolder(n), seedPages);
+    writeReport(SPEC, `${name}.seed`, { seeded: result.childCount });
+  }
   await runInteraction(page, {
     spec: SPEC, name, floor, target: OPEN_TARGET, budget: BUDGET[name], startEvent: "click",
     before: () => openAndWait(page, START),
-    action: () => sidebarRow(page, ROADMAP.title).click(),
+    action: () => explorerRow(page, ROADMAP.title).click(),
     until: { selector: BLOCK, text: ROADMAP.text },
   });
 }
@@ -89,6 +91,7 @@ test("page switch, default seed", async ({ page }) => {
 test("page switch, ~1000 pages seeded", async ({ page }) => {
   test.setTimeout(360_000);
   await pageSwitchCase(page, "pageSwitch1000", 1000);
+  // the folder stays collapsed, so the target rows stay mounted while the store holds 1000 more pages
 });
 
 // A fresh page holding "hello" with the caret at its end.
@@ -196,11 +199,11 @@ test("open a 300-block page", async ({ page }) => {
   const floor = await boot(page);
   const seeded = await page.evaluate(() => globalThis.__perfSeed(300)); // opens it
   writeReport(SPEC, "longPage.seed", { seeded });
-  await expect(sidebarRow(page, "Perf 300 blocks")).toBeVisible();
+  await expect(explorerRow(page, "Perf 300 blocks")).toBeVisible();
   await runInteraction(page, {
     spec: SPEC, name: "longPage", floor, target: HEAVY_TARGET, budget: BUDGET.longPage, startEvent: "click",
     before: () => openAndWait(page, START),
-    action: () => sidebarRow(page, "Perf 300 blocks").click(),
+    action: () => explorerRow(page, "Perf 300 blocks").click(),
     until: { selector: '[data-block-id="perf-block-300-20"]' },
   });
 });
@@ -215,7 +218,7 @@ test("open a database view", async ({ page }) => {
       await openAndWait(page, START);
       await expect(cells).toHaveCount(0);
     },
-    action: () => sidebarRow(page, "Tasks database").click(),
+    action: () => explorerRow(page, "Tasks database").click(),
     until: { selector: '[role="gridcell"]' },
   });
 });

@@ -28,15 +28,14 @@ test.use(PERF_USE);
 const SPEC = "enterFocus";
 const ENTERS = 30;
 
-async function openEditor(page, workbench) {
-  await page.addInitScript((on) => {
+async function openEditor(page) {
+  await page.addInitScript(() => {
     try {
-      localStorage.setItem("osio.workbench", on ? "1" : "0");
       localStorage.setItem("osio:perf", "1");
     } catch {
       /* ignore */
     }
-  }, workbench);
+  });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await createNewWorkspacePage(page);
   const empty = page.getByRole("button", { name: /Click here to start writing/i });
@@ -92,12 +91,6 @@ async function enterThenType(page, caseName) {
 
 test("Enter then a key, workbench ON: the key lands in the new block", async ({ page }) => {
   test.setTimeout(120_000);
-  await openEditor(page, true);
+  await openEditor(page);
   await enterThenType(page, "workbenchOn");
-});
-
-test("Enter then a key, workbench OFF: the key lands in the new block", async ({ page }) => {
-  test.setTimeout(120_000);
-  await openEditor(page, false);
-  await enterThenType(page, "workbenchOff");
 });
