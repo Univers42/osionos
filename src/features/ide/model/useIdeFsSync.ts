@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/20 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/28 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,10 +20,9 @@ import { ideOutput } from "./ideOutputBus";
 import { createReconnectBackoff } from "./reconnectBackoff";
 import { isSandboxOnline, useSandboxHealthStore } from "./sandboxHealthStore";
 import { isDeliberateClose } from "./wsCloseCodes";
-import { createLiveInboundSession } from "./inboundLive";
+import { createLiveInbound } from "./inboundLive";
 import { createSerialQueue, acquireInboundLeadership } from "./inboundPipeline";
 import { routeFsEvent } from "./inboundSession";
-import { attachSandbox } from "./materialize";
 
 /**
  * Live writeback (P4): streams the in-sandbox fs-agent's events, PUBLISHES them
@@ -60,8 +59,8 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
     // tabs editing one page yields a spurious conflict (placeholderText is lost
     // on the round trip). Gating the writer too was judged not worth it.
     const leadership = acquireInboundLeadership(workspaceId, globalThis.navigator?.locks);
-    const session = createLiveInboundSession(workspaceId, queue);
-    const route = { isLeader: () => leadership.isLeader(), queue, session, attach: () => attachSandbox(workspaceId) };
+    const { session, attach } = createLiveInbound(workspaceId, queue);
+    const route = { isLeader: () => leadership.isLeader(), queue, session, attach };
 
     const connect = () => {
       const jwt = getActivePageJwt() ?? "";

@@ -10,82 +10,92 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+// Attach (the fs-agent's "ready"): a three-way reconcile of the readable page
+// tree against the sandbox volume and the sync ledger (reconcileOnAttach), so a
+// shell edit made while the app was away is applied, not overwritten. It runs
+// INSIDE the queued ready task, so a shell edit goes through the session's
+// `run`, never the queue (D1: the queue would wait on this very task). No live
+// imports: node runs it against an in-memory sandbox.
+
 import type { PageEntry } from "@/entities/page";
-import { buildVPath, joinV, type VPath } from "../vfs/vpath";
-import { createPageProvider, resolveFacadePath, type PageFacade } from "../vfs/pageProvider";
-import { createSandboxProvider } from "../vfs/sandboxProvider";
-import { bridgeFsTransport } from "../vfs/bridgeTransport";
-import { pageStoreFacade } from "./pageStoreFacade";
+import { fileOfEntry } from "@/features/page-file/model/pageIndex";
+import { pageFileText } from "@/features/page-file/model/pageFileText";
 import { sha16 } from "./ideFsEcho";
-import { recordSyncedHash } from "./ideSyncEngine";
-import { useIdeSyncConflicts } from "./ideSyncConflicts";
 import { ideOutput } from "./ideOutputBus";
+import { useIdeSyncConflicts } from "./ideSyncConflicts";
 import {
-  reconcileOnAttach, emptyReconcileReport, MAX_ATTACH_FILES, ATTACH_FILE_CAP_REASON,
-  type DesiredFile, type ReconcileReport,
+  reconcileOnAttach, MAX_ATTACH_FILES, ATTACH_FILE_CAP_REASON, type DesiredFile, type ReconcileReport,
 } from "./reconcileOnAttach";
 
-export type InboundFile = { path: string; content: string };
+import type { ReadableViews } from "@/features/page-file/model/pageFileFacadeViews";
+import type { FsProvider } from "../vfs/types";
+import type { InboundSession } from "./inboundSession";
 
-export type MaterializeOptions = {
-  /** Applies a sandbox edit made while the app was away to its page; the ledger
-   *  records the agreement once it resolves. Absent: the file is surfaced
-   *  through the conflict reporter, so neither side changes until the user picks. */
-  onInbound?: (file: InboundFile) => Promise<void>;
-};
+export interface AttachDeps {
+  workspaceId: string;
+  session: Pick<InboundSession, "views" | "run">;
+  provider: FsProvider;
+}
 
-export type MaterializeResult = { written: number; failed: number; report: ReconcileReport };
+/** `unloaded`: pages skipped because their body never loaded; `failed`: every other skip. */
+export type MaterializeResult = { written: number; unloaded: number; failed: number; report: ReconcileReport };
 
-type PageFile = { path: string; pageId: string };
+/** A desired file and the page object it was read from — what 14' and 15 compare against. */
+type Snapshot = DesiredFile & { pageId: string; indexPath: string; page: PageEntry };
 type Skipped = ReconcileReport["skipped"];
 
+const NOT_LOADED = "page content not loaded, not reconciled";
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
-/** Every file the osionos:// mount serves (its title-collision rule included), with its page id. */
-async function listPageFiles(facade: PageFacade, workspaceId: string): Promise<PageFile[]> {
-  const pages = createPageProvider("osionos", facade);
-  const files: PageFile[] = [];
-  const walk = async (dir: VPath): Promise<void> => {
-    for (const entry of await pages.list(dir)) {
-      const child = joinV(dir, entry.name);
-      if (entry.kind === "dir") await walk(child);
-      const page = entry.kind === "file" ? resolveFacadePath(facade, child.segments) : undefined;
-      if (page) files.push({ path: child.segments.join("/"), pageId: page.id });
-    }
-  };
-  await walk(buildVPath("osionos", workspaceId, []));
-  return files;
+/**
+ * 16: every index entry as `{ path, content: pageFileText(page) }`, a folder as
+ * its `_folder.omd` (no body needed). Only the first MAX_ATTACH_FILES loaded
+ * files are serialized. O(n) plus the text of at most MAX_ATTACH_FILES pages.
+ * Ponytail: a page or code page whose body never loaded is skipped — its stand-in
+ * would overwrite the sandbox copy — so a shell edit made to it while away waits
+ * until the page is opened or edited (the outbound writer), never applied here.
+ */
+function desiredSet(views: ReadableViews): { files: Snapshot[]; skipped: Skipped } {
+  const files: Snapshot[] = [];
+  const skipped: Skipped = [];
+  for (const entry of views.indexOf().entries) {
+    const page = views.pageById(entry.id);
+    const path = fileOfEntry(entry);
+    if (page === undefined) continue;
+    if (entry.kind !== "dir" && page.content === undefined) skipped.push({ path, reason: NOT_LOADED });
+    else if (files.length >= MAX_ATTACH_FILES) skipped.push({ path, reason: ATTACH_FILE_CAP_REASON });
+    else files.push({ path, content: pageFileText(page), pageId: entry.id, indexPath: entry.path, page });
+  }
+  return { files, skipped };
 }
 
-/** Content of the first MAX_ATTACH_FILES pages; the rest are reported, never loaded.
- *  A lazy page whose fetch failed reads as "" — indistinguishable from an empty
- *  page — so it is skipped: that stand-in must never overwrite the sandbox copy.
- *  Ponytail: "loaded" means the facade reports a size; a code page with no code
- *  block never does, so it is skipped on every attach (reported, never written). */
-async function loadDesired(facade: PageFacade, files: PageFile[]): Promise<{ desired: DesiredFile[]; skipped: Skipped }> {
-  const skipped: Skipped = files.slice(MAX_ATTACH_FILES).map((file) => ({ path: file.path, reason: ATTACH_FILE_CAP_REASON }));
-  const contents = new Map<string, string>();
-  for (const file of files.slice(0, MAX_ATTACH_FILES)) {
-    try {
-      contents.set(file.pageId, await facade.readContent(file.pageId));
-    } catch (error) {
-      skipped.push({ path: file.path, reason: `page content did not load: ${messageOf(error)}` });
-    }
+/**
+ * 15: a page the app changed while attach ran may have had its newer file
+ * overwritten with the snapshot's text, so each written path whose page object
+ * changed — and still lives there — is reconciled once more with the current
+ * text (the ledger holds what attach wrote, so the re-run writes). A page renamed
+ * meanwhile is the outbound writer's move. O(written).
+ * Ponytail: once — a page changed AGAIN while the re-run writes can still end
+ * older in the sandbox, until its next edit or the next attach.
+ */
+async function rewriteChanged(deps: AttachDeps, byPath: ReadonlyMap<string, Snapshot>, report: ReconcileReport): Promise<void> {
+  const { views } = deps.session;
+  const changed: DesiredFile[] = [];
+  for (const path of report.written) {
+    const was = byPath.get(path);
+    const page = was === undefined ? undefined : views.pageById(was.pageId);
+    if (was === undefined || page === undefined || page === was.page) continue;
+    if (views.indexOf().pathForId(was.pageId) === was.indexPath) changed.push({ path, content: pageFileText(page) });
   }
-  const loaded = new Set(facade.list().filter((entry) => entry.sizeBytes !== null).map((entry) => entry.id));
-  const desired: DesiredFile[] = [];
-  for (const file of files.slice(0, MAX_ATTACH_FILES)) {
-    const content = contents.get(file.pageId);
-    if (content === undefined) continue;
-    if (loaded.has(file.pageId)) desired.push({ path: file.path, content });
-    else skipped.push({ path: file.path, reason: "page content not loaded, not reconciled" });
-  }
-  return { desired, skipped };
+  if (changed.length === 0) return;
+  const again = await reconcileOnAttach({ workspaceId: deps.workspaceId, desired: changed, provider: deps.provider });
+  report.inbound.push(...again.inbound);
+  report.conflicts.push(...again.conflicts);
+  report.skipped.push(...again.skipped);
 }
 
-/** Hand the sandbox side to the existing conflict banner (keep mine / take sandbox). */
-async function surfaceConflict(input: { path: string; theirs: string; pageId: string | undefined; why: string }): Promise<void> {
-  if (!input.pageId) return;
+/** Hand the sandbox side to the conflict banner (keep mine / take sandbox). */
+async function surfaceConflict(input: { path: string; theirs: string; pageId: string; why: string }): Promise<void> {
   useIdeSyncConflicts.getState().report({
     relPath: input.path, pageId: input.pageId, theirs: input.theirs,
     theirsHash: await sha16(input.theirs), atMs: Date.now(),
@@ -93,59 +103,48 @@ async function surfaceConflict(input: { path: string; theirs: string; pageId: st
   ideOutput("sync", `CONFLICT: ${input.path} ${input.why} — open the file to resolve`);
 }
 
-async function settleInbound(workspaceId: string, inbound: InboundFile[], pageIds: Map<string, string>, onInbound?: MaterializeOptions["onInbound"]): Promise<void> {
-  for (const file of inbound) {
-    const conflict = { path: file.path, theirs: file.content, pageId: pageIds.get(file.path) };
-    if (!onInbound) {
-      await surfaceConflict({ ...conflict, why: "changed in the sandbox while the app was away" });
-      continue;
-    }
-    try {
-      await onInbound(file);
-      recordSyncedHash(workspaceId, file.path, await sha16(file.content));
-    } catch (error) {
-      await surfaceConflict({ ...conflict, why: `changed in the sandbox but could not be applied (${messageOf(error)})` });
-    }
+/**
+ * 14': a shell edit made while the app was away, planned and executed by the
+ * session — the executor records the ledger when it applies. Refused when the
+ * page object changed since the snapshot (the app moved on: applying could undo
+ * its edit or rename) or when the executor did not apply it; either way the
+ * sandbox side goes to the conflict store and the old agreement stands.
+ */
+async function settleInbound(deps: AttachDeps, file: { path: string; content: string }, was: Snapshot): Promise<void> {
+  try {
+    if (deps.session.views.pageById(was.pageId) !== was.page) throw new Error("the page changed during attach");
+    const outcome = await deps.session.run({ kind: "write", path: file.path, text: file.content, hash: await sha16(file.content) });
+    if (!outcome.applied) throw new Error(outcome.error ?? "the executor did not apply it");
+  } catch (error) {
+    const why = `changed in the sandbox but could not be applied (${messageOf(error)})`;
+    await surfaceConflict({ path: file.path, theirs: file.content, pageId: was.pageId, why });
   }
 }
 
 /**
- * Reconcile the canonical page tree with the sandbox volume on attach (P4):
- * a three-way merge against the persisted sync ledger (reconcileOnAttach), so
- * shell edits made while the app was closed survive instead of being
- * overwritten. Writes record echo hashes, so the fs-agent's re-emission never
- * loops back into the page store. Sandbox-only files are left alone. Caps,
- * unloaded pages and failures surface in `failed` / `report.skipped`.
+ * Reconcile the page tree into the sandbox (file header). Sandbox-only files are
+ * left alone; shell edits made while away are applied through the session;
+ * both-sides changes go to the conflict store; caps and failures surface in
+ * `failed` / `report.skipped`. O(n) plus O(B) over the reconciled files.
  */
-export async function materializeWorkspace(
-  workspaceId: string,
-  _pages: PageEntry[],
-  options: MaterializeOptions = {},
-): Promise<MaterializeResult> {
-  if (!workspaceId) return { written: 0, failed: 0, report: emptyReconcileReport() };
-  const facade = pageStoreFacade(workspaceId);
-  const files = await listPageFiles(facade, workspaceId);
-  const { desired, skipped } = await loadDesired(facade, files);
-  const emptyPages = new Set(desired.filter((file) => file.content === "").map((file) => file.path));
+export async function attachWorkspace(deps: AttachDeps): Promise<MaterializeResult> {
+  const { files, skipped } = desiredSet(deps.session.views);
+  const byPath = new Map(files.map((file) => [file.path, file]));
   const report = await reconcileOnAttach({
-    workspaceId,
-    desired,
-    provider: createSandboxProvider("sandbox", bridgeFsTransport(workspaceId)),
-    // No ledger + an empty page: the sandbox copy wins — decideInboundWrite's live rule.
-    tiebreak: (path) => (emptyPages.has(path) ? "theirs" : null),
+    workspaceId: deps.workspaceId, desired: files, provider: deps.provider,
+    // No ledger + a loaded, empty page: the sandbox copy wins — decideInboundWrite's live rule.
+    tiebreak: (path) => (byPath.get(path)?.content === "" ? "theirs" : null),
   });
+  await rewriteChanged(deps, byPath, report);
   report.skipped.push(...skipped);
-  const pageIds = new Map(files.map((file) => [file.path, file.pageId]));
-  await settleInbound(workspaceId, report.inbound, pageIds, options.onInbound);
-  for (const conflict of report.conflicts) {
-    await surfaceConflict({ path: conflict.path, theirs: conflict.theirs, pageId: pageIds.get(conflict.path), why: "changed on both sides" });
+  for (const file of report.inbound) {
+    const was = byPath.get(file.path);
+    if (was !== undefined) await settleInbound(deps, file, was);
   }
-  return { written: report.written.length, failed: report.skipped.length, report };
-}
-
-/** The "ready" task: reconcile, then one Output line with the counts. */
-export async function attachSandbox(workspaceId: string, options: MaterializeOptions = {}): Promise<void> {
-  const { written, failed } = await materializeWorkspace(workspaceId, [], options);
-  ideOutput("fs-sync", `sandbox attached — materialized ${written} files${failed > 0 ? `, ${failed} FAILED` : ""}`);
-  if (failed > 0) console.warn(`[ide] materialize: ${failed} of ${written + failed} files failed to reach the sandbox`);
+  for (const { path, theirs } of report.conflicts) {
+    const was = byPath.get(path);
+    if (was !== undefined) await surfaceConflict({ path, theirs, pageId: was.pageId, why: "changed on both sides" });
+  }
+  const unloaded = skipped.filter((skip) => skip.reason === NOT_LOADED).length;
+  return { written: report.written.length, unloaded, failed: report.skipped.length - unloaded, report };
 }

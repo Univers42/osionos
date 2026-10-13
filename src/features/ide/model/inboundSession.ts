@@ -24,6 +24,7 @@ import { decodeUtf8Strict, type SerialQueue } from "./inboundPipeline";
 import { createInboundView, type ExecView } from "./inboundView";
 
 import type { PageFileStore } from "@/features/page-file/model/pageFileFacade";
+import type { ReadableViews } from "@/features/page-file/model/pageFileFacadeViews";
 import type { ExecContext, ExecOutcome } from "./inboundExec";
 import type { InboundEvent } from "./inboundPlan";
 import type { PageFacade } from "../vfs/pageProvider";
@@ -43,6 +44,8 @@ export interface InboundSessionDeps {
 }
 
 export interface InboundSession {
+  /** The readable page tree the session plans against (attach reads its desired set here). */
+  readonly views: ReadableViews;
   readonly view: ExecView;
   readonly facade: PageFacade;
   /** One fs-agent write/delete: decoded, planned, executed. Never throws (24). */
@@ -63,6 +66,7 @@ export function createInboundSession(deps: InboundSessionDeps): InboundSession {
   const ctx: ExecContext = { workspaceId: deps.workspaceId, facade, view, pending, restore: deps.restore, stat: deps.stat };
   const drain = createInboundDrain({ store: deps.store, views, ctx, enqueue: deps.enqueue });
   return {
+    views,
     view,
     facade,
     async handle(evt) {
