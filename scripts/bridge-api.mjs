@@ -903,9 +903,10 @@ async function fetchPageRowIfUuid(pageId, config, fetchImpl) {
 // collaborators; requirePageOwnership: owner_id/properties/collaborators;
 // ownerOrWorkspaceAccess: owner_id/workspace_id; the workspace-change guard:
 // workspace_id; withoutForeignSharingChanges: owner_id/visibility/collaborators/
-// workspace_id; handlePageArchiveCascade: id/workspace_id), and nothing else. Skips
-// the heavy content JSONB + search_doc tsvector that fetchPageRow's select:'*' pulls.
-const PAGE_AUTH_SELECT = 'id,owner_id,workspace_id,visibility,properties,collaborators';
+// workspace_id; handlePageArchiveCascade: id/workspace_id; withoutUnreachableParent:
+// parent_page_id), and nothing else. Skips the heavy content JSONB + search_doc
+// tsvector that fetchPageRow's select:'*' pulls.
+const PAGE_AUTH_SELECT = 'id,owner_id,workspace_id,visibility,properties,collaborators,parent_page_id';
 
 async function fetchPageAuthRow(pageId, config, fetchImpl) {
 	const id = requireUuid(pageId, 'pageId');
@@ -972,6 +973,31 @@ async function readablePageAccess(request, pageId, permission, config, fetchImpl
 	const row = requireReadablePage(await fetchPageRow(pageId, config, fetchImpl), token.userId);
 	const authContext = await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl);
 	return { authContext, row };
+}
+
+/**
+ * Whether the caller may nest a page under `parentPageId`: it exists and they read it as
+ * a member of its workspace (canReadPageRowAsMember). `authContext`: userId + workspaceIds.
+ */
+async function canNestUnder(authContext, parentPageId, config, fetchImpl) {
+	const parent = await fetchPageAuthRow(parentPageId, config, fetchImpl);
+	if (!parent) return false;
+	const members = [...authContext.workspaceIds, ...await memberWorkspaceIds(authContext.userId, config, fetchImpl)];
+	return canReadPageRowAsMember(parent, authContext.userId, members);
+}
+
+/**
+ * A page PATCH minus a parentPageId the caller may not nest under (added to `ignored`).
+ * Checked only when it MOVES the page: the outbox resends the stored parent on every
+ * edit, and a member may edit a page whose parent they cannot read.
+ */
+async function withoutUnreachableParent({ payload, ignored }, existing, authContext, config, fetchImpl) {
+	const target = optionalUuid(payload.parentPageId, 'parentPageId');
+	if (!target || sameId(target, existing.parent_page_id)) return { payload, ignored };
+	if (await canNestUnder(authContext, target, config, fetchImpl)) return { payload, ignored };
+	const kept = { ...payload };
+	delete kept.parentPageId;
+	return { payload: kept, ignored: [...ignored, 'parentPageId'] };
 }
 
 /** `row` when the caller may read it; otherwise the SAME 404 a missing id gets. */
@@ -2837,6 +2863,10 @@ async function handlePageCreate(request, response, config, fetchImpl) {
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const workspaceId = requireUuid(payload.workspaceId, 'workspaceId');
 	const authContext = await requireWorkspaceAccess(request, workspaceId, 'create', config, fetchImpl);
+	const parentPageId = optionalUuid(payload.parentPageId, 'parentPageId');
+	if (parentPageId && !await canNestUnder(authContext, parentPageId, config, fetchImpl)) {
+		throw Object.assign(new Error('Parent page not found.'), { status: 404 });
+	}
 	const rows = await baasRest(config, fetchImpl, 'osionos_pages', {
 		method: 'POST',
 		body: pageCreateRowFromPayload(payload, authContext),
@@ -2913,7 +2943,8 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	const requested = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	// Only the owner changes who may read the page; a non-owner's sharing keys are dropped
 	// (listed in `ignored` when they differed) while the rest of the edit is still written.
-	const { payload, ignored } = withoutForeignSharingChanges(requested, existing, access.userId);
+	const sharingChecked = withoutForeignSharingChanges(requested, existing, access.userId);
+	const { payload, ignored } = await withoutUnreachableParent(sharingChecked, existing, access, config, fetchImpl);
 	if (Object.keys(payload).length === 0 && Object.keys(requested).length > 0) {
 		json(response, 200, { ok: true, ignored }, config); // nothing left to write — not even updated_at
 		return true;
