@@ -37,7 +37,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
   return (
     <header
       data-testid="app-topbar"
-      className="flex h-[var(--osio-topbar-h)] shrink-0 items-center gap-1.5 border-b border-[var(--osio-topbar-border)] bg-[var(--osio-topbar-bg)] px-2"
+      className="flex h-[var(--osio-topbar-h)] shrink-0 items-center gap-1.5 bg-transparent [--osio-topbar-bg:var(--osio-bg-canvas)] px-2"
     >
       <div className="hidden md:block">
         <TopBarMenu groups={menus} />

@@ -327,7 +327,7 @@ const App: React.FC = () => {
     <div
       data-testid="app-shell"
       data-zen={zen ? "1" : undefined}
-      className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-page)]"
+      className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-canvas)]"
     >
       {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
       <TopBar onOpenSettings={openSettings} />

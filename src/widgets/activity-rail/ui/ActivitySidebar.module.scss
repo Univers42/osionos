@@ -10,25 +10,41 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+/* The rail sits on the canvas; the panel beside it is the floating card. */
 .activitySidebar {
   display: flex;
   height: 100%;
   flex-shrink: 0;
+  padding-block: var(--osio-frame-gap);
   z-index: var(--osio-z-sidebar);
-  background: var(--osio-bg-subtle);
-  border-right: 1px solid var(--osio-border-default);
 }
 
-/* The panel beside the rail. No width transition: docking is instant, so the
-   editor next to it is laid out once, not on every animation frame. The inner
-   box keeps the committed width, so a drag clips it instead of re-wrapping
-   every row per frame (VS Code-style). */
+/* The peek overlay is one card around rail and panel together, and the
+   overlay already insets itself by the frame gap. */
+.activitySidebar[data-sidebar-mode="peek"] {
+  padding-block: 0;
+  background: var(--osio-bg-surface);
+}
+
+/* No width transition: docking is instant, so the editor next to it is laid out
+   once, not on every animation frame. The inner box keeps the committed width,
+   so a drag clips it instead of re-wrapping every row per frame (VS Code-style).
+   overflow: hidden is also what rounds the content to the card's corners. */
 .panel {
   position: relative;
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  border-left: 1px solid var(--osio-border-default);
+  background: var(--osio-bg-surface);
+  border: 1px solid var(--osio-pane-border);
+  border-radius: var(--osio-radius-pane);
+  box-shadow: var(--osio-pane-shadow);
+}
+
+.activitySidebar[data-sidebar-mode="peek"] .panel {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .panel[hidden] {
@@ -42,11 +58,24 @@
   min-height: 0;
 }
 
+/* The gap between the card and the panes belongs to the workspace grid's
+   padding, so the handle takes no room of its own: its hit area (never under
+   6px, even when the gap is 0) and hairline are centred on that gap. */
 .resizeHandle {
   position: relative;
-  flex: 0 0 6px;
+  flex: 0 0 0;
   cursor: col-resize;
   touch-action: none;
+}
+
+.resizeHandle::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--osio-frame-gap) / 2);
+  width: max(var(--osio-frame-gap), 6px);
+  transform: translateX(-50%);
 }
 
 .resizeHandle::after {
@@ -54,7 +83,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 2px;
+  left: calc(var(--osio-frame-gap) / 2);
   width: 1px;
   background: transparent;
   transition: background-color var(--osio-motion-fast);

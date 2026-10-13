@@ -108,7 +108,7 @@ export const TabStrip: React.FC<{ pane: PaneNode; zoom: number }> = ({ pane, zoo
   return (
     <div
       data-osio-tabstrip
-      className="flex items-stretch h-9 shrink-0 bg-[var(--osio-bg-muted)] border-b border-[var(--osio-border-default)]"
+      className="flex items-stretch h-9 shrink-0 gap-0.5 px-1"
       onMouseDown={() => setActivePane(pane.id)}
       onDragOver={onDragOver}
       onDrop={onDrop}

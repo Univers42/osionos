@@ -99,7 +99,7 @@
   --osio-bg-canvas: var(--osio-n-0);
   --osio-bg-surface: var(--osio-n-1);
   --osio-bg-panel: var(--osio-bg-surface);
-  --osio-bg-page: var(--osio-n-2);
+  --osio-bg-page: var(--osio-n-1);
   --osio-bg-subtle: var(--osio-n-3);
   --osio-bg-muted: var(--osio-n-4);
   --osio-bg-hover: var(--osio-n-5);

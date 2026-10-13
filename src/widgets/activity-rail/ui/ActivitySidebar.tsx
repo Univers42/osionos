@@ -115,7 +115,7 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, 
   return (
     <aside className={styles.activitySidebar} aria-label="Sidebar" data-sidebar-mode={peek ? "peek" : sidebarMode}>
       <ActivityRail onOpenSettings={onOpenSettings} />
-      <div ref={panelRef} className={styles.panel} hidden={!showPanel}>
+      <div ref={panelRef} className={styles.panel} data-osio-sidebar-card hidden={!showPanel}>
         {panelMounted ? (
           <div className={styles.panelInner} style={{ width: sidebarWidth }}>
             <SidebarPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} peek={peek} />

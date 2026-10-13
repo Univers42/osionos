@@ -111,12 +111,14 @@ test("the colours kept outside the stylesheet match the generated palette", () =
   const light = resolved("light");
   const dark = resolved("dark");
   const html = readAppFile("index.html");
-  assert.ok(html.includes(`content="${light["--osio-bg-page"]}" media="(prefers-color-scheme: light)"`), "light theme-color");
-  assert.ok(html.includes(`content="${dark["--osio-bg-page"]}" media="(prefers-color-scheme: dark)"`), "dark theme-color");
+  assert.ok(html.includes(`content="${light["--osio-bg-canvas"]}" media="(prefers-color-scheme: light)"`), "light theme-color");
+  assert.ok(html.includes(`content="${dark["--osio-bg-canvas"]}" media="(prefers-color-scheme: dark)"`), "dark theme-color");
   assert.ok(readAppFile("public/favicon.svg").includes(`fill="${light["--osio-accent"]}"`), "favicon");
   assert.ok(readAppFile("src/features/auth/ui/Portal.tsx").includes(`fill="${light["--osio-accent"]}"`), "sign-in brand mark");
+  // The first swatch is the paper tone (n-2): bg-page now sits on the surface
+  // (n-1) because a pane is a card, but the picker still shows the paper.
   assert.deepEqual(WARM_PALETTE.swatches, [
-    light["--osio-bg-page"],
+    light["--osio-n-2"],
     light["--osio-bg-surface"],
     light["--osio-accent"],
     light["--osio-update"],

@@ -66,17 +66,17 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
   const activeTab = pane.tabs.find((t) => t.tabId === pane.activeTabId) ?? pane.tabs[0] ?? null;
   const mounted = useDeferredMount(isActive);
   const zoom = isPaneZoomEnabled() ? normalizePaneZoom(pane.zoom) : 1;
+  // A lone pane has nothing to be told apart from.
+  const isOneOfMany = useWorkspaceLayout((s) => s.root.type === "split");
 
   return (
     <div
       data-osio-pane={pane.id}
+      data-osio-pane-active={isActive && isOneOfMany ? "" : undefined}
       // `contain: layout paint` isolates each pane's rendering so an edit/scroll in
       // one pane can't trigger layout/paint of the other panes (key with 8 open).
       style={{ contain: "layout paint" }}
-      className={[
-        "relative flex flex-col min-w-0 min-h-0 flex-1 overflow-hidden bg-[var(--osio-bg-page)]",
-        isActive ? "ring-1 ring-inset ring-[var(--osio-accent)]/35" : "",
-      ].join(" ")}
+      className="relative flex flex-col min-w-0 min-h-0 flex-1 overflow-hidden rounded-[var(--osio-radius-pane)] border border-[var(--osio-pane-border)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-pane-shadow)]"
     >
       <TabStrip pane={pane} zoom={zoom} />
       <div
