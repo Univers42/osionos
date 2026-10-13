@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { PageEntry } from "../../src/entities/page/model/types.ts";
-import { buildPageIndex } from "../../src/features/page-file/model/pageIndex.ts";
+import { buildPageIndex, fileOfEntry } from "../../src/features/page-file/model/pageIndex.ts";
 import { pathForEntry } from "../../src/features/page-file/model/pagePaths.ts";
 import { generatedTree, page } from "./page-tree-fixtures.ts";
 
@@ -116,4 +116,13 @@ test("a 10 000-deep chain indexes without recursion", () => {
   assert.equal(index.entries.length, depth);
   // "a/" per ancestor, then the page's own "a.omd".
   assert.equal(index.pathForId(`c${depth - 1}`)?.length, (depth - 1) * 2 + 5);
+});
+
+test("fileOfEntry: a folder's file is its _folder.omd, a page's and a code page's file is its own path", () => {
+  const index = buildPageIndex(handTree);
+  const fileOf = (id: string) => fileOfEntry(index.entries.find((entry) => entry.id === id) ?? { path: "?", kind: "page" });
+  assert.equal(fileOf("s"), "src/_folder.omd");
+  assert.equal(fileOf("m"), "src/main.ts");
+  assert.equal(fileOf("r"), "Roadmap.omd");
+  assert.equal(fileOf("n"), "src/main.ts.d/notes.omd");
 });

@@ -20,7 +20,7 @@ import type { PageIndex, PageIndexEntry } from "./pageIndex";
  *  FILE (+ rarely DIR `main.ts.d/`). Names come off the page index, so this table and
  *  `PageIndex.pathForId` cannot disagree. The mutating ops run against OpContext. */
 /** A block page's DIR id (`#dir`) and a folder page's meta-FILE id (`#meta`). */
-const DIR_SUFFIX = "#dir";
+export const DIR_SUFFIX = "#dir";
 export const META_SUFFIX = "#meta";
 /** A code page's children live in `<path>.d/` — pagePaths.childDirName's rule. */
 export const CODE_DIR_SUFFIX = ".d";

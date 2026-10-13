@@ -24,6 +24,7 @@ import { LoadingPane } from "@/shared/ui";
 import { PageBody } from "./PageBody";
 import { PageBodyUnavailable } from "./PageBodyUnavailable";
 import { usePageBodyLoad } from "../model/usePageBodyLoad";
+import { PageConflictBanner } from "@/features/page-file/ui/PageConflictBanner";
 import { usePageHeaderBarProps } from "@/entities/page/model/usePageHeaderBarProps";
 import { PageHeader } from "./PageHeader";
 import { PageOutlineRail } from "@/widgets/page-toc/PageOutlineRail";
@@ -71,6 +72,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef,
       const first = page?.content?.[0];
       return {
         cover: page?.cover,
+        surface: page?.surface,
         soleBlock: page?.content?.length === 1,
         firstType: first?.type,
         firstLayoutMode: first?.layoutMode,
@@ -168,6 +170,9 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef,
         onCloseComments={() => setCommentsOpen(false)}
       />
 
+      {/* Surfaced sandbox divergence (ADR-001 §7). Code pages own theirs inside
+          CodeFileView, so only the block editor shows this one. */}
+      {body.state === "ready" && shell.surface !== "code" && <PageConflictBanner pageId={pageId} />}
       {body.state === "ready" && <PageBody pageId={pageId} locked={pageConfig.locked} />}
       {body.state === "loading" && <LoadingPane label="Loading page" className="py-16" />}
       {(body.state === "failed" || body.state === "signed-out") && (

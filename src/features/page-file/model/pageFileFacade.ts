@@ -44,6 +44,8 @@ export interface PageFileStore {
   access(): object | null;
   canRead(page: PageEntry): boolean;
   canEdit(page: PageEntry): boolean;
+  /** Owner-only: may this user change who sees the page (pinFilePatch). */
+  canChangeSharing(page: PageEntry): boolean;
   /** Fetch a page body the store has not hydrated yet. */
   loadContent(pageId: string): Promise<void>;
   subscribe(listener: (state: unknown, prevState: unknown) => void): () => void;
@@ -60,7 +62,8 @@ export interface PageFileStore {
 
 type DirLookup = (parentId: string | null) => PageDir | undefined;
 
-function operationContext(deps: PageFileStore, views: ReadableViews, dirOf: DirLookup): OpContext {
+/** The context every mutating operation runs in; `dirOf` defaults to the live tables. */
+export function operationContext(deps: PageFileStore, views: ReadableViews, dirOf: DirLookup = (parentId) => views.tablesFor().dirs.get(ownerOf(parentId))): OpContext {
   return {
     deps,
     pageById: views.pageById,
@@ -93,9 +96,10 @@ function subscribeToTreeChanges(deps: PageFileStore, views: ReadableViews, onCha
  * through `workspace://<ws>/<path>`, online or degraded, from the SAME tree.
  * O(1) by id or name, O(children) per listing, O(depth) per walk; the memoised
  * views live in pageFileFacadeViews.ts and the mutating operations in pageFileFacadeOps.ts.
+ * Pass `views` to share one slice cache with another reader of the same store (the
+ * inbound view): two caches would each pay the O(n) readable filter per store change.
  */
-export function createPageFileFacade(deps: PageFileStore): PageFacade {
-  const views = createReadableViews(deps);
+export function createPageFileFacade(deps: PageFileStore, views: ReadableViews = createReadableViews(deps)): PageFacade {
   const dirOf: DirLookup = (parentId) => views.tablesFor().dirs.get(ownerOf(parentId));
   const ctx = operationContext(deps, views, dirOf);
 

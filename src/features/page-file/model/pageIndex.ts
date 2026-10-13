@@ -13,7 +13,7 @@
 import type { PageEntry } from "@/entities/page";
 
 import { assignSiblingNames, kindOfPage } from "./pagePaths";
-import type { PageFileKind } from "./types";
+import { FOLDER_META_NAME, type PageFileKind } from "./types";
 
 // Pure: no store import.
 
@@ -23,6 +23,11 @@ export interface PageIndexEntry {
   path: string;
   kind: PageFileKind;
   parentId: string | null;
+}
+
+/** The file an entry stands for: a folder's is the `_folder.omd` inside its directory. O(1). */
+export function fileOfEntry(entry: Pick<PageIndexEntry, "path" | "kind">): string {
+  return entry.kind === "dir" ? `${entry.path}/${FOLDER_META_NAME}` : entry.path;
 }
 
 export interface PageIndex {

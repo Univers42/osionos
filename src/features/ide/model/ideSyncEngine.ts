@@ -50,12 +50,33 @@ export function syncedHashOf(workspaceId: string, relPath: string): string | nul
 export function recordOutboundWrite(workspaceId: string, relPath: string, hash: string): () => void {
   const previous = syncedHashOf(workspaceId, relPath);
   recordEditorHash(hash);
+  rememberOwnWrite(`${workspaceId}\0${relPath}`, hash);
   recordSyncedHash(workspaceId, relPath, hash);
   return () => {
     if (syncedHashOf(workspaceId, relPath) !== hash) return; // superseded since: keep the newer agreement
     if (previous === null) clearSyncedHash(workspaceId, relPath);
     else recordSyncedHash(workspaceId, relPath, previous);
   };
+}
+
+// Ponytail: the last OWN_WRITES_KEPT hashes per path, for the tab's life (no TTL, one
+// entry per path ever written). A path written more often than that before an old
+// write's fs event arrives forgets it, and inboundLanded may then apply that stale
+// write over a newer shell save (C3b5 R5). Raise the count if the writer ever loops.
+const OWN_WRITES_KEPT = 8;
+const ownWrites = new Map<string, string[]>();
+
+function rememberOwnWrite(key: string, hash: string): void {
+  const kept = (ownWrites.get(key) ?? []).filter((seen) => seen !== hash);
+  kept.push(hash);
+  ownWrites.set(key, kept.slice(-OWN_WRITES_KEPT));
+}
+
+/** `hash` is a write of ours at `relPath` that the ledger has since moved past:
+ *  its fs event is stale, whatever the page looks like now (C3b5 C3.3). O(kept). */
+export function isStaleOwnWrite(workspaceId: string, relPath: string, hash: string): boolean {
+  if (syncedHashOf(workspaceId, relPath) === hash) return false;
+  return ownWrites.get(`${workspaceId}\0${relPath}`)?.includes(hash) ?? false;
 }
 
 export type InboundDecision =
@@ -68,10 +89,13 @@ export type InboundDecision =
 /**
  * Decide what an inbound sandbox write means against the local page state.
  *   echo     — our own write bouncing back (suppressed upstream hash match)
- *   ignore   — contents already identical (ledger refreshed by the caller)
+ *   ignore   — contents already identical, or the file is still the agreed base
  *   create   — no local page exists yet (shell/git created a new file)
  *   apply    — local side unchanged since the last agreement → fast-forward
  *   conflict — BOTH sides changed → surface, never clobber
+ * `agreedPageHash`: what the page hashed to right after the last inbound apply or
+ * create at this path, while the ledger still holds that shell text (inboundLanded):
+ * "ours unchanged since the agreement" also accepts it.
  */
 export function decideInboundWrite(input: {
   inboundHash: string | null;
@@ -80,11 +104,19 @@ export function decideInboundWrite(input: {
   localHash: string | null;
   inboundContent: string;
   lastSyncedHash: string | null;
+  agreedPageHash?: string | null;
 }): InboundDecision {
+  const { lastSyncedHash, localHash } = input;
+  const agreed = input.agreedPageHash ?? null;
   if (input.inboundHash && input.isEcho(input.inboundHash)) return { action: "echo" };
   if (input.localContent === null) return { action: "create" };
+  // theirs === base: the file has not moved since the agreement, only the page has.
+  // Nothing of the shell's is lost (its bytes ARE the base). Ours reaches the file
+  // through the outbound writer for a block page; a code page, a failed writer run
+  // (never retried) and a page whose body never loaded wait for the next attach.
+  if (input.inboundHash !== null && lastSyncedHash !== null && input.inboundHash === lastSyncedHash) return { action: "ignore" };
   if (input.localContent === input.inboundContent) return { action: "ignore" };
-  if (input.lastSyncedHash !== null && input.localHash === input.lastSyncedHash) return { action: "apply" };
-  if (input.lastSyncedHash === null && input.localContent === "") return { action: "apply" };
+  if (lastSyncedHash !== null && (localHash === lastSyncedHash || (agreed !== null && localHash === agreed))) return { action: "apply" };
+  if (lastSyncedHash === null && input.localContent === "") return { action: "apply" };
   return { action: "conflict" };
 }

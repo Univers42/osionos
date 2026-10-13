@@ -96,11 +96,13 @@ function claimNext(page: PageEntry, claimed: Set<string>, nextK: Map<string, num
  * Sanitized base plus its lower-case, sharing one `toLowerCase` between the `.omd`
  * probe and the collision key (the old code paid it twice per page). A page drops a
  * typed ".omd" (the suffix is added back), a code file named "*.omd" gets ".txt" so
- * it is never read back as a page file. O(title).
+ * it is never read back as a page file. A page also drops trailing dots: "etc." would
+ * be "etc..omd", a name the inbound guard refuses (inboundSegments). O(title).
  */
 function baseFor(page: PageEntry, kind: PageFileKind): { base: string; lower: string } {
   const raw = sanitizeSegment(page.title || "untitled");
-  const clean = raw === "." ? "untitled" : raw;
+  const trimmed = kind === "page" ? raw.replace(/\.+$/, "") : raw;
+  const clean = trimmed === "" || trimmed === "." ? "untitled" : trimmed;
   const lowerRaw = clean.toLowerCase();
   if (kind === "code") {
     if (lowerRaw.endsWith(PAGE_FILE_SUFFIX)) return { base: `${clean}.txt`, lower: `${lowerRaw}.txt` };
@@ -127,14 +129,7 @@ function ownName(base: string, kind: PageFileKind): string {
 }
 
 function childDirName(base: string, kind: PageFileKind): string {
-  switch (kind) {
-    case "code":
-      return base + ".d";
-    case "dir":
-      return base;
-    case "page":
-      return base;
-  }
+  return kind === "code" ? `${base}.d` : base;
 }
 
 function suffixed(base: string, k: number, isCode: boolean): string {
@@ -154,7 +149,6 @@ function suffixed(base: string, k: number, isCode: boolean): string {
  */
 export function fileNameForPage(page: PageEntry, siblings: readonly PageEntry[]): string {
   const others = siblings.filter((p) => p._id !== page._id);
-  // Include page even if archived by temporarily clearing archivedAt for naming
   const pageForNaming = page.archivedAt ? { ...page, archivedAt: null } : page;
   const all = [...others, pageForNaming];
   const names = assignSiblingNames(all);
@@ -176,11 +170,9 @@ export function pathForEntry(
   let currentId: string | undefined = pageId;
   let isFirst = true;
   const siblingCache = new Map<string, Map<string, SiblingName>>();
-
   while (currentId) {
     if (visited.has(currentId)) return "";
     visited.add(currentId);
-
     const page = resolve(currentId);
     if (!page || page.archivedAt) return "";
 

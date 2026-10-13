@@ -12,9 +12,11 @@
 
 import { fsError } from "@/features/ide/vfs/errors";
 import type { PageFacadeEntry } from "@/features/ide/vfs/pageProvider";
-import { codeBlockOf, createCodeFileBlock } from "@/features/ide/model/codeFile";
+import { codeBlockOf } from "@/features/ide/model/codeFile";
 import { languageForFileName } from "@/features/ide/model/ideLanguages";
+import { addPageFor, type CreateInput } from "./pageFileAddPage";
 import { fileToPage, isPageFileName } from "./pageFileCodec";
+import { pinFilePatch } from "./pinFilePatch";
 import { assignSiblingNames, kindOfPage, titleFromFileName, type SiblingName } from "./pagePaths";
 import { CODE_DIR_SUFFIX, META_SUFFIX, ownerOf } from "./pageFileFacadeTables";
 import { FOLDER_META_NAME } from "./types";
@@ -22,8 +24,6 @@ import type { PageEntry } from "@/entities/page";
 import type { PageFileStore } from "./pageFileFacade";
 
 /** The mutating file operations of the page-file facade, run against the facade's closures. */
-type CreateInput = { title: string; parentId: string | null; kind: "file" | "dir"; content?: string };
-
 export interface OpContext {
   readonly deps: PageFileStore;
   pageById(id: string): PageEntry | undefined;
@@ -68,20 +68,14 @@ function assertNotMeta(id: string, operation: string): void {
 /** `_folder.omd` is reserved in EVERY directory (assignSiblingNames seeds `claimed` with it), so a
  *  page by that name is only reachable under the ` (2)` the index gives it. The test is on the
  *  SANITIZED name, never on `claimedIn`: it holds where no claimed table exists at all. O(len). */
-function assertNotFolderMeta(deps: PageFileStore, name: string): void {
+export function assertNotFolderMeta(deps: PageFileStore, name: string): void {
   if (deps.toSegment(name).toLowerCase() === FOLDER_META_NAME.toLowerCase()) {
     throw fsError("Unsupported", undefined, "a folder's meta file is created with its folder");
   }
 }
 
-function addPageFor(deps: PageFileStore, input: CreateInput, parentId: string | null): Promise<PageEntry | null> {
-  if (input.kind === "dir") return deps.addPage({ title: input.title, parentId, surface: "folder" });
-  if (isPageFileName(input.title)) return deps.addPage({ title: titleFromFileName(input.title), parentId, surface: "page", content: fileToPage(input.content ?? "").content });
-  return deps.addPage({ title: input.title, parentId, surface: "code", content: [createCodeFileBlock(input.title, input.content ?? "")] });
-}
-
 /** The two names the page index (assignSiblingNames) reserves for the new page: its own and its child dir. */
-function reservedNames(input: CreateInput, wanted: string): string[] {
+export function reservedNames(input: CreateInput, wanted: string): string[] {
   const own = wanted.toLowerCase();
   if (input.kind === "dir") return [own];
   return [own, isPageFileName(input.title) ? titleFromFileName(own) : `${own}${CODE_DIR_SUFFIX}`];
@@ -92,7 +86,7 @@ function reservedNames(input: CreateInput, wanted: string): string[] {
  *  the new page taking a ` (2)` AND displacing an earlier creator whose id sorts later. `created`
  *  is EXCLUDED from its own siblings, so a rename/move candidate reports nothing when nothing
  *  collides — a case-only rename included. O(n + s log s): n pages filtered, s siblings sorted. */
-function displacesSiblings(ctx: OpContext, created: PageEntry, parentId: string | null): boolean {
+export function displacesSiblings(ctx: OpContext, created: PageEntry, parentId: string | null): boolean {
   const others = ctx.deps.pages().filter((p) => p._id !== created._id && (p.parentPageId ?? null) === parentId && ctx.pageById(p._id) !== undefined);
   const without = assignSiblingNames(others);
   const withNew = assignSiblingNames([...others, created]);
@@ -148,7 +142,7 @@ export async function writePage(ctx: OpContext, id: string, text: string): Promi
     return ctx.deps.updateBlock(page._id, block.id, { content: text });
   }
   const parsed = fileToPage(text, page);
-  ctx.deps.patchPage(page._id, parsed.patch);
+  ctx.deps.patchPage(page._id, pinFilePatch(parsed.patch, ctx.deps.canChangeSharing(page)));
   ctx.deps.updatePageContent(page._id, parsed.content);
 }
 

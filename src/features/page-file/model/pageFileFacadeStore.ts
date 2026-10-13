@@ -12,12 +12,12 @@
 
 import { API_BASE, getActivePageJwt } from "@/shared/api/client";
 import { usePageStore } from "@/store/usePageStore";
-import { canEditPage, canReadPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
+import { canChangePageVisibility, canEditPage, canReadPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { sanitizeSegment } from "@/features/ide/model/idePaths";
 
 import type { PageFacade } from "@/features/ide/vfs/pageProvider";
 
-import { createPageFileFacade, type NewPage } from "./pageFileFacade";
+import { createPageFileFacade, type NewPage, type PageFileStore } from "./pageFileFacade";
 
 /** The REAL PageFacade over usePageStore — wires the live store like
  *  pageStoreFacade (store access, per-call jwt, lazy fetchPageContent) plus the
@@ -26,16 +26,23 @@ import { createPageFileFacade, type NewPage } from "./pageFileFacade";
  *  `import.meta.env`, neither of which loads under node, so the facade proper
  *  (pageFileFacade.ts) stays importable by the canvas tests and the bench. */
 export function pageFileFacade(workspaceId: string): PageFacade {
+  return createPageFileFacade(pageFileStoreDeps(workspaceId));
+}
+
+/** The live store as the facade's dependency set — shared by the facade above and
+ *  the inbound session, which builds its own facade over the same views. */
+export function pageFileStoreDeps(workspaceId: string): PageFileStore {
   const store = () => usePageStore.getState();
   const context = () => getCurrentPageAccessContext();
   const jwt = (): string => getActivePageJwt() ?? "";
 
-  return createPageFileFacade({
+  return {
     workspaceId,
     pages: () => store().pages[workspaceId] ?? [],
     access: context,
     canRead: (page) => canReadPage(page, context()),
     canEdit: (page) => canEditPage(page, context()),
+    canChangeSharing: (page) => canChangePageVisibility(page, context()),
     loadContent: async (pageId) => {
       if (API_BASE && jwt()) await store().fetchPageContent(pageId, jwt());
     },
@@ -51,5 +58,5 @@ export function pageFileFacade(workspaceId: string): PageFacade {
     movePage: (pageId, parentId) => store().movePage(pageId, parentId, workspaceId),
     archivePage: (pageId) => store().archivePage(pageId, workspaceId, jwt()),
     toSegment: sanitizeSegment,
-  });
+  };
 }
