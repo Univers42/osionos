@@ -127,14 +127,7 @@ function ownName(base: string, kind: PageFileKind): string {
 }
 
 function childDirName(base: string, kind: PageFileKind): string {
-  switch (kind) {
-    case "code":
-      return base + ".d";
-    case "dir":
-      return base;
-    case "page":
-      return base;
-  }
+  return kind === "code" ? `${base}.d` : base;
 }
 
 function suffixed(base: string, k: number, isCode: boolean): string {
