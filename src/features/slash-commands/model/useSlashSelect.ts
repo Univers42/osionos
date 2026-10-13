@@ -23,7 +23,6 @@ import {
 import { createDefaultTableBlock } from "@/entities/block/model/tableBlocks";
 import { createDefaultDrawBlock } from "@/entities/block/model/drawBlocks";
 import type { SlashMenuState } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
-import { focusEditableBlock } from "@/features/block-editor/model/blockDomFocus";
 import { createViewShowcaseLayoutContent } from "@/widgets/database-view/model/databaseViewShowcase";
 import { createProfileHeaderContent, PROFILE_HEADER_COVER } from "./profileHeaderPreset";
 
@@ -68,13 +67,6 @@ function appendInlineText(content: string, insertText: string): string {
   const cleanContent = stripSlashQuery(content);
   const separator = cleanContent.length > 0 && cleanContent === cleanContent.trimEnd() ? " " : "";
   return `${cleanContent}${separator}${insertText}`;
-}
-
-/**
- * Places the cursor at the start or end of a block's editable content.
- */
-export function repositionCursor(blockId: string, _content: string) {
-  focusEditableBlock(blockId, "start");
 }
 
 export function useSlashSelect({
@@ -142,7 +134,7 @@ export function useSlashSelect({
             placeholderText: undefined,
           });
           if (!createdPage) {
-            repositionCursor(blockId, nextContent);
+            focusBlock(blockId, true);
           }
         })();
         return;
@@ -204,7 +196,7 @@ export function useSlashSelect({
               content: nextContent,
               placeholderText: undefined,
             });
-            if (!createdPage) repositionCursor(blockId, nextContent);
+            if (!createdPage) focusBlock(blockId, true);
           })();
           return;
         }
@@ -223,7 +215,7 @@ export function useSlashSelect({
               content: nextContent,
               placeholderText: undefined,
             });
-            if (!createdPage) repositionCursor(blockId, nextContent);
+            if (!createdPage) focusBlock(blockId, true);
           })();
           return;
         }
@@ -265,7 +257,6 @@ export function useSlashSelect({
         updateBlock(pageId, blockId, { content: cleanContent || "E = mc^2" });
       }
 
-      repositionCursor(blockId, "");
     },
     [
       pageId,
@@ -415,7 +406,7 @@ export function useSlashSelect({
         content: nextContent,
         placeholderText: undefined,
       });
-      repositionCursor(blockId, nextContent);
+      focusBlock(blockId, true);
     },
     [
       slashMenu,
@@ -423,6 +414,7 @@ export function useSlashSelect({
       createPageInPrivateWorkspace,
       updateBlock,
       pageId,
+      focusBlock,
     ],
   );
 
@@ -440,9 +432,9 @@ export function useSlashSelect({
         content: nextContent,
         placeholderText: undefined,
       });
-      repositionCursor(blockId, nextContent);
+      focusBlock(blockId, true);
     },
-    [pageId, setSlashMenu, slashMenu, updateBlock],
+    [pageId, setSlashMenu, slashMenu, updateBlock, focusBlock],
   );
 
   return {
