@@ -41,7 +41,7 @@ import {
   TextCursor,
   Trash2,
 } from 'lucide-react';
-import { LayoutDashboard } from 'lucide-react';
+import { BookOpen, LayoutDashboard } from 'lucide-react';
 import { PAGE_DEBUG_TOOLS, usePageDebugStore, type PageDebugToolId } from '@/shared/debug/pageDebugStore';
 
 import {
@@ -185,6 +185,14 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
   const hasActionMatch = useMemo(() => !normalizedQuery || ACTION_LABELS.some((label) => label.includes(normalizedQuery)), [normalizedQuery]);
 
   const closeConfig = useCallback(() => setConfigOpen(false), []);
+  // Notion's "Turn into wiki": only an ordinary page or a wiki can switch, not a
+  // folder, an agent, a code file or Home.
+  const pageSurface = usePageStore((state) => state.pageById(pageId)?.surface);
+  const canToggleWiki = pageSurface === undefined || pageSurface === 'page' || pageSurface === 'wiki';
+  const toggleWiki = useCallback(() => {
+    usePageStore.getState().patchPage(pageId, { surface: pageSurface === 'wiki' ? undefined : 'wiki' });
+    setConfigOpen(false);
+  }, [pageId, pageSurface]);
   useClickOutside(menuBoundaryRefs, closeConfig, configOpen);
   useEscapeKey(closeConfig, configOpen);
 
@@ -256,6 +264,9 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                       <MenuButton icon={<Presentation size={16} />} label="Present" shortcut="Ctrl+Alt+P" checked={actions.config.presentationMode} badge="Beta" onClick={() => runPageAction(actions.present(), showActionError)} />
                       <MenuButton icon={<Text size={16} />} label="Small text" checked={actions.config.smallText} onClick={() => runPageAction(actions.toggleSmallText(), showActionError)} />
                       <MenuButton icon={<Maximize2 size={16} />} label="Full width" checked={actions.config.fullWidth} onClick={() => runPageAction(actions.toggleFullWidth(), showActionError)} />
+                      {canToggleWiki && (
+                        <MenuButton icon={<BookOpen size={16} />} label={pageSurface === 'wiki' ? 'Turn into page' : 'Turn into wiki'} onClick={toggleWiki} />
+                      )}
                       <MenuButton icon={<Lock size={16} />} label="Lock page" checked={actions.config.locked} onClick={() => runPageAction(actions.toggleLock(), showActionError)} />
                       <MenuButton icon={<Code2 size={16} />} label="Raw / code mode" checked={actions.config.rawMode} onClick={() => { runPageAction(actions.toggleRawMode(), showActionError); closeConfig(); }} />
                       {actions.hasRemovableHeader && (

@@ -148,7 +148,8 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
         ? <FolderOpen size={14} className="shrink-0 text-[var(--osio-accent)]" />
         : <Folder size={14} className="shrink-0 text-[var(--osio-fg-muted)]" />;
     }
-    if (isWiki) return <BookOpen size={14} className="shrink-0 text-[var(--osio-accent)]" />;
+    // A wiki shows its own icon, as in Notion; the book is only the default.
+    if (isWiki && !pageEntry.icon) return <BookOpen size={14} className="shrink-0 text-[var(--osio-accent)]" />;
     // Dev mode: a code file shows a language-colored chip so the filesystem
     // "showcases the extension" at a glance (the extension is already in the title).
     if (devMode && pageEntry.surface === "code") {
