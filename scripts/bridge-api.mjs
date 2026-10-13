@@ -954,15 +954,21 @@ function requireReadablePage(row, userId) {
 	return row;
 }
 
+/**
+ * Access for a page-scoped side route (config, actions, translate). A page the caller
+ * cannot read takes the missing-page path: the same answer as a random id, scoped to
+ * the caller's own workspace, so nothing is written under the page's workspace.
+ */
 async function requirePageScopeAccess(request, pageId, payload, permission, config, fetchImpl = fetch) {
 	const normalizedPageId = requirePageReference(pageId);
-	const row = await fetchPageRowIfUuid(normalizedPageId, config, fetchImpl);
+	const tokenContext = verifyAppSessionToken(bearerToken(request), config);
+	const found = await fetchPageRowIfUuid(normalizedPageId, config, fetchImpl);
+	const row = found && canReadPageRow(found, tokenContext.userId) ? found : null;
 	if (row) {
 		const authContext = await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl);
 		return { pageId: normalizedPageId, workspaceId: row.workspace_id, authContext, row };
 	}
 
-	const tokenContext = verifyAppSessionToken(bearerToken(request), config);
 	const requestedWorkspaceId = UUID_REGEX.test(String(payload?.workspaceId ?? '')) ? String(payload.workspaceId) : '';
 	const workspaceId = requestedWorkspaceId && tokenContext.workspaceIds.includes(requestedWorkspaceId)
 		? requestedWorkspaceId
@@ -2663,8 +2669,7 @@ async function handleFavoriteAdd(request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const pageId = requireUuid(payload.pageId, 'pageId');
-	const row = await fetchPageRow(pageId, config, fetchImpl);
-	if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
+	const row = requireReadablePage(await fetchPageAuthRow(pageId, config, fetchImpl), authContext.userId);
 	await ownerOrWorkspaceAccess(request, row, 'read', config, fetchImpl);
 	await baasRest(config, fetchImpl, 'osionos_page_favorites', {
 		method: 'POST',
@@ -3241,10 +3246,9 @@ async function handlePageTranslate(url, request, response, config, fetchImpl) {
 	const pageId = pageSubresourceIdFromPath(url.pathname, 'translate');
 	if (!pageId) return false;
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
-	const { row, authContext } = await requirePageScopeAccess(request, pageId, payload, 'read', config, fetchImpl);
-	// A row the caller may not read takes the missing-id path (translate the request's own
-	// payload): indistinguishable from a nonexistent page, and its content never leaves.
-	const source = row && canReadPageRow(row, authContext.userId) ? row : null;
+	// An unreadable page comes back as no row (requirePageScopeAccess): the request's own
+	// payload is translated, exactly as for a nonexistent page, and its content never leaves.
+	const { row: source } = await requirePageScopeAccess(request, pageId, payload, 'read', config, fetchImpl);
 	const targetLocale = safeTranslationLocale(payload.targetLocale);
 	const cache = new Map();
 	const sourceTitle = source ? source.title : safeText(payload.title, 500);
