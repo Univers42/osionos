@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { formatNs, measure, type BenchResult, type BenchSuite } from "./harness.ts";
+import { formatNs, isBurst, measure, measureBurst, type BenchResult, type BenchSuite } from "./harness.ts";
 
 // Usage: node --experimental-strip-types --expose-gc tests/bench/run.ts tests/bench/x.bench.ts…
 // Each file exports `bench` (a BenchSuite). Exit 1 when any case's p95 exceeds its budget.
@@ -26,7 +26,8 @@ function isSuite(value: unknown): value is BenchSuite {
 
 function row(result: BenchResult): string {
   const cells = [formatNs(result.medianNs), formatNs(result.p95Ns), formatNs(result.p99Ns), formatNs(result.budgetNs)];
-  return `${result.ok ? "ok  " : "OVER"} ${result.name.padEnd(52)} ${cells.map((c) => c.padStart(11)).join(" ")}  ×${result.batch}`;
+  const total = result.totalNs === undefined ? "" : `  total ${formatNs(result.totalNs)} / ${formatNs(result.totalBudgetNs ?? Number.NaN)}`;
+  return `${result.ok ? "ok  " : "OVER"} ${result.name.padEnd(52)} ${cells.map((c) => c.padStart(11)).join(" ")}  ×${result.batch}${total}`;
 }
 
 async function runFile(file: string): Promise<BenchResult[]> {
@@ -35,11 +36,12 @@ async function runFile(file: string): Promise<BenchResult[]> {
   if (!isSuite(suite)) throw new Error(`${file}: no exported \`bench\` suite`);
   console.log(`\n# ${suite.suite}  (${file})`);
   console.log(`     ${"case".padEnd(52)} ${["median", "p95", "p99", "budget"].map((h) => h.padStart(11)).join(" ")}  batch`);
-  const results = suite.cases.map((entry) => {
-    const result = measure(entry);
+  const results: BenchResult[] = [];
+  for (const entry of suite.cases) {
+    const result = isBurst(entry) ? await measureBurst(entry) : measure(entry);
     console.log(row(result));
-    return result;
-  });
+    results.push(result);
+  }
   mkdirSync(OUT_DIR, { recursive: true });
   const report = { suite: suite.suite, node: process.version, date: new Date().toISOString(), results };
   writeFileSync(`${OUT_DIR}/${basename(file, ".bench.ts")}.json`, `${JSON.stringify(report, null, 2)}\n`);

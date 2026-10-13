@@ -101,7 +101,7 @@ function reportConflict(step: Extract<InboundStep, { op: "conflict" }>): void {
   ideOutput("sync", `CONFLICT: ${step.path} changed on both sides — open the file to resolve`);
 }
 
-function failureLine(step: InboundStep, eventPath: string, reason: string): string {
+export function failureLine(step: InboundStep, eventPath: string, reason: string): string {
   const unsynced = "the file stays in the sandbox, unsynced";
   if (step.op === "move") return `${eventPath}: not synced — moving ${step.fromPath} to ${step.toPath} failed (${reason}); ${unsynced}`;
   if (step.op === "restore") return `${eventPath}: not synced — the page could not be restored (${reason}); ${unsynced}`;

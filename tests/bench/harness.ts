@@ -30,9 +30,34 @@ export interface BenchCase {
   setup: () => () => unknown;
 }
 
+/** One burst on a fresh world: how its events arrive, and when their work is done. */
+export interface BurstRun {
+  /** Starts the burst; one promise per event, settling in event order. */
+  deliver(): readonly Promise<unknown>[];
+  /** Resolves once the work the events left queued (a deferred flush) is done too. */
+  settled(): Promise<unknown>;
+}
+
+/**
+ * Async events timed by when each one completes — the gap since the previous one — on a fresh
+ * world per run: what a queue drains when a burst lands. The work left after the last event
+ * (settled) is charged to the last event. Gated on the p95 per event AND on the whole burst.
+ * Ponytail: BURST_RUNS fresh worlds, one untimed warm-up first; the total is the slowest run,
+ * GC pauses included (they are real), so a neighbour on the box fails it, never passes it.
+ */
+export interface BurstCase {
+  name: string;
+  /** p95 budget per event, in nanoseconds. */
+  budgetNs: number;
+  /** Budget for one whole burst (the slowest run), in nanoseconds. */
+  totalBudgetNs: number;
+  /** Builds a fresh world OUTSIDE the timed region. */
+  setup: () => Promise<BurstRun>;
+}
+
 export interface BenchSuite {
   suite: string;
-  cases: readonly BenchCase[];
+  cases: readonly (BenchCase | BurstCase)[];
 }
 
 export interface BenchResult {
@@ -44,6 +69,9 @@ export interface BenchResult {
   budgetNs: number;
   batch: number;
   samples: number;
+  /** Burst cases only: the slowest run's sum of event times, and its budget. */
+  totalNs?: number;
+  totalBudgetNs?: number;
   ok: boolean;
 }
 
@@ -53,11 +81,12 @@ const SAMPLE_BUDGET_NS = 400_000_000;
 const MIN_SAMPLES = 30;
 const MAX_SAMPLES = 2_000;
 const MAX_BATCH = 1 << 20;
+const BURST_RUNS = 5;
 
 /** Read by nothing; written by every call so the JIT cannot drop the operation. */
 export const blackhole: { sink: unknown } = { sink: undefined };
 
-export function defineBench(suite: string, cases: readonly BenchCase[]): BenchSuite {
+export function defineBench(suite: string, cases: readonly (BenchCase | BurstCase)[]): BenchSuite {
   return { suite, cases };
 }
 
@@ -120,4 +149,43 @@ export function formatNs(ns: number): string {
   if (ns < 1_000) return `${ns.toFixed(1)} ns`;
   if (ns < 1_000_000) return `${(ns / 1_000).toFixed(2)} µs`;
   return `${(ns / 1_000_000).toFixed(2)} ms`;
+}
+
+export function isBurst(entry: BenchCase | BurstCase): entry is BurstCase {
+  return "totalBudgetNs" in entry;
+}
+
+async function timeEvents(run: BurstRun): Promise<number[]> {
+  const times: number[] = [];
+  let mark = process.hrtime.bigint();
+  for (const done of run.deliver()) {
+    blackhole.sink = await done;
+    const now = process.hrtime.bigint();
+    times.push(Number(now - mark));
+    mark = now;
+  }
+  await run.settled();
+  if (times.length > 0) times[times.length - 1] += Number(process.hrtime.bigint() - mark);
+  return times;
+}
+
+/** One untimed warm-up burst, then BURST_RUNS timed ones. O(BURST_RUNS × events). */
+export async function measureBurst(entry: BurstCase): Promise<BenchResult> {
+  await timeEvents(await entry.setup());
+  const perEvent: number[] = [];
+  let totalNs = 0;
+  for (let run = 0; run < BURST_RUNS; run++) {
+    const burst = await entry.setup();
+    (globalThis as { gc?: () => void }).gc?.();
+    const times = await timeEvents(burst);
+    perEvent.push(...times);
+    totalNs = Math.max(totalNs, times.reduce((sum, ns) => sum + ns, 0));
+  }
+  perEvent.sort((a, b) => a - b);
+  const p95Ns = percentile(perEvent, 0.95);
+  return {
+    name: entry.name, medianNs: percentile(perEvent, 0.5), p95Ns, p99Ns: percentile(perEvent, 0.99),
+    minNs: perEvent[0] ?? Number.NaN, budgetNs: entry.budgetNs, batch: 1, samples: perEvent.length,
+    totalNs, totalBudgetNs: entry.totalBudgetNs, ok: p95Ns <= entry.budgetNs && totalNs <= entry.totalBudgetNs,
+  };
 }

@@ -111,6 +111,7 @@ export async function execWorld(pages: PageEntry[], opts: ExecWorldOptions = {})
   const shellWrite = async (path: string, text: string): Promise<void> => {
     await putFile(sandbox, workspaceId, path, text);
     await send({ event: "write", path, hash: await sha16(text), content: b64(text) });
+    await queue.idle(); // a create lands at its drain's flush (inboundDrain)
   };
   const shellDelete = async (path: string): Promise<void> => {
     await sandbox.delete(buildVPath(sandbox.scheme, workspaceId, path.split("/")), { recursive: true }).catch(() => undefined);

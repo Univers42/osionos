@@ -18,13 +18,14 @@ import { createPageFileFacade } from "@/features/page-file/model/pageFileFacade"
 import { createReadableViews } from "@/features/page-file/model/pageFileFacadeViews";
 import { sha16, type FsEvent } from "./ideFsEcho";
 import { ideOutput } from "./ideOutputBus";
-import { executeSteps, type ExecContext, type ExecOutcome } from "./inboundExec";
+import { createInboundDrain } from "./inboundDrain";
 import { createInboundPending, type Schedule } from "./inboundPending";
 import { decodeUtf8Strict, type SerialQueue } from "./inboundPipeline";
-import { planInbound, type InboundEvent } from "./inboundPlan";
 import { createInboundView, type ExecView } from "./inboundView";
 
 import type { PageFileStore } from "@/features/page-file/model/pageFileFacade";
+import type { ExecContext, ExecOutcome } from "./inboundExec";
+import type { InboundEvent } from "./inboundPlan";
 import type { PageFacade } from "../vfs/pageProvider";
 import type { StatResult } from "./inboundArchive";
 
@@ -60,7 +61,7 @@ export function createInboundSession(deps: InboundSessionDeps): InboundSession {
   const pending = createInboundPending({ schedule: deps.schedule, enqueue: deps.enqueue });
   const view = createInboundView({ workspaceId: deps.workspaceId, store: deps.store, views, pending, readText: (id) => facade.readContent(id) });
   const ctx: ExecContext = { workspaceId: deps.workspaceId, facade, view, pending, restore: deps.restore, stat: deps.stat };
-  const run = async (event: InboundEvent): Promise<ExecOutcome> => executeSteps(await planInbound(event, view), event.path, ctx);
+  const drain = createInboundDrain({ store: deps.store, views, ctx, enqueue: deps.enqueue });
   return {
     view,
     facade,
@@ -69,12 +70,12 @@ export function createInboundSession(deps: InboundSessionDeps): InboundSession {
         const decoded = await decodeFsEvent(evt);
         if (decoded === null) return;
         if ("skip" in decoded) ideOutput("fs-sync", decoded.skip);
-        else await run(decoded);
+        else await drain.handle(decoded);
       } catch (error) {
         ideOutput("fs-sync", `${evt.path}: event skipped — ${messageOf(error)}`);
       }
     },
-    run,
+    run: drain.run,
     dispose: () => pending.dispose(),
   };
 }

@@ -26,7 +26,7 @@ type CreateStep = Extract<InboundStep, { op: "create" }>;
 type Placement = { parentId: string | null; parentNow: string | null; name: string; nameNow: string };
 
 /** "a/b/c.omd" → { dir: "a/b", name: "c.omd" }. O(len). */
-function splitPath(path: string): { dir: string; name: string } {
+export function splitPath(path: string): { dir: string; name: string } {
   const cut = path.lastIndexOf("/");
   return { dir: cut < 0 ? "" : path.slice(0, cut), name: path.slice(cut + 1) };
 }

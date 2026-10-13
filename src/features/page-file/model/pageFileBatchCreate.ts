@@ -36,7 +36,8 @@ const messageOf = (error: unknown): string => (error instanceof Error ? error.me
 /**
  * createPage's refusals, item by item: a folder meta name, a name the tables or an
  * EARLIER item claims (case-insensitively), a store that created nothing, and a
- * page a concurrent writer collided with (archived, as createPage does).
+ * page a concurrent writer collided with (archived, as createPage does). Throws
+ * only before the first add (the tables could not be read).
  * O(n + Σ len(content) + Σ s log s over the directories touched).
  */
 export async function createPagesBatch(deps: PageFileStore, views: ReadableViews, inputs: readonly CreateInput[]): Promise<BatchCreateResult[]> {
@@ -57,8 +58,8 @@ export async function createPagesBatch(deps: PageFileStore, views: ReadableViews
     }
   }
   for (const loser of await displaced(ctx, added)) {
-    await deps.archivePage(loser.page._id);
-    results[loser.at] = { error: `AlreadyExists: ${deps.toSegment(inputs[loser.at].title)} was created concurrently by another writer` };
+    const clash = `AlreadyExists: ${deps.toSegment(inputs[loser.at].title)} was created concurrently by another writer`;
+    results[loser.at] = { error: await deps.archivePage(loser.page._id).then(() => clash, (error) => `${clash}; archiving it failed (${messageOf(error)})`) };
   }
   return results;
 }
