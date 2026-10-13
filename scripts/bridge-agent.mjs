@@ -190,9 +190,8 @@ async function toolGetPage(deps, session, input) {
 	const ids = await callerWorkspaceIds(deps, session);
 	const rows = await rest(deps.config, deps.fetchImpl, `osionos_pages?id=eq.${pageId}&select=id,title,workspace_id,content,owner_id,visibility,collaborators&limit=1`);
 	const row = Array.isArray(rows) ? rows[0] : null;
-	if (!row) throw httpError('Page not found.', 404);
-	if (!ids.includes(row.workspace_id)) throw httpError('You do not have access to this page.', 403);
-	if (!isOwnerOrCollaborator(row, session.userId)) throw httpError('You do not have access to this page.', 403);
+	// A page outside the caller's workspaces, or one that is not theirs, answers like a missing one.
+	if (!row || !ids.includes(row.workspace_id) || !isOwnerOrCollaborator(row, session.userId)) throw httpError('Page not found.', 404);
 	const blocks = Array.isArray(row.content) ? row.content : [];
 	return {
 		page: {

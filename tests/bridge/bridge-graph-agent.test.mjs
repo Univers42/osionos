@@ -26,6 +26,7 @@ const EXTRA = {
 	ownerlessShared: 'e1e1e1e1-8888-4888-8888-e1e1e1e1e1e1',
 	ownerlessPrivate: 'e2e2e2e2-8888-4888-8888-e2e2e2e2e2e2',
 	collabA: 'a7a7a7a7-1111-4111-8111-a7a7a7a7a7a7',
+	outsideCollabA: 'a8a8a8a8-1111-4111-8111-a8a8a8a8a8a8',
 };
 
 function graphWorld() {
@@ -38,6 +39,7 @@ function graphWorld() {
 		page(EXTRA.ownerlessShared, null, 'shared', 'Ownerless notes'),
 		page(EXTRA.ownerlessPrivate, null, 'private', 'Ownerless private notes'),
 		page(EXTRA.collabA, IDS.userA, 'private', 'A notes shared with B', [{ userId: IDS.userB, role: 'viewer' }]),
+		{ ...page(EXTRA.outsideCollabA, IDS.userA, 'private', 'A home page with B as collaborator', [{ userId: IDS.userB, role: 'viewer' }]), workspace_id: IDS.homeA },
 	);
 	return world;
 }
@@ -116,4 +118,11 @@ describe('in-chat agent', () => {
 			else assert.deepEqual([result.ok, result.page], [false, undefined], JSON.stringify(result));
 		});
 	}
+
+	it('get_page answers a page outside the caller\'s workspaces and a page they may not read like a missing page', async () => {
+		const missing = await agentTool('get_page', { pageId: IDS.missing });
+		assert.deepEqual(missing, { ok: false, error: 'Page not found.' });
+		assert.deepEqual(await agentTool('get_page', { pageId: EXTRA.outsideCollabA }), missing);
+		assert.deepEqual(await agentTool('get_page', { pageId: IDS.privateA }), missing);
+	});
 });
