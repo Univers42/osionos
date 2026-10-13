@@ -12,8 +12,9 @@
 
 import { fsError } from "@/features/ide/vfs/errors";
 import type { PageFacadeEntry } from "@/features/ide/vfs/pageProvider";
-import { codeBlockOf, createCodeFileBlock } from "@/features/ide/model/codeFile";
+import { codeBlockOf } from "@/features/ide/model/codeFile";
 import { languageForFileName } from "@/features/ide/model/ideLanguages";
+import { addPageFor, type CreateInput } from "./pageFileAddPage";
 import { fileToPage, isPageFileName } from "./pageFileCodec";
 import { pinFilePatch } from "./pinFilePatch";
 import { assignSiblingNames, kindOfPage, titleFromFileName, type SiblingName } from "./pagePaths";
@@ -23,8 +24,6 @@ import type { PageEntry } from "@/entities/page";
 import type { PageFileStore } from "./pageFileFacade";
 
 /** The mutating file operations of the page-file facade, run against the facade's closures. */
-type CreateInput = { title: string; parentId: string | null; kind: "file" | "dir"; content?: string };
-
 export interface OpContext {
   readonly deps: PageFileStore;
   pageById(id: string): PageEntry | undefined;
@@ -73,12 +72,6 @@ function assertNotFolderMeta(deps: PageFileStore, name: string): void {
   if (deps.toSegment(name).toLowerCase() === FOLDER_META_NAME.toLowerCase()) {
     throw fsError("Unsupported", undefined, "a folder's meta file is created with its folder");
   }
-}
-
-function addPageFor(deps: PageFileStore, input: CreateInput, parentId: string | null): Promise<PageEntry | null> {
-  if (input.kind === "dir") return deps.addPage({ title: input.title, parentId, surface: "folder" });
-  if (isPageFileName(input.title)) return deps.addPage({ title: titleFromFileName(input.title), parentId, surface: "page", content: fileToPage(input.content ?? "").content });
-  return deps.addPage({ title: input.title, parentId, surface: "code", content: [createCodeFileBlock(input.title, input.content ?? "")] });
 }
 
 /** The two names the page index (assignSiblingNames) reserves for the new page: its own and its child dir. */

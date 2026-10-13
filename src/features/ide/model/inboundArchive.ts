@@ -1,0 +1,75 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   inboundArchive.ts                                  :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+// The end of a delete's window: archive only what the shell really removed.
+// Everything here runs as a queued task (the timer only enqueues), so no event
+// interleaves with the re-check.
+
+import { ideOutput } from "./ideOutputBus";
+import { clearSyncedHash, syncedHashOf } from "./ideSyncEngine";
+
+import type { ExecContext } from "./inboundExec";
+import type { ArchiveTicket } from "./inboundPending";
+
+/** What a sandbox `stat` told us; "unknown" (offline, refused) never archives. */
+export type StatResult = "present" | "absent" | "unknown";
+
+const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/**
+ * B1. Archive a due page only when its path is the one the delete named, the
+ * sandbox says that path is gone, and — when the page has sub-pages — their
+ * directory is gone too. `rm Roadmap.omd` alone must not cascade onto children
+ * whose files are still there. Any doubt keeps the page; nothing throws.
+ * O(1) plus at most two sandbox stats.
+ */
+export async function archiveIfGone(ticket: ArchiveTicket, ctx: ExecContext): Promise<void> {
+  if (!ctx.pending.claim(ticket)) return;
+  try {
+    const keep = await keepReason(ticket, ctx);
+    if (keep === undefined) await archiveNow(ticket, ctx);
+    else if (keep !== null) ideOutput("fs-sync", keep);
+  } catch (error) {
+    ideOutput("fs-sync", `${ticket.path}: the page was not archived — ${messageOf(error)}`);
+  }
+}
+
+/** undefined = archive; null = keep quietly (moved, or the file came back); text = keep and say why. */
+async function keepReason(ticket: ArchiveTicket, ctx: ExecContext): Promise<string | null | undefined> {
+  if (!stillAt(ticket, ctx)) return null;
+  const own = await ctx.stat(ticket.path);
+  if (own === "present") return null;
+  if (own === "unknown") return `${ticket.path}: could not confirm the delete in the sandbox; the page stays`;
+  const childrenDir = ctx.view.childrenDirOf(ticket.pageId);
+  if (childrenDir === undefined) return undefined;
+  const children = await ctx.stat(childrenDir);
+  if (children === "absent") return undefined;
+  return children === "present"
+    ? `${ticket.path}: deleted, but ${childrenDir}/ still holds its sub-pages; the page stays (delete that directory to archive it)`
+    : `${ticket.path}: could not check ${childrenDir}/ in the sandbox; the page stays`;
+}
+
+function stillAt(ticket: ArchiveTicket, ctx: ExecContext): boolean {
+  const state = ctx.view.pageState(ticket.pageId);
+  return state?.status === "live" && state.path === ticket.path;
+}
+
+/** B2: the ledger forgets the path, the restore memory keeps its last agreed hash. */
+async function archiveNow(ticket: ArchiveTicket, ctx: ExecContext): Promise<void> {
+  const state = ctx.view.pageState(ticket.pageId);
+  if (state?.status !== "live" || state.path !== ticket.path) return;
+  const syncedHash = syncedHashOf(ctx.workspaceId, state.filePath);
+  await ctx.facade.archive(ticket.pageId);
+  clearSyncedHash(ctx.workspaceId, state.filePath);
+  ctx.pending.rememberArchived(ticket.pageId, { syncedHash, path: state.path });
+  ideOutput("fs-sync", `${ticket.path}: deleted in the shell — the page is in the trash`);
+}
