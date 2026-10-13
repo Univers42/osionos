@@ -72,12 +72,17 @@ test.describe("activity rail sidebar", () => {
     await dragHandleTo(page, 3);
     // Only the (closed) edge peek is left, no docked sidebar.
     await expect(page.locator('aside[data-sidebar-mode]:not([data-sidebar-mode="peek"])')).toHaveCount(0);
+    // The drag ended on the edge strip. A hand still resting there must not
+    // bring back the sidebar it just hid.
+    await page.mouse.move(2, 300);
+    await page.waitForTimeout(500);
     await expect(peek(page)).not.toHaveAttribute("data-open", "");
   });
 
-  test("Ctrl+Alt+B hides and restores; nothing floats over the content, and the top bar has no toggle", async ({ page, baseURL }) => {
+  test("Ctrl+Alt+B hides and restores; nothing floats over the content, and the top bar has no toggle or brand label", async ({ page, baseURL }) => {
     await gotoDocked(page, baseURL);
     await expect(page.getByTestId("app-topbar").getByRole("button", { name: "Toggle sidebar" })).toHaveCount(0);
+    await expect(page.getByTestId("app-topbar")).not.toContainText("osionos");
     await hideSidebar(page);
     await expect(page.getByRole("button", { name: "Open sidebar" })).toHaveCount(0);
     await page.keyboard.press("Control+Alt+b");
