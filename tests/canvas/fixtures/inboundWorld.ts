@@ -59,16 +59,24 @@ export function viewWorld(pages: PageEntry[]) {
 /** base64 of the UTF-8 bytes, as the fs-agent sends file content. */
 export const b64 = (text: string): string => btoa(Array.from(textToBytes(text), (byte) => String.fromCharCode(byte)).join(""));
 
-/** The store's restore: the page and every descendant come back. O(n · depth). */
-function restoreIn(store: ReturnType<typeof createFixtureStore>, pageId: string): void {
-  const back = new Set([pageId]);
+/** A page and every descendant, as the store's getAllDescendantIds walks them. O(n · depth). */
+function subtreeOf(store: ReturnType<typeof createFixtureStore>, pageId: string): Set<string> {
+  const ids = new Set([pageId]);
   for (let grew = true; grew; ) {
     grew = false;
     for (const entry of store.pages()) {
-      if (entry.parentPageId && back.has(entry.parentPageId) && !back.has(entry._id)) { back.add(entry._id); grew = true; }
+      if (entry.parentPageId && ids.has(entry.parentPageId) && !ids.has(entry._id)) { ids.add(entry._id); grew = true; }
     }
   }
-  store._seed(store.pages().map((entry) => (back.has(entry._id) ? { ...entry, archivedAt: null } : entry)));
+  return ids;
+}
+
+/** The REAL store's archive and restore (pageStore.actions.ts createArchivePage /
+ *  createRestorePage): the subtree flips `archivedAt` and nothing else — the facade
+ *  fixture's archive also bumps `updatedAt`, which would change a restored page's text. */
+function setArchived(store: ReturnType<typeof createFixtureStore>, pageId: string, archivedAt: string | null): void {
+  const ids = subtreeOf(store, pageId);
+  store._seed(store.pages().map((entry) => (ids.has(entry._id) ? { ...entry, archivedAt } : entry)));
 }
 
 async function statIn(provider: FsProvider, workspaceId: string, path: string): Promise<StatResult> {
@@ -96,14 +104,17 @@ export async function execWorld(pages: PageEntry[], opts: ExecWorldOptions = {})
   const workspaceId = freshWs();
   const store = createFixtureStore(workspaceId);
   store._seed(pages.map((entry) => ({ ...entry, workspaceId })));
+  store.archivePage = async (id) => setArchived(store, id, "2026-10-13T12:00:00Z");
   const sandbox = createMemProvider("sandbox");
   for (const [path, text] of Object.entries(opts.files ?? {})) await putFile(sandbox, workspaceId, path, text);
   const clock = createFakeClock();
   const queueErrors: unknown[] = [];
   const queue = createSerialQueue((error) => { queueErrors.push(error); });
+  const enqueued = { count: 0 };
   const session = createInboundSession({
-    workspaceId, store, restore: async (id) => restoreIn(store, id), schedule: clock.schedule,
-    stat: opts.stat ?? ((path) => statIn(sandbox, workspaceId, path)), enqueue: (task) => { void queue.run(task); },
+    workspaceId, store, restore: async (id) => setArchived(store, id, null), schedule: clock.schedule,
+    stat: opts.stat ?? ((path) => statIn(sandbox, workspaceId, path)),
+    enqueue: (task) => { enqueued.count += 1; void queue.run(task); },
   });
   const send = (evt: FsEvent): Promise<void> => queue.run(() => session.handle(evt));
   const shellWrite = async (path: string, text: string): Promise<void> => {
@@ -116,5 +127,5 @@ export async function execWorld(pages: PageEntry[], opts: ExecWorldOptions = {})
   };
   const elapse = async (): Promise<void> => { clock.advance(INBOUND_WINDOW_MS); await queue.idle(); };
   const pageOf = (id: string): PageEntry | undefined => store.pages().find((entry) => entry._id === id);
-  return { workspaceId, store, sandbox, clock, queue, queueErrors, session, send, shellWrite, shellDelete, elapse, pageOf };
+  return { workspaceId, store, sandbox, clock, queue, queueErrors, enqueued, session, send, shellWrite, shellDelete, elapse, pageOf };
 }
