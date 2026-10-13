@@ -133,7 +133,7 @@ describe('a page moved under another member\'s page stays out of that page\'s ca
 	});
 });
 
-describe('a cascade stays inside P\'s workspace', () => {
+describe('a cascade stays inside P\'s workspace and ends on a parent_page_id cycle', () => {
 	const asA = sessionHeaders(config, IDS.userA, IDS.homeA);
 	/** A owns the team and P; B's shared X sits under P in `xWorkspace`. */
 	function crossWorkspaceMock(xWorkspace) {
@@ -161,6 +161,16 @@ describe('a cascade stays inside P\'s workspace', () => {
 			assert.equal(response.status, 200, response.text);
 			assert.equal([...cascadeIds(mock, 'GET'), ...cascadeIds(mock, op.method)].includes(PAGE.child), false);
 			assert.equal(mock.page(PAGE.child)?.archived_at, null);
+		});
+
+		it(`${opName} of P inside a P → X → Y → P cycle ends and names each page once`, async () => {
+			const world = teamWorld();
+			const [P, X, Y] = [PAGE.parent, PAGE.child, PAGE.grandchild];
+			world.osionos_pages.push(under(teamPage(P, IDS.userA, 'private', 'P', 'p'), Y), under(teamPage(X, IDS.userA, 'private', 'X', 'x'), P), under(teamPage(Y, IDS.userA, 'private', 'Y', 'y'), X));
+			const { mock, response } = await run(world, P, op.init, asA);
+			assert.equal(response.status, 200, response.text);
+			assert.deepEqual(cascadeIds(mock, op.method).toSorted(), (opName === 'DELETE' ? [P, X, Y] : [X, Y]).toSorted());
+			if (opName === 'archive') assert.deepEqual([P, X, Y].map((id) => mock.page(id).archived_at), [ARCHIVED_AT, ARCHIVED_AT, ARCHIVED_AT]);
 		});
 	}
 });
