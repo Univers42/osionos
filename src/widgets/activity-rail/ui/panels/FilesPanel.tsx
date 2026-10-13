@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { workspaceSpaces } from "@/widgets/sidebar/model/workspaceSpaces";
 import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { SidebarPageTree } from "@/widgets/sidebar/ui/SidebarPageTree";
@@ -43,12 +44,8 @@ export const FilesPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpe
 
   const [showInviteCTA, setShowInviteCTA] = useState(true);
 
-  const privateWorkspaces = useMemo(
-    () => (activeWorkspaceId && activeWorkspaceOwnerId === activeUserId ? [{ _id: activeWorkspaceId }] : []),
-    [activeUserId, activeWorkspaceId, activeWorkspaceOwnerId],
-  );
-  const sharedWorkspaces = useMemo(
-    () => (activeWorkspaceId && activeWorkspaceOwnerId !== activeUserId ? [{ _id: activeWorkspaceId }] : []),
+  const { privateWorkspaces, sharedWorkspaces } = useMemo(
+    () => workspaceSpaces(activeWorkspaceId, activeWorkspaceOwnerId, activeUserId),
     [activeUserId, activeWorkspaceId, activeWorkspaceOwnerId],
   );
 
@@ -58,7 +55,7 @@ export const FilesPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpe
 
   const handleAddToWorkspace = useCallback(
     (wsId: string) => {
-      addPage(wsId, "Untitled", jwt).then((page) => {
+      addPage(wsId, "Untitled", jwt, undefined, { visibility: "private" }).then((page) => {
         if (page) openPage({ id: page._id, workspaceId: wsId, kind: "page", title: page.title });
       });
     },

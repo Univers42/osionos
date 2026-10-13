@@ -17,6 +17,7 @@ import { ReadOnlyBlock } from "@/entities/block";
 import {
   createRootBlockRenderMeta,
   estimateBlockHeight,
+  measureScrollMargin,
   ROOT_BLOCK_VIRTUALIZATION_OVERSCAN,
   ROOT_BLOCK_VIRTUALIZATION_THRESHOLD,
 } from "@/entities/block/model/blockVirtualization";
@@ -37,12 +38,6 @@ function isExternalHref(href: string) {
 
 function resolveScrollElement(root: HTMLElement | null): HTMLElement | null {
   return root?.closest<HTMLElement>(".osionos-page") ?? null;
-}
-
-function measureScrollMargin(root: HTMLElement, scrollElement: HTMLElement): number {
-  const rootRect = root.getBoundingClientRect();
-  const scrollRect = scrollElement.getBoundingClientRect();
-  return Math.max(0, rootRect.top - scrollRect.top + scrollElement.scrollTop);
 }
 
 interface PageBlocksRendererProps {

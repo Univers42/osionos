@@ -21,6 +21,7 @@ import { pagesToGraph } from './bridge-graph.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordSubitemNoteBody } from './bridge-records.mjs';
 import { publishRealtime } from './bridge-social-core.mjs';
+import { takeToken } from './bridge-ratelimit.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
 import { createIdeSandboxHandler, reapExpiredSandboxes } from './bridge-ide-sandbox.mjs';
@@ -730,6 +731,20 @@ function pageRowsToEntries(rows) {
 	return Array.isArray(rows) ? rows.map(pageRowToEntry) : [];
 }
 
+/**
+ * Whether `userId` may read a page row: its owner, a listed collaborator, anyone
+ * in the workspace for a shared or public page, and anyone for a legacy page that
+ * predates owners. The same rule as the app's canReadPage (pageAccess.ts), so a
+ * member's private page in a shared workspace stays theirs on the wire too.
+ */
+export function isPageReadableBy(row, userId) {
+	const collaborators = safeJsonArray(row?.collaborators);
+	if (row?.visibility === 'shared' || row?.visibility === 'public') return true;
+	if (row?.owner_id != null && row.owner_id === userId) return true;
+	if (row?.owner_id == null && row?.visibility == null && collaborators.length === 0) return true;
+	return collaborators.some((entry) => entry && entry.userId === userId);
+}
+
 function pageCreateRowFromPayload(payload, authContext) {
 	const workspaceId = requireUuid(payload.workspaceId, 'workspaceId');
 	const parentPageId = optionalUuid(payload.parentPageId, 'parentPageId');
@@ -1272,7 +1287,7 @@ export async function searchUnsplashPhotos({ query, perPage, page, orientation }
 
 	if (!response.ok) {
 		const body = await response.text().catch(() => '');
-		throw Object.assign(new Error(`Unsplash search failed with ${response.status}: ${body.slice(0, 160)}`), { status: 502 });
+		throw Object.assign(new Error(`Unsplash search failed with ${response.status}: ${body.slice(0, 160)}`), { status: 502, upstreamStatus: response.status });
 	}
 
 	const payload = await response.json().catch(() => ({}));
@@ -1322,7 +1337,16 @@ export async function searchOpenversePhotos({ query, perPage, page, orientation 
 const coverSearchCache = new Map();
 const COVER_SEARCH_TTL_MS = 10 * 60 * 1000;
 
-/** Unsplash when a key is configured, Openverse otherwise — cached. */
+/** Unsplash refuses with 403 once the key's hourly quota is spent, 429 when throttled. */
+function isUnsplashQuotaRefusal(error) {
+	return error?.upstreamStatus === 403 || error?.upstreamStatus === 429;
+}
+
+/**
+ * Unsplash when a key is configured, Openverse otherwise — cached. A spent
+ * Unsplash quota also falls back to Openverse, so one busy hour does not turn
+ * photo search off for everyone until the quota resets.
+ */
 export async function searchCoverPhotos(options = {}, config = configFromEnv(), fetchImpl = fetch) {
 	const key = [safeUnsplashQuery(options.query), safeUnsplashPerPage(options.perPage),
 		safeUnsplashPage(options.page), safeUnsplashOrientation(options.orientation)].join('|');
@@ -1331,13 +1355,88 @@ export async function searchCoverPhotos(options = {}, config = configFromEnv(), 
 
 	let payload;
 	if (config.unsplashAccessKey) {
-		payload = await searchUnsplashPhotos(options, config, fetchImpl);
+		payload = await searchUnsplashPhotos(options, config, fetchImpl).catch((error) => {
+			if (!isUnsplashQuotaRefusal(error)) throw error;
+			return searchOpenversePhotos(options, fetchImpl);
+		});
 	} else {
 		payload = await searchOpenversePhotos(options, fetchImpl);
 	}
 	if (coverSearchCache.size > 200) coverSearchCache.clear();
 	coverSearchCache.set(key, { at: Date.now(), payload });
 	return payload;
+}
+
+const UNSPLASH_DOWNLOAD_PATH = /^\/photos\/([A-Za-z0-9_-]{1,64})\/download$/;
+const UNSPLASH_IXID = /^[A-Za-z0-9_-]{1,256}$/;
+
+/**
+ * The Unsplash download-tracking URL for a client-supplied `download_location`,
+ * or null when it is not one. The client's string is never fetched: the URL is
+ * rebuilt from constants, and only the photo id and the `ixid` attribution
+ * token are carried over, each against a strict pattern.
+ */
+export function unsplashDownloadUrl(downloadLocation) {
+	let given;
+	try {
+		given = new URL(safeText(downloadLocation, 1024));
+	} catch {
+		return null;
+	}
+	if (given.protocol !== 'https:' || given.hostname !== 'api.unsplash.com' || given.port !== '') return null;
+	if (given.username !== '' || given.password !== '') return null;
+	const photoId = UNSPLASH_DOWNLOAD_PATH.exec(given.pathname)?.[1];
+	if (!photoId) return null;
+
+	const url = new URL(`https://api.unsplash.com/photos/${photoId}/download`);
+	const ixid = given.searchParams.get('ixid');
+	if (ixid !== null) {
+		if (!UNSPLASH_IXID.test(ixid)) return null;
+		url.searchParams.set('ixid', ixid);
+	}
+	return url.toString();
+}
+
+/** Tells Unsplash a photo was used, which its API terms ask for on every pick. */
+export async function trackUnsplashDownload(downloadLocation, config = configFromEnv(), fetchImpl = fetch) {
+	if (!config.unsplashAccessKey) {
+		throw Object.assign(new Error('Unsplash access key is not configured on the osionos bridge.'), { status: 503 });
+	}
+	const url = unsplashDownloadUrl(downloadLocation);
+	if (!url) {
+		throw Object.assign(new Error('downloadLocation must be an Unsplash photo download URL.'), { status: 400 });
+	}
+	// Never followed: the request that counts is this one, and a redirect target is not ours to choose.
+	const response = await fetchWithTimeout(fetchImpl, url, {
+		method: 'GET',
+		redirect: 'manual',
+		headers: { Accept: 'application/json', Authorization: `Client-ID ${config.unsplashAccessKey}` },
+	});
+	if (response.status >= 400) {
+		throw Object.assign(new Error(`Unsplash download tracking failed with ${response.status}.`), { status: 502 });
+	}
+	return { ok: true };
+}
+
+// Burst, then steady rate, per signed-in user. A picker debounces to under 3
+// requests a second and a query is at most 80 characters, so typing one never
+// drains 40; a pick is a deliberate click.
+const MEDIA_SEARCH_LIMIT = { capacity: 40, refillPerSec: 2 };
+const MEDIA_DOWNLOAD_LIMIT = { capacity: 10, refillPerSec: 0.2 };
+const MEDIA_DOWNLOAD_BODY_LIMIT_BYTES = 2048;
+// Pixabay allows 100 requests a minute per key, all users together; stay under it.
+const PIXABAY_UPSTREAM_LIMIT = { capacity: 90, refillPerSec: 1.5 };
+
+/**
+ * Admits a media request: a signed-in user, within their rate limit. These
+ * routes spend provider keys the bridge holds, so an anonymous caller gets 401.
+ * Ponytail: the bucket is per bridge process — N instances allow N times the
+ * rate — and it limits one user, not the provider key; a spent key shows up as
+ * the provider's own refusal (see searchCoverPhotos for what photos do then).
+ */
+function admitMediaRequest(request, config, bucket, limit) {
+	const { userId } = verifyAppSessionToken(bearerToken(request), config);
+	takeToken(`${bucket}:${userId}`, limit);
 }
 
 const PIXABAY_MIN_PER_PAGE = 3;
@@ -1414,6 +1513,8 @@ async function searchCoverVideos(options = {}, config = configFromEnv(), fetchIm
 	const hit = coverVideoCache.get(key);
 	if (hit && Date.now() - hit.at < COVER_VIDEO_TTL_MS) return hit.payload;
 
+	// Only a cache miss reaches Pixabay, so only a miss spends the shared allowance.
+	takeToken('media-upstream:pixabay', PIXABAY_UPSTREAM_LIMIT);
 	const payload = await searchPixabayVideos(options, config, fetchImpl);
 	if (coverVideoCache.size > 200) coverVideoCache.clear();
 	coverVideoCache.set(key, { at: Date.now(), payload });
@@ -1781,7 +1882,7 @@ function pageSubresourceIdFromPath(pathname, subresource) {
 
 async function handlePageList(url, request, response, config, fetchImpl) {
 	const workspaceId = requireUuid(url.searchParams.get('workspaceId'), 'workspaceId');
-	await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
+	const access = await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
 	const isFullList = url.pathname === '/api/pages/all';
 	const filters = isFullList ? {} : {
 		databaseId: url.searchParams.has('databaseId')
@@ -1795,7 +1896,8 @@ async function handlePageList(url, request, response, config, fetchImpl) {
 	// Only the bulk /api/pages/all hydrate goes metadata-only (content loads lazily
 	// on page open); the filtered single-list path keeps '*' so nothing regresses.
 	const select = isFullList ? PAGE_LIST_SELECT : '*';
-	json(response, 200, pageRowsToEntries(await listPageRows(workspaceId, config, fetchImpl, filters, select)), config);
+	const rows = await listPageRows(workspaceId, config, fetchImpl, filters, select);
+	json(response, 200, pageRowsToEntries(rows.filter((row) => isPageReadableBy(row, access.userId))), config);
 	return true;
 }
 
@@ -1899,7 +2001,9 @@ async function handlePageRead(url, request, response, config, fetchImpl) {
 	if (!pageId) return false;
 	const row = await fetchPageRow(pageId, config, fetchImpl);
 	if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
-	await ownerOrWorkspaceAccess(request, row, 'read', config, fetchImpl);
+	const access = await ownerOrWorkspaceAccess(request, row, 'read', config, fetchImpl);
+	// Another member's private page answers like a missing one: its existence is private too.
+	if (!isPageReadableBy(row, access.userId)) throw Object.assign(new Error('Page not found.'), { status: 404 });
 	json(response, 200, pageRowToEntry(row), config);
 	return true;
 }
@@ -2191,12 +2295,13 @@ async function listWorkspaceDatabases(workspaceIds, config, fetchImpl) {
 }
 
 /** Owner-scoped page graph across `workspaceIds` (the note half of the data graph). */
-async function ownerScopedPageGraph(workspaceIds, userId, config, fetchImpl) {
+/** Every page the viewer can read, so a shared page's parent and links stay in the graph. */
+async function readablePageGraph(workspaceIds, userId, config, fetchImpl) {
 	const rows = [];
 	for (const workspaceId of workspaceIds) {
 		const wsRows = await listPageRows(workspaceId, config, fetchImpl, {});
 		for (const row of wsRows) {
-			if (row.owner_id == null || row.owner_id === userId) rows.push(row);
+			if (isPageReadableBy(row, userId)) rows.push(row);
 		}
 	}
 	return pagesToGraph(rows);
@@ -2232,7 +2337,7 @@ async function handleGraphData(url, request, response, config, fetchImpl) {
 		: requested
 			? (accessible.includes(requested) ? [requested] : [])
 			: authContext.workspaceIds;
-	const noteGraph = await ownerScopedPageGraph(workspaceIds, authContext.userId, config, fetchImpl);
+	const noteGraph = await readablePageGraph(workspaceIds, authContext.userId, config, fetchImpl);
 	const recordGraph = await workspaceRecordGraph(workspaceIds, config, fetchImpl);
 	json(response, 200, mergeGraphs(noteGraph, recordGraph), config);
 	return true;
@@ -3235,7 +3340,7 @@ async function handlePagesPost(url, request, response, config, fetchImpl) {
 	return false;
 }
 
-async function handleBridgeGet(url, response, config, fetchImpl) {
+async function handleBridgeGet(url, request, response, config, fetchImpl) {
 	if (url.pathname === '/api/auth/bridge/health') {
 		json(response, 200, { ok: true, service: 'osionos-bridge' }, config);
 		return true;
@@ -3245,6 +3350,7 @@ async function handleBridgeGet(url, response, config, fetchImpl) {
 		return true;
 	}
 	if (url.pathname === '/api/media/pixabay/videos') {
+		admitMediaRequest(request, config, 'media-search', MEDIA_SEARCH_LIMIT);
 		json(response, 200, await searchCoverVideos({
 			query: url.searchParams.get('query') ?? url.searchParams.get('q') ?? undefined,
 			perPage: url.searchParams.get('perPage') ?? undefined,
@@ -3253,6 +3359,7 @@ async function handleBridgeGet(url, response, config, fetchImpl) {
 		return true;
 	}
 	if (url.pathname !== '/api/media/unsplash/search') return false;
+	admitMediaRequest(request, config, 'media-search', MEDIA_SEARCH_LIMIT);
 	json(response, 200, await searchCoverPhotos({
 		query: url.searchParams.get('query') ?? url.searchParams.get('q') ?? undefined,
 		perPage: url.searchParams.get('perPage') ?? url.searchParams.get('per_page') ?? undefined,
@@ -3379,6 +3486,12 @@ async function handleBridgePost(url, request, response, config, handoffStore, re
 		await handleClaudeAgentStream(request, response, config);
 		return true;
 	}
+	if (url.pathname === '/api/media/unsplash/download') {
+		admitMediaRequest(request, config, 'media-download', MEDIA_DOWNLOAD_LIMIT);
+		const body = await readJson(request, MEDIA_DOWNLOAD_BODY_LIMIT_BYTES);
+		json(response, 200, await trackUnsplashDownload(body?.downloadLocation, config, fetchImpl), config);
+		return true;
+	}
 	if (await handlePagesPost(url, request, response, config, fetchImpl)) return true;
 	if (url.pathname === '/api/auth/bridge/session') {
 		await handleBridgeSession(request, response, config, handoffStore, replayStore, fetchImpl);
@@ -3421,7 +3534,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.collab(url, request, response, context.config)) return;
 	if (request.method === 'GET' && await handleWorkspaceGet(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'GET' && await handlePagesGet(url, request, response, context.config, context.fetchImpl)) return;
-	if (request.method === 'GET' && await handleBridgeGet(url, response, context.config, context.fetchImpl)) return;
+	if (request.method === 'GET' && await handleBridgeGet(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'POST' && await handleBridgePost(
 		url,
 		request,

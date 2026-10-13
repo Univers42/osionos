@@ -1778,6 +1778,42 @@ body {
   box-shadow: none !important;
 }
 
+/* ==========================================================================
+   Pane zoom — a split can be zoomed on its own (workspace-grid/model/paneZoom.ts;
+   PaneView sets `zoom` and --osio-pane-zoom on the pane body).
+
+   These surfaces map the pointer onto a pixel grid of their own — a canvas
+   backing store, chart hit-testing, a third-party editor or web component —
+   and that mapping is only exact at zoom 1, so they are zoomed back to 1 and
+   stay at 100% inside a zoomed pane. Draw and layout are matched at the block,
+   not the canvas, because their resize and drag math also reads the wrapper
+   around it. A new surface of this kind opts in with `data-osio-fixed-scale`.
+
+   The second rule stops a fixed-scale surface nested in another one (a
+   database inside a layout cell) from being divided twice.
+   ========================================================================== */
+[data-osio-pane] :where(
+  [data-osio-fixed-scale],
+  [data-database-id],
+  [data-osio-ide],
+  [role="application"],
+  [data-block-type="draw"],
+  [data-block-type="layout"]
+) {
+  zoom: calc(1 / var(--osio-pane-zoom, 1));
+}
+
+[data-osio-pane] :where(
+  [data-osio-fixed-scale],
+  [data-database-id],
+  [data-osio-ide],
+  [role="application"],
+  [data-block-type="draw"],
+  [data-block-type="layout"]
+) > * {
+  --osio-pane-zoom: 1;
+}
+
 /* The page's own toolbar / cover controls, same as presentation mode hides them. */
 [data-zen="1"] .osionos-page-toolbar,
 [data-zen="1"] .osionos-page-cover-controls {

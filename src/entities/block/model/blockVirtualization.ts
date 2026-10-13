@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { Block, BlockType } from "@/entities/block";
+import { toCssPx } from "@/shared/lib/dom/cssZoom";
 
 export const ROOT_BLOCK_VIRTUALIZATION_THRESHOLD = 60;
 export const ROOT_BLOCK_VIRTUALIZATION_OVERSCAN = 12;
@@ -82,4 +83,11 @@ export function estimateBlockHeight(block: Block | undefined): number {
 
 export function estimateRootBlockSize(block: Block | undefined): number {
   return estimateBlockHeight(block);
+}
+
+/** Where the block list starts inside its scroll container, in the CSS px the
+ *  virtualizer scrolls by. The rect gap is on-screen px; scrollTop is not. */
+export function measureScrollMargin(root: HTMLElement, scrollElement: HTMLElement): number {
+  const gap = root.getBoundingClientRect().top - scrollElement.getBoundingClientRect().top;
+  return Math.max(0, toCssPx(gap, scrollElement) + scrollElement.scrollTop);
 }

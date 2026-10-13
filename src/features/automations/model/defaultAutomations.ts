@@ -34,6 +34,18 @@ export const DEFAULT_AUTOMATIONS: Automation[] = [
   // box that step 1 opens. mod+k keeps working as Search; the chord costs nothing.
   shortcut("toggle-zen", "Zen mode (focus)", "mod+k mod+z", "toggleZenMode", "always"),
   shortcut("split-pane", "Split pane right", "mod+\\", "splitPane", "always"),
+  // Pane zoom takes over the browser's own zoom keys, but only while a pane is
+  // selected (the commands are disabled otherwise, so the page zooms as usual).
+  // One row per way a keyboard produces the key: "=" and Shift+"=" on QWERTY
+  // and AZERTY, the numpad "+", and "0" which AZERTY types with Shift ("à" bare).
+  shortcut("zoom-pane-in", "Zoom in (selected pane)", "mod+=", "zoomPaneIn", "always"),
+  shortcut("zoom-pane-in-plus", "Zoom in (selected pane, + key)", "mod+shift+plus", "zoomPaneIn", "always"),
+  shortcut("zoom-pane-in-numpad", "Zoom in (selected pane, numpad +)", "mod+plus", "zoomPaneIn", "always"),
+  shortcut("zoom-pane-out", "Zoom out (selected pane)", "mod+-", "zoomPaneOut", "always"),
+  shortcut("zoom-pane-out-shift", "Zoom out (selected pane, Shift+-)", "mod+shift+_", "zoomPaneOut", "always"),
+  shortcut("zoom-pane-reset", "Reset zoom (selected pane)", "mod+0", "zoomPaneReset", "always"),
+  shortcut("zoom-pane-reset-shift", "Reset zoom (selected pane, Shift+0)", "mod+shift+0", "zoomPaneReset", "always"),
+  shortcut("zoom-pane-reset-azerty", "Reset zoom (selected pane, AZERTY 0 key)", "mod+à", "zoomPaneReset", "always"),
   shortcut("bold", "Bold", "mod+b", "bold", "inTextEntry", false),
   shortcut("italic", "Italic", "mod+i", "italic", "inTextEntry", false),
   shortcut("underline", "Underline", "mod+u", "underline", "inTextEntry", false),

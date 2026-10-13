@@ -20,6 +20,7 @@ import { focusCell, focusCellWhenReady, focusTableBlockShell, resolveRowDropSlot
 import { handleNavigateKey, handleTableCellKey } from "./tableKeyboard";
 import { TableDataRow, createColumnStyles, getColumnKey, getRowKey } from "./TableParts";
 import { AddAxisButton } from "./TableAddButton";
+import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import { TableRowMenu } from "./TableRowMenu";
 import { applyTableMenuAction, type TableMenuAction } from "./tableMenuActions";
 import { useTableCommit } from "./useTableCommit";
@@ -96,10 +97,11 @@ export const TableBlockEditor: React.FC<TableBlockEditorProps> = ({ block, pageI
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX;
-    const startWidth = config.columnWidths?.[columnIndex] ?? event.currentTarget.closest("td")?.getBoundingClientRect().width ?? 160;
+    const cell = event.currentTarget.closest("td");
+    const startWidth = config.columnWidths?.[columnIndex] ?? (cell ? toCssPx(cell.getBoundingClientRect().width, cell) : 160);
     let latestWidth = startWidth;
     const move = (moveEvent: PointerEvent) => {
-      latestWidth = clampTableColumnWidth(startWidth + moveEvent.clientX - startX, startWidth);
+      latestWidth = clampTableColumnWidth(startWidth + toCssPx(moveEvent.clientX - startX, tableRef.current), startWidth);
       tableRef.current?.style.setProperty(`--osio-table-col-${columnIndex}-width`, `${latestWidth}px`);
     };
     const up = () => {
@@ -115,10 +117,11 @@ export const TableBlockEditor: React.FC<TableBlockEditorProps> = ({ block, pageI
     event.preventDefault();
     event.stopPropagation();
     const startY = event.clientY;
-    const startHeight = config.rowHeights?.[rowIndex] ?? event.currentTarget.closest("tr")?.getBoundingClientRect().height ?? ROW_ESTIMATE_HEIGHT;
+    const row = event.currentTarget.closest("tr");
+    const startHeight = config.rowHeights?.[rowIndex] ?? (row ? toCssPx(row.getBoundingClientRect().height, row) : ROW_ESTIMATE_HEIGHT);
     let latestHeight = startHeight;
     const move = (moveEvent: PointerEvent) => {
-      latestHeight = clampTableRowHeight(startHeight + moveEvent.clientY - startY, startHeight);
+      latestHeight = clampTableRowHeight(startHeight + toCssPx(moveEvent.clientY - startY, tableRef.current), startHeight);
       tableRef.current?.style.setProperty(`--osio-table-row-${rowIndex}-height`, `${latestHeight}px`);
     };
     const up = () => {

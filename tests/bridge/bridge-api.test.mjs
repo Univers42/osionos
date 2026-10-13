@@ -12,6 +12,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -21,11 +22,15 @@ import {
 	createBridgeServer,
 	createBridgeHandoff,
 	createUserSession,
+	isPageReadableBy,
 	persistBridgeIdentity,
 	requireWorkspaceAccess,
+	searchCoverPhotos,
 	searchPixabayVideos,
 	searchUnsplashPhotos,
 	stableStringify,
+	trackUnsplashDownload,
+	unsplashDownloadUrl,
 	validateBridgePayload,
 	verifyAppSessionToken,
 	verifyBridgeRequest,
@@ -71,6 +76,13 @@ function appSession(config = testBaasConfig(), issuedAt = Date.now()) {
 		workspaceName: "Owner's osionos",
 		workspaceSlug: 'owner-osionos-3f6d2a70',
 	}, issuedAt);
+}
+
+/** An Authorization header for a signed-in user. Rate limits are per user and
+ *  live for the whole process, so a test that spends one passes its own `user`. */
+function bearer(config, { user = subject, issuedAt = Date.now() } = {}) {
+	const session = createUserSession(validateBridgePayload({ ...payload, subject: user }), config, null, issuedAt);
+	return { authorization: `Bearer ${session.session.accessToken}` };
 }
 
 async function listen(server) {
@@ -484,7 +496,7 @@ describe('osionos bridge receiver', () => {
 		const baseUrl = await listen(server);
 
 		try {
-			const response = await fetch(`${baseUrl}/api/media/unsplash/search?query=dispatcher%20order&perPage=3`);
+			const response = await fetch(`${baseUrl}/api/media/unsplash/search?query=dispatcher%20order&perPage=3`, { headers: bearer(config) });
 			assert.equal(response.status, 200);
 			const payload = await response.json();
 			assert.equal(payload.results[0].id, 'photo-over-http');
@@ -559,10 +571,10 @@ describe('osionos bridge receiver', () => {
 		const baseUrl = await listen(server);
 
 		try {
-			const first = await fetch(`${baseUrl}/api/media/pixabay/videos?query=cache%20once%20per%20query`);
+			const first = await fetch(`${baseUrl}/api/media/pixabay/videos?query=cache%20once%20per%20query`, { headers: bearer(config) });
 			assert.equal(first.status, 200);
 			assert.equal((await first.json()).results[0].id, 'pixabay-125');
-			const second = await fetch(`${baseUrl}/api/media/pixabay/videos?query=cache%20once%20per%20query`);
+			const second = await fetch(`${baseUrl}/api/media/pixabay/videos?query=cache%20once%20per%20query`, { headers: bearer(config) });
 			assert.equal(second.status, 200);
 			assert.equal((await second.json()).results[0].ref, 'https://cdn.pixabay.com/video/125_medium.mp4');
 			assert.equal(upstreamCalls, 1);
@@ -581,6 +593,225 @@ describe('osionos bridge receiver', () => {
 			if (!existsSync(file)) continue;
 			const content = readFileSync(file, 'utf8');
 			assert.doesNotMatch(content, /VITE_[A-Z0-9_]*(SERVICE_ROLE|JWT_SECRET|OSIONOS_BRIDGE_SHARED_SECRET|APP_SESSION_SECRET)/);
+		}
+	});
+});
+
+describe('media routes spend provider keys, so they need a signed-in user', () => {
+	const mediaConfig = () => ({ ...testConfig(), unsplashAccessKey: 'unsplash-media-key', pixabayApiKey: 'pixabay-media-key' });
+	const DOWNLOAD = 'https://api.unsplash.com/photos/LBI7cgq3pbM/download?ixid=M3wxMjA3fDB8MXxzZWFyY2h8';
+	const postDownload = (baseUrl, headers, downloadLocation = DOWNLOAD) => fetch(`${baseUrl}/api/media/unsplash/download`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json', ...headers },
+		body: JSON.stringify({ downloadLocation }),
+	});
+
+	/** Serves `handler` as the upstream and hands the test the bridge URL and the upstream calls. */
+	async function withBridge(config, handler, run) {
+		const calls = [];
+		const server = createBridgeServer({
+			config,
+			fetchImpl: async (url, init = {}) => {
+				calls.push({ url: String(url), init });
+				return handler(String(url), init);
+			},
+		});
+		const baseUrl = await listen(server);
+		try {
+			await run(baseUrl, calls);
+		} finally {
+			await new Promise((resolveClose) => server.close(resolveClose));
+		}
+	}
+	const emptyResults = () => new Response(JSON.stringify({ results: [], hits: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+
+	it('answers 401 without a session, with a garbage token and with an expired one, and never calls the provider', async () => {
+		const config = mediaConfig();
+		const expired = bearer(config, { issuedAt: Date.now() - (config.sessionTtlSeconds + 60) * 1000 });
+		await withBridge(config, emptyResults, async (baseUrl, calls) => {
+			for (const headers of [{}, { authorization: 'Bearer not-a-session' }, expired]) {
+				assert.equal((await fetch(`${baseUrl}/api/media/unsplash/search?query=anonymous`, { headers })).status, 401);
+				assert.equal((await fetch(`${baseUrl}/api/media/pixabay/videos?query=anonymous`, { headers })).status, 401);
+				assert.equal((await postDownload(baseUrl, headers)).status, 401);
+			}
+			assert.equal(calls.length, 0);
+		});
+	});
+
+	it('answers 503, not 200, when the bridge has no session secret to check a token with', async () => {
+		const config = { ...mediaConfig(), appSessionSecret: '' };
+		await withBridge(config, emptyResults, async (baseUrl, calls) => {
+			const response = await fetch(`${baseUrl}/api/media/unsplash/search?query=unconfigured`, { headers: { authorization: 'Bearer osionos_v1.a.b' } });
+			assert.equal(response.status, 503);
+			assert.equal(calls.length, 0);
+		});
+	});
+
+	it('limits searches per user: one user running out does not slow another down', async () => {
+		const config = mediaConfig();
+		const heavyUser = bearer(config, { user: randomUUID() });
+		await withBridge(config, emptyResults, async (baseUrl) => {
+			const statuses = [];
+			// 40 are allowed in a burst and 2 more each second; 80 back to back must hit the limit.
+			for (let attempt = 0; attempt < 80 && statuses.at(-1) !== 429; attempt += 1) {
+				statuses.push((await fetch(`${baseUrl}/api/media/unsplash/search?query=limit`, { headers: heavyUser })).status);
+			}
+			assert.equal(statuses.at(-1), 429);
+			assert.ok(statuses.length > 40, `the first 40 are allowed, refused after ${statuses.length - 1}`);
+			assert.ok(statuses.slice(0, -1).every((status) => status === 200));
+			// Photo and video searches draw on the same allowance.
+			assert.equal((await fetch(`${baseUrl}/api/media/pixabay/videos?query=limit`, { headers: heavyUser })).status, 429);
+			const otherUser = bearer(config, { user: randomUUID() });
+			assert.equal((await fetch(`${baseUrl}/api/media/unsplash/search?query=limit`, { headers: otherUser })).status, 200);
+		});
+	});
+
+	it('reports a picked photo to Unsplash at a URL rebuilt from constants, without following a redirect', async () => {
+		const config = mediaConfig();
+		const user = bearer(config, { user: randomUUID() });
+		const redirect = () => new Response(null, { status: 302, headers: { location: 'https://elsewhere.example/' } });
+		await withBridge(config, redirect, async (baseUrl, calls) => {
+			const response = await postDownload(baseUrl, user, `${DOWNLOAD}&utm=dropped`);
+			assert.equal(response.status, 200);
+			assert.deepEqual(await response.json(), { ok: true });
+			assert.equal(calls.length, 1);
+			assert.equal(calls[0].url, DOWNLOAD);
+			assert.equal(calls[0].init.redirect, 'manual');
+			assert.equal(calls[0].init.headers.Authorization, 'Client-ID unsplash-media-key');
+		});
+	});
+
+	it('refuses to track anything that is not an Unsplash download URL, and caps the request body', async () => {
+		const config = mediaConfig();
+		const user = bearer(config, { user: randomUUID() });
+		await withBridge(config, emptyResults, async (baseUrl, calls) => {
+			assert.equal((await postDownload(baseUrl, user, 'https://internal.example/photos/x/download')).status, 400);
+			assert.equal((await postDownload(baseUrl, user, `${DOWNLOAD}&pad=${'x'.repeat(4096)}`)).status, 413);
+			assert.equal(calls.length, 0);
+		});
+	});
+
+	it('unsplashDownloadUrl keeps only the photo id and the ixid token', () => {
+		const canonical = 'https://api.unsplash.com/photos/LBI7cgq3pbM/download';
+		const accepted = [
+			[`${canonical}?ixid=abc_DEF-123`, `${canonical}?ixid=abc_DEF-123`],
+			[canonical, canonical],
+			['https://API.UNSPLASH.COM/photos/LBI7cgq3pbM/download', canonical],
+			['https://api.unsplash.com:443/photos/LBI7cgq3pbM/download', canonical],
+			['https:\\\\api.unsplash.com\\photos\\LBI7cgq3pbM\\download', canonical],
+			[`${canonical}?ixid=tok&redirect=https://evil.example&w=1`, `${canonical}?ixid=tok`],
+			[`${canonical}#fragment`, canonical],
+		];
+		for (const [given, expected] of accepted) assert.equal(unsplashDownloadUrl(given), expected, given);
+
+		const rejected = [
+			'https://user:pass@api.unsplash.com/photos/LBI7cgq3pbM/download',
+			'https://api.unsplash.com@evil.example/photos/LBI7cgq3pbM/download',
+			'https://api.unspl\u0430sh.com/photos/LBI7cgq3pbM/download', // Cyrillic "a"
+			'https://api.unsplash.com./photos/LBI7cgq3pbM/download',
+			'https://api.unsplash.com.evil.example/photos/LBI7cgq3pbM/download',
+			'https://api.unsplash.com:8443/photos/LBI7cgq3pbM/download',
+			'http://api.unsplash.com/photos/LBI7cgq3pbM/download',
+			'https://api.unsplash.com/photos/x/../../me/download',
+			'https://api.unsplash.com/photos/%2e%2e/%2e%2e/me/download',
+			'https://api.unsplash.com/photos/a%2Fb/download',
+			'https://api.unsplash.com/photos/LBI7cgq3pbM/download/extra',
+			'https://api.unsplash.com/photos/LBI7cgq3pbM',
+			'https://api.unsplash.com/me',
+			`${canonical}?ixid=has space`,
+			`${canonical}?ixid=${'x'.repeat(257)}`,
+			'//api.unsplash.com/photos/LBI7cgq3pbM/download',
+			'not a url',
+			'',
+			null,
+			undefined,
+			['https://api.unsplash.com/photos/a/download', 'https://evil.example/'],
+			{ href: canonical },
+		];
+		for (const given of rejected) assert.equal(unsplashDownloadUrl(given), null, String(given));
+	});
+
+	it('trackUnsplashDownload: an upstream error is a 502, a missing key a 503', async () => {
+		const config = mediaConfig();
+		await assert.rejects(() => trackUnsplashDownload(DOWNLOAD, config, async () => new Response('gone', { status: 404 })), (error) => error.status === 502 && !error.message.includes('unsplash-media-key'));
+		await assert.rejects(() => trackUnsplashDownload(DOWNLOAD, { ...config, unsplashAccessKey: '' }, async () => new Response('{}')), (error) => error.status === 503);
+		assert.deepEqual(await trackUnsplashDownload(DOWNLOAD, config, async () => new Response('{"url":"https://unsplash.com/photos/x"}')), { ok: true });
+	});
+
+	it('keeps all users together under Pixabay\'s per-key limit, counting only cache misses', async () => {
+		const config = mediaConfig();
+		let upstreamCalls = 0;
+		const videos = () => new Response(JSON.stringify({ totalHits: 0, hits: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+		await withBridge(config, () => { upstreamCalls += 1; return videos(); }, async (baseUrl) => {
+			const statuses = [];
+			// Different users, different queries: each one misses the cache.
+			for (let query = 0; query < 120 && statuses.at(-1) !== 429; query += 1) {
+				const user = bearer(config, { user: randomUUID() });
+				statuses.push((await fetch(`${baseUrl}/api/media/pixabay/videos?query=upstream-${query}`, { headers: user })).status);
+			}
+			assert.equal(statuses.at(-1), 429);
+			assert.ok(statuses.slice(0, -1).every((status) => status === 200));
+			// The allowance is per process, and an earlier test in this file already spent some of it.
+			assert.ok(upstreamCalls > 80 && upstreamCalls <= 90, `asked Pixabay ${upstreamCalls} times`);
+			// A cached query costs nothing upstream, so it is still answered.
+			const cached = await fetch(`${baseUrl}/api/media/pixabay/videos?query=upstream-0`, { headers: bearer(config, { user: randomUUID() }) });
+			assert.equal(cached.status, 200);
+		});
+	});
+
+	it('falls back to Openverse when the Unsplash quota is spent, but not when Unsplash is broken', async () => {
+		const config = mediaConfig();
+		const openverse = () => new Response(JSON.stringify({ result_count: 1, results: [{ id: 'cc-1', title: 'Free photo', url: 'https://cdn.example/cc-1.jpg', creator: 'Someone' }] }), { status: 200 });
+		const upstream = (unsplashStatus) => async (url) => (new URL(url).hostname === 'api.unsplash.com' ? new Response('refused', { status: unsplashStatus }) : openverse());
+
+		for (const status of [403, 429]) {
+			const result = await searchCoverPhotos({ query: `quota spent ${status}` }, config, upstream(status));
+			assert.equal(result.results[0].id, 'ov-cc-1');
+		}
+		await assert.rejects(() => searchCoverPhotos({ query: 'unsplash is down' }, config, upstream(500)), (error) => error.status === 502);
+	});
+});
+
+describe('a member\'s private page stays theirs in a shared workspace', () => {
+	const otherMember = '6a1e5f1c-8f0b-4f0e-9a43-6d0c2b7b1a11';
+	const otherPrivateId = '9e3c2a51-1d4f-4f7e-8c2a-1b6d0e9f7a01';
+	const otherSharedId = '9e3c2a51-1d4f-4f7e-8c2a-1b6d0e9f7a02';
+	const row = (id, visibility, extra = {}) => ({
+		id, workspace_id: workspaceId, parent_page_id: null, owner_id: otherMember, title: `${visibility} page of another member`,
+		visibility, collaborators: [], properties: [], content: [], archived_at: null,
+		created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z', ...extra,
+	});
+
+	it('isPageReadableBy: owner, collaborator, shared, public and legacy pages are readable; another member\'s private page is not', () => {
+		const me = subject;
+		assert.equal(isPageReadableBy({ owner_id: me, visibility: 'private' }, me), true);
+		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: 'shared' }, me), true);
+		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: 'public' }, me), true);
+		assert.equal(isPageReadableBy({ owner_id: null, visibility: null, collaborators: [] }, me), true);
+		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: 'private', collaborators: [{ userId: me, role: 'viewer' }] }, me), true);
+		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: 'private' }, me), false);
+		assert.equal(isPageReadableBy({ owner_id: otherMember, visibility: null }, me), false);
+		assert.equal(isPageReadableBy({ owner_id: null, visibility: 'private' }, me), false);
+	});
+
+	it('the page list and a page read leave out another member\'s private page and keep their shared one', async () => {
+		const config = testBaasConfig();
+		const { pages, fetchImpl } = createMockBaasFetch();
+		pages.set(otherPrivateId, row(otherPrivateId, 'private'));
+		pages.set(otherSharedId, row(otherSharedId, 'shared'));
+		const server = createBridgeServer({ config, fetchImpl });
+		const baseUrl = await listen(server);
+		const headers = { authorization: `Bearer ${appSession(config).session.accessToken}` };
+		try {
+			const listed = await (await fetch(`${baseUrl}/api/pages/all?workspaceId=${workspaceId}`, { headers })).json();
+			const ids = listed.map((page) => page._id);
+			assert.equal(ids.includes(otherSharedId), true);
+			assert.equal(ids.includes(otherPrivateId), false);
+			assert.equal(ids.includes(childPageId), true);
+			assert.equal((await fetch(`${baseUrl}/api/pages/${otherPrivateId}`, { headers })).status, 404);
+			assert.equal((await fetch(`${baseUrl}/api/pages/${otherSharedId}`, { headers })).status, 200);
+		} finally {
+			await new Promise((resolveClose) => server.close(resolveClose));
 		}
 	});
 });

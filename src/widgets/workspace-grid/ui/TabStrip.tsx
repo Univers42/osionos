@@ -34,9 +34,10 @@ const InsertBar: React.FC = () => (
  *  dragged from other panes AND files dragged from the sidebar tree — showing an
  *  insertion bar (where it lands) or a full-tab highlight (drop ONTO a tab to
  *  replace it, VSCode-style — so it's not always about accumulating tabs). */
-export const TabStrip: React.FC<{ pane: PaneNode }> = ({ pane }) => {
-  const { setActiveTab, closeTab, setActivePane, splitActivePane, closePane, moveTab, openTabAt, replaceTabWith } =
+export const TabStrip: React.FC<{ pane: PaneNode; zoom: number }> = ({ pane, zoom }) => {
+  const { setActiveTab, closeTab, setActivePane, splitActivePane, closePane, moveTab, openTabAt, replaceTabWith, zoomPane } =
     useWorkspaceLayout.getState();
+  const zoomPercent = Math.round(zoom * 100);
   const endDrag = useSidebarTreeDnd((s) => s.endDrag);
   const listRef = useRef<HTMLDivElement>(null);
   const [hint, setHint] = useState<DropHint | null>(null);
@@ -130,6 +131,17 @@ export const TabStrip: React.FC<{ pane: PaneNode }> = ({ pane }) => {
         {hint && hint.replaceTabId === undefined && hint.index >= pane.tabs.length ? <InsertBar /> : null}
       </div>
       <div className="flex items-center gap-0.5 px-1 shrink-0">
+        {zoomPercent === 100 ? null : (
+          <button
+            type="button"
+            title="Reset zoom"
+            aria-label={`Reset zoom (${zoomPercent}%)`}
+            onClick={() => zoomPane(pane.id, "reset")}
+            className="h-[var(--osio-control-h-xs)] shrink-0 rounded-[var(--osio-radius-chip)] px-1.5 text-xs font-medium tabular-nums text-[var(--osio-fg-muted)] transition-[background-color,color] duration-[var(--osio-dur-fast)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--osio-focus-ring-color)]"
+          >
+            {zoomPercent}%
+          </button>
+        )}
         <IconButton size="sm" title="Split right" onClick={() => splitActivePane(pane.id, "row")}>
           <SplitSquareHorizontal size={14} />
         </IconButton>

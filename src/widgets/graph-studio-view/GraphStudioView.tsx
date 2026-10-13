@@ -264,6 +264,7 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
     <div
       data-testid="graph-studio-view"
       data-graph-state={view.phase}
+      data-osio-fixed-scale
       className="relative flex h-full min-h-[inherit] w-full flex-col overflow-hidden"
     >
       {fixedScope ? null : (
