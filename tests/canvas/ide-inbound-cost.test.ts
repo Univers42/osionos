@@ -21,6 +21,7 @@ import { recordSyncedHash } from "../../src/features/ide/model/ideSyncEngine.ts"
 import { executeSteps } from "../../src/features/ide/model/inboundExec.ts";
 import { planInbound } from "../../src/features/ide/model/inboundPlan.ts";
 import { createInboundView } from "../../src/features/ide/model/inboundView.ts";
+import { createLandedMemo } from "../../src/features/ide/model/inboundLanded.ts";
 import { createPageFileFacade } from "../../src/features/page-file/model/pageFileFacade.ts";
 import { blockPage, folderPage, viewWorld } from "./fixtures/inboundWorld.ts";
 
@@ -65,7 +66,9 @@ test("cost: a shell edit three levels deep in a 10 000-page workspace makes at m
   const counter = { lookups: 0 };
   const views = countingViews(world.views, counter);
   const facade = createPageFileFacade(world.store, views);
-  const view = createInboundView({ workspaceId: world.workspaceId, store: world.store, views, pending: world.pending, readText: (id) => facade.readContent(id) });
+  const readText = (id: string): Promise<string> => facade.readContent(id);
+  const landed = createLandedMemo({ workspaceId: world.workspaceId, readText });
+  const view = createInboundView({ workspaceId: world.workspaceId, store: world.store, views, pending: world.pending, landed, readText });
   const ours = await facade.readContent("R");
   recordSyncedHash(world.workspaceId, "Area/Team/Roadmap.omd", await sha16(ours));
   const text = `${ours.slice(0, ours.lastIndexOf("---\n") + 4)}Edited in vim\n`;
@@ -74,7 +77,7 @@ test("cost: a shell edit three levels deep in a 10 000-page workspace makes at m
 
   const event = { kind: "write" as const, path: "Area/Team/Roadmap.omd", text, hash: await sha16(text) };
   const steps = await planInbound(event, view);
-  const ctx = { workspaceId: world.workspaceId, facade, view, pending: world.pending, restore: async () => undefined, stat: async () => "unknown" as const };
+  const ctx = { workspaceId: world.workspaceId, facade, view, pending: world.pending, landed, restore: async () => undefined, stat: async () => "unknown" as const };
   const outcome = await executeSteps(steps, event.path, ctx);
 
   assert.deepEqual(steps.map((step) => step.op), ["apply"]);

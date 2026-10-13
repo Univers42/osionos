@@ -162,7 +162,7 @@ async function ownedFileRow(pageId: string, fid: string | undefined, ctx: WriteC
     steps.push({ op: "conflict", pageId, path: ctx.path, theirs: ctx.text, hash: ctx.hash });
     return steps;
   }
-  steps.push(...(await decide(pageId, ctx.view.syncedHashOf(ctx.path), ctx)));
+  steps.push(...(await decide(pageId, ctx.view.syncedHashOf(ctx.path), ctx, ctx.view.agreedPageHash(ctx.path, ctx.hash))));
   return steps;
 }
 

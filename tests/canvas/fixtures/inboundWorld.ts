@@ -23,6 +23,7 @@ import { createSerialQueue } from "../../../src/features/ide/model/inboundPipeli
 import { statInProvider, type StatResult } from "../../../src/features/ide/model/inboundArchive.ts";
 import { createInboundSession } from "../../../src/features/ide/model/inboundSession.ts";
 import { createInboundView } from "../../../src/features/ide/model/inboundView.ts";
+import { createLandedMemo } from "../../../src/features/ide/model/inboundLanded.ts";
 import { createMemProvider } from "../../../src/features/ide/vfs/memProvider.ts";
 import { buildVPath } from "../../../src/features/ide/vfs/vpath.ts";
 import { textToBytes } from "../../../src/features/ide/vfs/bytes.ts";
@@ -52,7 +53,8 @@ export function viewWorld(pages: PageEntry[]) {
   const clock = createFakeClock();
   const queued: (() => Promise<void>)[] = [];
   const pending = createInboundPending({ schedule: clock.schedule, enqueue: (task) => { queued.push(task); } });
-  const view = createInboundView({ workspaceId, store, views, pending, readText: (id) => facade.readContent(id) });
+  const readText = (id: string): Promise<string> => facade.readContent(id);
+  const view = createInboundView({ workspaceId, store, views, pending, landed: createLandedMemo({ workspaceId, readText }), readText });
   return { workspaceId, store, views, facade, clock, queued, pending, view };
 }
 

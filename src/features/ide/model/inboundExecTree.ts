@@ -90,8 +90,9 @@ export async function movePage(step: MoveStep, ctx: ExecContext): Promise<void> 
 export async function createPage(step: CreateStep, ctx: ExecContext): Promise<void> {
   const { dir, name } = splitPath(step.path);
   const parentId = await ensureDirPage(dir, ctx);
-  await ctx.facade.create({ title: name, parentId, kind: "file", content: step.text });
+  const created = await ctx.facade.create({ title: name, parentId, kind: "file", content: step.text });
   recordSyncedHash(ctx.workspaceId, step.path, step.hash);
+  await ctx.landed.remember(step.path, step.hash, created.id);
 }
 
 /** Back from the trash; the restore memory is spent once the page is live again. */

@@ -92,6 +92,7 @@ export function viewOf(specs: readonly FakePageSpec[]): FakeView {
     archivedByInbound: (pageId) => table.inboundArchived.get(pageId),
     canDelete: (pageId) => !table.noDelete.has(pageId),
     syncedHashOf: (path) => table.ledger.get(path) ?? null,
+    agreedPageHash: () => null,
     isEchoHash: (hash) => table.echo.has(hash),
     childrenOf: (entryId) => table.pages.filter((page) => !page.archived && page.parentId === entryId.replace(/#dir$/, ""))
       .map((page) => ({ pageId: page.pageId, path: page.path })),

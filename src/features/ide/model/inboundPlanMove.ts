@@ -141,9 +141,10 @@ function livePageOf(view: InboundView, pageId: string): LivePage | undefined {
 /**
  * The three-way merge from ideSyncEngine. Echo is settled by R2 and the local
  * text is never null, so only ignore/apply/conflict are reachable; the rest
- * record. O(len(local) + len(text)) for the hash and the one comparison.
+ * record. `agreedPageHash` only for a page's own path (inboundLanded); a move or
+ * a restore decides on the ledger alone. O(len(local) + len(text)).
  */
-export async function decide(pageId: string, lastSynced: string | null, ctx: WriteContext): Promise<InboundStep[]> {
+export async function decide(pageId: string, lastSynced: string | null, ctx: WriteContext, agreedPageHash: string | null = null): Promise<InboundStep[]> {
   const localContent = await ctx.view.localText(pageId);
   const verdict = decideInboundWrite({
     inboundHash: ctx.hash,
@@ -152,6 +153,7 @@ export async function decide(pageId: string, lastSynced: string | null, ctx: Wri
     localHash: await sha16(localContent),
     inboundContent: ctx.text,
     lastSyncedHash: lastSynced,
+    agreedPageHash,
   });
   if (verdict.action === "apply") return [{ op: "apply", pageId, path: ctx.path, text: ctx.text, hash: ctx.hash }];
   if (verdict.action === "conflict") return [{ op: "conflict", pageId, path: ctx.path, theirs: ctx.text, hash: ctx.hash }];

@@ -26,6 +26,7 @@ import type { ReadableViews } from "@/features/page-file/model/pageFileFacadeVie
 import type { PageFacadeEntry } from "../vfs/pageProvider";
 import type { InboundView, LivePage, ViewEntry } from "./inboundPlan";
 import type { InboundPending } from "./inboundPending";
+import type { LandedMemo } from "./inboundLanded";
 
 export interface InboundViewDeps {
   workspaceId: string;
@@ -33,6 +34,7 @@ export interface InboundViewDeps {
   /** The SAME views the facade was built with (one slice cache, one table build). */
   views: ReadableViews;
   pending: InboundPending;
+  landed: LandedMemo;
   /** The facade's readContent: the text the app would write for the page's own file. */
   readText(pageId: string): Promise<string>;
 }
@@ -69,6 +71,7 @@ export function createInboundView(deps: InboundViewDeps): ExecView {
       return page !== undefined && deps.store.canEdit(page);
     },
     syncedHashOf: (path) => syncedHashOf(workspaceId, path),
+    agreedPageHash: (path, inboundHash) => deps.landed.pageHashAt(path, inboundHash),
     isEchoHash: (hash) => isEchoHash(hash),
     childrenOf: (entryId) => childrenOf(views, entryId),
     localText: (pageId) => deps.readText(pageId),

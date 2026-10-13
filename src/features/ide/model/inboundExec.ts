@@ -24,6 +24,7 @@ import { useIdeSyncConflicts } from "./ideSyncConflicts";
 import type { PageFacade } from "../vfs/pageProvider";
 import type { InboundStep } from "./inboundPlan";
 import type { InboundPending } from "./inboundPending";
+import type { LandedMemo } from "./inboundLanded";
 import type { ExecView } from "./inboundView";
 
 export interface ExecContext {
@@ -31,6 +32,7 @@ export interface ExecContext {
   readonly facade: PageFacade;
   readonly view: ExecView;
   readonly pending: InboundPending;
+  readonly landed: LandedMemo;
   restore(pageId: string): Promise<void>;
   stat(path: string): Promise<StatResult>;
 }
@@ -85,7 +87,8 @@ async function runStep(step: InboundStep, ctx: ExecContext): Promise<void> {
       // writeContent is writePage: the file's name keeps the title, the app the
       // surface, the owner the visibility (pinFilePatch, B6).
       await ctx.facade.writeContent(step.pageId, step.text);
-      return recordSyncedHash(ctx.workspaceId, step.path, step.hash);
+      recordSyncedHash(ctx.workspaceId, step.path, step.hash);
+      return ctx.landed.remember(step.path, step.hash, step.pageId);
     case "create":
       return createPage(step, ctx);
     case "conflict":

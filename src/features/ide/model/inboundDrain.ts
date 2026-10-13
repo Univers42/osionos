@@ -108,15 +108,20 @@ function isHeld(held: ReadonlySet<string>, path: string): boolean {
   return held.has(lower);
 }
 
-/** One batch create; each page that landed gets its ledger, each refusal its create line. */
+/** One batch create; each page that landed gets its ledger (and its landed page hash,
+ *  read back through the store: the returned object predates the front-matter patch). */
 async function makeBatch(deps: DrainDeps, items: readonly Deferred[]): Promise<void> {
   const inputs = items.map(({ step, parentId, name }) => ({ title: name, parentId, kind: "file" as const, content: step.text }));
   try {
     const results = await createPagesBatch(deps.store, deps.views, inputs);
     for (const [at, result] of results.entries()) {
       const { step } = items[at];
-      if ("page" in result) recordSyncedHash(deps.ctx.workspaceId, step.path, step.hash);
-      else ideOutput("fs-sync", failureLine(step, step.path, result.error));
+      if (!("page" in result)) {
+        ideOutput("fs-sync", failureLine(step, step.path, result.error));
+        continue;
+      }
+      recordSyncedHash(deps.ctx.workspaceId, step.path, step.hash);
+      await deps.ctx.landed.remember(step.path, step.hash, result.page._id);
     }
   } catch (error) {
     for (const { step } of items) ideOutput("fs-sync", failureLine(step, step.path, messageOf(error)));

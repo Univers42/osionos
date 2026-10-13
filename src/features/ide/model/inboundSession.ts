@@ -19,6 +19,7 @@ import { createReadableViews } from "@/features/page-file/model/pageFileFacadeVi
 import { sha16, type FsEvent } from "./ideFsEcho";
 import { ideOutput } from "./ideOutputBus";
 import { createInboundDrain } from "./inboundDrain";
+import { createLandedMemo } from "./inboundLanded";
 import { createInboundPending, type Schedule } from "./inboundPending";
 import { decodeUtf8Strict, type SerialQueue } from "./inboundPipeline";
 import { createInboundView, type ExecView } from "./inboundView";
@@ -62,8 +63,10 @@ export function createInboundSession(deps: InboundSessionDeps): InboundSession {
   const views = createReadableViews(deps.store);
   const facade = createPageFileFacade(deps.store, views);
   const pending = createInboundPending({ schedule: deps.schedule, enqueue: deps.enqueue });
-  const view = createInboundView({ workspaceId: deps.workspaceId, store: deps.store, views, pending, readText: (id) => facade.readContent(id) });
-  const ctx: ExecContext = { workspaceId: deps.workspaceId, facade, view, pending, restore: deps.restore, stat: deps.stat };
+  const readText = (id: string): Promise<string> => facade.readContent(id);
+  const landed = createLandedMemo({ workspaceId: deps.workspaceId, readText });
+  const view = createInboundView({ workspaceId: deps.workspaceId, store: deps.store, views, pending, landed, readText });
+  const ctx: ExecContext = { workspaceId: deps.workspaceId, facade, view, pending, landed, restore: deps.restore, stat: deps.stat };
   const drain = createInboundDrain({ store: deps.store, views, ctx, enqueue: deps.enqueue });
   return {
     views,

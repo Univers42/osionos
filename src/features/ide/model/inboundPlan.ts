@@ -70,6 +70,8 @@ export interface InboundView {
   archivedByInbound(pageId: string): { syncedHash: string | null; path: string } | undefined;
   canDelete(pageId: string): boolean;
   syncedHashOf(path: string): string | null;
+  /** The page hash the last inbound apply/create at `path` left, while still valid (inboundLanded). */
+  agreedPageHash(path: string, inboundHash: string): string | null;
   isEchoHash(hash: string): boolean;
   /** Live pages directly inside a children-dir / folder-dir entry. */
   childrenOf(entryId: string): readonly { pageId: string; path: string }[];
