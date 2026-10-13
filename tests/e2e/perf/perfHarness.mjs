@@ -56,6 +56,8 @@ export async function bootApp(page, { workbench, ide = false }) {
       if (on) localStorage.setItem("osio.workbench", "1");
       else localStorage.removeItem("osio.workbench");
       if (withIde) localStorage.setItem("osio.ide", "1");
+      // A production build (PLAYWRIGHT_BUILD=production) only installs the perf fixtures behind this flag.
+      localStorage.setItem("osio:perf", "1");
     } catch {
       /* ignore */
     }

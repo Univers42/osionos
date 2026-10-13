@@ -84,7 +84,7 @@ case "${COMMAND}" in
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh lint-fix "$@"
     ;;
   test-e2e)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e OSIO_CANVAS_V2 browser-tests pnpm exec playwright test "$@"
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e OSIO_CANVAS_V2 -e PLAYWRIGHT_BUILD browser-tests pnpm exec playwright test "$@"
     ;;
   test-e2e-serial)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e OSIO_CANVAS_V2 browser-tests pnpm exec playwright test --workers=1 "$@"
