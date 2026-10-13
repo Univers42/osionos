@@ -1915,7 +1915,7 @@ async function handlePageSearch(url, request, response, config, fetchImpl) {
 	}
 	// Ponytail: PostgREST caps the hits at PAGE_SEARCH_MAX BEFORE this filter, so when most
 	// top matches are other members' private pages the result under-reports (fewer hits,
-	// never a foreign private one). Narrowing in SQL (`or=`) is unproven; SEC1 left it out.
+	// never another member's private one). Narrowing in SQL (`or=`) is unproven, so it is left out.
 	const readable = readablePageRows(rows, userId);
 	readable.sort((a, b) => pageTitleScore(b, query) - pageTitleScore(a, query));
 	const limited = readable.slice(0, limit);
@@ -2860,6 +2860,8 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	const { userId } = verifyAppSessionToken(bearerToken(request), config);
 	// Auth-only columns — the update path never reads existing.content/title. The read
 	// check runs before any role check, so an unreadable page is a 404 for every role.
+	// Ponytail: readability is decided on this row and not re-checked by the PATCH — an
+	// owner who makes the page private between the two still has this one edit go through.
 	const existing = requireReadablePage(await fetchPageAuthRow(pageId, config, fetchImpl), userId);
 	// The page OWNER may update their own page even when the workspace gate would
 	// deny — e.g. a record-note that landed in a read-only seed workspace (ac3e…)

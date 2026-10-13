@@ -10,9 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// SEC1: a non-owner cannot change who may read a page (PATCH guard), publish an
-// ownerless or foreign page to the marketplace, read foreign drafts or children
-// through a marketplace app, or take over a record note by re-opening it.
+// Only a page's owner changes who may read it: a non-owner's PATCH keeps the sharing
+// keys out, the marketplace publishes only the caller's own app (with that app's own
+// children), app drafts and children follow the read rule, and re-opening a record
+// never changes who owns its note.
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -56,7 +57,7 @@ function marketWorld() {
 	return world;
 }
 
-describe('SEC1 PATCH guard — sharing keys from a non-owner are ignored, never a 403', () => {
+describe('sharing keys from a non-owner are ignored, never a 403', () => {
 	it('stores a non-owner edit that repeats the stored workspace and visibility', async () => {
 		const mock = createPostgrestMock(teamWorld({ memberRole: 'editor' }));
 		const content = [{ id: 'b-edit', type: 'paragraph', content: 'written by B' }];
@@ -110,7 +111,7 @@ describe('SEC1 PATCH guard — sharing keys from a non-owner are ignored, never 
 	});
 });
 
-describe('SEC1 marketplace', () => {
+describe('marketplace publishing and app pages', () => {
 	it('refuses to publish an ownerless app and leaves it unchanged', async () => {
 		const mock = createPostgrestMock(marketWorld());
 		const before = structuredClone(mock.page(APPS.ownerless));
@@ -157,11 +158,11 @@ describe('SEC1 marketplace', () => {
 		});
 	});
 
-	it('does not return a foreign private page placed under the caller\'s app', async () => {
+	it('does not return another user\'s private page placed under the caller\'s app', async () => {
 		const mock = createPostgrestMock(marketWorld());
 		await withBridge(config, mock.fetchImpl, async (base) => {
-			const blind = await send(base, `/api/pages/${IDS.privateA}`, asB, patch({ parentPageId: APPS.publishedB }));
-			assert.equal(blind.status, 404, blind.text);
+			const byB = await send(base, `/api/pages/${IDS.privateA}`, asB, patch({ parentPageId: APPS.publishedB }));
+			assert.equal(byB.status, 404, byB.text);
 			const moved = await send(base, `/api/pages/${IDS.privateA}`, asA, patch({ parentPageId: APPS.publishedB }));
 			assert.equal(moved.status, 200, moved.text);
 			const app = await send(base, `/api/marketplace/apps/${APPS.publishedB}`, asB);
@@ -182,7 +183,7 @@ describe('SEC1 marketplace', () => {
 	});
 });
 
-describe('SEC1 record notes', () => {
+describe('record note ownership', () => {
 	it('keeps the first opener as owner when another member opens the same record', async () => {
 		const world = teamWorld();
 		world.osionos_workspace_databases = [{ workspace_id: IDS.team, db_id: DB, engine: 'postgresql', tables: ['tasks'], edges_table: null, label: 'Tasks' }];

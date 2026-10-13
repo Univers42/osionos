@@ -10,8 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// SEC1: every page READ site denies member B (a viewer of A's team workspace) A's
-// private pages, and a denied single page is indistinguishable from a missing id.
+// A member reads only the pages the client rule allows: every page read site answers
+// member B (a viewer of A's team workspace) without A's private pages, and a single
+// page B may not read answers exactly like a missing id.
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -33,7 +34,7 @@ async function assertSameAsMissing(base, pathFor, init) {
 	assert.deepEqual(denied.body, missing.body);
 }
 
-describe('SEC1 list and read', () => {
+describe('page list and read show a member only readable pages', () => {
 	it('lists only pages B may read on /api/pages and /api/pages/all', async () => {
 		const mock = createPostgrestMock(teamWorld());
 		await withBridge(config, mock.fetchImpl, async (base) => {
@@ -65,7 +66,7 @@ describe('SEC1 list and read', () => {
 	});
 });
 
-describe('SEC1 search', () => {
+describe('search returns only readable pages', () => {
 	const missingColumn = { status: 400, body: { code: '42703', details: null, hint: null, message: 'column osionos_pages.search_doc does not exist' } };
 	const scans = (mock) => mock.calls.filter((call) => call.table === 'osionos_pages' && !call.params.has('search_doc'));
 
@@ -103,7 +104,7 @@ describe('SEC1 search', () => {
 	});
 });
 
-describe('SEC1 translate', () => {
+describe('translate works only on a readable page', () => {
 	it('treats a private page like a missing id and never calls a translator with its content', async () => {
 		const mock = createPostgrestMock(teamWorld());
 		await withBridge(config, mock.fetchImpl, async (base) => {
@@ -120,7 +121,7 @@ describe('SEC1 translate', () => {
 	});
 });
 
-describe('SEC1 backlinks', () => {
+describe('backlinks show only readable pages', () => {
 	it('404s a private target like a missing id', async () => {
 		const mock = createPostgrestMock(teamWorld());
 		await withBridge(config, mock.fetchImpl, async (base) => assertSameAsMissing(base, (id) => `/api/pages/${id}/backlinks`));
@@ -137,7 +138,7 @@ describe('SEC1 backlinks', () => {
 	});
 });
 
-describe('SEC1 comments and publish', () => {
+describe('comments and publishing need a readable page', () => {
 	it('404s listing and posting comments on a private page like a missing id', async () => {
 		const mock = createPostgrestMock(teamWorld());
 		await withBridge(config, mock.fetchImpl, async (base) => {

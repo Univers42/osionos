@@ -38,7 +38,7 @@ const COLLABORATORS = {
 	'[null]': [null],
 };
 
-// The ruling (U1(b)) in table terms, independent of the implementation.
+// The read rule in table terms, independent of the implementation.
 function expectedRead(visibility, owner, collaborators) {
 	return visibility === 'shared' || visibility === 'public'
 		|| owner === 'self' || owner === 'self-UPPERCASE'

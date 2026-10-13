@@ -171,8 +171,8 @@ async function toolSearchPages(deps, session, input) {
 	const matches = [];
 	for (const row of Array.isArray(rows) ? rows : []) {
 		if (row.archived_at) continue;
-		// Only the caller's own and shared-with-them pages reach the model: anything else it reads
-		// can carry instructions (prompt injection) or be repeated to a third party.
+		// Only the caller's own and shared-with-them pages reach the model: any text it reads
+		// can steer its next tool call, create_page included.
 		if (!isOwnerOrCollaborator(row, session.userId)) continue;
 		let haystack = String(row.title ?? '').toLowerCase();
 		try {

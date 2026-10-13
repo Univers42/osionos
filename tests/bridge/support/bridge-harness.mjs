@@ -171,7 +171,7 @@ export async function withBridge(config, fetchImpl, run) {
 	}
 }
 
-/** One HTTP call against the running bridge: status, raw text (for leak checks) and parsed body. */
+/** One HTTP call against the running bridge: status, raw text (to assert what it never contains) and parsed body. */
 export async function send(base, path, headers, init = {}) {
 	const response = await fetch(`${base}${path}`, { headers, ...init });
 	const text = await response.text();

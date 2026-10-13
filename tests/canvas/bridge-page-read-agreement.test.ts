@@ -64,7 +64,7 @@ function clientAnswer(row: Row): boolean | "throws" {
   }
 }
 
-// UUIDs are case-insensitive; the bridge folds case (SEC1 condition 3), the client does not.
+// UUIDs are case-insensitive; the bridge folds case, the client does not.
 const foldOwnerCase = (row: Row): Row => ({ ...row, owner_id: typeof row.owner_id === "string" ? row.owner_id.toLowerCase() : row.owner_id });
 
 test("bridge canReadPageRow agrees with client canReadPage on all 160 table rows", () => {

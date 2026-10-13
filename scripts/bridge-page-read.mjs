@@ -14,10 +14,11 @@
  * Page READ and SHARING authorization on raw osionos_pages rows — the server half of
  * the client's canReadPage / canChangePageVisibility (src/shared/lib/auth/pageAccess.ts).
  * Callers still run the workspace gate first (requireWorkspaceAccess /
- * ownerOrWorkspaceAccess); this decides what a member of that workspace may see.
+ * ownerOrWorkspaceAccess), or use canReadPageRowAsMember on surfaces that span
+ * workspaces; this decides what a member of that workspace may see.
  * Pure: no I/O, never throws on a malformed row. Null or unknown visibility is
  * 'private' (as pageRowToEntry shows it); there is deliberately no "ownerless page is
- * readable" legacy branch, so such a page is readable by nobody (SEC1 ruling U1(b)).
+ * readable" legacy branch, so such a private page is readable by nobody.
  */
 
 const PAGE_VISIBILITIES = new Set(['private', 'shared', 'public']);
