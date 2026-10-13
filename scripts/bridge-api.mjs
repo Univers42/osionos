@@ -1163,6 +1163,15 @@ function idsFilter(ids) {
 	return `id=in.(${ids.map((id) => encodeURIComponent(id)).join(',')})`;
 }
 
+// Ponytail: 100 uuids ≈ 3.8 KB of path + query, under an 8 KB proxy line limit; the deployed proxy's real limit is not verified.
+const CASCADE_CHUNK_IDS = 100;
+
+function idChunks(ids) {
+	const chunks = [];
+	for (let at = 0; at < ids.length; at += CASCADE_CHUNK_IDS) chunks.push(ids.slice(at, at + CASCADE_CHUNK_IDS));
+	return chunks;
+}
+
 export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) {
 	const persistenceEnabled = config.persistence === 'baas' || (config.persistence === 'auto' && config.serviceKey && config.baasUrl);
 	if (!persistenceEnabled) return null;
@@ -2969,22 +2978,28 @@ async function cascadeDescendantIds(request, row, permission, config, fetchImpl)
 	const refs = await listWorkspacePageRefs(row.workspace_id, config, fetchImpl);
 	const descendantIds = descendantPageIds(refs, row.id);
 	if (descendantIds.length === 0) return [];
-	const authRows = await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(descendantIds)}&select=${PAGE_AUTH_SELECT}`);
-	const byId = new Map((Array.isArray(authRows) ? authRows : []).map((descendant) => [descendant.id, descendant]));
+	const byId = new Map();
+	for (const chunk of idChunks(descendantIds)) {
+		const authRows = await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(chunk)}&select=${PAGE_AUTH_SELECT}`);
+		for (const descendant of Array.isArray(authRows) ? authRows : []) byId.set(descendant.id, descendant);
+	}
 	const needsMembership = [...byId.values()].some((descendant) => !sameId(descendant.owner_id, userId));
 	const memberAccess = needsMembership ? await memberAccessOrNull(request, row.workspace_id, permission, config, fetchImpl) : null;
 	const keep = (descendant) => descendant !== undefined && sameId(descendant.workspace_id, row.workspace_id) && mayMutatePage(descendant, userId, memberAccess);
 	return descendantPageIds(refs, row.id, (id) => keep(byId.get(id)));
 }
 
-async function handlePageArchiveCascade(request, row, archivedAt, config, fetchImpl) {
-	const descendantIds = await cascadeDescendantIds(request, row, 'update', config, fetchImpl);
-	if (descendantIds.length === 0) return;
-	await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(descendantIds)}`, {
-		method: 'PATCH',
-		body: { archived_at: archivedAt, updated_at: new Date().toISOString() },
-		prefer: 'return=minimal',
-	});
+// Ponytail: not atomic — a failure leaves a suffix (delete, archive) or a prefix (restore) of the BFS order applied; a retry finishes it. Edits between chunks are not serialized.
+async function handlePageArchiveCascade(row, ids, archivedAt, config, fetchImpl) {
+	if (ids.length === 0) return;
+	const updatedAt = new Date().toISOString();
+	for (const chunk of idChunks(ids)) {
+		await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(chunk)}&workspace_id=eq.${row.workspace_id}`, {
+			method: 'PATCH',
+			body: { archived_at: archivedAt, updated_at: updatedAt },
+			prefer: 'return=minimal',
+		});
+	}
 }
 
 async function handlePageUpdate(url, request, response, config, fetchImpl) {
@@ -3023,17 +3038,28 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	// the heavy content JSONB) was pure waste. The cascade guard must NOT depend on
 	// a returned row anymore — return=minimal yields no body (baasRest → null), so
 	// gate the cascade on the payload's archived_at, which is what we're applying.
+	// An archive lands descendants before the root so a prefix is always a
+	// consistent tree; a restore lands the root first for the same reason.
+	const carriesArchive = hasOwn(updateRow, 'archived_at');
+	let cascadedIds = [];
+	if (carriesArchive && updateRow.archived_at !== null) {
+		const descendantIds = await cascadeDescendantIds(request, existing, 'update', config, fetchImpl);
+		await handlePageArchiveCascade(existing, [...descendantIds].reverse(), updateRow.archived_at, config, fetchImpl);
+		cascadedIds = descendantIds;
+	}
 	await baasRest(config, fetchImpl, `osionos_pages?id=eq.${pageId}`, {
 		method: 'PATCH',
 		body: updateRow,
 		prefer: 'return=minimal',
 	});
-	if (hasOwn(updateRow, 'archived_at')) {
-		await handlePageArchiveCascade(request, existing, updateRow.archived_at, config, fetchImpl);
+	if (carriesArchive && updateRow.archived_at === null) {
+		const descendantIds = await cascadeDescendantIds(request, existing, 'update', config, fetchImpl);
+		await handlePageArchiveCascade(existing, descendantIds, updateRow.archived_at, config, fetchImpl);
+		cascadedIds = descendantIds;
 	}
 	// updated_at is stamped by pageUpdateRowFromPayload (no BEFORE-UPDATE trigger on
 	// osionos_pages), so the value we wrote IS the stored value — authoritative.
-	json(response, 200, { ok: true, updatedAt: updateRow.updated_at, ...(ignored.length > 0 ? { ignored } : {}) }, config);
+	json(response, 200, { ok: true, updatedAt: updateRow.updated_at, ...(ignored.length > 0 ? { ignored } : {}), ...(carriesArchive ? { cascadedIds } : {}) }, config);
 	return true;
 }
 
@@ -3417,12 +3443,20 @@ async function handlePageDelete(url, request, response, config, fetchImpl) {
 	const row = requireReadablePage(await fetchPageAuthRow(pageId, config, fetchImpl), userId);
 	const access = await ownerOrWorkspaceAccess(request, row, 'delete', config, fetchImpl);
 	requirePageOwnership(row, access);
-	const ids = [pageId, ...await cascadeDescendantIds(request, row, 'delete', config, fetchImpl)];
-	await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(ids)}`, {
+	// Deepest first so a landed prefix never leaves a live page under a removed parent.
+	// The root write carries the same workspace scope so a page that left the workspace between the read and the write is left alone.
+	const descendantIds = await cascadeDescendantIds(request, row, 'delete', config, fetchImpl);
+	for (const chunk of idChunks([...descendantIds].reverse())) {
+		await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(chunk)}&workspace_id=eq.${row.workspace_id}`, {
+			method: 'DELETE',
+			prefer: 'return=minimal',
+		});
+	}
+	await baasRest(config, fetchImpl, `osionos_pages?${idsFilter([pageId])}&workspace_id=eq.${row.workspace_id}`, {
 		method: 'DELETE',
 		prefer: 'return=minimal',
 	});
-	json(response, 200, { ok: true, deletedIds: ids }, config);
+	json(response, 200, { ok: true, deletedIds: [pageId, ...descendantIds] }, config);
 	return true;
 }
 
