@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseIconValue, serializeIconValue } from "../../packages/osionos-ui/src/shared/iconValue.ts";
+import { assetRendererValue, parseIconValue, serializeIconValue } from "../../packages/osionos-ui/src/shared/iconValue.ts";
 
 test("bare emoji parses as an emoji", () => {
   const v = parseIconValue("🚀");
@@ -75,4 +75,20 @@ test("a bare emoji has no color/bg", () => {
   const v = parseIconValue("⭐");
   assert.equal(v?.bg, undefined);
   assert.equal(v?.color, undefined);
+});
+
+test("assetRendererValue: a bare emoji the icon library does not list still renders", () => {
+  // 📕 and 🥗 are wiki icons in the live data; the library's catalog lacks them.
+  assert.equal(assetRendererValue("📕"), "emoji:📕");
+  assert.equal(assetRendererValue("🥗"), "emoji:🥗");
+  assert.equal(assetRendererValue("👨‍🍳"), "emoji:👨‍🍳");
+  assert.equal(assetRendererValue("🇫🇷"), "emoji:🇫🇷");
+  assert.equal(assetRendererValue("1️⃣"), "emoji:1️⃣");
+  // Everything else reaches the library as it was.
+  assert.equal(assetRendererValue("emoji:🚀"), "emoji:🚀");
+  assert.equal(assetRendererValue("icon:rocket"), "icon:rocket");
+  assert.equal(assetRendererValue("page"), "page");
+  assert.equal(assetRendererValue("url:https://example.com/a.png"), "url:https://example.com/a.png");
+  assert.equal(assetRendererValue("🚀;bg=%23ff0000"), "🚀;bg=%23ff0000");
+  assert.equal(assetRendererValue(""), "");
 });

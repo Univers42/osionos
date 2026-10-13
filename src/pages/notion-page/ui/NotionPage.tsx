@@ -22,6 +22,7 @@ import { initRealtimeMessagesBridge } from "@/services/realtime-messages";
 import { PageHeaderBar } from "@/entities/page";
 import { PageBody } from "./PageBody";
 import { PageHeader } from "./PageHeader";
+import { WikiPages } from "./WikiPages";
 import { PageOutlineRail } from "@/widgets/page-toc/PageOutlineRail";
 import { anyJsDebugToolEnabled, usePageDebugStore } from "@/shared/debug/pageDebugStore";
 
@@ -65,6 +66,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
       const first = page?.content?.[0];
       return {
         workspaceId: page?.workspaceId,
+        isWiki: page?.surface === "wiki",
         cover: page?.cover,
         soleBlock: page?.content?.length === 1,
         firstType: first?.type,
@@ -166,6 +168,12 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
       />
 
       <PageBody pageId={pageId} locked={pageConfig.locked} />
+
+      {shell.isWiki && shell.workspaceId ? (
+        <div className="osionos-wiki-pages-wrap">
+          <WikiPages pageId={pageId} workspaceId={shell.workspaceId} locked={pageConfig.locked} />
+        </div>
+      ) : null}
 
       {anyJsDebugToolEnabled(debugTools) && (
         <Suspense fallback={null}>
