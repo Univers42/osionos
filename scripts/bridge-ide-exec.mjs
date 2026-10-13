@@ -20,7 +20,7 @@
 // The pure seams (resize parse, auth extraction, std-stream demux) are unit
 // tested in tests/bridge/ide-exec-parse.test.mjs; the docker glue stays
 // live-verified. Failures close with a WS code+reason (4001 auth · 4003 gate
-// off · 4004 no sandbox · 4008 bad lang · 4013 overflow · 4029 throttled) so
+// off · 4004 no sandbox · 4008 bad lang · 4011 token expired · 4013 overflow · 4029 throttled) so
 // the frontend can say WHY instead of "[connection closed]".
 
 import { handshake, encodeFrame, closeFrame, createFrameDecoder } from './ide-ws.mjs';
@@ -114,6 +114,19 @@ function lspExecSpec(lang) {
   return { User: '10001:10001', WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
 }
 
+/** An IDE token lives at most 15 minutes; a socket opened with one must not outlive it. App tokens
+ *  carry no `exp` here, so nothing is armed for them. `exp` is in seconds, `now` in ms.
+ *  Ponytail: the timer is wall-clock; a host clock stepped backwards after arming closes the
+ *  socket late (by the step), never early. */
+export function armTokenExpiry(socket, exp, now = Date.now()) {
+  if (!Number.isFinite(exp)) return;
+  const timer = setTimeout(() => {
+    if (!socket.destroyed) socket.end(closeFrame(4011, 'token expired'));
+  }, Math.max(0, exp * 1000 - now));
+  timer.unref();
+  socket.once('close', () => clearTimeout(timer));
+}
+
 /** Returns an upgrade handler `(request, socket) => boolean` — true when it owns
  *  the WS path. Attach to the bridge's http server `upgrade` event. `allowOrigin`
  *  is the browser-origin predicate (same allowlist as the REST CORS layer). */
@@ -132,11 +145,12 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     if (origin && !allowOrigin(origin)) { rejectUpgrade(socket, 403, 'Forbidden'); return true; }
 
     const auth = extractWsAuth(request);
-    let userId, names;
+    let userId, names, tokenExp;
     try {
       const session = verifySession(auth.token, config);
       const identity = requireSandboxIdentity(session, url.searchParams.get('workspaceId'), env);
       userId = identity.userId;
+      tokenExp = session.exp;
       names = deriveNames(userId, identity.workspaceId);
     } catch (error) {
       // The status tells an unlisted account apart; the reason stays generic.
@@ -151,6 +165,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     if ((activeExecByUser.get(userId) ?? 0) >= MAX_CONCURRENT_EXEC) { rejectUpgrade(socket, 429, 'Too Many Streams'); return true; }
 
     if (!handshake(request, socket, { protocol: auth.protocol })) return true;
+    armTokenExpiry(socket, tokenExp);
 
     let spec;
     try {

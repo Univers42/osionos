@@ -251,3 +251,18 @@ export async function reapExpiredSandboxes(env = process.env, maxLifetimeMs = SA
   }
   return reaped;
 }
+
+/** Starts the max-lifetime reaper (#16). reapExpiredSandboxes self-gates, so scheduling is always
+ *  safe; the interval is unref()ed so it never keeps the process alive, and a failed sweep is
+ *  logged, not thrown (a transient docker-ide outage must not crash the process). Called from the
+ *  runtime entries, not the server factories, so test-built servers spawn no background interval.
+ *  Ponytail: a sweep still running when the next tick fires overlaps it; sweeps only stop
+ *  containers, so the overlap is wasted work, not a wrong result. */
+export function scheduleSandboxReaper(env = process.env, log = console) {
+  const intervalMs = Number(env.OSIONOS_IDE_REAP_INTERVAL_MS) || 15 * 60 * 1000;
+  return setInterval(() => {
+    reapExpiredSandboxes(env)
+      .then((n) => { if (n > 0) log.info(`[osionos-bridge] reaped ${n} expired IDE sandbox(es)`); })
+      .catch((error) => log.warn('[osionos-bridge] sandbox reap failed:', error?.message ?? error));
+  }, intervalMs).unref();
+}

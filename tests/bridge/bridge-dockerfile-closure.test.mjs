@@ -22,6 +22,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// scripts/ide-server.mjs is deployed only by groot's compose image (its COPY list is checked there),
+// so it is deliberately absent from the fly closure below.
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const SCRIPTS = resolve(APP_ROOT, 'scripts');
 const STATIC_IMPORT = /\b(?:import|export)\s[^;]*?\bfrom\s*['"]\.\/([\w.-]+\.mjs)['"]/g;
