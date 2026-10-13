@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/08 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,7 @@ import { BookOpen, ChevronRight, Folder, FolderOpen } from "lucide-react";
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useShallow } from "zustand/react/shallow";
 import { usePageStore, type PageEntry } from "@/store/usePageStore";
+import { useIsActivePage } from "@/store/activePageFlag";
 import { canReadPage, usePageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { isFolderEntry, isWikiEntry, selectChildPageIds, selectPageTreeEntry } from "./pageTreeItem.helpers";
 import { SidebarRenameInput } from "./SidebarRenameInput";
@@ -37,7 +38,6 @@ interface Props {
   workspaceId: string;
   jwt: string;
   depth?: number;
-  activeId?: string | null;
 }
 
 /**
@@ -48,8 +48,10 @@ interface Props {
  * – Hovering a collapsed folder mid-drag springs it open after a short dwell.
  * Memoized on its primitive props: the tree re-renders on every title keystroke (recents
  * change), and 1 000 rows re-rendering cost ~250 ms per key (tests/e2e/perf/titleTyping.spec.mjs).
+ * The active highlight is a keyed subscription, not a prop: an `activeId` prop changed for every
+ * row on every navigation (1 000 pages: 306 ms median page switch, tests/e2e/perf/interactions.spec.mjs).
  */
-export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspaceId, jwt, depth = 0, activeId }: Props) {
+export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspaceId, jwt, depth = 0 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -61,6 +63,7 @@ export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspace
   const page = usePageStore(useShallow((s) => selectPageTreeEntry(s, pageId)));
   const childPageIds = usePageStore(useShallow((s) => selectChildPageIds(s.pages[workspaceId] ?? EMPTY_WORKSPACE_PAGES, pageId, workspaceId)));
   const accessContext = usePageAccessContext();
+  const isActive = useIsActivePage(pageId);
   const collapseToken = useSidebarTreeDnd((s) => s.collapseToken);
   const devMode = useDevMode((s) => s.dev);
 
@@ -88,7 +91,6 @@ export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspace
 
   if (!page || page.archivedAt || !canReadPage(page, accessContext)) return null;
   const pageEntry = page;
-  const isActive = activeId === pageEntry._id;
   const paddingLeft = `calc(var(--osio-space-2) + ${depth} * var(--osio-space-4))`;
   const fallbackIcon = pageEntry.databaseId ? "icon:table" : "icon:page";
 
@@ -206,6 +208,7 @@ export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspace
             type="button"
             {...dragHandlers}
             onClick={handleRowClick}
+            aria-current={isActive ? "page" : undefined}
             onDoubleClick={(e) => { e.stopPropagation(); setRenaming(true); }}
             onKeyDown={(e) => {
               if (e.key === "Delete") { e.preventDefault(); e.stopPropagation(); requestDelete(); }
@@ -234,7 +237,7 @@ export const PageTreeItem = React.memo(function PageTreeItem({ pageId, workspace
       </div>
 
       {expanded && hasChildren && (
-        <PageTreeRows pageIds={children} workspaceId={workspaceId} jwt={jwt} depth={depth + 1} activeId={activeId} />
+        <PageTreeRows pageIds={children} workspaceId={workspaceId} jwt={jwt} depth={depth + 1} />
       )}
 
       {contextMenu ? (
@@ -268,16 +271,15 @@ interface PageTreeRowsProps {
   workspaceId: string;
   jwt: string;
   depth: number;
-  activeId?: string | null;
 }
 
 /** Sibling rows. Memoized so a parent re-render with the same (store-stable) id list
  *  creates no elements at all — the sidebar re-renders on every title keystroke. */
-export const PageTreeRows = React.memo(function PageTreeRows({ pageIds, workspaceId, jwt, depth, activeId }: PageTreeRowsProps) {
+export const PageTreeRows = React.memo(function PageTreeRows({ pageIds, workspaceId, jwt, depth }: PageTreeRowsProps) {
   return (
     <>
       {pageIds.map((pageId) => (
-        <PageTreeItem key={pageId} pageId={pageId} workspaceId={workspaceId} jwt={jwt} depth={depth} activeId={activeId} />
+        <PageTreeItem key={pageId} pageId={pageId} workspaceId={workspaceId} jwt={jwt} depth={depth} />
       ))}
     </>
   );

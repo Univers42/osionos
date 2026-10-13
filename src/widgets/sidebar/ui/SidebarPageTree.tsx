@@ -427,7 +427,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
       </SidebarSection>
 
       <SidebarSection label="Agents" onAdd={createAgentPage}>
-        <PageTreeRows pageIds={agentPageIds} workspaceId={activeWorkspaceId} jwt={jwt} depth={0} activeId={activePageId} />
+        <PageTreeRows pageIds={agentPageIds} workspaceId={activeWorkspaceId} jwt={jwt} depth={0} />
         <SidebarNavItem
           icon={<Plus size={14} />}
           label="New agent"
@@ -475,7 +475,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
                 No pages yet
               </p>
             )}
-            <PageTreeRows pageIds={pageIds} workspaceId={ws._id} jwt={jwt} depth={0} activeId={activePageId} />
+            <PageTreeRows pageIds={pageIds} workspaceId={ws._id} jwt={jwt} depth={0} />
             <SidebarNavItem
               icon={<FolderPlus size={14} />}
               label="New folder"
@@ -499,8 +499,8 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         }
       >
         <SectionDropZone visibility="shared" workspaceId={activeWorkspaceId} />
-        <PageTreeRows pageIds={ownedSharedPageIds} workspaceId={activeWorkspaceId} jwt={jwt} depth={0} activeId={activePageId} />
-        <PageTreeRows pageIds={sharedWorkspaceRootPageIds} workspaceId={activeWorkspaceId} jwt={jwt} depth={0} activeId={activePageId} />
+        <PageTreeRows pageIds={ownedSharedPageIds} workspaceId={activeWorkspaceId} jwt={jwt} depth={0} />
+        <PageTreeRows pageIds={sharedWorkspaceRootPageIds} workspaceId={activeWorkspaceId} jwt={jwt} depth={0} />
         {ownedSharedPageIds.length === 0 && sharedWorkspaceRootPageIds.length === 0 ? (
           <SidebarNavItem
             icon={<Plus size={14} className="text-[var(--osio-accent)]" />}
