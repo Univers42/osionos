@@ -29,6 +29,7 @@ import './styles/global.css';
 // of the production entry bundle (cuts initial JS parse / TBT on mobile).
 if (import.meta.env.DEV) {
   void import('@/shared/lib/perf/loadTest');
+  void import('@/shared/lib/perf/perfFixtures');
 }
 
 // Self-recover from stale lazy chunks after a redeploy: when a dynamic import
