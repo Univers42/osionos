@@ -24,10 +24,7 @@ import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRo
 import { publishRealtime } from './bridge-social-core.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
-import { createIdeSandboxHandler, scheduleSandboxReaper } from './bridge-ide-sandbox.mjs';
 import { createIdeTokenHandler } from './bridge-ide-token.mjs';
-import { createIdeOpsHandler, createIdePreviewHandler } from './bridge-ide-ops.mjs';
-import { createIdeExecUpgradeHandler } from './bridge-ide-exec.mjs';
 import { createConnectorHandler } from './bridge-connector.mjs';
 import { createOAuthHandler } from './bridge-oauth.mjs';
 import { createChatHandler } from './bridge-chat.mjs';
@@ -3671,9 +3668,6 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.agent(url, request, response, context.config)) return;
 	if (await context.social.runner(url, request, response, context.config)) return;
 	if (await context.social.ideToken(url, request, response, context.config)) return;
-	if (await context.social.ideSandbox(url, request, response, context.config)) return;
-	if (await context.social.idePreview(url, request, response, context.config)) return;
-	if (await context.social.ideOps(url, request, response, context.config)) return;
 	if (await context.social.connector(url, request, response, context.config)) return;
 		if (await context.social.oauth(url, request, response, context.config)) return;
 	if (await context.social.perms(url, request, response, context.config)) return;
@@ -3727,9 +3721,6 @@ export function createBridgeServer(options = {}) {
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		perms: createPermsHandler({ verifySession: verifyAppSessionToken, requireWorkspaceAccess, fetchImpl }),
 		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
-		ideSandbox: createIdeSandboxHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
-		ideOps: createIdeOpsHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
-		idePreview: createIdePreviewHandler({ config, verifySession: verifyAppSessionToken, env: process.env }),
 		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
 		rtc: createRtcTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
@@ -3754,18 +3745,9 @@ export function createBridgeServer(options = {}) {
 			if (!response.headersSent) errorJson(response, error, responseConfig);
 		}
 	});
-	// The IDE PTY (P3) / LSP (P5) WS relays own their own upgrade paths; every
-	// other upgrade is refused (the bridge does no other WS — realtime is Kong).
-	const ideExecUpgrade = createIdeExecUpgradeHandler({
-		config, verifySession: verifyAppSessionToken, env: process.env,
-		// Same origin allowlist as the REST CORS layer: an origin is allowed iff
-		// requestOriginConfig echoes it back as the allowedOrigin.
-		allowOrigin: (origin) => requestOriginConfig(config, { headers: { origin } }).allowedOrigin === origin,
-	});
-	server.on('upgrade', (request, socket) => {
-		try { if (!ideExecUpgrade(request, socket)) socket.destroy(); }
-		catch { socket.destroy(); }
-	});
+	// The sandbox relays run in ide-server.mjs (one process per sandbox daemon); the
+	// bridge does no WebSocket work (realtime is Kong), so every upgrade is refused.
+	server.on('upgrade', (_request, socket) => socket.destroy());
 	return server;
 }
 
@@ -3774,7 +3756,6 @@ export function startBridgeServer(config = configFromEnv()) {
 	server.listen(config.port, '0.0.0.0', () => {
 		console.info(`[osionos-bridge] listening on 0.0.0.0:${config.port}`);
 	});
-	scheduleSandboxReaper(process.env);
 	return server;
 }
 

@@ -15,7 +15,8 @@ import { Readable } from "node:stream";
 
 import { requireIdeSubject, requireSandboxIdentity } from "../../scripts/ide-sandbox-spec.mjs";
 import { createIdeSandboxHandler } from "../../scripts/bridge-ide-sandbox.mjs";
-import { createIdeOpsHandler, createIdePreviewHandler } from "../../scripts/bridge-ide-ops.mjs";
+import { createIdeOpsHandler } from "../../scripts/bridge-ide-ops.mjs";
+import { createIdePreviewHandler } from "../../scripts/ide-preview.mjs";
 import { createIdeExecUpgradeHandler, extractWsAuth } from "../../scripts/bridge-ide-exec.mjs";
 import { createRunnerHandler } from "../../scripts/bridge-runner.mjs";
 

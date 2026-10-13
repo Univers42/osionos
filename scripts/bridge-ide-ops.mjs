@@ -23,19 +23,12 @@ import { bearerToken, readJsonBody } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createDockerClient } from './ide-docker.mjs';
 import { createStdStreamDemux } from './bridge-ide-exec.mjs';
+import { jsonReply as reply } from './bridge-ide-sandbox.mjs';
 import {
   requireSandboxIdentity, deriveNames, buildGitExecSpec, buildSearchExecSpec, buildWriteExecSpec, buildFsOpSpec, buildPortsExecSpec, buildPortTunnelExecSpec,
 } from './ide-sandbox-spec.mjs';
 
 const BODY_LIMIT = 1024 * 1024; // editor writes carry (base64) file content
-
-function reply(response, status, body, config) {
-  response.writeHead(status, {
-    'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store',
-    'access-control-allow-origin': config.allowedOrigin, 'access-control-allow-credentials': 'true', vary: 'Origin',
-  });
-  response.end(JSON.stringify(body));
-}
 
 /** ripgrep `--json` → flat matches. One JSON object per line; we keep `match`
  *  events. Pure + exported for a fixture test (no daemon needed). */
@@ -152,81 +145,13 @@ function tunnelRequest(tunnel, message) {
   });
 }
 
-const PREVIEW_COOKIE = 'osio_ide_preview';
-
-function previewCookieToken(request) {
-  const header = String(request.headers.cookie ?? '');
-  for (const part of header.split(';')) {
-    const [name, ...rest] = part.trim().split('=');
-    if (name === PREVIEW_COOKIE) return decodeURIComponent(rest.join('='));
-  }
-  return null;
-}
-
-/** Port-forwarded preview over the exec channel (no new network path — the
- *  isolation invariants hold; see ADR-002/backlog). Auth: the app session
- *  token in an HttpOnly, path-scoped cookie minted by the POST — the preview
- *  page's (untrusted!) JS can never read it, and header-auth APIs stay out of
- *  reach. GET/HEAD only. */
-export function createIdePreviewHandler({ config, verifySession, env = process.env }) {
-  return async function handleIdePreviewRoute(url, request, response, requestConfig = config) {
-    if (!url.pathname.startsWith('/api/ide/preview')) return false;
-    if (env.OSIONOS_IDE_SANDBOX !== '1' || !env.OSIONOS_IDE_DOCKER_HOST) {
-      reply(response, 404, { ok: false, message: 'IDE sandbox is not enabled.' }, requestConfig);
-      return true;
-    }
-    const method = (request.method || 'GET').toUpperCase();
-
-    if (url.pathname === '/api/ide/preview/session' && method === 'POST') {
-      let payload;
-      try {
-        payload = await readJsonBody(request, 8 * 1024);
-        const token = bearerToken(request);
-        const session = verifySession(token, requestConfig);
-        requireSandboxIdentity(session, payload?.workspaceId, env);
-        response.writeHead(200, {
-          'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store',
-          'access-control-allow-origin': requestConfig.allowedOrigin, 'access-control-allow-credentials': 'true', vary: 'Origin',
-          'set-cookie': `${PREVIEW_COOKIE}=${encodeURIComponent(token)}; Path=/api/ide/preview; HttpOnly; SameSite=Lax; Secure; Max-Age=3600`,
-        });
-        response.end(JSON.stringify({ ok: true }));
-      } catch (error) {
-        reply(response, error?.status ?? 401, { ok: false, message: error?.message ?? 'Unauthorized.' }, requestConfig);
-      }
-      return true;
-    }
-
-    const match = /^\/api\/ide\/preview\/([0-9a-f-]{36})\/(\d{1,5})(\/.*)?$/.exec(url.pathname);
-    if (!match) { reply(response, 404, { ok: false }, requestConfig); return true; }
-    if (method !== 'GET' && method !== 'HEAD') { reply(response, 405, { ok: false }, requestConfig); return true; }
-
-    try {
-      const session = verifySession(previewCookieToken(request), requestConfig);
-      const identity = requireSandboxIdentity(session, match[1], env);
-      takeToken(`ide-preview:${identity.userId}`, { capacity: 120, refillPerSec: 40 });
-      const names = deriveNames(identity.userId, identity.workspaceId);
-      const docker = createDockerClient(env);
-      const tunnel = await getOrCreateTunnel(docker, names.containerName, Number(match[2]));
-      const upstream = await tunnelRequest(tunnel, {
-        method,
-        path: `${match[3] || '/'}${url.search}`,
-        headers: { accept: String(request.headers.accept ?? '*/*') },
-      });
-      if (upstream.truncated) {
-        reply(response, 502, { ok: false, message: 'Response over the 2 MiB preview cap.' }, requestConfig);
-        return true;
-      }
-      const body = Buffer.from(String(upstream.body ?? ''), 'base64');
-      response.writeHead(upstream.status || 502, {
-        'content-type': upstream.headers?.['content-type'] || 'application/octet-stream',
-        'content-length': body.length,
-        'cache-control': 'no-store',
-      });
-      response.end(method === 'HEAD' ? undefined : body);
-    } catch (error) {
-      reply(response, error?.status ?? 502, { ok: false, message: error?.message ?? 'Preview failed.' }, requestConfig);
-    }
-    return true;
+/** Resolves the box's answer for one GET/HEAD: the former inline tunnel sequence, one function so
+ *  tests inject a fake. `env` is bound here because the docker client reads it. */
+export function tunnelUpstream(env) {
+  return async function requestThroughTunnel(names, port, { method, path, headers }) {
+    const docker = createDockerClient(env);
+    const tunnel = await getOrCreateTunnel(docker, names.containerName, port);
+    return tunnelRequest(tunnel, { method, path, headers });
   };
 }
 

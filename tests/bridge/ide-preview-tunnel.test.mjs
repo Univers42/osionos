@@ -20,7 +20,8 @@ import http from "node:http";
 import { spawn } from "node:child_process";
 
 import { buildPortTunnelExecSpec } from "../../scripts/ide-sandbox-spec.mjs";
-import { encodeTunnelFrame, createTunnelFrameDecoder, createIdePreviewHandler } from "../../scripts/bridge-ide-ops.mjs";
+import { encodeTunnelFrame, createTunnelFrameDecoder } from "../../scripts/bridge-ide-ops.mjs";
+import { createIdePreviewHandler } from "../../scripts/ide-preview.mjs";
 
 function listen(handler) {
   return new Promise((resolve) => {
@@ -110,7 +111,7 @@ function fakeRes() {
   };
 }
 
-test("preview handler: gate-off 404, cookie-less proxy 401, bad paths 404", async () => {
+test("preview handler: gate-off 404, tokenless mint 401, removed cookie route and bad paths", async () => {
   const offHandler = createIdePreviewHandler({ config: CONFIG, verifySession: () => ({}), env: {} });
   const off = fakeRes();
   assert.equal(await offHandler(new URL("http://x/api/ide/preview/session"), { method: "POST", headers: {} }, off, CONFIG), true);
@@ -120,17 +121,21 @@ test("preview handler: gate-off 404, cookie-less proxy 401, bad paths 404", asyn
     config: CONFIG,
     verifySession: (token) => { if (!token) throw Object.assign(new Error("no token"), { status: 401 }); return { userId: U, workspaceIds: [W] }; },
     env: ENABLED,
+    upstream: async () => { throw new Error("the box must not be reached"); },
   });
   const unauth = fakeRes();
-  const ws = "a1b2c3d4-0001-4000-a000-000000000001";
-  assert.equal(await handler(new URL(`http://x/api/ide/preview/${ws}/3000/`), { method: "GET", headers: {} }, unauth, CONFIG), true);
+  assert.equal(await handler(new URL("http://x/api/ide/preview/session"), { method: "POST", headers: {}, [Symbol.asyncIterator]: async function* () {} }, unauth, CONFIG), true);
   assert.equal(unauth.statusCode, 401);
 
+  const ws = "a1b2c3d4-0001-4000-a000-000000000001";
+  const oldRoute = fakeRes();
+  assert.equal(await handler(new URL(`http://x/api/ide/preview/${ws}/3000/`), { method: "GET", headers: {} }, oldRoute, CONFIG), false);
+
   const badPath = fakeRes();
-  await handler(new URL("http://x/api/ide/preview/not-a-uuid/3000/"), { method: "GET", headers: {} }, badPath, CONFIG);
+  await handler(new URL("http://x/p/not-a-cap/"), { method: "GET", headers: {} }, badPath, CONFIG);
   assert.equal(badPath.statusCode, 404);
 
   const badMethod = fakeRes();
-  await handler(new URL(`http://x/api/ide/preview/${ws}/3000/`), { method: "DELETE", headers: {} }, badMethod, CONFIG);
+  await handler(new URL("http://x/p/pc1.a.b/"), { method: "DELETE", headers: {} }, badMethod, CONFIG);
   assert.equal(badMethod.statusCode, 405);
 });

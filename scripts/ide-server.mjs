@@ -18,27 +18,12 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { ideTokenSecret, verifyIdeToken } from './ide-token.mjs';
 import { createIdeSandboxHandler, scheduleSandboxReaper } from './bridge-ide-sandbox.mjs';
-import { createIdeOpsHandler, createIdePreviewHandler } from './bridge-ide-ops.mjs';
+import { createIdeOpsHandler } from './bridge-ide-ops.mjs';
+import { createIdePreviewHandler, parseExactOrigin } from './ide-preview.mjs';
 import { createIdeExecUpgradeHandler } from './bridge-ide-exec.mjs';
 
 const DEFAULT_PORT = 4100;
 const PREFLIGHT_MAX_AGE_SECONDS = '600';
-
-function startupError(message) {
-	return Object.assign(new Error(message), { status: 503 });
-}
-
-// Exact-origin rule: a value with a path or trailing slash would never equal a browser's Origin
-// header, so it is refused at start-up instead of silently locking every browser out.
-function parseAllowedOrigin(env) {
-	const message = 'OSIONOS_IDE_ALLOWED_ORIGIN must be one http(s) origin.';
-	let url;
-	try { url = new URL(env.OSIONOS_IDE_ALLOWED_ORIGIN); } catch { throw startupError(message); }
-	if (!['http:', 'https:'].includes(url.protocol) || env.OSIONOS_IDE_ALLOWED_ORIGIN !== url.origin) {
-		throw startupError(message);
-	}
-	return url.origin;
-}
 
 function sendJson(response, status, body) {
 	response.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
@@ -79,6 +64,12 @@ async function dispatch(request, response, ctx) {
 		sendJson(response, 200, { ok: true });
 		return;
 	}
+	// Before the origin check: subresources of an opaque-origin preview page send `Origin: null`,
+	// and the signed link in the path is the credential there.
+	if (url.pathname.startsWith('/p/')) {
+		await ctx.preview(url, request, response, ctx.requestConfig);
+		return;
+	}
 	if (url.pathname.startsWith('/api/ide/')) {
 		await routeIdeApi(url, request, response, ctx);
 		return;
@@ -86,17 +77,20 @@ async function dispatch(request, response, ctx) {
 	sendJson(response, 404, { ok: false });
 }
 
-export function createIdeServer({ env = process.env } = {}) {
+export function createIdeServer({ env = process.env, upstream } = {}) {
 	const secret = ideTokenSecret(env);
-	const allowedOrigin = parseAllowedOrigin(env);
+	const allowedOrigin = parseExactOrigin(env.OSIONOS_IDE_ALLOWED_ORIGIN, 'OSIONOS_IDE_ALLOWED_ORIGIN must be one http(s) origin.');
 	// The handlers pass a config as the second argument; an IDE token needs none.
 	const verifySession = (token) => verifyIdeToken(token, { secret });
 	const requestConfig = { allowedOrigin };
 	const shared = { config: requestConfig, verifySession, env };
+	// `upstream` is a test seam; undefined keeps the docker tunnel.
+	const preview = createIdePreviewHandler({ ...shared, upstream });
 	const ctx = {
 		allowedOrigin,
 		requestConfig,
-		handlers: [createIdeSandboxHandler(shared), createIdePreviewHandler(shared), createIdeOpsHandler(shared)],
+		preview,
+		handlers: [createIdeSandboxHandler(shared), preview, createIdeOpsHandler(shared)],
 	};
 	const upgrade = createIdeExecUpgradeHandler({ ...shared, allowOrigin: (origin) => origin === allowedOrigin });
 	const server = createServer(async (request, response) => {
