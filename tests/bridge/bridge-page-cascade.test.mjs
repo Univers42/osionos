@@ -133,6 +133,38 @@ describe('a page moved under another member\'s page stays out of that page\'s ca
 	});
 });
 
+describe('a cascade stays inside P\'s workspace', () => {
+	const asA = sessionHeaders(config, IDS.userA, IDS.homeA);
+	/** A owns the team and P; B's shared X sits under P in `xWorkspace`. */
+	function crossWorkspaceMock(xWorkspace) {
+		const world = teamWorld();
+		world.osionos_pages.push(teamPage(PAGE.parent, IDS.userA, 'shared', 'P', 'p text'), { ...under(teamPage(PAGE.child, IDS.userB, 'shared', 'X', 'x text'), PAGE.parent), workspace_id: xWorkspace });
+		return createPostgrestMock(world);
+	}
+	for (const [opName, op] of Object.entries({ DELETE: OPS.DELETE, archive: OPS.archive })) {
+		it(`${opName} of P leaves another user's child that moved to another workspace between the walk's two reads`, async () => {
+			const mock = crossWorkspaceMock(IDS.team);
+			const movingFetch = async (url, init) => {
+				const answer = await mock.fetchImpl(url, init);
+				if (new URL(url).searchParams.get('select') === 'id,parent_page_id') mock.page(PAGE.child).workspace_id = IDS.homeB;
+				return answer;
+			};
+			const response = await withBridge(config, movingFetch, (base) => send(base, `/api/pages/${PAGE.parent}`, asA, op.init));
+			assert.equal(response.status, 200, response.text);
+			assert.equal(cascadeIds(mock, op.method).includes(PAGE.child), false);
+			assert.equal(mock.page(PAGE.child)?.archived_at, null);
+		});
+
+		it(`${opName} of P neither reads nor writes a child that lives in another workspace`, async () => {
+			const mock = crossWorkspaceMock(IDS.homeB);
+			const response = await withBridge(config, mock.fetchImpl, (base) => send(base, `/api/pages/${PAGE.parent}`, asA, op.init));
+			assert.equal(response.status, 200, response.text);
+			assert.equal([...cascadeIds(mock, 'GET'), ...cascadeIds(mock, op.method)].includes(PAGE.child), false);
+			assert.equal(mock.page(PAGE.child)?.archived_at, null);
+		});
+	}
+});
+
 describe('a cascade stops at the first descendant it skips', () => {
 	const middles = {
 		'a middle page the caller cannot read': teamPage(PAGE.child, IDS.userA, 'private', 'X', 'x text'),

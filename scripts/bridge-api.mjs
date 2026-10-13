@@ -2901,7 +2901,8 @@ async function handleWorkspaceValidate(request, response, config, fetchImpl) {
  * caller's own PATCH/DELETE of that page would accept (mayMutatePage), judged with their
  * membership in the workspace — never with the owner context `row` was reached through.
  * The walk stops at the first page it skips, which keeps that page's subtree together.
- * Auth columns are fetched for the descendant ids only.
+ * Auth columns are fetched for the descendant ids only; a descendant whose row is no
+ * longer in `row`'s workspace by then (moved between the two reads) is skipped.
  * Ponytail: a skipped child of a deleted page survives only through the
  * parent_page_id ON DELETE SET NULL in models/osionos-bridge-migration.sql — not
  * verified on live databases; one without it rejects or cascades the parent DELETE.
@@ -2915,7 +2916,8 @@ async function cascadeDescendantIds(request, row, permission, config, fetchImpl)
 	const byId = new Map((Array.isArray(authRows) ? authRows : []).map((descendant) => [descendant.id, descendant]));
 	const needsMembership = [...byId.values()].some((descendant) => !sameId(descendant.owner_id, userId));
 	const memberAccess = needsMembership ? await memberAccessOrNull(request, row.workspace_id, permission, config, fetchImpl) : null;
-	return descendantPageIds(refs, row.id, (id) => byId.has(id) && mayMutatePage(byId.get(id), userId, memberAccess));
+	const keep = (descendant) => descendant !== undefined && sameId(descendant.workspace_id, row.workspace_id) && mayMutatePage(descendant, userId, memberAccess);
+	return descendantPageIds(refs, row.id, (id) => keep(byId.get(id)));
 }
 
 async function handlePageArchiveCascade(request, row, archivedAt, config, fetchImpl) {
