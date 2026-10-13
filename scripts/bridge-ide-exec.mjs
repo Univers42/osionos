@@ -57,14 +57,15 @@ export function parseResizeFrame(data) {
 }
 
 /** Auth rides the WS subprotocol (`osio-token.<jwt>` alongside `osio-ide.v1`)
- *  so the token stays out of URLs/access logs; the query param remains as a
- *  fallback for one transition. Exported pure for tests. */
-export function extractWsAuth(request, url) {
+ *  so the token stays out of URLs/access logs. The token comes ONLY from the
+ *  subprotocol entry; a missing entry yields undefined, which the existing
+ *  verify step already refuses. Exported pure for tests. */
+export function extractWsAuth(request) {
   const offered = String(request.headers['sec-websocket-protocol'] ?? '')
     .split(',').map((s) => s.trim()).filter(Boolean);
   const tokenEntry = offered.find((p) => p.startsWith('osio-token.'));
   return {
-    token: tokenEntry ? tokenEntry.slice('osio-token.'.length) : url.searchParams.get('token'),
+    token: tokenEntry ? tokenEntry.slice('osio-token.'.length) : undefined,
     protocol: offered.includes('osio-ide.v1') ? 'osio-ide.v1' : undefined,
   };
 }
@@ -130,14 +131,19 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     const origin = request.headers.origin;
     if (origin && !allowOrigin(origin)) { rejectUpgrade(socket, 403, 'Forbidden'); return true; }
 
-    const auth = extractWsAuth(request, url);
+    const auth = extractWsAuth(request);
     let userId, names;
     try {
       const session = verifySession(auth.token, config);
-      const identity = requireSandboxIdentity(session, url.searchParams.get('workspaceId'));
+      const identity = requireSandboxIdentity(session, url.searchParams.get('workspaceId'), env);
       userId = identity.userId;
       names = deriveNames(userId, identity.workspaceId);
-    } catch { rejectUpgrade(socket, 401, 'Unauthorized'); return true; }
+    } catch (error) {
+      // The status tells an unlisted account apart; the reason stays generic.
+      if (error?.status === 403) rejectUpgrade(socket, 403, 'Forbidden');
+      else rejectUpgrade(socket, 401, 'Unauthorized');
+      return true;
+    }
 
     // Throttle open-churn, then bound simultaneous streams per user.
     try { takeToken(`ide-exec:${userId}`, { capacity: 8, refillPerSec: 0.5 }); }

@@ -144,7 +144,7 @@ export function createIdeSandboxHandler({ config, verifySession, env = process.e
     // Identity: owner from the token, workspace ownership-checked, names hashed.
     let identity, names;
     try {
-      identity = requireSandboxIdentity(session, payload?.workspaceId);
+      identity = requireSandboxIdentity(session, payload?.workspaceId, env);
       names = { ...identity, ...deriveNames(identity.userId, identity.workspaceId) };
     } catch (error) {
       jsonReply(response, error?.status ?? 400, { ok: false, message: error?.message ?? 'Invalid request.' }, requestConfig);

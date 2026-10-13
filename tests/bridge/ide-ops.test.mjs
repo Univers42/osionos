@@ -15,6 +15,17 @@ import assert from "node:assert/strict";
 
 import { createIdeOpsHandler, parseRipgrepJson } from "../../scripts/bridge-ide-ops.mjs";
 
+const CONFIG = { allowedOrigin: "https://localhost:3001" };
+const U = "11111111-1111-4111-8111-111111111111";
+const W = "22222222-2222-4222-8222-222222222222";
+const ENABLED = { OSIONOS_IDE_SANDBOX: "1", OSIONOS_IDE_DOCKER_HOST: "p:2375", OSIONOS_IDE_ALLOWED_SUBJECTS: U };
+
+function fakeRes() {
+  return { statusCode: 0,
+    writeHead(s) { this.statusCode = s; },
+    end() {} };
+}
+
 test("parseRipgrepJson keeps match events, drops begin/end/summary", () => {
   const output = [
     '{"type":"begin","data":{"path":{"text":"src/main.py"}}}',
@@ -29,13 +40,6 @@ test("parseRipgrepJson keeps match events, drops begin/end/summary", () => {
   assert.deepEqual(results[0], { path: "src/main.py", lineNumber: 1, line: "def greet():" });
   assert.equal(results[1].lineNumber, 9);
 });
-
-const CONFIG = { allowedOrigin: "https://localhost:3001" };
-function fakeRes() {
-  return { statusCode: 0,
-    writeHead(s) { this.statusCode = s; },
-    end() {} };
-}
 
 test("ops double-gate: env unset → 404 (route hidden)", async () => {
   const handler = createIdeOpsHandler({ config: CONFIG, verifySession: () => { throw new Error("nope"); }, env: {} });
@@ -53,7 +57,7 @@ test("ops double-gate beats method check: env unset + GET → 404, never a route
 });
 
 test("ops rejects non-POST + disowns foreign paths", async () => {
-  const handler = createIdeOpsHandler({ config: CONFIG, verifySession: () => ({ userId: "u", workspaceIds: [] }), env: { OSIONOS_IDE_SANDBOX: "1", OSIONOS_IDE_DOCKER_HOST: "p:2375" } });
+  const handler = createIdeOpsHandler({ config: CONFIG, verifySession: () => ({ userId: U, workspaceIds: [W] }), env: ENABLED });
   const res = fakeRes();
   await handler(new URL("http://x/api/ide/git"), { method: "GET", headers: {} }, res, CONFIG);
   assert.equal(res.statusCode, 405);

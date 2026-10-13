@@ -16,7 +16,7 @@ import { Readable } from 'node:stream';
 import { createRunnerHandler } from '../../scripts/bridge-runner.mjs';
 
 const config = { allowedOrigin: 'http://app' };
-const RUNNER_ENV = { OSIONOS_RUNNER_URL: 'http://runner:7900' };
+const RUNNER_ENV = { OSIONOS_RUNNER_URL: 'http://runner:7900', OSIONOS_IDE_ALLOWED_SUBJECTS: 'user-1' };
 
 function mockResponse() {
 	return {

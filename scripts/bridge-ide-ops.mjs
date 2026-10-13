@@ -60,7 +60,7 @@ export function parseRipgrepJson(output) {
  *  429 and never load-amplifies onto the docker daemon (review finding). */
 async function resolveSandbox(request, payload, env, config, verifySession, bucket = { id: 'ide-ops', capacity: 60, refillPerSec: 1 }) {
   const session = verifySession(bearerToken(request), config);
-  const identity = requireSandboxIdentity(session, payload?.workspaceId);
+  const identity = requireSandboxIdentity(session, payload?.workspaceId, env);
   takeToken(`${bucket.id}:${identity.userId}`, { capacity: bucket.capacity, refillPerSec: bucket.refillPerSec });
   const names = { ...identity, ...deriveNames(identity.userId, identity.workspaceId) };
   const docker = createDockerClient(env);
@@ -183,7 +183,7 @@ export function createIdePreviewHandler({ config, verifySession, env = process.e
         payload = await readJsonBody(request, 8 * 1024);
         const token = bearerToken(request);
         const session = verifySession(token, requestConfig);
-        requireSandboxIdentity(session, payload?.workspaceId);
+        requireSandboxIdentity(session, payload?.workspaceId, env);
         response.writeHead(200, {
           'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store',
           'access-control-allow-origin': requestConfig.allowedOrigin, 'access-control-allow-credentials': 'true', vary: 'Origin',
@@ -202,7 +202,7 @@ export function createIdePreviewHandler({ config, verifySession, env = process.e
 
     try {
       const session = verifySession(previewCookieToken(request), requestConfig);
-      const identity = requireSandboxIdentity(session, match[1]);
+      const identity = requireSandboxIdentity(session, match[1], env);
       takeToken(`ide-preview:${identity.userId}`, { capacity: 120, refillPerSec: 40 });
       const names = deriveNames(identity.userId, identity.workspaceId);
       const docker = createDockerClient(env);
