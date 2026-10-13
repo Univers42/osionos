@@ -105,14 +105,16 @@ describe('record notes keep what people wrote in them', () => {
 	it('refreshes the note title from a renamed record and keeps the content', async () => {
 		const { mock, rows } = recordWorld();
 		await withBridge(config, mock.fetchImpl, async (base) => {
-			const written = await openAndWrite(base, mock);
+			await openAndWrite(base, mock);
+			// Backdated: the edit and the refresh can land in the same millisecond.
+			mock.page(NOTE_ID).updated_at = LEGACY_NOTE.updated_at;
 			rows[0].title = 'Row seven, renamed';
 			const reopened = await send(base, OPEN, asA, { method: 'POST' });
 			assert.equal(reopened.status, 200, reopened.text);
 			const note = mock.page(NOTE_ID);
 			assert.equal(note.title, 'Row seven, renamed');
 			assert.deepEqual([note.content, note.icon], [WRITTEN, 'icon:star']);
-			assert.notEqual(note.updated_at, written.updated_at);
+			assert.notEqual(note.updated_at, LEGACY_NOTE.updated_at);
 		});
 	});
 });
