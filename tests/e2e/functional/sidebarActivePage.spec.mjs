@@ -10,22 +10,23 @@
 //                                                                            //
 // ************************************************************************** //
 
-// The page tree marks exactly one row as the open page, and the mark follows navigation.
+// The explorer marks exactly one row as the open page, and the mark follows navigation.
 // Rows learn this from a keyed subscription (src/store/activePageFlag.ts), not a prop.
 
 import { test, expect } from "@playwright/test";
 
-const treeRow = (page, title) => page.locator("span.truncate", { hasText: new RegExp(`^${title}$`) }).first();
-const currentRows = (page) => page.locator('button[title^="Double-click to rename"][aria-current="page"]');
+import { explorerRow } from "../../browser/core/app.mjs";
+
+const currentRows = (page) => page.getByRole("treeitem", { selected: true });
 
 test("the open page's tree row is the only one marked current, and the mark follows navigation", async ({ page, baseURL }) => {
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
 
-  await treeRow(page, "Getting Started").click();
+  await explorerRow(page, "Getting Started").click();
   await expect(currentRows(page)).toHaveCount(1);
   await expect(currentRows(page)).toContainText("Getting Started");
 
-  await treeRow(page, "Project Roadmap").click();
+  await explorerRow(page, "Project Roadmap").click();
   await expect(currentRows(page)).toHaveCount(1);
   await expect(currentRows(page)).toContainText("Project Roadmap");
 });

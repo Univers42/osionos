@@ -20,7 +20,7 @@ import {
 /**
  * The "Gallery" home surface: a cover-card gallery of the workspace's notes,
  * reading the live osionos_pages records via the workspace database adapter (no
- * copy). The folder selector lives in the Explorer sidebar (FilesPanel's gallery
+ * copy). The folder selector lives in the Explorer sidebar (ExplorerPanel's gallery
  * mode → FolderRail) and scopes this gallery through the shared useWorkspaceNav
  * store — so there is ONE sidebar, not a redundant second folder rail here.
  */

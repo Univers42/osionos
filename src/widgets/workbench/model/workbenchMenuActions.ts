@@ -14,7 +14,7 @@ import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
 import { terminalMenuAction, workbenchViewItems, type MenuItemSpec } from "@/widgets/top-bar/model/workbenchMenuItems";
 import { useWorkbenchStore } from "./workbenchStore";
 
-/** Terminal menu with the workbench flag ON: the dock owns the terminal, IDE mode is never touched. */
+/** Terminal menu: the dock owns the terminal. */
 export function openWorkbenchTerminal(mode: "new" | "split"): void {
   const workbench = useWorkbenchStore.getState();
   const ideDock = useIdeDockStore.getState();

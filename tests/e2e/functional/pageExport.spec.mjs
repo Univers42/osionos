@@ -19,7 +19,7 @@
 import fs from "node:fs";
 import { expect, test } from "@playwright/test";
 
-import { createParagraphs, openFreshPage } from "../../browser/core/app.mjs";
+import { createParagraphs, explorerRow, openFreshPage } from "../../browser/core/app.mjs";
 
 /** Minimal STORE-zip reader (our writer never compresses). */
 function readZipEntries(buffer) {
@@ -48,17 +48,10 @@ async function setPageTitle(page, title) {
   await titleBox.fill(title);
 }
 
-/** A sidebar page-tree row (the tree row's exact class stack, not any .group). */
-function treeRow(page, rowTitle) {
-  return page.locator(".group.relative.w-full", { hasText: rowTitle }).first();
-}
-
-/** Open the Export dialog from the (active) page's sidebar row. */
+/** Open the Export dialog from the (active) page's explorer row. */
 async function openExportDialog(page, rowTitle) {
-  const row = treeRow(page, rowTitle);
-  await row.hover();
-  await row.getByTitle("Page options").click();
-  await page.getByTestId("page-options-export").click();
+  await explorerRow(page, rowTitle).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Export", exact: true }).click();
   await expect(page.getByTestId("export-dialog")).toBeVisible();
 }
 
@@ -127,9 +120,8 @@ test.describe("page export", () => {
     await makeRootPage(page, baseURL);
 
     // Create a child page from the root row, give it a body, return to root.
-    const rootRow = treeRow(page, "Export Root");
-    await rootRow.hover();
-    await rootRow.getByTitle("Add child page").click();
+    await explorerRow(page, "Export Root").click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Add child page", exact: true }).click();
     await setPageTitle(page, "Child Page");
     await createParagraphs(page, ["child body"]);
 
@@ -149,9 +141,9 @@ test.describe("page export", () => {
 
   test("include subpages without folders keeps a flat zip", async ({ page, baseURL }) => {
     await makeRootPage(page, baseURL);
-    const rootRow = treeRow(page, "Export Root");
-    await rootRow.hover();
-    await rootRow.getByTitle("Add child page").click();
+    // Add the child through the explorer context menu, then export the parent.
+    await explorerRow(page, "Export Root").click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Add child page", exact: true }).click();
     await setPageTitle(page, "Child Page");
 
     await openExportDialog(page, "Export Root");

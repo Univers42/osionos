@@ -49,19 +49,16 @@ export function summarize(values) {
   return { n: values.length, median: percentile(values, 50), p95: percentile(values, 95), max: Math.max(...values) };
 }
 
-/** Opens the app with the workbench flag set as asked; the perf globals come with the dev server. */
-export async function bootApp(page, { workbench, ide = false }) {
-  await page.addInitScript(({ on, withIde }) => {
+/** Opens the app (the workbench is the only layout); the perf globals come with the dev server. */
+export async function bootApp(page) {
+  await page.addInitScript(() => {
     try {
-      if (on) localStorage.setItem("osio.workbench", "1");
-      else localStorage.removeItem("osio.workbench");
-      if (withIde) localStorage.setItem("osio.ide", "1");
       // A production build (PLAYWRIGHT_BUILD=production) only installs the perf fixtures behind this flag.
       localStorage.setItem("osio:perf", "1");
     } catch {
       /* ignore */
     }
-  }, { on: workbench, withIde: ide });
+  });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => typeof globalThis.__perfSeedPages === "function", null, { timeout: 60_000 });
 }

@@ -10,7 +10,7 @@
 //                                                                            //
 // ************************************************************************** //
 
-// The unified workbench behind osio.workbench: grid + resizable dock + one
+// The unified workbench: grid + resizable dock + one
 // status bar. Offline build, so the sandbox chip shows its honest non-online state.
 
 import { expect, test } from "@playwright/test";
@@ -21,9 +21,6 @@ async function bootWorkbench(page) {
   // Failed-resource noise is the offline build having no bridge, not a UI error.
   page.on("console", (msg) => {
     if (msg.type() === "error" && !/Failed to load resource|ERR_|net::/i.test(msg.text())) errors.push(msg.text());
-  });
-  await page.addInitScript(() => {
-    try { localStorage.setItem("osio.workbench", "1"); } catch { /* ignore */ }
   });
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.locator("[data-osio-workbench]").waitFor({ state: "visible", timeout: 60_000 });
@@ -36,7 +33,6 @@ test("grid and status bar render; sandbox state is named", async ({ page }) => {
   await expect(page.getByTestId("workbench-grid")).toBeVisible();
   await expect(page.getByTestId("workbench-statusbar")).toBeVisible();
   await expect(page.getByTestId("sandbox-chip")).toHaveText(/Sandbox: (checking|online|stopped|disabled|unavailable)/);
-  await expect(page.locator("[data-osio-ide-shell]")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

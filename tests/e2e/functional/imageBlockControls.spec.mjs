@@ -41,7 +41,7 @@ async function insertImage(page, baseURL) {
   await entry.evaluate((node) => node.click());
   await page.getByText("Add an image").click();
   await page.getByText("Upload an image from your device.").waitFor();
-  await page.locator('input[type="file"]').setInputFiles({
+  await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
     name: "tiny.png",
     mimeType: "image/png",
     buffer: TINY_PNG,

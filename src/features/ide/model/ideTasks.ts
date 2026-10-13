@@ -19,8 +19,6 @@
 // Heavy store/language modules are imported LAZILY inside the actions: this
 // module is reachable from the top-bar menu (warm chunk) and must stay thin.
 
-import { isWorkbenchEnabled } from "@/shared/config/featureFlags";
-
 export const TASKS_FILE = "tasks.json";
 
 export type IdeTask = {
@@ -76,18 +74,11 @@ async function workspaceContext() {
   };
 }
 
-/** Enter IDE mode + open the dock terminal, then hand the command to the PTY. */
+/** Hand the command to the PTY (the workbench opens its dock on run request). */
 export async function runInTerminal(command: string): Promise<void> {
   const { workspaceId } = await workspaceContext();
   if (!workspaceId) return;
-  const [{ useIdeModeStore }, { useTerminalRunBus }] = await Promise.all([
-    import("./ideModeStore"),
-    import("./terminalRunBus"),
-  ]);
-  if (!isWorkbenchEnabled()) {
-    useIdeModeStore.getState().setIdeMode(workspaceId, true);
-    useIdeModeStore.getState().setBottomOpen(true);
-  }
+  const { useTerminalRunBus } = await import("./terminalRunBus");
   useTerminalRunBus.getState().requestRun(`cd /workspace && ${command}`);
 }
 

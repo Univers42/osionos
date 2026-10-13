@@ -32,9 +32,7 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPagePrune";
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarTrigger } from "@/features/ui-orchestrator/ui/SidebarTrigger";
-import { LazyCanvasDebugRoute, LazyIdeShell, LazyMainContent, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
-import { isIdeEnabled, isWorkbenchEnabled } from "@/shared/config/featureFlags";
-import { useIdeModeStore } from "@/features/ide/model/ideModeStore";
+import { LazyCanvasDebugRoute, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
 import { applyStoredAppearance } from "@/shared/config/theme";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
@@ -51,6 +49,7 @@ import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDa
 import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
 import { ToastViewport } from "@osionos/ui/primitives";
 import { ShareHost } from "@/features/share/ShareHost";
+import { ExportHost } from "@/features/page-export/ui/ExportHost";
 import { TopBar } from "@/widgets/top-bar";
 import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
 
@@ -207,14 +206,6 @@ const App: React.FC = () => {
   // hides every chrome region off it. Session-only: a reload always exits zen.
   const zen = useZenMode((s) => s.zen);
 
-  // Dedicated IDE layout: flip the content region into the VS Code-style shell
-  // when this workspace is in IDE mode (double-gated on the osio.ide flag, so a
-  // stock build never renders it and the normal grid is untouched).
-  const activeWorkspaceId = activeWorkspace?._id ?? "";
-  const ideModeOn = useIdeModeStore((s) => (activeWorkspaceId ? s.byWorkspace[activeWorkspaceId] === true : false));
-  const showIde = ideModeOn && isIdeEnabled();
-  const legacyRegion = showIde ? <LazyIdeShell /> : <LazyMainContent />;
-
   // Database automations → app services: notify events become toasts; webhook
   // actions route through the bridge's SSRF-guarded proxy endpoint.
   useDatabaseAutomationBridge();
@@ -361,10 +352,9 @@ const App: React.FC = () => {
         {/* Floating trigger for when sidebar is closed */}
         <SidebarTrigger />
 
-        {/* Content area — the dedicated IDE shell when this workspace is in IDE
-            mode, otherwise the normal tabbed/splittable workspace grid. */}
+        {/* Content area — the unified workbench (grid + dock + status bar). */}
         <main className="flex-1 flex min-w-0 overflow-hidden relative">
-          {isWorkbenchEnabled() ? <LazyWorkbench /> : legacyRegion}
+          <LazyWorkbench />
         </main>
       </div>
 
@@ -372,6 +362,7 @@ const App: React.FC = () => {
       {settingsOpen && <LazySettingsCenter initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />}
       <ToastViewport />
       <ShareHost />
+      <ExportHost />
       <ContactDock />
       <QuickCaptureModal />
       <WorkspaceIntentModal />

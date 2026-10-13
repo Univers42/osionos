@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useState, useCallback } from "react";
-import { SidebarFooter } from "@/widgets/sidebar/ui/SidebarFooter";
+import { SidebarFooter } from "../SidebarFooter";
 import { FolderRail } from "@/widgets/home-variants/ui/HomeWorkspaceParts";
 import { WorkspaceExplorer } from "@/features/ide/ui/WorkspaceExplorer";
 import { useWorkspaceFileOps } from "@/features/ide/model/useWorkspaceFileOps";
@@ -37,8 +37,8 @@ interface Props {
 
 const NOOP_OPEN = (): void => undefined;
 
-/** Files rail panel hosting the VFS explorer: same shell as FilesPanel, with
- *  the VFS tree in place of SidebarPageTree and a compact Recents strip. */
+/** Explorer rail panel hosting the VFS explorer: the VFS tree plus
+ *  a compact Recents strip. */
 export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpenConsole, onOpenFile = NOOP_OPEN }) => {
   const explorerView = useExplorerView((s) => s.view);
   const { activeWorkspaceId, jwt } = useFetchActiveWorkspacePages();

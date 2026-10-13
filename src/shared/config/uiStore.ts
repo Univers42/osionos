@@ -26,8 +26,7 @@ export type ActivePanel =
   | 'tasks'
   | 'public'
   | 'database'
-  // Workbench-only panels (gated by isWorkbenchEnabled). A persisted value
-  // with the flag off is mapped to 'files' by visiblePanel, so no version bump.
+  // Workbench panels (Source Control, Run, Problems).
   | 'scm'
   | 'run'
   | 'problems';
@@ -51,15 +50,11 @@ interface UIStore {
   hide: () => void;
   reveal: () => void;
 
-  // --- legacy fields kept for back-compat (still read by Sidebar/Settings/TopBar) ---
+  // --- legacy fields kept for back-compat (still read by Settings/TopBar) ---
   isSidebarOpen: boolean; // mirror of (sidebarMode !== 'hidden')
   sidebarWidth: number; // = the expanded PANEL width, remembered across rail/hidden
-  useNewSidebar: boolean;
-  showOtherApps: boolean;
   setSidebarOpen: (open: boolean) => void;
   setSidebarWidth: (width: number) => void;
-  setUseNewSidebar: (enabled: boolean) => void;
-  setShowOtherApps: (enabled: boolean) => void;
   toggleSidebar: () => void;
 }
 
@@ -81,8 +76,6 @@ export const useUIStore = create<UIStore>()(
         activePanel: 'files',
         isSidebarOpen: true,
         sidebarWidth: 260,
-        useNewSidebar: true,
-        showOtherApps: true,
 
         setSidebarMode: (mode) => applyMode(mode),
         setActivePanel: (panel) => set({ activePanel: panel }),
@@ -108,8 +101,6 @@ export const useUIStore = create<UIStore>()(
         // Back-compat actions, rewired onto the state machine.
         setSidebarOpen: (open) => applyMode(open ? 'panel' : 'rail'),
         setSidebarWidth: (width) => set({ sidebarWidth: clampPanelWidth(width) }),
-        setUseNewSidebar: (enabled) => set({ useNewSidebar: enabled }),
-        setShowOtherApps: (enabled) => set({ showOtherApps: enabled }),
         // The TopBar/View toggle flips panel <-> rail (never to hidden).
         toggleSidebar: () =>
           applyMode(get().sidebarMode === 'panel' ? 'rail' : 'panel'),
@@ -130,8 +121,6 @@ export const useUIStore = create<UIStore>()(
             activePanel: 'files',
             isSidebarOpen: open,
             sidebarWidth: clampPanelWidth(prev.sidebarWidth ?? 260),
-            useNewSidebar: prev.useNewSidebar ?? true,
-            showOtherApps: prev.showOtherApps ?? true,
           } as UIStore;
         }
         return prev as UIStore;

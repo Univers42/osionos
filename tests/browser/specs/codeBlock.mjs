@@ -14,6 +14,7 @@ import { expect } from "@playwright/test";
 
 import {
   activateFirstEditor,
+  explorerRow,
   getCodeTextarea,
   openFreshPage,
   openSlashMenuFromEditor,
@@ -183,7 +184,7 @@ export const codeBlockScenarios = [
 
       await page.reload({ waitUntil: "networkidle" });
 
-      const sidebarEntry = page.locator("nav button").filter({ hasText: uniqueTitle }).first();
+      const sidebarEntry = explorerRow(page, uniqueTitle);
       await sidebarEntry.waitFor({ state: "visible", timeout: 15_000 });
       await sidebarEntry.click();
 
@@ -325,7 +326,7 @@ export const codeBlockScenarios = [
       });
 
       await page.reload({ waitUntil: "networkidle" });
-      const sidebarEntry = page.locator("nav button").filter({ hasText: uniqueTitle }).first();
+      const sidebarEntry = explorerRow(page, uniqueTitle);
       await sidebarEntry.waitFor({ state: "visible", timeout: 15_000 });
       await sidebarEntry.click();
       await getCodeTextarea(page).waitFor({ state: "visible", timeout: 10_000 });
@@ -509,27 +510,21 @@ export const codeBlockScenarios = [
       await page.keyboard.press("Home"); // ensure cursor is at start first
       await page.keyboard.press("End");  // move to end → scrolls right
 
-      // Wait until BOTH ta and hl have scrolled horizontally.
-      await page.waitForFunction(
-        () => {
-          const ta = document.querySelector('textarea[placeholder="Code…"]');
-          const hl = ta?.previousElementSibling;
-          return (ta?.scrollLeft ?? 0) > 0 && hl instanceof HTMLElement && hl.scrollLeft > 0;
-        },
-        null,
-        { timeout: 5000 },
-      );
-
-      const { taLeft, hlLeft } = await page.evaluate(() => {
-        const ta = document.querySelector('textarea[placeholder="Code…"]');
-        const hl = ta?.previousElementSibling;
-        return {
-          taLeft: ta?.scrollLeft ?? 0,
-          hlLeft: (hl instanceof HTMLElement) ? hl.scrollLeft : -1,
-        };
-      });
-      expect(taLeft).toBeGreaterThan(0);
-      expect(hlLeft).toBe(taLeft);
+      // Poll until hl has caught up with ta. ta.scrollLeft moves at once but the
+      // scroll event (and so the sync) fires on the next frame: "both > 0" passed on
+      // an intermediate event and read hl=16 against ta=1939 (lane gate 2026-10-13).
+      await expect
+        .poll(
+          () => page.evaluate(() => {
+            const ta = document.querySelector('textarea[placeholder="Code…"]');
+            const hl = ta?.previousElementSibling;
+            const taLeft = ta?.scrollLeft ?? 0;
+            const hlLeft = (hl instanceof HTMLElement) ? hl.scrollLeft : -1;
+            return taLeft > 0 && hlLeft === taLeft ? "synced" : `ta=${taLeft} hl=${hlLeft}`;
+          }),
+          { timeout: 5000 },
+        )
+        .toBe("synced");
     },
   ),
 

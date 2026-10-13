@@ -14,7 +14,7 @@ import { useEffect } from "react";
 
 import { useWorkbenchStore } from "./workbenchStore";
 
-/** Ctrl+` and Ctrl+J toggle the dock (both VS Code chords), same guards as the legacy IdeShell. */
+/** Ctrl+` and Ctrl+J toggle the dock (both VS Code chords). */
 export function useDockHotkeys(): void {
   const toggleDock = useWorkbenchStore((s) => s.toggleDock);
   useEffect(() => {

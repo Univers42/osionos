@@ -21,7 +21,7 @@ import { languageById, languageForFileName } from "../model/ideLanguages";
 import { useCodeRunner } from "../model/useCodeRunner";
 import { canFormat, formatCode } from "../model/formatCode";
 import { pagePathOf } from "../model/pagePathOf";
-import { isSandboxBound, revealTerminal, useSandboxBound } from "../model/useSandboxBinding";
+import { isSandboxBound, useSandboxBound } from "../model/useSandboxBinding";
 import { ideFsWrite } from "../model/ideFsClient";
 import { recordSyncedHash } from "../model/ideSyncEngine";
 import { useIdeRevealBus } from "../model/ideRevealBus";
@@ -100,7 +100,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     onFormat: () => formatRef.current(),
   });
 
-  // Run the CURRENT editor text. In IDE Workspace mode, run in the sandbox's REAL
+  // Run the CURRENT editor text. When the workspace is bound to a sandbox, run in its REAL
   // interactive PTY so stdin/input() work (the one-shot runner has no stdin →
   // input() gets EOF). Otherwise fall back to that stateless runner.
   const runNow = React.useCallback(() => {
@@ -111,10 +111,10 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
       const relPath = pagePathOf(pageId);
       const shellPath = `'/workspace/${relPath.replace(/'/g, "'\\''")}'`;
       const command = lang.runCmd.replaceAll("{file}", shellPath);
-      revealTerminal(); // reveal/connect the terminal
       // Write the latest text FIRST, then dispatch the run — so a fast PTY never
       // executes a stale file. If the terminal is still connecting, the bus keeps
       // the request until it opens; if already open, the subscribe fires it.
+      // The workbench opens its dock on run request (useOpenDockOnRunRequest).
       void ideFsWrite(wsId, relPath, source).then(() => useTerminalRunBus.getState().requestRun(command));
       return;
     }

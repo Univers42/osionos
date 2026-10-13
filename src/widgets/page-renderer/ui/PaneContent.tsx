@@ -36,7 +36,7 @@ import {
   LazyTrashView,
   LazyWorkspaceDatabaseBlock,
 } from "./lazyViews";
-import { isDrawEnabled, isIdeEnabled, isWorkbenchEnabled } from "@/shared/config/featureFlags";
+import { isDrawEnabled } from "@/shared/config/featureFlags";
 // Deep path, NOT the barrel: `@/widgets/database-view` has a side-effect
 // `import './model/dataSourceProvider'` that pulls knownDatabaseState (and its
 // ~458KB seed JSON) onto this warm pane path. The constants module is leaf-pure.
@@ -58,9 +58,7 @@ const PageTabView: React.FC<{ tab: WorkspaceTab; paneId?: string; chrome?: "bar"
     return <div className="h-full overflow-hidden"><LazyAgentConversationPage pageId={tab.pageId} /></div>;
   }
   // IDE code file: line-based Monaco editor instead of the block editor.
-  // Double guard — surface AND flag — so a code page falls back to the normal
-  // editor (never a blank pane) whenever neither osio.ide nor osio.workbench is on.
-  if (page.surface === "code" && (isIdeEnabled() || isWorkbenchEnabled())) {
+  if (page.surface === "code") {
     return <div className="h-full overflow-hidden"><LazyCodeFileView pageId={tab.pageId} /></div>;
   }
   return (

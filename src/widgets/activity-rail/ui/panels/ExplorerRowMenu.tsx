@@ -27,7 +27,7 @@ interface Props {
 }
 
 /** Page actions menu for the workbench explorer row.
- *  Mirrors the context built by PageTreeItem (lines 132-146) so the same
+ *  Mirrors the context built by the Explorer row menu when it opens so the same
  *  registry actions work without duplication. */
 export const ExplorerRowMenu: React.FC<Props> = ({ request, workspaceId, jwt, onClose }) => {
   const page = usePageStore.getState().pageById(request.pageId ?? "");

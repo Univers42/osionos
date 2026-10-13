@@ -17,7 +17,6 @@
 // numbers (2 000 pages: p95 140-146 ms) measured Playwright's trace snapshotter (PERF_USE).
 // Target 16 ms is below the floor, so it is MISSED by method; budget = worst p95 x 1.2:
 //   workbench ON,  default seed : p95 31.5-31.9 ms (floor 30.7-31.0) -> 38
-//   workbench OFF, default seed : p95 31.2-31.7 ms (floor 30.8-30.9) -> 38
 //   workbench ON,  ~2000 pages  : p95 31.8-31.9 ms (floor 31.5)      -> 38
 //   workbench ON,  ~10000 pages : p95 31.4 ms (floor 31.2), one run   -> 38
 // The page cache write is not in the keystroke: at 10 000 pages savePagesCache costs ~26 ms
@@ -34,10 +33,10 @@ test.use(PERF_USE);
 
 const SPEC = "typing";
 const TARGET_MS = 16;
-const BUDGET = { workbenchOn: 38, workbenchOff: 38, pages2000: 38, pages10000: 38 };
+const BUDGET = { defaultSeed: 38, pages2000: 38, pages10000: 38 };
 
-async function openEditor(page, workbench) {
-  await bootApp(page, { workbench });
+async function openEditor(page) {
+  await bootApp(page);
   await createNewWorkspacePage(page);
   const editor = page.locator('[role="textbox"][aria-multiline="true"]').first();
   const empty = page.getByRole("button", { name: /Click here to start writing/i });
@@ -61,28 +60,22 @@ async function typeCase(page, editor, caseName, budget) {
 
 test("block page typing, workbench ON, default seed", async ({ page }) => {
   test.setTimeout(120_000);
-  const editor = await openEditor(page, true);
-  await typeCase(page, editor, "workbenchOn.defaultSeed", BUDGET.workbenchOn);
+  const editor = await openEditor(page);
+  await typeCase(page, editor, "defaultSeed", BUDGET.defaultSeed);
 });
 
 test("block page typing, workbench ON, ~2000 pages seeded", async ({ page }) => {
   test.setTimeout(120_000);
-  const editor = await openEditor(page, true);
+  const editor = await openEditor(page);
   const seeded = await page.evaluate(() => globalThis.__perfSeedPages(2000));
   writeReport(SPEC, "seed2000", { seeded });
-  await typeCase(page, editor, "workbenchOn.pages2000", BUDGET.pages2000);
+  await typeCase(page, editor, "pages2000", BUDGET.pages2000);
 });
 
 test("block page typing, workbench ON, ~10000 pages seeded", async ({ page }) => {
   test.setTimeout(180_000);
-  const editor = await openEditor(page, true);
+  const editor = await openEditor(page);
   const seeded = await page.evaluate(() => globalThis.__perfSeedPages(10_000));
   writeReport(SPEC, "seed10000", { seeded });
-  await typeCase(page, editor, "workbenchOn.pages10000", BUDGET.pages10000);
-});
-
-test("block page typing, workbench OFF baseline", async ({ page }) => {
-  test.setTimeout(120_000);
-  const editor = await openEditor(page, false);
-  await typeCase(page, editor, "workbenchOff.defaultSeed", BUDGET.workbenchOff);
+  await typeCase(page, editor, "pages10000", BUDGET.pages10000);
 });

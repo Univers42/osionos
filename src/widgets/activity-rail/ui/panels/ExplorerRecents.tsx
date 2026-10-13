@@ -17,8 +17,8 @@ import { isFavoritesEnabled } from "@/shared/config/featureFlags";
 import { useFavoritesStore } from "@/store/favorites/favoritesStore";
 import { favoritesForWorkspace } from "@/store/favorites/favoritesScope";
 import { usePageStore } from "@/store/usePageStore";
-import { FavoriteSidebarItem } from "@/widgets/sidebar/ui/FavoriteSidebarItem";
-import { RecentPageRow } from "@/widgets/sidebar/ui/RecentPageRow";
+import { FavoriteSidebarItem } from "../FavoriteSidebarItem";
+import { RecentPageRow } from "../RecentPageRow";
 
 /** Compact strip: the tree below is the main surface, so recents stay short. */
 export const EXPLORER_RECENTS_CAP = 5;

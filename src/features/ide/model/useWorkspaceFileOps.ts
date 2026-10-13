@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { getWorkspaceMounts, subscribeWorkspaceMounts, workspaceUri } from "../vfs/workspaceMounts";
-import { useIdeFileOps } from "./useIdeFileOps";
+import { useWorkspaceImportExport } from "./useWorkspaceImportExport";
 import { createWorkspaceFileOpsWith, type WorkspaceFileOps } from "./workspaceFileOps";
 import type { MountTable } from "../vfs/types";
 
@@ -25,11 +25,10 @@ export function createWorkspaceFileOps(mounts: MountTable, workspaceId: string):
   return createWorkspaceFileOpsWith(mounts, workspaceId, workspaceUri);
 }
 
-/** Binds the core to the active workspace. `importFolder` / `exportProject` are the
- *  legacy page-store implementations, reused as-is: until the page-file mount
- *  lands, `importFolder`'s optional parent is a page id, not a relative path. */
+/** Binds the core to the active workspace. `importFolder` / `exportProject` stay on the
+ *  page store: `importFolder`'s optional parent is a page id, not a relative path. */
 export function useWorkspaceFileOps() {
-  const { workspaceId, importFolder, exportProject } = useIdeFileOps();
+  const { workspaceId, importFolder, exportProject } = useWorkspaceImportExport();
   const [rebound, setRebound] = useState<{ workspaceId: string; mounts: MountTable } | null>(null);
 
   useEffect(

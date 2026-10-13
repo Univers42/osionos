@@ -91,9 +91,9 @@ export const LazyDrawView = lazy(() =>
   import("@/widgets/draw-canvas/ui/DrawCanvasView").then((m) => ({ default: m.DrawCanvasView })),
 );
 
-// Deep import (never a barrel): the IDE editor pulls the Monaco core + its
+// Deep import (never a barrel): the code editor pulls the Monaco core + its
 // language grammars, a large chunk that must never leak onto the warm pane path. Only reached
-// for surface==='code' pages when osio.ide is on (default OFF).
+// for surface==='code' pages.
 export const LazyCodeFileView = lazy(() =>
   import("@/features/ide/ui/CodeFileView").then((m) => ({ default: m.CodeFileView })),
 );
