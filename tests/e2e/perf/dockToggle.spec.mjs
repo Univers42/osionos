@@ -14,7 +14,9 @@
 
 import { test } from "@playwright/test";
 
-import { assertBudget, bootApp, measureFloor, measureToPaint } from "./perfHarness.mjs";
+import { PERF_USE, assertBudget, bootApp, measureFloor, measureToPaint } from "./perfHarness.mjs";
+
+test.use(PERF_USE);
 
 // Measured 2026-10-13: p95 30.5-32.2 ms, median 15-16 ms (floor median 21 ms); the frame phase
 // makes p95 bimodal (1 or 2 frames). Target 16 missed -> budget = 32.2 x 1.2 = 39.

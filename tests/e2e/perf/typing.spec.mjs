@@ -11,22 +11,26 @@
 // ************************************************************************** //
 
 // Typing in a block page: keydown -> painted frame, plus the page-store actions in us.
-// Budgets, measured 2026-10-13 (Docker, software rendering, shared host), p95 over n=30.
-// Target 16 ms is MISSED in every case, so budget = worst observed p95 x 1.2 (rule: a missed
-// target is reported, never loosened silently). The floor (an unhandled key to the same 2nd rAF)
-// is 19-25 ms here, i.e. the method's frame cadence dominates:
-//   workbench ON,  default seed : p95 26.4 ms (floor 25.9)  -> 32
-//   workbench OFF, default seed : p95 24.7 ms (floor 25.2)  -> 30
-//   workbench ON,  ~2000 pages  : p95 140-146 ms (floor 76.8; updatePageContent ~12 ms/call) -> 175
+// Budgets, measured 2026-10-13 with tracing OFF (Docker, software rendering, shared host), p95
+// over n=30, two runs. The floor (an unhandled key to the same 2nd rAF) is 31 ms here, and every
+// case sits on it: typing costs no frame over the method's floor, 2 000 pages included. Earlier
+// numbers (2 000 pages: p95 140-146 ms) measured Playwright's trace snapshotter (PERF_USE).
+// Target 16 ms is below the floor, so it is MISSED by method; budget = worst p95 x 1.2:
+//   workbench ON,  default seed : p95 31.5-31.9 ms (floor 30.7-31.0) -> 38
+//   workbench OFF, default seed : p95 31.2-31.7 ms (floor 30.8-30.9) -> 38
+//   workbench ON,  ~2000 pages  : p95 31.8-31.9 ms (floor 31.5)      -> 38
+// A keystroke that costs one more frame lands at ~48 ms and fails all three.
 
 import { expect, test } from "@playwright/test";
 
 import { createNewWorkspacePage } from "../../browser/core/app.mjs";
-import { assertBudget, bootApp, measureFloor, measureToPaint, readStoreMicros, writeReport } from "./perfHarness.mjs";
+import { PERF_USE, assertBudget, bootApp, measureFloor, measureToPaint, readStoreMicros, writeReport } from "./perfHarness.mjs";
+
+test.use(PERF_USE);
 
 const SPEC = "typing";
 const TARGET_MS = 16;
-const BUDGET = { workbenchOn: 32, workbenchOff: 30, pages2000: 175 };
+const BUDGET = { workbenchOn: 38, workbenchOff: 38, pages2000: 38 };
 
 async function openEditor(page, workbench) {
   await bootApp(page, { workbench });

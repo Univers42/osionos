@@ -16,7 +16,9 @@
 
 import { test } from "@playwright/test";
 
-import { assertBudget, bootApp, measureFloor, measureToPaint, summarize } from "./perfHarness.mjs";
+import { PERF_USE, assertBudget, bootApp, measureFloor, measureToPaint, summarize } from "./perfHarness.mjs";
+
+test.use(PERF_USE);
 
 const SPEC = "railPanels";
 const PANELS = ["Source Control", "Problems"];

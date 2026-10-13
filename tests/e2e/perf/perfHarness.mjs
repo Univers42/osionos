@@ -27,6 +27,12 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect } from "@playwright/test";
 
+/** Every perf spec runs `test.use(PERF_USE)`. Playwright tracing (the config's
+ *  retain-on-failure records every test) snapshots the whole DOM on the main thread around
+ *  each action: 37 % of the CPU of the 2 000-page keystroke profile (keystrokeProfile.spec,
+ *  2026-10-13), so a traced run measures the tracer, not the app. */
+export const PERF_USE = { trace: "off" };
+
 export const WARMUPS = 5;
 export const RUNS = 30;
 export const REPORT_DIR = path.join("test-results", "perf");
