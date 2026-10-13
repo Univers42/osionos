@@ -20,6 +20,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordSubitemNoteBody } from './bridge-records.mjs';
+import { canChangePageSharing, canReadAsNonMember, canReadPageRow, pageVisibility, readablePageRows, withoutForeignSharingChanges } from './bridge-page-read.mjs';
 import { publishRealtime } from './bridge-social-core.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
@@ -100,7 +101,6 @@ const BAAS_FETCH_TIMEOUT_MS = 2_500;
 // The multi-engine graph overview pages tens of thousands of rows — needs headroom.
 const GRAPH_FETCH_TIMEOUT_MS = 20_000;
 const MAX_CLAUDE_TOOL_RESULT_TEXT = 120_000;
-const PAGE_VISIBILITY_VALUES = new Set(['private', 'shared', 'public']);
 const PAGE_SURFACE_VALUES = new Set(['page', 'agent', 'home', 'folder', 'wiki', 'app', 'code']);
 // Shared, system-owned global marketplace (app records are surface 'app' under this database).
 const MARKETPLACE_WORKSPACE_ID = '5a4b1c2d-1111-4111-8111-000000000001';
@@ -657,7 +657,7 @@ function postgrestQuery(params) {
 	return searchParams.toString();
 }
 
-function pageRowToEntry(row) {
+export function pageRowToEntry(row) {
 	return {
 		_id: row.id,
 		title: typeof row.title === 'string' && row.title ? row.title : 'Untitled',
@@ -667,7 +667,7 @@ function pageRowToEntry(row) {
 		updatedAt: row.updated_at ?? row.created_at ?? undefined,
 		workspaceId: row.workspace_id,
 		ownerId: row.owner_id ?? null,
-		visibility: PAGE_VISIBILITY_VALUES.has(row.visibility) ? row.visibility : 'private',
+		visibility: pageVisibility(row.visibility),
 		collaborators: safeJsonArray(row.collaborators),
 		parentPageId: row.parent_page_id ?? null,
 		sortOrder: typeof row.sort_order === 'number' ? row.sort_order : null,
@@ -734,7 +734,7 @@ function pageCreateRowFromPayload(payload, authContext) {
 	const workspaceId = requireUuid(payload.workspaceId, 'workspaceId');
 	const parentPageId = optionalUuid(payload.parentPageId, 'parentPageId');
 	const databaseId = hasOwn(payload, 'databaseId') && payload.databaseId !== null ? safeText(payload.databaseId, 160) || null : null;
-	const visibility = PAGE_VISIBILITY_VALUES.has(payload.visibility) ? payload.visibility : 'private';
+	const visibility = pageVisibility(payload.visibility);
 	const surface = PAGE_SURFACE_VALUES.has(payload.surface) ? payload.surface : null;
 	const row = {
 		workspace_id: workspaceId,
@@ -795,7 +795,7 @@ function pageUpdateRowFromPayload(payload) {
 	assignPayloadValue(row, payload, 'coverPosition', 'cover_position', (value) => typeof value === 'number' ? Math.max(0, Math.min(100, value)) : null);
 	assignPayloadValue(row, payload, 'databaseId', 'database_id', (value) => value === null ? null : textOrNull(value, 160));
 	assignPayloadValue(row, payload, 'surface', 'surface', (value) => PAGE_SURFACE_VALUES.has(value) ? value : null);
-	assignPayloadValue(row, payload, 'visibility', 'visibility', (value) => PAGE_VISIBILITY_VALUES.has(value) ? value : 'private');
+	assignPayloadValue(row, payload, 'visibility', 'visibility', pageVisibility);
 	assignPayloadValue(row, payload, 'collaborators', 'collaborators', (value) => safeJsonArray(value));
 	assignPayloadValue(row, payload, 'properties', 'properties', (value) => safeJsonArray(value));
 	assignPayloadValue(row, payload, 'content', 'content', (value) => safeJsonArray(value));
@@ -898,11 +898,12 @@ async function fetchPageRowIfUuid(pageId, config, fetchImpl) {
 // Auth/cascade-only page row for handlePageUpdate — every existing.<col> the
 // update path dereferences (requirePageOwnership: owner_id/properties/collaborators;
 // ownerOrWorkspaceAccess: owner_id/workspace_id; the workspace-change guard:
+// workspace_id; withoutForeignSharingChanges: owner_id/visibility/collaborators/
 // workspace_id; handlePageArchiveCascade: id/workspace_id), and nothing else. Skips
 // the heavy content JSONB + search_doc tsvector that fetchPageRow's select:'*' pulls.
 async function fetchPageAuthRow(pageId, config, fetchImpl) {
 	const id = requireUuid(pageId, 'pageId');
-	const query = postgrestQuery({ id: `eq.${id}`, select: 'id,owner_id,workspace_id,properties,collaborators', limit: '1' });
+	const query = postgrestQuery({ id: `eq.${id}`, select: 'id,owner_id,workspace_id,visibility,properties,collaborators', limit: '1' });
 	const rows = await baasRest(config, fetchImpl, `osionos_pages?${query}`);
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
@@ -931,6 +932,20 @@ async function ownerOrWorkspaceAccess(request, row, permission, config, fetchImp
 		return { ...token, workspaceId: row.workspace_id, role: 'owner', permissions: ['create', 'read', 'update', 'delete'] };
 	}
 	return requireWorkspaceAccess(request, row.workspace_id, permission, config, fetchImpl);
+}
+
+/**
+ * A page the caller may READ, with their access context — or the SAME 404 a missing id
+ * gets, so another member's private page is indistinguishable from a nonexistent one.
+ * Readability is decided before the permission gate for that reason: a viewer asking
+ * for 'update' on a private page must not get a 403 confirming that it exists.
+ */
+async function readablePageAccess(request, pageId, permission, config, fetchImpl) {
+	const token = verifyAppSessionToken(bearerToken(request), config);
+	const row = await fetchPageRow(pageId, config, fetchImpl);
+	if (!row || !canReadPageRow(row, token.userId)) throw Object.assign(new Error('Page not found.'), { status: 404 });
+	const authContext = await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl);
+	return { authContext, row };
 }
 
 async function requirePageScopeAccess(request, pageId, payload, permission, config, fetchImpl = fetch) {
@@ -1781,7 +1796,7 @@ function pageSubresourceIdFromPath(pathname, subresource) {
 
 async function handlePageList(url, request, response, config, fetchImpl) {
 	const workspaceId = requireUuid(url.searchParams.get('workspaceId'), 'workspaceId');
-	await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
+	const { userId } = await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
 	const isFullList = url.pathname === '/api/pages/all';
 	const filters = isFullList ? {} : {
 		databaseId: url.searchParams.has('databaseId')
@@ -1795,7 +1810,8 @@ async function handlePageList(url, request, response, config, fetchImpl) {
 	// Only the bulk /api/pages/all hydrate goes metadata-only (content loads lazily
 	// on page open); the filtered single-list path keeps '*' so nothing regresses.
 	const select = isFullList ? PAGE_LIST_SELECT : '*';
-	json(response, 200, pageRowsToEntries(await listPageRows(workspaceId, config, fetchImpl, filters, select)), config);
+	const rows = await listPageRows(workspaceId, config, fetchImpl, filters, select);
+	json(response, 200, pageRowsToEntries(readablePageRows(rows, userId)), config);
 	return true;
 }
 
@@ -1860,46 +1876,58 @@ export function pageSnippet(text, query) {
  * GET /api/pages/search?workspaceId=&q=&limit= — server-side search across ALL pages
  * in the workspace. Postgres full-text (the search_doc generated tsvector, weight A
  * title + B content) via PostgREST `wfts`, so deeply nested notes are found by
- * stemmed title OR body. Owner/ACL-scoped via requireWorkspaceAccess; each entry
- * carries a content `snippet`. Falls back to a full-scan substring rank if an older
- * backend lacks the search_doc column. This is the stable contract the grobase vector
- * backend (cosine /search) will later serve unchanged.
+ * stemmed title OR body. Workspace-gated via requireWorkspaceAccess, then only rows
+ * the caller may read (canReadPageRow); each entry carries a content `snippet`. Falls
+ * back to a full-scan substring rank ONLY when an older backend lacks the search_doc
+ * column — any other failure is a 5xx, never an unfiltered scan. This is the stable
+ * contract the grobase vector backend (cosine /search) will later serve unchanged.
  */
 async function handlePageSearch(url, request, response, config, fetchImpl) {
 	const workspaceId = requireUuid(url.searchParams.get('workspaceId'), 'workspaceId');
-	await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
+	const { userId } = await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
 	const raw = (url.searchParams.get('q') || '').trim();
 	const query = raw.toLowerCase();
 	const limit = Math.min(Math.max(Number.parseInt(url.searchParams.get('limit') || '12', 10) || 12, 1), PAGE_SEARCH_MAX);
 	if (!raw) { json(response, 200, [], config); return true; }
+	const path = `osionos_pages?workspace_id=eq.${workspaceId}&archived_at=is.null`
+		+ `&search_doc=wfts(english).${encodeURIComponent(raw)}`
+		+ `&select=*&order=updated_at.desc&limit=${PAGE_SEARCH_MAX}`;
+	let rows;
 	try {
-		const path = `osionos_pages?workspace_id=eq.${workspaceId}&archived_at=is.null`
-			+ `&search_doc=wfts(english).${encodeURIComponent(raw)}`
-			+ `&select=*&order=updated_at.desc&limit=${PAGE_SEARCH_MAX}`;
-		const rows = await baasRest(config, fetchImpl, path);
-		if (Array.isArray(rows)) {
-			rows.sort((a, b) => pageTitleScore(b, query) - pageTitleScore(a, query));
-			const limited = rows.slice(0, limit);
-			const entries = pageRowsToEntries(limited);
-			entries.forEach((entry, index) => {
-				const snippet = pageSnippet(pageContentText(limited[index].content), query);
-				if (snippet) entry.snippet = snippet;
-			});
-			json(response, 200, entries, config);
-			return true;
-		}
-	} catch { /* search_doc absent on an older backend — fall through to the full scan */ }
-	const scanned = legacyRankedRows(await listPageRows(workspaceId, config, fetchImpl, {}), query, limit);
-	json(response, 200, pageRowsToEntries(scanned), config);
+		rows = await baasRest(config, fetchImpl, path);
+	} catch (error) {
+		if (!isMissingSearchDocError(error)) throw error;
+		const scanned = readablePageRows(await listPageRows(workspaceId, config, fetchImpl, {}), userId);
+		json(response, 200, pageRowsToEntries(legacyRankedRows(scanned, query, limit)), config);
+		return true;
+	}
+	// Ponytail: PostgREST caps the hits at PAGE_SEARCH_MAX BEFORE this filter, so when most
+	// top matches are other members' private pages the result under-reports (fewer hits,
+	// never a foreign private one). Narrowing in SQL (`or=`) is unproven; SEC1 left it out.
+	const readable = readablePageRows(rows, userId);
+	readable.sort((a, b) => pageTitleScore(b, query) - pageTitleScore(a, query));
+	const limited = readable.slice(0, limit);
+	const entries = pageRowsToEntries(limited);
+	entries.forEach((entry, index) => {
+		const snippet = pageSnippet(pageContentText(limited[index].content), query);
+		if (snippet) entry.snippet = snippet;
+	});
+	json(response, 200, entries, config);
 	return true;
+}
+
+// Ponytail: recognises the missing column by the error TEXT (Postgres 42703 naming
+// search_doc, as baasRest embeds it). A backend that words it differently gets a 5xx
+// instead of the fallback scan — fails closed, never open.
+function isMissingSearchDocError(error) {
+	const message = error instanceof Error ? error.message : '';
+	return message.includes('search_doc') && /42703|does not exist/.test(message);
 }
 
 async function handlePageRead(url, request, response, config, fetchImpl) {
 	const pageId = pageIdFromPath(url.pathname);
 	if (!pageId) return false;
-	const row = await fetchPageRow(pageId, config, fetchImpl);
-	if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
-	await ownerOrWorkspaceAccess(request, row, 'read', config, fetchImpl);
+	const { row } = await readablePageAccess(request, pageId, 'read', config, fetchImpl);
 	json(response, 200, pageRowToEntry(row), config);
 	return true;
 }
@@ -1963,12 +1991,17 @@ async function handleMarketplaceList(request, response, config, fetchImpl) {
 	return true;
 }
 
+/** Marketplace rows are read without workspace membership: in the catalogue AND public, owned or collaborated. */
+function isReadableMarketplaceRow(row, userId) {
+	return row?.workspace_id === MARKETPLACE_WORKSPACE_ID && canReadAsNonMember(row, userId);
+}
+
 /** One marketplace app record + its child sub-pages (Details/Features/Changelog/…), with content. */
 async function handleMarketplaceApp(appId, request, response, config, fetchImpl) {
-	verifyAppSessionToken(bearerToken(request), config);
+	const { userId } = verifyAppSessionToken(bearerToken(request), config);
 	const id = requireUuid(appId, 'appId');
 	const appRow = await fetchPageRow(id, config, fetchImpl);
-	if (!appRow || appRow.workspace_id !== MARKETPLACE_WORKSPACE_ID) {
+	if (!isReadableMarketplaceRow(appRow, userId)) {
 		throw Object.assign(new Error('App not found.'), { status: 404 });
 	}
 	const childRows = await baasRest(config, fetchImpl, `osionos_pages?${postgrestQuery({
@@ -1979,7 +2012,7 @@ async function handleMarketplaceApp(appId, request, response, config, fetchImpl)
 	const counts = await marketplaceInstallCounts(config, fetchImpl);
 	json(response, 200, {
 		app: injectInstallCounts([pageRowToEntry(appRow)], counts)[0],
-		children: pageRowsToEntries(Array.isArray(childRows) ? childRows : []),
+		children: pageRowsToEntries((Array.isArray(childRows) ? childRows : []).filter((row) => isReadableMarketplaceRow(row, userId))),
 	}, config);
 	return true;
 }
@@ -2019,8 +2052,8 @@ async function handleMarketplacePublish(request, response, config, fetchImpl) {
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const pageId = requireUuid(payload.pageId, 'pageId');
 	const row = await fetchPageRow(pageId, config, fetchImpl);
-	if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
-	if (row.owner_id && row.owner_id !== authContext.userId) {
+	if (!row || row.workspace_id !== MARKETPLACE_WORKSPACE_ID) throw Object.assign(new Error('Page not found.'), { status: 404 });
+	if (!canChangePageSharing(row, authContext.userId)) {
 		throw Object.assign(new Error('Only the owner can publish this app.'), { status: 403 });
 	}
 	const props = (Array.isArray(row.properties) ? row.properties : []).filter((p) => p && p.key !== 'published' && p.key !== 'publishedAt');
@@ -2319,11 +2352,16 @@ async function ensureRecordNote(dbId, table, pk, request, config, fetchImpl) {
 		userId: authContext.userId,
 		now: new Date().toISOString(),
 	});
+	// Insert-if-absent, then refresh the mirrored fields WITHOUT owner_id: a merge-upsert of
+	// the whole body re-stamped the owner to whoever opened the record last (SEC1).
 	await baasRest(config, fetchImpl, 'osionos_pages?on_conflict=id', {
 		method: 'POST',
 		body,
-		prefer: 'resolution=merge-duplicates,return=minimal',
+		prefer: 'resolution=ignore-duplicates,return=minimal',
 	});
+	const refresh = { ...body };
+	delete refresh.owner_id;
+	await baasRest(config, fetchImpl, `osionos_pages?id=eq.${body.id}`, { method: 'PATCH', body: refresh, prefer: 'return=minimal' });
 	return { noteId: body.id, mount, authContext };
 }
 
@@ -2634,31 +2672,34 @@ function backlinkRefsFromRows(rows) {
 	return (Array.isArray(rows) ? rows : []).map((row) => ({ id: row.id, title: row.title || 'Untitled', icon: row.icon ?? null }));
 }
 
+// The columns canReadPageRow needs, besides the ref itself.
+const BACKLINK_SELECT = 'id,title,icon,owner_id,visibility,collaborators';
+
 /**
  * GET /api/pages/:id/backlinks — inline [[page:]] backlinks + unlinked mentions.
  * `linked` = pages (in a workspace the caller can access) that link to :id.
  * `mentions` = pages whose title/body match :id's title (FTS) but don't link it.
+ * Both lists, and :id itself, hold only pages the caller may read.
  */
 async function handlePageBacklinks(url, request, response, config, fetchImpl) {
 	const pageId = pageSubresourceIdFromPath(url.pathname, 'backlinks');
 	if (!pageId) return false;
-	const row = await fetchPageRow(pageId, config, fetchImpl);
-	if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
-	const authContext = await ownerOrWorkspaceAccess(request, row, 'read', config, fetchImpl);
+	const { authContext, row } = await readablePageAccess(request, pageId, 'read', config, fetchImpl);
 	const accessible = [...new Set([...authContext.workspaceIds, ...await memberWorkspaceIds(authContext.userId, config, fetchImpl)])].filter((id) => UUID_REGEX.test(id));
 	if (accessible.length === 0) { json(response, 200, { ok: true, linked: [], mentions: [] }, config); return true; }
 	const inWorkspace = `workspace_id=in.(${accessible.join(',')})`;
 	const linkRows = await baasRest(config, fetchImpl, `osionos_page_links?target_page_id=eq.${pageId}&${inWorkspace}&select=source_page_id`);
 	const sourceIds = [...new Set((Array.isArray(linkRows) ? linkRows : []).map((r) => r.source_page_id).filter((id) => id && id !== pageId))];
 	const linked = sourceIds.length
-		? backlinkRefsFromRows(await baasRest(config, fetchImpl, `osionos_pages?id=in.(${sourceIds.join(',')})&archived_at=is.null&select=id,title,icon`))
+		? backlinkRefsFromRows(readablePageRows(await baasRest(config, fetchImpl, `osionos_pages?id=in.(${sourceIds.join(',')})&archived_at=is.null&select=${BACKLINK_SELECT}`), authContext.userId))
 		: [];
 	const title = String(row.title || '').trim();
 	let mentions = [];
 	if (title) {
 		const excluded = new Set([pageId, ...sourceIds]);
-		const hits = await baasRest(config, fetchImpl, `osionos_pages?${inWorkspace}&archived_at=is.null&search_doc=wfts(english).${encodeURIComponent(`"${title}"`)}&select=id,title,icon&limit=20`).catch(() => []);
-		mentions = backlinkRefsFromRows((Array.isArray(hits) ? hits : []).filter((hit) => !excluded.has(hit.id)));
+		// Ponytail: limit=20 applies before the read filter, so mentions can under-report.
+		const hits = await baasRest(config, fetchImpl, `osionos_pages?${inWorkspace}&archived_at=is.null&search_doc=wfts(english).${encodeURIComponent(`"${title}"`)}&select=${BACKLINK_SELECT}&limit=20`).catch(() => []);
+		mentions = backlinkRefsFromRows(readablePageRows(hits, authContext.userId).filter((hit) => !excluded.has(hit.id)));
 	}
 	json(response, 200, { ok: true, linked, mentions }, config);
 	return true;
@@ -2779,7 +2820,14 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	const access = await ownerOrWorkspaceAccess(request, existing, 'update', config, fetchImpl);
 	requirePageOwnership(existing, access);
 
-	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const requested = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	// Only the owner changes who may read the page; a non-owner's sharing keys are dropped
+	// (listed in `ignored` when they differed) while the rest of the edit is still written.
+	const { payload, ignored } = withoutForeignSharingChanges(requested, existing, access.userId);
+	if (Object.keys(payload).length === 0 && Object.keys(requested).length > 0) {
+		json(response, 200, { ok: true, ignored }, config); // nothing left to write — not even updated_at
+		return true;
+	}
 	if (hasOwn(payload, 'workspaceId') && payload.workspaceId !== existing.workspace_id) {
 		await requireWorkspaceAccess(request, payload.workspaceId, 'create', config, fetchImpl);
 	}
@@ -2799,7 +2847,7 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	}
 	// updated_at is stamped by pageUpdateRowFromPayload (no BEFORE-UPDATE trigger on
 	// osionos_pages), so the value we wrote IS the stored value — authoritative.
-	json(response, 200, { ok: true, updatedAt: updateRow.updated_at }, config);
+	json(response, 200, { ok: true, updatedAt: updateRow.updated_at, ...(ignored.length > 0 ? { ignored } : {}) }, config);
 	return true;
 }
 
@@ -3158,11 +3206,14 @@ async function handlePageTranslate(url, request, response, config, fetchImpl) {
 	const pageId = pageSubresourceIdFromPath(url.pathname, 'translate');
 	if (!pageId) return false;
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
-	const { row } = await requirePageScopeAccess(request, pageId, payload, 'read', config, fetchImpl);
+	const { row, authContext } = await requirePageScopeAccess(request, pageId, payload, 'read', config, fetchImpl);
+	// A row the caller may not read takes the missing-id path (translate the request's own
+	// payload): indistinguishable from a nonexistent page, and its content never leaves.
+	const source = row && canReadPageRow(row, authContext.userId) ? row : null;
 	const targetLocale = safeTranslationLocale(payload.targetLocale);
 	const cache = new Map();
-	const sourceTitle = row ? row.title : safeText(payload.title, 500);
-	const sourceContent = row ? safeJsonArray(row.content) : safeJsonArray(payload.content);
+	const sourceTitle = source ? source.title : safeText(payload.title, 500);
+	const sourceContent = source ? safeJsonArray(source.content) : safeJsonArray(payload.content);
 	json(response, 200, {
 		ok: true,
 		pageId,
@@ -3446,6 +3497,8 @@ export function createBridgeServer(options = {}) {
 	const handoffStore = options.handoffStore ?? new Map();
 	const replayStore = options.replayStore ?? new Map();
 	const fetchImpl = options.fetchImpl ?? fetch;
+	// Comments and publish reach a page through the same read rule as GET /api/pages/:id.
+	const verifyPageAccess = (request, pageId, permission) => readablePageAccess(request, pageId, permission, config, fetchImpl);
 	// Standalone workstream handlers, created once. rtc keeps the sibling
 	// contract (closes over the base config); chat/profile/feed additionally
 	// accept the per-request (per-origin) config at dispatch time.
@@ -3464,24 +3517,8 @@ export function createBridgeServer(options = {}) {
 		push: createPushHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-			comments: createCommentsHandler({
-				config, verifySession: verifyAppSessionToken, fetchImpl,
-				verifyPageAccess: async (request, pageId, permission) => {
-					const row = await fetchPageRow(pageId, config, fetchImpl);
-					if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
-					const authContext = await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl);
-					return { authContext, row };
-				},
-			}),
-			publicPages: createPublicHandler({
-				config, verifySession: verifyAppSessionToken, fetchImpl,
-				verifyPageAccess: async (request, pageId, permission) => {
-					const row = await fetchPageRow(pageId, config, fetchImpl);
-					if (!row) throw Object.assign(new Error('Page not found.'), { status: 404 });
-					const authContext = await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl);
-					return { authContext, row };
-				},
-			}),
+			comments: createCommentsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
+			publicPages: createPublicHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
 			community: createCommunityHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),

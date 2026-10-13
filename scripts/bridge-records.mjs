@@ -96,7 +96,9 @@ export function recordProperties(row, pkColumn) {
 /**
  * Build the osionos_pages upsert body for a record note. `databaseId` is
  * `baas:<dbId>:<table>` so the client template registry can key a RecordTemplate
- * off it. Owner-stamped + workspace-scoped by the caller (handleRecordOpen).
+ * off it. Owner-stamped by the FIRST opener + workspace-scoped by the caller
+ * (ensureRecordNote). 'shared': the note mirrors a record every member of the
+ * mounting workspace can already read, so any of them may read the note too.
  */
 export function recordNotePageBody({ dbId, table, pk, row, engine, workspaceId, userId, now }) {
 	const pkColumn = pkColumnForEngine(engine);
@@ -109,7 +111,7 @@ export function recordNotePageBody({ dbId, table, pk, row, engine, workspaceId, 
 		title: recordTitle(row, table, pk),
 		icon: 'icon:database',
 		surface: 'page',
-		visibility: 'private',
+		visibility: 'shared',
 		collaborators: [],
 		properties: recordProperties(row, pkColumn),
 		content: [],
