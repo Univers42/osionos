@@ -1605,10 +1605,9 @@ body {
   display: none !important;
 }
 
-/* A pane card's border, shadow and active outline are chrome — noise in zen. */
+/* A pane card's active outline is chrome — noise in zen. The border and shadow
+   already collapse with the gap (shell.css). */
 [data-zen="1"] [data-osio-pane] {
-  border-width: 0;
-  box-shadow: none !important;
   outline: none !important;
 }
 

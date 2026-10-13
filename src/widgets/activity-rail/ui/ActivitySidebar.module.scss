@@ -37,6 +37,7 @@
   overflow: hidden;
   background: var(--osio-bg-surface);
   border: 1px solid var(--osio-pane-border);
+  border-right-color: var(--osio-sidebar-border-end);
   border-radius: var(--osio-radius-pane);
   box-shadow: var(--osio-pane-shadow);
 }
@@ -74,7 +75,7 @@
   top: 0;
   bottom: 0;
   left: calc(var(--osio-frame-gap) / 2);
-  width: max(var(--osio-frame-gap), 6px);
+  width: max(var(--osio-frame-gap), var(--osio-splitter-hit-min));
   transform: translateX(-50%);
 }
 

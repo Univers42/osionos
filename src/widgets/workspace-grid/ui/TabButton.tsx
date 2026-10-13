@@ -53,7 +53,7 @@ export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onCl
         "text-xs transition-[background-color,color] duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)]",
         active
           ? "bg-[var(--osio-bg-hover)] text-[var(--osio-fg-default)]"
-          : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
+          : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]",
         replaceTarget ? "ring-2 ring-inset ring-[var(--osio-accent)] bg-[var(--osio-accent-subtle)]" : "",
       ].join(" ")}
     >

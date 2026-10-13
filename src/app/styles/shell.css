@@ -9,15 +9,26 @@
   --osio-pane-shadow: var(--osio-e1);
   --osio-pane-outline-active: color-mix(in srgb, var(--osio-accent) 40%, transparent);
   --osio-pane-outline-offset: 0;
+  /* Resting divider between cards and between the sidebar and a pane: the gap
+     is the divider while there is one. */
+  --osio-pane-seam: transparent;
+  --osio-sidebar-border-end: var(--osio-pane-border);
+  --osio-splitter-hit-min: 6px;
 }
 
 /* Edge to edge, the outline would be clipped by the window at the outer
-   edges: it moves inside the card instead. */
+   edges: it moves inside the card instead. Card borders and shadows go with
+   the gap (side by side they would double into 2px lines and trace the window
+   edge); one seam hairline per division replaces them. */
 :root[data-density="compact"],
 [data-zen="1"] {
   --osio-frame-gap: 0px;
   --osio-radius-pane: 0px;
   --osio-pane-outline-offset: -1px;
+  --osio-pane-border: transparent;
+  --osio-pane-shadow: none;
+  --osio-pane-seam: var(--osio-border-default);
+  --osio-sidebar-border-end: var(--osio-border-default);
 }
 
 @media (max-width: 767.98px) {
@@ -25,6 +36,10 @@
     --osio-frame-gap: 0px;
     --osio-radius-pane: 0px;
     --osio-pane-outline-offset: -1px;
+    --osio-pane-border: transparent;
+    --osio-pane-shadow: none;
+    --osio-pane-seam: var(--osio-border-default);
+  --osio-sidebar-border-end: var(--osio-border-default);
   }
 }
 

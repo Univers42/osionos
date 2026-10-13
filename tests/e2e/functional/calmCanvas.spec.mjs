@@ -3,7 +3,7 @@
 // and phone widths collapse the gap and the radius to zero (edge-to-edge).
 
 import { test, expect } from "@playwright/test";
-import { activateFirstEditor, openFreshPage } from "../../browser/core/app.mjs";
+import { activateFirstEditor, createNewWorkspacePage, openFreshPage } from "../../browser/core/app.mjs";
 
 const pane = (page) => page.locator("[data-osio-pane]");
 
@@ -78,6 +78,41 @@ test.describe("calm canvas shell", () => {
     await expect(page.locator('[data-zen="1"]')).toHaveCount(1);
     expect(await frameGap(page)).toBe(0);
     expect(await style(pane(page).first(), "borderTopLeftRadius")).toBe("0px");
+  });
+
+  test("edge to edge, two panes keep one resting divider and no doubled borders", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await splitRight(page);
+    const hairline = () => page.locator("[data-pane-splitter]").evaluate((el) => getComputedStyle(el, "::after").backgroundColor);
+    expect(await hairline()).toBe("rgba(0, 0, 0, 0)");
+    await page.evaluate(() => { document.documentElement.dataset.density = "compact"; });
+    await expect.poll(hairline).toBe(await resolved(page, "background-color", "--osio-border-default"));
+    const [first, second] = await pane(page).evaluateAll((els) => els.map((el) => getComputedStyle(el).borderTopColor));
+    expect(first).toBe("rgba(0, 0, 0, 0)");
+    expect(second).toBe("rgba(0, 0, 0, 0)");
+    const sidebarSeam = await page.locator("[data-osio-sidebar-card]").evaluate((el) => getComputedStyle(el).borderRightColor);
+    expect(sidebarSeam).toBe(await resolved(page, "border-top-color", "--osio-border-default"));
+  });
+
+  test("zen mode with two panes still shows a divider", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await splitRight(page);
+    await page.getByRole("textbox", { name: "Page title" }).first().click();
+    await page.keyboard.press("Control+k");
+    await page.keyboard.press("Control+z");
+    await expect(page.locator('[data-zen="1"]')).toHaveCount(1);
+    const hairline = () => page.locator("[data-pane-splitter]").evaluate((el) => getComputedStyle(el, "::after").backgroundColor);
+    await expect.poll(hairline).toBe(await resolved(page, "background-color", "--osio-border-default"));
+  });
+
+  test("an inactive tab under the pointer is not mistaken for the active one", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await page.addStyleTag({ content: "*{transition:none!important}" });
+    await createNewWorkspacePage(page);
+    const tab = page.locator("[data-tab-id]:not([data-active])").first();
+    await expect(tab).toBeVisible();
+    await tab.hover();
+    expect(await style(tab, "backgroundColor")).not.toBe(await resolved(page, "background-color", "--osio-bg-hover"));
   });
 
   test("a phone width is edge-to-edge", async ({ page, baseURL }) => {
