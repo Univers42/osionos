@@ -215,6 +215,18 @@ export function refocusBlockIfLost(
   });
 }
 
+/**
+ * Focus `blockId` and place the caret, as soon as the block is in the DOM.
+ *
+ * The first attempt is a microtask: a key handler that wrote the store before calling this
+ * has its React sync flush queued in an earlier microtask, so the new block is committed by
+ * then. A frame or a timer alone is too late — Chrome dispatches a key the user pressed
+ * meanwhile before either, and that key landed in the PREVIOUS block
+ * (tests/e2e/perf/enterFocus.spec.mjs: 12 of 30 keys misplaced, 2026-10-13). The frame and
+ * timer attempts still run for callers that write the store after calling this, but once the
+ * caret is placed they only act if focus fell to <body> (the node was replaced): they never
+ * move a caret the user has since typed past.
+ */
 export function focusEditableBlock(
   blockId: string,
   placement: CaretPlacement = "start",
@@ -222,11 +234,13 @@ export function focusEditableBlock(
   remainingFrames = 10,
 ) {
   let requestedVirtualScroll = false;
+  let placed = false;
   const retry = () => {
     requestAnimationFrame(focusAttempt);
     globalThis.setTimeout(focusAttempt, 0);
   };
   const focusAttempt = () => {
+    if (placed && document.activeElement && document.activeElement !== document.body) return;
     const editable = resolveEditableBlock(blockId, placement, root);
     if (!editable) {
       if (!requestedVirtualScroll) {
@@ -246,12 +260,19 @@ export function focusEditableBlock(
     editable.scrollIntoView({ block: "nearest", behavior: "auto" });
     placeCaret(editable, placement);
 
-    if (document.activeElement !== editable && remainingFrames > 0) {
+    if (document.activeElement === editable) {
+      placed = true;
+    } else if (remainingFrames > 0) {
       remainingFrames -= 1;
       retry();
     }
   };
 
+  // Only when the block is already there: a miss is left to the frame/timer attempts, which
+  // own the virtual-scroll request and the retry budget.
+  queueMicrotask(() => {
+    if (resolveEditableBlock(blockId, placement, root)) focusAttempt();
+  });
   retry();
 }
 
