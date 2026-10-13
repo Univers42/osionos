@@ -1,27 +1,40 @@
 #!/usr/bin/env node
 // Generates the app's colour tokens from the seeds in scripts/tokens/palettes.mjs.
 //
-//   node scripts/build-tokens.mjs           write the stylesheet
-//   node scripts/build-tokens.mjs --check   fail if the committed stylesheet is
-//                                           stale, or a palette fails contrast
+//   node scripts/build-tokens.mjs           write every generated file
+//   node scripts/build-tokens.mjs --check   fail if a committed file is stale,
+//                                           a palette fails its contrast level,
+//                                           or a value is not a usable colour
 //
 // Run from the app's root. Both forms refuse a palette that fails contrast, so
 // an unreadable colour can be neither written nor committed.
 
 import { readFileSync, writeFileSync } from "node:fs";
 
-import { resolveTokens } from "./tokens/aliases.mjs";
+import { resolvedTokens } from "./tokens/aliases.mjs";
 import { contrastFailures } from "./tokens/contrast.mjs";
 import { MODES, PALETTES } from "./tokens/palettes.mjs";
-import { modeTokens } from "./tokens/ramps.mjs";
+import { GENERATED_REGISTRY, renderRegistry } from "./tokens/registry.mjs";
 import { GENERATED_STYLESHEET, renderStylesheet } from "./tokens/stylesheet.mjs";
+import { malformedTokens } from "./tokens/validity.mjs";
 
-function reportContrast() {
+const OUTPUTS = [
+  { path: GENERATED_STYLESHEET, render: renderStylesheet },
+  { path: GENERATED_REGISTRY, render: renderRegistry },
+];
+
+function reportProblems() {
   let failed = 0;
   for (const palette of PALETTES) {
+    const level = palette.contrast ?? "AA";
     for (const mode of MODES) {
-      for (const { text, background, ratio, required } of contrastFailures(resolveTokens(modeTokens(palette, mode)))) {
+      const tokens = resolvedTokens(palette, mode);
+      for (const { text, background, ratio, required } of contrastFailures(tokens, { level })) {
         console.error(`✗ ${palette.id}/${mode}: ${text} on ${background} is ${ratio}:1, needs ${required}:1`);
+        failed += 1;
+      }
+      for (const [name, value] of malformedTokens(tokens)) {
+        console.error(`✗ ${palette.id}/${mode}: ${name} is "${value}", not a colour a script can read`);
         failed += 1;
       }
     }
@@ -29,27 +42,28 @@ function reportContrast() {
   return failed;
 }
 
-function isCommitted(stylesheet) {
+function isCommitted({ path, render }) {
   try {
-    return readFileSync(GENERATED_STYLESHEET, "utf8") === stylesheet;
+    return readFileSync(path, "utf8") === render();
   } catch (error) {
     if (error.code === "ENOENT") return false;
     throw error;
   }
 }
 
-if (reportContrast() > 0) {
-  console.error("\nA text colour is too close to its background. Change the seed or the tone table in scripts/tokens/.");
+if (reportProblems() > 0) {
+  console.error("\nA palette is unreadable or malformed. Change the seed, the pins or the tone table in scripts/tokens/.");
   process.exit(1);
 }
 
-const stylesheet = renderStylesheet();
 if (!process.argv.includes("--check")) {
-  writeFileSync(GENERATED_STYLESHEET, stylesheet);
-  console.log(`✓ wrote ${GENERATED_STYLESHEET}`);
-} else if (isCommitted(stylesheet)) {
-  console.log(`✓ colour tokens: ${GENERATED_STYLESHEET} matches its seeds and every contrast pair passes AA.`);
+  for (const output of OUTPUTS) {
+    writeFileSync(output.path, output.render());
+    console.log(`✓ wrote ${output.path}`);
+  }
 } else {
-  console.error(`✗ ${GENERATED_STYLESHEET} is not what the seeds generate. Run \`npm run tokens\` and commit the result.`);
-  process.exit(1);
+  const stale = OUTPUTS.filter((output) => !isCommitted(output));
+  for (const { path } of stale) console.error(`✗ ${path} is not what the seeds generate. Run \`npm run tokens\` and commit the result.`);
+  if (stale.length > 0) process.exit(1);
+  console.log(`✓ colour tokens: ${OUTPUTS.length} generated files match their seeds; ${PALETTES.length} palettes pass their contrast level.`);
 }

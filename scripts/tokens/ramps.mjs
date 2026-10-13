@@ -1,6 +1,11 @@
 // Turns a palette's seeds into the colours that differ between light and dark:
-// the neutral ramp, the accent ramp, status colours, block tints, and the two
-// graph colours that need the accent at partial opacity.
+// the neutral ramp, the accent ramp, status colours, block tints, the two
+// graph colours that need the accent at partial opacity, and (ambient.mjs) the
+// shadow, scrim and graph chrome tinted by the palette's own ramps.
+//
+// A palette's pins (palettes.mjs) replace generated values by name. They are
+// applied before anything derived from them, so a pinned accent also decides
+// the text colour placed on it.
 //
 // Ponytail: the lightness of each tone is a table copied from the hand-tuned
 // "warm" palette, not a model of perception. A palette whose hue is much
@@ -10,7 +15,10 @@
 // A tone asked for outside sRGB loses chroma only (oklch.mjs), so a very
 // saturated seed comes out duller than written without an error.
 
-import { contrastRatio, hexToRgb, oklchToHex } from "./oklch.mjs";
+import { ambientTokens } from "./ambient.mjs";
+import { blockTints } from "./tints.mjs";
+import { contrastRatio, oklchToHex } from "./oklch.mjs";
+import { translucent } from "./translucent.mjs";
 
 // Neutral steps are slots by role, not a light-to-dark scale: a card is lighter
 // than the canvas in both modes, so no single order could be monotonic in both.
@@ -78,42 +86,12 @@ const STATUS_TONES = {
   },
 };
 
-const TINT_TONES = {
-  light: {
-    gray: { fg: [0.518, 0.01, 85], bg: [0.948, 0.011, 95] },
-    brown: { fg: [0.458, 0.079, 52], bg: [0.933, 0.017, 68] },
-    orange: { fg: [0.539, 0.146, 49], bg: [0.945, 0.029, 69] },
-    yellow: { fg: [0.531, 0.111, 88], bg: [0.95, 0.043, 95] },
-    green: { fg: [0.511, 0.128, 148], bg: [0.94, 0.024, 133] },
-    blue: { fg: [0.524, 0.129, 249], bg: [0.943, 0.013, 229] },
-    purple: { fg: [0.517, 0.123, 298], bg: [0.935, 0.017, 305] },
-    pink: { fg: [0.538, 0.134, 352], bg: [0.938, 0.017, 350] },
-    red: { fg: [0.5, 0.182, 30], bg: [0.934, 0.019, 33] },
-  },
-  dark: {
-    gray: { fg: [0.765, 0.015, 85], bg: [0.275, 0.008, 75] },
-    brown: { fg: [0.804, 0.054, 62], bg: [0.258, 0.023, 61] },
-    orange: { fg: [0.77, 0.118, 75], bg: [0.26, 0.03, 66] },
-    yellow: { fg: [0.823, 0.114, 96], bg: [0.267, 0.032, 98] },
-    green: { fg: [0.744, 0.126, 149], bg: [0.267, 0.03, 150] },
-    blue: { fg: [0.788, 0.067, 233], bg: [0.253, 0.023, 238] },
-    purple: { fg: [0.788, 0.081, 302], bg: [0.25, 0.042, 298] },
-    pink: { fg: [0.796, 0.079, 352], bg: [0.248, 0.031, 347] },
-    red: { fg: [0.77, 0.109, 29], bg: [0.244, 0.033, 29] },
-  },
-};
-
 // Opacity of the accent in the graph: [links between notes, background glow].
 const GRAPH_ACCENT_ALPHA = { light: [0.5, 0.05], dark: [0.55, 0.1] };
 
 const tone = ([l, c, h]) => oklchToHex({ l, c, h });
 
 const seeded = ([l, share], { hue, chroma }) => oklchToHex({ l, c: chroma * share, h: hue });
-
-function translucent(hex, alpha) {
-  const { r, g, b } = hexToRgb(hex);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 function readableOn(background, candidates) {
   return candidates.reduce((best, candidate) =>
@@ -125,9 +103,9 @@ function neutralRamp(palette, mode) {
   return NEUTRAL_TONES[mode].map((step, index) => [`--osio-n-${index}`, seeded(step, palette.neutral)]);
 }
 
-function accentRamp(palette, mode) {
+function accentRamp(palette, mode, pins) {
   const tones = ACCENT_TONES[mode];
-  const solid = seeded(tones.solid, palette.accent);
+  const solid = pins["--osio-a-solid"] ?? seeded(tones.solid, palette.accent);
   return {
     "--osio-a-solid": solid,
     "--osio-a-hover": seeded(tones.hover, palette.accent),
@@ -141,23 +119,37 @@ function statusColours(mode) {
   return Object.entries(STATUS_TONES[mode]).map(([name, lch]) => [`--osio-${name}`, tone(lch)]);
 }
 
-function blockTints(mode) {
-  return Object.entries(TINT_TONES[mode]).flatMap(([name, { fg, bg }]) => [
-    [`--osio-block-tint-${name}-fg`, tone(fg)],
-    [`--osio-block-tint-${name}-bg`, tone(bg)],
-  ]);
-}
+/** `tokens` with each pin that names one of its tokens swapped in; the key order does not change. */
+const applyPins = (tokens, pins) =>
+  Object.fromEntries(Object.entries(tokens).map(([name, value]) => [name, pins[name] ?? value]));
 
-/** Every token of `palette` whose value differs by mode, as { "--osio-…": "#RRGGBB" | "rgba(…)" }. */
+/** The pins of `palette` for `mode`, as { "--osio-…": "#RRGGBB" }. */
+export const pinsOf = (palette, mode) => palette.pins?.[mode] ?? {};
+
+/**
+ * Every token of `palette` whose value differs by mode, as { "--osio-…": "#RRGGBB" | "rgba(…)" | "r g b" },
+ * with the palette's pins on these tokens applied. A pin naming a public alias is not here: resolveTokens applies it.
+ */
 export function modeTokens(palette, mode) {
-  const accent = accentRamp(palette, mode);
+  const pins = pinsOf(palette, mode);
+  const neutral = applyPins(Object.fromEntries(neutralRamp(palette, mode)), pins);
+  const core = applyPins(
+    {
+      ...neutral,
+      ...accentRamp(palette, mode, pins),
+      ...Object.fromEntries(statusColours(mode)),
+      ...blockTints(palette, mode, neutral, NEUTRAL_TONES[mode][4][0]),
+    },
+    pins,
+  );
   const [edgeAlpha, glowAlpha] = GRAPH_ACCENT_ALPHA[mode];
-  return {
-    ...Object.fromEntries(neutralRamp(palette, mode)),
-    ...accent,
-    ...Object.fromEntries(statusColours(mode)),
-    ...Object.fromEntries(blockTints(mode)),
-    "--osio-graph-edge-note": translucent(accent["--osio-a-solid"], edgeAlpha),
-    "--osio-graph-field-warm": translucent(accent["--osio-a-solid"], glowAlpha),
-  };
+  return applyPins(
+    {
+      ...core,
+      "--osio-graph-edge-note": translucent(core["--osio-a-solid"], edgeAlpha),
+      "--osio-graph-field-warm": translucent(core["--osio-a-solid"], glowAlpha),
+      ...ambientTokens(core, palette, mode),
+    },
+    pins,
+  );
 }

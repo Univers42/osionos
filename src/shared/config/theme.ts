@@ -70,10 +70,11 @@ export function persistThemeMode(mode: ThemeMode) {
  * `data-theme` axis (above) selects light/dark within it. Every palette ships
  * both modes. The default palette keeps the id "warm" because that id is stored
  * in users' browsers; it is shown as "Calm". Its colours are generated into
- * tokens.generated.css on `:root`/[data-theme], with no data-palette block. */
+ * tokens.generated.css on `:root`/[data-theme] with no data-palette block; every
+ * other palette has a complete block per mode there. */
 
 export interface PaletteMeta {
-  /** matches `[data-palette="<id>"]` in global.css; "warm" is the default palette. */
+  /** matches `[data-palette="<id>"]` in tokens.generated.css; "warm" is the default palette. */
   id: string;
   label: string;
   description: string;
@@ -83,19 +84,8 @@ export interface PaletteMeta {
   swatches: readonly string[];
 }
 
-export const WARM_PALETTE: PaletteMeta = {
-  id: "warm",
-  label: "Calm",
-  description: "Warm paper greys with one deep cobalt for actions, links and focus.",
-  signatureMode: "light",
-  swatches: ["#FBF9F5", "#FFFFFF", "#1F5BC4", "#1F5BC4", "#1B1A18"],
-};
-
-// The remaining palettes are appended here from the generated registry.
-export const PALETTES: readonly PaletteMeta[] = [
-  WARM_PALETTE,
-  ...GENERATED_PALETTES,
-];
+/** Every palette, default first, generated with its CSS by scripts/build-tokens.mjs. */
+export const PALETTES: readonly PaletteMeta[] = GENERATED_PALETTES;
 
 export const DEFAULT_PALETTE = "warm";
 const PALETTE_STORAGE_KEY = "osionos:palette";
