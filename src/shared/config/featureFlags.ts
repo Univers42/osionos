@@ -194,8 +194,8 @@ export function isIdeEnabled(): boolean {
 
 /** The unified workbench (one rail, one side panel, editor grid + bottom dock,
  *  one status bar) that replaces both the IDE-mode shell and the page chrome.
- *  Default OFF until it reaches parity; `?osio.workbench=1`, the `osio.workbench`
- *  localStorage key, or `VITE_OSIO_WORKBENCH=1` turns it on. */
+ *  Default ON; `?osio.workbench=0`, the `osio.workbench` localStorage key, or
+ *  `VITE_OSIO_WORKBENCH=0` opts out for one release before the flag is removed. */
 export function isWorkbenchEnabled(): boolean {
-  return isFeatureFlagEnabled("osio.workbench", false);
+  return isFeatureFlagEnabled("osio.workbench", true);
 }
