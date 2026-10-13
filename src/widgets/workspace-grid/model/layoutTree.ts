@@ -33,6 +33,9 @@ export interface PaneNode {
   id: string;
   tabs: WorkspaceTab[];
   activeTabId: string | null;
+  /** This pane's own zoom (0.5–2); absent means 100%. Read it through
+   *  normalizePaneZoom — it comes back from localStorage unvalidated. */
+  zoom?: number;
 }
 
 /** Branch of the layout tree: an ordered, resizable row/column of children. */

@@ -11,10 +11,13 @@
 /* ************************************************************************** */
 
 import React from "react";
+import { isPaneZoomEnabled } from "@/shared/config/featureFlags";
 import { PaneContent } from "@/widgets/page-renderer/ui/PaneContent";
 import { useWorkspaceLayout } from "../model/workspaceLayout";
 import type { PaneNode } from "../model/layoutTree";
+import { normalizePaneZoom } from "../model/paneZoom";
 import { TabStrip } from "./TabStrip";
+import { EmptyWorkspace } from "./EmptyWorkspace";
 import { PaneDropOverlay } from "./PaneDropOverlay";
 import { usePaneDnd } from "./usePaneDnd";
 import { EditorTitleBar } from "@/widgets/workbench/ui/EditorTitleBar";
@@ -63,10 +66,11 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
   const { dragActive, dropZone, dropHandlers } = usePaneDnd(pane.id);
   const activeTab = pane.tabs.find((t) => t.tabId === pane.activeTabId) ?? pane.tabs[0] ?? null;
   const mounted = useDeferredMount(isActive);
+  const zoom = isPaneZoomEnabled() ? normalizePaneZoom(pane.zoom) : 1;
 
   return (
     <div
-      data-osio-pane
+      data-osio-pane={pane.id}
       // `contain: layout paint` isolates each pane's rendering so an edit/scroll in
       // one pane can't trigger layout/paint of the other panes (key with 8 open).
       style={{ contain: "layout paint" }}
@@ -75,7 +79,7 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
         isActive ? "ring-1 ring-inset ring-[var(--osio-accent)]/35" : "",
       ].join(" ")}
     >
-      <TabStrip pane={pane} />
+      <TabStrip pane={pane} zoom={zoom} />
       {activeTab && <EditorTitleBar tab={activeTab} />}
       <div
         className="relative flex-1 min-h-0 overflow-hidden"
@@ -89,6 +93,10 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
         // "select-first" round and risking a caret reset on the first keystroke.
         // No-op when already active; getState() avoids a subscription.
         onFocusCapture={isActive ? undefined : () => useWorkspaceLayout.getState().setActivePane(pane.id)}
+        // CSS zoom, not a transform: the content reflows inside the pane the way
+        // a page reflows under browser zoom, and the pane keeps its own size. The
+        // variable is what fixed-scale surfaces divide by (global.css, "Pane zoom").
+        style={zoom === 1 ? undefined : ({ zoom, "--osio-pane-zoom": zoom } as React.CSSProperties)}
       >
         {activeTab ? (
           mounted ? (
@@ -98,9 +106,7 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
             <div className="h-full bg-[var(--osio-bg-page)]" aria-busy="true" />
           )
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-[var(--osio-fg-subtle)]">
-            Drag a page here
-          </div>
+          <EmptyWorkspace />
         )}
         {/* During an external tab/page drag, a transparent capture layer sits ABOVE
             the editor so every region (incl. the bottom) drops onto the pane — the

@@ -16,6 +16,7 @@ import { Film, Link, Loader2, Search } from "lucide-react";
 import type { CoverPickerAsset } from "@/shared/ui/assets/collectionMedia";
 import { loadCoverGallery } from "@/shared/lib/media/coverGallery";
 import { searchCoverVideos } from "@/shared/lib/media/coverVideos";
+import { searchRefusalNotice } from "@/shared/lib/media/searchRefusal";
 import { CoverTile, normalizeExternalUrl } from "./coverPickerTiles";
 
 interface CoverVideoTabProps {
@@ -27,17 +28,18 @@ interface CoverVideoTabProps {
 type VideoSearch =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "unavailable" }
+  | { status: "unavailable"; note: string }
   | { status: "done"; items: CoverPickerAsset[] };
 
 const SEARCH_DEBOUNCE_MS = 350;
 
-const SEARCH_NOTE: Record<VideoSearch["status"], string | null> = {
-  idle: null,
-  loading: null,
-  unavailable: "Video search is unavailable right now.",
-  done: "Videos from Pixabay",
-};
+const UNAVAILABLE = "Video search is unavailable right now.";
+
+function searchNote(search: VideoSearch): string | null {
+  if (search.status === "unavailable") return search.note;
+  if (search.status !== "done") return null;
+  return search.items.length === 0 ? "No videos found — try another keyword." : "Videos from Pixabay";
+}
 
 /**
  * Video covers: a Pixabay search (through the bridge), curated ambient presets
@@ -62,7 +64,9 @@ export const CoverVideoTab: React.FC<CoverVideoTabProps> = ({ value, onSelect, o
       setSearch({ status: "loading" });
       searchCoverVideos(term)
         .then((items) => { if (on) setSearch({ status: "done", items }); })
-        .catch(() => { if (on) setSearch({ status: "unavailable" }); });
+        .catch((error: unknown) => {
+          if (on) setSearch({ status: "unavailable", note: searchRefusalNotice(error) ?? UNAVAILABLE });
+        });
     }, term ? SEARCH_DEBOUNCE_MS : 0);
     return () => {
       on = false;
@@ -71,9 +75,7 @@ export const CoverVideoTab: React.FC<CoverVideoTabProps> = ({ value, onSelect, o
   }, [query]);
 
   const found = search.status === "done" ? search.items : [];
-  const note = search.status === "done" && found.length === 0
-    ? "No videos found — try another keyword."
-    : SEARCH_NOTE[search.status];
+  const note = searchNote(search);
 
   useEffect(() => {
     let on = true;

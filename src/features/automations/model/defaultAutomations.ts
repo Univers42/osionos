@@ -29,11 +29,30 @@ export const DEFAULT_AUTOMATIONS: Automation[] = [
   shortcut("heading-3", "Heading 3", "mod+alt+3", "heading3", "editorFocused"),
   shortcut("open-palette", "Command palette", "mod+shift+p", "openPalette", "always"),
   shortcut("open-search", "Search", "mod+k", "openSearch", "always"),
+  // Ctrl+N is the browser's new window and cannot be taken; Alt makes it ours.
+  shortcut("new-page", "New page", "mod+alt+n", "newPage", "always"),
+  // Ctrl+B is Bold and Ctrl+\ splits a pane, so the sidebar joins the Ctrl+Alt family.
+  shortcut("toggle-sidebar", "Show or hide the sidebar", "mod+alt+b", "toggleSidebar", "always"),
+  shortcut("open-search-panel", "Search panel", "mod+shift+f", "openSearchPanel", "always"),
+  shortcut("focus-explorer", "Explorer", "mod+alt+e", "focusExplorer", "always"),
+  shortcut("focus-conversations", "Conversations", "mod+alt+m", "focusConversations", "always"),
   // A CHORD (VSCode style): Ctrl+K then Ctrl+Z, keeping Ctrl held. Step 2 carries a
   // modifier on purpose — a bare "z" would collide with typing "z" into the Search
   // box that step 1 opens. mod+k keeps working as Search; the chord costs nothing.
   shortcut("toggle-zen", "Zen mode (focus)", "mod+k mod+z", "toggleZenMode", "always"),
   shortcut("split-pane", "Split pane right", "mod+\\", "splitPane", "always"),
+  // Pane zoom takes over the browser's own zoom keys, but only while a pane is
+  // selected (the commands are disabled otherwise, so the page zooms as usual).
+  // One row per way a keyboard produces the key: "=" and Shift+"=" on QWERTY
+  // and AZERTY, the numpad "+", and "0" which AZERTY types with Shift ("à" bare).
+  shortcut("zoom-pane-in", "Zoom in (selected pane)", "mod+=", "zoomPaneIn", "always"),
+  shortcut("zoom-pane-in-plus", "Zoom in (selected pane, + key)", "mod+shift+plus", "zoomPaneIn", "always"),
+  shortcut("zoom-pane-in-numpad", "Zoom in (selected pane, numpad +)", "mod+plus", "zoomPaneIn", "always"),
+  shortcut("zoom-pane-out", "Zoom out (selected pane)", "mod+-", "zoomPaneOut", "always"),
+  shortcut("zoom-pane-out-shift", "Zoom out (selected pane, Shift+-)", "mod+shift+_", "zoomPaneOut", "always"),
+  shortcut("zoom-pane-reset", "Reset zoom (selected pane)", "mod+0", "zoomPaneReset", "always"),
+  shortcut("zoom-pane-reset-shift", "Reset zoom (selected pane, Shift+0)", "mod+shift+0", "zoomPaneReset", "always"),
+  shortcut("zoom-pane-reset-azerty", "Reset zoom (selected pane, AZERTY 0 key)", "mod+à", "zoomPaneReset", "always"),
   shortcut("bold", "Bold", "mod+b", "bold", "inTextEntry", false),
   shortcut("italic", "Italic", "mod+i", "italic", "inTextEntry", false),
   shortcut("underline", "Underline", "mod+u", "underline", "inTextEntry", false),

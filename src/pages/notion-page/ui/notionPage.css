@@ -123,9 +123,21 @@
   padding-right: var(--page-content-padding-inline, clamp(16px, 11%, 96px));
 }
 
+/* A wiki's page list sits in the same column as the body, at the UI's own text
+   size (it is a list of pages, not prose). */
+.osionos-wiki-pages-wrap {
+  box-sizing: border-box;
+  max-width: var(--page-content-max-width, var(--osio-page-max-width, 900px));
+  width: 100%;
+  margin: 24px auto 64px;
+  padding-left: var(--page-content-padding-inline, clamp(16px, 11%, 96px));
+  padding-right: var(--page-content-padding-inline, clamp(16px, 11%, 96px));
+}
+
 .osionos-page--full-width .osionos-page-header,
 .osionos-page--full-width .osionos-page-properties,
-.osionos-page--full-width .osionos-page-body {
+.osionos-page--full-width .osionos-page-body,
+.osionos-page--full-width .osionos-wiki-pages-wrap {
   max-width: none;
 }
 

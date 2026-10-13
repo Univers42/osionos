@@ -12,7 +12,6 @@
 
 import {
   Bell,
-  Bot,
   CalendarRange,
   CircleAlert,
   Database,
@@ -28,6 +27,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ActivePanel } from "@/shared/config/uiStore";
+import type { CommandId } from "@/features/automations/model/types";
 
 /** Fixed rail width (px) — matches the .rail CSS width. */
 export const RAIL_WIDTH = 48;
@@ -37,47 +37,66 @@ export const PANEL_TRANSITION_WIDTH = 140;
 /** Dragging the rail's edge left past this (toward 0) hides the sidebar. */
 export const RAIL_HIDE_WIDTH = 24;
 
-/** A rail item selects a side panel, opens an embedded app tab, or opens the chat shell. */
+/** A rail item selects a side panel or opens an embedded app tab. */
 export type RailAction =
   | { kind: "panel"; panel: ActivePanel }
-  | { kind: "tab"; app: "mail" | "calendar" }
-  | { kind: "chat" };
+  | { kind: "tab"; app: "mail" | "calendar" };
 
 export interface RailItem {
   id: string;
   label: string;
   Icon: LucideIcon;
   action: RailAction;
+  /** The command whose shortcut the tooltip shows. */
+  commandId?: CommandId;
 }
 
-/** Top group of the activity rail (VSCode-style). Order mirrors the brief. */
-export const RAIL_TOP_ITEMS: RailItem[] = [
-  { id: "files", label: "Files", Icon: Files, action: { kind: "panel", panel: "files" } },
-  { id: "search", label: "Search", Icon: Search, action: { kind: "panel", panel: "search" } },
-  { id: "agents", label: "Assistant", Icon: Bot, action: { kind: "chat" } },
-  { id: "messenger", label: "Messenger", Icon: MessagesSquare, action: { kind: "panel", panel: "messenger" } },
-  { id: "notifications", label: "Notifications", Icon: Bell, action: { kind: "panel", panel: "notifications" } },
-  { id: "tasks", label: "My Tasks", Icon: ListTodo, action: { kind: "panel", panel: "tasks" } },
-  // ponytail: nav LABEL renamed Public→Shared (AOC §12); panel id stays "public"
-  // (R-R3) so the persisted uiStore activePanel keeps resolving — label-only, no
-  // migration. Upgrade: to change the id, bump uiStore persist version + migrate-hook 'public'→'shared'.
-  { id: "public", label: "Shared", Icon: Globe, action: { kind: "panel", panel: "public" } },
-  { id: "marketplace", label: "Marketplace", Icon: Store, action: { kind: "panel", panel: "marketplace" } },
-  { id: "database", label: "Databases", Icon: Database, action: { kind: "panel", panel: "database" } },
-];
+export interface RailGroup {
+  id: "workspace" | "workbench" | "conversations" | "apps";
+  label: string;
+  items: readonly RailItem[];
+}
 
-/** Workbench panels (Source Control, Run, Problems) — always included. */
-export const RAIL_WORKBENCH_ITEMS: RailItem[] = [
-  { id: "scm", label: "Source Control", Icon: GitBranch, action: { kind: "panel", panel: "scm" } },
-  { id: "run", label: "Run", Icon: Play, action: { kind: "panel", panel: "run" } },
-  { id: "problems", label: "Problems", Icon: CircleAlert, action: { kind: "panel", panel: "problems" } },
-];
-
-/** The rail's top group: the top items, then the workbench panels. Built once. */
-export const RAIL_ITEMS: RailItem[] = [...RAIL_TOP_ITEMS, ...RAIL_WORKBENCH_ITEMS];
-
-/** App launchers — open an in-app iframe tab rather than a panel. */
-export const RAIL_APP_ITEMS: RailItem[] = [
-  { id: "mail", label: "Mail", Icon: Mail, action: { kind: "tab", app: "mail" } },
-  { id: "calendar", label: "Calendar", Icon: CalendarRange, action: { kind: "tab", app: "calendar" } },
+/** The rail, grouped by what the user does there. Installed marketplace apps
+ *  are appended to "apps" at render time. */
+export const RAIL_GROUPS: readonly RailGroup[] = [
+  {
+    id: "workspace",
+    label: "Workspace",
+    items: [
+      { id: "files", label: "Explorer", Icon: Files, action: { kind: "panel", panel: "files" }, commandId: "focusExplorer" },
+      { id: "search", label: "Search", Icon: Search, action: { kind: "panel", panel: "search" }, commandId: "openSearchPanel" },
+      { id: "database", label: "Databases", Icon: Database, action: { kind: "panel", panel: "database" } },
+      { id: "tasks", label: "My Tasks", Icon: ListTodo, action: { kind: "panel", panel: "tasks" } },
+      // ponytail: nav LABEL renamed Public→Shared (AOC §12); panel id stays "public"
+      // (R-R3) so the persisted uiStore activePanel keeps resolving.
+      { id: "public", label: "Shared", Icon: Globe, action: { kind: "panel", panel: "public" } },
+    ],
+  },
+  {
+    id: "workbench",
+    label: "Workbench",
+    items: [
+      { id: "scm", label: "Source Control", Icon: GitBranch, action: { kind: "panel", panel: "scm" } },
+      { id: "run", label: "Run", Icon: Play, action: { kind: "panel", panel: "run" } },
+      { id: "problems", label: "Problems", Icon: CircleAlert, action: { kind: "panel", panel: "problems" } },
+    ],
+  },
+  {
+    id: "conversations",
+    label: "Conversations",
+    items: [
+      { id: "conversations", label: "Conversations", Icon: MessagesSquare, action: { kind: "panel", panel: "conversations" }, commandId: "focusConversations" },
+      { id: "notifications", label: "Notifications", Icon: Bell, action: { kind: "panel", panel: "notifications" } },
+    ],
+  },
+  {
+    id: "apps",
+    label: "Apps",
+    items: [
+      { id: "marketplace", label: "Marketplace", Icon: Store, action: { kind: "panel", panel: "marketplace" } },
+      { id: "mail", label: "Mail", Icon: Mail, action: { kind: "tab", app: "mail" } },
+      { id: "calendar", label: "Calendar", Icon: CalendarRange, action: { kind: "tab", app: "calendar" } },
+    ],
+  },
 ];

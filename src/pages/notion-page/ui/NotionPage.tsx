@@ -29,6 +29,7 @@ import { usePageBodyLoad } from "../model/usePageBodyLoad";
 import { PageConflictBanner } from "@/features/page-file/ui/PageConflictBanner";
 import { usePageHeaderBarProps } from "@/entities/page/model/usePageHeaderBarProps";
 import { PageHeader } from "./PageHeader";
+import { WikiPages } from "./WikiPages";
 import { PageOutlineRail } from "@/widgets/page-toc/PageOutlineRail";
 import { anyJsDebugToolEnabled, usePageDebugStore } from "@/shared/debug/pageDebugStore";
 
@@ -73,6 +74,8 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef,
       const page = s.pageById(pageId);
       const first = page?.content?.[0];
       return {
+        workspaceId: page?.workspaceId,
+        isWiki: page?.surface === "wiki",
         cover: page?.cover,
         surface: page?.surface,
         soleBlock: page?.content?.length === 1,
@@ -187,6 +190,12 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef,
       {(body.state === "failed" || body.state === "signed-out") && (
         <PageBodyUnavailable signedIn={body.state === "failed"} onRetry={body.retry} />
       )}
+
+      {shell.isWiki && shell.workspaceId ? (
+        <div className="osionos-wiki-pages-wrap">
+          <WikiPages pageId={pageId} workspaceId={shell.workspaceId} locked={pageConfig.locked} />
+        </div>
+      ) : null}
 
       {anyJsDebugToolEnabled(debugTools) && (
         <Suspense fallback={null}>

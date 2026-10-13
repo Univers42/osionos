@@ -17,9 +17,10 @@ import {
   type LayoutNode, type PaneNode, type WorkspaceTab,
 } from "./layoutTree";
 import { pruneTabsForPages, removePane, setSizes, splitPane } from "./layoutMutations";
-import { freshLayout, layoutScope, loadLayout, saveLayout } from "./layoutPersist";
+import { emptyLayout, freshLayout, layoutScope, loadLayout, saveLayout } from "./layoutPersist";
 import { activePageToTab } from "./pageToTab";
 import { mirrorActiveTab } from "./layoutSync";
+import { normalizePaneZoom, stepPaneZoom, withPaneZoom, type PaneZoomChange } from "./paneZoom";
 
 interface LayoutState {
   root: LayoutNode;
@@ -39,6 +40,8 @@ interface LayoutState {
   closeTab: (paneId: string, tabId: string) => void;
   setActiveTab: (paneId: string, tabId: string) => void;
   setActivePane: (paneId: string) => void;
+  /** Step one pane's zoom along the ladder, or put it back to 100%. */
+  zoomPane: (paneId: string, change: PaneZoomChange) => void;
   moveTab: (fromPaneId: string, tabId: string, toPaneId: string, index?: number) => void;
   splitWith: (paneId: string, direction: "row" | "column", tab: WorkspaceTab, side: "before" | "after") => void;
   splitMoveTab: (fromPaneId: string, tabId: string, targetPaneId: string, direction: "row" | "column", side: "before" | "after") => void;
@@ -67,6 +70,12 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
     set({ root, activePaneId });
     saveLayout({ root, activePaneId }, get().scope);
     if (mirror !== false) mirrorActiveTab(mirror);
+  }
+
+  /** The last tab or pane closed: an empty workspace, not Home reopened behind the user's back. */
+  function closeEverything(): void {
+    const empty = emptyLayout();
+    commit(empty.root, empty.activePaneId, null);
   }
 
   function focusInPane(paneId: string, tabId: string, mirror: boolean): void {
@@ -180,7 +189,7 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
         return commit(root, state.activePaneId, activeTabOf(root, state.activePaneId));
       }
       const removed = removePane(state.root, paneId);
-      if (!removed) { const fresh = freshLayout(); return commit(fresh.root, fresh.activePaneId, activeTabOf(fresh.root, fresh.activePaneId)); }
+      if (!removed) return closeEverything();
       const activePaneId = findPane(removed, state.activePaneId) ? state.activePaneId : (collectPanes(removed)[0]?.id ?? "");
       commit(removed, activePaneId, activeTabOf(removed, activePaneId));
     },
@@ -190,10 +199,7 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
       const state = get();
       const result = pruneTabsForPages(state.root, state.activePaneId, (t) => Boolean(t.pageId) && pageIds.has(t.pageId));
       if (result === null) return; // no open tab matched
-      if (result === "empty") {
-        const fresh = freshLayout();
-        return commit(fresh.root, fresh.activePaneId, activeTabOf(fresh.root, fresh.activePaneId));
-      }
+      if (result === "empty") return closeEverything();
       commit(result.root, result.activePaneId, activeTabOf(result.root, result.activePaneId));
     },
 
@@ -203,6 +209,16 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
       if (get().activePaneId === paneId) return;
       const { root } = get();
       commit(root, paneId, activeTabOf(root, paneId));
+    },
+
+    zoomPane: (paneId, change) => {
+      const state = get();
+      const pane = findPane(state.root, paneId);
+      if (!pane) return;
+      const current = normalizePaneZoom(pane.zoom);
+      const next = change === "reset" ? 1 : stepPaneZoom(current, change);
+      if (next === current) return;
+      commit(withPaneZoom(state.root, paneId, next), state.activePaneId, false);
     },
 
     moveTab: (fromPaneId, tabId, toPaneId, index) => {
@@ -253,7 +269,7 @@ export const useWorkspaceLayout = create<LayoutState>((set, get) => {
 
     closePane: (paneId) => {
       const removed = removePane(get().root, paneId);
-      if (!removed) { const fresh = freshLayout(); return commit(fresh.root, fresh.activePaneId, activeTabOf(fresh.root, fresh.activePaneId)); }
+      if (!removed) return closeEverything();
       const activePaneId = collectPanes(removed)[0]?.id ?? "";
       commit(removed, activePaneId, activeTabOf(removed, activePaneId));
     },

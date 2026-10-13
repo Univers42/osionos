@@ -22,39 +22,36 @@ interface Props {
   onOpenSettings?: () => void;
   onOpenTrash?: () => void;
   onOpenConsole?: () => void;
+  /** Rendered as the hidden-mode peek overlay: no resize edge, a pin to dock. */
+  peek?: boolean;
 }
 
 /**
- * The left sidebar. One container stays mounted across panel<->rail so its width
- * animates (CSS transition) on collapse/expand; during an active drag the width
- * is written straight to the DOM (no transition) and tracks the pointer 1:1 all
- * the way down to the rail width — no snap jump. Below the transition width the
- * content swaps to the icon rail; release there collapses, release wider keeps
- * the panel. From the rail, drag right → expand, drag far left → hide.
+ * The left sidebar: the activity rail, always there when docked, and the panel
+ * beside it. One click on a rail icon switches panel; clicking the active one
+ * folds the panel away. Docking changes are instant: animating the width would
+ * relayout the editor next to it on every frame.
  *
- * Smoothness invariants: BOTH the rail and the panel stay mounted as
- * crossfading layers — crossing the drag threshold or toggling modes never
- * mounts/unmounts the heavy panel subtree (the old swap was a mid-drag mount
- * storm). The panel layer keeps its COMMITTED width, so a narrower container
- * clips it (VSCode-style) instead of re-wrapping every row per frame. The
- * panel pre-mounts on first idle so even the first expand is instant.
+ * The edge drags: the panel's edge resizes it, and below the transition width
+ * folds it to the rail; the rail's edge drags the panel back out, or, pulled
+ * far left, hides the sidebar. Widths are written to the DOM during a drag and
+ * committed to the store on release.
  */
-export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpenConsole }) => {
+export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpenConsole, peek = false }) => {
   const sidebarMode = useUIStore((s) => s.sidebarMode);
   const sidebarWidth = useUIStore((s) => s.sidebarWidth);
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth);
   const collapseToRail = useUIStore((s) => s.collapseToRail);
   const expandToPanel = useUIStore((s) => s.expandToPanel);
   const hide = useUIStore((s) => s.hide);
-  const sizeRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
-  const previewRef = useRef(false);
-  const [previewRail, setPreviewRail] = useState(false);
+  // The peek shows the panel whatever mode the docked sidebar was last in.
+  const showPanel = peek || sidebarMode === "panel";
 
-  // Mount the panel once and keep it mounted forever (hidden layers cost no
-  // renders). Render-adjust in the same pass — an effect would cascade.
-  const [panelMounted, setPanelMounted] = useState(sidebarMode !== "rail");
-  if (sidebarMode === "panel" && !panelMounted) setPanelMounted(true);
+  // Mount the panel once and keep it mounted (a folded panel costs no renders).
+  const [panelMounted, setPanelMounted] = useState(showPanel);
+  if (showPanel && !panelMounted) setPanelMounted(true);
   useEffect(() => {
     if (panelMounted) return undefined;
     // Pre-warm during idle so the FIRST rail→panel expand pays no mount cost.
@@ -66,71 +63,38 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, 
     return () => clearTimeout(timer);
   }, [panelMounted]);
 
-  const targetWidth = sidebarMode === "rail" ? RAIL_WIDTH : sidebarWidth;
-
-  // Drive width from the DOM (not React's style prop) so a re-render mid-drag
-  // can't reset it. For non-drag changes the CSS `transition: width` animates it.
+  const panelWidth = showPanel ? sidebarWidth : 0;
   useLayoutEffect(() => {
-    if (sizeRef.current && !draggingRef.current) sizeRef.current.style.width = `${targetWidth}px`;
-  }, [targetWidth]);
+    if (panelRef.current && !draggingRef.current) panelRef.current.style.width = `${panelWidth}px`;
+  }, [panelWidth]);
 
-  const setLive = (px: number) => {
-    if (sizeRef.current) sizeRef.current.style.width = `${px}px`;
+  const setLivePanel = (px: number) => {
+    if (panelRef.current) panelRef.current.style.width = `${Math.max(0, px)}px`;
   };
 
-  // Expanded panel: track 1:1 down to the rail width; preview icons below the threshold.
-  const onPanelLive = useCallback((px: number) => {
-    setLive(Math.max(RAIL_WIDTH, Math.min(PANEL_MAX_WIDTH, px)));
-    const shouldPreview = px < PANEL_TRANSITION_WIDTH;
-    if (shouldPreview !== previewRef.current) {
-      previewRef.current = shouldPreview;
-      setPreviewRail(shouldPreview);
+  // Drag in total-sidebar pixels (rail + panel), the unit the thresholds are in.
+  const onLive = useCallback((total: number) => {
+    setLivePanel(Math.min(PANEL_MAX_WIDTH, total - RAIL_WIDTH));
+  }, []);
+  const onCommit = useCallback((total: number) => {
+    draggingRef.current = false;
+    if (total < RAIL_HIDE_WIDTH) {
+      hide();
+    } else if (total < PANEL_TRANSITION_WIDTH) {
+      collapseToRail();
+      setLivePanel(0);
+    } else {
+      setSidebarWidth(total - RAIL_WIDTH);
+      expandToPanel();
     }
-  }, []);
-  const onPanelCommit = useCallback(
-    (px: number) => {
-      draggingRef.current = false;
-      previewRef.current = false;
-      setPreviewRail(false);
-      if (px < PANEL_TRANSITION_WIDTH) collapseToRail();
-      else setSidebarWidth(px);
-    },
-    [collapseToRail, setSidebarWidth],
-  );
-  const startPanelResize = useSidebarResize({
+  }, [collapseToRail, expandToPanel, hide, setSidebarWidth]);
+  const startResize = useSidebarResize({
     getStartWidth: () => {
       draggingRef.current = true;
-      return useUIStore.getState().sidebarWidth;
+      return RAIL_WIDTH + (useUIStore.getState().sidebarMode === "panel" ? useUIStore.getState().sidebarWidth : 0);
     },
-    onLiveWidth: onPanelLive,
-    onCommit: onPanelCommit,
-  });
-
-  // Rail: drag right past the transition → expand; drag far left → hide.
-  const onRailLive = useCallback((px: number) => {
-    setLive(Math.max(RAIL_HIDE_WIDTH, Math.min(PANEL_MAX_WIDTH, px)));
-  }, []);
-  const onRailCommit = useCallback(
-    (px: number) => {
-      draggingRef.current = false;
-      if (px >= PANEL_TRANSITION_WIDTH) {
-        setSidebarWidth(px);
-        expandToPanel();
-      } else if (px < RAIL_HIDE_WIDTH) {
-        hide();
-      } else {
-        setLive(RAIL_WIDTH); // settle back to the rail width with a transition
-      }
-    },
-    [expandToPanel, hide, setSidebarWidth],
-  );
-  const startRailResize = useSidebarResize({
-    getStartWidth: () => {
-      draggingRef.current = true;
-      return RAIL_WIDTH;
-    },
-    onLiveWidth: onRailLive,
-    onCommit: onRailCommit,
+    onLiveWidth: onLive,
+    onCommit,
   });
 
   const onResizeKeyDown = useCallback(
@@ -146,46 +110,32 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, 
     [setSidebarWidth],
   );
 
-  if (sidebarMode === "hidden") return null;
-
-  const showRail = sidebarMode === "rail" || previewRail;
-  const startResize = sidebarMode === "rail" ? startRailResize : startPanelResize;
+  if (sidebarMode === "hidden" && !peek) return null;
 
   return (
-    <aside className={styles.activitySidebar} aria-label="Sidebar">
-      {/* width is driven by useLayoutEffect/drag (DOM), never React's style prop,
-          so a re-render mid-drag can't snap it back. Rail + panel are persistent
-          crossfading layers — threshold crossings toggle a class, never a mount. */}
-      <div ref={sizeRef} className={styles.panel}>
-        <div
-          className={[styles.layer, showRail ? styles.layerVisible : ""].join(" ")}
-          style={{ width: RAIL_WIDTH }}
-          aria-hidden={!showRail}
-        >
-          <ActivityRail onOpenSettings={onOpenSettings} />
-        </div>
+    <aside className={styles.activitySidebar} aria-label="Sidebar" data-sidebar-mode={peek ? "peek" : sidebarMode}>
+      <ActivityRail onOpenSettings={onOpenSettings} />
+      <div ref={panelRef} className={styles.panel} hidden={!showPanel}>
         {panelMounted ? (
-          <div
-            className={[styles.layer, !showRail ? styles.layerVisible : ""].join(" ")}
-            style={{ width: sidebarWidth }}
-            aria-hidden={showRail}
-          >
-            <SidebarPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />
+          <div className={styles.panelInner} style={{ width: sidebarWidth }}>
+            <SidebarPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} peek={peek} />
           </div>
         ) : null}
       </div>
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize sidebar"
-        aria-valuemin={RAIL_WIDTH}
-        aria-valuemax={PANEL_MAX_WIDTH}
-        aria-valuenow={Math.round(targetWidth)}
-        tabIndex={0}
-        className={styles.resizeHandle}
-        onPointerDown={startResize}
-        onKeyDown={onResizeKeyDown}
-      />
+      {peek ? null : (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          aria-valuemin={RAIL_WIDTH}
+          aria-valuemax={RAIL_WIDTH + PANEL_MAX_WIDTH}
+          aria-valuenow={Math.round(RAIL_WIDTH + panelWidth)}
+          tabIndex={0}
+          className={styles.resizeHandle}
+          onPointerDown={startResize}
+          onKeyDown={onResizeKeyDown}
+        />
+      )}
     </aside>
   );
 };

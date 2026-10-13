@@ -15,7 +15,7 @@
 // items already shaped for a cover tile. This file does not fall back to a
 // direct provider call — a key in the browser bundle is a published key.
 
-import { api } from "@/shared/api/client";
+import { api, getActivePageJwt } from "@/shared/api/client";
 import type { CoverPickerAsset } from "@/shared/ui/assets/collectionMedia";
 
 const PAGE_SIZE = 18;
@@ -29,7 +29,7 @@ function isCoverVideo(value: unknown): value is CoverPickerAsset {
  *  a bridge without a key), so the caller can say search is unavailable. */
 export async function searchCoverVideos(query: string): Promise<CoverPickerAsset[]> {
   const params = new URLSearchParams({ query, perPage: String(PAGE_SIZE) });
-  const payload = await api.get<unknown>(`/api/media/pixabay/videos?${params.toString()}`);
+  const payload = await api.get<unknown>(`/api/media/pixabay/videos?${params.toString()}`, getActivePageJwt() ?? undefined);
   if (typeof payload !== "object" || payload === null) return [];
   const results: unknown = Reflect.get(payload, "results");
   return Array.isArray(results) ? results.filter(isCoverVideo) : [];

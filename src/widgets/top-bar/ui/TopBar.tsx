@@ -11,8 +11,6 @@
 /* ************************************************************************** */
 
 import React, { useMemo } from "react";
-import { PanelLeft } from "lucide-react";
-import { useUIStore } from "@/shared/config/uiStore";
 import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
 import { buildCommands } from "../model/commands";
 import { buildMenus } from "../model/menus";
@@ -28,10 +26,10 @@ interface TopBarProps {
   onOpenSettings: (tab?: SettingsTab) => void;
 }
 
-/** Global VSCode-style top bar: logo · menus · command/search · update · window controls. */
+/** Global VSCode-style top bar: menus · command/search · update · window controls.
+ *  No brand label: it did nothing, and the user knows which app they are in. */
 export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
   useTopBarHotkeys();
-  const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const ctx = useMemo(() => ({ openSettings: onOpenSettings }), [onOpenSettings]);
   const menus = useMemo(() => buildMenus(ctx), [ctx]);
   const commands = useMemo(() => buildCommands(ctx), [ctx]);
@@ -41,20 +39,6 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
       data-testid="app-topbar"
       className="flex h-[var(--osio-topbar-h)] shrink-0 items-center gap-1.5 border-b border-[var(--osio-topbar-border)] bg-[var(--osio-topbar-bg)] px-2"
     >
-      <button
-        type="button"
-        aria-label="Toggle sidebar"
-        onClick={toggleSidebar}
-        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--osio-radius-chip)] text-[var(--osio-fg-muted)] transition-[background-color,color,transform] duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)] active:scale-[0.92] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-topbar-bg)]"
-      >
-        <PanelLeft size={16} aria-hidden />
-      </button>
-
-      <span className="hidden md:flex shrink-0 select-none items-center gap-1.5 pl-1 pr-1.5" aria-label="osionos">
-        <span aria-hidden className="h-4 w-4 rounded-[5px] bg-[var(--osio-accent)]" />
-        <span className="text-sm font-semibold tracking-tight text-[var(--osio-fg-default)]">osionos</span>
-      </span>
-
       <div className="hidden md:block">
         <TopBarMenu groups={menus} />
       </div>

@@ -20,7 +20,8 @@ import { useUserStore } from "@/features/auth";
 import { normalizeExternalUrl } from "@/shared/lib/media/externalImageUrl";
 import { useAssetLibraryStore } from "@/shared/config/assetLibraryStore";
 import { uploadPageMedia } from "@/shared/lib/media/pageMediaUpload";
-import { searchUnsplashPickerAssets } from "@/shared/lib/media/unsplash";
+import { reportUnsplashDownload, searchUnsplashPickerAssets } from "@/shared/lib/media/unsplash";
+import { searchRefusalNotice } from "@/shared/lib/media/searchRefusal";
 import { giphyEnabled } from "@/shared/chat/giphyApi";
 import { GifPicker } from "@/widgets/channel-messages/ui/composer/GifPicker";
 
@@ -75,7 +76,8 @@ export const MediaEmbedDialog: React.FC<MediaEmbedDialogProps> = ({ kind, onSele
 
   const [urlDraft, setUrlDraft] = useState("");
   const [unsplashQuery, setUnsplashQuery] = useState("");
-  const [unsplash, setUnsplash] = useState<Array<{ ref: string; previewUrl: string }>>([]);
+  const [unsplash, setUnsplash] = useState<Array<{ ref: string; previewUrl: string; downloadLocation?: string }>>([]);
+  const [unsplashNotice, setUnsplashNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
@@ -137,7 +139,11 @@ export const MediaEmbedDialog: React.FC<MediaEmbedDialogProps> = ({ kind, onSele
     setBusy(true);
     try {
       const items = await searchUnsplashPickerAssets({ query: query || "workspace", perPage: 24 });
-      setUnsplash(items.map((item) => ({ ref: item.ref, previewUrl: item.previewUrl ?? item.ref })));
+      setUnsplash(items.map((item) => ({ ref: item.ref, previewUrl: item.previewUrl ?? item.ref, downloadLocation: item.downloadLocation })));
+      setUnsplashNotice(null);
+    } catch (error) {
+      // Signed out or rate limited: say so and keep what is already listed.
+      setUnsplashNotice(searchRefusalNotice(error) ?? "Photo search is unavailable right now.");
     } finally {
       setBusy(false);
     }
@@ -199,12 +205,18 @@ export const MediaEmbedDialog: React.FC<MediaEmbedDialogProps> = ({ kind, onSele
               placeholder="Search Unsplash…"
               className="h-[var(--osio-control-h-md)] w-full rounded-[var(--osio-radius-control)] border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2.5 text-sm text-[var(--osio-fg-default)] placeholder:text-[var(--osio-fg-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
             />
+            {unsplashNotice ? (
+              <p role="status" className="text-sm text-[var(--osio-fg-muted)]">{unsplashNotice}</p>
+            ) : null}
             <div className="grid max-h-64 grid-cols-3 gap-2 overflow-y-auto">
               {unsplash.map((item) => (
                 <button
                   key={item.ref}
                   type="button"
-                  onClick={() => commit(`url:${item.ref}`)}
+                  onClick={() => {
+                    reportUnsplashDownload(item.downloadLocation);
+                    commit(`url:${item.ref}`);
+                  }}
                   aria-label="Insert this Unsplash image"
                   className="aspect-square overflow-hidden rounded-[var(--osio-radius-control)] border border-[var(--osio-border-default)] transition-transform hover:scale-[1.02]"
                 >

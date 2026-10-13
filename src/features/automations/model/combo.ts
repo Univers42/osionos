@@ -21,6 +21,8 @@ const NAMED_KEYS: Record<string, string> = {
   Home: "home",
   End: "end",
   " ": "space",
+  // "+" is also the separator in a combo string, so the key needs a name.
+  "+": "plus",
 };
 
 /** True for the bare modifier keys (a combo is never just "Shift"). */

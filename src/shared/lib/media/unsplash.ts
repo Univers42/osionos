@@ -10,13 +10,15 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { api } from "@/shared/api/client";
+import { api, getActivePageJwt } from "@/shared/api/client";
+import { searchRefusalNotice } from "./searchRefusal";
 import type { CoverPickerAsset } from "@/shared/ui/assets/collectionMedia";
 
 const ENV = import.meta.env as Record<string, string | undefined>;
 const DIRECT_ACCESS_KEY = (ENV.VITE_UNSPLASH_ACCESS_KEY ?? "").trim();
 const DEFAULT_PROXY_PATH = "/api/media/unsplash/search";
 const PROXY_PATH = (ENV.VITE_UNSPLASH_PROXY_PATH ?? DEFAULT_PROXY_PATH).trim();
+const DOWNLOAD_PATH = "/api/media/unsplash/download";
 
 interface UnsplashSearchOptions {
   query: string;
@@ -119,7 +121,7 @@ async function fetchViaBridge(options: UnsplashSearchOptions): Promise<UnsplashP
     page: String(options.page ?? 1),
     orientation: options.orientation ?? "landscape",
   });
-  const payload = await api.get<UnsplashGatewayPayload>(`${PROXY_PATH}?${params.toString()}`);
+  const payload = await api.get<UnsplashGatewayPayload>(`${PROXY_PATH}?${params.toString()}`, getActivePageJwt() ?? undefined);
   return readItems(payload).map(normalizePhoto).filter((item): item is UnsplashPickerAsset => Boolean(item));
 }
 
@@ -152,11 +154,25 @@ export async function searchUnsplashPickerAssets(
   try {
     const bridgeItems = await fetchViaBridge(request);
     if (bridgeItems.length > 0) return bridgeItems;
-  } catch {
-    // The app can still run offline or with a public Unsplash access key.
+  } catch (error) {
+    // A refusal (signed out, rate limited) is the caller's to show. Anything
+    // else: the app can still run offline or with a public Unsplash access key.
+    if (searchRefusalNotice(error)) throw error;
   }
 
   return fetchDirect(request);
+}
+
+/**
+ * Tells Unsplash a photo was used, which its API terms ask for whenever one is
+ * picked. Fire and forget: a pick never waits on this and never fails because
+ * of it. An asset from any other source has no download location and is skipped.
+ */
+export function reportUnsplashDownload(downloadLocation: string | undefined): void {
+  if (!downloadLocation) return;
+  api
+    .post<unknown>(DOWNLOAD_PATH, { downloadLocation }, getActivePageJwt() ?? undefined)
+    .catch(() => undefined);
 }
 
 export function toMediaPickerAsset(item: UnsplashPickerAsset): CoverPickerAsset {

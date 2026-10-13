@@ -10,51 +10,29 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from "react";
-import { PanelLeftClose } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Pin } from "lucide-react";
 import { WorkspaceSwitcher } from "@/features/auth";
 import { IconButton } from "@/shared/ui";
 import { useUIStore, type ActivePanel } from "@/shared/config/uiStore";
+import { PANEL_LOADERS, prefetchPanel, readyPanel } from "./panelLoaders";
 
-// Only the default Explorer panel loads eagerly — every other panel mounts on
-// demand when its rail icon is clicked. Static imports here were a warm-chunk
-// leak: this file mounts in App, and PublicSwitcher/Marketplace statically drag
-// PageBlocksRenderer → ReadOnlyBlock → MediaBlockPreview → MermaidDiagram
-// (~100KB of editor renderer) onto the entry bundle. Deep imports, never barrels.
-const AgentsPanel = React.lazy(() =>
-  import("./panels/AgentsPanel").then((m) => ({ default: m.AgentsPanel })));
-const MessengerPanel = React.lazy(() =>
-  import("./panels/MessengerPanel").then((m) => ({ default: m.MessengerPanel })));
-const PublicSwitcherPanel = React.lazy(() =>
-  import("./panels/PublicSwitcherPanel").then((m) => ({ default: m.PublicSwitcherPanel })));
-const MarketplacePanel = React.lazy(() =>
-  import("./panels/MarketplacePanel").then((m) => ({ default: m.MarketplacePanel })));
-const SearchPanelSlot = React.lazy(() =>
-  import("./panels/SearchPanelSlot").then((m) => ({ default: m.SearchPanelSlot })));
-const DatabasesPanel = React.lazy(() =>
-  import("@/widgets/database-view/ui/DatabasesPanel").then((m) => ({ default: m.DatabasesPanel })));
-const NotificationsPanel = React.lazy(() =>
-  import("@/widgets/notifications/ui/NotificationsPanel").then((m) => ({ default: m.NotificationsPanel })));
-const MyTasksPanel = React.lazy(() =>
-  import("@/widgets/tasks/ui/MyTasksPanel").then((m) => ({ default: m.MyTasksPanel })));
-const IdeSourceControlPanel = React.lazy(() =>
-  import("@/features/ide/ui/IdeSourceControl").then((m) => ({ default: m.IdeSourceControl })));
-const IdeRunPanel = React.lazy(() =>
-  import("@/features/ide/ui/IdeRunPanel").then((m) => ({ default: m.IdeRunPanel })));
-const IdeProblemsPanel = React.lazy(() =>
-  import("@/features/ide/ui/IdeProblemsPanel").then((m) => ({ default: m.IdeProblemsPanel })));
-
-// The Explorer and its open handler load together on demand.
+// Every panel is a lazy chunk the rail prefetches on hover (panelLoaders.ts).
+// The Explorer takes props, so it has its own: it and its open handler load
+// together, and the workbench's file tree stays off the first paint.
 const ExplorerPanel = React.lazy(() =>
   Promise.all([import("./panels/ExplorerPanel"), import("../model/openWorkspaceEntry")]).then(([panel, entry]) => ({
-    default: (props: Props) => <panel.ExplorerPanel {...props} onOpenFile={entry.openWorkspaceEntry} />,
+    default: (props: Omit<Props, "peek">) => <panel.ExplorerPanel {...props} onOpenFile={entry.openWorkspaceEntry} />,
   })));
+const LAZY_PANELS = Object.fromEntries(
+  Object.entries(PANEL_LOADERS).map(([panel, load]) => [panel, React.lazy(load)]),
+) as Record<keyof typeof PANEL_LOADERS, React.LazyExoticComponent<React.ComponentType>>;
 
 const PANEL_TITLES: Record<ActivePanel, string> = {
   files: "Explorer",
   search: "Search",
   agents: "Agents",
-  messenger: "Messenger",
+  conversations: "Conversations",
   notifications: "Notifications",
   tasks: "My Tasks",
   public: "Shared", // label-only rename (AOC §12); id stays "public" (R-R3)
@@ -69,62 +47,72 @@ interface Props {
   onOpenSettings?: () => void;
   onOpenTrash?: () => void;
   onOpenConsole?: () => void;
+  /** Shown as the hidden-mode peek: a pin docks the sidebar again. */
+  peek?: boolean;
 }
 
-function PanelBody({ panel, onOpenSettings, onOpenTrash, onOpenConsole }: Props & { panel: ActivePanel }) {
-  switch (panel) {
-    case "files":
-      return (
-        <ExplorerPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />
-      );
-    case "search":
-      return <SearchPanelSlot />;
-    case "agents":
-      return <AgentsPanel />;
-    case "messenger":
-      return <MessengerPanel />;
-    case "notifications":
-      return <NotificationsPanel />;
-    case "tasks":
-      return <MyTasksPanel />;
-    case "public":
-      return <PublicSwitcherPanel />;
-    case "marketplace":
-      return <MarketplacePanel />;
-    case "database":
-      return <DatabasesPanel />;
-    case "scm":
-      return <IdeSourceControlPanel />;
-    case "run":
-      return <IdeRunPanel />;
-    case "problems":
-      return <IdeProblemsPanel />;
-    default:
-      return null;
-  }
+/** One panel's content. Memoized on its props, which do not change when the
+ *  user switches panel: a switch only flips the wrapper's `hidden`, and the
+ *  panels behind it (the Explorer's whole page tree) do not render at all. */
+const PanelBody = React.memo(function PanelBody({ panel, onOpenSettings, onOpenTrash, onOpenConsole }: Omit<Props, "peek"> & { panel: ActivePanel }) {
+  // Chosen once per mount: swapping the lazy wrapper for the loaded component
+  // later would be a different element type, and React would remount the panel.
+  const [Body] = useState(() => readyPanel(panel) ?? LAZY_PANELS[panel as keyof typeof LAZY_PANELS]);
+  if (panel === "files") return <ExplorerPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />;
+  return Body ? <Body /> : null;
+});
+
+/** Escape in a panel hands the keyboard back to the page being edited. */
+function returnFocusToContent(event: React.KeyboardEvent): void {
+  if (event.key !== "Escape" || event.defaultPrevented) return;
+  const editor = document.querySelector<HTMLElement>("main [contenteditable='true'], main textarea, main");
+  editor?.focus();
 }
 
-/** The expanded side panel: shared workspace/account header + the active view.
- *  Memoized — it stays mounted as a hidden layer, and the parent re-renders on
- *  every rail-preview flip; memo keeps those flips from re-rendering the tree. */
-export const SidebarPanel = React.memo(function SidebarPanel(handlers: Props) {
-  const panel = useUIStore((s) => s.activePanel);
-  const collapseToRail = useUIStore((s) => s.collapseToRail);
+/**
+ * The panel next to the rail. A panel, once opened, stays mounted and is only
+ * hidden when another is shown, so switching back is a style change, not a
+ * remount (no Suspense flash, scroll and state kept).
+ * Memoized: the parent re-renders on drag and mode flips.
+ */
+export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, onOpenTrash, onOpenConsole, peek = false }: Props) {
+  const activePanel = useUIStore((s) => s.activePanel);
+  const toggleDocked = useUIStore((s) => s.toggleDocked);
+  const [visited, setVisited] = useState<ReadonlySet<ActivePanel>>(() => new Set([activePanel]));
+  // The panels a keyboard shortcut opens load while the app is idle, so the
+  // shortcut never waits on a download.
+  useEffect(() => {
+    const warm = () => { prefetchPanel("conversations"); prefetchPanel("search"); };
+    if (typeof requestIdleCallback !== "function") {
+      const timer = setTimeout(warm, 1500);
+      return () => clearTimeout(timer);
+    }
+    const id = requestIdleCallback(warm);
+    return () => cancelIdleCallback(id);
+  }, []);
+  if (!visited.has(activePanel)) setVisited(new Set(visited).add(activePanel));
+
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[var(--osio-bg-subtle)]">
+    <div className="flex h-full min-h-0 flex-col bg-[var(--osio-bg-subtle)]" onKeyDown={returnFocusToContent}>
       <WorkspaceSwitcher />
-      <div className="flex items-center justify-between px-3 py-2">
+      <div className="flex h-8 items-center justify-between px-3">
         <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--osio-fg-subtle)]">
-          {PANEL_TITLES[panel]}
+          {PANEL_TITLES[activePanel]}
         </span>
-        <IconButton aria-label="Collapse to rail" title="Collapse to rail" onClick={collapseToRail}>
-          <PanelLeftClose size={14} />
-        </IconButton>
+        {peek ? (
+          <IconButton aria-label="Keep the sidebar open" title="Keep the sidebar open" onClick={toggleDocked}>
+            <Pin size={14} />
+          </IconButton>
+        ) : null}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <React.Suspense fallback={null}><PanelBody panel={panel} {...handlers} /></React.Suspense>
-      </div>
+      {[...visited].map((panel) => (
+        <div key={panel} data-sidebar-panel={panel} hidden={panel !== activePanel} className="flex min-h-0 flex-1 flex-col">
+          <React.Suspense fallback={null}>
+            <PanelBody panel={panel} onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />
+          </React.Suspense>
+        </div>
+      ))}
     </div>
   );
 });

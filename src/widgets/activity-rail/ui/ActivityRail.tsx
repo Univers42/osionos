@@ -12,32 +12,42 @@
 
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Settings, CircleUser } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { useUIStore } from "@/shared/config/uiStore";
+import { isAutomationsEnabled } from "@/shared/config/featureFlags";
 import { useUserStore } from "@/features/auth";
+import { useAutomationStore } from "@/features/automations/model/useAutomationStore";
+import { shortcutLabel } from "@/features/automations/model/shortcutLabel";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
-import { mailTab, calendarTab, chatTab, profileTab } from "@/widgets/workspace-grid/model/layoutPersist";
-import { useChatStore } from "@/features/chat/model/useChatStore";
+import { mailTab, calendarTab, profileTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { useUnreadStore } from "@/store/chat/useUnreadStore";
 import { useInstalledApps } from "@/features/marketplace/model/useInstalledApps";
 import { installedTab } from "@/features/marketplace/model/installedAppLauncher";
 import { RailIcon } from "./RailIcon";
 import { RailHomeButton } from "./RailHomeButton";
-import { RAIL_ITEMS, type RailItem } from "../model/railItems";
+import { prefetchPanel } from "./panelLoaders";
+import { RAIL_GROUPS, type RailItem } from "../model/railItems";
 import { useConnectionNotifications, useIncomingInviteCount } from "@/widgets/notifications/model/useConnectionNotifications";
 
 interface Props {
   onOpenSettings?: () => void;
 }
 
-/** The thin (~48px) icon column. Selecting an item opens/toggles its panel;
- *  Mail/Calendar open an in-app iframe tab instead. role=tablist + roving focus.
- *  Memoized — it stays mounted as a crossfade layer; parent preview-flips
- *  re-render it for free otherwise. */
+const Separator: React.FC = () => <div aria-hidden className="my-1 h-px w-6 shrink-0 bg-[var(--osio-border-default)]" />;
+
+/** The activity rail: one icon per place, grouped Workspace / Conversations /
+ *  Apps. Clicking an icon opens its panel (the active one folds the panel); a
+ *  pointer resting on an icon starts loading that panel. role=tablist with
+ *  roving arrow-key focus. Memoized: it re-renders only on its own state. */
 export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }: Props) {
   const sidebarMode = useUIStore((s) => s.sidebarMode);
   const activePanel = useUIStore((s) => s.activePanel);
   const selectPanel = useUIStore((s) => s.selectPanel);
   const installedMap = useInstalledApps((s) => s.installed);
+  const automations = useAutomationStore(useShallow((s) => s.automations()));
+  const unread = useUnreadStore((s) => Object.values(s.counts).reduce((sum, count) => sum + (count > 0 ? count : 0), 0));
   const listRef = useRef<HTMLDivElement>(null);
+  const showKeys = isAutomationsEnabled();
 
   // Live connection-invitation notifications: hydrate + realtime; badge = incoming count.
   useConnectionNotifications();
@@ -55,14 +65,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
         selectPanel(item.action.panel);
         return;
       }
-      if (item.action.kind === "chat") {
-        // Open the assistant on a fresh conversation (the user's expectation).
-        useChatStore.getState().createConversation();
-        useWorkspaceLayout.getState().openTab(chatTab());
-        return;
-      }
-      const tab = item.action.app === "mail" ? mailTab() : calendarTab();
-      useWorkspaceLayout.getState().openTab(tab);
+      useWorkspaceLayout.getState().openTab(item.action.app === "mail" ? mailTab() : calendarTab());
     },
     [selectPanel],
   );
@@ -80,8 +83,13 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
     buttons[(next + buttons.length) % buttons.length]?.focus();
   }, []);
 
-  const isPanelItemActive = (item: RailItem) =>
-    item.action.kind === "panel" && sidebarMode === "panel" && activePanel === item.action.panel;
+  const isActive = (item: RailItem) =>
+    item.action.kind === "panel" && sidebarMode !== "rail" && activePanel === item.action.panel;
+  const badgeOf = (item: RailItem) => {
+    if (item.id === "notifications") return inviteCount;
+    if (item.id === "conversations") return unread;
+    return undefined;
+  };
 
   return (
     <div
@@ -90,33 +98,39 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
       aria-orientation="vertical"
       aria-label="Activity bar"
       onKeyDown={onKeyDown}
-      className="flex h-full w-12 shrink-0 flex-col items-center gap-1 bg-[var(--osio-bg-subtle)] py-2"
+      className="flex h-full w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden bg-[var(--osio-bg-subtle)] py-2"
     >
       <RailHomeButton />
-      <div className="my-1 h-px w-6 bg-[var(--osio-border-default)]" />
-      {RAIL_ITEMS.map((item) => (
-        <RailIcon
-          key={item.id}
-          label={item.label}
-          Icon={item.Icon}
-          active={isPanelItemActive(item)}
-          badge={item.action.kind === "panel" && item.action.panel === "notifications" ? inviteCount : undefined}
-          onClick={() => runItem(item)}
-        />
+      {RAIL_GROUPS.map((group) => (
+        <React.Fragment key={group.id}>
+          <Separator />
+          {group.items.map((item) => {
+            const panel = item.action.kind === "panel" ? item.action.panel : null;
+            return (
+              <RailIcon
+                key={item.id}
+                label={item.label}
+                Icon={item.Icon}
+                keys={showKeys && item.commandId ? shortcutLabel(automations, item.commandId) ?? undefined : undefined}
+                active={isActive(item)}
+                badge={badgeOf(item)}
+                onClick={() => runItem(item)}
+                onIntent={panel ? () => prefetchPanel(panel) : undefined}
+              />
+            );
+          })}
+          {group.id === "apps" ? installedApps.map((entry) => (
+            <RailIcon
+              key={entry.identifier}
+              label={entry.title}
+              iconValue={entry.icon ?? "icon:box"}
+              onClick={() => useWorkspaceLayout.getState().openTab(installedTab(entry))}
+            />
+          )) : null}
+        </React.Fragment>
       ))}
 
-      {installedApps.length > 0 ? <div className="my-1 h-px w-6 bg-[var(--osio-border-default)]" /> : null}
-
-      {installedApps.map((entry) => (
-        <RailIcon
-          key={entry.identifier}
-          label={entry.title}
-          iconValue={entry.icon ?? "icon:box"}
-          onClick={() => useWorkspaceLayout.getState().openTab(installedTab(entry))}
-        />
-      ))}
-
-      <div className="mt-auto flex flex-col items-center gap-1">
+      <div className="mt-auto flex flex-col items-center gap-1 pt-2">
         <RailIcon
           label="Account"
           Icon={CircleUser}

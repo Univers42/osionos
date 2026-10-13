@@ -1,0 +1,68 @@
+/* The empty workspace: a sheet of dotted paper with a pencil sketch on it.
+   Everything is drawn with tokens, quiet enough to sit behind a work day. */
+
+.osio-empty-workspace {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Dot-grid paper, fading out toward the edges of the pane. */
+.osio-empty-workspace::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(var(--osio-border-strong) 1px, transparent 1.4px);
+  background-size: 22px 22px;
+  opacity: 0.55;
+  mask-image: radial-gradient(ellipse 60% 55% at 50% 45%, black 20%, transparent 75%);
+}
+
+.osio-empty-sketch {
+  color: var(--osio-fg-subtle);
+}
+
+.osio-empty-sketch .osio-sketch-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 260;
+  stroke-dashoffset: 260;
+  animation: osio-sketch-draw 1.4s var(--osio-ease-standard) forwards;
+}
+
+.osio-empty-sketch .osio-sketch-line:nth-of-type(2) { animation-delay: 0.15s; }
+.osio-empty-sketch .osio-sketch-line:nth-of-type(3) { animation-delay: 0.3s; }
+.osio-empty-sketch .osio-sketch-line:nth-of-type(4) { animation-delay: 0.45s; }
+.osio-empty-sketch .osio-sketch-line:nth-of-type(5) { animation-delay: 0.6s; }
+
+.osio-empty-sketch .osio-sketch-accent {
+  stroke: var(--osio-accent);
+}
+
+.osio-empty-sketch .osio-sketch-pencil {
+  transform-origin: 70% 70%;
+  animation: osio-sketch-float 7s ease-in-out 1.6s infinite;
+}
+
+@keyframes osio-sketch-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes osio-sketch-float {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(-2px, -3px) rotate(-2deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .osio-empty-sketch .osio-sketch-line {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .osio-empty-sketch .osio-sketch-pencil {
+    animation: none;
+  }
+}

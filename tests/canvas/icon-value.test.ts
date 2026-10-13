@@ -86,6 +86,8 @@ test("a glyph is drawn as-is, a legacy ASCII value goes to the catalog renderer"
   assert.equal(drawable("👍🏽"), "👍🏽");
   assert.equal(drawable("#️⃣"), "#️⃣");
   assert.equal(drawable("emoji:🚀"), "🚀");
+  // 📕 and 🥗 are wiki icons in the live data that the catalog lacks; they are drawn as-is.
+  for (const glyph of ["📕", "🥗", "👨‍🍳", "🇫🇷", "1️⃣"]) assert.equal(drawable(glyph), glyph);
   for (const legacy of ["page", "emoji:rocket", "https://a.example/x.png", "url:https://a.example/x.png", "icon:rocket", "img:/x.svg"]) {
     assert.equal(drawable(legacy), null, legacy);
   }

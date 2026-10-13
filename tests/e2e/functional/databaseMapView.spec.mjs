@@ -51,10 +51,7 @@ async function isUnconfigured(page) {
 test("a city column renders as select + offers a Map view that plots the city", async ({ page }) => {
   await mockBridge(page);
   await page.goto("/");
-  // The sidebar loads EXPANDED (Explorer panel) by default — the rail icon
-  // column only becomes visible/actionable once collapsed (ActivitySidebar.tsx
-  // crossfade: `visibility:hidden` while sidebarMode==='panel'). Collapse first.
-  await page.getByRole("button", { name: "Toggle sidebar" }).click();
+  // The rail sits beside the panel, so its icons are clickable straight away.
   const rail = page.locator('[aria-label="Databases"]').first();
   await rail.waitFor({ timeout: 20_000 });
   await rail.click();
