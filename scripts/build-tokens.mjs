@@ -4,7 +4,9 @@
 //   node scripts/build-tokens.mjs           write every generated file
 //   node scripts/build-tokens.mjs --check   fail if a committed file is stale,
 //                                           a palette fails its contrast level,
-//                                           or a value is not a usable colour
+//                                           a value is not a usable colour, or
+//                                           the vendored database declares a
+//                                           colour the bridge does not map
 //
 // Run from the app's root. Both forms refuse a palette that fails contrast, so
 // an unreadable colour can be neither written nor committed.
@@ -13,15 +15,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 import { resolvedTokens } from "./tokens/aliases.mjs";
 import { contrastFailures } from "./tokens/contrast.mjs";
+import { BRIDGE_STYLESHEET, renderBridge, VENDORED_THEME } from "./tokens/databaseBridge.mjs";
 import { MODES, PALETTES } from "./tokens/palettes.mjs";
 import { GENERATED_REGISTRY, renderRegistry } from "./tokens/registry.mjs";
 import { GENERATED_STYLESHEET, renderStylesheet } from "./tokens/stylesheet.mjs";
 import { malformedTokens } from "./tokens/validity.mjs";
-
-const OUTPUTS = [
-  { path: GENERATED_STYLESHEET, render: renderStylesheet },
-  { path: GENERATED_REGISTRY, render: renderRegistry },
-];
 
 function reportProblems() {
   let failed = 0;
@@ -55,6 +53,21 @@ if (reportProblems() > 0) {
   console.error("\nA palette is unreadable or malformed. Change the seed, the pins or the tone table in scripts/tokens/.");
   process.exit(1);
 }
+
+// The database bridge is generated from the vendored theme, so a vendored
+// colour the table does not map fails the run instead of escaping the palette.
+const bridge = renderBridge(readFileSync(VENDORED_THEME, "utf8"));
+if (bridge.unmapped.length > 0) {
+  console.error(`✗ ${VENDORED_THEME} declares colours the database bridge does not map:\n  ${bridge.unmapped.join("\n  ")}`);
+  console.error("\nMap each in the ROLES table of scripts/tokens/databaseBridge.mjs.");
+  process.exit(1);
+}
+
+const OUTPUTS = [
+  { path: GENERATED_STYLESHEET, render: renderStylesheet },
+  { path: GENERATED_REGISTRY, render: renderRegistry },
+  { path: BRIDGE_STYLESHEET, render: () => bridge.css },
+];
 
 if (!process.argv.includes("--check")) {
   for (const output of OUTPUTS) {
