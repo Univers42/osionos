@@ -65,6 +65,15 @@ test("sync engine: echo, ignore, create, fast-forward, conflict — the full mat
   );
 });
 
+test("sync engine P2: theirs === base ignores whatever ours did; a null ledger or hash decides as before", () => {
+  const base = { isEcho: never, localContent: "mine", localHash: "H(mine)", inboundContent: "base" };
+  assert.deepEqual(decideInboundWrite({ ...base, inboundHash: "H(base)", lastSyncedHash: "H(base)" }), { action: "ignore" });
+  assert.deepEqual(decideInboundWrite({ ...base, inboundHash: "H(base)", lastSyncedHash: null }), { action: "conflict" }, "no ledger: still the safe direction");
+  assert.deepEqual(decideInboundWrite({ ...base, localContent: "", inboundHash: "H(base)", lastSyncedHash: null }), { action: "apply" }, "no ledger + empty page: still applies");
+  assert.deepEqual(decideInboundWrite({ ...base, inboundHash: null, lastSyncedHash: "H(base)" }), { action: "conflict" }, "no inbound hash: no base match");
+  assert.deepEqual(decideInboundWrite({ ...base, localContent: null, localHash: null, inboundHash: "H(base)", lastSyncedHash: "H(base)" }), { action: "create" }, "create still wins");
+});
+
 test("sync ledger: record / read / clear round-trip, workspace-scoped", () => {
   recordSyncedHash("ws1", "a/b.c", "hash1");
   assert.equal(syncedHashOf("ws1", "a/b.c"), "hash1");

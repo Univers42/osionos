@@ -68,7 +68,7 @@ export type InboundDecision =
 /**
  * Decide what an inbound sandbox write means against the local page state.
  *   echo     — our own write bouncing back (suppressed upstream hash match)
- *   ignore   — contents already identical (ledger refreshed by the caller)
+ *   ignore   — contents already identical, or the file is still the agreed base
  *   create   — no local page exists yet (shell/git created a new file)
  *   apply    — local side unchanged since the last agreement → fast-forward
  *   conflict — BOTH sides changed → surface, never clobber
@@ -81,10 +81,16 @@ export function decideInboundWrite(input: {
   inboundContent: string;
   lastSyncedHash: string | null;
 }): InboundDecision {
+  const { lastSyncedHash } = input;
   if (input.inboundHash && input.isEcho(input.inboundHash)) return { action: "echo" };
   if (input.localContent === null) return { action: "create" };
+  // theirs === base: the file has not moved since the agreement, only the page has.
+  // Nothing of the shell's is lost (its bytes ARE the base). Ours reaches the file
+  // through the outbound writer for a block page; a code page, a failed writer run
+  // (never retried) and a page whose body never loaded wait for the next attach.
+  if (input.inboundHash !== null && lastSyncedHash !== null && input.inboundHash === lastSyncedHash) return { action: "ignore" };
   if (input.localContent === input.inboundContent) return { action: "ignore" };
-  if (input.lastSyncedHash !== null && input.localHash === input.lastSyncedHash) return { action: "apply" };
-  if (input.lastSyncedHash === null && input.localContent === "") return { action: "apply" };
+  if (lastSyncedHash !== null && input.localHash === lastSyncedHash) return { action: "apply" };
+  if (lastSyncedHash === null && input.localContent === "") return { action: "apply" };
   return { action: "conflict" };
 }
