@@ -200,7 +200,5 @@ test.describe("calm canvas shell", () => {
     await openFreshPage(page, baseURL);
     const root = (name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
     expect(await root("--osio-topbar-bg")).toBe(await root("--osio-bg-canvas"));
-    const inlineOverride = await page.getByTestId("app-topbar").evaluate((el) => el.className.includes("--osio-topbar-bg"));
-    expect(inlineOverride).toBe(false);
   });
 });

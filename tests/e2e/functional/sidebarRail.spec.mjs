@@ -168,13 +168,13 @@ test.describe("activity rail sidebar", () => {
     expect(await indicatorOf(peek(page).getByRole("tab", { name: /^Search/ }))).toEqual({ outline: "solid", shadow: 1 });
   });
 
-  // Marketplace shows its labels only once it has apps, and Agents has no rail tab, so a fresh stack reaches
-  // neither; they use the same PanelSectionLabel as the two panels checked here.
+  // Marketplace shows its labels only once it has apps, so a fresh stack does not reach it; it uses the same
+  // PanelSectionLabel as Conversations. Shared and Agents carry no label: the panel title already names them.
   test("every section label in a panel is sentence case, with no letter-spacing", async ({ page, baseURL }) => {
     await gotoDocked(page, baseURL);
     // An h2 label would be serif without the family override: the global h1-h4 rule sets the heading stack.
     const bodyFamily = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
-    for (const [tab, panel] of [["Shared", "public"], ["Conversations", "conversations"]]) {
+    for (const [tab, panel] of [["Conversations", "conversations"]]) {
       await rail(page).getByRole("tab", { name: new RegExp(`^${tab}`) }).click();
       const labels = page.locator(`[data-sidebar-panel="${panel}"]:not([hidden]) [data-section-label]`);
       await expect(labels.first()).toBeVisible();
@@ -185,5 +185,9 @@ test.describe("activity rail sidebar", () => {
         expect(style, `${panel}: ${style.text}`).toMatchObject({ transform: "none", spacing: "normal", family: bodyFamily });
       }
     }
+
+    // The panel title already says "Shared"; a second label of the same style read as a stutter.
+    await rail(page).getByRole("tab", { name: /^Shared/ }).click();
+    await expect(page.locator('[data-sidebar-panel="public"]:not([hidden]) [data-section-label]')).toHaveCount(0);
   });
 });
