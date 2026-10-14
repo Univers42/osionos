@@ -10,8 +10,9 @@
 //                                                                              //
 // **************************************************************************** //
 
-// WS exec-attach relay: the interactive shell (P3, /api/ide/pty) and the LSP
-// transport (P5, /api/ide/lsp) — the SAME mechanism, differing only in argv.
+// WS exec-attach relay: the interactive shell (P3, /api/ide/pty), the LSP
+// transport (P5, /api/ide/lsp), the DAP transport (P5, /api/ide/debug), and
+// fs-sync (P4, /api/ide/fsync) — the SAME mechanism, differing only in argv.
 // Bridges a browser WebSocket to a hijacked `docker exec` stream on the
 // SERVER-derived sandbox container, through the P2 socket-proxy.
 //
@@ -20,7 +21,7 @@
 // The pure seams (resize parse, auth extraction, std-stream demux) are unit
 // tested in tests/bridge/ide-exec-parse.test.mjs; the docker glue stays
 // live-verified. Failures close with a WS code+reason (4001 auth · 4003 gate
-// off · 4004 no sandbox · 4008 bad lang · 4011 token expired · 4013 overflow · 4029 throttled · 4137 LSP out of memory) so
+// off · 4004 no sandbox · 4008 bad lang or adapter · 4011 token expired · 4013 overflow · 4029 throttled · 4137 LSP out of memory) so
 // the frontend can say WHY instead of "[connection closed]".
 
 import { handshake, encodeFrame, closeFrame, createFrameDecoder } from './ide-ws.mjs';
@@ -99,7 +100,7 @@ function rejectUpgrade(socket, status, text) {
 
 // The only language servers we relay to (P5). Adding one = one line here + the
 // server installed in the sandbox image. Command is server-fixed, never client.
-const LSP_SERVERS = {
+export const LSP_SERVERS = Object.freeze({
   typescript: ['typescript-language-server', '--stdio'],
   python: ['pyright-langserver', '--stdio'],
   // gopls / rust-analyzer / clangd all speak LSP over stdio with no flag.
@@ -108,11 +109,33 @@ const LSP_SERVERS = {
   clangd: ['clangd'],
   // jdtls-launch pins the JRE 21 runtime, heap and oom_score_adj; argv stays server-fixed.
   java: ['jdtls-launch'],
-};
+});
+
+// Debug adapters we relay to (P5). Server-fixed argv; Node is absent on purpose:
+// js-debug needs Node >= 20 and the `startDebugging` reverse request, neither
+// available in the sandbox image.
+export const DAP_SERVERS = Object.freeze({
+  python: ['debugpy-adapter'],
+});
+
+/** Return the argv array for `lang` from `table` only when `lang` is a string
+ *  and an own property of `table`. This blocks prototype-pollution keys
+ *  (`__proto__`, `constructor`, `toString`) that would otherwise return a
+ *  truthy inherited value and reach docker as a non-array `Cmd`. */
+export function serverCommand(table, lang) {
+  if (typeof lang !== 'string' || !Object.hasOwn(table, lang)) {
+    throw Object.assign(new Error('unsupported server'), { status: 400 });
+  }
+  return table[lang];
+}
 
 function lspExecSpec(lang) {
-  const cmd = LSP_SERVERS[lang];
-  if (!cmd) throw Object.assign(new Error('unsupported language server'), { status: 400 });
+  const cmd = serverCommand(LSP_SERVERS, lang);
+  return { User: '10001:10001', WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
+}
+
+function dapExecSpec(lang) {
+  const cmd = serverCommand(DAP_SERVERS, lang);
   return { User: '10001:10001', WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
 }
 
@@ -153,8 +176,9 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     const url = new URL(request.url, 'http://ide.local');
     const isPty = url.pathname === '/api/ide/pty';
     const isLsp = url.pathname === '/api/ide/lsp';
+    const isDap = url.pathname === '/api/ide/debug';
     const isFsync = url.pathname === '/api/ide/fsync';
-    if (!isPty && !isLsp && !isFsync) return false;
+    if (!isPty && !isLsp && !isDap && !isFsync) return false;
 
     if (env.OSIONOS_IDE_SANDBOX !== '1' || !env.OSIONOS_IDE_DOCKER_HOST) { rejectUpgrade(socket, 404, 'Not Found'); return true; }
     // Browsers always send Origin on WS upgrades — refuse foreign pages. A
@@ -189,8 +213,9 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     try {
       if (isPty) spec = buildShellExecSpec();
       else if (isFsync) spec = buildFsAgentExecSpec();
+      else if (isDap) spec = dapExecSpec(url.searchParams.get('lang'));
       else spec = lspExecSpec(url.searchParams.get('lang'));
-    } catch { socket.end(closeFrame(4008, 'unsupported language server')); return true; }
+    } catch { socket.end(closeFrame(4008, isDap ? 'unsupported debug adapter' : 'unsupported language server')); return true; }
 
     activeExecByUser.set(userId, (activeExecByUser.get(userId) ?? 0) + 1);
     bumpContainerSockets(names.containerName, 1);
@@ -248,13 +273,13 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
       return true;
     }
 
-    // LSP/fs-sync may start a stopped box too (never one stopped at the hard cap — see
+    // LSP/DAP/fs-sync may start a stopped box too (never one stopped at the hard cap — see
     // ensureSandbox); a refusal lands in the catch below, which releases the stream cap.
     ensureSandbox(env, names, { passive: true }).then(() => docker.attachExec(names.containerName, spec)).then(({ stream: duplex, execId }) => {
       const decode = createFrameDecoder();
-      // LSP is Tty:false — strip docker's 8-byte mux headers (see the demux
+      // LSP and DAP are Tty:false — strip docker's 8-byte mux headers (see the demux
       // doc). PTY/fsync are Tty:true and arrive raw.
-      const demux = isLsp ? createStdStreamDemux() : null;
+      const demux = (isLsp || isDap) ? createStdStreamDemux() : null;
       // Backpressure: pause the container stream when the client stops draining,
       // so a slow/zero-window reader can't hoard unbounded bytes in the bridge.
       duplex.on('data', (chunk) => {
@@ -276,7 +301,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
             if (!socket.destroyed) socket.end(closeFrame(1000, 'process ended'));
           });
         } else {
-          // fs-sync: unchanged behaviour.
+          // DAP and fs-sync: close with 1000 'process ended'.
           if (!socket.destroyed) socket.end(closeFrame(1000, 'process ended'));
         }
       });
@@ -287,14 +312,15 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
         for (const m of messages) {
           if (m.opcode === 8) { duplex.end(); return; } // client close
           if (m.opcode !== 1 && m.opcode !== 2) continue;
-          duplex.write(m.data); // LSP/fsync: per-connection, no resize channel
+          duplex.write(m.data); // LSP/DAP/fsync: per-connection, no resize channel
         }
       });
       socket.on('close', () => duplex.destroy());
       socket.on('error', () => duplex.destroy());
     }).catch((error) => {
       release();
-      const reason = sandboxRefusal(isFsync ? 'fs-sync' : 'language server', names, error, 'no running sandbox');
+      const kind = isFsync ? 'fs-sync' : (isDap ? 'debug adapter' : 'language server');
+      const reason = sandboxRefusal(kind, names, error, 'no running sandbox');
       if (!socket.destroyed) socket.end(closeFrame(4004, reason));
     });
     return true;
