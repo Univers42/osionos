@@ -1,0 +1,51 @@
+/* Personal appearance: the accent and three more axes, each an attribute on
+   <html> that theme.ts writes (and index.html mirrors before first paint). An
+   axis at its default has no attribute, so this file costs nothing until used.
+   The accent presets are generated from scripts/tokens/accents.mjs. */
+@import "./accents.generated.css";
+
+:root {
+  /* The custom accent's hue in degrees; theme.ts sets it inline on <html>
+     while data-accent="custom". 260 is the default cobalt's own hue. */
+  --osio-accent-hue: 260;
+  /* The UI text size, on body through --osio-font-size-base; never on html,
+     where it would redefine 1rem. text-sm and base follow it. */
+  --osio-font-size-ui: 14px;
+}
+
+/* Compact: smaller controls everywhere; shell.css takes the frame gap and the
+   pane radius to 0 on the same attribute. */
+:root[data-density="compact"] {
+  --osio-control-h-lg: 32px;
+  --osio-control-h-md: 28px;
+  --osio-control-h-sm: 24px;
+}
+
+:root[data-radius="sharp"] {
+  --osio-radius-scale: 0.5;
+}
+
+:root[data-radius="round"] {
+  --osio-radius-scale: 1.33;
+}
+
+:root[data-ui-scale="small"] {
+  --osio-font-size-ui: 13px;
+}
+
+:root[data-ui-scale="large"] {
+  --osio-font-size-ui: 15px;
+}
+
+/* The "Custom" swatch in Settings > Appearance: the whole hue circle. */
+.osio-accent-swatch-custom {
+  background: conic-gradient(
+    oklch(0.7 0.14 0),
+    oklch(0.7 0.14 60),
+    oklch(0.7 0.14 120),
+    oklch(0.7 0.14 180),
+    oklch(0.7 0.14 240),
+    oklch(0.7 0.14 300),
+    oklch(0.7 0.14 360)
+  );
+}

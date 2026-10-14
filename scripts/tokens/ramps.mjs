@@ -59,13 +59,13 @@ const NEUTRAL_TONES = {
 };
 
 // [lightness, share of the palette's accent chroma].
-const ACCENT_TONES = {
+export const ACCENT_TONES = {
   light: { solid: [0.497, 1], hover: [0.447, 0.94], text: [0.476, 0.945], subtle: [0.955, 0.125] },
   dark: { solid: [0.72, 0.74], hover: [0.78, 0.6], text: [0.8, 0.57], subtle: [0.29, 0.28] },
 };
 
 // Text placed on a solid accent is white or this dark ink, whichever reads better.
-const INK_TONE = [0.218, 0.5];
+export const INK_TONE = [0.218, 0.5];
 
 // Status colours and block tints mean the same thing in every palette (red is
 // danger, green is success), so their hues are fixed: [lightness, chroma, hue].

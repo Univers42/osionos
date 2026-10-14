@@ -13,6 +13,8 @@
 import { useEffect, useState } from "react";
 import { type DrawTheme, LIGHT_THEME } from "@osionos/draw-engine";
 
+import { APPEARANCE_ATTRIBUTES } from "@/shared/config/theme";
+
 export interface DrawChrome {
   theme: DrawTheme;
   /** Default stroke for new shapes — a theme token so ink is visible on any canvas. */
@@ -47,7 +49,7 @@ export function useResolvedDrawChrome(): DrawChrome {
     const observer = new MutationObserver(resolve);
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["data-theme", "data-palette", "class"],
+      attributeFilter: ["data-theme", "data-palette", "class", ...APPEARANCE_ATTRIBUTES],
     });
     return () => observer.disconnect();
   }, []);

@@ -11,7 +11,8 @@
 /* ************************************************************************** */
 
 /**
- * Appearance controls: a light/dark/system mode toggle + a grid of named color
+ * Appearance controls: a light/dark/system mode toggle, the accent and
+ * density/corner/text-size axes (AppearanceControls), and a grid of named color
  * palettes (Warm, Nord, Monochrome, …). The palette drives the global
  * `data-palette` axis (theme.ts) — orthogonal to light/dark — so a theme is one
  * click and re-skins the whole app. Picking a palette also clears any legacy
@@ -33,6 +34,8 @@ import {
   type ThemeMode,
 } from '@/shared/config/theme';
 import { useWorkspaceConfigStore } from '@/shared/config/workspaceConfigStore';
+
+import { AccentControl, ShapeControls, useAppearance } from './AppearanceControls';
 
 interface WorkspaceThemeControlsProps {
   compact?: boolean;
@@ -70,6 +73,7 @@ const PalettePreview: React.FC<{ swatches: readonly string[] }> = ({ swatches })
 export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ compact = false }) => {
   const [mode, setMode] = useState<ThemeMode>(() => readStoredThemeMode());
   const [palette, setPalette] = useState<string>(() => readStoredPalette());
+  const [appearance, changeAppearance] = useAppearance();
   const activeUserId = useUserStore((s) => s.activeUserId);
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const clearAppearance = useWorkspaceConfigStore((s) => s.clearAppearance);
@@ -111,6 +115,9 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
           ))}
         </div>
       </div>
+
+      <AccentControl appearance={appearance} paletteId={palette} onChange={changeAppearance} />
+      <ShapeControls appearance={appearance} onChange={changeAppearance} />
 
       <div>
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">Color theme</p>
