@@ -178,6 +178,66 @@ test.describe("editor menu chrome", () => {
     }
   });
 
+  // A cut through a row reads as a rendering glitch: each row of a scroll region
+  // is either whole inside it or wholly scrolled out of sight.
+  const rowsOutsideOrInside = (region, rowSelector) =>
+    region.evaluate((el, selector) => {
+      const box = el.getBoundingClientRect();
+      const cut = [...el.querySelectorAll(selector)]
+        .filter((row) => {
+          const { top, bottom } = row.getBoundingClientRect();
+          const whole = top >= box.top - 0.5 && bottom <= box.bottom + 0.5;
+          const gone = top >= box.bottom - 0.5 || bottom <= box.top + 0.5;
+          return !whole && !gone;
+        })
+        .map((row) => row.textContent.trim());
+      return { cut, overflows: el.scrollHeight > el.clientHeight };
+    }, rowSelector);
+
+  test("the block menu never cuts a row in half", async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openFreshPage(page, baseURL);
+    await createParagraphs(page, ["Context target"]);
+    await openBlockContextMenuForEditor(getEditors(page).first());
+    const region = page.getByTestId("block-context-menu").getByRole("menu");
+    await expect(region).toBeVisible();
+    const { cut, overflows } = await rowsOutsideOrInside(region, ':scope > div > [role="menuitem"]');
+    expect(overflows, "the menu has to scroll for this test to mean anything").toBe(true);
+    expect(cut).toEqual([]);
+  });
+
+  for (const [width, height] of [[1440, 900], [390, 844]]) {
+    test(`the slash menu never cuts a row in half at ${width}x${height}`, async ({ page, baseURL }) => {
+      // A phone opens on Home, whose heading is not the editor under test: open the page wide, then narrow.
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await openFreshPage(page, baseURL);
+      await page.setViewportSize({ width, height });
+      await typeInFreshEditor(page, "/");
+      const list = slashMenu(page).getByRole("listbox");
+      await expect(list).toBeVisible();
+      const { cut, overflows } = await rowsOutsideOrInside(list, '[role="option"]');
+      expect(overflows, "the list has to scroll for this test to mean anything").toBe(true);
+      expect(cut).toEqual([]);
+    });
+  }
+
+  test("the colour menu's section label is a sentence-case menu label", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await typeInFreshEditor(page, "/");
+    await selectSlashMenuEntry(page, "Text color");
+    const label = page.getByTestId("color-menu").getByText("Color", { exact: true }).first();
+    await expect(label).toBeVisible();
+    const style = await label.evaluate((el) => {
+      const css = getComputedStyle(el);
+      return { transform: css.textTransform, weight: css.fontWeight, size: css.fontSize, spacing: css.letterSpacing, color: css.color };
+    });
+    expect(style.transform).toBe("none");
+    expect(style.weight).toBe("500");
+    expect(style.spacing).toBe("normal");
+    expect(style.size).toBe(await resolveToken(page, "font-size", "--osio-font-size-xs"));
+    expect(style.color).toBe(await resolveToken(page, "color", "--osio-fg-muted"));
+  });
+
   for (const mode of ["light", "dark"]) {
     test(`slash menu keeps the overlay chrome in ${mode}`, async ({ page, baseURL }) => {
       await page.addInitScript((value) => localStorage.setItem("osionos:theme-mode", value), mode);

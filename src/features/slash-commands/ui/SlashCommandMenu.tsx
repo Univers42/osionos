@@ -21,6 +21,7 @@ import {
   parseSlashQuery,
   PLACEHOLDER_COMMAND_ID,
 } from "@/features/slash-commands/model/slashMenuCatalog";
+import { useWholeRowScroll } from "@/shared/lib/dom/useWholeRowScroll";
 import { usePageStore } from "@/store/usePageStore";
 import type {
   SlashCreatePageCommand,
@@ -63,6 +64,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   onClose,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [activeIdx, setActiveIdx] = useState(0);
   const [prevFilter, setPrevFilter] = useState(filter);
 
@@ -184,6 +186,8 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       : { left, top: position.y + MENU_GAP, maxHeight: Math.min(COMMAND_MENU_MAX_HEIGHT, spaceBelow) };
   }, [position.x, position.y, position.top]);
 
+  useWholeRowScroll(listRef, ordered);
+
   if (typeof document === "undefined") return null;
 
   let commandIndex = -1;
@@ -222,7 +226,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
         </div>
       ) : null}
 
-      <div id="slash-command-list" role="listbox" className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={listRef} id="slash-command-list" role="listbox" className="relative min-h-0 flex-1 overflow-y-auto">
         {ordered.length === 0 ? (
           <div className="px-2 py-6 text-center text-xs text-[var(--osio-fg-muted)]">
             No blocks match “/{command}”.

@@ -18,6 +18,7 @@ import type {
   BlockContextMenuState,
 } from "../model/blockContextMenu.helpers";
 import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
+import { useWholeRowScroll } from "@/shared/lib/dom/useWholeRowScroll";
 import {
   clampAnchoredPanelPosition,
   clampViewportMenuPosition,
@@ -339,6 +340,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
   width = 260,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
+  const regionRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const active = Boolean(menu);
@@ -385,10 +387,6 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
     );
   }, [openSubmenu, position, width]);
 
-  if (!menu || !position || sections.length === 0) {
-    return null;
-  }
-
   const normalizedQuery = query.trim().toLowerCase();
   const visibleSections = normalizedQuery
     ? sections
@@ -400,6 +398,12 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
         }))
         .filter((section) => section.items.length > 0)
     : sections;
+
+  useWholeRowScroll(regionRef, menu && visibleSections);
+
+  if (!menu || !position || sections.length === 0) {
+    return null;
+  }
 
   return createPortal(
     <>
@@ -432,7 +436,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             className="osio-field w-full px-2 text-sm placeholder:text-[var(--osio-fg-subtle)]"
           />
         </div>
-        <div className="max-h-[400px] overflow-y-auto" role="menu">
+        <div ref={regionRef} className="relative max-h-[400px] overflow-y-auto" role="menu">
         {visibleSections.map((section, index) => (
           <div key={`${section.label ?? "section"}-${index}`}>
             {section.label ? (
