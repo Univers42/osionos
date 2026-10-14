@@ -51,10 +51,10 @@ export const ConnectorsStrip: React.FC = () => {
                 : "border-[var(--osio-border-default)] text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
             }`}
           >
-            {state === "connecting" ? <Loader2 size={13} className="animate-spin" />
-              : connected ? <Check size={13} />
-              : state === "error" ? <TriangleAlert size={13} className="text-[var(--osio-danger)]" />
-              : <Plug size={13} />}
+            {state === "connecting" ? <Loader2 size={12} className="animate-spin" />
+              : connected ? <Check size={12} />
+              : state === "error" ? <TriangleAlert size={12} className="text-[var(--osio-danger)]" />
+              : <Plug size={12} />}
             {d.displayName}
           </button>
         );

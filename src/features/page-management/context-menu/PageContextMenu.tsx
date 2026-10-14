@@ -140,7 +140,7 @@ export const PageContextMenu: React.FC<Props> = ({ x, y, ctx, onClose }) => {
         >
           {Icon ? <Icon size={14} className="shrink-0" /> : <span className="w-[14px] shrink-0" />}
           <span className="flex-1 text-left">{action.label}</span>
-          {hasSubmenu ? <ChevronRight size={13} className="shrink-0 opacity-60" /> : null}
+          {hasSubmenu ? <ChevronRight size={12} className="shrink-0 opacity-60" /> : null}
         </button>
         {hasSubmenu && isSubOpen
           ? action.submenu!.map((sub) => (

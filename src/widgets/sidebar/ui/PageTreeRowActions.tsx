@@ -41,7 +41,7 @@ export const PageTreeRowActions: React.FC<Props> = ({ pageId, workspaceId, title
     />
     <button
       type="button"
-      className="p-1 rounded-md text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+      className="p-1 rounded-md text-[var(--osio-fg-muted)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
       onClick={onNewFolder}
       title="New folder inside"
     >
@@ -49,7 +49,7 @@ export const PageTreeRowActions: React.FC<Props> = ({ pageId, workspaceId, title
     </button>
     <button
       type="button"
-      className="p-1 rounded-md text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+      className="p-1 rounded-md text-[var(--osio-fg-muted)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
       onClick={onNewFile}
       title="New file inside"
     >

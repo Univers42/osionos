@@ -77,7 +77,7 @@ export const PublicSwitcherPanel: React.FC = () => {
                   onClick={() => select(ws)}
                   style={{ position: "absolute", top: 0, left: 0, width: "100%", height: v.size, transform: `translateY(${v.start}px)` }}
                   className={[
-                    "flex items-center gap-2 rounded-md px-2 text-left text-sm transition-colors duration-[120ms]",
+                    "flex items-center gap-2 rounded-md px-2 text-left text-sm transition-colors duration-(--osio-dur-fast)",
                     active
                       ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
                       : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",

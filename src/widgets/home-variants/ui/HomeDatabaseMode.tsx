@@ -67,7 +67,7 @@ export const HomeDatabaseMode: React.FC = () => {
   return (
     <div className="flex h-full min-h-0">
       <aside className="w-52 shrink-0 overflow-auto border-r border-[var(--osio-border-default)] p-2">
-        <PaneHeader icon={<Database size={13} />} label="Databases" onRefresh={reload} />
+        <PaneHeader icon={<Database size={12} />} label="Databases" onRefresh={reload} />
         {catalog.map((mount) => (
           <PickButton key={mount.dbId} active={mount.dbId === activeDb?.dbId} icon={<Database size={14} />}
             label={mount.dbId} meta={`${mount.tables.length}`} onClick={() => { setDbId(mount.dbId); setTable(""); }} />
@@ -75,7 +75,7 @@ export const HomeDatabaseMode: React.FC = () => {
       </aside>
 
       <aside className="w-52 shrink-0 overflow-auto border-r border-[var(--osio-border-default)] p-2">
-        <PaneHeader icon={<Table2 size={13} />} label="Tables" />
+        <PaneHeader icon={<Table2 size={12} />} label="Tables" />
         {(activeDb?.tables ?? []).map((entry) => (
           <PickButton key={entry.table} active={entry.table === activeTable?.table} icon={<Table2 size={14} />}
             label={entry.table} meta={`${entry.rows.length}`} onClick={() => setTable(entry.table)} />

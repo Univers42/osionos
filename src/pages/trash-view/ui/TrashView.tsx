@@ -149,7 +149,7 @@ export const TrashView: React.FC = () => {
                 e.target.value === "" ? undefined : e.target.value,
               )
             }
-            className="w-full px-3 py-2 text-sm rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] hover:border-[var(--osio-border-strong)] focus:outline-none focus:border-[var(--osio-accent)]"
+            className="w-full px-3 py-2 text-sm rounded-xs border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] hover:border-[var(--osio-border-strong)] focus:outline-none focus:border-[var(--osio-accent)]"
           >
             <option value="">Select a workspace</option>
             {userWorkspaces.map((ws) => (

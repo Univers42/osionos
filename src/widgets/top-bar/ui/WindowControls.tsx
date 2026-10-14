@@ -25,7 +25,7 @@ export const WindowControls: React.FC = () => {
   return (
     <div className="flex items-center" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
       <button type="button" aria-label="Minimize window" className={BASE} onClick={controls.minimize}>
-        <Minus size={15} aria-hidden />
+        <Minus size={16} aria-hidden />
       </button>
       <button type="button" aria-label="Maximize window" className={BASE} onClick={controls.toggleMaximize}>
         <Square size={12} aria-hidden />

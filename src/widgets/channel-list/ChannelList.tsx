@@ -63,7 +63,7 @@ export const ChannelList: React.FC<{ filter?: string }> = ({ filter = "" }) => {
           aria-label="Create channel"
           title="Create channel"
           onClick={() => setCreateOpen(true)}
-          className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+          className="rounded-xs p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
         >
           <Plus size={14} />
         </button>

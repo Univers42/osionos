@@ -39,7 +39,7 @@ export const IdePortsPanel: React.FC = () => {
   }, [workspaceId]);
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-[12px] leading-6 text-[var(--osio-code-fg)]">
+    <div className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-xs leading-6 text-[var(--osio-code-fg)]">
       {ports === null && <p className="py-4 text-center text-[var(--osio-code-fg-muted)]">Checking sandbox listeners…</p>}
       {ports?.length === 0 && (
         <p className="py-4 text-center text-[var(--osio-code-fg-muted)]">
@@ -54,14 +54,14 @@ export const IdePortsPanel: React.FC = () => {
             type="button"
             title={`Open a preview of port ${entry.port}`}
             onClick={() => void openPortPreview(workspaceId, entry.port)}
-            className="inline-flex shrink-0 items-center gap-1 rounded border border-[var(--osio-code-border)] px-1.5 py-0.5 text-[11px] text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
+            className="inline-flex shrink-0 items-center gap-1 rounded-xs border border-[var(--osio-code-border)] px-1.5 py-0.5 text-2xs text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
           >
             <ExternalLink size={11} /> Open
           </button>
         </div>
       ))}
       {(ports?.length ?? 0) > 0 && (
-        <p className="mt-3 text-[11px] text-[var(--osio-code-fg-muted)]">
+        <p className="mt-3 text-2xs text-[var(--osio-code-fg-muted)]">
           Preview rides the isolated exec channel: GET-only, 2 MiB cap, no websockets yet — live-reload dev servers render but do not hot-update.
         </p>
       )}

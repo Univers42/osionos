@@ -37,11 +37,11 @@ export const PageCommentsButton: React.FC<{ pageId: string }> = ({ pageId }) => 
         onClick={() => setOpen((value) => !value)}
         aria-label="Comments"
         title="Comments"
-        className="relative flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
+        className="relative flex h-7 w-7 items-center justify-center rounded-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
       >
         <MessageSquare size={16} />
         {openCount > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 min-w-[14px] rounded-full bg-[var(--osio-accent)] px-1 text-center text-[9px] font-semibold leading-[14px] text-[var(--osio-accent-fg)]">
+          <span className="absolute -right-0.5 -top-0.5 min-w-[14px] rounded-full bg-[var(--osio-accent)] px-1 text-center text-3xs font-semibold leading-[14px] text-[var(--osio-accent-fg)]">
             {openCount}
           </span>
         )}

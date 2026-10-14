@@ -79,7 +79,7 @@ export const IdeSandboxTree: React.FC = () => {
   const renderDir = (rel: string, depth: number): React.ReactNode => {
     const listing = listings.get(rel);
     if (listing === "error") {
-      return <p className="px-3 py-1 text-[11px] text-[var(--osio-code-fg-muted)]" style={{ paddingLeft: 12 + depth * 12 }}>sandbox not connected</p>;
+      return <p className="px-3 py-1 text-2xs text-[var(--osio-code-fg-muted)]" style={{ paddingLeft: 12 + depth * 12 }}>sandbox not connected</p>;
     }
     if (!listing) return null;
     return listing.map((entry) => {
@@ -91,7 +91,7 @@ export const IdeSandboxTree: React.FC = () => {
             <button
               type="button"
               onClick={() => toggleDir(childRel)}
-              className="flex w-full items-center gap-1 px-3 py-0.5 text-left text-[12px] text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.10))]"
+              className="flex w-full items-center gap-1 px-3 py-0.5 text-left text-xs text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.10))]"
               style={{ paddingLeft: 12 + depth * 12 }}
             >
               {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -106,7 +106,7 @@ export const IdeSandboxTree: React.FC = () => {
         <div
           key={childRel}
           title="Synced text files open from the workspace tree above; binaries live terminal-side."
-          className="flex w-full items-center gap-1 px-3 py-0.5 text-[12px] text-[var(--osio-code-fg-muted)]"
+          className="flex w-full items-center gap-1 px-3 py-0.5 text-xs text-[var(--osio-code-fg-muted)]"
           style={{ paddingLeft: 24 + depth * 12 }}
         >
           <FileIcon size={12} />
@@ -122,7 +122,7 @@ export const IdeSandboxTree: React.FC = () => {
         type="button"
         data-sandbox-root
         onClick={() => setOpen((v) => !v)}
-        className="flex h-7 w-full items-center gap-1 px-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]"
+        className="flex h-7 w-full items-center gap-1 px-3 text-left text-2xs font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]"
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <HardDrive size={12} /> Sandbox

@@ -70,7 +70,7 @@ const AiSection: React.FC<{ filter: string }> = ({ filter }) => {
       <div className="flex items-center justify-between px-1">
         <PanelSectionLabel as="h2">AI</PanelSectionLabel>
         <button type="button" aria-label="New AI chat" title="New AI chat" onClick={startAiChat}
-          className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]">
+          className="rounded-xs p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]">
           <MessageSquarePlus size={14} />
         </button>
       </div>

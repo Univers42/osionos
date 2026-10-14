@@ -26,7 +26,7 @@ const AppCard: React.FC<{ app: ConnApp; connected: boolean; busy: boolean; onCon
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-1.5">
         <span className="truncate text-sm font-medium text-[var(--osio-fg-default)]">{app.name}</span>
-        {app.live && <span className="rounded-full bg-[var(--osio-accent)]/12 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-accent-text)]">Live</span>}
+        {app.live && <span className="rounded-full bg-[var(--osio-accent)]/12 px-1.5 py-px text-3xs font-semibold uppercase tracking-wide text-[var(--osio-accent-text)]">Live</span>}
       </div>
       <p className="mt-0.5 line-clamp-2 text-xs leading-[16px] text-[var(--osio-fg-muted)]">{app.description}</p>
     </div>
@@ -56,7 +56,7 @@ const DiscoverGrid: React.FC<{ isConnected: (id: string) => boolean; busyId: str
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2.5">
-        <Search size={15} className="text-[var(--osio-fg-subtle)]" />
+        <Search size={16} className="text-[var(--osio-fg-subtle)]" />
         <input
           type="search"
           value={query}

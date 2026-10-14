@@ -62,7 +62,7 @@ export const IdeTreeRow: React.FC<{ node: IdeTreeNode; depth: number }> = ({ nod
         onClick={() => (node.isFolder ? tree.toggle(id) : tree.openFile(node))}
         style={{ paddingLeft: 8 + depth * 12 }}
         className={
-          "group flex cursor-pointer items-center gap-1.5 py-[3px] pr-1 text-[13px] " +
+          "group flex cursor-pointer items-center gap-1.5 py-[3px] pr-1 text-sm " +
           (isActive
             ? "bg-[var(--osio-code-active-line,rgba(127,127,127,0.14))] text-[var(--osio-code-fg)] "
             : "text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.10))] ") +
@@ -72,14 +72,14 @@ export const IdeTreeRow: React.FC<{ node: IdeTreeNode; depth: number }> = ({ nod
         {node.isFolder ? (
           isOpen ? <ChevronDown size={14} className="shrink-0 opacity-70" /> : <ChevronRight size={14} className="shrink-0 opacity-70" />
         ) : (
-          <FileCode2 size={13} className="shrink-0" style={{ color: languageForFileName(node.page.title).accent }} />
+          <FileCode2 size={12} className="shrink-0" style={{ color: languageForFileName(node.page.title).accent }} />
         )}
         <span className="flex-1 truncate">{node.page.title || "Untitled"}</span>
         <span className="hidden shrink-0 items-center gap-0.5 pr-1 group-hover:flex">
           {node.isFolder && (
             <>
-              <RowAction title="New file" onClick={() => tree.startCreate(id, "code")}><FilePlus size={13} /></RowAction>
-              <RowAction title="New folder" onClick={() => tree.startCreate(id, "folder")}><FolderPlus size={13} /></RowAction>
+              <RowAction title="New file" onClick={() => tree.startCreate(id, "code")}><FilePlus size={12} /></RowAction>
+              <RowAction title="New folder" onClick={() => tree.startCreate(id, "folder")}><FolderPlus size={12} /></RowAction>
             </>
           )}
           <RowAction title="Rename" onClick={() => tree.startRename(id)}><Pencil size={12} /></RowAction>
@@ -112,7 +112,7 @@ const RowAction: React.FC<{ title: string; onClick: () => void; children: React.
     title={title}
     aria-label={title}
     onClick={(event) => { event.stopPropagation(); onClick(); }}
-    className="flex h-5 w-5 items-center justify-center rounded text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.16))] hover:text-[var(--osio-code-fg)]"
+    className="flex h-5 w-5 items-center justify-center rounded-xs text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.16))] hover:text-[var(--osio-code-fg)]"
   >
     {children}
   </button>

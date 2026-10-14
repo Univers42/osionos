@@ -77,7 +77,7 @@ export const ImageAvatarUpload: React.FC<ImageAvatarUploadProps> = ({ onUploaded
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={status === 'busy'}
-        className="inline-flex items-center gap-1.5 rounded-md border border-[var(--osio-border-default)] px-2.5 py-1.5 text-xs font-medium text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-md border border-[var(--osio-border-default)] px-2.5 py-1.5 text-xs font-medium text-[var(--osio-fg-muted)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] disabled:cursor-not-allowed disabled:opacity-60"
       >
         <Upload size={14} /> {status === 'busy' ? 'Uploading…' : 'Upload photo'}
       </button>

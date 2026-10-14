@@ -62,10 +62,10 @@ export function AddAxisButton({ axis, onAdd }: Readonly<{ axis: Axis; onAdd: (ax
       >
         <Plus size={14} />
       </button>
-      {dragCount > 0 && <span className="pointer-events-none rounded-full bg-[var(--osio-accent)] px-1.5 text-[11px] font-semibold leading-5 text-[var(--osio-accent-fg)] shadow-[var(--osio-shadow-sm)]">+{dragCount}</span>}
+      {dragCount > 0 && <span className="pointer-events-none rounded-full bg-[var(--osio-accent)] px-1.5 text-2xs font-semibold leading-5 text-[var(--osio-accent-fg)] shadow-[var(--osio-shadow-sm)]">+{dragCount}</span>}
       <div className={`hidden group-hover/add:flex ${isColumn ? "flex-col" : "flex-row"} items-center gap-0.5 rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-1 py-0.5 shadow-[var(--osio-shadow-menu)]`}>
         {[2, 3, 5].map((count) => (
-          <button key={count} type="button" title={`Add ${count} ${label}s`} onClick={() => onAdd(axis, count)} className="rounded-md px-1.5 text-[11px] font-semibold leading-5 text-[var(--osio-fg-muted)] transition-colors hover:text-[var(--osio-fg-default)]">
+          <button key={count} type="button" title={`Add ${count} ${label}s`} onClick={() => onAdd(axis, count)} className="rounded-md px-1.5 text-2xs font-semibold leading-5 text-[var(--osio-fg-muted)] transition-colors hover:text-[var(--osio-fg-default)]">
             {count}
           </button>
         ))}

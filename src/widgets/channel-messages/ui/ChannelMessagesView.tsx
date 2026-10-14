@@ -64,7 +64,7 @@ const DateDivider: React.FC<{ label: string }> = ({ label }) => (
 const UnreadDivider: React.FC = () => (
   <div className="my-2 flex items-center gap-3" role="separator" aria-label="New messages">
     <span className="h-px flex-1 bg-[var(--osio-accent)]" />
-    <span className="rounded-full bg-[var(--osio-accent)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-accent-fg)]">New</span>
+    <span className="rounded-full bg-[var(--osio-accent)] px-2 py-0.5 text-3xs font-semibold uppercase tracking-wide text-[var(--osio-accent-fg)]">New</span>
     <span className="h-px flex-1 bg-[var(--osio-accent)]" />
   </div>
 );

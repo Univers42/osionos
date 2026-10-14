@@ -28,7 +28,7 @@ export const IdeSourceControl: React.FC = () => {
 
   if (connected === false) {
     return (
-      <p className="px-3 py-6 text-center text-[11px] leading-5 text-[var(--osio-code-fg-muted)]">
+      <p className="px-3 py-6 text-center text-2xs leading-5 text-[var(--osio-code-fg-muted)]">
         Source control needs a running workspace sandbox. Start it, then reopen this panel.
       </p>
     );
@@ -42,27 +42,27 @@ export const IdeSourceControl: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full flex-col text-[13px] text-[var(--osio-code-fg)]">
+    <div className="flex h-full flex-col text-xs text-[var(--osio-code-fg)]">
       <div className="flex items-center gap-2 p-2">
         <input
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Commit message"
-          className="flex-1 rounded border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] px-2 py-1 outline-none focus:border-[var(--osio-accent)]"
+          className="flex-1 rounded-xs border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] px-2 py-1 outline-none focus:border-[var(--osio-accent)]"
         />
         <button type="button" title="Refresh" onClick={() => void refresh()} disabled={busy}
-          className="flex h-7 w-7 items-center justify-center rounded text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)] disabled:opacity-50">
+          className="flex h-7 w-7 items-center justify-center rounded-xs text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)] disabled:opacity-50">
           <RefreshCw size={14} />
         </button>
       </div>
       <div className="flex gap-2 px-2 pb-2">
         <button type="button" onClick={onCommit} disabled={busy || !message.trim()}
-          className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded bg-[var(--osio-accent)] text-[12px] text-[var(--osio-accent-fg,#fff)] disabled:opacity-50">
+          className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-xs bg-[var(--osio-accent)] text-xs text-[var(--osio-accent-fg)] disabled:opacity-50">
           <GitCommitHorizontal size={14} /> Commit
         </button>
         <button type="button" onClick={() => void push(pat)} disabled={busy}
           title="Push (uses the token below)"
-          className="inline-flex h-7 items-center justify-center gap-1 rounded border border-[var(--osio-code-border)] px-2 text-[12px] hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] disabled:opacity-50">
+          className="inline-flex h-7 items-center justify-center gap-1 rounded-xs border border-[var(--osio-code-border)] px-2 text-xs hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] disabled:opacity-50">
           <Upload size={14} /> Push
         </button>
       </div>
@@ -71,21 +71,21 @@ export const IdeSourceControl: React.FC = () => {
         value={pat}
         onChange={(e) => setPat(e.target.value)}
         placeholder="Personal access token (for push)"
-        className="mx-2 mb-2 rounded border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] px-2 py-1 text-[12px] outline-none focus:border-[var(--osio-accent)]"
+        className="mx-2 mb-2 rounded-xs border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--osio-accent)]"
       />
-      {error && <p className="px-3 pb-1 text-[11px] text-[var(--osio-danger,#ff6b6b)]">{error}</p>}
+      {error && <p className="px-3 pb-1 text-2xs text-[var(--osio-danger)]">{error}</p>}
       <div className="min-h-0 flex-1 overflow-auto px-1 pb-2">
-        <div className="px-2 py-0.5 text-[11px] uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
+        <div className="px-2 py-0.5 text-2xs uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
           Changes ({files.length})
         </div>
         {files.map((file) => (
-          <div key={file.path} className="flex items-center gap-2 rounded px-2 py-0.5 hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.08))]">
+          <div key={file.path} className="flex items-center gap-2 rounded-xs px-2 py-0.5 hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.08))]">
             <span className="w-5 shrink-0 text-center font-mono text-[var(--osio-code-fg-muted)]">{file.code.trim() || "•"}</span>
             <span className="truncate">{file.path}</span>
           </div>
         ))}
         {files.length === 0 && !busy && (
-          <p className="px-3 py-4 text-center text-[11px] text-[var(--osio-code-fg-muted)]">No changes.</p>
+          <p className="px-3 py-4 text-center text-2xs text-[var(--osio-code-fg-muted)]">No changes.</p>
         )}
       </div>
     </div>

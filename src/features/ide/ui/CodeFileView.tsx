@@ -201,21 +201,21 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   return (
     <div data-code-theme="dark" data-osio-ide className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
       {conflict && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1.5 text-[12px] text-[var(--osio-warning,#d97706)]">
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1.5 text-xs text-[var(--osio-warning)]">
           <span className="min-w-0 flex-1 truncate">
             The sandbox version of this file differs from your edits.
           </span>
           <button
             type="button"
             onClick={resolveKeepMine}
-            className="shrink-0 rounded border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
+            className="shrink-0 rounded-xs border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
           >
             Keep mine
           </button>
           <button
             type="button"
             onClick={resolveTakeSandbox}
-            className="shrink-0 rounded border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
+            className="shrink-0 rounded-xs border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
           >
             Take sandbox
           </button>
@@ -227,7 +227,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
           <RunConsole lines={runner.lines} running={runner.running} exit={runner.exit} onClear={runner.clear} onStop={runner.stop} onClose={() => setShowConsole(false)} />
         </div>
       )}
-      <div className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1 font-mono text-[11px] text-[var(--osio-code-fg-muted)]">
+      <div className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1 font-mono text-2xs text-[var(--osio-code-fg-muted)]">
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: lang.accent }} />
           {lang.label}
@@ -238,7 +238,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
             title="Run (Ctrl/Cmd + Enter)"
             onClick={runNow}
             disabled={runner.running}
-            className="inline-flex h-5 items-center gap-1 rounded px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)] disabled:opacity-50"
+            className="inline-flex h-5 items-center gap-1 rounded-xs px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)] disabled:opacity-50"
           >
             <Play size={11} /> {runner.running ? "Running…" : "Run"}
           </button>
@@ -248,7 +248,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
             type="button"
             title="Format (Ctrl/Cmd + Alt + L)"
             onClick={() => void formatNow()}
-            className="inline-flex h-5 items-center gap-1 rounded px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
+            className="inline-flex h-5 items-center gap-1 rounded-xs px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
           >
             <Sparkles size={11} /> Format
           </button>
@@ -257,12 +257,12 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
           type="button"
           title="Toggle terminal"
           onClick={() => setShowConsole((v) => !v)}
-          className="inline-flex h-5 items-center rounded px-1.5 hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
+          className="inline-flex h-5 items-center rounded-xs px-1.5 hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
         >
           <SquareTerminal size={12} />
         </button>
         <span className="flex-1" />
-        {formatError && <span className="truncate text-[var(--osio-danger,#ff6b6b)]" title={formatError}>⚠ {formatError}</span>}
+        {formatError && <span className="truncate text-[var(--osio-danger)]" title={formatError}>⚠ {formatError}</span>}
         <span>Ln {status.line}, Col {status.col}</span>
         <span>{status.lines} {status.lines === 1 ? "line" : "lines"}</span>
         <span>Spaces: 4</span>

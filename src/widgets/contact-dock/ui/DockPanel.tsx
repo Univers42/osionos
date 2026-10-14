@@ -71,7 +71,7 @@ export const DockPanel: React.FC<DockPanelProps> = ({ onCollapse }) => {
           type="button"
           onClick={toggleAi}
           aria-pressed={aiOpen}
-          className="flex w-full min-h-11 items-center gap-[var(--osio-space-3)] rounded-md border-l-2 border-l-[var(--osio-accent)] bg-[var(--osio-accent-subtle)] px-[var(--osio-space-3)] py-[var(--osio-space-2)] text-left transition-colors duration-150 ease-out hover:opacity-90"
+          className="flex w-full min-h-11 items-center gap-[var(--osio-space-3)] rounded-md border-l-2 border-l-[var(--osio-accent)] bg-[var(--osio-accent-subtle)] px-[var(--osio-space-3)] py-[var(--osio-space-2)] text-left transition-colors duration-(--osio-dur-fast) ease-out hover:opacity-90"
         >
           <Sparkles size={18} className="text-[var(--osio-accent)]" aria-hidden="true" />
           <span className="flex-1 truncate text-sm font-medium text-[var(--osio-accent-text)]">Ask the assistant</span>

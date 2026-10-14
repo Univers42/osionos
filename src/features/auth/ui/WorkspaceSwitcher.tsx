@@ -88,12 +88,12 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
           onKeyDown={(event) => { if (!renaming && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setOpen(o => !o); } }}
           className={[
             'flex items-center gap-2 flex-1 min-w-0 h-8 px-2 rounded-[6px]',
-            'transition-colors duration-100 cursor-pointer select-none',
+            'transition-colors duration-(--osio-dur-fast) cursor-pointer select-none',
             open ? 'bg-[var(--osio-bg-muted)]' : 'hover:bg-[var(--osio-bg-hover)]',
           ].join(' ')}
         >
           {/* Avatar (rounded square, like osionos) */}
-          <span className="flex items-center justify-center w-[22px] h-[22px] shrink-0 rounded text-base leading-none">
+          <span className="flex items-center justify-center w-[22px] h-[22px] shrink-0 rounded-xs text-base leading-none">
             <IconValueView
               value={workspaceIcon ?? persona?.emoji ?? getCollectionEmojiValue('package')}
               size={18}
@@ -112,7 +112,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
                 if (event.key === 'Enter') commitRename((event.target as HTMLInputElement).value);
                 else if (event.key === 'Escape') setRenaming(false);
               }}
-              className="flex-1 min-w-0 rounded px-1 bg-transparent text-base font-semibold text-[var(--osio-fg-default)] leading-5 outline-none ring-1 ring-[var(--osio-accent)]"
+              className="flex-1 min-w-0 rounded-xs px-1 bg-transparent text-base font-semibold text-[var(--osio-fg-default)] leading-5 outline-none ring-1 ring-[var(--osio-accent)]"
             />
           ) : (
             <span
@@ -132,9 +132,9 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             type="button"
             onClick={handleNewPage}
             className={[
-              'flex items-center justify-center w-7 h-7 rounded shrink-0',
+              'flex items-center justify-center w-7 h-7 rounded-xs shrink-0',
               'text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]',
-              'transition-colors duration-100 cursor-pointer',
+              'transition-colors duration-(--osio-dur-fast) cursor-pointer',
             ].join(' ')}
             title="New page"
           >
@@ -149,16 +149,16 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             aria-expanded={open}
             onClick={() => setOpen(o => !o)}
             className={[
-              'flex items-center justify-center w-6 h-7 rounded shrink-0',
+              'flex items-center justify-center w-6 h-7 rounded-xs shrink-0',
               'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]',
-              'transition-all duration-100 cursor-pointer',
+              'transition-all duration-(--osio-dur-fast) cursor-pointer',
             ].join(' ')}
             title="More options"
           >
             <ChevronDown
               size={14}
               className={[
-                'transition-transform duration-150',
+                'transition-transform duration-(--osio-dur-fast)',
                 open ? 'rotate-180' : '',
               ].join(' ')}
             />

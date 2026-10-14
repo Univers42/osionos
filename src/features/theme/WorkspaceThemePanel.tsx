@@ -104,7 +104,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
               type="button"
               aria-pressed={mode === id}
               onClick={() => selectMode(id)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-[120ms] ${
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-(--osio-dur-fast) ${
                 mode === id
                   ? 'bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-[var(--osio-shadow-sm)]'
                   : 'text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]'
@@ -130,7 +130,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
                 key={preset.id}
                 aria-pressed={selected}
                 onClick={() => selectPalette(preset.id)}
-                className={`group rounded-xl border p-2 text-left transition-all duration-[140ms] ${
+                className={`group rounded-xl border p-2 text-left transition-all duration-(--osio-dur-fast) ${
                   selected
                     ? 'border-[var(--osio-accent)] ring-2 ring-[var(--osio-accent)] ring-offset-1 ring-offset-[var(--osio-bg-surface)]'
                     : 'border-[var(--osio-border-default)] hover:border-[var(--osio-border-strong)]'

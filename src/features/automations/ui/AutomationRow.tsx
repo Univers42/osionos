@@ -29,7 +29,7 @@ export interface AutomationRowProps {
 }
 
 const SELECT_CLASS =
-  "min-w-0 rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1 text-xs text-[var(--osio-fg-default)]";
+  "min-w-0 rounded-xs border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1 text-xs text-[var(--osio-fg-default)]";
 
 export function AutomationRow(props: AutomationRowProps): React.JSX.Element {
   const { automation, conflicted, isCustom, onCombo, onCommand, onWhen, onToggle, onReset, onRemove } = props;
@@ -56,7 +56,7 @@ export function AutomationRow(props: AutomationRowProps): React.JSX.Element {
       <button
         type="button"
         onClick={recorder.recording ? recorder.stop : recorder.start}
-        className="w-36 shrink-0 rounded border border-[var(--osio-border-default)] px-2 py-1 text-left font-mono text-xs text-[var(--osio-fg-muted)] hover:border-[var(--osio-accent)]"
+        className="w-36 shrink-0 rounded-xs border border-[var(--osio-border-default)] px-2 py-1 text-left font-mono text-xs text-[var(--osio-fg-muted)] hover:border-[var(--osio-accent)]"
       >
         {recorder.recording ? "Press keys…" : combo ? formatCombo(combo) : "Set shortcut"}
       </button>
@@ -75,11 +75,11 @@ export function AutomationRow(props: AutomationRowProps): React.JSX.Element {
 
       {conflicted ? <ConflictBadge /> : null}
 
-      <button type="button" onClick={onReset} title="Reset to default" className="shrink-0 rounded p-1 text-[var(--osio-fg-subtle)] hover:text-[var(--osio-fg-muted)]">
+      <button type="button" onClick={onReset} title="Reset to default" className="shrink-0 rounded-xs p-1 text-[var(--osio-fg-subtle)] hover:text-[var(--osio-fg-muted)]">
         <RotateCcw size={14} />
       </button>
       {isCustom ? (
-        <button type="button" onClick={onRemove} title="Remove" className="shrink-0 rounded p-1 text-[var(--osio-fg-subtle)] hover:text-[var(--osio-danger)]">
+        <button type="button" onClick={onRemove} title="Remove" className="shrink-0 rounded-xs p-1 text-[var(--osio-fg-subtle)] hover:text-[var(--osio-danger)]">
           <X size={14} />
         </button>
       ) : null}

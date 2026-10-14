@@ -102,7 +102,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
               <span className="block text-xs font-medium text-[var(--osio-accent)]">Replying to {replyTo.authorName}</span>
               <span className="block truncate text-xs text-[var(--osio-fg-muted)]">{replyTo.content || 'Attachment'}</span>
             </div>
-            <button type="button" aria-label="Cancel reply" onClick={onClearReply} className="rounded p-0.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]">
+            <button type="button" aria-label="Cancel reply" onClick={onClearReply} className="rounded-xs p-0.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]">
               <X size={14} />
             </button>
           </div>

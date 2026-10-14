@@ -305,7 +305,7 @@ const App: React.FC = () => {
   if (error === "bridge-session-required" || !activeUserId) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[var(--osio-bg-page)] px-6 text-[var(--osio-fg-default)]">
-        <section className="w-full max-w-md rounded-md border border-[var(--osio-border)] bg-[var(--osio-bg-panel)] p-6 shadow-sm">
+        <section className="w-full max-w-md rounded-md border border-[var(--osio-border)] bg-[var(--osio-bg-panel)] p-6 shadow-osio-e1">
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">Private workspace</p>
           <h1 className="mt-3 text-2xl font-semibold">Open osionos from Prismatica</h1>
           <p className="mt-3 text-sm leading-6 text-[var(--osio-fg-muted)]">

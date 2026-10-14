@@ -116,4 +116,8 @@ In Tailwind, prefer arbitrary token values such as `z-[var(--osio-z-popover)]` o
 2. Do not add alpha-channel hex values. Use 6-character hex for color tokens.
 3. Use `rgba()` only in `--osio-overlay`.
 4. Prefer semantic tokens over visual names.
-5. Keep legacy `--color-*` aliases only until the migration sweep is complete.
+5. Keep legacy `--color-*` aliases only until the migration sweep is complete.6. ESLint (`no-restricted-syntax`, `eslint.config.js`) rejects in `src/**` and the kit: `text-[Npx]`
+   (use `text-3xs`/`2xs`/`xs`/`sm`), stock shadows and bare `shadow` (use `shadow-osio-e1`..`e5`), a bare
+   `rounded` (use `rounded-xs`/`sm`/`md`/`lg`), a raw hex colour outside `HEX_ALLOWLIST`, and ramp tokens
+   (`--osio-n-*`, `--osio-a-*`; components read semantic names). The patterns match string text, so a class
+   assembled by concatenation escapes them.

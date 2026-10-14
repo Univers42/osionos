@@ -80,7 +80,7 @@ function DrawActionsImpl({ engine }: { engine: DrawEngine | null }) {
       <button type="button" style={BTN_STYLE} onClick={exportJson} title="Export .osidraw JSON">
         JSON
       </button>
-      <button type="button" style={{ ...BTN_STYLE, color: "var(--osio-danger, #e03131)" }} onClick={reset} title="Reset canvas">
+      <button type="button" style={{ ...BTN_STYLE, color: "var(--osio-danger)" }} onClick={reset} title="Reset canvas">
         Reset
       </button>
     </div>

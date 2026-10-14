@@ -59,7 +59,7 @@ export function PlanPanel() {
               key={tier}
               disabled={loading}
               onClick={() => setPending(tier)}
-              className={`flex items-center justify-between rounded-md border p-3 text-left text-sm transition-colors duration-[120ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] disabled:cursor-not-allowed disabled:opacity-60 ${
+              className={`flex items-center justify-between rounded-md border p-3 text-left text-sm transition-colors duration-(--osio-dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] disabled:cursor-not-allowed disabled:opacity-60 ${
                 isSelected
                   ? 'border-[var(--osio-accent)] bg-[var(--osio-bg-muted)] font-medium text-[var(--osio-fg-strong)]'
                   : 'border-[var(--osio-border-default)] text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]'

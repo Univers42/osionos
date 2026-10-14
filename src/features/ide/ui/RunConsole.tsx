@@ -27,7 +27,7 @@ interface Props {
 /** Per-stream text colour for a run-output line. Shared with the Run panel. */
 export const streamClass: Record<RunLine["stream"], string> = {
   stdout: "text-[var(--osio-code-fg)]",
-  stderr: "text-[var(--osio-danger,#ff6b6b)]",
+  stderr: "text-[var(--osio-danger)]",
   system: "text-[var(--osio-code-fg-muted)]",
 };
 
@@ -42,11 +42,11 @@ export const RunConsole: React.FC<Props> = ({ lines, running, exit, onClear, onS
   }, [lines]);
 
   const failed = exit != null && (exit.timedOut || (exit.code ?? 0) !== 0);
-  const btn = "inline-flex h-6 items-center gap-1 rounded px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]";
+  const btn = "inline-flex h-6 items-center gap-1 rounded-xs px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]";
 
   return (
     <div data-code-theme="dark" className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
-      <div className="flex shrink-0 items-center gap-2 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1 font-mono text-[11px] text-[var(--osio-code-fg-muted)]">
+      <div className="flex shrink-0 items-center gap-2 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1 font-mono text-2xs text-[var(--osio-code-fg-muted)]">
         <span className="font-semibold uppercase tracking-wide">Terminal</span>
         {running && (
           <span className="inline-flex items-center gap-1 text-[var(--osio-accent)]">
@@ -54,16 +54,16 @@ export const RunConsole: React.FC<Props> = ({ lines, running, exit, onClear, onS
           </span>
         )}
         {!running && exit && (
-          <span className={failed ? "text-[var(--osio-danger,#ff6b6b)]" : "text-[var(--osio-success)]"}>
+          <span className={failed ? "text-[var(--osio-danger)]" : "text-[var(--osio-success)]"}>
             {exit.timedOut ? "timed out" : `exit ${exit.code ?? "?"}`} · {exit.durationMs}ms
           </span>
         )}
         <span className="flex-1" />
         {running && <button type="button" title="Stop" className={btn} onClick={onStop}><Square size={12} /> Stop</button>}
         <button type="button" title="Clear" className={btn} onClick={onClear}><Trash2 size={12} /> Clear</button>
-        <button type="button" title="Hide terminal" className={btn} onClick={onClose}><X size={13} /></button>
+        <button type="button" title="Hide terminal" className={btn} onClick={onClose}><X size={12} /></button>
       </div>
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-[12px] leading-5">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-xs leading-5">
         {lines.length === 0 ? (
           <div className="italic text-[var(--osio-code-fg-muted)]">Run the file (⌘/Ctrl + Enter) to see output here.</div>
         ) : (

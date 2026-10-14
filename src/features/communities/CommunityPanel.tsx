@@ -46,9 +46,9 @@ const ChannelRow: React.FC<{ channel: ChatChannel }> = ({ channel }) => {
       className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]"
     >
       {isGroup ? (
-        <Users size={15} className="text-[var(--osio-fg-muted)]" />
+        <Users size={16} className="text-[var(--osio-fg-muted)]" />
       ) : (
-        <Hash size={15} className="text-[var(--osio-fg-muted)]" />
+        <Hash size={16} className="text-[var(--osio-fg-muted)]" />
       )}
       <span className="truncate">{channel.name}</span>
     </button>

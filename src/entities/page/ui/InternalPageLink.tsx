@@ -26,7 +26,7 @@ export const InternalPageLink: React.FC<InternalPageLinkProps> = ({ pageId }) =>
 
   if (!page) {
     return (
-      <span className="inline-flex items-center gap-1 rounded bg-[var(--osio-bg-subtle)] px-1 py-0.5 text-[var(--osio-fg-subtle)]">
+      <span className="inline-flex items-center gap-1 rounded-xs bg-[var(--osio-bg-subtle)] px-1 py-0.5 text-[var(--osio-fg-subtle)]">
         <FileText className="h-3 w-3" />
         <span className="text-sm">{linkMetadata.title}</span>
       </span>

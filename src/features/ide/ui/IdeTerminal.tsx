@@ -58,7 +58,7 @@ export const IdeTerminal: React.FC<{ termId?: string }> = ({ termId = "0" }) => 
     <div className="relative min-h-0 flex-1">
       <div ref={hostRef} className="absolute inset-0 px-2 py-1" />
       {status === "unavailable" && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-[12px] text-[var(--osio-code-fg-muted)]">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-[var(--osio-code-fg-muted)]">
           Sign in and enable the workspace sandbox (OSIONOS_IDE_SANDBOX) to use the terminal.
         </div>
       )}

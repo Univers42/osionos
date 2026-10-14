@@ -44,7 +44,7 @@ export const MentionAutocomplete: React.FC<MentionAutocompleteProps> = ({ query,
           onMouseDown={(event) => { event.preventDefault(); onPick(person.username as string); }}
           className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[var(--osio-bg-hover)]"
         >
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--osio-accent)] text-[10px] font-semibold text-[var(--osio-accent-fg)]">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--osio-accent)] text-3xs font-semibold text-[var(--osio-accent-fg)]">
             {person.avatar ? <img src={person.avatar} alt="" className="h-full w-full object-cover" /> : person.name.slice(0, 1).toUpperCase()}
           </span>
           <span className="min-w-0 flex-1">

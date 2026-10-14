@@ -31,12 +31,12 @@ export const IdeOutputPanel: React.FC = () => {
         <button
           type="button"
           onClick={clear}
-          className="rounded px-2 py-0.5 text-[11px] text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
+          className="rounded-xs px-2 py-0.5 text-2xs text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
         >
           Clear
         </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto px-3 py-1 font-mono text-[12px] leading-5 text-[var(--osio-code-fg)]">
+      <div className="min-h-0 flex-1 overflow-auto px-3 py-1 font-mono text-xs leading-5 text-[var(--osio-code-fg)]">
         {lines.length === 0 && (
           <p className="py-4 text-center text-[var(--osio-code-fg-muted)]">No output yet — sync, terminal and runner events land here.</p>
         )}
