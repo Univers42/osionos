@@ -55,13 +55,13 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
             type="button"
             data-dock-tab={id}
             onClick={() => setTab(id)}
-            className={`rounded px-2 py-1 hover:text-[var(--osio-code-fg)] ${
+            className={`rounded-xs px-2 py-1 hover:text-[var(--osio-code-fg)] ${
               tab === id ? "text-[var(--osio-code-fg)] underline decoration-[var(--osio-accent)] underline-offset-4" : ""
             }`}
           >
             {label}
             {id === "output" && conflicts > 0 && (
-              <span className="ml-1 rounded bg-[var(--osio-warning,#d97706)] px-1 text-[10px] text-white">{conflicts}</span>
+              <span className="ml-1 rounded-xs bg-[var(--osio-warning,#d97706)] px-1 text-[10px] text-white">{conflicts}</span>
             )}
           </button>
         ))}
@@ -73,7 +73,7 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
               title="New terminal (fresh session)"
               aria-label="New terminal"
               onClick={() => useIdeDockStore.getState().newTerminal()}
-              className="flex h-5 w-5 items-center justify-center rounded hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] hover:text-[var(--osio-code-fg)]"
+              className="flex h-5 w-5 items-center justify-center rounded-xs hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] hover:text-[var(--osio-code-fg)]"
             >
               <Plus size={13} />
             </button>
@@ -82,7 +82,7 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
               title={secondaryTerm ? "Close split" : "Split terminal"}
               aria-label={secondaryTerm ? "Close split" : "Split terminal"}
               onClick={() => (secondaryTerm ? useIdeDockStore.getState().closeSecondary() : useIdeDockStore.getState().splitTerminal())}
-              className="flex h-5 w-5 items-center justify-center rounded hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] hover:text-[var(--osio-code-fg)]"
+              className="flex h-5 w-5 items-center justify-center rounded-xs hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] hover:text-[var(--osio-code-fg)]"
             >
               <Columns2 size={13} />
             </button>
@@ -93,7 +93,7 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
           title="Hide panel"
           aria-label="Hide panel"
           onClick={onClose}
-          className="flex h-5 w-5 items-center justify-center rounded hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] hover:text-[var(--osio-code-fg)]"
+          className="flex h-5 w-5 items-center justify-center rounded-xs hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] hover:text-[var(--osio-code-fg)]"
         >
           <X size={13} />
         </button>

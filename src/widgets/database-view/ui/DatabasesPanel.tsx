@@ -48,7 +48,7 @@ const MountGroup: React.FC<{ source: LiveSourceMount; query: string }> = ({ sour
         {collapsed ? <ChevronRight size={14} className="shrink-0 text-[var(--osio-fg-subtle)]" /> : <ChevronDown size={14} className="shrink-0 text-[var(--osio-fg-subtle)]" />}
         <Database size={14} className="shrink-0 text-[var(--osio-fg-muted)]" />
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--osio-fg-default)]">{source.mount.name}</span>
-        <span className="shrink-0 rounded bg-[var(--osio-bg-hover)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">{source.mount.engine}</span>
+        <span className="shrink-0 rounded-xs bg-[var(--osio-bg-hover)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">{source.mount.engine}</span>
         <span
           className="size-2 shrink-0 rounded-full"
           style={{ backgroundColor: dotColor(source) }}

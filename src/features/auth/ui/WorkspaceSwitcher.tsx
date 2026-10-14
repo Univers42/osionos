@@ -93,7 +93,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
           ].join(' ')}
         >
           {/* Avatar (rounded square, like osionos) */}
-          <span className="flex items-center justify-center w-[22px] h-[22px] shrink-0 rounded text-base leading-none">
+          <span className="flex items-center justify-center w-[22px] h-[22px] shrink-0 rounded-xs text-base leading-none">
             <IconValueView
               value={workspaceIcon ?? persona?.emoji ?? getCollectionEmojiValue('package')}
               size={18}
@@ -112,7 +112,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
                 if (event.key === 'Enter') commitRename((event.target as HTMLInputElement).value);
                 else if (event.key === 'Escape') setRenaming(false);
               }}
-              className="flex-1 min-w-0 rounded px-1 bg-transparent text-base font-semibold text-[var(--osio-fg-default)] leading-5 outline-none ring-1 ring-[var(--osio-accent)]"
+              className="flex-1 min-w-0 rounded-xs px-1 bg-transparent text-base font-semibold text-[var(--osio-fg-default)] leading-5 outline-none ring-1 ring-[var(--osio-accent)]"
             />
           ) : (
             <span
@@ -132,7 +132,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             type="button"
             onClick={handleNewPage}
             className={[
-              'flex items-center justify-center w-7 h-7 rounded shrink-0',
+              'flex items-center justify-center w-7 h-7 rounded-xs shrink-0',
               'text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]',
               'transition-colors duration-100 cursor-pointer',
             ].join(' ')}
@@ -149,7 +149,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             aria-expanded={open}
             onClick={() => setOpen(o => !o)}
             className={[
-              'flex items-center justify-center w-6 h-7 rounded shrink-0',
+              'flex items-center justify-center w-6 h-7 rounded-xs shrink-0',
               'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]',
               'transition-all duration-100 cursor-pointer',
             ].join(' ')}

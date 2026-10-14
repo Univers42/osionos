@@ -88,7 +88,7 @@ export const DmList: React.FC<{ filter?: string }> = ({ filter = "" }) => {
             aria-label="New group"
             title="New group"
             onClick={() => setGroupOpen(true)}
-            className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+            className="rounded-xs p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
           >
             <Users size={14} />
           </button>
@@ -97,7 +97,7 @@ export const DmList: React.FC<{ filter?: string }> = ({ filter = "" }) => {
             aria-label="Start a direct message"
             title="Start a direct message"
             onClick={() => setPickerOpen((open) => !open)}
-            className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+            className="rounded-xs p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
           >
             <Plus size={14} />
           </button>

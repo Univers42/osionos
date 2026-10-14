@@ -80,7 +80,7 @@ const PersonRow: React.FC<{ person: PersonHit; onClose: () => void }> = ({ perso
         aria-label={`Message ${person.name}`}
         title={`Message ${person.name}`}
         onClick={() => startDm(person, onClose)}
-        className="rounded p-1.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+        className="rounded-xs p-1.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
       >
         <MessageCircle size={14} />
       </button>
@@ -89,7 +89,7 @@ const PersonRow: React.FC<{ person: PersonHit; onClose: () => void }> = ({ perso
         type="button"
         aria-label={`More actions for ${person.name}`}
         onClick={() => setMenuOpen((value) => !value)}
-        className="rounded p-1.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+        className="rounded-xs p-1.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
       >
         <MoreHorizontal size={14} />
       </button>
@@ -121,7 +121,7 @@ export const PeopleSearchBar: React.FC<PeopleSearchBarProps> = ({ onClose }) => 
           placeholder="Search people…"
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--osio-fg-subtle)]"
         />
-        <button type="button" aria-label="Close people search" onClick={onClose} className="rounded p-0.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]">
+        <button type="button" aria-label="Close people search" onClick={onClose} className="rounded-xs p-0.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]">
           <X size={14} />
         </button>
       </div>

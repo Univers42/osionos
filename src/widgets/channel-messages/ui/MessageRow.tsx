@@ -80,7 +80,7 @@ function renderContent(content: string): React.ReactNode {
   if (parts.length === 1) return renderInlineToReact(content);
   return parts.map((part, index) =>
     /^@[a-z0-9_.]+$/i.test(part)
-      ? <span key={index} className="rounded bg-[var(--osio-accent)]/15 px-0.5 font-medium text-[var(--osio-accent)]">{part}</span>
+      ? <span key={index} className="rounded-xs bg-[var(--osio-accent)]/15 px-0.5 font-medium text-[var(--osio-accent)]">{part}</span>
       : <React.Fragment key={index}>{renderInlineToReact(part)}</React.Fragment>,
   );
 }
@@ -112,7 +112,7 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
         </div>
         )}
         {message.replyTo && (
-          <div className="mb-1 max-w-md rounded border-l-2 border-[var(--osio-accent)] bg-[var(--osio-bg-subtle)] px-2 py-1">
+          <div className="mb-1 max-w-md rounded-xs border-l-2 border-[var(--osio-accent)] bg-[var(--osio-bg-subtle)] px-2 py-1">
             <span className="block text-xs font-medium text-[var(--osio-accent)]">{message.replyTo.authorName}</span>
             <span className="block truncate text-xs text-[var(--osio-fg-muted)]">{message.replyTo.content || 'Attachment'}</span>
           </div>
@@ -126,7 +126,7 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => { if (event.key === 'Escape') setEditing(false); }}
-              className="min-w-0 flex-1 rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none focus:border-[var(--osio-accent)]"
+              className="min-w-0 flex-1 rounded-xs border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none focus:border-[var(--osio-accent)]"
             />
             <Button type="submit" tone="primary" size="sm">Save</Button>
             <Button tone="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>

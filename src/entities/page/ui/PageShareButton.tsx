@@ -46,7 +46,7 @@ export const PageShareButton: React.FC<PageShareButtonProps> = ({ pageId, worksp
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="flex h-7 items-center gap-1.5 rounded px-2 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+        className="flex h-7 items-center gap-1.5 rounded-xs px-2 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
         aria-label="Share page"
         aria-expanded={open}
       >

@@ -51,7 +51,7 @@ export const TableBlockReadOnly: React.FC<TableBlockReadOnlyProps> = ({ block })
 
   if (!data.length) {
     return (
-      <div className="my-2 rounded border border-[var(--osio-border-default)] px-3 py-2 text-xs text-[var(--osio-fg-subtle)]">
+      <div className="my-2 rounded-xs border border-[var(--osio-border-default)] px-3 py-2 text-xs text-[var(--osio-fg-subtle)]">
         Empty table
       </div>
     );

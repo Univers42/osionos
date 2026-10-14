@@ -66,7 +66,7 @@ export const PagePropertiesPanel: React.FC<Props> = ({
       {editable ? (
         <div className="relative mt-0.5">
           <button type="button" onClick={() => setAdding((open) => !open)}
-            className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-sm text-[var(--osio-fg-subtle)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)]">
+            className="inline-flex items-center gap-1 rounded-xs px-1.5 py-1 text-sm text-[var(--osio-fg-subtle)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)]">
             <Plus size={14} /> Add a property
           </button>
           {adding ? (

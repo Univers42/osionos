@@ -42,7 +42,7 @@ export const RunConsole: React.FC<Props> = ({ lines, running, exit, onClear, onS
   }, [lines]);
 
   const failed = exit != null && (exit.timedOut || (exit.code ?? 0) !== 0);
-  const btn = "inline-flex h-6 items-center gap-1 rounded px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]";
+  const btn = "inline-flex h-6 items-center gap-1 rounded-xs px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]";
 
   return (
     <div data-code-theme="dark" className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">

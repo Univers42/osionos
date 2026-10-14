@@ -41,7 +41,7 @@ export const PageRelationField: React.FC<Props> = ({ workspaceId, excludePageId,
   return (
     <div className="flex flex-wrap items-center gap-1">
       {ids.map((id) => (
-        <span key={id} className="inline-flex items-center gap-1 rounded bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-xs text-[var(--osio-fg-default)]">
+        <span key={id} className="inline-flex items-center gap-1 rounded-xs bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-xs text-[var(--osio-fg-default)]">
           <button type="button" className="max-w-40 min-h-[24px] truncate hover:underline" onClick={() => openPage({ id, workspaceId, kind: "page", title: titleOf(id) })}>
             {titleOf(id)}
           </button>
@@ -58,7 +58,7 @@ export const PageRelationField: React.FC<Props> = ({ workspaceId, excludePageId,
       {editable ? (
         <div className="relative">
           <button type="button" onClick={() => setPicking((open) => !open)}
-            className="inline-flex min-h-[24px] items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]">
+            className="inline-flex min-h-[24px] items-center gap-0.5 rounded-xs px-1.5 py-0.5 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]">
             <Plus size={12} /> Relate
           </button>
           {picking ? (

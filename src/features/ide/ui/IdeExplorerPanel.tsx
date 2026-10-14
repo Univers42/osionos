@@ -116,7 +116,7 @@ const ToolButton: React.FC<{ title: string; onClick: () => void; children: React
     title={title}
     aria-label={title}
     onClick={onClick}
-    className="flex h-6 w-6 items-center justify-center rounded text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.16))] hover:text-[var(--osio-code-fg)]"
+    className="flex h-6 w-6 items-center justify-center rounded-xs text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.16))] hover:text-[var(--osio-code-fg)]"
   >
     {children}
   </button>

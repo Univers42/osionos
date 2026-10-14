@@ -121,7 +121,7 @@ export const PeopleDatabasePanel: React.FC<PanelProps> = ({ source, ctx, onCount
           <div className="inline-flex rounded-md border border-[var(--osio-border-default)] p-0.5">
             {descriptor.views.map((entry) => (
               <button key={entry.id} type="button" onClick={() => setViewId(entry.id)}
-                className={`rounded px-2 py-1 text-xs ${viewId === entry.id ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]" : "text-[var(--osio-fg-muted)]"}`}>
+                className={`rounded-xs px-2 py-1 text-xs ${viewId === entry.id ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]" : "text-[var(--osio-fg-muted)]"}`}>
                 {entry.label}
               </button>
             ))}

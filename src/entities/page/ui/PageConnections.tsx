@@ -67,7 +67,7 @@ const ConnRow: React.FC<{ icon: React.ReactNode; label: string; refs: PageRef[];
     <span className="flex h-7 w-32 sm:w-40 shrink-0 items-center gap-1.5 px-1.5 text-[var(--osio-fg-muted)]">{icon}{label}</span>
     <div className="flex flex-1 flex-wrap items-center gap-1 py-0.5 min-w-0">
       {refs.map((ref) => {
-        const chip = "inline-flex items-center gap-1 rounded bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-xs";
+        const chip = "inline-flex items-center gap-1 rounded-xs bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-xs";
         if (ref.surface === "folder") {
           return <span key={ref.id} className={chip}><Folder size={11} />{ref.title || "Untitled"}</span>;
         }

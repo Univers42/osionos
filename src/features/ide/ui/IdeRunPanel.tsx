@@ -60,7 +60,7 @@ export const IdeRunPanel: React.FC = () => {
 
   const failed = exit != null && (exit.timedOut || (exit.code ?? 0) !== 0);
   const btn =
-    "inline-flex h-6 items-center gap-1 rounded px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)] disabled:opacity-40 disabled:pointer-events-none";
+    "inline-flex h-6 items-center gap-1 rounded-xs px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)] disabled:opacity-40 disabled:pointer-events-none";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

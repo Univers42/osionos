@@ -623,7 +623,7 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
   const visibleDevices = devices.filter((device) => !device.revokedAt);
   const activePasskeys = passkeys.filter((passkey) => !passkey.removedAt);
   const deviceRows = visibleDevices.map((device, index) => [
-    <span key={`${device._id}-name`}>{index === 0 ? 'Ubuntu · This Device' : device.userAgent?.split(')')[0]?.replace('(', '') || 'Linux'}{device._id === 'current-device' ? <span className="ml-2 rounded bg-[var(--osio-accent-subtle)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">Current</span> : null}</span>,
+    <span key={`${device._id}-name`}>{index === 0 ? 'Ubuntu · This Device' : device.userAgent?.split(')')[0]?.replace('(', '') || 'Linux'}{device._id === 'current-device' ? <span className="ml-2 rounded-xs bg-[var(--osio-accent-subtle)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">Current</span> : null}</span>,
     device._id === 'current-device' ? 'Now' : new Date(device.lastActiveAt).toLocaleString(),
     device.location ?? 'Unknown location',
     device._id === 'current-device' ? '' : <Button key={`${device._id}-logout`} onClick={() => { runAsync(revokeDevice(device._id)); }}>Log out</Button>,
@@ -756,7 +756,7 @@ const PasswordModal: React.FC<{ hasPassword: boolean; onSaved: () => void; onClo
         {hasPassword && <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Current password" />}
         <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={nextPassword} onChange={(event) => setNextPassword(event.target.value)} placeholder="New password" />
         <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm password" />
-        <div className="grid grid-cols-4 gap-1">{[0, 1, 2, 3].map((index) => <span key={index} className={`h-1 rounded ${index < strength ? 'bg-[var(--osio-accent)]' : 'bg-[var(--osio-bg-muted)]'}`} />)}</div>
+        <div className="grid grid-cols-4 gap-1">{[0, 1, 2, 3].map((index) => <span key={index} className={`h-1 rounded-xs ${index < strength ? 'bg-[var(--osio-accent)]' : 'bg-[var(--osio-bg-muted)]'}`} />)}</div>
         <div className="flex justify-end gap-2">
           <Button onClick={onClose}>Cancel</Button>
           <Button tone="primary" disabled={!canSave} onClick={() => { runAsync(postAccountAction('/api/account/password', { currentPassword, nextPassword }).then(() => { onSaved(); toast({ kind: 'success', title: 'Password saved' }); onClose(); })); }}>Save password</Button>
@@ -988,7 +988,7 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
         <SettingRow title="Custom landing page" description={<>When a new member joins this workspace, a copy of this page will be added to their <b>Private</b> pages</>} action={<Button onClick={() => setModal({ name: 'page-selector' })}>{settings.landingPageId ? 'Change page' : 'Select page'}</Button>} />
       </Section>
       <Section title="Sidebar">
-        <SettingRow title={<span className="inline-flex items-center gap-2">Try the new sidebar <span className="rounded bg-[var(--osio-accent-subtle)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">New</span></span>} description="Keep your pages, meetings, and AI within reach." action={<Toggle checked={sidebar.newSidebar ?? true} onChange={(checked) => { setUseNewSidebar(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, newSidebar: checked } }); }} label="Try the new sidebar" />} />
+        <SettingRow title={<span className="inline-flex items-center gap-2">Try the new sidebar <span className="rounded-xs bg-[var(--osio-accent-subtle)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">New</span></span>} description="Keep your pages, meetings, and AI within reach." action={<Toggle checked={sidebar.newSidebar ?? true} onChange={(checked) => { setUseNewSidebar(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, newSidebar: checked } }); }} label="Try the new sidebar" />} />
         <SettingRow title="Show other osionos apps in sidebar" description="Show osionos Calendar and osionos Mail in your sidebar" action={<Toggle checked={sidebar.showApps ?? true} onChange={(checked) => { setShowOtherApps(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, showApps: checked } }); }} label="Show other osionos apps in sidebar" />} />
       </Section>
       <Section title="Export">
@@ -1292,7 +1292,7 @@ const ProviderImportModal: React.FC<{ app: string; workspaceId: string; activeUs
   return (
     <Modal open onClose={onClose} title={`${app} import`} size="sm">
       <div className="space-y-4">
-        <div className="h-2 overflow-hidden rounded bg-[var(--osio-bg-muted)]"><div className="h-full bg-[var(--osio-accent)] transition-all" style={{ width: `${progress}%` }} /></div>
+        <div className="h-2 overflow-hidden rounded-xs bg-[var(--osio-bg-muted)]"><div className="h-full bg-[var(--osio-accent)] transition-all" style={{ width: `${progress}%` }} /></div>
         <p className="text-sm text-[var(--osio-fg-muted)]">{progress >= 100 ? 'Import completed.' : 'Importing workspace content...'}</p>
         <div className="flex justify-end"><Button tone="primary" onClick={onClose}>Done</Button></div>
       </div>
@@ -1426,9 +1426,9 @@ const LibraryPanel = () => {
   const rows = assets.map((asset) => [
     <div key={asset.id} className="flex min-w-0 items-center gap-3">
       {asset.source.startsWith('data:image') || asset.source.startsWith('http') ? (
-        <img src={asset.source} alt="" className="h-10 w-14 rounded object-cover" />
+        <img src={asset.source} alt="" className="h-10 w-14 rounded-xs object-cover" />
       ) : (
-        <span className="flex h-10 w-14 items-center justify-center rounded bg-[var(--osio-bg-subtle)]"><FileText size={16} /></span>
+        <span className="flex h-10 w-14 items-center justify-center rounded-xs bg-[var(--osio-bg-subtle)]"><FileText size={16} /></span>
       )}
       <div className="min-w-0">
         <div className="truncate font-medium">{asset.name}</div>

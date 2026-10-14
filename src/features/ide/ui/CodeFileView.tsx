@@ -208,14 +208,14 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
           <button
             type="button"
             onClick={resolveKeepMine}
-            className="shrink-0 rounded border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
+            className="shrink-0 rounded-xs border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
           >
             Keep mine
           </button>
           <button
             type="button"
             onClick={resolveTakeSandbox}
-            className="shrink-0 rounded border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
+            className="shrink-0 rounded-xs border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
           >
             Take sandbox
           </button>
@@ -238,7 +238,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
             title="Run (Ctrl/Cmd + Enter)"
             onClick={runNow}
             disabled={runner.running}
-            className="inline-flex h-5 items-center gap-1 rounded px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)] disabled:opacity-50"
+            className="inline-flex h-5 items-center gap-1 rounded-xs px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)] disabled:opacity-50"
           >
             <Play size={11} /> {runner.running ? "Running…" : "Run"}
           </button>
@@ -248,7 +248,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
             type="button"
             title="Format (Ctrl/Cmd + Alt + L)"
             onClick={() => void formatNow()}
-            className="inline-flex h-5 items-center gap-1 rounded px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
+            className="inline-flex h-5 items-center gap-1 rounded-xs px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
           >
             <Sparkles size={11} /> Format
           </button>
@@ -257,7 +257,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
           type="button"
           title="Toggle terminal"
           onClick={() => setShowConsole((v) => !v)}
-          className="inline-flex h-5 items-center rounded px-1.5 hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
+          className="inline-flex h-5 items-center rounded-xs px-1.5 hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
         >
           <SquareTerminal size={12} />
         </button>

@@ -61,7 +61,7 @@ export const PeoplePickerList: React.FC<PeoplePickerListProps> = ({
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={(event) => { if (event.key === 'Escape') onEscape?.(); }}
         placeholder={placeholder}
-        className="w-full rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none focus:border-[var(--osio-accent)]"
+        className="w-full rounded-xs border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none focus:border-[var(--osio-accent)]"
       />
       {showConnections ? (
         <p className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">Your connections</p>
@@ -75,7 +75,7 @@ export const PeoplePickerList: React.FC<PeoplePickerListProps> = ({
                 type="button"
                 aria-pressed={multiSelect ? picked : undefined}
                 onClick={() => onPick(person)}
-                className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-[var(--osio-bg-hover)] ${picked ? 'bg-[var(--osio-bg-hover)]' : ''}`}
+                className={`flex w-full items-center gap-2 rounded-xs px-2 py-1 text-left text-sm hover:bg-[var(--osio-bg-hover)] ${picked ? 'bg-[var(--osio-bg-hover)]' : ''}`}
               >
                 <span className={`h-2 w-2 shrink-0 rounded-full ${person.online ? 'bg-green-500' : 'bg-[var(--osio-fg-subtle)]'}`} />
                 <span className="truncate">{person.name}</span>

@@ -33,7 +33,7 @@ const FlagButton: React.FC<{ active: boolean; title: string; onClick: () => void
     title={title}
     onClick={onClick}
     className={cx(
-      "grid h-6 w-6 place-items-center rounded transition-colors",
+      "grid h-6 w-6 place-items-center rounded-xs transition-colors",
       active
         ? "bg-[var(--osio-accent-subtle)] text-[var(--osio-accent)]"
         : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",

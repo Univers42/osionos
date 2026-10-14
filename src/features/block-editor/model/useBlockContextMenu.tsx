@@ -543,7 +543,7 @@ export function useBlockContextMenu({
               onClick: () => handleSetBlockStyle({ backgroundColor: undefined, textColor: blockLocation.block.textColor }),
             },
             ...BLOCK_COLOR_OPTIONS.map((option) => ({
-              icon: <span style={{ backgroundColor: option.background }} className="h-4 w-4 rounded border border-[var(--osio-border-default)]" />,
+              icon: <span style={{ backgroundColor: option.background }} className="h-4 w-4 rounded-xs border border-[var(--osio-border-default)]" />,
               label: `${option.label} background`,
               active: blockLocation.block.backgroundColor === option.background,
               onClick: () =>
@@ -566,7 +566,7 @@ export function useBlockContextMenu({
                   ...colorProfiles.map((profile) => ({
                     icon: (
                       <span
-                        className="h-4 w-4 rounded border border-[var(--osio-border-default)]"
+                        className="h-4 w-4 rounded-xs border border-[var(--osio-border-default)]"
                         style={{ backgroundColor: profile.backgroundColor }}
                       />
                     ),

@@ -838,7 +838,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           style={{ ...calloutSurface(calloutType), ...surfaceStyle }}
         >
           <span
-            className="pointer-events-none absolute right-2 top-1.5 max-w-[45%] truncate select-none rounded px-1 text-[10px] font-semibold uppercase tracking-wide opacity-0 transition-opacity group-hover/callout:opacity-60"
+            className="pointer-events-none absolute right-2 top-1.5 max-w-[45%] truncate select-none rounded-xs px-1 text-[10px] font-semibold uppercase tracking-wide opacity-0 transition-opacity group-hover/callout:opacity-60"
             style={{ color: accent }}
             aria-hidden="true"
           >
@@ -847,7 +847,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <div className="relative mt-0.5 shrink-0">
             <button
               type="button"
-              className="inline-flex cursor-pointer items-center justify-center rounded"
+              className="inline-flex cursor-pointer items-center justify-center rounded-xs"
               style={{ color: accent }}
               aria-label="Change callout type"
               title="Change callout type"
@@ -940,7 +940,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <div
           role="separator"
           aria-label="Divider block"
-          className="group/divider relative flex w-full select-none items-center rounded py-0 outline-offset-4 transition-[outline-color] group-hover/block:outline-dashed group-hover/block:outline-1 group-hover/block:outline-[var(--osio-border-default)]"
+          className="group/divider relative flex w-full select-none items-center rounded-xs py-0 outline-offset-4 transition-[outline-color] group-hover/block:outline-dashed group-hover/block:outline-1 group-hover/block:outline-[var(--osio-border-default)]"
         >
           <hr className="pointer-events-none w-full border-0 border-t border-[var(--osio-fg-subtle)] transition-colors group-hover/block:border-[var(--osio-accent)]" />
         </div>

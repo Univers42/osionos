@@ -31,7 +31,7 @@ export const IdeOutputPanel: React.FC = () => {
         <button
           type="button"
           onClick={clear}
-          className="rounded px-2 py-0.5 text-[11px] text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
+          className="rounded-xs px-2 py-0.5 text-[11px] text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
         >
           Clear
         </button>

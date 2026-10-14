@@ -37,7 +37,7 @@ export const PageCommentsButton: React.FC<{ pageId: string }> = ({ pageId }) => 
         onClick={() => setOpen((value) => !value)}
         aria-label="Comments"
         title="Comments"
-        className="relative flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
+        className="relative flex h-7 w-7 items-center justify-center rounded-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
       >
         <MessageSquare size={16} />
         {openCount > 0 && (

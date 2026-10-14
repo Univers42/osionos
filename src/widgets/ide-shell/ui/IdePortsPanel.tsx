@@ -54,7 +54,7 @@ export const IdePortsPanel: React.FC = () => {
             type="button"
             title={`Open a preview of port ${entry.port}`}
             onClick={() => void openPortPreview(workspaceId, entry.port)}
-            className="inline-flex shrink-0 items-center gap-1 rounded border border-[var(--osio-code-border)] px-1.5 py-0.5 text-[11px] text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
+            className="inline-flex shrink-0 items-center gap-1 rounded-xs border border-[var(--osio-code-border)] px-1.5 py-0.5 text-[11px] text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
           >
             <ExternalLink size={11} /> Open
           </button>

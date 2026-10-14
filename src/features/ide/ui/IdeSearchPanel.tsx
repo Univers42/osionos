@@ -78,7 +78,7 @@ export const IdeSearchPanel: React.FC = () => {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search code files"
-          className="w-full rounded border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] px-2 py-1 text-[13px] text-[var(--osio-code-fg)] outline-none focus:border-[var(--osio-accent)]"
+          className="w-full rounded-xs border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] px-2 py-1 text-[13px] text-[var(--osio-code-fg)] outline-none focus:border-[var(--osio-accent)]"
         />
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-1 pb-2 text-[12px] text-[var(--osio-code-fg)]">
@@ -98,7 +98,7 @@ export const IdeSearchPanel: React.FC = () => {
                   useIdeRevealBus.getState().request({ pageId: file.pageId, line: match.lineNumber, col: 1 });
                   openPage({ id: file.pageId, workspaceId, kind: "page", title: file.title });
                 }}
-                className="flex w-full items-baseline gap-2 rounded px-2 py-0.5 text-left hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.10))]"
+                className="flex w-full items-baseline gap-2 rounded-xs px-2 py-0.5 text-left hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.10))]"
               >
                 <span className="w-8 shrink-0 text-right font-mono text-[var(--osio-code-fg-muted)]">{match.lineNumber}</span>
                 <span className="truncate font-mono">{match.line || " "}</span>

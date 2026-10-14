@@ -176,8 +176,8 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY }); }}
         {...dropHandlers}
       >
-        {indicator === "before" && <span className="pointer-events-none absolute inset-x-1 -top-px h-0.5 rounded bg-[var(--osio-accent)]" />}
-        {indicator === "after" && <span className="pointer-events-none absolute inset-x-1 -bottom-px h-0.5 rounded bg-[var(--osio-accent)]" />}
+        {indicator === "before" && <span className="pointer-events-none absolute inset-x-1 -top-px h-0.5 rounded-xs bg-[var(--osio-accent)]" />}
+        {indicator === "after" && <span className="pointer-events-none absolute inset-x-1 -bottom-px h-0.5 rounded-xs bg-[var(--osio-accent)]" />}
 
         {canExpand ? (
           <button

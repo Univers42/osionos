@@ -90,7 +90,7 @@ export function RawModeView({ pageId }: Readonly<{ pageId: string }>) {
 }
 
 function DropOverlay({ zone }: Readonly<{ zone: RawLayoutMode }>) {
-  const cell = "m-1 flex items-center justify-center rounded border-2 border-dashed border-[var(--osio-accent)] bg-[var(--osio-accent)]/10 text-xs font-semibold text-[var(--osio-accent)]";
+  const cell = "m-1 flex items-center justify-center rounded-xs border-2 border-dashed border-[var(--osio-accent)] bg-[var(--osio-accent)]/10 text-xs font-semibold text-[var(--osio-accent)]";
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 top-9 z-[var(--osio-z-popover)] flex">
       {zone !== "preview" && <div className={`${zone === "split" ? "w-1/2" : "w-full"} ${cell}`}>Code</div>}
