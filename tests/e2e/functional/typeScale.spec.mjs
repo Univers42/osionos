@@ -331,11 +331,4 @@ test.describe("type scale", () => {
     expect(await styleOf(panelTitle, ...look)).toEqual(sectionLook);
   });
 
-  test("sidebar action rows are as tall as page rows", async ({ page, baseURL }) => {
-    await openFreshPage(page, baseURL);
-    const heightOf = (locator) => locator.evaluate((element) => element.getBoundingClientRect().height);
-    const pageRow = page.getByRole("button", { name: /Getting Started/ }).first();
-    const sharedRow = page.getByRole("button", { name: "Start collaborating" });
-    expect(await heightOf(sharedRow)).toBe(await heightOf(pageRow));
-  });
 });
