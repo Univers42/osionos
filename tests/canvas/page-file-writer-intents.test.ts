@@ -21,6 +21,9 @@
 // HO-B and HO-C (devil D5-L7 on 7ca3090): a tab that GAINS the lead clears its intents and
 // removes nothing until an attach that started after the gain has finished; the leading tabs
 // below have attached (`tab(…, true)`), as a tab that loaded alone has.
+// A2 (attach lane, 2026-10-14): an attach whose server pull did not land reconciles NOTHING
+// into the sandbox — the localStorage cache is never written over the sandbox — says so on
+// Output (ATTACH_DEFERRED) and is re-queued on a 5 s/15 s/30 s/60 s backoff until it lands.
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import test from "node:test";
@@ -77,8 +80,8 @@ const { derivePageState } = await import("../../src/store/pageStore.helpers.ts")
 const { takeAppRemoval } = await import("../../src/store/appRemovals.ts");
 const { useSandboxHealthStore } = await import("../../src/features/ide/model/sandboxHealthStore.ts");
 const { useIdeOutputBus } = await import("../../src/features/ide/model/ideOutputBus.ts");
-const { acquireInboundLeadership, attachUnderLead, createSerialQueue } = await import("../../src/features/ide/model/inboundPipeline.ts");
-const { createLiveInbound } = await import("../../src/features/ide/model/inboundLive.ts");
+const { acquireInboundLeadership, attachUnderLead, createSerialQueue, removesForItsUser } = await import("../../src/features/ide/model/inboundPipeline.ts");
+const { createLiveInbound, ATTACH_DEFERRED } = await import("../../src/features/ide/model/inboundLive.ts");
 const { createMemProvider } = await import("../../src/features/ide/vfs/memProvider.ts");
 const { buildVPath } = await import("../../src/features/ide/vfs/vpath.ts");
 const { usePageFileWriter, WRITE_DEBOUNCE_MS } = await import("../../src/features/page-file/model/usePageFileWriter.ts");
@@ -111,6 +114,9 @@ async function tab(entries: Entry[], leads: boolean) {
   await sleep(0);
   if (leads) attachUnderLead(ws)(); // the attach a tab that loaded alone has run
   const provider = createMemProvider("sandbox");
+  let writes = 0;
+  const write = provider.write.bind(provider);
+  provider.write = (path, data, opts) => { writes += 1; return write(path, data, opts); };
   Reflect.set(globalThis, "__intentProvider", provider);
   useSandboxHealthStore.setState({ state: "online" });
   const own = (entry: Entry): Entry => ({ ...entry, workspaceId: ws, ownerId: OWNER, updatedAt: "2026-10-14T08:00:00.000Z" }) as Entry;
@@ -123,6 +129,10 @@ async function tab(entries: Entry[], leads: boolean) {
     ws, pages, patch,
     pathOf: (id: string) => pageIndexFor(ws, pages().filter((entry) => !entry.archivedAt)).pathForId(id) as string,
     present: (path: string) => provider.read(buildVPath("sandbox", ws, path.split("/"))).then(() => true, () => false),
+    /** Sandbox writes since the tab was made; the attach's are what the A2 tests count. */
+    writes: () => writes,
+    /** The shell removing a file, with no page-store change: only a reconcile brings it back. */
+    drop: (path: string) => provider.delete(buildVPath("sandbox", ws, path.split("/"))),
     start: (): (() => void) => {
       usePageFileWriter(ws, true);
       return (Reflect.get(globalThis, "__intentCleanups") as (() => void)[]).pop() ?? (() => undefined);
@@ -275,12 +285,102 @@ test("L7: an attach that started before the gain does not open removals", async 
   assert.equal(await t.present(path), true, "an attach from before the takeover counted");
 });
 
-/** The attach a gain queues (inboundLive), the page list answered by `pages` (a throw: the pull fails). */
+/** The attach a gain queues (inboundLive), the page list answered by `pages` (a throw: the pull
+ *  fails). Disposed after the attach, as the sync effect's cleanup would be: on the failed pull
+ *  that cancels the A2 retry, so no timer outlives the test. */
 async function liveAttach(t: Awaited<ReturnType<typeof tab>>, pages: () => unknown) {
   const archive = { ok: true, cascadedIds: [] };
   Reflect.set(globalThis, "__intentApi", async (path: string) => (String(path).startsWith("/api/pages/all") ? pages() : archive));
-  await createLiveInbound(t.ws, createSerialQueue(() => undefined)).attach();
+  const live = createLiveInbound(t.ws, createSerialQueue(() => undefined));
+  await live.attach();
+  live.session.dispose();
 }
+
+/** The api router the A2 tests count: `pull(call)` answers each `/api/pages/all` (a throw is a
+ *  failed pull), everything else gets the archive stub. Returns the call counter. O(1). */
+function countedPull(pull: (call: number) => unknown): () => number {
+  const archive = { ok: true, cascadedIds: [] };
+  let calls = 0;
+  Reflect.set(globalThis, "__intentApi", async (path: string) => {
+    if (!String(path).startsWith("/api/pages/all")) return archive;
+    calls += 1;
+    return pull(calls);
+  });
+  return () => calls;
+}
+
+test("A2: an attach whose page pull never landed writes nothing to the sandbox and says so", async () => {
+  const t = await tab(tree(), false);
+  const { stop, path } = await synced(t);
+  await t.leaderCloses();
+  await t.drop(path); // the shell removed X's file: a reconciled attach would write it back
+  countedPull(() => { throw new Error("BaaS request failed with 503"); });
+  const live = createLiveInbound(t.ws, createSerialQueue(() => undefined));
+  const before = t.writes();
+  try {
+    await live.attach();
+    assert.equal(t.writes() - before, 0, "an attach whose pull failed wrote to the sandbox");
+    assert.ok(
+      useIdeOutputBus.getState().lines.some((line) => line.channel === "fs-sync" && line.text === ATTACH_DEFERRED),
+      "Output does not say the reconcile was deferred",
+    );
+    assert.equal(removesForItsUser(t.ws), false, "the deferred attach opened removals");
+  } finally {
+    live.session.dispose();
+    stop();
+    t.close();
+  }
+});
+
+test("A2: the retry's pull lands, and it reconciles the file and settles", async (ctx) => {
+  const t = await tab(tree(), false);
+  const { stop, path } = await synced(t);
+  await t.leaderCloses();
+  await t.drop(path);
+  const pulls = countedPull((call) => {
+    if (call === 1) throw new Error("BaaS request failed with 503");
+    return t.pages();
+  });
+  const queue = createSerialQueue(() => undefined);
+  const live = createLiveInbound(t.ws, queue);
+  ctx.mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    await live.attach();
+    assert.equal(await t.present(path), false, "setup: the deferred attach wrote the dropped file");
+    ctx.mock.timers.tick(5_000);
+    await queue.idle();
+    assert.equal(pulls(), 2, "the retry did not ask the server again");
+    assert.equal(await t.present(path), true, "the retry did not reconcile the shell's removal");
+    assert.equal(removesForItsUser(t.ws), true, "the retry's attach did not settle");
+  } finally {
+    live.session.dispose();
+    ctx.mock.timers.reset();
+    stop();
+    t.close();
+  }
+});
+
+test("A2: disposal before the retry stops the schedule — no further page pull", async (ctx) => {
+  const t = await tab(tree(), false);
+  const { stop } = await synced(t);
+  await t.leaderCloses();
+  const pulls = countedPull(() => { throw new Error("BaaS request failed with 503"); });
+  const queue = createSerialQueue(() => undefined);
+  const live = createLiveInbound(t.ws, queue);
+  ctx.mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    await live.attach();
+    assert.equal(pulls(), 1, "setup: the attach pulled once");
+    live.session.dispose();
+    for (const step of [5_000, 15_000, 30_000, 60_000]) ctx.mock.timers.tick(step);
+    await queue.idle();
+    assert.equal(pulls(), 1, "a disposed effect still pulled the pages");
+  } finally {
+    ctx.mock.timers.reset();
+    stop();
+    t.close();
+  }
+});
 
 test("L7 live: the attach a gain queues pulls the pages, and only then may the new leader remove", async () => {
   const t = await tab(tree(), false);
