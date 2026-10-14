@@ -23,9 +23,9 @@ import { bearerToken, readJsonBody } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createDockerClient } from './ide-docker.mjs';
 import { createStdStreamDemux } from './bridge-ide-exec.mjs';
-import { jsonReply as reply } from './bridge-ide-sandbox.mjs';
+import { jsonReply as reply, sandboxNames } from './bridge-ide-sandbox.mjs';
 import {
-  requireSandboxIdentity, deriveNames, buildGitExecSpec, buildSearchExecSpec, buildWriteExecSpec, buildFsOpSpec, buildPortsExecSpec, buildPortTunnelExecSpec,
+  requireSandboxIdentity, buildGitExecSpec, buildSearchExecSpec, buildWriteExecSpec, buildFsOpSpec, buildPortsExecSpec, buildPortTunnelExecSpec,
 } from './ide-sandbox-spec.mjs';
 
 const BODY_LIMIT = 1024 * 1024; // editor writes carry (base64) file content
@@ -55,7 +55,7 @@ async function resolveSandbox(request, payload, env, config, verifySession, buck
   const session = verifySession(bearerToken(request), config);
   const identity = requireSandboxIdentity(session, payload?.workspaceId, env);
   takeToken(`${bucket.id}:${identity.userId}`, { capacity: bucket.capacity, refillPerSec: bucket.refillPerSec });
-  const names = { ...identity, ...deriveNames(identity.userId, identity.workspaceId) };
+  const names = sandboxNames(identity);
   const docker = createDockerClient(env);
   const info = await docker.inspect(names.containerName);
   if (!info?.State?.Running) throw Object.assign(new Error('No running sandbox. Open the workspace first.'), { status: 409 });

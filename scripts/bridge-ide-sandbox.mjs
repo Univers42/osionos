@@ -123,6 +123,15 @@ async function provision(env, names, { passive, docker, hardMaxMs }) {
   return startWithinCap(env, names, docker);
 }
 
+/** What every sandbox path hands to ensureSandbox: the hashed container/volume names AND the
+ *  owner/workspace ids, which createOrAdopt writes as the box's labels. The socket-proxy refuses a
+ *  create without them ("create rejected: Labels"); the terminal relay passed deriveNames() alone,
+ *  so a terminal could never start a stopped box, and a session POST joining that attempt got its
+ *  502 (2026-10-14, reproduced inside the VM ide-server). */
+export function sandboxNames(identity) {
+  return { ...identity, ...deriveNames(identity.userId, identity.workspaceId) };
+}
+
 /** Ensure the per-(user,workspace) sandbox container exists and runs. Shared by the
  *  /api/ide/session handler and the PTY attach path (explicit user actions) and by the
  *  LSP/fs-sync attach paths (`passive: true`), which the IDE opens together — so a box is
@@ -178,7 +187,7 @@ export function createIdeSandboxHandler({ config, verifySession, env = process.e
     let identity, names;
     try {
       identity = requireSandboxIdentity(session, payload?.workspaceId, env);
-      names = { ...identity, ...deriveNames(identity.userId, identity.workspaceId) };
+      names = sandboxNames(identity);
     } catch (error) {
       jsonReply(response, error?.status ?? 400, { ok: false, message: error?.message ?? 'Invalid request.' }, requestConfig);
       return true;
