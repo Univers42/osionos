@@ -186,6 +186,10 @@ const READ_CAP_BYTES = 512 * 1024;
 // executes them through the REAL local sh in tests). Failures print one
 // VFSERR:<tag> token the client maps into the FsError taxonomy; every path is
 // prefixed "./" so a name starting with "-" can never read as an option.
+// list globs instead of running ls: every op runs with Tty:true, and GNU ls on a
+// terminal shell-quotes a name with a space ('with space.txt'), which the explorer
+// showed quoted and could not open (busybox ls never quotes, so the alpine test
+// image missed it; vfs-conformance's "sh on a tty" target pins it).
 const FS_OP_SCRIPTS = {
   read: `f="./$1"; if [ ! -e "$f" ]; then echo VFSERR:ENOENT; exit 1; fi
 if [ -d "$f" ]; then echo VFSERR:EISDIR; exit 1; fi
@@ -196,7 +200,13 @@ if [ -d "$f" ]; then k=dir; s=0; else k=file; s=$(wc -c < "$f"); fi
 printf '%s|%s|%s' "$k" "$s" "$(date -r "$f" +%s 2>/dev/null || echo 0)"`,
   list: `f="./$1"; if [ ! -e "$f" ]; then echo VFSERR:ENOENT; exit 1; fi
 if [ ! -d "$f" ]; then echo VFSERR:ENOTDIR; exit 1; fi
-ls -1A -p "$f"`,
+cd "$f" && [ -r . ] || exit 1
+nl='
+'; cr=$(printf '\\r')
+for e in * .[!.]* ..?*; do
+  case $e in *"$nl"* | *"$cr"*) continue ;; esac
+  if [ -d "$e" ]; then printf '%s/\\n' "$e"; elif [ -e "$e" ] || [ -L "$e" ]; then printf '%s\\n' "$e"; fi
+done`,
   mkdir: `f="./$1"; if [ -e "$f" ]; then echo VFSERR:EEXIST; exit 1; fi
 d=$(dirname "$f"); if [ ! -d "$d" ]; then echo VFSERR:ENOPARENT; exit 1; fi
 mkdir "$f"`,

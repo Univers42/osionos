@@ -17,7 +17,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -82,7 +82,10 @@ function memFacade(): PageFacade {
 }
 
 /** Execute a built exec spec via the local sh — same argv a live sandbox runs. */
-function localShTransport(cwd: string): FsOpTransport {
+/** overPty runs each script under script(1), a real terminal: the bridge execs every fs op
+ *  with Tty:true, and a terminal changes what tools print (GNU ls shell-quotes
+ *  `with space.txt` on a tty, so the explorer showed the quotes and the open said ENOENT). */
+function localShTransport(cwd: string, overPty = false): FsOpTransport {
   return (op, params) =>
     new Promise((resolve) => {
       let spec: { Cmd: string[] };
@@ -92,7 +95,8 @@ function localShTransport(cwd: string): FsOpTransport {
         resolve({ exitCode: 1, output: `VFSERR:${(error as Error).message}` });
         return;
       }
-      const [cmd, ...args] = spec.Cmd;
+      const quoted = spec.Cmd.map((arg) => `'${arg.replace(/'/g, "'\\''")}'`).join(" ");
+      const [cmd, ...args] = overPty ? ["script", "-qec", quoted, "/dev/null"] : spec.Cmd;
       execFile(cmd, args, { cwd, maxBuffer: 8 * 1024 * 1024 }, (error, stdout) => {
         const exitCode = error ? (typeof error.code === "number" ? error.code : 1) : 0;
         resolve({ exitCode, output: String(stdout) });
@@ -100,9 +104,9 @@ function localShTransport(cwd: string): FsOpTransport {
     });
 }
 
-function hasSh(): boolean {
+function hasSh(cmd = "sh", args = ["-c", "exit 0"]): boolean {
   try {
-    execFileSync("sh", ["-c", "exit 0"], { stdio: "ignore" });
+    execFileSync(cmd, args, { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -116,6 +120,9 @@ const TARGETS: { name: string; make: () => FsProvider }[] = [
   { name: "page-file", make: () => createPageProvider("workspace", createPageFileFacade(createFixtureStore("ws"))) },
   ...(hasSh()
     ? [{ name: "sandbox(sh)", make: () => createSandboxProvider("sandbox", localShTransport(mkdtempSync(join(tmpdir(), "vfs-")))) }]
+    : []),
+  ...(hasSh("script", ["-qec", "exit 0", "/dev/null"])
+    ? [{ name: "sandbox(sh on a tty)", make: () => createSandboxProvider("sandbox", localShTransport(mkdtempSync(join(tmpdir(), "vfs-")), true)) }]
     : []),
 ];
 
@@ -268,6 +275,16 @@ test("mem watch: native create/write/delete events, stops on abort", async () =>
   controller.abort();
   await done;
   assert.deepEqual(events, ["create:w.txt", "write:w.txt", "delete:w.txt"]);
+});
+
+test("sandbox list: a name a shell made with a newline in it is left out, never split into two entries", async (t) => {
+  if (!hasSh()) return t.skip("no sh");
+  const dir = mkdtempSync(join(tmpdir(), "vfs-"));
+  writeFileSync(join(dir, "line\nbreak.txt"), "");
+  writeFileSync(join(dir, "ok.txt"), "");
+  writeFileSync(join(dir, ".hidden"), "");
+  const p = createSandboxProvider("sandbox", localShTransport(dir));
+  assert.deepEqual((await p.list(root(p))).map((entry) => entry.name), [".hidden", "ok.txt"]);
 });
 
 test("overlay: lower-layer read-through, whiteout delete, merged listing", async () => {
