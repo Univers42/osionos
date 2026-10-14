@@ -111,7 +111,7 @@ const PanelToggleChip: React.FC = () => {
 export const WorkbenchStatusBar: React.FC = () => (
   <footer
     data-testid="workbench-statusbar"
-    className="flex shrink-0 items-center gap-1 bg-transparent px-[var(--osio-statusbar-px)] text-2xs text-[var(--osio-fg-muted)]"
+    className="flex shrink-0 items-center gap-1 bg-transparent pl-[var(--osio-statusbar-px)] pr-[var(--osio-statusbar-end)] text-2xs text-[var(--osio-fg-muted)]"
     style={{ height: "var(--osio-statusbar-h)" }}
   >
     <BranchChip />

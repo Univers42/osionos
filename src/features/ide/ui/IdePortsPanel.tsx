@@ -54,7 +54,7 @@ export const IdePortsPanel: React.FC = () => {
         <p className="osio-code-empty">Nothing listening in the sandbox. Start a server in the terminal and it appears here.</p>
       )}
       {(online ? (ports ?? []) : []).map((entry) => (
-        <div key={entry.port} className="flex min-h-7 items-center gap-3 px-3 hover:bg-[var(--osio-code-btn-hover)]">
+        <div key={entry.port} className="flex min-h-6 items-center gap-3 px-3 hover:bg-[var(--osio-code-btn-hover)]">
           <span className="w-14 shrink-0 text-right font-mono font-semibold tabular-nums text-[var(--osio-code-caret)]">{entry.port}</span>
           <span className="min-w-0 flex-1 truncate font-mono text-[var(--osio-code-fg-muted)]">{entry.address}</span>
           <Tooltip label={`Open a preview of port ${entry.port}`} side="left">

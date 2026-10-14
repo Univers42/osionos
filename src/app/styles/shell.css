@@ -21,6 +21,11 @@
   --osio-dock-shadow: var(--osio-pane-shadow);
   /* The status bar sits on the canvas; its chips start where the cards do. */
   --osio-statusbar-px: var(--osio-frame-gap);
+  /* The contact launcher (a 48px button in a 16px padded corner) floats over the
+     bottom-right, so the Panel chip stops short of it. Ponytail: the 3rem
+     mirrors that button's h-12/w-12 by hand; a resized launcher leaves the
+     wrong gap here. */
+  --osio-statusbar-end: calc(var(--osio-space-4) * 2 + 3rem);
 }
 
 /* Edge to edge, the outline would be clipped by the window at the outer

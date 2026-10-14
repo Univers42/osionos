@@ -219,6 +219,18 @@ test.describe("status bar", () => {
     expect(await style(chip, "backgroundColor")).toBe(await tokenAt(shellOf(page), "background-color", "--osio-control-bg-hover"));
     expect((await rect(chip)).height).toBeGreaterThanOrEqual(20);
   });
+
+  test("the Panel chip stays clear of the floating contact launcher", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    const chip = page.getByTestId("workbench-statusbar").getByRole("button", { name: /Panel/ });
+    const box = await rect(chip);
+    // The launcher is a circle: its overlap with the chip is at the top corner, not the centre.
+    const hits = await page.evaluate(
+      (b) => [0.15, 0.5, 0.85].map((f) => document.elementFromPoint(b.left + b.width * f, b.top + 2)?.closest("button")?.textContent?.trim()),
+      box,
+    );
+    expect(hits).toEqual(["Panel", "Panel", "Panel"]);
+  });
 });
 
 test.describe("editor title bar", () => {
