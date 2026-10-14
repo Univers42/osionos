@@ -89,8 +89,9 @@ test.describe("Relate picker stays inside the viewport", () => {
       await trigger.click();
       const picker = page.getByTestId("relation-picker");
       await expect(picker).toBeVisible();
-      await expect(picker).toBeInViewport({ ratio: 1 });
-      const box = await picker.boundingBox();
+      const panel = picker.locator("xpath=..");
+      await expect(panel).toBeInViewport({ ratio: 1 });
+      const box = await panel.boundingBox();
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
     });

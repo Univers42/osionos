@@ -117,8 +117,30 @@ test.describe("page properties", () => {
       probe.remove();
       return look;
     });
-    expect(await computed(picker, "border-top-left-radius")).toBe(reference.radius);
-    expect(await computed(picker, "box-shadow")).toBe(reference.shadow);
+    const panel = picker.locator("xpath=..");
+    expect(await computed(panel, "border-top-left-radius")).toBe(reference.radius);
+    // The kit Popover's Tailwind shadow stacks four empty ring layers in front of
+    // the real one; they paint nothing, so compare the layers that do.
+    const painted = (shadow) => shadow.replaceAll("rgba(0, 0, 0, 0) 0px 0px 0px 0px, ", "");
+    expect(painted(await computed(panel, "box-shadow"))).toBe(painted(reference.shadow));
+  });
+
+  test("the Relate picker takes focus, and Escape or an outside click closes it", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await seedProperties(page, [{ key: "related", label: "Related", type: "relation", value: [] }]);
+    const relate = properties(page).getByRole("button", { name: "Relate" });
+    const picker = page.getByTestId("relation-picker");
+
+    await relate.click();
+    await expect(picker.getByRole("button").first()).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(picker).toHaveCount(0);
+    await expect(relate).toBeFocused();
+
+    await relate.click();
+    await expect(picker).toBeVisible();
+    await properties(page).getByText("Related", { exact: true }).click();
+    await expect(picker).toHaveCount(0);
   });
 
   test("a multi-select option is added from the dropdown", async ({ page, baseURL }) => {
