@@ -72,14 +72,14 @@ export const IdeTreeRow: React.FC<{ node: IdeTreeNode; depth: number }> = ({ nod
         {node.isFolder ? (
           isOpen ? <ChevronDown size={14} className="shrink-0 opacity-70" /> : <ChevronRight size={14} className="shrink-0 opacity-70" />
         ) : (
-          <FileCode2 size={13} className="shrink-0" style={{ color: languageForFileName(node.page.title).accent }} />
+          <FileCode2 size={12} className="shrink-0" style={{ color: languageForFileName(node.page.title).accent }} />
         )}
         <span className="flex-1 truncate">{node.page.title || "Untitled"}</span>
         <span className="hidden shrink-0 items-center gap-0.5 pr-1 group-hover:flex">
           {node.isFolder && (
             <>
-              <RowAction title="New file" onClick={() => tree.startCreate(id, "code")}><FilePlus size={13} /></RowAction>
-              <RowAction title="New folder" onClick={() => tree.startCreate(id, "folder")}><FolderPlus size={13} /></RowAction>
+              <RowAction title="New file" onClick={() => tree.startCreate(id, "code")}><FilePlus size={12} /></RowAction>
+              <RowAction title="New folder" onClick={() => tree.startCreate(id, "folder")}><FolderPlus size={12} /></RowAction>
             </>
           )}
           <RowAction title="Rename" onClick={() => tree.startRename(id)}><Pencil size={12} /></RowAction>

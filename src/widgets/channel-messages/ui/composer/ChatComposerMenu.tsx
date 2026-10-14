@@ -26,10 +26,10 @@ export type ChatCommandId = 'image' | 'file' | 'voice' | 'link';
 interface ChatCommand { id: ChatCommandId; label: string; hint: string; icon: React.ReactNode }
 
 const COMMANDS: ChatCommand[] = [
-  { id: 'image', label: 'Image', hint: 'Upload a photo', icon: <ImageIcon size={15} /> },
-  { id: 'file', label: 'File', hint: 'Attach a document', icon: <FileUp size={15} /> },
-  { id: 'voice', label: 'Voice message', hint: 'Record audio (max 1:00)', icon: <Mic size={15} /> },
-  { id: 'link', label: 'Link', hint: 'Paste a URL preview', icon: <Link2 size={15} /> },
+  { id: 'image', label: 'Image', hint: 'Upload a photo', icon: <ImageIcon size={16} /> },
+  { id: 'file', label: 'File', hint: 'Attach a document', icon: <FileUp size={16} /> },
+  { id: 'voice', label: 'Voice message', hint: 'Record audio (max 1:00)', icon: <Mic size={16} /> },
+  { id: 'link', label: 'Link', hint: 'Paste a URL preview', icon: <Link2 size={16} /> },
 ];
 
 interface ChatComposerMenuProps {

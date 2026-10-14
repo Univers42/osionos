@@ -431,7 +431,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
     return (
       <div key={thread.id} className="ml-4">
         <SidebarNavItem
-          icon={<GitBranch size={13} />}
+          icon={<GitBranch size={12} />}
           label={thread.name}
           active={activePageKind === "channel" && activePageId === thread.id}
           onClick={() => openChannel(thread)}
@@ -585,10 +585,10 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
         }}
       >
         <div className="mb-2 grid grid-cols-4 gap-1 px-1">
-          <button type="button" title="Create text channel" className="flex h-8 items-center justify-center rounded-md text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={() => createChannel("text", "messages")}><Hash size={15} /></button>
-          <button type="button" title="Create forum" className="flex h-8 items-center justify-center rounded-md text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={() => createChannel("forum", "forum")}><MessageSquare size={15} /></button>
-          <button type="button" title="Create voice room" className="flex h-8 items-center justify-center rounded-md text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={() => createChannel("audio", "audio")}><Volume2 size={15} /></button>
-          <button type="button" title="Create video room" className="flex h-8 items-center justify-center rounded-md text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={() => createChannel("video", "video")}><Video size={15} /></button>
+          <button type="button" title="Create text channel" className="flex h-8 items-center justify-center rounded-md text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={() => createChannel("text", "messages")}><Hash size={16} /></button>
+          <button type="button" title="Create forum" className="flex h-8 items-center justify-center rounded-md text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={() => createChannel("forum", "forum")}><MessageSquare size={16} /></button>
+          <button type="button" title="Create voice room" className="flex h-8 items-center justify-center rounded-md text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={() => createChannel("audio", "audio")}><Volume2 size={16} /></button>
+          <button type="button" title="Create video room" className="flex h-8 items-center justify-center rounded-md text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={() => createChannel("video", "video")}><Video size={16} /></button>
         </div>
         {renderChannelCategories()}
       </SidebarSection>

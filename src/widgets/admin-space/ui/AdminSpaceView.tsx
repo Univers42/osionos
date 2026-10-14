@@ -91,7 +91,7 @@ export const AdminSpaceView: React.FC = () => {
           page, and it drives that surface for everyone.
         </p>
         <h2 className="mt-8 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">
-          <FileText size={13} /> Templates
+          <FileText size={12} /> Templates
         </h2>
         <div className="mt-3 space-y-3">
           {SURFACES.map(({ surface, label, desc }) => {
@@ -112,7 +112,7 @@ export const AdminSpaceView: React.FC = () => {
                       onClick={() => openTemplate(tmpl)}
                       className="inline-flex shrink-0 items-center gap-2 rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-sm font-medium text-[var(--osio-accent-fg)] hover:opacity-90"
                     >
-                      <PenSquare size={15} /> Edit
+                      <PenSquare size={16} /> Edit
                     </button>
                   ) : (
                     <button
@@ -121,7 +121,7 @@ export const AdminSpaceView: React.FC = () => {
                       onClick={() => void create(surface, label)}
                       className="inline-flex shrink-0 items-center gap-2 rounded-md border border-[var(--osio-border-default)] px-3 py-1.5 text-sm font-medium text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] disabled:opacity-50"
                     >
-                      <Plus size={15} /> {busy === surface ? "Creating…" : "Create"}
+                      <Plus size={16} /> {busy === surface ? "Creating…" : "Create"}
                     </button>
                   )}
                 </div>

@@ -49,10 +49,10 @@ export const PageConnections: React.FC<Props> = ({ pageId, workspaceId }) => {
 
   return (
     <div className="mt-2 flex flex-col gap-1 text-sm">
-      {data.parent ? <ConnRow icon={<Folder size={13} />} label="In folder" refs={[data.parent]} onGo={go} /> : null}
-      {data.children.length ? <ConnRow icon={<CornerDownRight size={13} />} label="Contains" refs={data.children} onGo={go} /> : null}
-      {data.backlinks.length ? <ConnRow icon={<Link2 size={13} />} label="Linked from" refs={data.backlinks} onGo={go} /> : null}
-      {data.mentionRefs.length ? <ConnRow icon={<AtSign size={13} />} label="Mentions" refs={data.mentionRefs} onGo={go} /> : null}
+      {data.parent ? <ConnRow icon={<Folder size={12} />} label="In folder" refs={[data.parent]} onGo={go} /> : null}
+      {data.children.length ? <ConnRow icon={<CornerDownRight size={12} />} label="Contains" refs={data.children} onGo={go} /> : null}
+      {data.backlinks.length ? <ConnRow icon={<Link2 size={12} />} label="Linked from" refs={data.backlinks} onGo={go} /> : null}
+      {data.mentionRefs.length ? <ConnRow icon={<AtSign size={12} />} label="Mentions" refs={data.mentionRefs} onGo={go} /> : null}
     </div>
   );
 };

@@ -339,7 +339,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     () => (
       <div className="flex items-center gap-2 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
         <div className="flex shrink-0 items-center gap-2">
-          <Braces size={15} aria-hidden className="text-[var(--osio-accent)]" />
+          <Braces size={16} aria-hidden className="text-[var(--osio-accent)]" />
           <div ref={langPickerRef} className="relative">
             <button
               type="button"
@@ -410,7 +410,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             ].join(" ")}
             onClick={() => commitBlockUpdate(block.id, { lineNumbers: !codeShowLineNumbers })}
           >
-            <Hash size={13} />
+            <Hash size={12} />
           </button>
           <button
             type="button"
@@ -418,7 +418,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--osio-code-fg-muted)] transition-colors hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
             onClick={() => commitBlockUpdate(block.id, { codeTheme: block.codeTheme === "light" ? "dark" : "light" })}
           >
-            {block.codeTheme === "light" ? <Moon size={13} /> : <Sun size={13} />}
+            {block.codeTheme === "light" ? <Moon size={12} /> : <Sun size={12} />}
           </button>
           {isRenderable && (
             <button
@@ -431,7 +431,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
                 })
               }
             >
-              {codeView === "preview" ? <><Code size={13} /> Source</> : <><Eye size={13} /> Preview</>}
+              {codeView === "preview" ? <><Code size={12} /> Source</> : <><Eye size={12} /> Preview</>}
             </button>
           )}
           <button
@@ -443,7 +443,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             ].join(" ")}
             onClick={handleCopyCode}
           >
-            {copiedCode ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
+            {copiedCode ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
           </button>
         </div>
       </div>

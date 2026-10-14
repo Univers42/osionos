@@ -50,7 +50,7 @@ export const PageShareButton: React.FC<PageShareButtonProps> = ({ pageId, worksp
         aria-label="Share page"
         aria-expanded={open}
       >
-        <Share2 size={15} />
+        <Share2 size={16} />
         <span className="hidden sm:inline">Share</span>
       </button>
       {open && (

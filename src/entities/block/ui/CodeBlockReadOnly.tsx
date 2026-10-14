@@ -72,7 +72,7 @@ export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
           ].join(" ")}
           onClick={handleCopy}
         >
-          {copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
+          {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
         </button>
       </div>
       {isMermaid ? (

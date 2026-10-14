@@ -95,17 +95,17 @@ export const LinkEditorPanel: React.FC<LinkEditorPanelProps> = ({
       </label>
       <div className="flex items-center justify-between pt-1">
         <button type="button" className={ACTION_CLASS} onClick={() => onOpenUrl(draftHref.trim())}>
-          <ExternalLink size={13} /> Open
+          <ExternalLink size={12} /> Open
         </button>
         <button type="button" className={ACTION_CLASS} onClick={() => navigator.clipboard?.writeText(draftHref.trim())}>
-          <Copy size={13} /> Copy
+          <Copy size={12} /> Copy
         </button>
         <button
           type="button"
           className={`${ACTION_CLASS} hover:text-[var(--osio-danger)]`}
           onClick={onRemove}
         >
-          <Unlink size={13} /> Remove
+          <Unlink size={12} /> Remove
         </button>
       </div>
     </div>

@@ -277,14 +277,14 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
             onClick={() => setSettingsTab('settings')}
             className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-[var(--osio-border-default)] px-2 py-1 text-xs hover:bg-[var(--osio-bg-hover)]"
           >
-            <Settings size={13} /> Settings
+            <Settings size={12} /> Settings
           </button>
           <button
             type="button"
             onClick={() => setSettingsTab('people')}
             className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-[var(--osio-border-default)] px-2 py-1 text-xs hover:bg-[var(--osio-bg-hover)]"
           >
-            <Users size={13} /> People
+            <Users size={12} /> People
           </button>
         </div>
       </header>

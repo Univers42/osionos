@@ -302,7 +302,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
         }}
         label="Page options" title="Page options"
       >
-        <MoreHorizontal size={13} />
+        <MoreHorizontal size={12} />
       </IconButton>
 
       {isMenuOpen &&

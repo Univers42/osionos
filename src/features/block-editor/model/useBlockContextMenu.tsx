@@ -92,7 +92,7 @@ function createTableContextMenuSections(
       label: "Table",
       items: [
         {
-          icon: <Settings2 size={15} />,
+          icon: <Settings2 size={16} />,
           label: "Table settings",
           onClick: handleUnavailable,
           subItems: [
@@ -401,12 +401,12 @@ export function useBlockContextMenu({
       label: "Insert",
       items: [
         {
-          icon: <PlusSquare size={15} />,
+          icon: <PlusSquare size={16} />,
           label: "Insert text above",
           onClick: () => handleInsert("before"),
         },
         {
-          icon: <PlusSquare size={15} />,
+          icon: <PlusSquare size={16} />,
           label: "Insert text below",
           onClick: () => handleInsert("after"),
         },
@@ -417,7 +417,7 @@ export function useBlockContextMenu({
       ...(blockLocation.index > 0
         ? [
             {
-              icon: <ArrowUp size={15} />,
+              icon: <ArrowUp size={16} />,
               label: "Move up",
               onClick: () => handleMove("up"),
             },
@@ -426,7 +426,7 @@ export function useBlockContextMenu({
       ...(blockLocation.index < blockLocation.siblings.length - 1
         ? [
             {
-              icon: <ArrowDown size={15} />,
+              icon: <ArrowDown size={16} />,
               label: "Move down",
               onClick: () => handleMove("down"),
             },
@@ -440,7 +440,7 @@ export function useBlockContextMenu({
     const transformSection: BlockContextMenuSection = {
       items: [
         {
-          icon: <MoveRight size={15} />,
+          icon: <MoveRight size={16} />,
           label: "Turn into",
           onClick: handleUnavailable,
           subItems: BLOCK_TRANSFORM_OPTIONS.map((option) => ({
@@ -508,7 +508,7 @@ export function useBlockContextMenu({
           ]),
         },
         {
-          icon: <Palette size={15} />,
+          icon: <Palette size={16} />,
           label: "Color",
           onClick: handleUnavailable,
           subItems: [
@@ -585,7 +585,7 @@ export function useBlockContextMenu({
           ],
         },
         {
-          icon: <Plus size={15} />,
+          icon: <Plus size={16} />,
           label: "Create color profile",
           panelOnly: true,
           onClick: () => undefined,
@@ -601,39 +601,39 @@ export function useBlockContextMenu({
 
     const actionItems = [
       {
-        icon: <Copy size={15} />,
+        icon: <Copy size={16} />,
         label: "Copy block",
         onClick: handleCopyBlock,
       },
       ...(effectiveBlockContent.trim()
         ? [
             {
-              icon: <Copy size={15} />,
+              icon: <Copy size={16} />,
               label: "Copy text",
               onClick: handleCopyText,
             },
           ]
         : []),
       {
-        icon: <Link size={15} />,
+        icon: <Link size={16} />,
         label: "Copy link to block",
         shortcut: "Alt+⇧+L",
         onClick: handleCopyLink,
       },
       {
-        icon: <CopyPlus size={15} />,
+        icon: <CopyPlus size={16} />,
         label: "Duplicate",
         shortcut: "Ctrl+D",
         onClick: handleDuplicate,
       },
       {
-        icon: <MoveRight size={15} />,
+        icon: <MoveRight size={16} />,
         label: "Move to",
         shortcut: "Ctrl+⇧+P",
         onClick: handleUnavailable,
       },
       {
-        icon: <Settings2 size={15} />,
+        icon: <Settings2 size={16} />,
         label: "Component settings",
         subItems: [],
         onClick: handleUnavailable,
@@ -649,7 +649,7 @@ export function useBlockContextMenu({
       {
         items: [
           {
-            icon: <Trash2 size={15} />,
+            icon: <Trash2 size={16} />,
             label: "Delete",
             shortcut: "Del",
             danger: true,
@@ -660,25 +660,25 @@ export function useBlockContextMenu({
       {
         items: [
           {
-            icon: <MessageSquare size={15} />,
+            icon: <MessageSquare size={16} />,
             label: "Comment",
             shortcut: "Ctrl+⇧+M",
             onClick: handleComment,
           },
           {
-            icon: <MessageSquare size={15} />,
+            icon: <MessageSquare size={16} />,
             label: "Suggest edits",
             shortcut: "Ctrl+⇧+Alt+X",
             onClick: handleUnavailable,
           },
           {
-            icon: <Presentation size={15} />,
+            icon: <Presentation size={16} />,
             label: "Present from here",
             shortcut: "Ctrl+Alt+P",
             onClick: handleUnavailable,
           },
           {
-            icon: <Sparkles size={15} />,
+            icon: <Sparkles size={16} />,
             label: "Ask AI",
             shortcut: "Ctrl+J",
             onClick: handleUnavailable,

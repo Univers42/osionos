@@ -75,7 +75,7 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
               onClick={() => useIdeDockStore.getState().newTerminal()}
               className="flex h-5 w-5 items-center justify-center rounded-xs hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] hover:text-[var(--osio-code-fg)]"
             >
-              <Plus size={13} />
+              <Plus size={12} />
             </button>
             <button
               type="button"
@@ -84,7 +84,7 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
               onClick={() => (secondaryTerm ? useIdeDockStore.getState().closeSecondary() : useIdeDockStore.getState().splitTerminal())}
               className="flex h-5 w-5 items-center justify-center rounded-xs hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] hover:text-[var(--osio-code-fg)]"
             >
-              <Columns2 size={13} />
+              <Columns2 size={12} />
             </button>
           </>
         )}
@@ -95,7 +95,7 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
           onClick={onClose}
           className="flex h-5 w-5 items-center justify-center rounded-xs hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] hover:text-[var(--osio-code-fg)]"
         >
-          <X size={13} />
+          <X size={12} />
         </button>
       </div>
       {/* Terminals never unmount once opened — the PTY sockets and scrollback live on.

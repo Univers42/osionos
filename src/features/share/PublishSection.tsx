@@ -27,7 +27,7 @@ export const PublishSection: React.FC<{ pageId: string }> = ({ pageId }) => {
     <div className="mt-3 border-t border-[var(--osio-border-default)] pt-3">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--osio-fg-default)]"><Globe size={13} /> Publish to web</p>
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--osio-fg-default)]"><Globe size={12} /> Publish to web</p>
           <p className="text-2xs text-[var(--osio-fg-muted)]">Anyone with the link reads a snapshot.</p>
         </div>
         {token ? (

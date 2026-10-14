@@ -61,7 +61,7 @@ export const RunConsole: React.FC<Props> = ({ lines, running, exit, onClear, onS
         <span className="flex-1" />
         {running && <button type="button" title="Stop" className={btn} onClick={onStop}><Square size={12} /> Stop</button>}
         <button type="button" title="Clear" className={btn} onClick={onClear}><Trash2 size={12} /> Clear</button>
-        <button type="button" title="Hide terminal" className={btn} onClick={onClose}><X size={13} /></button>
+        <button type="button" title="Hide terminal" className={btn} onClick={onClose}><X size={12} /></button>
       </div>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-xs leading-5">
         {lines.length === 0 ? (

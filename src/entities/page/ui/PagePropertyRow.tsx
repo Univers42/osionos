@@ -55,7 +55,7 @@ export const PagePropertyRow: React.FC<Props> = ({ property, workspaceId, pageId
     {editable ? (
       <button type="button" onClick={() => onRemove(property.key)} title="Remove property"
         className="mt-1 rounded-xs p-1 text-[var(--osio-fg-subtle)] opacity-0 hover:bg-[var(--osio-bg-subtle)] group-hover:opacity-100">
-        <X size={13} />
+        <X size={12} />
       </button>
     ) : null}
   </div>

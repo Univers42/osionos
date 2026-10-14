@@ -63,7 +63,7 @@ function DrawZoomBarImpl({
     <div style={BAR_STYLE} role="group" aria-label="Zoom controls">
       <button type="button"
           onMouseDown={(event) => event.preventDefault()} style={BTN_STYLE} aria-label="Zoom out (⌘−)" title="Zoom out — ⌘−" onClick={() => engine?.zoomOut()}>
-        <ZoomOut size={15} aria-hidden />
+        <ZoomOut size={16} aria-hidden />
       </button>
       <button
         type="button"
@@ -77,11 +77,11 @@ function DrawZoomBarImpl({
       </button>
       <button type="button"
           onMouseDown={(event) => event.preventDefault()} style={BTN_STYLE} aria-label="Zoom in (⌘+)" title="Zoom in — ⌘+" onClick={() => engine?.zoomIn()}>
-        <ZoomIn size={15} aria-hidden />
+        <ZoomIn size={16} aria-hidden />
       </button>
       <button type="button"
           onMouseDown={(event) => event.preventDefault()} style={BTN_STYLE} aria-label="Zoom to fit (⇧1)" title="Zoom to fit — ⇧1" onClick={() => engine?.fit()}>
-        <Maximize size={15} aria-hidden />
+        <Maximize size={16} aria-hidden />
       </button>
       {!contentVisible ? (
         <button
@@ -91,7 +91,7 @@ function DrawZoomBarImpl({
           aria-label="Scroll back to content"
           onClick={() => engine?.fit()}
         >
-          <Focus size={15} aria-hidden />
+          <Focus size={16} aria-hidden />
           Back to content
         </button>
       ) : null}

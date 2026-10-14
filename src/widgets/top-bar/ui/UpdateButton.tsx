@@ -67,7 +67,7 @@ export const UpdateButton: React.FC = () => {
         "inline-flex h-[var(--osio-control-h-sm)] items-center gap-1.5 rounded-[var(--osio-radius-control)] border border-[var(--osio-update)]/25 bg-[var(--osio-update)]/12 px-2.5 text-xs font-semibold text-[var(--osio-update)] transition-[background-color,border-color,color,transform] duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)] active:scale-[0.97] hover:border-[var(--osio-update)]/40 hover:bg-[var(--osio-update)]/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-update)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-topbar-bg)] disabled:opacity-60 disabled:active:scale-100",
       )}
     >
-      <RefreshCw size={13} aria-hidden className={busy ? "animate-spin" : undefined} />
+      <RefreshCw size={12} aria-hidden className={busy ? "animate-spin" : undefined} />
       Update
     </button>
   );

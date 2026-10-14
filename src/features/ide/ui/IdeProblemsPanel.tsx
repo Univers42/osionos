@@ -24,9 +24,9 @@ const EMPTY: never[] = [];
 const URI_PREFIX = "file:///workspace/";
 
 function severityIcon(severity: number) {
-  if (severity === 1) return <AlertCircle size={13} className="text-[var(--osio-danger,#f87171)]" />;
-  if (severity === 2) return <AlertTriangle size={13} className="text-[var(--osio-warning,#fbbf24)]" />;
-  return <Info size={13} className="text-[var(--osio-code-fg-muted)]" />;
+  if (severity === 1) return <AlertCircle size={12} className="text-[var(--osio-danger,#f87171)]" />;
+  if (severity === 2) return <AlertTriangle size={12} className="text-[var(--osio-warning,#fbbf24)]" />;
+  return <Info size={12} className="text-[var(--osio-code-fg-muted)]" />;
 }
 
 /** Diagnostics/Problems panel (P5): every LSP diagnostic across open documents,

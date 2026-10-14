@@ -58,7 +58,7 @@ const WikiPageRow: React.FC<{ pageId: string; now: number }> = ({ pageId, now })
         className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm text-[var(--osio-fg-default)] transition-colors hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--osio-focus-ring-color)]"
       >
         <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-          {page.icon ? <IconValueView value={page.icon} size={16} /> : <FileText size={15} className="text-[var(--osio-fg-muted)]" />}
+          {page.icon ? <IconValueView value={page.icon} size={16} /> : <FileText size={16} className="text-[var(--osio-fg-muted)]" />}
         </span>
         <span className="min-w-0 flex-1 truncate font-medium">{page.title || "Untitled"}</span>
         <span className="shrink-0 text-xs text-[var(--osio-fg-muted)]">{formatEditedAgo(page.updatedAt, now)}</span>

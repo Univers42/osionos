@@ -77,7 +77,7 @@ export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
         <Sparkles size={16} className="text-[var(--osio-accent)]" aria-hidden="true" />
         <span className="flex-1 truncate text-sm font-semibold text-[var(--osio-fg-default)]">Assistant</span>
         <IconButton size="sm" label="Close assistant" onClick={onClose}>
-          <X size={15} aria-hidden="true" />
+          <X size={16} aria-hidden="true" />
         </IconButton>
       </header>
 

@@ -111,7 +111,7 @@ export const CoverVideoTab: React.FC<CoverVideoTabProps> = ({ value, onSelect, o
       {note ? <p className="text-xs text-[var(--osio-fg-subtle)]">{note}</p> : null}
 
       <div className="flex items-center gap-2 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2">
-        <Link size={15} className="text-[var(--osio-fg-muted)]" />
+        <Link size={16} className="text-[var(--osio-fg-muted)]" />
         <input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}

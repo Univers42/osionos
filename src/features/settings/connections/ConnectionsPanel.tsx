@@ -56,7 +56,7 @@ const DiscoverGrid: React.FC<{ isConnected: (id: string) => boolean; busyId: str
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2.5">
-        <Search size={15} className="text-[var(--osio-fg-subtle)]" />
+        <Search size={16} className="text-[var(--osio-fg-subtle)]" />
         <input
           type="search"
           value={query}
