@@ -166,13 +166,13 @@ const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-3">
+        <form onSubmit={handleSubmit} className="space-y-3">
           <label className="block text-xs font-medium text-[var(--osio-fg-muted)]">
             <span>Name</span>
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 text-sm text-[var(--osio-fg-default)] outline-none focus:border-[var(--osio-accent)]"
+              className="osio-field mt-1 w-full px-2 text-sm"
             />
           </label>
           <div className="grid grid-cols-2 gap-2">
@@ -182,7 +182,7 @@ const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
                 type="color"
                 value={textColor}
                 onChange={(event) => setTextColor(event.target.value)}
-                className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-transparent"
+                className="osio-field mt-1 w-full"
               />
             </label>
             <label className="text-xs font-medium text-[var(--osio-fg-muted)]">
@@ -191,13 +191,13 @@ const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
                 type="color"
                 value={backgroundColor}
                 onChange={(event) => setBackgroundColor(event.target.value)}
-                className="mt-1 h-8 w-full rounded-md border border-[var(--osio-border-default)] bg-transparent"
+                className="osio-field mt-1 w-full"
               />
             </label>
           </div>
           <button
             type="submit"
-            className="w-full rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--osio-accent-fg)] transition-opacity hover:opacity-90"
+            className="w-full rounded-[var(--osio-control-radius)] bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--osio-accent-fg)] transition-opacity hover:opacity-90"
           >
             + Save profile
           </button>
@@ -207,7 +207,7 @@ const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
           {profiles.map((profile) => (
             <div
               key={profile.id}
-              className="flex items-center gap-2 rounded-lg border border-[var(--osio-border-default)] px-2 py-1.5"
+              className="flex items-center gap-2 rounded-[var(--osio-radius-sm)] px-2 py-1.5 hover:bg-[var(--osio-menu-item-hover-bg)]"
             >
               <span
                 className="h-5 w-5 rounded-[var(--osio-radius-sm)] border border-[var(--osio-border-default)]"

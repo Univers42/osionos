@@ -199,8 +199,10 @@ test.describe("editor menu chrome", () => {
       const panelFill = (await readChrome(panel)).backgroundColor;
       const row = panel.getByRole("menuitem").nth(1);
       await row.hover();
-      const hoverFill = await row.evaluate((el) => getComputedStyle(el).backgroundColor);
-      expect(await paintedContrast(page, panelFill, hoverFill)).toBeGreaterThan(1.15);
+      // The fill fades in over --osio-dur-fast; reading it mid-transition measures a half-painted row.
+      await expect
+        .poll(async () => paintedContrast(page, panelFill, await row.evaluate((el) => getComputedStyle(el).backgroundColor)))
+        .toBeGreaterThan(1.15);
       const edge = await panel.locator(".osio-menu-separator").first().evaluate((el) => getComputedStyle(el).backgroundColor);
       expect(await paintedContrast(page, panelFill, edge)).toBeGreaterThan(1.15);
     });

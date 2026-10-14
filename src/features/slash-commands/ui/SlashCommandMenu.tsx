@@ -210,7 +210,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           hidden entirely until you type, so there's no input-looking box on open. */}
       {command ? (
         <div
-          className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-border-default)] px-2 py-2"
+          className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-menu-separator)] px-2 py-2"
           aria-hidden="true"
         >
           <Search size={14} className="shrink-0 text-[var(--osio-fg-subtle)]" />
@@ -268,7 +268,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 border-t border-[var(--osio-border-default)] px-2 py-1.5 text-2xs text-[var(--osio-fg-muted)]">
+      <div className="flex shrink-0 items-center gap-2 border-t border-[var(--osio-menu-separator)] px-2 py-1.5 text-2xs text-[var(--osio-fg-muted)]">
         <span>↑↓ navigate</span>
         <span aria-hidden>·</span>
         <span>↵ select</span>

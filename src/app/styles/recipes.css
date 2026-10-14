@@ -121,6 +121,7 @@
   color: var(--osio-fg-default);
   font-size: var(--osio-font-size-sm);
   text-align: left;
+  cursor: pointer;
   transition: background-color var(--osio-dur-fast) var(--osio-ease-standard);
 
   &:hover,
