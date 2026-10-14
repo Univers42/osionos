@@ -240,3 +240,36 @@ test("ledger F2: every changed workspace leaves the stored document, not only th
   store.flush(); // neither workspace fits alone any more
   assert.deepEqual(JSON.parse(origin.getItem(SYNC_LEDGER_KEY) ?? "{}"), {});
 });
+
+// A browser that checks the origin's total refuses even a shrinking write once the origin is
+// over quota, so forgetting the changed workspaces cannot be written either: the key goes
+// (devil Q1 on 3f0635a, 2026-10-14).
+test("ledger F2: when even the shrunk document is refused, the key is removed", () => {
+  const origin = originStorage(50, { [SYNC_LEDGER_KEY]: JSON.stringify({ ws: { "a.c": "h1" } }), filler: "x".repeat(200) });
+  const store = createSyncLedgerStore({ storage: origin });
+  store.set("ws", "a.c", "h2");
+  store.flush();
+  assert.equal(origin.getItem(SYNC_LEDGER_KEY), null);
+});
+
+// Known gap, pinned so a fix shows up here: tab B hydrated h(v1), tab A moved on to h(v2), and B's
+// later flush (of another path) writes h(v1) back. After a reload, an app back at v1 with v2 in
+// the sandbox reads as a shell change and the sandbox's v2 is applied (devil Q2b, 2026-10-14).
+test("ledger, two tabs (known gap): a later flush from the other tab puts the older base back", async () => {
+  const origin = originStorage(1e6);
+  const a = createSyncLedgerStore({ storage: origin });
+  a.set("ws-q2b", "a.c", await sha16(V1));
+  a.flush();
+  const b = createSyncLedgerStore({ storage: origin });
+  assert.equal(b.get("ws-q2b", "a.c"), await sha16(V1));
+  a.set("ws-q2b", "a.c", await sha16(V2));
+  a.flush();
+  b.set("ws-q2b", "g.c", "h-g");
+  b.flush();
+  assert.equal(JSON.parse(origin.getItem(SYNC_LEDGER_KEY) ?? "{}")["ws-q2b"]["a.c"], await sha16(V1), "the older base is back");
+  configureSyncLedgerStorage(origin); // the reload
+  const { provider } = await seeded({ "a.c": V2 });
+  const report = await reconcileOnAttach({ workspaceId: "ws-q2b", provider, desired: [{ path: "a.c", content: V1 }] });
+  configureSyncLedgerStorage(null);
+  assert.deepEqual([report.inbound.length, report.conflicts.length, report.written.length], [1, 0, 0], "the sandbox's v2 applied over the app's v1");
+});
