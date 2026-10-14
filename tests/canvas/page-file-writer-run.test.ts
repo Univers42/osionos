@@ -18,7 +18,7 @@ import { sha16 } from "../../src/features/ide/model/ideFsEcho.ts";
 import { pageToFile } from "../../src/features/page-file/model/pageFileCodec.ts";
 import { pageFileText } from "../../src/features/page-file/model/pageFileText.ts";
 import { planOutbound } from "../../src/features/page-file/model/outboundPlan.ts";
-import { LEFT_WITHOUT_PAGE, runOutbound } from "../../src/features/page-file/model/outboundRun.ts";
+import { LEFT_WITHOUT_PAGE, NOT_AGREED, runOutbound } from "../../src/features/page-file/model/outboundRun.ts";
 import { page } from "./page-tree-fixtures.ts";
 import { block, cp, ctxFor, freshWs, snap, world } from "./page-file-writer-fixtures.ts";
 
@@ -40,6 +40,15 @@ test("remove phase: shell edit since the last sync → kept, never removed", asy
   const run = await runOutbound(ctxFor(ws, { moves: [], removes: [{ id: "pA", path: "One.omd" }], changed: [], enteredCode: [] }, [archived], w.io));
   assert.deepEqual(w.removals, []);
   assert.deepEqual(run.report.kept, [{ path: "One.omd", reason: "changed in the shell since the last sync" }]);
+});
+test("remove phase: no agreement from this browser → kept with NOT_AGREED, file still there", async () => {
+  const ws = freshWs();
+  const archived = page("pA", "One", null);
+  const w = world({ "One.omd": "whatever the shell has" }); // a fresh browser never agreed on it
+  const run = await runOutbound(ctxFor(ws, { moves: [], removes: [{ id: "pA", path: "One.omd" }], changed: [], enteredCode: [] }, [archived], w.io));
+  assert.deepEqual(w.removals, []);
+  assert.equal(w.files.get("One.omd"), "whatever the shell has");
+  assert.deepEqual(run.report.kept, [{ path: "One.omd", reason: NOT_AGREED }]);
 });
 test("remove phase: file already gone → ledger cleared, no io", async () => {
   const ws = freshWs();
@@ -66,7 +75,7 @@ test("a self-heal never clobbers an occupied target the ledger does not know", a
   const run = await runOutbound(ctxFor(ws, { moves: [{ id: "pA", from: "One.omd", to: "Two.omd", dir: false }], removes: [], changed: [], enteredCode: [] }, [a], w.io));
   assert.equal(w.files.get("Two.omd"), "the other page, edited in the shell");
   assert.equal(w.files.get("One.omd"), pageFileText(a), "the old file is never removed");
-  assert.deepEqual(run.report.kept, [{ path: "Two.omd", reason: "changed in the shell since the last sync" }]);
+  assert.deepEqual(run.report.kept, [{ path: "Two.omd", reason: NOT_AGREED }]);
 });
 test("write phase: a file the shell changed since the last sync is kept, not overwritten", async () => {
   const ws = freshWs();
@@ -77,6 +86,15 @@ test("write phase: a file the shell changed since the last sync is kept, not ove
   assert.equal(w.files.get("One.omd"), "shell edit");
   assert.deepEqual(run.report.kept, [{ path: "One.omd", reason: "changed in the shell since the last sync" }]);
   assert.equal(syncedHashOf(ws, "One.omd"), await sha16("agreed"));
+});
+test("write phase: a file this browser never agreed on is kept with NOT_AGREED, not overwritten", async () => {
+  const ws = freshWs();
+  const a = cp("pA", "One", null, "page", [block("app edit")]);
+  const w = world({ "One.omd": "whatever the shell has" });
+  const run = await runOutbound(ctxFor(ws, { moves: [], removes: [], changed: ["pA"], enteredCode: [] }, [a], w.io));
+  assert.equal(w.files.get("One.omd"), "whatever the shell has");
+  assert.deepEqual(run.report.written, []);
+  assert.deepEqual(run.report.kept, [{ path: "One.omd", reason: NOT_AGREED }]);
 });
 test("write phase: the agreed content is replaced; identical content only records the ledger", async () => {
   const ws = freshWs();
