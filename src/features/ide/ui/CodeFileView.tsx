@@ -11,9 +11,9 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { Play, Sparkles, SquareTerminal } from "lucide-react";
+import { AlertTriangle, Play, Sparkles, SquareTerminal } from "lucide-react";
 
-import { LoadingPane } from "@/shared/ui";
+import { LoadingPane, Tooltip } from "@/shared/ui";
 import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { codeBlockOf, createCodeFileBlock } from "../model/codeFile";
@@ -31,6 +31,14 @@ import type { IDisposable } from "../model/monacoRuntime";
 import { replaceEditorText, useMonacoEditor, type EditorStatus } from "./useMonacoEditor";
 import { RunConsole } from "./RunConsole";
 import "./monacoEditor.css";
+
+// One look for every button on the code card's bars: 24px square at least, the control
+// radius, and the code tokens so the card stays dark in a light theme. The text colour is
+// the bar's own (a button inherits it); a bar that wants another sets it beside this.
+const CODE_BTN = "inline-flex h-6 min-w-6 shrink-0 items-center justify-center gap-1 rounded-[var(--osio-radius-control)] px-1.5 " +
+  "transition-colors duration-[var(--osio-dur-fast)] " +
+  "hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)] active:bg-[var(--osio-code-btn-active)] " +
+  "disabled:opacity-50";
 
 /**
  * The IDE editor for a `surface: "code"` page. Monaco owns the document
@@ -199,22 +207,16 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   return (
     <div data-code-theme="dark" data-osio-ide className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
       {conflict && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1.5 text-xs text-[var(--osio-warning)]">
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1 text-xs text-[var(--osio-code-fg)]">
+          {/* The page theme's warning colour clears 3:1 on the dark card, not 4.5:1, so only the icon wears it. */}
+          <AlertTriangle size={12} aria-hidden className="shrink-0 text-[var(--osio-warning)]" />
           <span className="min-w-0 flex-1 truncate">
             The sandbox version of this file differs from your edits.
           </span>
-          <button
-            type="button"
-            onClick={resolveKeepMine}
-            className="shrink-0 rounded-xs border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
-          >
+          <button type="button" onClick={resolveKeepMine} className={`${CODE_BTN} border border-[var(--osio-code-border)]`}>
             Keep mine
           </button>
-          <button
-            type="button"
-            onClick={resolveTakeSandbox}
-            className="shrink-0 rounded-xs border border-[var(--osio-code-border)] px-2 py-0.5 text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
-          >
+          <button type="button" onClick={resolveTakeSandbox} className={`${CODE_BTN} border border-[var(--osio-code-border)]`}>
             Take sandbox
           </button>
         </div>
@@ -225,40 +227,30 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
           <RunConsole lines={runner.lines} running={runner.running} exit={runner.exit} onClear={runner.clear} onStop={runner.stop} onClose={() => setShowConsole(false)} />
         </div>
       )}
-      <div className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1 font-mono text-2xs text-[var(--osio-code-fg-muted)]">
+      <div className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-0.5 font-mono text-2xs text-[var(--osio-code-fg-muted)]">
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: lang.accent }} />
           {lang.label}
         </span>
         {lang.runnable && (
-          <button
-            type="button"
-            title="Run (Ctrl/Cmd + Enter)"
-            onClick={runNow}
-            disabled={runner.running}
-            className="inline-flex h-5 items-center gap-1 rounded-xs px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)] disabled:opacity-50"
-          >
-            <Play size={11} /> {runner.running ? "Running…" : "Run"}
-          </button>
+          <Tooltip label="Run (Ctrl/Cmd + Enter)">
+            <button type="button" onClick={runNow} disabled={runner.running} className={CODE_BTN}>
+              <Play size={12} aria-hidden /> {runner.running ? "Running…" : "Run"}
+            </button>
+          </Tooltip>
         )}
         {canFormat(lang.id) && (
-          <button
-            type="button"
-            title="Format (Ctrl/Cmd + Alt + L)"
-            onClick={() => void formatNow()}
-            className="inline-flex h-5 items-center gap-1 rounded-xs px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
-          >
-            <Sparkles size={11} /> Format
-          </button>
+          <Tooltip label="Format (Ctrl/Cmd + Alt + L)">
+            <button type="button" onClick={() => void formatNow()} className={CODE_BTN}>
+              <Sparkles size={12} aria-hidden /> Format
+            </button>
+          </Tooltip>
         )}
-        <button
-          type="button"
-          title="Toggle terminal"
-          onClick={() => setShowConsole((v) => !v)}
-          className="inline-flex h-5 items-center rounded-xs px-1.5 hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
-        >
-          <SquareTerminal size={12} />
-        </button>
+        <Tooltip label="Toggle terminal">
+          <button type="button" aria-label="Toggle terminal" onClick={() => setShowConsole((v) => !v)} className={CODE_BTN}>
+            <SquareTerminal size={12} aria-hidden />
+          </button>
+        </Tooltip>
         <span className="flex-1" />
         {formatError && <span className="truncate text-[var(--osio-danger)]" title={formatError}>⚠ {formatError}</span>}
         <span>Ln {status.line}, Col {status.col}</span>
