@@ -23,7 +23,7 @@ import { IDS, createPostgrestMock, harnessConfig, send, sessionHeaders, teamWorl
 const config = harnessConfig();
 const asTeamOwner = sessionHeaders(config, IDS.userA, IDS.homeA, [IDS.team]);
 const CHUNK = 200;
-const MAX_BYTES = 32 * 1024 * 1024;
+const MAX_BYTES = 16 * 1024 * 1024;
 
 // Fixed-width hex so the id order of the seed is the same raw string order the
 // bridge, the cursor filter and Postgres all compare on.
@@ -95,11 +95,12 @@ function expectedLegacyOrder(pages, query) {
 		.map((entry) => entry.page.id);
 }
 
-/** No page read that carries content may be asked for without a row limit. */
+/** No page read that carries content may be asked for without a row limit. A read with
+ * no `select` counts too: PostgREST answers every column then, content included. */
 function assertEveryContentReadIsBounded(mock, label) {
 	const unbounded = pageReads(mock)
 		.filter((call) => !call.params.has('limit'))
-		.filter((call) => call.params.get('select') === '*' || String(call.params.get('select')).includes('content'));
+		.filter((call) => !call.params.has('select') || call.params.get('select') === '*' || String(call.params.get('select')).includes('content'));
 	assert.deepEqual(unbounded.map(String), [], `${label}: no unbounded page read carrying content`);
 }
 
@@ -177,7 +178,7 @@ describe('the filtered page list walks the workspace in keyset chunks', () => {
 	});
 
 	it('stops at the byte cap and answers 413 instead of a partial list', async () => {
-		const heavy = 'x'.repeat(7 * 1000 * 1000);
+		const heavy = 'x'.repeat(4 * 1000 * 1000);
 		const pages = Array.from({ length: 205 }, (unused, index) => seedPage(index, index < 200
 			? { updated_at: TIE_STAMPS[index % TIE_STAMPS.length] }
 			: { updated_at: TIE_STAMPS[index % TIE_STAMPS.length], content: [{ id: `${uuidFor(index)}-b1`, type: 'paragraph', content: heavy }] }));
