@@ -23,7 +23,8 @@
  */
 
 import type { PageEntry } from "@/entities/page";
-import { isPersistedPageId, PAGE_OUTBOX_KEY } from "@/store/pageStore.helpers";
+import { saveLedger, type SyncLedger } from "@osionos/outbox-ledger";
+import { evictPageCaches, isPersistedPageId, PAGE_OUTBOX_KEY } from "@/store/pageStore.helpers";
 
 const HASH_SEED = 5381;
 /** Stamp marker for a page whose content is not loaded (so it is never published). */
@@ -31,6 +32,13 @@ export const CONTENT_UNLOADED = "∅";
 /** The page outbox ledger key (shared by the writer + hydrate seeding); defined beside the page
  *  cache's prefix, which it shares. */
 export { PAGE_OUTBOX_KEY };
+
+/** The outbox's ledger writes. On a full origin the rebuildable page caches make room first: a
+ *  refused write left the ledger on disk stale, and after a reload a stale ledger republishes
+ *  pages already confirmed (outbox-ledger saveLedger). */
+export function saveOutboxLedger(key: string, ledger: SyncLedger): boolean {
+  return saveLedger(key, ledger, () => void evictPageCaches());
+}
 
 /** Pages the outbox is responsible for: server-persisted and not archived. */
 export function isPersistablePage(page: PageEntry): boolean {

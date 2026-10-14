@@ -13,14 +13,14 @@
 // The one store write for a server page list: the boot hydrate (additive) and the sidebar's
 // fetchPages (authoritative) both land here, so they cannot drift apart again.
 
-import { loadLedger, saveLedger } from "@osionos/outbox-ledger";
+import { loadLedger } from "@osionos/outbox-ledger";
 import type { PageEntry, PageStore } from "@/entities/page";
 import { flushAllBlockDrafts } from "@/features/block-editor/model/blockDraftStore";
 import { canEditPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { derivePageState, savePagesCache } from "@/store/pageStore.helpers";
 import { isPageClean, mergeServerPages } from "./mergeServerPages";
 import { OUTBOX_RECOVERING_KEY, recoveringIds } from "./outboxRecovery";
-import { PAGE_OUTBOX_KEY, pageStamp } from "./pageStamp";
+import { PAGE_OUTBOX_KEY, pageStamp, saveOutboxLedger } from "./pageStamp";
 
 type SetPageState = (update: (state: PageStore) => Partial<PageStore>) => void;
 
@@ -55,6 +55,6 @@ export function applyServerPages(
     if (taken > 0 || authoritative) savePagesCache(pages, workspaceId);
     return derivePageState(pages, state);
   });
-  if (taken > 0) saveLedger(PAGE_OUTBOX_KEY, ledger);
+  if (taken > 0) saveOutboxLedger(PAGE_OUTBOX_KEY, ledger);
   return taken;
 }

@@ -265,6 +265,30 @@ function enqueuePagesCachePersist(
   });
 }
 
+// The cache is rebuilt from the server at every load (hydratePages): a workspace whose copy no
+// longer fits is dropped rather than left behind stale — the live demo kept 312 of ~3 180 pages
+// that way, and a non-authoritative hydrate never removes a page (2026-10-14). Edits the server
+// has not confirmed never depend on it: they are written first under their own key
+// (sync/pendingPages), so a failure here loses nothing.
+let pagesCacheEvicted = false;
+
+/** Drop every workspace's page cache for this session (never the outbox ledger), to give its room
+ *  to unconfirmed edits. Returns the characters freed. O(keys). */
+export function evictPageCaches(storage: Pick<Storage, "length" | "key" | "getItem" | "removeItem"> = localStorage): number {
+  pagesCacheEvicted = true;
+  const keys: string[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key?.startsWith(PAGE_CACHE_WORKSPACE_PREFIX) && key !== PAGE_OUTBOX_KEY) keys.push(key);
+  }
+  let freed = 0;
+  for (const key of keys) {
+    freed += key.length + (storage.getItem(key)?.length ?? 0);
+    storage.removeItem(key);
+  }
+  return freed;
+}
+
 export function flushScheduledPagesCachePersist() {
   cancelIdlePagesCacheFlush();
 
@@ -276,25 +300,34 @@ export function flushScheduledPagesCachePersist() {
   const workspaceIds = [...dirtyWorkspaceIds];
   pendingPagesCache = null;
   dirtyWorkspaceIds.clear();
+  if (pagesCacheEvicted) return;
 
   timed("savePagesCache", () => {
-    try {
-      for (const workspaceId of workspaceIds) {
-        const workspacePages = pages[workspaceId];
-        if (workspaceCacheKey(workspaceId) === PAGE_OUTBOX_KEY) continue;
-        if (workspacePages) {
-          localStorage.setItem(workspaceCacheKey(workspaceId), JSON.stringify(workspacePages));
-        } else {
-          localStorage.removeItem(workspaceCacheKey(workspaceId));
-        }
-      }
-      for (const legacyKey of LEGACY_PAGE_CACHE_KEYS) {
+    for (const workspaceId of workspaceIds) {
+      if (workspaceCacheKey(workspaceId) === PAGE_OUTBOX_KEY) continue;
+      writeWorkspaceCache(workspaceCacheKey(workspaceId), pages[workspaceId]);
+    }
+    for (const legacyKey of LEGACY_PAGE_CACHE_KEYS) {
+      try {
         localStorage.removeItem(legacyKey);
+      } catch {
+        // storage unavailable: nothing to migrate away from
       }
-    } catch {
-      // localStorage might be unavailable (e.g. private browsing quota)
     }
   });
+}
+
+function writeWorkspaceCache(key: string, workspacePages: PageEntry[] | undefined): void {
+  try {
+    if (workspacePages) localStorage.setItem(key, JSON.stringify(workspacePages));
+    else localStorage.removeItem(key);
+  } catch {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // storage unavailable (private mode): the load falls back to the server
+    }
+  }
 }
 
 if (globalThis.window !== undefined) {

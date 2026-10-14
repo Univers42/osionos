@@ -43,8 +43,9 @@ import {
   markPageWriteRefused,
 } from "@/shared/lib/auth/pageAccess";
 import { flushAllBlockDrafts } from "@/features/block-editor/model/blockDraftStore";
-import { buildDesiredPages, PAGE_OUTBOX_KEY } from "./pageStamp";
+import { buildDesiredPages, PAGE_OUTBOX_KEY, saveOutboxLedger } from "./pageStamp";
 import { publishPage, publishPageKeepalive } from "./pageOutbox";
+import { createPendingKeeper, createUnloadGuard } from "./pendingPages";
 import { hydratePagesFromBaas } from "./hydratePages";
 import { recoverRefusedEdit } from "./refusedEditRecovery";
 import { refusedEditDeps } from "./refusedEditDeps";
@@ -55,9 +56,10 @@ import {
   clearRecoveringMarks,
   ignoredWarning,
 } from "./outboxRecovery";
-import { computeSyncActions, loadLedger, saveLedger } from "@osionos/outbox-ledger";
+import { computeSyncActions, loadLedger } from "@osionos/outbox-ledger";
 import type { SyncLedger } from "@osionos/outbox-ledger";
 import type { PageEntry } from "@/entities/page";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 
 const DEBOUNCE_MS = 800;
 /** First retry delay when the server pushes back; doubles up to MAX_RETRY_MS. */
@@ -115,7 +117,7 @@ async function recoverRefusedPublish(
 ): Promise<"continue" | "stop"> {
   const recovering = loadLedger(OUTBOX_RECOVERING_KEY);
   recovering[id] = new Date().toISOString();
-  saveLedger(OUTBOX_RECOVERING_KEY, recovering);
+  saveOutboxLedger(OUTBOX_RECOVERING_KEY, recovering);
   const outcome = await recoverRefusedEdit(
     page,
     getCurrentPageAccessContext()?.privateWorkspaceIds[0] ?? null,
@@ -126,7 +128,7 @@ async function recoverRefusedPublish(
   const entry: SyncLedger = { [id]: "" };
   const step = applyRecoveryOutcome(entry, recovering, id, outcome, markPageWriteRefused);
   if (!Object.hasOwn(entry, id)) forgotten.add(id);
-  saveLedger(OUTBOX_RECOVERING_KEY, recovering);
+  saveOutboxLedger(OUTBOX_RECOVERING_KEY, recovering);
   return step;
 }
 
@@ -134,7 +136,7 @@ async function recoverRefusedPublish(
 function settleRecoveringMarks(ids: string[]): void {
   if (ids.length === 0) return;
   const recovering = loadLedger(OUTBOX_RECOVERING_KEY);
-  if (clearRecoveringMarks(recovering, ids)) saveLedger(OUTBOX_RECOVERING_KEY, recovering);
+  if (clearRecoveringMarks(recovering, ids)) saveOutboxLedger(OUTBOX_RECOVERING_KEY, recovering);
 }
 
 export function usePageSync(): void {
@@ -179,6 +181,23 @@ export function usePageSync(): void {
     };
     const clearRetry = () => { if (retry) { clearTimeout(retry); retry = null; } backoff = RETRY_MS; };
 
+    // Unconfirmed edits go to their own key before any network await (pendingPages).
+    const keep = createPendingKeeper(() => useToastStore.getState().push({
+      kind: "error",
+      title: "Browser storage is full",
+      description: "Edits not yet saved to the server can't be kept across a reload. Keep this tab open until they sync.",
+    }));
+    const unconfirmedNow = (): PageEntry[] => {
+      const context = getCurrentPageAccessContext();
+      const { desired, payloads } = buildDesiredPages(
+        usePageStore.getState().pages,
+        (page) => !!context && canEditPage(page, context),
+      );
+      const { toPublish } = computeSyncActions(desired, loadLedger(PAGE_OUTBOX_KEY));
+      return toPublish.flatMap((id) => payloads.get(id) ?? []);
+    };
+    const guard = createUnloadGuard(globalThis, () => !hydratedRef.current || keep(unconfirmedNow()));
+
     const flush = async (): Promise<void> => {
       // Wait for hydrate to seed the ledger before the first publish (re-check shortly).
       if (!hydratedRef.current) { schedule(); return; }
@@ -187,11 +206,13 @@ export function usePageSync(): void {
       try {
         const ledger = loadLedger(PAGE_OUTBOX_KEY); // reload so hydrate seeds are honoured
         const context = getCurrentPageAccessContext();
+        const pagesAtStart = usePageStore.getState().pages;
         const { desired, payloads } = buildDesiredPages(
-          usePageStore.getState().pages,
+          pagesAtStart,
           (page) => !!context && canEditPage(page, context), // never publish a non-editable page
         );
         const { toPublish, toUnpublish } = computeSyncActions(desired, ledger);
+        keep(toPublish.flatMap((id) => payloads.get(id) ?? []));
         const confirmed: SyncLedger = {};
         const forgotten = new Set(toUnpublish); // left desired set → forget (no network)
         let failed = false;
@@ -211,7 +232,11 @@ export function usePageSync(): void {
         const latest = loadLedger(PAGE_OUTBOX_KEY);
         Object.assign(latest, confirmed);
         for (const id of forgotten) delete latest[id];
-        saveLedger(PAGE_OUTBOX_KEY, latest);
+        saveOutboxLedger(PAGE_OUTBOX_KEY, latest);
+        const done = new Set(settled);
+        const left = toPublish.filter((id) => !done.has(id) && payloads.has(id));
+        keep(left.flatMap((id) => payloads.get(id) ?? []));
+        if (left.length === 0 && usePageStore.getState().pages === pagesAtStart) guard.disarm();
         settleRecoveringMarks([...settled, ...toUnpublish]);
         if (failed) scheduleRetry(); else clearRetry();
       } finally {
@@ -228,27 +253,21 @@ export function usePageSync(): void {
     // UNLOAD seam — a reload can land inside the editor's 250ms draft commit
     // AND this outbox's 800ms debounce, so without this flush the last edits
     // die in memory. Ordered: (1) commit every dirty draft into the page store,
-    // (2) force the store's localStorage cache to disk synchronously (its own
-    // pagehide listener would also run, but AFTER ours is not guaranteed —
-    // the explicit call is idempotent), (3) fire best-effort keepalive PATCHes
-    // for every page the ledger says is unsynced. The ledger is NOT advanced —
-    // nothing can confirm during unload — so the next session re-publishes
-    // idempotently; steps 1+2 alone already make the reload lossless locally.
+    // (2) keep every unconfirmed page under its own key, BEFORE the cache: a
+    // full origin refused the cache silently and the edits were lost
+    // (pendingPages), (3) force the store's localStorage cache to disk (its own
+    // pagehide listener would also run, but AFTER ours is not guaranteed — the
+    // explicit call is idempotent), (4) fire best-effort keepalive PATCHes for
+    // every unconfirmed page. The ledger is NOT advanced — nothing can confirm
+    // during unload — so the next session re-publishes idempotently. When step 2
+    // fails, the beforeunload guard has already asked the user to stay.
     const flushOnUnload = () => {
       if (!hydratedRef.current) return; // pre-hydrate the ledger is empty — everything would spray
       flushAllBlockDrafts("unmount");
+      const unconfirmed = unconfirmedNow();
+      keep(unconfirmed);
       flushScheduledPagesCachePersist();
-      const ledger = loadLedger(PAGE_OUTBOX_KEY);
-      const context = getCurrentPageAccessContext();
-      const { desired, payloads } = buildDesiredPages(
-        usePageStore.getState().pages,
-        (page) => !!context && canEditPage(page, context),
-      );
-      const { toPublish } = computeSyncActions(desired, ledger);
-      for (const id of toPublish) {
-        const page = payloads.get(id);
-        if (page) publishPageKeepalive(page);
-      }
+      for (const page of unconfirmed) publishPageKeepalive(page);
     };
     globalThis.addEventListener("pagehide", flushOnUnload);
 
@@ -256,6 +275,7 @@ export function usePageSync(): void {
     // mutations leave `pages` and `pageRevisions` referentially unchanged).
     const unsubscribe = usePageStore.subscribe((state, previous) => {
       if (state.pages === previous.pages && state.pageRevisions === previous.pageRevisions) return;
+      guard.arm();
       schedule();
     });
     schedule(); // publish whatever is already pending on mount
@@ -263,6 +283,7 @@ export function usePageSync(): void {
       disposed = true;
       if (timer) clearTimeout(timer);
       clearRetry();
+      guard.disarm();
       globalThis.removeEventListener("pagehide", flushOnUnload);
       unsubscribe();
     };
