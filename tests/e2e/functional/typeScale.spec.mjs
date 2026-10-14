@@ -335,7 +335,7 @@ test.describe("type scale", () => {
     await openFreshPage(page, baseURL);
     const heightOf = (locator) => locator.evaluate((element) => element.getBoundingClientRect().height);
     const pageRow = explorerRow(page, "Getting Started").locator("> div");
-    const sharedRow = page.getByRole("button", { name: "Start collaborating" });
+    const sharedRow = page.getByRole("button", { name: "Archived files" });
     expect(await heightOf(sharedRow)).toBe(await heightOf(pageRow));
   });
 });

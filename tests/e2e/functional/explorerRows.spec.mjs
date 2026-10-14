@@ -150,3 +150,13 @@ test("the offline sandbox state is a muted icon, a title and a kit Retry button"
   expect((await read(retry, ["height"])).height).toBe(await tokenValue(page, "height", "--osio-control-h-sm"));
   expect((await read(retry, ["borderTopLeftRadius"])).borderTopLeftRadius).toBe(await tokenValue(page, "border-top-left-radius", "--osio-control-radius"));
 });
+
+test("the row menu marks Delete as the destructive item, like the page options menu", async ({ page }) => {
+  test.setTimeout(120_000);
+  await bootExplorer(page);
+  await explorerRow(page, "Getting Started").click({ button: "right" });
+  const remove = page.getByRole("menu").getByRole("menuitem", { name: "Delete", exact: true });
+  await expect(remove).toHaveAttribute("data-tone", "danger");
+  expect((await read(remove, ["color"])).color).toBe(await tokenValue(page, "color", "--osio-danger"));
+  await expect(page.getByRole("menu").getByRole("menuitem", { name: "Rename", exact: true })).not.toHaveAttribute("data-tone", /.+/);
+});
