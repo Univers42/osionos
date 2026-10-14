@@ -25,8 +25,12 @@
 // id or path is evicted out of turn. An evicted entry (bounds, quota) reads as
 // "never synced", which sends the attach reconcile to its tiebreak/conflict
 // path, never to a silent overwrite. Two tabs on one workspace: the last flush
-// wins that workspace, leaving the other tab's older (still real) agreements —
-// DEBOUNCE_MS below says what an older agreement gets wrong.
+// wins that workspace, so tab B's later flush puts back the base h(v1) it
+// hydrated after tab A had moved to h(v2) or forgotten the workspace (F2). An
+// older base is not a safe one: after a reload, an app back at v1 (an ABA edit)
+// with v2 in the sandbox reads as "only the sandbox changed", and the sandbox's
+// v2 is applied over the app instead of a conflict (devil Q2a, Q2b, 2026-10-14;
+// pinned in ide-sync-ledger.test.ts). DEBOUNCE_MS below is the one-tab case.
 
 import { ideOutput } from "./ideOutputBus";
 
