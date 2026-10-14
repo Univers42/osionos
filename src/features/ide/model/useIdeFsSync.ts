@@ -53,15 +53,20 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
     const queue = createSerialQueue((error) => {
       ideOutput("fs-sync", `event failed: ${error instanceof Error ? error.message : String(error)}`);
     });
-    // Ponytail: only APPLYING and REMOVING are leader-only (leadsInbound; a
+    // Ponytail: only APPLYING and REMOVING are leader-only (removesForItsUser: a
     // remove also needs this tab's app intent, store/appRemovals). A follower
     // tab's outbound writer still writes and moves files with its own echo set
     // and ledger, so the leader sees them as ordinary shell writes: they
     // converge via apply/ignore, and both tabs editing one page yields a
     // spurious conflict (placeholderText is lost on the round trip). Gating
     // those too was judged not worth it.
-    const leadership = acquireInboundLeadership(workspaceId, globalThis.navigator?.locks);
     const { session, attach } = createLiveInbound(workspaceId, queue);
+    // A tab that gains the lead after the socket's "ready" (the leader closed) gets no other
+    // one, and must attach before it may remove anything (inboundPipeline attachUnderLead).
+    let readySeen = false;
+    const leadership = acquireInboundLeadership(workspaceId, globalThis.navigator?.locks, () => {
+      if (readySeen) void queue.run(attach);
+    });
     const route = { isLeader: () => leadership.isLeader(), queue, session, attach };
 
     const connect = async () => {
@@ -88,6 +93,7 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
         for (const line of lines) {
           const evt = parseFsEvent(line);
           if (!evt) continue;
+          if (evt.event === "ready") readySeen = true;
           publishFsEvent(workspaceId, evt);
           routeFsEvent(evt, route);
         }

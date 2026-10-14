@@ -18,6 +18,9 @@
 // the positive control: without it every "kept" below could pass vacuously.
 // Stubbed, because only a browser or Vite provides them: React (an effect runs at once and its
 // cleanup is kept), the api client, the auth helper, the sandbox provider (an in-memory one).
+// HO-B and HO-C (devil D5-L7 on 7ca3090): a tab that GAINS the lead clears its intents and
+// removes nothing until an attach that started after the gain has finished; the leading tabs
+// below have attached (`tab(…, true)`), as a tab that loaded alone has.
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import test from "node:test";
@@ -74,7 +77,8 @@ const { derivePageState } = await import("../../src/store/pageStore.helpers.ts")
 const { takeAppRemoval } = await import("../../src/store/appRemovals.ts");
 const { useSandboxHealthStore } = await import("../../src/features/ide/model/sandboxHealthStore.ts");
 const { useIdeOutputBus } = await import("../../src/features/ide/model/ideOutputBus.ts");
-const { acquireInboundLeadership } = await import("../../src/features/ide/model/inboundPipeline.ts");
+const { acquireInboundLeadership, attachUnderLead, createSerialQueue } = await import("../../src/features/ide/model/inboundPipeline.ts");
+const { createLiveInbound } = await import("../../src/features/ide/model/inboundLive.ts");
 const { createMemProvider } = await import("../../src/features/ide/vfs/memProvider.ts");
 const { buildVPath } = await import("../../src/features/ide/vfs/vpath.ts");
 const { usePageFileWriter, WRITE_DEBOUNCE_MS } = await import("../../src/features/page-file/model/usePageFileWriter.ts");
@@ -105,6 +109,7 @@ async function tab(entries: Entry[], leads: boolean) {
   if (!leads) void locks.request(`osio-inbound:${ws}`, { mode: "exclusive" }, () => new Promise<void>((resolve) => { otherTabCloses = resolve; }));
   const leadership = acquireInboundLeadership(ws, locks);
   await sleep(0);
+  if (leads) attachUnderLead(ws)(); // the attach a tab that loaded alone has run
   const provider = createMemProvider("sandbox");
   Reflect.set(globalThis, "__intentProvider", provider);
   useSandboxHealthStore.setState({ state: "online" });
@@ -125,6 +130,8 @@ async function tab(entries: Entry[], leads: boolean) {
     answer: (body: unknown) => Reflect.set(globalThis, "__intentApi", async () => body),
     archive: (id: string) => store.archivePage(id, ws, "jwt"),
     restore: (id: string) => store.restorePage(id, ws, "jwt"),
+    /** The leading tab closes; this tab takes the lead at the next tick. */
+    leaderCloses: async () => { otherTabCloses(); await sleep(0); },
     close: () => { leadership.release(); otherTabCloses(); },
   };
 }
@@ -213,4 +220,88 @@ test("I10: archive, restore, archive again in the leading tab removes each time;
   stop();
   t.close();
   assert.equal(await t.present(path), false, "the second archive, through the folder, removes again");
+});
+
+test("HO-B: a stale tab takes the lead when the leader closes, then trashes the old folder; the clone stays", async () => {
+  const t = await tab(tree(), false);
+  const { stop, path } = await synced(t);
+  await t.leaderCloses();
+  t.answer({ ok: true, updatedAt: "2026-10-14T10:00:00.000Z", cascadedIds: [X] });
+  await t.archive(P);
+  await round();
+  stop();
+  t.close();
+  assert.equal(await t.present(path), true, "a successor that had not attached removed the re-cloned file");
+  assert.equal(takeAppRemoval(t.ws, X), false, "the intent was not spent");
+});
+
+test("HO-C: a follower trashes, and the leader closes inside the writer's debounce; the clone stays", async () => {
+  const t = await tab(tree(), false);
+  const { stop, path } = await synced(t);
+  t.answer({ ok: true, updatedAt: "2026-10-14T10:00:00.000Z", cascadedIds: [X] });
+  await t.archive(P);
+  await t.leaderCloses(); // the gain clears the follower's intents
+  assert.equal(takeAppRemoval(t.ws, X), false, "the gain kept a follower's intent");
+  await round();
+  stop();
+  t.close();
+  assert.equal(await t.present(path), true, "a follower's intent removed the clone after the handover");
+});
+
+test("L7 control: once the new leader has attached, its user's own trash removes again", async () => {
+  const t = await tab(tree(), false);
+  const { stop, path } = await synced(t);
+  await t.leaderCloses();
+  attachUnderLead(t.ws)(); // the attach the gain queued: pages pulled, tree reconciled
+  t.answer({ ok: true, cascadedIds: [] });
+  await t.archive(X);
+  await round();
+  stop();
+  t.close();
+  assert.equal(await t.present(path), false, "a settled leader must remove what its user trashed");
+});
+
+test("L7: an attach that started before the gain does not open removals", async () => {
+  const t = await tab(tree(), false);
+  const { stop, path } = await synced(t);
+  const settled = attachUnderLead(t.ws); // started while following
+  await t.leaderCloses();
+  settled();
+  t.answer({ ok: true, cascadedIds: [] });
+  await t.archive(X);
+  await round();
+  stop();
+  t.close();
+  assert.equal(await t.present(path), true, "an attach from before the takeover counted");
+});
+
+/** The attach a gain queues (inboundLive), the page list answered by `pages` (a throw: the pull fails). */
+async function liveAttach(t: Awaited<ReturnType<typeof tab>>, pages: () => unknown) {
+  const archive = { ok: true, cascadedIds: [] };
+  Reflect.set(globalThis, "__intentApi", async (path: string) => (String(path).startsWith("/api/pages/all") ? pages() : archive));
+  await createLiveInbound(t.ws, createSerialQueue(() => undefined)).attach();
+}
+
+test("L7 live: the attach a gain queues pulls the pages, and only then may the new leader remove", async () => {
+  const t = await tab(tree(), false);
+  const { stop, path } = await synced(t);
+  await t.leaderCloses();
+  await liveAttach(t, () => t.pages());
+  await t.archive(X);
+  await round();
+  stop();
+  t.close();
+  assert.equal(await t.present(path), false, "a leader that pulled and attached must remove what its user trashed");
+});
+
+test("L7 live: an attach whose page pull failed leaves the new leader unable to remove", async () => {
+  const t = await tab(tree(), false);
+  const { stop, path } = await synced(t);
+  await t.leaderCloses();
+  await liveAttach(t, () => { throw new Error("BaaS request failed with 503"); });
+  await t.archive(X);
+  await round();
+  stop();
+  t.close();
+  assert.equal(await t.present(path), true, "an attach on a page list it could not pull opened removals");
 });

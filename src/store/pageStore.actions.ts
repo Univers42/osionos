@@ -145,6 +145,9 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
 const FETCH_PAGES_TTL_MS = 30_000;
 const lastFetchedAt = new Map<string, number>();
 
+/** When the workspace's page list last landed from the server (ms since epoch), if ever. */
+export const pagesPulledAt = (workspaceId: string): number | undefined => lastFetchedAt.get(workspaceId);
+
 export function createFetchPages(set: SetFn, get: GetFn) {
   // `force` (default false) is an extra optional arg — assignable to the 2-param PageStore
   // type, so existing callers are unchanged; an explicit-refresh call site can pass true.
