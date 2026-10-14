@@ -79,10 +79,11 @@ export function makeRun(ctx: OutboundRunCtx): Run {
  *  removes. Never throws — a phase-level failure lands in the report. O(n). */
 export async function runOutbound(ctx: OutboundRunCtx): Promise<Run> {
   const run = makeRun(ctx);
+  const agreedAtPlan = new Map(ctx.plan.removes.map((remove) => [remove.path, syncedHashOf(ctx.workspaceId, remove.path)]));
   try {
     await runMoves(ctx, run);
     await runWrites(ctx, run);
-    await runRemoves(ctx, run);
+    await runRemoves(ctx, run, agreedAtPlan);
   } catch (error) {
     run.report.failed.push({ path: "plan", reason: messageOf(error) });
   }
@@ -165,7 +166,10 @@ async function writePageFile(ctx: OutboundRunCtx, run: Run, page: PageEntry, tar
   }
 }
 
-async function runRemoves(ctx: OutboundRunCtx, run: Run): Promise<void> {
+/** A file is removed only when it still holds what was agreed when the plan was made,
+ *  read before any await: the inbound side records the agreement of a file it just made
+ *  a NEW page from, at the same path, and a remove reading that one deleted the file. */
+async function runRemoves(ctx: OutboundRunCtx, run: Run, agreedAtPlan: ReadonlyMap<string, string | null>): Promise<void> {
   for (const remove of ctx.plan.removes) {
     const page = ctx.pageById(remove.id);
     if (page && kindOfPage(page) === "dir") continue; // never delete a folder
@@ -179,7 +183,7 @@ async function runRemoves(ctx: OutboundRunCtx, run: Run): Promise<void> {
     if (current === null) { clearSyncedHash(ctx.workspaceId, remove.path); continue; }
     try {
       const hash = await run.hash(current);
-      if (hash !== syncedHashOf(ctx.workspaceId, remove.path)) {
+      if (hash !== agreedAtPlan.get(remove.path)) {
         run.report.kept.push({ path: remove.path, reason: "changed in the shell since the last sync" });
         continue;
       }
