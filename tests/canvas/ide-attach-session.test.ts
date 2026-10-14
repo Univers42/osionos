@@ -24,6 +24,8 @@ import { routeFsEvent } from "../../src/features/ide/model/inboundSession.ts";
 import { attach, editedWhileAway, fileIn, textOf } from "./fixtures/attachWorld.ts";
 import { blockPage, codePage, execWorld, folderPage, putFile } from "./fixtures/inboundWorld.ts";
 import { unloadedPage } from "./page-file-facade-fixtures.ts";
+import { loadUnloadedBodies } from "../../src/features/ide/model/materialize.ts";
+import { para } from "./fixtures/inboundWorld.ts";
 
 const NOT_LOADED = "page content not loaded, not reconciled";
 
@@ -40,6 +42,34 @@ test("16: every loaded page and code file is written, a folder always as <dir>/_
   assert.deepEqual(result.report.skipped, [{ path: "Later.omd", reason: NOT_LOADED }]);
   assert.deepEqual([result.written, result.unloaded, result.failed], [3, 1, 0], "not loaded is not a failure");
   assert.equal(syncedHashOf(world.workspaceId, "Docs/_folder.omd"), await sha16(textOf(world, "F")));
+});
+
+test("bodies attach would skip are fetched first, six at a time, so every page reaches the sandbox", async () => {
+  const unloaded = Array.from({ length: 8 }, (_, i) => unloadedPage(`U${i}`, `Page ${i}`, null));
+  const world = await execWorld([unloadedPage("F", "Docs", null, "folder"), blockPage("A", "Alpha", "F"), ...unloaded]);
+  const asked: string[] = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const count = await loadUnloadedBodies(world.session.views, async (id) => {
+    asked.push(id);
+    maxInFlight = Math.max(maxInFlight, (inFlight += 1));
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    world.store.updatePageContent(id, para(`body ${id}`));
+    inFlight -= 1;
+  });
+  assert.equal(count, 8);
+  assert.deepEqual(asked.sort(), unloaded.map((entry) => entry._id).sort(), "never a folder, never a loaded page");
+  assert.ok(maxInFlight <= 6, `at most six at once (saw ${maxInFlight})`);
+  const result = await attach(world);
+  assert.deepEqual([result.written, result.unloaded, result.failed], [10, 0, 0]);
+  assert.equal(await fileIn(world, "Page 3.omd"), textOf(world, "U3"));
+});
+
+test("a body that fails to load stays unloaded and attach still skips it", async () => {
+  const world = await execWorld([unloadedPage("U", "Later", null)]);
+  await loadUnloadedBodies(world.session.views, async () => { throw new Error("offline"); });
+  const result = await attach(world);
+  assert.deepEqual([result.written, result.unloaded, result.failed], [0, 1, 0]);
 });
 
 test("16: a _folder.omd changed on both sides is reported under its folder's id", async () => {
