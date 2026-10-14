@@ -101,9 +101,20 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		const response = await fetchImpl(`${config.baasUrl}/rest/v1/${table}?${query}`, {
 			method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(TIMEOUT_MS),
 		});
-		const text = await response.text().catch(() => '');
-		if (response.ok) return text ? JSON.parse(text) : [];
-		throw storeFailure(response.status, text);
+		let readFailed = false;
+		const text = await response.text().catch(() => { readFailed = true; return ''; });
+		if (!response.ok) throw storeFailure(response.status, text);
+		// An empty answer means "no rules", which is an access decision — so a body that
+		// stops mid-stream, or one that is not JSON, is reported as the broken read it is.
+		if (readFailed) throw httpError('BaaS response body could not be read (share rules)', 502);
+		// Ponytail: a body-less 200 still answers [] — a table read that genuinely matched
+		// nothing and one whose answer was lost after the headers look the same here.
+		if (!text) return [];
+		try {
+			return JSON.parse(text);
+		} catch {
+			throw httpError(`BaaS response body was not valid JSON (${Buffer.byteLength(text)} bytes)`, 502);
+		}
 	}
 
 	function storeFailure(status, text) {

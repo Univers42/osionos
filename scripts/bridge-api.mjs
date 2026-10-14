@@ -511,6 +511,33 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
 }
 
 /**
+ * Read one BaaS answer as JSON for a caller that has a fixed way of naming a failure.
+ * `empty` is what the caller answers when the response carries no body at all; `failureStatus`
+ * maps a non-2xx status to the one the caller answers with, so each reader keeps its own
+ * status mapping and message while the broken-read rule lives in one place.
+ * A body that stops mid-stream, or one that is not JSON, is a 502: every caller here answers
+ * "no rows" through `empty`, and a decision taken on that is taken on missing data.
+ */
+async function readJsonBody(response, { service, empty, failureStatus }) {
+	let readFailed = false;
+	const text = await response.text().catch(() => { readFailed = true; return ''; });
+	if (!response.ok) {
+		const status = failureStatus(response.status, text);
+		throw Object.assign(new Error(`${service} request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
+	}
+	if (readFailed) throw Object.assign(new Error(`BaaS response body could not be read (${service}).`), { status: 502 });
+	// Ponytail: a body-less 2xx still answers `empty` — a query that genuinely matched no
+	// row and one whose answer was lost after the headers are indistinguishable here, so
+	// the lost one reads as "no rows" instead of as a broken read.
+	if (!text) return empty;
+	try {
+		return JSON.parse(text);
+	} catch {
+		throw Object.assign(new Error(`BaaS response body was not valid JSON (${Buffer.byteLength(text)} bytes).`), { status: 502 });
+	}
+}
+
+/**
  * POST to the grobase query-router (container DNS, or Kong's /query/v1 behind a link) with
  * the tenant api-key. Used by the data graph: the api-key resolves to the tenant + owner-scopes
  * the read to the seeded business records. 503 if the key/url aren't configured.
@@ -554,17 +581,7 @@ async function baasQueryPost(config, fetchImpl, path, body, timeoutMs = BAAS_FET
 		headers: queryRouterHeaders(config, { 'Content-Type': 'application/json' }),
 		body: JSON.stringify(body),
 	}, timeoutMs);
-	const text = await response.text().catch(() => '');
-	if (!response.ok) {
-		const status = responseStatusForBaasFailure(response.status);
-		throw Object.assign(new Error(`query-router request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
-	}
-	if (!text) return null;
-	try {
-		return JSON.parse(text);
-	} catch {
-		return null;
-	}
+	return readJsonBody(response, { service: 'query-router', empty: null, failureStatus: responseStatusForBaasFailure });
 }
 
 /** GET from the query-router with the tenant api-key. Sibling of
@@ -577,17 +594,7 @@ async function baasQueryGet(config, fetchImpl, path, timeoutMs = BAAS_FETCH_TIME
 		method: 'GET',
 		headers: queryRouterHeaders(config),
 	}, timeoutMs);
-	const text = await response.text().catch(() => '');
-	if (!response.ok) {
-		const status = queryRouterStatus(response.status, text);
-		throw Object.assign(new Error(`query-router request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
-	}
-	if (!text) return null;
-	try {
-		return JSON.parse(text);
-	} catch {
-		return null;
-	}
+	return readJsonBody(response, { service: 'query-router', empty: null, failureStatus: queryRouterStatus });
 }
 
 /** POST to the query-router and return its RAW {status, body} verbatim. WRITES
@@ -608,7 +615,13 @@ async function baasQueryPassthrough(config, fetchImpl, path, body, timeoutMs = B
 	} catch (error) {
 		return { status: 502, body: { ok: false, message: error instanceof Error ? error.message : String(error) } };
 	}
-	const text = await response.text().catch(() => '');
+	let readFailed = false;
+	const text = await response.text().catch(() => { readFailed = true; return ''; });
+	// A write the engine answered but whose body never arrived has no status to classify,
+	// so it answers 502 the way an unreachable engine does — never a 200 with no rows.
+	if (readFailed) return { status: 502, body: { ok: false, message: 'BaaS response body could not be read (query-router).' } };
+	// Ponytail: a non-JSON answer is passed through verbatim and capped at 300 bytes, so a
+	// longer answer reaches the write client truncated (and can split a multi-byte char).
 	let parsed = null;
 	if (text) {
 		try { parsed = JSON.parse(text); } catch { parsed = { raw: text.slice(0, 300) }; }
@@ -637,17 +650,7 @@ export async function baasRegistryGet(config, fetchImpl, path, tenantId, timeout
 			...(config.serviceKey ? { apikey: config.serviceKey } : {}),
 		},
 	}, timeoutMs), timeoutMs, 'The adapter-registry');
-	const text = await response.text().catch(() => '');
-	if (!response.ok) {
-		const status = responseStatusForBaasFailure(response.status);
-		throw Object.assign(new Error(`adapter-registry request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
-	}
-	if (!text) return [];
-	try {
-		return JSON.parse(text);
-	} catch {
-		return [];
-	}
+	return readJsonBody(response, { service: 'adapter-registry', empty: [], failureStatus: responseStatusForBaasFailure });
 }
 
 function postgrestQuery(params) {
@@ -1235,6 +1238,25 @@ function idChunks(ids) {
 	return chunks;
 }
 
+/**
+ * The 2xx body of the bridge-identity upsert, read with the same rule the other BaaS
+ * readers use, but keeping this call's own failure shape — a non-2xx is answered above,
+ * and `BaaS bridge persistence failed with …` must not change.
+ */
+async function readUpsertBody(response) {
+	let readFailed = false;
+	const text = await response.text().catch(() => { readFailed = true; return ''; });
+	if (readFailed) throw Object.assign(new Error('BaaS response body could not be read (bridge identity).'), { status: 502 });
+	// Ponytail: a body-less 2xx still answers null, so an upsert that matched no row and
+	// one whose answer was lost after the headers are the same null here.
+	if (!text) return null;
+	try {
+		return JSON.parse(text);
+	} catch {
+		throw Object.assign(new Error(`BaaS response body was not valid JSON (${Buffer.byteLength(text)} bytes).`), { status: 502 });
+	}
+}
+
 export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) {
 	const persistenceEnabled = config.persistence === 'baas' || (config.persistence === 'auto' && config.serviceKey && config.baasUrl);
 	if (!persistenceEnabled) return null;
@@ -1257,7 +1279,9 @@ export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) 
 		const body = await response.text().catch(() => '');
 		throw Object.assign(new Error(`BaaS bridge persistence failed with ${response.status}: ${body.slice(0, 160)}`), { status: 502 });
 	}
-	const body = await response.json().catch(() => null);
+	// No workspace row answers a session with no workspace, so a broken body must not
+	// read as "this identity has no workspace".
+	const body = await readUpsertBody(response);
 	const row = Array.isArray(body) ? body[0] : body;
 	if (!row || typeof row !== 'object') return null;
 	return {
