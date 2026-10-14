@@ -203,6 +203,15 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
       bumpContainerSockets(names.containerName, -1);
     };
     socket.once('close', release); // covers a close during the pending attach
+    // http.Server keeps an upgraded socket half-open: a client that went away sends a FIN,
+    // the socket emits 'end' and never 'close', and `release` never ran. Six closed tabs and
+    // the account got "429 Too Many Streams" on every terminal until a restart (live VM,
+    // 2026-10-14: four sockets in CLOSE_WAIT, their docker attach streams still open).
+    socket.once('end', () => socket.destroy());
+    // Caveat: a client gone without a FIN (sleep, a dropped network) is noticed by TCP
+    // keepalive alone: probes start after 30 s idle, but their interval and count are the
+    // kernel's (75 s x 9 by default), so its slot comes back after about 11 minutes.
+    socket.setKeepAlive(true, 30_000);
 
     const docker = createDockerClient(env);
 

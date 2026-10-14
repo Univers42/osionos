@@ -62,6 +62,7 @@ function openTerminal(dockerHost) {
     destroy() { this.destroyed = true; settle(null); },
     on() {},
     once() {},
+    setKeepAlive() {},
   };
   const request = {
     url: `/api/ide/pty?workspaceId=${WS}`,
