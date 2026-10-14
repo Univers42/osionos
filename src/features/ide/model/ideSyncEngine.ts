@@ -44,9 +44,13 @@ export function syncedHashOf(workspaceId: string, relPath: string): string | nul
 // removes their files: what is at those paths now, the shell put there, and a `git clone`
 // over an `rm -rf` puts the same bytes back — an agreement left at a cascaded child's path
 // matched them, and the writer deleted the clone (devil C1, 2026-10-14). The writer takes a
-// mark when it skips that remove. In memory: a reload starts the writer with no baseline.
-// Caveat: a page restored from the trash in the app before any writer round keeps its mark,
-// so archiving it in the app later leaves its file in the sandbox — a leftover, never a loss.
+// mark when it skips that remove; a restore from the shell drops the marks of its subtree.
+// In memory, in the tab that applies shell events, the only one whose writer removes
+// (inboundPipeline leadsInbound): a reload starts the writer with no baseline.
+// Ponytail: a mark the writer never takes stays until the tab reloads — a page restored from
+// the trash in the app before any writer round, or one whose path a new page owned first
+// (devil A5: its remove is never planned). Archiving such a page in the app later leaves its
+// file in the sandbox: a leftover, never a loss. O(marks) memory, one id per shell delete.
 const shellArchived = new Map<string, Set<string>>();
 
 export function markShellArchived(workspaceId: string, pageIds: Iterable<string>): void {

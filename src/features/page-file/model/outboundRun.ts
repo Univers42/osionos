@@ -38,6 +38,8 @@ export type OutboundRunCtx = {
   pageById(id: string): PageEntry | undefined;
   io: OutboundIo;
   hash?: OutboundHash;
+  /** False in a tab that does not apply shell events: its removes are left to the one that does. */
+  mayRemove?: () => boolean;
 };
 
 export type OutboundReport = {
@@ -169,14 +171,20 @@ async function writePageFile(ctx: OutboundRunCtx, run: Run, page: PageEntry, tar
 /** A file is removed only when it still holds what was agreed when the plan was made,
  *  read before any await: the inbound side records the agreement of a file it just made
  *  a NEW page from, at the same path, and a remove reading that one deleted the file.
- *  A page the shell deleted is never removed here (takeShellArchived), and the agreement
- *  cleared is only ever the planned one, never a new page's recorded meanwhile. */
+ *  A page the shell deleted is never removed here (takeShellArchived), nor anything in a tab
+ *  that does not apply shell events (mayRemove), and the agreement cleared is only ever the
+ *  planned one, never a new page's recorded meanwhile. */
 async function runRemoves(ctx: OutboundRunCtx, run: Run, agreedAtPlan: ReadonlyMap<string, string | null>): Promise<void> {
   const forgetPlanned = (path: string): void => {
     if (syncedHashOf(ctx.workspaceId, path) === agreedAtPlan.get(path)) clearSyncedHash(ctx.workspaceId, path);
   };
+  if (ctx.mayRemove?.() === false) {
+    for (const remove of ctx.plan.removes) run.report.skipped.push({ path: remove.path, reason: "removed by the tab that applies shell events" });
+    return;
+  }
   for (const remove of ctx.plan.removes) {
     if (takeShellArchived(ctx.workspaceId, remove.id)) {
+      forgetPlanned(remove.path);
       run.report.skipped.push({ path: remove.path, reason: "deleted in the shell" });
       continue;
     }
