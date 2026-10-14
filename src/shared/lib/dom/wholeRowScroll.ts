@@ -27,3 +27,14 @@ export function snapToRows(region: HTMLElement) {
   }
   region.scrollTop = scrollTop;
 }
+
+// Ponytail: a 1px tolerance absorbs sub-pixel scrollTop under zoom or fractional
+// DPR; a region left within 1px of an edge reads as at that edge. The cue is
+// refreshed on scroll and on re-snap only, so a window resize while the menu
+// stays mounted keeps the old cue until the next scroll.
+/** Mirrors where `region` has more rows into `data-fade-top` / `data-fade-bottom`, which `osio-scroll-fade` paints. */
+export function syncScrollCue(region: HTMLElement) {
+  const hiddenBelow = region.scrollHeight - region.clientHeight - region.scrollTop;
+  region.toggleAttribute("data-fade-top", region.scrollTop > 1);
+  region.toggleAttribute("data-fade-bottom", hiddenBelow > 1);
+}

@@ -195,7 +195,7 @@ test.describe("editor menu chrome", () => {
     }, rowSelector);
 
   test("the block menu never cuts a row in half", async ({ page, baseURL }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.setViewportSize({ width: 1440, height: 560 });
     await openFreshPage(page, baseURL);
     await createParagraphs(page, ["Context target"]);
     await openBlockContextMenuForEditor(getEditors(page).first());

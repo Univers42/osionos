@@ -17,6 +17,8 @@ import type {
   BlockContextMenuSection,
   BlockContextMenuState,
 } from "../model/blockContextMenu.helpers";
+import { filterMenuSections } from "../model/filterMenuSections";
+import { useNaturalHeight } from "@/shared/lib/dom/useNaturalHeight";
 import { useWholeRowScroll } from "@/shared/lib/dom/useWholeRowScroll";
 import {
   clampAnchoredPanelPosition,
@@ -28,6 +30,8 @@ import { ColorProfilePanel, PROFILE_PANEL_WIDTH } from "./ColorProfilePanel";
 
 const SUBMENU_WIDTH = 224; // w-56 = 14rem = 224px
 const VIEWPORT_PAD = 12;
+// Stands in while the menu is hidden and not yet measured.
+const UNMEASURED_HEIGHT = 520;
 
 interface BlockContextMenuProps {
   menu: BlockContextMenuState | null;
@@ -263,14 +267,20 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
     [],
   );
 
+  const visibleSections = useMemo(() => filterMenuSections(sections, query), [sections, query]);
+
+  const naturalHeight = useNaturalHeight(ref, regionRef, menu && visibleSections);
+
+  // Placed by the height it needs, so it opens where the pointer is when it
+  // fits and only slides up (then scrolls) when the viewport is genuinely short.
   const position = useMemo(() => {
     if (!menu) return null;
     return clampViewportMenuPosition(menu.x, menu.y, {
       width,
-      maxHeight: 520,
+      maxHeight: naturalHeight ?? UNMEASURED_HEIGHT,
       margin: VIEWPORT_PAD,
     });
-  }, [menu, width]);
+  }, [menu, width, naturalHeight]);
 
   const profilePanelPosition = useMemo(() => {
     if (!position || openSubmenu !== "Create color profile") return null;
@@ -283,19 +293,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
     );
   }, [openSubmenu, position, width]);
 
-  const normalizedQuery = query.trim().toLowerCase();
-  const visibleSections = normalizedQuery
-    ? sections
-        .map((section) => ({
-          ...section,
-          items: section.items.filter((item) =>
-            item.label.toLowerCase().includes(normalizedQuery),
-          ),
-        }))
-        .filter((section) => section.items.length > 0)
-    : sections;
-
-  useWholeRowScroll(regionRef, menu && visibleSections);
+  useWholeRowScroll(regionRef, menu && visibleSections, position?.maxHeight);
 
   if (!menu || !position || sections.length === 0) {
     return null;
@@ -314,16 +312,17 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
       <div
         ref={ref}
         data-testid="block-context-menu"
-        className="osio-surface-overlay fixed overflow-hidden"
+        className="osio-surface-overlay fixed flex flex-col overflow-hidden"
         style={{
           top: position.top,
           left: position.left,
           width,
           maxHeight: position.maxHeight,
           zIndex: 10001,
+          visibility: naturalHeight === undefined ? "hidden" : undefined,
         }}
       >
-        <div className="pb-1">
+        <div className="shrink-0 pb-1">
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -332,7 +331,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             className="osio-field w-full px-2 text-sm placeholder:text-[var(--osio-fg-subtle)]"
           />
         </div>
-        <div ref={regionRef} className="relative max-h-[400px] overflow-y-auto" role="menu">
+        <div ref={regionRef} className="osio-scroll-fade relative min-h-0 flex-1 overflow-y-auto" role="menu">
         {visibleSections.map((section, index) => (
           <div key={`${section.label ?? "section"}-${index}`}>
             {section.label ? (
@@ -354,8 +353,8 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
           </div>
         ))}
         </div>
-        <div className="osio-menu-separator" />
-        <div className="px-2 pb-1 text-xs leading-4 text-[var(--osio-fg-muted)]">
+        <div className="osio-menu-separator shrink-0" />
+        <div className="shrink-0 px-2 pb-1 text-xs leading-4 text-[var(--osio-fg-muted)]">
           <div>Last edited by current user</div>
           <div>Today</div>
         </div>

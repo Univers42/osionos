@@ -106,7 +106,7 @@ test.describe("page properties", () => {
     expect(removeBox.height).toBeGreaterThanOrEqual(24);
 
     await properties(page).getByRole("button", { name: "Relate" }).click();
-    const picker = properties(page).locator(".osio-surface-overlay");
+    const picker = page.getByTestId("relation-picker");
     await expect(picker).toBeVisible();
     const reference = await page.evaluate(() => {
       const probe = document.createElement("div");
