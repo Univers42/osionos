@@ -65,6 +65,20 @@ test("the bridge owns the table and chart tokens, aliased to existing ones", () 
   assert.match(bridge.css, /--osio-chart-10: var\(--osio-block-tint-gray-fg\);/);
 });
 
+// The table's focused cell and fill range paint the "success" ring and the emerald wash; selection is the
+// accent in this design, so those names follow it, while the green "done" badges (-surface-muted, -text-tag) stay green.
+test("the table's cell cursor follows the accent, and green stays on the success badges", () => {
+  const value = (name: string) => bridge.css.match(new RegExp(`--color-${name}: (.*);`))?.[1];
+  assert.match(value("ring-success") ?? "", /var\(--osio-accent\) 80%/);
+  assert.match(value("ring-success-soft") ?? "", /var\(--osio-accent\) 50%/);
+  assert.match(value("inset-success") ?? "", /var\(--osio-accent\) 50%/);
+  assert.match(value("emerald") ?? "", /^var\(--osio-accent\)$/);
+  assert.match(value("emerald-surface") ?? "", /var\(--osio-accent\)/);
+  assert.match(value("emerald-surface2") ?? "", /var\(--osio-accent\)/);
+  assert.match(value("emerald-surface-muted") ?? "", /block-tint-green/);
+  assert.match(value("emerald-text-tag") ?? "", /block-tint-green/);
+});
+
 type Specificity = [number, number, number];
 
 /** (ids, classes + attributes + pseudo-classes, types) of one compound selector chain. */

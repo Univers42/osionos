@@ -33,16 +33,30 @@ async function openInlineTable(page, options) {
   return block;
 }
 
-/** The colour a token paints, resolved the way the browser resolves it. */
-const paintOf = (page, token) =>
-  page.evaluate((name) => {
+/** The colour a CSS colour expression paints, resolved the way the browser resolves it. */
+const paintOfColor = (page, expression) =>
+  page.evaluate((value) => {
     const probe = document.createElement("div");
-    probe.style.backgroundColor = `var(${name})`;
+    probe.style.backgroundColor = value;
     document.body.append(probe);
     const colour = getComputedStyle(probe).backgroundColor;
     probe.remove();
     return colour;
-  }, token);
+  }, expression);
+
+const paintOf = (page, token) => paintOfColor(page, `var(${token})`);
+
+async function openChart(page, options) {
+  await bootWith(page, options);
+  await page.goto("/?home=database");
+  await page.locator('[aria-label="Add view"]').first().waitFor({ timeout: 20_000 });
+  await page.locator('[aria-label="Add view"]').first().click();
+  await page.getByRole("button", { name: "Chart", exact: true }).first().click();
+  await page.getByRole("button", { name: "Chart", exact: true }).first().click();
+  await page.getByText("Edit view", { exact: true }).click();
+  await page.getByText("What to show").first().click();
+  await page.getByRole("button", { name: /Theme/ }).first().click();
+}
 
 const headerBackground = (block) =>
   block.locator("thead tr").first().evaluate((row) => getComputedStyle(row).backgroundColor);
@@ -69,10 +83,20 @@ test.describe("database theme bridge", () => {
     expect(await headerBackground(block)).not.toBe(inDark);
   });
 
-  test("the table's own surface is the page surface", async ({ page }) => {
-    const block = await openInlineTable(page, { palette: "nord", mode: "dark" });
-    const scroller = block.locator("table").locator("xpath=ancestor::div[contains(@class,'bg-surface-primary')][1]");
-    expect(await scroller.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(await paintOf(page, "--osio-bg-page"));
+  // --color-surface-primary already reads --osio-bg-page in the vendored theme, so it cannot show the
+  // bridge at work. --color-surface-strong is a literal there (#d1d5db): only the bridge makes it the palette's border.
+  test("a colour the vendored theme writes as a literal paints the palette's token", async ({ page }) => {
+    const block = await openInlineTable(page, { palette: "nord" });
+    const painted = await block.evaluate((root) => {
+      const probe = document.createElement("div");
+      probe.style.backgroundColor = "var(--color-surface-strong)";
+      root.append(probe);
+      const colour = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return colour;
+    });
+    expect(painted).not.toBe("rgb(209, 213, 219)");
+    expect(painted).toBe(await paintOf(page, "--osio-border-default"));
   });
 
   test("a portalled menu receives the same variables as the table", async ({ page }) => {
@@ -86,18 +110,37 @@ test.describe("database theme bridge", () => {
   });
 
   test("a chart's first series is --osio-chart-1", async ({ page }) => {
-    await bootWith(page, { palette: "nord", mode: "dark" });
-    await page.goto("/?home=database");
-    await page.locator('[aria-label="Add view"]').first().waitFor({ timeout: 20_000 });
-    await page.locator('[aria-label="Add view"]').first().click();
-    await page.getByRole("button", { name: "Chart", exact: true }).first().click();
-    await page.getByRole("button", { name: "Chart", exact: true }).first().click();
-    await page.getByText("Edit view", { exact: true }).click();
-    await page.getByText("What to show").first().click();
-    await page.getByRole("button", { name: /Theme/ }).first().click();
+    await openChart(page, { palette: "nord", mode: "dark" });
     const bar = page.locator(".recharts-bar-rectangle path").first();
     await expect(bar).toBeVisible({ timeout: 20_000 });
     expect(await bar.evaluate((el) => getComputedStyle(el).fill)).toBe(await paintOf(page, "--osio-chart-1"));
+  });
+
+  // Recharts writes fill="#666" on every tick label; on a dark canvas that is 2.1:1 (Nord) and 3.0:1 (Calm).
+  for (const palette of ["nord", "warm"]) {
+    test(`a chart's axis labels are the muted ink in ${palette} dark`, async ({ page }) => {
+      await openChart(page, { palette, mode: "dark" });
+      const tick = page.locator(".recharts-cartesian-axis-tick-value").first();
+      await expect(tick).toBeVisible({ timeout: 20_000 });
+      expect(await tick.evaluate((el) => getComputedStyle(el).fill)).toBe(await paintOf(page, "--osio-fg-muted"));
+    });
+  }
+
+  // Selection is the accent here; the vendored table paints its focused cell with the "success" ring and emerald wash.
+  test("a focused table cell is ringed and washed in the accent", async ({ page }) => {
+    const block = await openInlineTable(page, { palette: "nord" });
+    await block.locator('tbody tr').first().locator('td[role="gridcell"]').first().click();
+    const cell = block.locator('td[aria-selected="true"]');
+    await expect(cell).toHaveCount(1);
+    const painted = await cell.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { background: style.backgroundColor, shadow: style.boxShadow };
+    });
+    expect(painted.background).toBe(await paintOfColor(page, "color-mix(in srgb, var(--osio-accent) 8%, transparent)"));
+    expect(painted.shadow).toContain(await paintOfColor(page, "color-mix(in srgb, var(--osio-accent) 80%, transparent)"));
+    expect(painted.shadow).not.toContain(await paintOfColor(page, "var(--osio-success)"));
+    const handle = cell.getByRole("button", { name: "Fill handle" });
+    expect(await handle.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(await paintOf(page, "--osio-accent"));
   });
 
   test("the vendored stock shadow and radius classes read the app's tokens", async ({ page }) => {

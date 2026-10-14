@@ -86,10 +86,10 @@ html[data-theme] [data-dbms-source] {
   --color-danger-text-soft: var(--osio-danger);
   --color-danger-text-tag: var(--osio-danger);
   --color-danger-vivid: var(--osio-danger);
-  --color-emerald: var(--osio-block-tint-green-fg);
-  --color-emerald-surface: var(--osio-block-tint-green-bg);
+  --color-emerald: var(--osio-accent);
+  --color-emerald-surface: color-mix(in srgb, var(--osio-accent) 8%, transparent);
   --color-emerald-surface-muted: color-mix(in srgb, var(--osio-block-tint-green-bg), var(--osio-block-tint-green-fg) 10%);
-  --color-emerald-surface2: var(--osio-block-tint-green-bg);
+  --color-emerald-surface2: color-mix(in srgb, var(--osio-accent) 12%, transparent);
   --color-emerald-text: var(--osio-block-tint-green-fg);
   --color-emerald-text-tag: var(--osio-block-tint-green-fg);
   --color-fill-body: var(--osio-fg-default);
@@ -182,7 +182,7 @@ html[data-theme] [data-dbms-source] {
   --color-ink-muted: var(--osio-fg-muted);
   --color-ink-secondary: var(--osio-fg-muted);
   --color-ink-strong: var(--osio-fg-strong);
-  --color-inset-success: color-mix(in srgb, var(--osio-success) 50%, transparent);
+  --color-inset-success: color-mix(in srgb, var(--osio-accent) 50%, transparent);
   --color-line: var(--osio-db-line);
   --color-line-faint: var(--osio-db-line-soft);
   --color-line-light: var(--osio-db-line-soft);
@@ -224,8 +224,8 @@ html[data-theme] [data-dbms-source] {
   --color-ring-accent-soft: color-mix(in srgb, var(--osio-focus-ring-color) 30%, transparent);
   --color-ring-accent-strong: var(--osio-accent);
   --color-ring-neutral: var(--osio-border-default);
-  --color-ring-success: color-mix(in srgb, var(--osio-success) 80%, transparent);
-  --color-ring-success-soft: color-mix(in srgb, var(--osio-success) 50%, transparent);
+  --color-ring-success: color-mix(in srgb, var(--osio-accent) 80%, transparent);
+  --color-ring-success-soft: color-mix(in srgb, var(--osio-accent) 50%, transparent);
   --color-rose: var(--osio-block-tint-red-fg);
   --color-rose-surface-muted: color-mix(in srgb, var(--osio-block-tint-red-bg), var(--osio-block-tint-red-fg) 10%);
   --color-rose-text-tag: var(--osio-block-tint-red-fg);

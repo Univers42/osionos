@@ -1,4 +1,4 @@
-/* Stock Tailwind utilities in the vendored database (src/shared/notion-database-sys).
+/* Stock Tailwind utilities, and chart axis text, in the vendored database (src/shared/notion-database-sys).
    Tailwind copies shadow and radius values into each class when the vendored
    code is compiled, so no variable can reach them; these rules point the
    classes the vendored markup uses at the app's elevation and radius tokens.
@@ -14,7 +14,11 @@
    Ponytail: delete this file once the vendored code reads --osio-e* and
    --osio-radius-*. Menus the vendored code portals into <body> sit outside
    .notion-object-database and keep their stock shadow; so does any class the
-   vendored markup gains later, until it is listed here. */
+   vendored markup gains later, until it is listed here.
+
+   Axis ticks: Recharts writes fill="#666" on every tick label (2.1:1 on Nord
+   dark). Only the cartesian axes are listed because the vendored charts draw no
+   polar ones; a radar chart added later needs .recharts-polar-angle-axis-tick-value. */
 
 @layer utilities {
   html :where(.notion-object-database) {
@@ -55,6 +59,9 @@
     }
     & .hover\:shadow-lg:hover {
       --tw-shadow: var(--osio-e3);
+    }
+    & .recharts-cartesian-axis-tick-value {
+      fill: var(--osio-fg-muted);
     }
   }
 }
