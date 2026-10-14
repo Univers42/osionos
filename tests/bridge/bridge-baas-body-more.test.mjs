@@ -92,8 +92,8 @@ describe('the share-rule store answers 502, never an empty rule list, on a broke
 });
 
 // ── 2. LiveKit room lookup — driven through the exported join hook ───────────
-// The hook reads osionos_channels first, inside a fallback catch; the membership
-// read it then makes is the unguarded one, so a broken body surfaces from there.
+// The hook reads osionos_channels first (the channel exists, in IDS.team); the
+// membership read it then makes is the one these tests break.
 
 const RTC_CONFIG = { baasUrl: 'http://baas.local', serviceKey: 'svc-key' };
 const CHANNEL = '5f5f5f5f-1111-4111-8111-5f5f5f5f5f5f';
@@ -102,7 +102,7 @@ const rtcJoin = (answer) => authorizeRtcJoin({
 	channelId: CHANNEL,
 	workspaceId: IDS.team,
 	config: RTC_CONFIG,
-	fetchImpl: async (url) => (String(url).includes('osionos_channels') ? emptyResponse() : answer()),
+	fetchImpl: async (url) => (String(url).includes('osionos_channels') ? Response.json([{ workspace_id: IDS.team }]) : answer()),
 });
 
 describe('the LiveKit room lookup answers 502, never "not a member", on a broken body', () => {
