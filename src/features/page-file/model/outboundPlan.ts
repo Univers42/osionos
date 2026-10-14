@@ -52,6 +52,9 @@ export interface OutboundPlan {
    *  skipped: their text cannot be produced without blanking the body, so a
    *  retitle renames their file but leaves its front-matter title stale. */
   changed: string[];
+  /** Ids of CODE pages newly live in `next` (a restore or an app-created page): only these get a
+   *  missing file remade, because the code editor already saves edits in place. */
+  enteredCode: string[];
 }
 
 /** The directory that holds a page's children: page → strip ".omd", code →
@@ -85,12 +88,13 @@ interface Shift {
  * the removes. O(n), n = next pages.
  */
 export function planOutbound(prev: Snapshot | null, next: Snapshot): OutboundPlan {
-  if (prev === null) return { moves: [], removes: [], changed: [] };
-  if (prev.index === next.index) return { moves: [], removes: [], changed: changedByPosition(prev, next) };
+  if (prev === null) return { moves: [], removes: [], changed: [], enteredCode: [] };
+  if (prev.index === next.index) return { moves: [], removes: [], changed: changedByPosition(prev, next), enteredCode: [] };
   return {
     moves: planMoves(prev, next),
     removes: planRemoves(prev, next),
     changed: changedByMap(prev, next),
+    enteredCode: enteredCodeByMap(prev, next),
   };
 }
 
@@ -140,6 +144,22 @@ function changedByMap(prev: Snapshot, next: Snapshot): string[] {
     changed.push(page._id);
   }
   return changed;
+}
+
+/**
+ * CODE pages live in `next` but absent from `prev`: a restore or an app-created
+ * page newly enters, while an edit or a move is in both and never listed.
+ * O(n) with O(1) lookups per page.
+ */
+function enteredCodeByMap(prev: Snapshot, next: Snapshot): string[] {
+  const entered: string[] = [];
+  for (const page of next.pages) {
+    if (kindOfPage(page) !== "code" || page.content === undefined) continue;
+    if (next.index.pathForId(page._id) === undefined) continue;
+    if (prev.index.pathForId(page._id) !== undefined) continue;
+    entered.push(page._id);
+  }
+  return entered;
 }
 
 /** Every prev entry whose page is absent from next's index: it must leave the

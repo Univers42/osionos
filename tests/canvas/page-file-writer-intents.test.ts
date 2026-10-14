@@ -79,6 +79,7 @@ const { createMemProvider } = await import("../../src/features/ide/vfs/memProvid
 const { buildVPath } = await import("../../src/features/ide/vfs/vpath.ts");
 const { usePageFileWriter, WRITE_DEBOUNCE_MS } = await import("../../src/features/page-file/model/usePageFileWriter.ts");
 const { pageIndexFor } = await import("../../src/features/page-file/model/pageIndexCache.ts");
+const { bytesToText, collectBytes } = await import("../../src/features/ide/vfs/bytes.ts");
 const { page } = await import("./page-file-facade-fixtures.ts");
 const { createFakeLocks } = await import("./fixtures/fakeLocks.ts");
 
@@ -139,6 +140,8 @@ async function synced(t: Awaited<ReturnType<typeof tab>>) {
   return { stop, path };
 }
 const tree = () => [page(P, "proj", null, "folder"), page(X, "child", P, "page", [{ id: "b-x", type: "paragraph", content: "x" }] as never)];
+const CODE_TEXT = "int main(){return 0;}";
+const treeCode = () => [page(P, "proj", null, "folder"), page(X, "make.c", P, "code", [{ id: "b-x", type: "code", content: CODE_TEXT }] as never)];
 
 test("P0 control: the leading tab's user trashes X in the app; the writer removes X's file", async () => {
   const t = await tab(tree(), true);
@@ -213,4 +216,37 @@ test("I10: archive, restore, archive again in the leading tab removes each time;
   stop();
   t.close();
   assert.equal(await t.present(path), false, "the second archive, through the folder, removes again");
+});
+
+test("code twin of I10: archive removes the code file, restore writes it back with the code text", async () => {
+  const t = await tab(treeCode(), true);
+  const stop = t.start();
+  const provider = Reflect.get(globalThis, "__intentProvider") as { read: (v: unknown) => Promise<ReadableStream<Uint8Array> | Uint8Array> };
+  const readText = async (path: string): Promise<string | null> => {
+    try {
+      return bytesToText(await collectBytes(await provider.read(buildVPath("sandbox", t.ws, path.split("/")))));
+    } catch {
+      return null;
+    }
+  };
+  t.answer({ ok: true, cascadedIds: [] });
+  await t.archive(X);
+  await round();
+  t.answer({ ok: true, cascadedIds: [] });
+  await t.restore(X);
+  await round();
+  const path = t.pathOf(X);
+  assert.equal(await t.present(path), true, "setup: the restore wrote X's file");
+  assert.equal(await readText(path), CODE_TEXT, "setup: the file holds X's code");
+  t.answer({ ok: true, cascadedIds: [] });
+  await t.archive(X);
+  await round();
+  assert.equal(await t.present(path), false, "the archive removes the code file");
+  t.answer({ ok: true, cascadedIds: [] });
+  await t.restore(X);
+  await round();
+  assert.equal(await t.present(path), true, "the restore writes the file back");
+  assert.equal(await readText(path), CODE_TEXT, "the restored file holds X's code text");
+  stop();
+  t.close();
 });
