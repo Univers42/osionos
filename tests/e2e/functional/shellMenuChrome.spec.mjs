@@ -76,6 +76,13 @@ test.describe("shell menus draw the overlay chrome", () => {
     await expectMenuRows(page, menu);
   });
 
+  test("the sidebar page context menu draws Delete in the danger tone, like the block menu", async ({ page, baseURL }) => {
+    await openPage(page, baseURL);
+    await explorerRow(page, "Quarterly plan").click({ button: "right" });
+    const remove = page.getByRole("menu").getByRole("menuitem", { name: "Delete", exact: true });
+    await expect(remove).toHaveCSS("color", await tokenValue(page, "color", "--osio-danger"));
+  });
+
   test("the top bar menu", async ({ page, baseURL }) => {
     await openPage(page, baseURL);
     await page.getByRole("navigation", { name: "Application menu" }).getByRole("button").first().click();
