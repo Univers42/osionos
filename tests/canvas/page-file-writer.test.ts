@@ -102,3 +102,12 @@ test("2000-page replay: applying the plan to a path map reproduces next's index"
   }
   assert.equal(fs.size, nextSnap.index.entries.length);
 });
+
+// Live VM, 2026-10-14: `rm -rf ft_printf_42 && git clone …` archived each file's page,
+// and the clone's files came back as new pages at the same paths. The writer planned
+// the old pages' removes and deleted 231 freshly cloned files.
+test("a path a live page owns again is never planned for removal", () => {
+  const ws = freshWs();
+  const plan = planOutbound(snap(ws, [page("pOld", "One", null)]), snap(ws, [page("pNew", "One", null)]));
+  assert.deepEqual(plan.removes, []);
+});

@@ -143,11 +143,16 @@ function changedByMap(prev: Snapshot, next: Snapshot): string[] {
 }
 
 /** Every prev entry whose page is absent from next's index: it must leave the
- *  sandbox (the runner decides file-by-file, keeping shell edits). O(n). */
+ *  sandbox (the runner decides file-by-file, keeping shell edits). A path another
+ *  live page owns now is that page's file: `rm -rf x && git clone x` archives the
+ *  old pages and makes new ones at the same paths, and removing them deleted 231
+ *  cloned files (live VM, 2026-10-14). O(n). */
 function planRemoves(prev: Snapshot, next: Snapshot): Remove[] {
   const removes: Remove[] = [];
   for (const entry of prev.index.entries) {
-    if (next.index.pathForId(entry.id) === undefined) removes.push({ id: entry.id, path: entry.path });
+    if (next.index.pathForId(entry.id) !== undefined) continue;
+    if (next.index.idForPath(entry.path) !== undefined) continue;
+    removes.push({ id: entry.id, path: entry.path });
   }
   return removes;
 }

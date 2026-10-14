@@ -1162,8 +1162,11 @@ function idsFilter(ids) {
 	return `id=in.(${ids.map((id) => encodeURIComponent(id)).join(',')})`;
 }
 
-// Ponytail: 100 uuids ≈ 3.8 KB of path + query, under an 8 KB proxy line limit; the deployed proxy's real limit is not verified.
-const CASCADE_CHUNK_IDS = 100;
+// PostgREST echoes a read's path and query in Content-Location, and Kong reads the upstream
+// header block into a 4 KB buffer: 100 ids answered 502 "upstream sent too big header", 90
+// answered 200 (live Kong, 2026-10-14). 50 ids ≈ 2.1 KB echoed, ~1.8 KB left for the rest.
+// Caveat: sized for 36-character uuids and PAGE_AUTH_SELECT; a longer select or id eats the margin.
+const CASCADE_CHUNK_IDS = 50;
 
 function idChunks(ids) {
 	const chunks = [];

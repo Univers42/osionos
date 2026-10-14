@@ -125,3 +125,20 @@ test("the synced ledger follows a successful rename to the new path", async () =
   assert.equal(syncedHashOf(ws, "Two.omd"), "H:agreed");
   assert.equal(syncedHashOf(ws, "One.omd"), null);
 });
+// The inbound side records the agreed hash of a file it just made a page from. A remove
+// planned before that, for the page archived at the same path, must not read the new
+// agreement mid-run and delete the file (live VM, 2026-10-14: 231 cloned files lost).
+test("remove phase: an agreement recorded during the run → kept, never removed", async () => {
+  const ws = freshWs();
+  const archived = page("pA", "One", null);
+  const w = world({ "One.omd": "cloned again" });
+  const read = w.io.read;
+  w.io.read = async (path) => {
+    recordSyncedHash(ws, path, await sha16("cloned again"));
+    return read(path);
+  };
+  const run = await runOutbound(ctxFor(ws, { moves: [], removes: [{ id: "pA", path: "One.omd" }], changed: [] }, [archived], w.io));
+  assert.deepEqual(w.removals, []);
+  assert.equal(w.files.get("One.omd"), "cloned again");
+  assert.deepEqual(run.report.removed, []);
+});
