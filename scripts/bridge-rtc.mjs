@@ -51,7 +51,9 @@ const DEFAULT_TOKEN_TTL_SECONDS = 60 * 60;
 const NBF_SKEW_SECONDS = 10;
 const RTC_BODY_LIMIT_BYTES = 16_384;
 const REST_TIMEOUT_MS = 2_500;
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Any 8-4-4-4-12 hex id, whatever its version or variant digits: a channel id that skipped the
+// lookup because of those digits (a v7 id, the nil id) was checked against the requested workspace.
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function httpError(message, status) {
 	return Object.assign(new Error(message), { status });
@@ -157,11 +159,11 @@ async function baasRestGet(config, fetchImpl, path) {
  * of a workspace can join the call of every channel in it, private ones included.
  */
 export async function authorizeRtcJoin({ userId, channelId, workspaceId, config, fetchImpl = fetch }) {
-	let targetWorkspaceId = UUID_REGEX.test(String(workspaceId ?? '')) ? String(workspaceId) : '';
-	if (UUID_REGEX.test(String(channelId ?? ''))) {
+	let targetWorkspaceId = UUID_SHAPE.test(String(workspaceId ?? '')) ? String(workspaceId) : '';
+	if (UUID_SHAPE.test(String(channelId ?? ''))) {
 		const rows = await baasRestGet(config, fetchImpl, `osionos_channels?id=eq.${channelId}&select=workspace_id&limit=1`);
 		const mapped = Array.isArray(rows) ? rows[0]?.workspace_id : undefined;
-		if (typeof mapped !== 'string' || !UUID_REGEX.test(mapped)) throw httpError('Channel not found.', 404);
+		if (typeof mapped !== 'string' || !UUID_SHAPE.test(mapped)) throw httpError('Channel not found.', 404);
 		targetWorkspaceId = mapped;
 	}
 	if (!targetWorkspaceId) throw httpError('No workspace could be resolved for this channel.', 422);

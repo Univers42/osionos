@@ -120,6 +120,14 @@ describe('RTC token room is derived only from the checked channel', () => {
 		assert.ok(!body?.token);
 	});
 
+	it('T7 a channel id of any UUID version or variant is looked up, never checked against the requested workspace', async () => {
+		for (const id of ['018f2b5e-7c1a-7d3e-9f00-0123456789ab', '00000000-0000-0000-0000-000000000000', '5f5f5f5f-1111-4111-c111-5f5f5f5f5f5f']) {
+			const { status, body } = await postToken({ channelId: id, workspaceId: OWN_WS });
+			assert.equal(status, 404, id);
+			assert.ok(!body?.token, id);
+		}
+	});
+
 	it('T5 channelId UUID own workspace -> 200, video.room channel-<uuid>', async () => {
 		const { status, body } = await postToken({ channelId: OWN_CHANNEL, workspaceId: OWN_WS });
 		assert.equal(status, 200);
