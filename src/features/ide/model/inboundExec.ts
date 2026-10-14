@@ -37,6 +37,8 @@ export interface ExecContext {
   /** Makes every deferred create now: a queued task about to read the tree calls it first. */
   settle(): Promise<void>;
   stat(path: string): Promise<StatResult>;
+  /** A directory's answer, never a batched one: archiving a directory cascades onto every page under it. */
+  statDir(path: string): Promise<StatResult>;
 }
 
 /** `applied`: an apply step landed (attach's onInbound needs to know). `reported`: this

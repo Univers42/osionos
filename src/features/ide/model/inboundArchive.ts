@@ -18,7 +18,7 @@ import { isFsError } from "../vfs/errors";
 import { buildVPath } from "../vfs/vpath";
 import { sandboxHashes, type FsOpTransport } from "../vfs/sandboxFsOps";
 import { ideOutput } from "./ideOutputBus";
-import { clearSyncedHash, recordSyncedHash, syncedHashOf } from "./ideSyncEngine";
+import { clearSyncedHash, markShellArchived, recordSyncedHash, syncedHashOf, unmarkShellArchived } from "./ideSyncEngine";
 
 import type { FsProvider } from "../vfs/types";
 import type { ExecContext } from "./inboundExec";
@@ -70,38 +70,42 @@ export async function archiveIfGone(ticket: ArchiveTicket, ctx: ExecContext): Pr
 
 /** undefined = archive; null = keep quietly (moved, or the file came back); text = keep and say why. */
 async function keepReason(ticket: ArchiveTicket, ctx: ExecContext): Promise<string | null | undefined> {
-  if (!stillAt(ticket, ctx)) return null;
-  const own = await ctx.stat(ticket.path);
+  const state = ctx.view.pageState(ticket.pageId);
+  if (state?.status !== "live" || state.path !== ticket.path) return null;
+  const own = await (state.isFolder ? ctx.statDir : ctx.stat)(ticket.path);
   if (own === "present") return null;
   if (own === "unknown") return `${ticket.path}: could not confirm the delete in the sandbox; the page stays`;
   const childrenDir = ctx.view.childrenDirOf(ticket.pageId);
   if (childrenDir === undefined) return undefined;
-  const children = await ctx.stat(childrenDir);
+  const children = await ctx.statDir(childrenDir);
   if (children === "absent") return undefined;
   return children === "present"
     ? `${ticket.path}: deleted, but ${childrenDir}/ still holds its sub-pages; the page stays (delete that directory to archive it)`
     : `${ticket.path}: could not check ${childrenDir}/ in the sandbox; the page stays`;
 }
 
-function stillAt(ticket: ArchiveTicket, ctx: ExecContext): boolean {
-  const state = ctx.view.pageState(ticket.pageId);
-  return state?.status === "live" && state.path === ticket.path;
-}
-
 /**
  * B2: the ledger forgets the path, the restore memory keeps its last agreed hash.
- * The ledger forgets it BEFORE the store is asked: the writer removes an archived page's
- * file when it still holds the agreement read at plan time, and `git clone` puts the same
- * bytes back at the same path (outboundRun). The store toasts a failed archive and keeps
- * the page (pageStore.actions applyCascadeOperation), so a page still live afterwards is
- * an archive that did not happen: its agreement comes back and Output says so.
+ * Both happen BEFORE the store is asked, so no writer round can see the page archived
+ * first: the page and every page under it — the store's archive cascades onto children
+ * whose own check kept them — are marked as deleted in the shell, which the writer never
+ * removes (outboundRun), since `git clone` puts the same bytes back at the same paths. The
+ * store toasts a failed archive and keeps the pages (pageStore.actions applyCascadeOperation):
+ * every page still live afterwards loses its mark, and a root still live gets its
+ * agreement back while Output says the archive did not happen.
+ * Caveat: only the root's agreement is cleared; a cascaded child keeps its own. A clone of
+ * that child's bytes within 15 s of the editor saving the same bytes (ideFsEcho ECHO_TTL_MS)
+ * reads as an echo: the file is in the sandbox but has no page until the next attach.
  */
 async function archiveNow(ticket: ArchiveTicket, ctx: ExecContext): Promise<void> {
   const state = ctx.view.pageState(ticket.pageId);
   if (state?.status !== "live" || state.path !== ticket.path) return;
   const syncedHash = syncedHashOf(ctx.workspaceId, state.filePath);
+  const subtree = ctx.view.subtreeOf(ticket.pageId);
   clearSyncedHash(ctx.workspaceId, state.filePath);
+  markShellArchived(ctx.workspaceId, subtree);
   await ctx.facade.archive(ticket.pageId);
+  unmarkShellArchived(ctx.workspaceId, subtree.filter((id) => ctx.view.pageState(id)?.status === "live"));
   if (ctx.view.pageState(ticket.pageId)?.status === "live") {
     if (syncedHash !== null && syncedHashOf(ctx.workspaceId, state.filePath) === null) {
       recordSyncedHash(ctx.workspaceId, state.filePath, syncedHash);
