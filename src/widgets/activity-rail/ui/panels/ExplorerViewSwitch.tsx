@@ -54,7 +54,7 @@ export const ExplorerViewSwitch: React.FC = () => {
           : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
       }`}
     >
-      <Icon size={13} aria-hidden="true" /> {label}
+      <Icon size={12} aria-hidden="true" /> {label}
     </button>
   );
 

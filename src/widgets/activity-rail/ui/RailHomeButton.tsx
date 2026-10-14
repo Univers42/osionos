@@ -93,7 +93,7 @@ export const RailHomeButton: React.FC = () => {
               data-tone={variant === item.id ? "accent" : undefined}
               className={`osio-menu-item ${variant === item.id ? "bg-[var(--osio-accent-subtle)]" : ""}`}
             >
-              <item.Icon size={15} aria-hidden="true" />
+              <item.Icon size={16} aria-hidden="true" />
               <span>{item.label}</span>
             </button>
           ))}

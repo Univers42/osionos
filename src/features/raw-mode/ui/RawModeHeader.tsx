@@ -44,7 +44,7 @@ export function RawModeHeader({ title, mode, dirty, showLineNumbers, onMode, onT
       <div className="ml-1 flex items-center rounded-md border border-[var(--osio-border-default)] p-0.5">
         {TABS.map(({ mode: tab, label, Icon }) => (
           <button key={tab} type="button" onClick={() => onMode(tab)} aria-pressed={mode === tab} title={label} className={`flex items-center gap-1 rounded-xs px-2 py-0.5 text-xs ${mode === tab ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]" : "text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]"}`}>
-            <Icon size={13} /> {label}
+            <Icon size={12} /> {label}
           </button>
         ))}
       </div>
