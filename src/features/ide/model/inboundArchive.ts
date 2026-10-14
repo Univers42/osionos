@@ -135,7 +135,7 @@ async function keepReason(ticket: ArchiveTicket, ctx: ExecContext): Promise<stri
 async function archiveNow(ticket: ArchiveTicket, ctx: ExecContext): Promise<void> {
   const place = placeOf(ctx, ticket.pageId);
   if (place === undefined || place.state.path !== ticket.path) return;
-  const syncedHash = syncedHashOf(ctx.workspaceId, place.state.filePath);
+  const syncedHash = place.syncedHash !== undefined ? place.syncedHash : syncedHashOf(ctx.workspaceId, place.state.filePath);
   const held = holdSubtree(ctx, ctx.view.subtreeOf(ticket.pageId));
   try {
     await ctx.facade.archive(ticket.pageId);
@@ -161,14 +161,18 @@ async function archiveNow(ticket: ArchiveTicket, ctx: ExecContext): Promise<void
   ideOutput("fs-sync", `${ticket.path}: deleted in the shell — the page is in the trash`);
 }
 
-type Place = { state: LivePage; childrenDir: string | undefined };
+/** `syncedHash` only on a detached page: its agreement then, kept here and not in the ledger. */
+type Place = { state: LivePage; childrenDir: string | undefined; syncedHash?: string | null };
 type HeldPage = Place & { pageId: string; syncedHash: string | null };
 
 /**
  * A folder's cascade stops at a page the server refuses (another member's) or skips, and keeps
  * it live; under an archived parent it has no place in the view (pageState undefined), so its
  * own check kept it quietly and the shell's delete was lost (devil C1 on 3bb4956, probe P-C).
- * Such a page is checked at the place it had when its parent was archived. Per pending set.
+ * Such a page is checked at the place it had when its parent was archived. Its agreement stays
+ * in its entry, never back in the ledger: that is keyed by path and outlives this tab's writer,
+ * so a new page made at the path later would have read it as a match and overwritten a file
+ * holding the old page's bytes (devil C5, 2026-10-14). Per pending set.
  * Ponytail: only the page itself; its own sub-pages are archived by its cascade, not each
  * remembered for a restore from the shell. An entry outlives a page restored or archived
  * elsewhere only until that page's next check (placeOf drops it).
@@ -206,12 +210,13 @@ function holdSubtree(ctx: ExecContext, pageIds: readonly string[]): Held {
   return held;
 }
 
-/** A page the store kept, under a live parent or not: its mark goes, and its agreement comes
- *  back unless one was recorded meanwhile. */
+/** A page the store kept: its mark goes, and when it is live in the view its agreement comes
+ *  back unless one was recorded meanwhile (a detached one keeps it in its entry, above). */
 function giveBackLive(ctx: ExecContext, held: Held): void {
   const kept = held.filter(({ pageId }) => ctx.view.pageState(pageId)?.status !== "archived");
   unmarkShellArchived(ctx.workspaceId, kept.map(({ pageId }) => pageId));
-  for (const { state, syncedHash } of kept) {
-    if (syncedHash !== null && syncedHashOf(ctx.workspaceId, state.filePath) === null) recordSyncedHash(ctx.workspaceId, state.filePath, syncedHash);
+  for (const { pageId, state, syncedHash } of kept) {
+    if (ctx.view.pageState(pageId)?.status !== "live" || syncedHash === null) continue;
+    if (syncedHashOf(ctx.workspaceId, state.filePath) === null) recordSyncedHash(ctx.workspaceId, state.filePath, syncedHash);
   }
 }

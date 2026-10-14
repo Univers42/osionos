@@ -22,6 +22,8 @@ import { recordSyncedHash, syncedHashOf } from "../../src/features/ide/model/ide
 import type { StatResult } from "../../src/features/ide/model/inboundArchive.ts";
 import { statInProvider } from "../../src/features/ide/model/inboundArchive.ts";
 import { blockPage, codePage, execWorld, folderPage, putFile } from "./fixtures/inboundWorld.ts";
+import { fileIn } from "./fixtures/attachWorld.ts";
+import { snapshotOf, writerRound } from "./fixtures/outboundWorld.ts";
 import type { PageEntry } from "../../src/entities/page/model/types.ts";
 
 const CHILDREN = 50;
@@ -96,7 +98,7 @@ test("a page the cascade archived comes back from the shell as itself, not a cop
 // folder that page has no place in the view, and its own check used to keep it quietly: its
 // ticket was cancelled with the cascaded ones, or it waited for an ancestor whose cascade could
 // never reach it (devil C1 on 3bb4956, probes P-C and skip, 2026-10-14).
-test("C1: a page the cascade skipped keeps its ticket and its agreement, and is archived alone next window", async () => {
+test("C1: a page the cascade skipped keeps its ticket, its agreement only in its own entry, and is archived alone next window", async () => {
   const { w, archived, textOf } = await srcTree();
   const cascade = w.store.archivePage;
   w.store.archivePage = async (id, ...rest) => {
@@ -107,10 +109,11 @@ test("C1: a page the cascade skipped keeps its ticket and its agreement, and is 
   await w.elapse();
   assert.deepEqual(archived, ["F"]);
   assert.ok(live(w.pageOf("m7")) && w.session.view.hasOwnPending("m7"), "the skipped page lost its ticket");
-  assert.equal(syncedHashOf(w.workspaceId, "src/f7.c"), await sha16(textOf("m7")), "the kept page got its agreement back");
+  assert.equal(syncedHashOf(w.workspaceId, "src/f7.c"), null, "a detached page's agreement went back into the ledger (C5)");
   await w.elapse();
   assert.deepEqual(archived, ["F", "m7"]);
   assert.ok(!live(w.pageOf("m7")));
+  assert.equal(w.session.view.archivedByInbound("m7")?.syncedHash, await sha16(textOf("m7")), "the restore memory lost the agreement");
 });
 
 test("C1: another member's page stops the cascade, so the caller's own page under it is archived alone", async () => {
@@ -150,4 +153,40 @@ test("C1: another member's page stops the cascade, so the caller's own page unde
   for (let round = 0; round < 3; round += 1) await w.elapse();
   assert.deepEqual(calls, ["Y", "F"]);
   assert.deepEqual(["F", "X", "Y", "m0"].map((id) => live(w.pageOf(id))), [false, true, false, false]);
+});
+
+// The ledger is keyed by path and outlives this tab's writer: an agreement given back to a page
+// left live under the archived folder would have let a new page made at that path overwrite a
+// file holding the old page's bytes (devil C5 on 959c990, giveback probe, 2026-10-14).
+test("C5: a writer started after the cascade finds no agreement at the detached page's path", async () => {
+  const w = await execWorld([folderPage("F", "src"), blockPage("X", "X", "F", "x-body"), blockPage("m", "M", "F", "m-body")]);
+  w.store.canEdit = (entry) => entry._id !== "X";
+  const xText = await w.session.facade.readContent("X");
+  for (const id of ["F", "X", "m"]) {
+    const state = w.session.view.pageState(id);
+    if (state?.status !== "live") continue;
+    const text = await w.session.facade.readContent(id);
+    await putFile(w.sandbox, w.workspaceId, state.filePath, text);
+    recordSyncedHash(w.workspaceId, state.filePath, await sha16(text));
+  }
+  w.store.archivePage = async (id) => {
+    if (id === "X") return; // another member's page: the server refuses it
+    w.store._seed(w.store.pages().map((entry) => (entry._id === id || (id === "F" && entry._id === "m") ? { ...entry, archivedAt: "2026-10-14T00:00:00Z" } : entry)));
+  };
+  await w.shellDelete("src/M.omd");
+  await w.shellDelete("src/X.omd");
+  await w.shellDelete("src/_folder.omd");
+  await w.shellDelete("src");
+  for (let round = 0; round < 3; round += 1) await w.elapse();
+  assert.equal(syncedHashOf(w.workspaceId, "src/X.omd"), null, "the detached page's agreement is in the ledger");
+  // A writer starting now: its baseline is the store as it is. The shell puts X's bytes back,
+  // and the app makes a new folder src with a page X in it.
+  let snap = snapshotOf(w);
+  await putFile(w.sandbox, w.workspaceId, "src/X.omd", xText);
+  w.store._seed([...w.store.pages(), ...[folderPage("F2", "src"), blockPage("Z", "X", "F2", "z-body")].map((entry) => ({ ...entry, workspaceId: w.workspaceId }))]);
+  const writes: string[] = [];
+  snap = await writerRound(w, snap, writes, () => false);
+  assert.equal(snap.index.pathForId("Z"), "src/X.omd");
+  assert.ok(!writes.includes("src/X.omd"), "the new page overwrote a file it never agreed on");
+  assert.match(await fileIn(w, "src/X.omd") ?? "", /x-body/);
 });
