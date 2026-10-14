@@ -52,6 +52,9 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
   // height is pinned inline), so the observer below never hears of them. The page
   // re-renders this component when they change, so compare after each render;
   // fitting changes the height only, so it cannot retrigger this.
+  // Ponytail: a font change that reaches the title without re-rendering it (a
+  // root attribute or a CSS variable alone) leaves it at the old height, clipped
+  // or loose, until the next keystroke or width change.
   const fittedFont = useRef('');
   useLayoutEffect(() => {
     const textarea = ref.current;
