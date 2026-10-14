@@ -26,9 +26,12 @@ interface Props {
 const INPUT_CLASS =
   "w-full bg-transparent outline-none text-sm text-[var(--osio-fg-default)] placeholder:text-[var(--osio-fg-subtle)]";
 
-// px-2 only: every other box property comes from the osio-field recipe, so the
-// two never compete for one property.
-const DATE_CLASS = "osio-field w-auto px-2 text-sm";
+// px-1.5 and the row-height token only: every other box property comes from the
+// osio-field recipe, so the two never compete for one property. The recipe's own
+// 32px would make this row taller than its 28px neighbours. On a phone the value
+// column is 108px, which the native date text only fits at 12px with 6px padding
+// (measured at 390px: 14px clipped the year to "202").
+const DATE_CLASS = "osio-field w-auto min-w-0 max-w-full px-1.5 text-sm max-sm:text-xs [--osio-field-h:var(--osio-control-h-sm)]";
 
 const NO_VALUE: DropdownOption<string> = { value: "", label: "Empty" };
 

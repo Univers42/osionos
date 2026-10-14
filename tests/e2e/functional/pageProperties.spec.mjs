@@ -145,9 +145,28 @@ test.describe("page properties", () => {
       await expect(due).toHaveClass(/osio-field/);
       expect(await computed(due, "color-scheme")).toBe(mode);
       expect(await computed(due, "border-top-left-radius")).toBe("8px");
-      expect(await computed(due, "height")).toBe("32px");
+      expect(await computed(due, "height")).toBe("28px");
     });
   }
+
+  // The recipe's 32px field made the Due row taller than the others and, with its
+  // native width, ran under the remove button on a phone.
+  test("the date field is the row height and stays left of the remove button on a phone", async ({ page, baseURL }) => {
+    await openWithProperties(page, baseURL);
+    const due = properties(page).getByLabel("Due", { exact: true });
+    const rowOf = (locator) => locator.locator("xpath=ancestor::div[contains(@class,'group')][1]");
+    const stageRow = rowOf(properties(page).getByRole("combobox", { name: "Stage" }));
+    const dueRow = rowOf(due);
+    expect((await dueRow.boundingBox()).height).toBe((await stageRow.boundingBox()).height);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const remove = dueRow.getByRole("button", { name: "Remove property" });
+    await expect.poll(async () => {
+      const [field, button] = [await due.boundingBox(), await remove.boundingBox()];
+      return button.x - (field.x + field.width);
+    }).toBeGreaterThan(0);
+    expect((await due.boundingBox()).height).toBe(28);
+  });
 });
 
 test.describe("page configuration menu", () => {
