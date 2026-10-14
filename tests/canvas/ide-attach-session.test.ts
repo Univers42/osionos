@@ -65,6 +65,14 @@ test("bodies attach would skip are fetched first, six at a time, so every page r
   assert.equal(await fileIn(world, "Page 3.omd"), textOf(world, "U3"));
 });
 
+test("a body is fetched only for a path this browser never synced: a reload costs no fetch", async () => {
+  const world = await execWorld([unloadedPage("K", "Known", null), unloadedPage("N", "New", null)]);
+  recordSyncedHash(world.workspaceId, "Known.omd", await sha16("agreed earlier"));
+  const asked: string[] = [];
+  const count = await loadUnloadedBodies(world.session.views, async (id) => { asked.push(id); }, (path) => syncedHashOf(world.workspaceId, path) !== null);
+  assert.deepEqual([count, asked], [1, ["N"]]);
+});
+
 test("a body that fails to load stays unloaded and attach still skips it", async () => {
   const world = await execWorld([unloadedPage("U", "Later", null)]);
   await loadUnloadedBodies(world.session.views, async () => { throw new Error("offline"); });
