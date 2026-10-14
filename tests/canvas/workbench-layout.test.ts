@@ -5,7 +5,7 @@ import { clampDockHeight, migrateFromIdeMode, DOCK_TABS, DOCK_MIN_HEIGHT, DOCK_D
 // --- DOCK_TABS ---
 
 test("DOCK_TABS has correct order", () => {
-  assert.deepStrictEqual(DOCK_TABS, ["terminal", "problems", "output", "ports"]);
+  assert.deepStrictEqual(DOCK_TABS, ["terminal", "problems", "output", "debug", "ports"]);
 });
 
 test("DOCK_MIN_HEIGHT is 120", () => {
@@ -135,8 +135,8 @@ test("isDockTab: valid ports returns true", () => {
   assert.strictEqual(isDockTab("ports"), true);
 });
 
-test("isDockTab: invalid debug returns false", () => {
-  assert.strictEqual(isDockTab("debug"), false);
+test("isDockTab: valid debug returns true", () => {
+  assert.strictEqual(isDockTab("debug"), true);
 });
 
 test("isDockTab: undefined returns false", () => {

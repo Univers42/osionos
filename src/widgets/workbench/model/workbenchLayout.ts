@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-export type DockTab = "terminal" | "problems" | "output" | "ports";
+export type DockTab = "terminal" | "problems" | "output" | "debug" | "ports";
 
 export const DOCK_MIN_HEIGHT = 120;
 export const DOCK_DEFAULT_HEIGHT = 260;
@@ -49,9 +49,9 @@ export function migrateFromIdeMode(raw: string | null): { dockOpen: boolean } | 
 }
 
 /** Frozen list of dock tab names, in the order specified. */
-export const DOCK_TABS: readonly DockTab[] = Object.freeze(["terminal", "problems", "output", "ports"]);
+export const DOCK_TABS: readonly DockTab[] = Object.freeze(["terminal", "problems", "output", "debug", "ports"]);
 
-/** Return true only if value is one of the four known dock tab strings. */
+/** Return true only if value is one of the five known dock tab strings. */
 export function isDockTab(value: unknown): value is DockTab {
   return typeof value === "string" && DOCK_TABS.includes(value as DockTab);
 }

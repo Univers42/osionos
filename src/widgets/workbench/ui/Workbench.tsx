@@ -19,6 +19,7 @@ import { useSandboxHealthProbe } from "@/features/ide/model/sandboxHealthStore";
 import { MainContent } from "@/widgets/page-renderer/ui/MainContent";
 import { useDockHotkeys } from "@/widgets/workbench/model/useDockHotkeys";
 import { useOpenDockOnRunRequest } from "@/widgets/workbench/model/useOpenDockOnRunRequest";
+import { useOpenDockOnDebugStart } from "@/widgets/workbench/model/useOpenDockOnDebugStart";
 import { useWorkbenchStore } from "@/widgets/workbench/model/workbenchStore";
 import { DockSplitter } from "./DockSplitter";
 import { WorkbenchDock } from "./WorkbenchDock";
@@ -38,6 +39,7 @@ export const Workbench: React.FC = () => {
   usePageFileWriter(workspaceId, true);
   useDockHotkeys();
   useOpenDockOnRunRequest();
+  useOpenDockOnDebugStart();
 
   return (
     <div data-osio-workbench className="flex h-full w-full min-w-0 flex-col">

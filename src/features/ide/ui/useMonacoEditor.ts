@@ -16,6 +16,7 @@ import { acquireModel, releaseModel } from "../model/monacoModels";
 import { loadMonacoLanguage } from "../model/monacoLanguages";
 import { indentsWithTabs } from "../model/ideLanguages";
 import { editorFontFamily, OSIO_THEME, watchEditorTheme } from "./monacoTheme";
+import { attachBreakpoints } from "./monacoBreakpoints";
 
 const SAVE_DEBOUNCE_MS = 1200;
 
@@ -133,6 +134,7 @@ export function useMonacoEditor(
     // dispatcher): Cmd/Ctrl+Enter runs, Cmd/Ctrl+Alt+L formats.
     instance.addCommand(KeyMod.CtrlCmd | KeyCode.Enter, () => configRef.current.onRun());
     instance.addCommand(KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyL, () => configRef.current.onFormat());
+    const stopBreakpoints = attachBreakpoints(instance, current.uri);
 
     const reportStatus = () => {
       const position = instance.getPosition();
@@ -166,6 +168,7 @@ export function useMonacoEditor(
       flush();
       for (const sub of subscriptions) sub.dispose();
       stopTheme();
+      stopBreakpoints();
       instance.dispose();
       editorRef.current = null;
       releaseModel(model);
