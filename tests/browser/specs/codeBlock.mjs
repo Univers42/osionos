@@ -225,6 +225,34 @@ export const codeBlockScenarios = [
       expect(bg).toBe("rgba(0, 0, 0, 0)");
     },
   ),
+  defineScenario(
+    "7b. Code block followups",
+    "Mermaid security",
+    "a mermaid `click … call` directive never runs script from the diagram",
+    async ({ page, appUrl }) => {
+      await openFreshPage(page, appUrl);
+      await page.evaluate(() => {
+        globalThis.__mermaidCalls = 0;
+        globalThis.__mermaidHit = () => {
+          globalThis.__mermaidCalls += 1;
+        };
+      });
+      await insertCodeBlock(page, "mermaid");
+      await page.locator('button[title="Show source"]').click();
+      await waitForRenderStability(page);
+      await getCodeTextarea(page).fill("graph TD\n  A-->B\n  click A call __mermaidHit()");
+      await waitForRenderStability(page);
+      await page.locator('button[title="Show preview"]').click();
+
+      // The node must render, or "no call" would pass on an empty preview.
+      const node = page.locator("svg g.node").filter({ hasText: "A" }).first();
+      await node.waitFor({ state: "visible", timeout: 10_000 });
+      // A bare click event: a real pointer press would also flip the block to source.
+      await node.dispatchEvent("click");
+      await waitForRenderStability(page);
+      expect(await page.evaluate(() => globalThis.__mermaidCalls)).toBe(0);
+    },
+  ),
 
   // ── T7b: Bug E — React-driven resize ────────────────────────────────────
 
