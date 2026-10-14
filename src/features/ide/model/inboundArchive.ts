@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/14 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -60,12 +60,40 @@ export async function archiveIfGone(ticket: ArchiveTicket, ctx: ExecContext): Pr
   if (!ctx.pending.claim(ticket)) return;
   try {
     await ctx.settle();
+    if (awaitsAncestorArchive(ticket, ctx)) {
+      ctx.pending.schedule(ticket.pageId, ticket.path, (next) => archiveIfGone(next, ctx));
+      return;
+    }
     const keep = await keepReason(ticket, ctx);
     if (keep === undefined) await archiveNow(ticket, ctx);
     else if (keep !== null) ideOutput("fs-sync", keep);
   } catch (error) {
     ideOutput("fs-sync", `${ticket.path}: the page was not archived — ${messageOf(error)}`);
   }
+}
+
+/**
+ * `rm -rf` deletes bottom-up, so every page under a removed folder came due before the folder
+ * and was archived alone: ~840 PATCHes at ~21/s held the serial queue, and a file created
+ * right after waited 9.9 s to become a page (C5 run 4, 2026-10-14). A page with a live
+ * ancestor whose own delete is still pending waits one more window instead: that archive
+ * cascades onto the whole subtree in one request (archiveNow cancels the waiting tickets),
+ * and when that ancestor is kept, the page is checked alone as before. O(depth).
+ * Ponytail: only an ancestor whose delete has ARRIVED counts. A tree whose `rm` outlasts the
+ * window archives its earliest-deleted pages one by one; an ancestor deleted again and again
+ * (a loop) keeps its subtree waiting, a window per round.
+ */
+function awaitsAncestorArchive(ticket: ArchiveTicket, ctx: ExecContext): boolean {
+  const state = ctx.view.pageState(ticket.pageId);
+  if (state?.status !== "live" || state.path !== ticket.path) return false;
+  const seen = new Set<string>();
+  for (let id = state.parentId; id !== undefined && !seen.has(id);) {
+    if (ctx.pending.hasOwn(id)) return true;
+    seen.add(id);
+    const parent = ctx.view.pageState(id);
+    id = parent?.status === "live" ? parent.parentId : undefined;
+  }
+  return false;
 }
 
 /** undefined = archive; null = keep quietly (moved, or the file came back); text = keep and say why. */
@@ -112,18 +140,25 @@ async function archiveNow(ticket: ArchiveTicket, ctx: ExecContext): Promise<void
     ideOutput("fs-sync", `${ticket.path}: deleted in the shell, but the page could not be moved to the trash; it stays`);
     return;
   }
+  // The cascade archived the subtree: no waiting ticket of it may run, and each page is
+  // restorable from the shell as if archived alone. The root goes last, the LRU's newest.
+  for (const page of held) {
+    if (page.pageId === ticket.pageId || ctx.view.pageState(page.pageId)?.status === "live") continue;
+    ctx.pending.cancel(page.pageId);
+    ctx.pending.rememberArchived(page.pageId, { syncedHash: page.syncedHash, path: page.path });
+  }
   ctx.pending.rememberArchived(ticket.pageId, { syncedHash, path: state.path });
   ideOutput("fs-sync", `${ticket.path}: deleted in the shell — the page is in the trash`);
 }
 
-type Held = { pageId: string; filePath: string; syncedHash: string | null }[];
+type Held = { pageId: string; path: string; filePath: string; syncedHash: string | null }[];
 
 function holdSubtree(ctx: ExecContext, pageIds: readonly string[]): Held {
   const held: Held = [];
   for (const pageId of pageIds) {
     const state = ctx.view.pageState(pageId);
     if (state?.status !== "live") continue;
-    held.push({ pageId, filePath: state.filePath, syncedHash: syncedHashOf(ctx.workspaceId, state.filePath) });
+    held.push({ pageId, path: state.path, filePath: state.filePath, syncedHash: syncedHashOf(ctx.workspaceId, state.filePath) });
     clearSyncedHash(ctx.workspaceId, state.filePath);
   }
   markShellArchived(ctx.workspaceId, held.map(({ pageId }) => pageId));
