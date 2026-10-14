@@ -17,6 +17,7 @@
 
 import { expect, test } from "@playwright/test";
 
+import { activateFirstEditor, openFreshPage, openSlashMenuFromEditor, slashCommandEntry } from "../../browser/core/app.mjs";
 import { insertInlineDatabase } from "../support/databaseHelpers.mjs";
 
 async function bootWith(page, { palette = "warm", mode = "light" } = {}) {
@@ -61,7 +62,24 @@ async function openChart(page, options) {
 const headerBackground = (block) =>
   block.locator("thead tr").first().evaluate((row) => getComputedStyle(row).backgroundColor);
 
+const rootValue = (page, name) => page.evaluate((property) => getComputedStyle(document.documentElement).getPropertyValue(property).trim(), name);
+
 test.describe("database theme bridge", () => {
+  // The bridge is imported by the components that render a database, so it is not in the render-blocking
+  // entry stylesheet: a page without a database does not define it, and the database brings it along.
+  test("the bridge arrives with the database chunk, not with the entry stylesheet", async ({ page }) => {
+    await bootWith(page);
+    await openFreshPage(page, "/");
+    expect(await rootValue(page, "--osio-chart-1")).toBe("");
+    expect(await rootValue(page, "--color-line-medium")).toBe("");
+    const editor = await activateFirstEditor(page);
+    await openSlashMenuFromEditor(editor, "/database");
+    await slashCommandEntry(page, "Database - Inline").click();
+    await page.locator(".osionos-database-block--inline").first().waitFor({ timeout: 15_000 });
+    expect(await rootValue(page, "--osio-chart-1")).not.toBe("");
+    expect(await rootValue(page, "--color-line-medium")).not.toBe("");
+  });
+
   test("the table header paints --osio-table-header-bg", async ({ page }) => {
     const block = await openInlineTable(page);
     expect(await headerBackground(block)).toBe(await paintOf(page, "--osio-table-header-bg"));

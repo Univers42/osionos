@@ -11,6 +11,12 @@
 /* ************************************************************************** */
 
 @import "tailwindcss";
+/* The vendored database compiles its own utilities (its stylesheet has its own
+   `@import "tailwindcss"`) into its lazy chunk, so scanning its sources here only
+   duplicated them in the render-blocking entry CSS: 424 rules, 4.6 KB gzip, each also
+   in the chunk with identical declarations (measured 2026-10-14). The app's own
+   classes are still scanned; a class both write is generated from the app's side. */
+@source not "../../shared/notion-database-sys";
 /* Every colour that differs by palette or mode (surfaces, text, borders, accent,
    status, block tints, syntax, shadow tint, scrim, graph inks), for all nine
    palettes. This file keeps what is the same in every palette: geometry, type,
@@ -19,10 +25,10 @@
 @import "./shell.css";
 @import "./type.css";
 @import "./recipes.css";
-/* The vendored database's own colours (tables, boards, charts) as references to
-   the tokens above, plus its stock shadow and radius classes. */
-@import "./database-bridge.generated.css";
-@import "./database-overrides.css";
+/* The vendored database's colour bridge (database-bridge.generated.css) and its stock
+   shadow/radius classes (database-overrides.css) are NOT imported here: nothing outside
+   the database reads them, so each component that renders ObjectDatabase imports them
+   and they ship in its lazy chunk (tokens-bridge.test.ts lists those components). */
 /* Accent presets and the density, corner and text-size axes: attribute blocks on <html>. */
 @import "./appearance.css";
 /* highlight.js base theme intentionally NOT imported eagerly (perf P2): the
