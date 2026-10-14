@@ -226,7 +226,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
         </div>
       ) : null}
 
-      <div ref={listRef} id="slash-command-list" role="listbox" className="relative min-h-0 flex-1 overflow-y-auto">
+      <div ref={listRef} id="slash-command-list" role="listbox" className="osio-scroll-fade relative min-h-0 flex-1 overflow-y-auto">
         {ordered.length === 0 ? (
           <div className="px-2 py-6 text-center text-xs text-[var(--osio-fg-muted)]">
             No blocks match “/{command}”.

@@ -27,6 +27,7 @@
    * elevated panel one step above bg-hover, so the solid fill vanishes there. */
   --osio-menu-item-hover-bg: color-mix(in srgb, var(--osio-fg-default) 10%, transparent);
   --osio-menu-separator: var(--osio-border-strong);
+  --osio-scroll-fade-size: 16px;
 
   /* Buttons and icon buttons. */
   --osio-control-radius: var(--osio-radius-control);
@@ -176,6 +177,33 @@
   height: 1px;
   margin-block: 4px;
   background-color: var(--osio-menu-separator);
+}
+
+/* A scroll region that still has rows out of sight fades the edge they are
+ * behind. `useWholeRowScroll` sets `data-fade-top` / `data-fade-bottom`; when
+ * everything fits neither is set and the region is not masked at all. */
+@utility osio-scroll-fade {
+  --osio-fade-top: 0px;
+  --osio-fade-bottom: 0px;
+
+  &[data-fade-top] {
+    --osio-fade-top: var(--osio-scroll-fade-size);
+  }
+
+  &[data-fade-bottom] {
+    --osio-fade-bottom: var(--osio-scroll-fade-size);
+  }
+
+  &[data-fade-top],
+  &[data-fade-bottom] {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      black var(--osio-fade-top),
+      black calc(100% - var(--osio-fade-bottom)),
+      transparent 100%
+    );
+  }
 }
 
 /* The static surface for a card that sits inside a pane. A floating panel uses
