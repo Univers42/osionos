@@ -35,7 +35,7 @@ const NEUTRAL_TONES = {
     [0.931, 0.95], // 7  border
     [0.876, 1.3], // 8  strong border
     [0.525, 1.1], // 9  subtle text
-    [0.518, 0.85], // 10 muted text
+    [0.485, 0.85], // 10 muted text
     [0.217, 0.3], // 11 text
     [0.168, 0.15], // 12 strong text
   ],

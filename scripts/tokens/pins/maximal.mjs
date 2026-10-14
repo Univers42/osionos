@@ -1,11 +1,11 @@
 // Maximal is neon on violet-black: the accent and the states are out of the tone
-// table's range, the dark surfaces are deeper and more violet than its tones, and
-// the cyan second voice is the Update button. All of that is pinned.
+// table's range and the dark surfaces are deeper and more violet than its tones.
+// All of that is pinned.
 
 export default {
   light: {
     "--osio-n-9": "#706684",
-    "--osio-n-10": "#6A6080",
+    "--osio-n-10": "#645A7A",
     "--osio-n-11": "#1A1422",
     "--osio-n-12": "#120D1A",
     "--osio-a-solid": "#E5007A",
@@ -19,9 +19,6 @@ export default {
     "--osio-success-hover": "#08723A",
     "--osio-warning": "#B24C00",
     "--osio-graph-note": "#0098DB",
-    "--osio-update": "#0079B8",
-    "--osio-update-hover": "#006698",
-    "--osio-update-fg": "#FFFFFF",
     "--osio-syntax-keyword": "#C1006A",
     "--osio-syntax-string": "#0B7A3E",
     "--osio-syntax-number": "#006FB0",
@@ -58,9 +55,6 @@ export default {
     "--osio-success-hover": "#66E6A1",
     "--osio-warning": "#FFB13D",
     "--osio-graph-note": "#34C3F0",
-    "--osio-update": "#34C3F0",
-    "--osio-update-hover": "#5AD0F5",
-    "--osio-update-fg": "#15101E",
     "--osio-syntax-keyword": "#FF6FBE",
     "--osio-syntax-string": "#5FE0A0",
     "--osio-syntax-number": "#6FD0F5",
