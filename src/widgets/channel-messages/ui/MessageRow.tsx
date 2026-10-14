@@ -15,6 +15,7 @@ import { Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react';
 
 import { renderInlineToReact } from '@osionos/markdown-engine/react';
 import type { ChatMessage } from '@/shared/chat/messageApi';
+import { Button, IconButton } from '@/shared/ui';
 
 import { MessageAttachments } from './attachments/MessageAttachments';
 import { LinkPreviewCard } from './attachments/LinkPreviewCard';
@@ -127,8 +128,8 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
               onKeyDown={(event) => { if (event.key === 'Escape') setEditing(false); }}
               className="flex-1 rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none focus:border-[var(--osio-accent)]"
             />
-            <button type="submit" className="rounded bg-[var(--osio-accent)] px-2 py-1 text-xs text-[var(--osio-accent-fg)]">Save</button>
-            <button type="button" onClick={() => setEditing(false)} className="rounded px-2 py-1 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]">Cancel</button>
+            <Button type="submit" tone="primary" size="sm">Save</Button>
+            <Button tone="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
           </form>
         ) : (
           <p className="whitespace-pre-wrap break-words text-sm leading-6">{renderContent(message.content)}</p>
@@ -138,53 +139,56 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
           <LinkPreviewCard key={url} attachment={{ type: 'url', url }} />
         ))}
         {(message.replyCount ?? 0) > 0 && onOpenThread && (
-          <button
-            type="button"
+          <Button
+            tone="ghost"
+            size="sm"
+            className="mt-1"
             onClick={() => onOpenThread(message)}
-            className="mt-1 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-[var(--osio-accent)] hover:bg-[var(--osio-bg-hover)]"
           >
             💬 {message.replyCount} {message.replyCount === 1 ? 'reply' : 'replies'}
-          </button>
+          </Button>
         )}
         {message.reactions.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {groupReactions(message).map(([emoji, users]) => (
-              <button
+              <Button
                 key={emoji}
-                type="button"
+                size="sm"
+                tone={users.includes(userId) ? 'default' : 'ghost'}
+                aria-pressed={users.includes(userId)}
                 onClick={() => canInteract && onReact(message.id, emoji, !users.includes(userId))}
-                className={`rounded-full border px-1.5 py-0.5 text-xs ${users.includes(userId) ? 'border-[var(--osio-accent)] bg-[var(--osio-bg-muted)]' : 'border-[var(--osio-border-default)]'}`}
               >
                 {emoji} {users.length}
-              </button>
+              </Button>
             ))}
           </div>
         )}
       </div>
       {canInteract && (
         <div className="absolute -top-2 right-2 hidden items-center gap-0.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-0.5 shadow-osio-menu group-hover:flex">
-          <button type="button" aria-label="Reply" onClick={() => onReply(message)} className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"><Reply size={14} /></button>
-          <button type="button" aria-label="Add reaction" onClick={() => setPickerOpen((open) => !open)} className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"><SmilePlus size={14} /></button>
+          <IconButton size="xs" label="Reply" onClick={() => onReply(message)}><Reply size={14} /></IconButton>
+          <IconButton size="xs" label="Add reaction" onClick={() => setPickerOpen((open) => !open)}><SmilePlus size={14} /></IconButton>
           {isAuthor && (
             <>
-              <button type="button" aria-label="Edit message" onClick={() => { setDraft(message.content); setEditing(true); }} className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"><Pencil size={14} /></button>
-              <button type="button" aria-label="Delete message" onClick={() => onDelete(message.id)} className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"><Trash2 size={14} /></button>
+              <IconButton size="xs" label="Edit message" onClick={() => { setDraft(message.content); setEditing(true); }}><Pencil size={14} /></IconButton>
+              <IconButton size="xs" label="Delete message" onClick={() => onDelete(message.id)}><Trash2 size={14} /></IconButton>
             </>
           )}
           {pickerOpen && (
             <div className="absolute right-0 top-7 z-10 flex gap-1 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1 shadow-[var(--osio-shadow-menu)]">
               {QUICK_EMOJI.map((emoji) => (
-                <button
+                <IconButton
                   key={emoji}
-                  type="button"
+                  size="xs"
+                  label={`React with ${emoji}`}
+                  className="text-sm"
                   onClick={() => {
                     onReact(message.id, emoji, !message.reactions.some((r) => r.userId === userId && r.emoji === emoji));
                     setPickerOpen(false);
                   }}
-                  className="rounded p-1 text-sm hover:bg-[var(--osio-bg-hover)]"
                 >
                   {emoji}
-                </button>
+                </IconButton>
               ))}
             </div>
           )}

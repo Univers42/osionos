@@ -20,6 +20,9 @@ function kitImports(source: string): string[] {
 test("SettingsCenter defines none of the kit components it used to copy", () => {
   for (const name of ["Button", "Switch", "SelectButton"]) {
     assert.doesNotMatch(settings, new RegExp(`const ${name}\\b`), `local ${name} is back`);
+  }
+  // <Button> is the kit's now; the other two names exist only as the removed copies.
+  for (const name of ["Switch", "SelectButton"]) {
     assert.doesNotMatch(settings, new RegExp(`<${name}\\b`), `<${name}> is still rendered`);
   }
 });

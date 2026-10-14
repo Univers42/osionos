@@ -90,8 +90,10 @@ import {
 } from '@/store/settings';
 import { defaultBillingState, defaultWorkspaceSettings } from '@/store/settings/defaults';
 import {
+  Button,
   Dropdown,
   EmojiPicker,
+  IconButton,
   IconValueView,
   MiniTabs as PrimitiveMiniTabs,
   Modal,
@@ -344,59 +346,11 @@ function anchorFromTitle(value: string): string {
     .replaceAll(/^-|-$/g, '');
 }
 
-function textFromReactNode(node: React.ReactNode): string {
-  if (typeof node === 'string' || typeof node === 'number') return String(node);
-  if (Array.isArray(node)) return node.map(textFromReactNode).join('');
-  if (React.isValidElement<{ children?: React.ReactNode }>(node)) {
-    return textFromReactNode(node.props.children);
-  }
-  return '';
-}
-
-const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: 'default' | 'primary' | 'danger' | 'ghost' }> = ({ className = '', tone = 'default', onClick, children, ...props }) => {
-  // Chrome mirrors the shared atoms/Button invariant (radius-control, token motion,
-  // press, one focus-ring); danger keeps the settings-local subtle tint on purpose.
-  const toneClass = {
-    default: 'border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] hover:border-[var(--osio-border-strong)] hover:bg-[var(--osio-bg-hover)]',
-    primary: 'bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] shadow-[var(--osio-e1)] hover:bg-[var(--osio-accent-hover)] hover:shadow-[var(--osio-e2)]',
-    danger: 'bg-[var(--osio-danger)]/10 text-[var(--osio-danger)] hover:bg-[var(--osio-danger)]/15',
-    ghost: 'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]',
-  }[tone];
-
-  const label = textFromReactNode(children) || props['aria-label'] || 'button';
-  const handleClick: React.MouseEventHandler<HTMLButtonElement> = (event) => {
-    if (onClick) {
-      onClick(event);
-      return;
-    }
-    noopHandledAction('settings_button_click', { label });
-  };
-
-  return <button type="button" className={`inline-flex h-[var(--osio-control-h-md)] select-none items-center justify-center gap-1.5 rounded-[var(--osio-radius-control)] px-3 text-sm font-medium transition-[background-color,border-color,color,box-shadow,transform] duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100 ${toneClass} ${className}`} onClick={handleClick} {...props}>{children}</button>;
-};
-
-const SelectButton: React.FC<{
-  children: React.ReactNode;
-  value?: string;
-  options?: Array<{ value: string; label: string }>;
-  onChange?: (value: string) => void;
-}> = ({ children, value, options: providedOptions, onChange }) => {
-  const label = textFromReactNode(children) || 'Select';
-  const [localValue, setLocalValue] = useState(value ?? label);
-  const options = useMemo(() => providedOptions ?? [
-    { value: label, label },
-    { value: 'Default', label: 'Default' },
-    { value: 'Off', label: 'Off' },
-  ].filter((option, index, array) => array.findIndex((candidate) => candidate.value === option.value) === index), [label, providedOptions]);
-  const selectedValue = value ?? localValue;
-
-  return <Dropdown value={selectedValue} options={options} onChange={(next) => { setLocalValue(next); if (onChange) onChange(next); else noopHandledAction('settings_select_change', { label, value: next }); }} align="end" width="auto" />;
-};
-
-const Switch: React.FC<{ checked?: boolean; label?: string; onChange?: (checked: boolean) => void }> = ({ checked = false, label, onChange }) => {
-  const [localValue, setLocalValue] = useState(checked);
-  const value = onChange ? checked : localValue;
-  return <Toggle checked={value} onChange={(next) => { if (!onChange) { setLocalValue(next); noopHandledAction('settings_toggle_change', { label, value: next }); } onChange?.(next); }} label={label} />;
+// Options are the label plus two placeholders, as the old SelectButton offered: member access has no backing store yet.
+const MemberAccess: React.FC<{ label: string }> = ({ label }) => {
+  const [value, setValue] = useState(label);
+  const options = [label, 'Default', 'Off'].map((option) => ({ value: option, label: option }));
+  return <Dropdown value={value} options={options} onChange={(next) => { setValue(next); noopHandledAction('settings_select_change', { label, value: next }); }} align="end" width="auto" />;
 };
 
 const Section: React.FC<{ title: string; children: React.ReactNode; className?: string }> = ({ title, children, className = '' }) => (
@@ -423,7 +377,7 @@ const SettingRow: React.FC<{
 );
 
 const DataTable: React.FC<{ headers: string[]; rows: React.ReactNode[][]; className?: string }> = ({ headers, rows, className = '' }) => (
-  <div className={`overflow-x-auto rounded-lg border border-[var(--osio-db-line)] ${className}`}>
+  <div className={`overflow-x-auto rounded-[var(--osio-radius-panel)] border border-[var(--osio-db-line)] ${className}`}>
     <table className="w-full min-w-[560px] table-fixed text-sm">
       <thead className="bg-[var(--osio-bg-subtle)] text-left text-xs font-medium text-[var(--osio-fg-muted)]">
         <tr>{headers.map((header) => <th key={header} className="border-b border-[var(--osio-db-line)] px-3 py-2">{header}</th>)}</tr>
@@ -459,7 +413,7 @@ const Avatar: React.FC<{ value?: string; label?: string; size?: number }> = ({ v
 );
 
 const FeatureCard: React.FC<{ icon?: React.ReactNode; title: string; description: string; action?: React.ReactNode }> = ({ icon, title, description, action }) => (
-  <div className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4">
+  <div className="rounded-[var(--osio-radius-panel)] border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4">
     <div className="flex items-start gap-3">
       {icon && <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--osio-bg-subtle)] text-[var(--osio-accent)]">{icon}</span>}
       <div className="min-w-0 flex-1">
@@ -517,8 +471,8 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
           <div className="truncate text-xs text-[var(--osio-fg-muted)]">{member.email}</div>
         </div>
       </div>,
-      <SelectButton key={`${member.email}-access`}>{index % 3 === 0 ? '2 pages' : '1 page'}</SelectButton>,
-      <Button key={`${member.email}-menu`} tone="ghost" className="px-2"><MoreHorizontal size={16} /></Button>,
+      <MemberAccess key={`${member.email}-access`} label={index % 3 === 0 ? '2 pages' : '1 page'} />,
+      <IconButton key={`${member.email}-menu`} label={`Actions for ${member.name}`} onClick={() => noopHandledAction('settings_button_click', { label: 'Member actions' })}><MoreHorizontal size={16} /></IconButton>,
     ]),
     [members],
   );
@@ -559,14 +513,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
         </aside>
 
         <section className="relative flex-1 overflow-hidden bg-[var(--osio-bg-surface)]" role="tabpanel" aria-label={current.title}>
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute right-3 top-3 z-[var(--osio-z-raised)] rounded-full bg-[var(--osio-bg-subtle)] p-1.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-            aria-label="Close settings"
-          >
-            <X size={16} />
-          </button>
+          <IconButton label="Close settings" onClick={onClose} className="absolute right-3 top-3 z-[var(--osio-z-raised)]"><X size={16} /></IconButton>
           <div className="h-full overflow-y-auto px-[clamp(18px,5vw,60px)] py-9">
             <div className="mx-auto flex w-full max-w-[800px] flex-col gap-9">
               <header className="space-y-2">
@@ -739,16 +686,16 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
         <SettingRow title="Passkeys" description={`${activePasskeys.length} passkey${activePasskeys.length === 1 ? '' : 's'} configured`} action={<Button onClick={() => setModal({ name: 'passkeys' })}><KeyRound size={14} /> Add passkey</Button>} />
       </Section>
       <Section title="Support">
-        <SettingRow title="Support access" description="Grant support temporary access to troubleshoot problems. You can revoke access anytime." action={<Switch checked={Boolean(account?.supportAccessGrantedUntil)} onChange={(checked) => { if (checked) setModal({ name: 'support-duration' }); else updateAccount({ supportAccessGrantedUntil: null }); }} />} />
+        <SettingRow title="Support access" description="Grant support temporary access to troubleshoot problems. You can revoke access anytime." action={<Toggle checked={Boolean(account?.supportAccessGrantedUntil)} onChange={(checked) => { if (checked) setModal({ name: 'support-duration' }); else updateAccount({ supportAccessGrantedUntil: null }); }} label="Support access" />} />
         <SettingRow danger title="Delete my account" description="Permanently delete your account and remove access to your pages and workspaces." action={<Button tone="danger" onClick={() => setModal({ name: 'delete-account' })}>Delete my account</Button>} />
       </Section>
       <Section title="Devices">
         <SettingRow danger title="Log out of all devices" description="Log out of active sessions on all your devices, other than this one" action={<Button tone="danger" onClick={() => setModal({ name: 'revoke-devices' })}>Log out of all devices</Button>} />
         <DataTable headers={['Device Name', 'Last Active', 'Location', '']} rows={deviceRows.length ? deviceRows : [['Ubuntu · This Device', 'Now', 'This device', '']]} />
-        <Button tone="ghost" className="mt-2"><FileDown size={14} /> Load more devices</Button>
+        <Button tone="ghost" className="mt-2" onClick={() => noopHandledAction('settings_button_click', { label: 'Load more devices' })}><FileDown size={14} /> Load more devices</Button>
       </Section>
       <Section title="User ID">
-        <SettingRow title="User ID" description={persona?.id ?? 'b0181a89-4ad8-476c-9657-352d6eadf49e'} action={<Button tone="ghost" aria-label="Copy user ID" onClick={() => { runAsync(navigator.clipboard.writeText(persona?.id ?? userId).then(() => toast({ kind: 'success', title: 'User ID copied' }))); }}><Copy size={16} /></Button>} />
+        <SettingRow title="User ID" description={persona?.id ?? 'b0181a89-4ad8-476c-9657-352d6eadf49e'} action={<IconButton label="Copy user ID" onClick={() => { runAsync(navigator.clipboard.writeText(persona?.id ?? userId).then(() => toast({ kind: 'success', title: 'User ID copied' }))); }}><Copy size={16} /></IconButton>} />
       </Section>
 
       {modal?.name === 'email-manager' && <EmailManagerModal userId={userId} fallbackEmail={persona?.email} onClose={() => setModal(null)} />}
@@ -914,24 +861,24 @@ const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }) 
         </div>
       </Section>
       <Section title="Input options">
-        <SettingRow title="Use Enter to add a new line" description="Applies to chat, comments, and other input fields. Press Cmd/Ctrl + Enter to send." action={<Switch checked={Boolean(preferences?.enterAddsNewline)} onChange={(checked) => update({ enterAddsNewline: checked })} />} />
+        <SettingRow title="Use Enter to add a new line" description="Applies to chat, comments, and other input fields. Press Cmd/Ctrl + Enter to send." action={<Toggle checked={Boolean(preferences?.enterAddsNewline)} onChange={(checked) => update({ enterAddsNewline: checked })} label="Use Enter to add a new line" />} />
       </Section>
       <Section title="Language & time">
-        <SettingRow title="Language" description="Choose the language you want to use osionos in" action={<SelectButton value={preferences?.language ?? 'en-US'} options={[{ value: 'en-US', label: 'English (US)' }, { value: 'fr-FR', label: 'Français' }, { value: 'es-ES', label: 'Español' }, { value: 'de-DE', label: 'Deutsch' }]} onChange={(value) => { changeLanguage(value); update({ language: value }); }}>English (US)</SelectButton>} />
-        <SettingRow title="Number format" description="Choose how numbers and currencies are formatted." action={<SelectButton value={preferences?.numberFormat ?? 'default'} options={[{ value: 'default', label: 'Default' }, { value: 'dot', label: '1,000.00' }, { value: 'comma', label: '1.000,00' }, { value: 'space', label: '1 000,00' }]} onChange={(value) => update({ numberFormat: value })}>Default</SelectButton>} />
-        <SettingRow title="Always show text direction controls" description="Show left-to-right and right-to-left controls in the editor." action={<Switch checked={Boolean(preferences?.privacy?.textDirectionControls)} onChange={(checked) => update({ privacy: { ...preferences?.privacy, textDirectionControls: checked } })} />} />
-        <SettingRow title="Start week" description="This will affect the way your calendars appear in osionos" action={<SelectButton value={preferences?.weekStart ?? 'monday'} options={[{ value: 'monday', label: 'Monday' }, { value: 'sunday', label: 'Sunday' }]} onChange={(value) => update({ weekStart: value as 'sunday' | 'monday' })}>Monday</SelectButton>} />
-        <SettingRow title="Date format" description="Set the default format for new @date mentions" action={<SelectButton value={preferences?.dateFormat ?? 'relative'} options={[{ value: 'relative', label: 'Relative' }, { value: 'short', label: 'Short' }, { value: 'iso', label: 'ISO' }]} onChange={(value) => update({ dateFormat: value })}>Relative</SelectButton>} />
-        <SettingRow title="Set time zone automatically using your location" description="Reminders, notifications, and emails will use your time zone" action={<Switch checked={Boolean(preferences?.autoTimezone)} onChange={(checked) => update({ autoTimezone: checked, timezone: checked ? Intl.DateTimeFormat().resolvedOptions().timeZone : preferences?.timezone })} />} />
-        <SettingRow title="Time zone" description="Choose your time zone" action={<SelectButton value={preferences?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} options={timezones} onChange={(value) => update({ timezone: value, autoTimezone: false })}>Time zone</SelectButton>} />
+        <SettingRow title="Language" description="Choose the language you want to use osionos in" action={<Dropdown value={preferences?.language ?? 'en-US'} options={[{ value: 'en-US', label: 'English (US)' }, { value: 'fr-FR', label: 'Français' }, { value: 'es-ES', label: 'Español' }, { value: 'de-DE', label: 'Deutsch' }]} onChange={(value) => { changeLanguage(value); update({ language: value }); }} align="end" width="auto" />} />
+        <SettingRow title="Number format" description="Choose how numbers and currencies are formatted." action={<Dropdown value={preferences?.numberFormat ?? 'default'} options={[{ value: 'default', label: 'Default' }, { value: 'dot', label: '1,000.00' }, { value: 'comma', label: '1.000,00' }, { value: 'space', label: '1 000,00' }]} onChange={(value) => update({ numberFormat: value })} align="end" width="auto" />} />
+        <SettingRow title="Always show text direction controls" description="Show left-to-right and right-to-left controls in the editor." action={<Toggle checked={Boolean(preferences?.privacy?.textDirectionControls)} onChange={(checked) => update({ privacy: { ...preferences?.privacy, textDirectionControls: checked } })} label="Always show text direction controls" />} />
+        <SettingRow title="Start week" description="This will affect the way your calendars appear in osionos" action={<Dropdown value={preferences?.weekStart ?? 'monday'} options={[{ value: 'monday', label: 'Monday' }, { value: 'sunday', label: 'Sunday' }]} onChange={(value) => update({ weekStart: value as 'sunday' | 'monday' })} align="end" width="auto" />} />
+        <SettingRow title="Date format" description="Set the default format for new @date mentions" action={<Dropdown value={preferences?.dateFormat ?? 'relative'} options={[{ value: 'relative', label: 'Relative' }, { value: 'short', label: 'Short' }, { value: 'iso', label: 'ISO' }]} onChange={(value) => update({ dateFormat: value })} align="end" width="auto" />} />
+        <SettingRow title="Set time zone automatically using your location" description="Reminders, notifications, and emails will use your time zone" action={<Toggle checked={Boolean(preferences?.autoTimezone)} onChange={(checked) => update({ autoTimezone: checked, timezone: checked ? Intl.DateTimeFormat().resolvedOptions().timeZone : preferences?.timezone })} label="Set time zone automatically using your location" />} />
+        <SettingRow title="Time zone" description="Choose your time zone" action={<Dropdown value={preferences?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} options={timezones} onChange={(value) => update({ timezone: value, autoTimezone: false })} align="end" width="auto" />} />
       </Section>
       <Section title="Desktop app">
-        <SettingRow title="Open on start" description="Choose what page opens when you start osionos and when you switch workspaces" action={<SelectButton value={desktop?.openOnStart ?? 'last-visited-page'} options={[{ value: 'last-visited-page', label: 'Last visited page' }, { value: 'home', label: 'Home' }, { value: 'new-page', label: 'New page' }]} onChange={(value) => update({ desktop: { ...preferences?.desktop, openOnStart: value } })}>Last visited page</SelectButton>} />
+        <SettingRow title="Open on start" description="Choose what page opens when you start osionos and when you switch workspaces" action={<Dropdown value={desktop?.openOnStart ?? 'last-visited-page'} options={[{ value: 'last-visited-page', label: 'Last visited page' }, { value: 'home', label: 'Home' }, { value: 'new-page', label: 'New page' }]} onChange={(value) => update({ desktop: { ...preferences?.desktop, openOnStart: value } })} align="end" width="auto" />} />
       </Section>
       <Section title="Privacy">
         <SettingRow title="Cookie settings" description="See the Cookie Notice for more information" action={<Button onClick={() => setModal({ name: 'cookies' })}>{cookieButtonLabel}</Button>} />
-        <SettingRow title="Show my view history" description="People with edit or full access can see when you’ve viewed a page." action={<Switch checked={privacy?.viewHistory ?? true} onChange={(checked) => update({ privacy: { ...preferences?.privacy, viewHistory: checked } })} />} />
-        <SettingRow title="Profile discoverability" description="Users who know your email will see your profile when inviting you." action={<Switch checked={privacy?.profileDiscoverability ?? true} onChange={(checked) => update({ privacy: { ...preferences?.privacy, profileDiscoverability: checked } })} />} />
+        <SettingRow title="Show my view history" description="People with edit or full access can see when you’ve viewed a page." action={<Toggle checked={privacy?.viewHistory ?? true} onChange={(checked) => update({ privacy: { ...preferences?.privacy, viewHistory: checked } })} label="Show my view history" />} />
+        <SettingRow title="Profile discoverability" description="Users who know your email will see your profile when inviting you." action={<Toggle checked={privacy?.profileDiscoverability ?? true} onChange={(checked) => update({ privacy: { ...preferences?.privacy, profileDiscoverability: checked } })} label="Profile discoverability" />} />
         <Button className="mt-3" onClick={() => setModal({ name: 'reset-preferences' })}>Reset to defaults</Button>
       </Section>
 
@@ -950,9 +897,9 @@ const CookieSettingsModal: React.FC<{ mode: string; onSave: (mode: string) => vo
   return (
     <Modal open onClose={onClose} title="Cookie settings" size="sm">
       <div className="space-y-3">
-        <SettingRow title="Essential cookies" description="Required for login, security, and workspace routing." action={<Switch checked label="Always on" />} />
-        <SettingRow title="Analytics cookies" description="Help us understand performance and reliability." action={<Switch checked={analytics} onChange={setAnalytics} />} />
-        <SettingRow title="Personalization cookies" description="Remember richer preferences across devices." action={<Switch checked={personalization} onChange={setPersonalization} />} />
+        <SettingRow title="Essential cookies" description="Required for login, security, and workspace routing." action={<Toggle checked disabled label="Essential cookies" onChange={() => undefined} />} />
+        <SettingRow title="Analytics cookies" description="Help us understand performance and reliability." action={<Toggle checked={analytics} onChange={setAnalytics} label="Analytics cookies" />} />
+        <SettingRow title="Personalization cookies" description="Remember richer preferences across devices." action={<Toggle checked={personalization} onChange={setPersonalization} label="Personalization cookies" />} />
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => onSave(nextMode)}>Save</Button></div>
       </div>
     </Modal>
@@ -1040,23 +987,23 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
         <SettingRow title="Custom landing page" description={<>When a new member joins this workspace, a copy of this page will be added to their <b>Private</b> pages</>} action={<Button onClick={() => setModal({ name: 'page-selector' })}>{settings.landingPageId ? 'Change page' : 'Select page'}</Button>} />
       </Section>
       <Section title="Sidebar">
-        <SettingRow title={<span className="inline-flex items-center gap-2">Try the new sidebar <span className="rounded bg-[var(--osio-accent-subtle)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">New</span></span>} description="Keep your pages, meetings, and AI within reach." action={<Switch checked={sidebar.newSidebar ?? true} onChange={(checked) => { setUseNewSidebar(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, newSidebar: checked } }); }} />} />
-        <SettingRow title="Show other osionos apps in sidebar" description="Show osionos Calendar and osionos Mail in your sidebar" action={<Switch checked={sidebar.showApps ?? true} onChange={(checked) => { setShowOtherApps(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, showApps: checked } }); }} />} />
+        <SettingRow title={<span className="inline-flex items-center gap-2">Try the new sidebar <span className="rounded bg-[var(--osio-accent-subtle)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">New</span></span>} description="Keep your pages, meetings, and AI within reach." action={<Toggle checked={sidebar.newSidebar ?? true} onChange={(checked) => { setUseNewSidebar(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, newSidebar: checked } }); }} label="Try the new sidebar" />} />
+        <SettingRow title="Show other osionos apps in sidebar" description="Show osionos Calendar and osionos Mail in your sidebar" action={<Toggle checked={sidebar.showApps ?? true} onChange={(checked) => { setShowOtherApps(checked); update(resolvedUserId, workspaceId, { sidebar: { ...settings.sidebar, showApps: checked } }); }} label="Show other osionos apps in sidebar" />} />
       </Section>
       <Section title="Export">
         <SettingRow title="Workspace content" description={`Export all pages in ${settings.name}. This can take longer depending on the size of the workspace.`} action={<Button onClick={() => runAsync(exportWorkspaceContent())}>Export</Button>} />
         <SettingRow title="Members" description={`${membersCount} members available locally. Upgrade text from prompt is kept as a disabled export pattern.`} action={<Button onClick={exportMembersCsv}>Export</Button>} />
       </Section>
       <Section title="Analytics">
-        <SettingRow title="Save and display page view analytics" description={`Collect page view data for all pages in ${settings.name}. Editors can see how many views it has.`} action={<Switch checked={analytics.pageViews ?? true} onChange={(checked) => update(resolvedUserId, workspaceId, { analytics: { ...settings.analytics, pageViews: checked } })} />} />
-        <Button tone="ghost" className="-ml-2"><Search size={14} /> Learn more</Button>
+        <SettingRow title="Save and display page view analytics" description={`Collect page view data for all pages in ${settings.name}. Editors can see how many views it has.`} action={<Toggle checked={analytics.pageViews ?? true} onChange={(checked) => update(resolvedUserId, workspaceId, { analytics: { ...settings.analytics, pageViews: checked } })} label="Save and display page view analytics" />} />
+        <Button tone="ghost" className="-ml-2" onClick={() => noopHandledAction('settings_button_click', { label: 'Learn more' })}><Search size={14} /> Learn more</Button>
       </Section>
       <Section title="Danger zone">
         <SettingRow danger title="Delete workspace" description="Permanently delete this workspace, including all pages and files." action={<Button tone="danger" onClick={() => setModal({ name: 'delete-workspace' })}>Delete workspace</Button>} />
         <Button tone="ghost" className="-ml-2" onClick={() => { runAsync(reset(resolvedUserId, workspaceId, workspaceName)); }}>Reset to defaults</Button>
       </Section>
       <Section title="Workspace ID">
-        <SettingRow title="Workspace ID" description={workspaceId} action={<Button tone="ghost" aria-label="Copy workspace ID" onClick={() => { runAsync(navigator.clipboard.writeText(workspaceId).then(() => toast({ kind: 'success', title: 'Workspace ID copied' }))); }}><Copy size={16} /></Button>} />
+        <SettingRow title="Workspace ID" description={workspaceId} action={<IconButton label="Copy workspace ID" onClick={() => { runAsync(navigator.clipboard.writeText(workspaceId).then(() => toast({ kind: 'success', title: 'Workspace ID copied' }))); }}><Copy size={16} /></IconButton>} />
       </Section>
       {modal?.name === 'page-selector' && <PageSelectorModal pages={pages} selectedId={settings.landingPageId ?? null} onSelect={(pageId) => { update(resolvedUserId, workspaceId, { landingPageId: pageId }); setModal(null); }} onClose={() => setModal(null)} />}
       {modal?.name === 'delete-workspace' && <TypedConfirmModal title="Delete workspace" message={`Type ${settings.name} to permanently delete this workspace.`} confirmText={settings.name} danger actionLabel="Delete workspace" onConfirm={() => runAsync(handleDeleteWorkspace())} onClose={() => setModal(null)} />}
@@ -1068,7 +1015,7 @@ const PageSelectorModal: React.FC<{ pages: PageEntry[]; selectedId: string | nul
   <Modal open onClose={onClose} title="Select landing page" size="md">
     <div className="space-y-2">
       <Button className="w-full justify-start" onClick={() => onSelect(null)}>No landing page</Button>
-      {pages.slice(0, 20).map((page) => <Button key={page._id} className={`w-full justify-start ${selectedId === page._id ? 'border-[var(--osio-accent)]' : ''}`} onClick={() => onSelect(page._id)}>{page.icon ?? '📄'} {page.title || 'Untitled'}</Button>)}
+      {pages.slice(0, 20).map((page) => <Button key={page._id} className="w-full justify-start" tone={selectedId === page._id ? 'primary' : 'default'} aria-pressed={selectedId === page._id} onClick={() => onSelect(page._id)}>{page.icon ?? '📄'} {page.title || 'Untitled'}</Button>)}
     </div>
   </Modal>
 );
@@ -1100,13 +1047,13 @@ const NotificationsPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }
   return (
     <>
       <Section title="In-app notifications">
-        <FeatureCard icon={<CalendarDays size={16} />} title="Live meeting activity" description="Join video conferencing and start transcribing. Meeting is being transcribed and summarized." action={<Switch checked={inApp?.liveMeetingActivity ?? true} onChange={(checked) => update({ inApp: { ...settings?.inApp, liveMeetingActivity: checked } })} />} />
+        <FeatureCard icon={<CalendarDays size={16} />} title="Live meeting activity" description="Join video conferencing and start transcribing. Meeting is being transcribed and summarized." action={<Toggle checked={inApp?.liveMeetingActivity ?? true} onChange={(checked) => update({ inApp: { ...settings?.inApp, liveMeetingActivity: checked } })} label="Live meeting activity" />} />
       </Section>
-      <Section title="Slack notifications"><SettingRow title="Slack notifications" description="Get Slack notifications about activity in your osionos workspace" action={<SelectButton value={slack?.mode ?? 'off'} options={[{ value: 'off', label: 'Off' }, { value: 'mentions', label: 'Mentions only' }, { value: 'all', label: 'All activity' }]} onChange={(value) => update({ slack: { ...settings?.slack, mode: value } })}>Off</SelectButton>} /></Section>
-      <Section title="Discord notifications"><SettingRow title="Discord notifications" description="Get Discord notifications about activity in your osionos workspace" action={<SelectButton value={discord?.mode ?? 'off'} options={[{ value: 'off', label: 'Off' }, { value: 'mentions', label: 'Mentions only' }, { value: 'all', label: 'All activity' }]} onChange={(value) => update({ discord: { ...settings?.discord, mode: value } })}>Off</SelectButton>} /></Section>
+      <Section title="Slack notifications"><SettingRow title="Slack notifications" description="Get Slack notifications about activity in your osionos workspace" action={<Dropdown value={slack?.mode ?? 'off'} options={[{ value: 'off', label: 'Off' }, { value: 'mentions', label: 'Mentions only' }, { value: 'all', label: 'All activity' }]} onChange={(value) => update({ slack: { ...settings?.slack, mode: value } })} align="end" width="auto" />} /></Section>
+      <Section title="Discord notifications"><SettingRow title="Discord notifications" description="Get Discord notifications about activity in your osionos workspace" action={<Dropdown value={discord?.mode ?? 'off'} options={[{ value: 'off', label: 'Off' }, { value: 'mentions', label: 'Mentions only' }, { value: 'all', label: 'All activity' }]} onChange={(value) => update({ discord: { ...settings?.discord, mode: value } })} align="end" width="auto" />} /></Section>
       <Section title="Email notifications">
         {emailRows.map(([label, key, description]) => (
-          <SettingRow key={label} title={label} description={description} action={<Switch checked={email?.[key] ?? key !== 'alwaysSend'} onChange={(checked) => update({ email: { ...settings?.email, [key]: checked } })} />} />
+          <SettingRow key={label} title={label} description={description} action={<Toggle checked={email?.[key] ?? key !== 'alwaysSend'} onChange={(checked) => update({ email: { ...settings?.email, [key]: checked } })} label={label} />} />
         ))}
         <Button className="mt-3" onClick={() => reset(userId)}>Reset to defaults</Button>
         <Button tone="ghost" className="mt-3" onClick={() => setModal({ name: 'page-notification-overrides' })}>Manage settings</Button>
@@ -1123,7 +1070,7 @@ const PageNotificationOverridesModal: React.FC<{ onClose: () => void }> = ({ onC
     <Modal open onClose={onClose} title="Page notification settings" size="md">
       <div className="space-y-2">
         {pages.length === 0 ? <p className="text-sm text-[var(--osio-fg-muted)]">No pages available yet.</p> : pages.map((page) => (
-          <SettingRow key={page._id} title={page.title || 'Untitled'} description={page.updatedAt ? new Date(page.updatedAt).toLocaleString() : 'No updates yet'} action={<Switch checked={enabledIds.has(page._id)} onChange={(checked) => setEnabledIds((current) => { const next = new Set(current); if (checked) { next.add(page._id); } else { next.delete(page._id); } return next; })} />} />
+          <SettingRow key={page._id} title={page.title || 'Untitled'} description={page.updatedAt ? new Date(page.updatedAt).toLocaleString() : 'No updates yet'} action={<Toggle checked={enabledIds.has(page._id)} onChange={(checked) => setEnabledIds((current) => { const next = new Set(current); if (checked) { next.add(page._id); } else { next.delete(page._id); } return next; })} label={`Notify me about ${page.title || 'Untitled'}`} />} />
         ))}
         <div className="flex justify-end"><Button tone="primary" onClick={onClose}>Done</Button></div>
       </div>
@@ -1375,17 +1322,17 @@ const PageSettingsPanel = () => {
         <SettingRow title={<span className="inline-flex items-center gap-2"><FileText size={16} />Copy page contents</span>} action={<Button onClick={() => runMaybeAsync(actions.copyContents())}>Copy</Button>} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><Copy size={16} />Duplicate</span>} description="Ctrl+D" action={<Button onClick={() => runMaybeAsync(actions.duplicate())}>Duplicate</Button>} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><Trash2 size={16} />Move to Trash</span>} action={<Button tone="danger" onClick={() => runMaybeAsync(actions.moveToTrash())}>Move</Button>} />
-        <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={16} />Present</span>} description="Beta · Ctrl+Alt+P" action={<Switch checked={actions.config.presentationMode} onChange={() => runMaybeAsync(actions.present())} />} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={16} />Present</span>} description="Beta · Ctrl+Alt+P" action={<Toggle checked={actions.config.presentationMode} onChange={() => runMaybeAsync(actions.present())} label="Present" />} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><Sparkles size={16} />Use with AI</span>} description="Share this page context with osionos AI." action={<Button onClick={() => recordSettingsAction('page_use_with_ai', { pageId: activePage.id })}>Use</Button>} />
-        <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={16} />Translate</span>} action={<div className="flex gap-2"><SelectButton value={actions.translateLocale} options={TRANSLATION_LANGUAGES.map((language) => ({ value: language.locale, label: language.label }))} onChange={actions.setTranslateLocale}>Language</SelectButton><Button onClick={() => runMaybeAsync(actions.translate())}>Translate</Button></div>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={16} />Translate</span>} action={<div className="flex gap-2"><Dropdown value={actions.translateLocale} options={TRANSLATION_LANGUAGES.map((language) => ({ value: language.locale, label: language.label }))} onChange={actions.setTranslateLocale} align="end" width="auto" /><Button onClick={() => runMaybeAsync(actions.translate())}>Translate</Button></div>} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><Import size={16} />Import</span>} action={<><input ref={importInputRef} type="file" accept=".json,.md,.markdown,.txt" className="hidden" onChange={handleImport} /><Button onClick={() => importInputRef.current?.click()}>Import</Button></>} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><FileDown size={16} />Export</span>} action={<Button onClick={() => runMaybeAsync(actions.exportPage())}>Export</Button>} />
       </Section>
-      <Section title="Page switches"><SettingRow title="Small text" action={<Switch checked={actions.config.smallText} onChange={() => runMaybeAsync(actions.toggleSmallText())} />} /><SettingRow title="Full width" action={<Switch checked={actions.config.fullWidth} onChange={() => runMaybeAsync(actions.toggleFullWidth())} />} /><SettingRow title="Lock page" action={<Switch checked={actions.config.locked} onChange={() => runMaybeAsync(actions.toggleLock())} />} /></Section>
+      <Section title="Page switches"><SettingRow title="Small text" action={<Toggle checked={actions.config.smallText} onChange={() => runMaybeAsync(actions.toggleSmallText())} label="Small text" />} /><SettingRow title="Full width" action={<Toggle checked={actions.config.fullWidth} onChange={() => runMaybeAsync(actions.toggleFullWidth())} label="Full width" />} /><SettingRow title="Lock page" action={<Toggle checked={actions.config.locked} onChange={() => runMaybeAsync(actions.toggleLock())} label="Lock page" />} /></Section>
       <Section title="History & connections">
         <SettingRow title="Updates & analytics" description={`Actions ${actions.config.analytics.actions} · Copies ${actions.config.analytics.copies}`} action={<Button onClick={actions.openAnalytics}>Open</Button>} />
         <SettingRow title="Version history" description={`${actions.versions.length} saved versions`} action={<Button onClick={actions.openVersionHistory}>Open</Button>} />
-        <SettingRow title="Notify me" action={<Switch checked={actions.config.notifications.comments} onChange={() => runMaybeAsync(actions.toggleNotifications())} />} />
+        <SettingRow title="Notify me" action={<Toggle checked={actions.config.notifications.comments} onChange={() => runMaybeAsync(actions.toggleNotifications())} label="Notify me" />} />
         <SettingRow title="Connections" description={actions.config.connections.length ? actions.config.connections.map((connection) => connection.name).join(', ') : 'None'} action={<Button onClick={() => runMaybeAsync(actions.manageConnections())}>Manage</Button>} />
         <p className="pt-3 text-xs text-[var(--osio-fg-subtle)]">Word count: {actions.wordCount} words · {actions.editedLabel}</p>
       </Section>
@@ -1400,12 +1347,12 @@ const AiPanel = () => {
   return (
     <Section title="osionos AI">
       <FeatureCard icon={<Sparkles size={16} />} title="osionos AI" description="Search everywhere, automate meeting notes, create summaries, and run agents." action={<Button tone="primary" onClick={() => { update(workspaceId, { connectors: true, searchEverywhereIndexing: true }); recordSettingsAction('ai_upgrade_click', { workspaceId }); }}>Upgrade</Button>} />
-      <SettingRow title="AI connectors" description="Let AI search connected tools from this workspace." action={<Switch checked={settings.connectors} onChange={(checked) => update(workspaceId, { connectors: checked })} />} />
-      <SettingRow title="Meeting notes auto-record" description="Automatically record and summarize meetings when available." action={<Switch checked={settings.meetingNotesAutoRecord} onChange={(checked) => update(workspaceId, { meetingNotesAutoRecord: checked })} />} />
-      <SettingRow title="Agents" description="Enable workspace agents." action={<Switch checked={settings.agentsEnabled} onChange={(checked) => update(workspaceId, { agentsEnabled: checked })} />} />
-      <SettingRow title="Custom agents" description="Allow members to create custom agents." action={<Switch checked={settings.customAgentsAllowed} onChange={(checked) => update(workspaceId, { customAgentsAllowed: checked })} />} />
-      <SettingRow title="Search everywhere indexing" description="Index pages and connected content for AI answers." action={<Switch checked={settings.searchEverywhereIndexing} onChange={(checked) => update(workspaceId, { searchEverywhereIndexing: checked })} />} />
-      <SettingRow title="Summaries" description="Generate page and meeting summaries." action={<Switch checked={settings.summaries} onChange={(checked) => update(workspaceId, { summaries: checked })} />} />
+      <SettingRow title="AI connectors" description="Let AI search connected tools from this workspace." action={<Toggle checked={settings.connectors} onChange={(checked) => update(workspaceId, { connectors: checked })} label="AI connectors" />} />
+      <SettingRow title="Meeting notes auto-record" description="Automatically record and summarize meetings when available." action={<Toggle checked={settings.meetingNotesAutoRecord} onChange={(checked) => update(workspaceId, { meetingNotesAutoRecord: checked })} label="Meeting notes auto-record" />} />
+      <SettingRow title="Agents" description="Enable workspace agents." action={<Toggle checked={settings.agentsEnabled} onChange={(checked) => update(workspaceId, { agentsEnabled: checked })} label="Agents" />} />
+      <SettingRow title="Custom agents" description="Allow members to create custom agents." action={<Toggle checked={settings.customAgentsAllowed} onChange={(checked) => update(workspaceId, { customAgentsAllowed: checked })} label="Custom agents" />} />
+      <SettingRow title="Search everywhere indexing" description="Index pages and connected content for AI answers." action={<Toggle checked={settings.searchEverywhereIndexing} onChange={(checked) => update(workspaceId, { searchEverywhereIndexing: checked })} label="Search everywhere indexing" />} />
+      <SettingRow title="Summaries" description="Generate page and meeting summaries." action={<Toggle checked={settings.summaries} onChange={(checked) => update(workspaceId, { summaries: checked })} label="Summaries" />} />
     </Section>
   );
 };
@@ -1444,9 +1391,9 @@ const PublicPagesPanel = () => {
   ]);
   return (
     <>
-      <Section title="Public pages"><DataTable headers={['Page', 'Status', '']} rows={pages.map((page) => [page.title || 'Untitled', page.visibility === 'public' ? 'Live' : 'Private', <Switch key={`${page._id}-public`} checked={page.visibility === 'public'} onChange={(checked) => publishPage(page._id, checked)} />])} /></Section>
+      <Section title="Public pages"><DataTable headers={['Page', 'Status', '']} rows={pages.map((page) => [page.title || 'Untitled', page.visibility === 'public' ? 'Live' : 'Private', <Toggle key={`${page._id}-public`} checked={page.visibility === 'public'} onChange={(checked) => publishPage(page._id, checked)} label={`Publish ${page.title || 'Untitled'}`} />])} /></Section>
       <Section title="Domains"><DataTable headers={['Domain', 'Homepage', 'Status']} rows={domainRows.length ? domainRows : [['No domains yet', 'Select a public page', 'Draft']]} /><Button className="mt-4" onClick={addDomain}>New domain</Button></Section>
-      <Section title="Settings"><SettingRow title="Always indicate that a page is live as a osionos Site" action={<Switch checked onChange={(checked) => recordSettingsAction('public_live_indicator_toggle', { checked })} />} /></Section>
+      <Section title="Settings"><SettingRow title="Always indicate that a page is live as a osionos Site" action={<Toggle checked onChange={(checked) => recordSettingsAction('public_live_indicator_toggle', { checked })} label="Always indicate that a page is live as a osionos Site" />} /></Section>
     </>
   );
 };
@@ -1489,7 +1436,7 @@ const LibraryPanel = () => {
     </div>,
     asset.kind,
     formatBytes(asset.size),
-    <Button key={`${asset.id}-remove`} tone="ghost" className="px-2" onClick={() => removeAsset(activeUserId, asset.id)}><Trash2 size={16} /></Button>,
+    <IconButton key={`${asset.id}-remove`} label="Remove asset" onClick={() => removeAsset(activeUserId, asset.id)}><Trash2 size={16} /></IconButton>,
   ]);
 
   return (
@@ -1549,7 +1496,7 @@ const TeamspacesPanel: React.FC<{ workspaceName?: string }> = ({ workspaceName =
   const rows = activeTeamspaces.map((teamspace) => [
     <input key={`${teamspace._id}-name`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={teamspace.name} onBlur={(event) => updateTeamspace(workspaceId, teamspace._id, { name: event.target.value })} />,
     teamspace.owners.join(', ') || activeUserId,
-    <SelectButton key={`${teamspace._id}-access`} value={teamspace.access} options={[{ value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }, { value: 'private', label: 'Private' }]} onChange={(value) => updateTeamspace(workspaceId, teamspace._id, { access: value as 'open' | 'closed' | 'private' })}>{teamspace.access}</SelectButton>,
+    <Dropdown key={`${teamspace._id}-access`} value={teamspace.access} options={[{ value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }, { value: 'private', label: 'Private' }]} onChange={(value) => updateTeamspace(workspaceId, teamspace._id, { access: value as 'open' | 'closed' | 'private' })} align="end" width="auto" />,
     <Button key={`${teamspace._id}-archive`} tone="danger" onClick={() => archiveTeamspace(workspaceId, teamspace._id)}>Archive</Button>,
   ]);
 
@@ -1560,7 +1507,7 @@ const TeamspacesPanel: React.FC<{ workspaceName?: string }> = ({ workspaceName =
 
   return (
     <>
-      <Section title="Default teamspaces"><SettingRow title={workspaceName} description="Default workspace teamspace" action={<Button onClick={() => recordSettingsAction('default_teamspace_update', { workspaceId })}>Update</Button>} /><SettingRow title="Limit teamspace creation to workspace owners" description="Allow only workspace owners to create teamspaces" action={<Switch checked={limitOwners} onChange={setLimitOwners} />} /></Section>
+      <Section title="Default teamspaces"><SettingRow title={workspaceName} description="Default workspace teamspace" action={<Button onClick={() => recordSettingsAction('default_teamspace_update', { workspaceId })}>Update</Button>} /><SettingRow title="Limit teamspace creation to workspace owners" description="Allow only workspace owners to create teamspaces" action={<Toggle checked={limitOwners} onChange={setLimitOwners} label="Limit teamspace creation to workspace owners" />} /></Section>
       <Section title="Teamspaces"><p className="mb-3 text-sm text-[var(--osio-fg-muted)]">Manage all teamspaces you have access to here.</p><MiniTabs active={activeTab} onChange={setActiveTab} tabs={[{ label: 'Active', count: activeTeamspaces.length }, { label: 'Owner' }, { label: 'Access' }, { label: 'Security' }]} /><DataTable className="mt-4" headers={['Teamspace', 'Owners', 'Access', '']} rows={rows.length ? rows : [[workspaceName, activeUserId, 'Default · joined', '']]} /><Button className="mt-4" onClick={() => setModalOpen(true)}>New teamspace</Button></Section>
       {modalOpen && <NewTeamspaceModal onCreate={(name) => { runAsync(createNewTeamspace(name)); setModalOpen(false); }} onClose={() => setModalOpen(false)} />}
     </>
@@ -1610,7 +1557,7 @@ const BillingPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId = 'local
 
   return (
     <>
-      <Section title="Plan"><SettingRow title={billing.plan} description="For students & educators" action={<SelectButton value={billing.plan} options={[{ value: 'Free', label: 'Free' }, { value: 'Education Plus', label: 'Education Plus' }, { value: 'Business', label: 'Business' }]} onChange={(value) => update(workspaceId, { plan: value })}>Change plan</SelectButton>} /></Section>
+      <Section title="Plan"><SettingRow title={billing.plan} description="For students & educators" action={<Dropdown value={billing.plan} options={[{ value: 'Free', label: 'Free' }, { value: 'Education Plus', label: 'Education Plus' }, { value: 'Business', label: 'Business' }]} onChange={(value) => update(workspaceId, { plan: value })} align="end" width="auto" />} /></Section>
       <Section title="Payment details">
         <SettingRow title="Payment method" description={billing.paymentMethod ? 'Configured' : 'None'} action={<Button onClick={() => setModal({ name: 'billing-edit', payload: { field: 'paymentMethod', label: 'Payment method' } })}>Edit method</Button>} />
         <SettingRow title="Billed to" description={billing.billedTo ? 'Configured' : 'None'} action={<Button onClick={() => setModal({ name: 'billing-edit', payload: { field: 'billedTo', label: 'Billed to' } })}>Edit information</Button>} />

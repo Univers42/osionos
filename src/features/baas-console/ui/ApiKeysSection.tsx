@@ -12,10 +12,10 @@
 
 import React, { useState } from 'react';
 import { KeyRound, Trash2 } from 'lucide-react';
-import { Badge } from '@/shared/ui';
+import { Badge, Button } from '@/shared/ui';
 import type { ApiKey } from '../model/tenantConsoleTypes';
 import { useTenantConsoleStore } from '../model/useTenantConsoleStore';
-import { ConsoleSection, ConsoleRow, ConsoleButton, ConsoleEmpty } from './consolePrimitives';
+import { ConsoleSection, ConsoleRow, ConsoleEmpty } from './consolePrimitives';
 import { CreateKeyModal } from './CreateKeyModal';
 
 const CELL = { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' as const };
@@ -40,9 +40,9 @@ function KeyRowItem({ apiKey, onRevoke }: { apiKey: ApiKey; onRevoke: (id: strin
       {revoked ? (
         <Badge tone="danger">revoked</Badge>
       ) : (
-        <ConsoleButton tone="danger" onClick={() => onRevoke(apiKey.id)}>
+        <Button tone="danger" onClick={() => onRevoke(apiKey.id)}>
           <Trash2 size={14} aria-hidden /> Revoke
-        </ConsoleButton>
+        </Button>
       )}
     </ConsoleRow>
   );
@@ -60,7 +60,7 @@ export function ApiKeysSection() {
     <ConsoleSection
       title="API Keys"
       icon={<KeyRound size={16} aria-hidden />}
-      action={<ConsoleButton onClick={() => setOpen(true)}>Create key</ConsoleButton>}
+      action={<Button onClick={() => setOpen(true)}>Create key</Button>}
     >
       {error ? <p style={{ color: 'var(--osio-danger)' }}>{error}</p> : null}
       {keys.length === 0 ? (

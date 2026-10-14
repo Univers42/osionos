@@ -6,10 +6,14 @@ import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
 
+async function openSettingsTab(page, tabName) {
+  await page.getByRole("dialog", { name: "Settings" }).getByRole("tab", { name: tabName, exact: true }).click();
+  await expect(page.getByRole("tabpanel")).toBeVisible();
+}
+
 async function openSettings(page, tabName) {
   await page.getByRole("button", { name: "Settings", exact: true }).first().click();
-  await page.getByRole("tab", { name: tabName }).click();
-  await expect(page.getByRole("tabpanel")).toBeVisible();
+  await openSettingsTab(page, tabName);
 }
 
 async function closeSettings(page) {
@@ -70,8 +74,9 @@ test.describe("settings use the kit", () => {
     const radius = await resolvedToken(page, "border-radius", "--osio-control-radius");
     expect(radius).not.toBe("");
 
+    await openSettings(page, "Preferences");
     for (const tabName of ["Preferences", "Notifications", "osionos AI"]) {
-      await openSettings(page, tabName);
+      await openSettingsTab(page, tabName);
       // Tabs are navigation rows and switches are pills: neither is a Button. The appearance
       // controls belong to the theme panel, which is restyled on its own.
       const radii = await page
