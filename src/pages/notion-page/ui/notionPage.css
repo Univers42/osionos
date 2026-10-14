@@ -68,16 +68,16 @@
 }
 
 /* Not prose: embedded apps, code, layout cells (fixed geometry, their own
-   font-size setting) and inline menus keep the chrome scale. */
-.osionos-page-body :where(
-  [data-database-id],
-  [data-block-type="code"],
-  [data-block-type="graph_view"],
-  [data-block-type="draw"],
-  [data-block-type="home_views"],
-  .osionos-layout-cell-editor,
-  [role="menu"]
-) {
+   font-size setting) and inline menus keep the chrome scale. One selector per
+   kind so Blink files each under its attribute or class instead of trying a
+   whole :where() list on every element at every restyle (global.css, pane zoom). */
+.osionos-page-body :where([data-database-id]),
+.osionos-page-body :where([data-block-type="code"]),
+.osionos-page-body :where([data-block-type="graph_view"]),
+.osionos-page-body :where([data-block-type="draw"]),
+.osionos-page-body :where([data-block-type="home_views"]),
+.osionos-page-body :where(.osionos-layout-cell-editor),
+.osionos-page-body :where([role="menu"]) {
   --text-sm: var(--osio-font-size-sm);
   --text-base: var(--osio-font-size-base);
   --text-lg: var(--osio-font-size-lg);
