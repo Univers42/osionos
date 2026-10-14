@@ -14,7 +14,7 @@ import { useEffect } from "react";
 
 import type { PageEntry } from "@/entities/page";
 import { ideOutput } from "@/features/ide/model/ideOutputBus";
-import { leadsInbound } from "@/features/ide/model/inboundPipeline";
+import { removesForItsUser } from "@/features/ide/model/inboundPipeline";
 import { isSandboxOnline, useSandboxHealthStore } from "@/features/ide/model/sandboxHealthStore";
 import { bytesToText, collectBytes, textToBytes } from "@/features/ide/vfs/bytes";
 import { bridgeFsTransport } from "@/features/ide/vfs/bridgeTransport";
@@ -161,7 +161,7 @@ export function usePageFileWriter(workspaceId: string, enabled: boolean): void {
           pathOf: (id) => index.pathForId(id),
           io,
           // The intent is spent first: a tab that does not lead never gets to plan it again.
-          mayRemove: (id) => takeAppRemoval(workspaceId, id) && leadsInbound(workspaceId),
+          mayRemove: (id) => takeAppRemoval(workspaceId, id) && removesForItsUser(workspaceId),
         });
         summarize(workspaceId, run.report);
       } finally {

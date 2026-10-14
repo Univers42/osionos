@@ -13,7 +13,9 @@
 // Inbound fs-event plumbing: the serial queue that keeps one connection's
 // events in order, strict UTF-8 decoding, and the
 // Web-Locks leadership that keeps exactly one tab applying per connection.
-// Pure and store-free so the node canvas runner can unit-test it directly.
+// Free of the page store (appRemovals is a plain map) so the node canvas runner
+// can unit-test it directly.
+import { clearAppRemovals } from "@/store/appRemovals";
 
 export interface SerialQueue {
   run(task: () => Promise<void>): Promise<void>;
@@ -83,33 +85,66 @@ export interface Leadership {
 // had the server name the old children, and the agreements it loaded matched the re-cloned
 // bytes, so it removed the clone (devil ST1 on 709fbea, 2026-10-14). That tab still spends
 // the intent and counts the file as left without a page.
-// Ponytail: a page trashed in a tab that does not lead keeps its file in the sandbox (the
-// writer's Output line counts it); a leader that closes hands its successor no marks and
-// no intents, so the successor removes nothing until its own user removes something.
-const leaderships = new Map<string, Leadership>();
+// A tab that GAINS the lead is that stale tab until it has looked again: it clears its
+// intents, and removes nothing until an attach that started after the gain has refetched the
+// pages and finished (attachUnderLead). Without that, a stale tab that took over when the
+// leader closed removed the clone on its user's trash of the old folder, and so did an intent
+// recorded as a follower when the handover fell inside the writer's 800 ms debounce (devil
+// HO-B and HO-C on 7ca3090, 2026-10-14).
+// Ponytail: a page trashed in a tab that does not lead, or before its first attach as leader,
+// keeps its file in the sandbox; the writer's Output line counts it as left without a page.
+type Lead = { leadership: Leadership; gains: number; settled: boolean };
+const leads = new Map<string, Lead>();
 
 /** Whether this tab applies the workspace's shell events now. */
 export function leadsInbound(workspaceId: string): boolean {
-  return leaderships.get(workspaceId)?.isLeader() ?? false;
+  return leads.get(workspaceId)?.leadership.isLeader() ?? false;
 }
 
+/** Whether this tab may remove a file its user removed in the app: it leads, and has attached since it gained the lead. */
+export function removesForItsUser(workspaceId: string): boolean {
+  const lead = leads.get(workspaceId);
+  return lead !== undefined && lead.settled && lead.leadership.isLeader();
+}
+
+/**
+ * Called as an attach starts. The function it returns, called once that attach has refetched
+ * the pages and finished, opens removals (removesForItsUser), unless the lead was released
+ * or gained again in between: only an attach that started after the gain counts.
+ */
+export function attachUnderLead(workspaceId: string): () => void {
+  const lead = leads.get(workspaceId);
+  const gains = lead?.gains;
+  return () => {
+    if (lead !== undefined && leads.get(workspaceId) === lead && lead.gains === gains && lead.leadership.isLeader()) lead.settled = true;
+  };
+}
+
+/** `onGain` runs each time this tab gains the lead, after its intents are cleared (maybe synchronously). */
 export function acquireInboundLeadership(
   workspaceId: string,
   locks: LockManagerLike | undefined,
+  onGain?: () => void,
 ): Leadership {
-  const held = requestLeadership(workspaceId, locks);
-  const leadership: Leadership = {
+  const lead: Lead = { leadership: { isLeader: () => false, release: () => undefined }, gains: 0, settled: false };
+  const held = requestLeadership(workspaceId, locks, () => {
+    lead.gains += 1;
+    lead.settled = false;
+    clearAppRemovals(workspaceId);
+    onGain?.();
+  });
+  lead.leadership = {
     isLeader: held.isLeader,
     release: () => {
       held.release();
-      if (leaderships.get(workspaceId) === leadership) leaderships.delete(workspaceId);
+      if (leads.get(workspaceId) === lead) leads.delete(workspaceId);
     },
   };
-  leaderships.set(workspaceId, leadership);
-  return leadership;
+  leads.set(workspaceId, lead);
+  return lead.leadership;
 }
 
-function requestLeadership(workspaceId: string, locks: LockManagerLike | undefined): Leadership {
+function requestLeadership(workspaceId: string, locks: LockManagerLike | undefined, gained: () => void): Leadership {
   let leader = false;
   let released = false;
   let releaseHold: (() => void) | null = null;
@@ -117,6 +152,7 @@ function requestLeadership(workspaceId: string, locks: LockManagerLike | undefin
   if (!locks) {
     // Ponytail: a browser without Web Locks (or two such tabs open) applies
     // events in every tab — one sandbox write becomes one page per tab.
+    gained();
     return {
       isLeader: () => !released,
       release: () => { released = true; },
@@ -126,6 +162,7 @@ function requestLeadership(workspaceId: string, locks: LockManagerLike | undefin
   locks.request(`osio-inbound:${workspaceId}`, { mode: "exclusive" }, () => {
     if (released) return Promise.resolve(); // release() won the grant race
     leader = true;
+    gained();
     // Held for the connection's lifetime: release() (or the tab closing)
     // resolves this, which hands the lock to the next waiting tab.
     return new Promise<void>((resolve) => { releaseHold = resolve; });
@@ -134,6 +171,7 @@ function requestLeadership(workspaceId: string, locks: LockManagerLike | undefin
     // browser without Web Locks — every such tab applies events — rather than
     // leaving every tab a follower that applies nothing.
     leader = !released;
+    if (leader) gained();
   });
 
   return {

@@ -13,7 +13,7 @@
 // Pages this tab's user archived or deleted in the app, recorded by the store once the server has
 // confirmed (pageStore.actions applyCascadeOperation, and its local-only branches). The page-file
 // writer removes a page's file only for one of these, and only in the tab that leads inbound
-// (usePageFileWriter, outboundRun mayRemove; inboundPipeline leadsInbound, devil ST1).
+// (usePageFileWriter, outboundRun mayRemove; inboundPipeline removesForItsUser, devil ST1 and L7).
 // Two automated archives record intents too, the loser of a concurrent create
 // (pageFileFacadeOps createPage, pageFileBatchCreate): in the leading tab's inbound path, or
 // through the workspace mount while the sandbox is offline (workspaceMounts), when no writer

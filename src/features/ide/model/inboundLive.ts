@@ -14,6 +14,7 @@
 // module that wires them, so the session itself stays importable under node.
 
 import { getActivePageJwt } from "@/shared/api/client";
+import { pagesPulledAt } from "@/store/pageStore.actions";
 import { usePageStore } from "@/store/usePageStore";
 import { pageFileStoreDeps } from "@/features/page-file/model/pageFileFacadeStore";
 
@@ -27,7 +28,7 @@ import { attachWorkspace, loadUnloadedBodies } from "./materialize";
 import { syncedHashOf } from "./ideSyncEngine";
 
 import type { Schedule } from "./inboundPending";
-import type { SerialQueue } from "./inboundPipeline";
+import { attachUnderLead, type SerialQueue } from "./inboundPipeline";
 import type { FsProvider } from "../vfs/types";
 
 // Ponytail: a hidden tab's timers are throttled (Chrome: about once a minute
@@ -59,8 +60,44 @@ export function createLiveInbound(workspaceId: string, queue: SerialQueue): Live
   return { session, attach: () => attachSandbox(workspaceId, session, sandbox, transport) };
 }
 
+// Caveat: 30 s is a guess at the slowest page-list pull; a pull still running then leaves
+// this attach unable to open removals (retention), and the next attach tries again.
+const PULL_WAIT_MS = 30_000;
+
+/** Resolves once the workspace's page list is not loading, or after `ms`. */
+function pagesLoaded(workspaceId: string, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (!usePageStore.getState().loadingIds.has(workspaceId)) return resolve();
+    const done = () => { clearTimeout(timer); stop(); resolve(); };
+    const timer = setTimeout(done, ms);
+    const stop = usePageStore.subscribe((state) => { if (!state.loadingIds.has(workspaceId)) done(); });
+  });
+}
+
+/**
+ * Pulls the page list again and waits for it to land: true when a pull landed after `since`.
+ * fetchPages returns at once while another pull is in flight (the first load, at startup), so
+ * that one is awaited instead.
+ * Caveat: a pull already in flight was sent before `since`; a takeover in that window sees the
+ * tree as of the send.
+ */
+async function pullPages(workspaceId: string, jwt: string, since: number): Promise<boolean> {
+  await usePageStore.getState().fetchPages(workspaceId, jwt, true);
+  await pagesLoaded(workspaceId, PULL_WAIT_MS);
+  return (pagesPulledAt(workspaceId) ?? 0) >= since;
+}
+
+/**
+ * The "ready" task, and the first task of a tab that gains the lead (useIdeFsSync). It pulls
+ * the pages before reconciling, so a tab that took the lead stale sees the leader's last
+ * `rm -rf && git clone` first; only then may it remove what its user trashes (inboundPipeline
+ * attachUnderLead, devil D5-L7).
+ */
 async function attachSandbox(workspaceId: string, session: InboundSession, provider: FsProvider, transport: FsOpTransport): Promise<void> {
+  const settled = attachUnderLead(workspaceId);
+  const since = Date.now();
   const jwt = getActivePageJwt();
+  const pulled = jwt ? await pullPages(workspaceId, jwt, since) : false;
   if (jwt) {
     const fetchBody = (pageId: string) => usePageStore.getState().fetchPageContent(pageId, jwt);
     await loadUnloadedBodies(session.views, fetchBody, (path) => syncedHashOf(workspaceId, path) !== null);
@@ -70,4 +107,5 @@ async function attachSandbox(workspaceId: string, session: InboundSession, provi
   const tail = `${unloaded > 0 ? `, ${unloaded} not loaded yet` : ""}${failed > 0 ? `, ${failed} FAILED` : ""}`;
   ideOutput("fs-sync", `sandbox attached — materialized ${written} files${tail}`);
   if (failed > 0) console.warn(`[ide] materialize: ${failed} files failed to reach the sandbox`);
+  if (pulled) settled();
 }
