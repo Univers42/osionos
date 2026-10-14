@@ -44,6 +44,17 @@ const garbledResponse = () => new Response(GARBLED, { status: 200, headers: { 'c
 /** A 2xx that carries no body at all — the one case that still reads as empty. */
 const emptyResponse = () => new Response(null, { status: 204 });
 
+/** A 409 whose body stops mid-stream: the write client classifies it by its own
+ *  status, so an unreadable body on a non-2xx is passed through as that status. */
+function conflictCutResponse() {
+	return new Response(new ReadableStream({
+		start(control) {
+			control.enqueue(new TextEncoder().encode('{"code":'));
+			control.error(new Error('terminated'));
+		},
+	}), { status: 409, headers: { 'content-type': 'application/json' } });
+}
+
 /** The 502 a broken read has to raise. A body that stopped mid-stream names the service
  *  whose answer never arrived; text that is not JSON carries its byte length, so an
  *  operator can size the answer without the answer itself ever being logged. */
@@ -251,6 +262,15 @@ describe('the query-router readers answer 502 on a broken body, and keep their e
 			const answer = await send(base, `/api/databases/${DB}/tables/tasks`, asA, post({ op: 'list' }));
 			assert.equal(answer.status, 200, answer.text);
 			assert.deepEqual(answer.body, { raw: GARBLED });
+		});
+	});
+
+	it('passes a 409 whose body read failed through as 409, never as 502', async () => {
+		await routerBridge(TABLES_PATH, conflictCutResponse, async (base) => {
+			const answer = await send(base, `/api/databases/${DB}/tables/tasks`, asA, post({ op: 'list' }));
+			assert.equal(answer.status, 409, answer.text);
+			assert.notEqual(answer.status, 502, answer.text);
+			assert.doesNotMatch(answer.text, /could not be read/i);
 		});
 	});
 });

@@ -25,6 +25,8 @@
  * (http://mini-baas-kong:8000/realtime: Kong admits that key alone there).
  */
 
+import { readBaasJson } from './bridge-baas-body.mjs';
+
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const REST_TIMEOUT_MS = 2_500;
 const PUBLISH_TIMEOUT_MS = 1_500;
@@ -97,19 +99,17 @@ export async function rest(config, fetchImpl, path, { method = 'GET', body, pref
 		body: body === undefined ? undefined : JSON.stringify(body),
 		signal: AbortSignal.timeout(REST_TIMEOUT_MS),
 	});
-	let readFailed = false;
-	const text = await response.text().catch(() => { readFailed = true; return ''; });
 	if (!response.ok) {
 		const status = response.status === 401 || response.status === 403 ? 403 : (response.status === 404 ? 404 : 502);
+		const text = await response.text().catch(() => '');
 		throw httpError(`BaaS request failed with ${response.status}: ${text.slice(0, 160)}`, status);
 	}
-	if (readFailed) throw httpError('BaaS response body could not be read.', 502);
-	if (!text) return null;
-	try {
-		return JSON.parse(text);
-	} catch {
-		throw httpError(`BaaS response body was not valid JSON (${Buffer.byteLength(text)} bytes).`, 502);
-	}
+	return readBaasJson(response, { service: 'service-role PostgREST', empty: null, fail: readFailure });
+}
+
+/** The 502 a broken BaaS body raises here; readBaasJson only words the message. */
+function readFailure(message) {
+	return httpError(message, 502);
 }
 
 /** Best-effort publish to the Rust realtime gateway; never throws. */
