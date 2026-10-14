@@ -16,6 +16,10 @@
 // against a docker API that records the exec it is asked for, answers in docker's
 // multiplexed format, and sees the attach connection end when the client leaves: for a
 // Tty:false exec that end is the agent's stdin EOF (the agent's own test covers the exit).
+// A client may also leave before the attach lands (the box starting, the exec being made):
+// the late attach must still end, and a reset must not take the bridge down (devil C2).
+// Every upgraded socket is destroyed in `finally`: http's closeAllConnections does not reach
+// them, so a regression in a close path hung the suite instead of failing it (devil C9).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -31,8 +35,10 @@ async function listening(server) {
   return server.address().port;
 }
 
-function fakeDocker() {
-  const seen = { specs: [], attachEnded: false };
+/** A docker API whose exec start answers `answerAfterMs` late; `attachEnded` once it upgraded. */
+function fakeDocker(answerAfterMs = 0) {
+  const seen = { specs: [], upgraded: false, attachEnded: false };
+  const sockets = [];
   const server = createServer((request, response) => {
     const chunks = [];
     request.on("data", (chunk) => chunks.push(chunk));
@@ -51,20 +57,37 @@ function fakeDocker() {
     });
   });
   server.on("upgrade", (_request, socket) => {
-    socket.write("HTTP/1.1 101 UPGRADED\r\nContent-Type: application/vnd.docker.multiplexed-stream\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n");
-    const header = Buffer.alloc(8);
-    header[0] = 1; // stdout
-    header.writeUInt32BE(Buffer.byteLength(LINE), 4);
-    socket.write(Buffer.concat([header, Buffer.from(LINE)]));
-    socket.on("end", () => { seen.attachEnded = true; socket.end(); });
-    socket.on("close", () => { seen.attachEnded = true; });
+    sockets.push(socket);
     socket.on("error", () => {});
+    socket.on("end", () => { if (seen.upgraded) seen.attachEnded = true; socket.end(); });
+    socket.on("close", () => { if (seen.upgraded) seen.attachEnded = true; });
+    setTimeout(() => {
+      if (socket.destroyed) return;
+      seen.upgraded = true;
+      socket.write("HTTP/1.1 101 UPGRADED\r\nContent-Type: application/vnd.docker.multiplexed-stream\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n");
+      const header = Buffer.alloc(8);
+      header[0] = 1; // stdout
+      header.writeUInt32BE(Buffer.byteLength(LINE), 4);
+      socket.write(Buffer.concat([header, Buffer.from(LINE)]));
+    }, answerAfterMs);
   });
-  return { server, seen };
+  return { server, seen, sockets };
 }
 
-/** One fs-sync upgrade; resolves with the client socket and every byte after the 101 header. */
-function openFsync(port) {
+async function bridgeTo(dockerPort) {
+  const handler = createIdeExecUpgradeHandler({
+    config: {},
+    verifySession: () => ({ userId: USER, workspaceIds: [WS] }),
+    env: { OSIONOS_IDE_SANDBOX: "1", OSIONOS_IDE_DOCKER_HOST: `127.0.0.1:${dockerPort}`, OSIONOS_IDE_ALLOWED_SUBJECTS: USER },
+  });
+  const sockets = [];
+  const server = createServer();
+  server.on("upgrade", (request, socket) => { sockets.push(socket); if (!handler(request, socket)) socket.destroy(); });
+  return { server, sockets, port: await listening(server) };
+}
+
+/** One upgrade on `route`; resolves with the client socket and every byte after the 101 header. */
+function openSocket(port, route) {
   return new Promise((resolve, reject) => {
     const socket = connect(port, "127.0.0.1");
     const received = { bytes: Buffer.alloc(0) };
@@ -78,10 +101,12 @@ function openFsync(port) {
       headerDone = true;
       received.status = text.split("\r\n")[0];
       received.bytes = chunk.subarray(end + 4);
+      socket.removeListener("error", reject);
+      socket.on("error", () => {});
       resolve({ socket, received });
     });
     socket.write([
-      `GET /api/ide/fsync?workspaceId=${WS} HTTP/1.1`, "Host: localhost", "Connection: Upgrade", "Upgrade: websocket",
+      `GET ${route} HTTP/1.1`, "Host: localhost", "Connection: Upgrade", "Upgrade: websocket",
       "Sec-WebSocket-Version: 13", "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
       "Sec-WebSocket-Protocol: osio-ide.v1, osio-token.t", "", "",
     ].join("\r\n"));
@@ -97,21 +122,27 @@ async function until(check, describe) {
   assert.fail(`${describe}: not within 3000 ms`);
 }
 
-test("the fs-agent runs with stdin and no TTY, its lines arrive demuxed, and a leaving client ends its stdin", async () => {
-  const docker = fakeDocker();
-  const dockerPort = await listening(docker.server);
-  const handler = createIdeExecUpgradeHandler({
-    config: {},
-    verifySession: () => ({ userId: USER, workspaceIds: [WS] }),
-    env: { OSIONOS_IDE_SANDBOX: "1", OSIONOS_IDE_DOCKER_HOST: `127.0.0.1:${dockerPort}`, OSIONOS_IDE_ALLOWED_SUBJECTS: USER },
-  });
-  const server = createServer();
-  server.on("upgrade", (request, socket) => { if (!handler(request, socket)) socket.destroy(); });
-  const port = await listening(server);
-  let client;
+/** Runs `body` against a fresh docker and bridge, then destroys every socket either one holds. */
+async function withPlane(answerAfterMs, body) {
+  const docker = fakeDocker(answerAfterMs);
+  const bridge = await bridgeTo(await listening(docker.server));
+  const clients = [];
   try {
-    const { socket, received } = await openFsync(port);
-    client = socket;
+    await body({ docker, bridge, open: async (route) => { const opened = await openSocket(bridge.port, route); clients.push(opened.socket); return opened; } });
+  } finally {
+    for (const socket of [...clients, ...bridge.sockets, ...docker.sockets]) socket.destroy();
+    bridge.server.closeAllConnections();
+    docker.server.closeAllConnections();
+    await new Promise((resolve) => bridge.server.close(resolve));
+    await new Promise((resolve) => docker.server.close(resolve));
+  }
+}
+
+const FSYNC = `/api/ide/fsync?workspaceId=${WS}`;
+
+test("the fs-agent runs with stdin and no TTY, its lines arrive demuxed, and a leaving client ends its stdin", async () => {
+  await withPlane(0, async ({ docker, open }) => {
+    const { socket, received } = await open(FSYNC);
     assert.match(received.status, /^HTTP\/1\.1 101 /);
     await until(() => received.bytes.length >= 2 + Buffer.byteLength(LINE), "the agent's line never reached the client");
     assert.equal(received.bytes[0], 0x82, "one binary frame");
@@ -121,11 +152,25 @@ test("the fs-agent runs with stdin and no TTY, its lines arrive demuxed, and a l
     assert.equal(docker.seen.specs[0].AttachStdin, true);
     socket.end(); // FIN: a closed tab, a reload
     await until(() => docker.seen.attachEnded, "the docker attach stayed open after the client left");
-  } finally {
-    client?.destroy();
-    server.closeAllConnections();
-    docker.server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
-    await new Promise((resolve) => docker.server.close(resolve));
-  }
+  });
+});
+
+for (const [how, leave] of [["a FIN", (socket) => socket.end()], ["a reset", (socket) => socket.resetAndDestroy()]]) {
+  test(`a client gone with ${how} before the attach lands: the late attach ends, the bridge stays up`, async () => {
+    await withPlane(300, async ({ docker, open }) => {
+      const { socket } = await open(FSYNC);
+      leave(socket);
+      await until(() => docker.seen.upgraded, "docker never answered the exec start");
+      await until(() => docker.seen.attachEnded, "the late attach stayed open: the agent never sees its stdin end");
+    });
+  });
+}
+
+test("a terminal client reset before its shell attaches does not take the bridge down", async () => {
+  await withPlane(300, async ({ docker, open }) => {
+    const { socket } = await open(`/api/ide/pty?workspaceId=${WS}&term=7`);
+    socket.resetAndDestroy();
+    await until(() => docker.seen.upgraded, "docker never answered the exec start");
+    await new Promise((resolve) => setTimeout(resolve, 200)); // an unhandled 'error' would throw here
+  });
 });

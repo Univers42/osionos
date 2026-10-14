@@ -183,6 +183,10 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     if ((activeExecByUser.get(userId) ?? 0) >= MAX_CONCURRENT_EXEC) { rejectUpgrade(socket, 429, 'Too Many Streams'); return true; }
 
     if (!handshake(request, socket, { protocol: auth.protocol })) return true;
+    // From the 101 on, not once the attach lands: a client reset while the box starts or the
+    // exec is created emitted 'error' with no listener, and the unhandled ECONNRESET took the
+    // bridge down with every terminal shell it held (devil C2, 2026-10-14).
+    socket.on('error', () => socket.destroy());
     armTokenExpiry(socket, tokenExp);
 
     let spec;
@@ -229,6 +233,9 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
           spawn: () => docker.attachExec(names.containerName, spec),
         });
       })().then((session) => {
+        // Gone before the attach landed: its 'close' already fired, so a client added now would
+        // never be detached. The shell itself stays, as on any detach.
+        if (socket.destroyed) return;
         const client = {
           sendBinary: (chunk) => (socket.destroyed ? true : socket.write(encodeFrame(chunk, 2))),
           sendClose: (code, reason) => { if (!socket.destroyed) socket.end(closeFrame(code, reason)); },
@@ -260,6 +267,9 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     // LSP/fs-sync may start a stopped box too (never one stopped at the hard cap — see
     // ensureSandbox); a refusal lands in the catch below, which releases the stream cap.
     ensureSandbox(env, names, { passive: true }).then(() => docker.attachExec(names.containerName, spec)).then(({ stream: duplex, execId }) => {
+      // Gone before the attach landed: its 'close' handler below would never run, so the attach
+      // stayed open and a Tty:false process never saw its stdin end (devil C2, 2026-10-14).
+      if (socket.destroyed) { duplex.destroy(); return; }
       const decode = createFrameDecoder();
       // LSP and fs-sync are Tty:false — strip docker's 8-byte mux headers (see the
       // demux doc). Only the PTY, handled above, is Tty:true and arrives raw.
