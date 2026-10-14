@@ -120,6 +120,18 @@ test("the bridge reaches the page root and the database roots", () => {
 // tokens: grep over src, packages and the legacy graph engine, 2026-10-14), so it ships with the code that
 // renders a database instead of in the render-blocking entry CSS (the bridge was 2.3 KB gzip of it).
 const BRIDGE_IMPORTS = ["database-bridge.generated.css", "database-overrides.css"];
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// A value import of ObjectDatabase from the vendored package, under any local name; a type-only import
+// renders nothing. Ponytail: a re-export through another module, or a dynamic import(), is not seen.
+function importsObjectDatabase(source: string): boolean {
+  const statements = source.matchAll(/^import\s+(type\s+)?\{([^}]*)\}\s*from\s*["']@notion-db\/object-database["']/gm);
+  for (const [, typeOnly, names] of statements) {
+    if (!typeOnly && names.split(",").some((name) => /^\s*ObjectDatabase(\s+as\s+\w+)?\s*$/.test(name))) return true;
+  }
+  return false;
+}
+
 const DATABASE_RENDERERS = [
   "src/widgets/database-view/ui/DatabaseBlock.tsx",
   "src/widgets/database-view/ui/WorkspaceDatabaseBlock.tsx",
@@ -128,14 +140,16 @@ const DATABASE_RENDERERS = [
 
 test("the entry stylesheet leaves the bridge to the database chunk", () => {
   const entry = readAppFile("src/app/styles/global.css");
-  for (const file of BRIDGE_IMPORTS) assert.doesNotMatch(entry, new RegExp(`@import\\s+"[^"]*${file.replace(/\./g, "\\.")}"`), `global.css still imports ${file}`);
+  // Any @import statement naming the file: either quote, or url(...).
+  for (const file of BRIDGE_IMPORTS) assert.doesNotMatch(entry, new RegExp(`@import[^;]*${escapeRegExp(file)}`), `global.css still imports ${file}`);
 });
 
 test("every component that renders ObjectDatabase imports the bridge with it", () => {
   for (const path of DATABASE_RENDERERS) {
     const source = readAppFile(path);
-    assert.match(source, /<ObjectDatabase\b/, `${path} no longer renders ObjectDatabase`);
-    for (const file of BRIDGE_IMPORTS) assert.match(source, new RegExp(`import ["']@/app/styles/${file.replace(/\./g, "\\.")}["']`), `${path} does not import ${file}`);
+    assert.ok(importsObjectDatabase(source), `${path} no longer imports ObjectDatabase`);
+    // Anchored to the line start, so a commented-out import does not count.
+    for (const file of BRIDGE_IMPORTS) assert.match(source, new RegExp(`^import ["']@/app/styles/${escapeRegExp(file)}["'];?$`, "m"), `${path} does not import ${file}`);
   }
 });
 
@@ -144,7 +158,7 @@ test("no other component renders ObjectDatabase without the bridge", () => {
     .map(String)
     .filter((path) => path.endsWith(".tsx") && !path.startsWith("shared/notion-database-sys/"))
     .map((path) => `src/${path}`)
-    .filter((path) => readAppFile(path).includes("<ObjectDatabase"));
+    .filter((path) => importsObjectDatabase(readAppFile(path)));
   assert.deepEqual(renderers.sort(), [...DATABASE_RENDERERS].sort());
 });
 
