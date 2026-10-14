@@ -24,8 +24,9 @@ import { pageFileText } from "@/features/page-file/model/pageFileText";
 import { sha16 } from "./ideFsEcho";
 import { ideOutput } from "./ideOutputBus";
 import { useIdeSyncConflicts } from "./ideSyncConflicts";
+import { syncedHashOf } from "./ideSyncEngine";
 import {
-  reconcileOnAttach, MAX_ATTACH_FILES, ATTACH_FILE_CAP_REASON, type DesiredFile, type ReconcileOptions, type ReconcileReport,
+  reconcileOnAttach, MAX_ATTACH_FILE_BYTES, OVERSIZE_REASON, type DesiredFile, type ReconcileOptions, type ReconcileReport,
 } from "./reconcileOnAttach";
 
 import type { ReadableViews } from "@/features/page-file/model/pageFileFacadeViews";
@@ -40,39 +41,47 @@ export interface AttachDeps {
   theirsHashes?: ReconcileOptions["theirsHashes"];
 }
 
-/** `unloaded`: pages skipped because their body never loaded; `failed`: every other skip. */
-export type MaterializeResult = { written: number; unloaded: number; failed: number; report: ReconcileReport };
+/**
+ * Every skip counted once, under what it is: `unloaded`, a never-synced page whose body did not
+ * load (past BODY_FETCHES_PER_ATTACH, or its fetch failed); `known`, a page synced before whose
+ * body is not loaded, so not re-checked; `oversize`, over the byte cap; `failed`, anything else.
+ */
+export type MaterializeResult = {
+  written: number; unloaded: number; known: number; oversize: number; failed: number; report: ReconcileReport;
+};
 
 /** A desired file and the page object it was read from — what 14' and 15 compare against. */
 type Snapshot = DesiredFile & { pageId: string; indexPath: string; page: PageEntry };
 type Skipped = ReconcileReport["skipped"];
 
 const NOT_LOADED = "page content not loaded, not reconciled";
+const KNOWN_UNLOADED = "synced before, content not loaded, not re-checked";
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /**
  * 16: every index entry as `{ path, content: pageFileText(page) }`, a folder as
- * its `_folder.omd` (no body needed). Only the first MAX_ATTACH_FILES loaded
- * files are serialized. O(n) plus the text of at most MAX_ATTACH_FILES pages.
+ * its `_folder.omd` (no body needed). O(n) plus the text of every loaded page,
+ * held until the attach ends (reconcileOnAttach pages through it).
  * Ponytail: a page or code page whose body never loaded is skipped — its stand-in
  * would overwrite the sandbox copy — so a shell edit made to it while away waits
  * until the page is opened or edited (the outbound writer), never applied here.
  */
-function desiredSet(views: ReadableViews): { files: Snapshot[]; skipped: Skipped } {
+function desiredSet(views: ReadableViews, isSynced: (path: string) => boolean): { files: Snapshot[]; skipped: Skipped } {
   const files: Snapshot[] = [];
   const skipped: Skipped = [];
   for (const entry of views.indexOf().entries) {
     const page = views.pageById(entry.id);
     const path = fileOfEntry(entry);
     if (page === undefined) continue;
-    if (entry.kind !== "dir" && page.content === undefined) skipped.push({ path, reason: NOT_LOADED });
-    else if (files.length >= MAX_ATTACH_FILES) skipped.push({ path, reason: ATTACH_FILE_CAP_REASON });
+    if (entry.kind !== "dir" && page.content === undefined) skipped.push({ path, reason: isSynced(path) ? KNOWN_UNLOADED : NOT_LOADED });
     else files.push({ path, content: pageFileText(page), pageId: entry.id, indexPath: entry.path, page });
   }
   return { files, skipped };
 }
 
 const BODY_FETCH_CONCURRENCY = 6;
+/** Bodies one attach fetches at most; the Output line names the rest as not loaded. */
+export const BODY_FETCHES_PER_ATTACH = 500;
 
 /**
  * Fetches the bodies attach would skip as not loaded, a few at a time, and returns how many it
@@ -82,9 +91,11 @@ const BODY_FETCH_CONCURRENCY = 6;
  * A path this browser already synced is skipped (`isSynced`): the volume outlives the box, so
  * a page reaches it once, and a reload of a 700-page workspace no longer costs 500 fetches.
  * Caveat: one request per page, and the live fetcher rewrites the whole pages cache each time,
- * so a first attach grows with the square of the page count; bounded by MAX_ATTACH_FILES, and a
- * workspace near that bound wants a batch endpoint. A page changed on another device after this
- * browser last synced it keeps the sandbox copy until it is opened here (attach's own rule).
+ * so a first attach grows with the square of the page count; bounded by BODY_FETCHES_PER_ATTACH,
+ * and a workspace near that bound wants a batch endpoint. Past it, a fresh browser reconciles the
+ * next never-synced pages at the next attach; a page left in conflict stays never-synced and is
+ * fetched again first, so 500 of them would hold the rest back. A page changed on another device
+ * after this browser last synced it keeps the sandbox copy until it is opened here (attach's own rule).
  */
 export async function loadUnloadedBodies(
   views: ReadableViews,
@@ -93,7 +104,7 @@ export async function loadUnloadedBodies(
 ): Promise<number> {
   const ids = views.indexOf().entries
     .filter((entry) => entry.kind !== "dir" && views.pageById(entry.id)?.content === undefined && !isSynced(fileOfEntry(entry)))
-    .slice(0, MAX_ATTACH_FILES)
+    .slice(0, BODY_FETCHES_PER_ATTACH)
     .map((entry) => entry.id);
   for (let i = 0; i < ids.length; i += BODY_FETCH_CONCURRENCY) {
     await Promise.all(ids.slice(i, i + BODY_FETCH_CONCURRENCY).map((id) => fetchBody(id).catch(() => undefined)));
@@ -157,11 +168,11 @@ async function settleInbound(deps: AttachDeps, file: { path: string; content: st
 /**
  * Reconcile the page tree into the sandbox (file header). Sandbox-only files are
  * left alone; shell edits made while away are applied through the session;
- * both-sides changes go to the conflict store; caps and failures surface in
- * `failed` / `report.skipped`. O(n) plus O(B) over the reconciled files.
+ * both-sides changes go to the conflict store; every skip is in `report.skipped`
+ * and counted by kind (MaterializeResult). O(n) plus O(B) over the reconciled files.
  */
 export async function attachWorkspace(deps: AttachDeps): Promise<MaterializeResult> {
-  const { files, skipped } = desiredSet(deps.session.views);
+  const { files, skipped } = desiredSet(deps.session.views, (path) => syncedHashOf(deps.workspaceId, path) !== null);
   const byPath = new Map(files.map((file) => [file.path, file]));
   const report = await reconcileOnAttach({
     workspaceId: deps.workspaceId, desired: files, provider: deps.provider, theirsHashes: deps.theirsHashes,
@@ -183,6 +194,21 @@ export async function attachWorkspace(deps: AttachDeps): Promise<MaterializeResu
     const was = byPath.get(path);
     if (was !== undefined) await surfaceConflict({ path, theirs, pageId: was.pageId, why: "changed on both sides" });
   }
-  const unloaded = skipped.filter((skip) => skip.reason === NOT_LOADED).length;
-  return { written: report.written.length, unloaded, failed: report.skipped.length - unloaded, report };
+  const count = (matches: (reason: string) => boolean): number => report.skipped.filter((skip) => matches(skip.reason)).length;
+  const unloaded = count((reason) => reason === NOT_LOADED);
+  const known = count((reason) => reason === KNOWN_UNLOADED);
+  const oversize = count((reason) => reason.endsWith(OVERSIZE_REASON));
+  const failed = report.skipped.length - unloaded - known - oversize;
+  return { written: report.written.length, unloaded, known, oversize, failed, report };
+}
+
+/** The attach's Output line: a skip that is a cap or a page not loaded is never called FAILED. */
+export function attachSummary({ written, unloaded, known, oversize, failed }: Omit<MaterializeResult, "report">): string {
+  const parts = [
+    unloaded > 0 ? `${unloaded} not loaded (cap ${BODY_FETCHES_PER_ATTACH} per attach)` : "",
+    known > 0 ? `${known} synced before, not re-checked` : "",
+    oversize > 0 ? `${oversize} over ${MAX_ATTACH_FILE_BYTES / 1024} KiB, not synced` : "",
+    failed > 0 ? `${failed} FAILED` : "",
+  ];
+  return `sandbox attached — materialized ${written} files${parts.filter(Boolean).map((part) => `, ${part}`).join("")}`;
 }

@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { reconcileOnAttach, MAX_ATTACH_FILES, MAX_ATTACH_FILE_BYTES } from "../../src/features/ide/model/reconcileOnAttach.ts";
+import { reconcileOnAttach, ATTACH_PAGE_FILES, MAX_ATTACH_FILE_BYTES, OVERSIZE_REASON } from "../../src/features/ide/model/reconcileOnAttach.ts";
 import { recordSyncedHash, syncedHashOf } from "../../src/features/ide/model/ideSyncEngine.ts";
 import { sha16, isEchoHash } from "../../src/features/ide/model/ideFsEcho.ts";
 import { instrumented, readBytes, readText, seeded } from "./ide-attach-fixtures.ts";
@@ -119,20 +119,36 @@ test("files only in the sandbox are never touched (shell-created files survive)"
   assert.equal(await readText(provider, "build/out.o"), "obj");
 });
 
-test("caps: past the file cap, ours over the byte cap, theirs over the byte cap → skipped with a reason", async () => {
+test("caps: ours or theirs over the byte cap → skipped with the oversize reason; a file past the 500th is reconciled", async () => {
   const huge = "y".repeat(MAX_ATTACH_FILE_BYTES + 1);
   const { provider } = await seeded({ "huge-theirs.c": huge });
-  const small = Array.from({ length: MAX_ATTACH_FILES - 2 }, (_, i) => ({ path: `f/${i}.c`, content: `${i}` }));
+  const small = Array.from({ length: ATTACH_PAGE_FILES - 2 }, (_, i) => ({ path: `f/${i}.c`, content: `${i}` }));
   const desired = [{ path: "big.c", content: `${huge}x` }, { path: "huge-theirs.c", content: "ours" }, ...small, { path: "over.c", content: "1" }];
   const report = await reconcileOnAttach({ workspaceId: freshWs(), provider, desired, tiebreak: () => "ours" });
   const reasons = new Map(report.skipped.map((s) => [s.path, s.reason]));
-  assert.equal(report.skipped.length, 3);
-  assert.match(reasons.get("big.c") ?? "", /512 KiB/);
-  assert.match(reasons.get("huge-theirs.c") ?? "", /sandbox copy .*512 KiB/);
-  assert.match(reasons.get("over.c") ?? "", /500-file/);
-  assert.equal(report.written.length, MAX_ATTACH_FILES - 2);
-  assert.deepEqual([await readText(provider, "big.c"), await readText(provider, "over.c")], [null, null]);
+  assert.equal(report.skipped.length, 2);
+  assert.equal(reasons.get("big.c"), OVERSIZE_REASON);
+  assert.equal(reasons.get("huge-theirs.c"), `sandbox copy ${OVERSIZE_REASON}`);
+  assert.equal(report.written.length, ATTACH_PAGE_FILES - 1, "every small file, the 501st included");
+  assert.deepEqual([await readText(provider, "big.c"), await readText(provider, "over.c")], [null, "1"]);
   assert.equal(await readText(provider, "huge-theirs.c"), huge);
+});
+
+// The attach stopped at the 500th file, and a session that kept those bodies loaded never
+// reached the rest (146 minitalk and 2 gnl files on the demo workspace, 2026-10-14).
+test("1001 files reconcile in pages: one hashes call per 500 paths, none skipped", async () => {
+  const files = Object.fromEntries(Array.from({ length: 2 * ATTACH_PAGE_FILES + 1 }, (_, i) => [`src/f${i}.c`, `int f${i};\n`]));
+  const { provider, reads } = await readLogged(files);
+  const known = new Map(await Promise.all(Object.entries(files).map(async ([path, text]) => [path, await sha16(text)] as [string, string])));
+  const asked: number[] = [];
+  const desired = Object.entries(files).map(([path, content]) => ({ path, content }));
+  const report = await reconcileOnAttach({
+    workspaceId: freshWs(), provider, desired, theirsHashes: async (paths) => { asked.push(paths.length); return known; },
+  });
+  assert.deepEqual(asked, [ATTACH_PAGE_FILES, ATTACH_PAGE_FILES, 1]);
+  assert.equal(reads.length, 0);
+  assert.equal(report.recorded.length, 2 * ATTACH_PAGE_FILES + 1);
+  assert.deepEqual(report.skipped, []);
 });
 
 test("one failing file never aborts the rest; a failed write leaves no ledger claim behind", async () => {
@@ -226,7 +242,7 @@ test("theirsHashes: an unchanged or absent file is decided without a read; a dif
 });
 
 test("theirsHashes: 500 unchanged files reconcile with one hashes call and no read", async () => {
-  const files = Object.fromEntries(Array.from({ length: MAX_ATTACH_FILES }, (_, i) => [`src/f${i}.c`, `int f${i};\n`]));
+  const files = Object.fromEntries(Array.from({ length: ATTACH_PAGE_FILES }, (_, i) => [`src/f${i}.c`, `int f${i};\n`]));
   const { provider, reads } = await readLogged(files);
   const known = new Map(await Promise.all(Object.entries(files).map(async ([path, text]) => [path, await sha16(text)] as [string, string])));
   let calls = 0;
@@ -234,7 +250,7 @@ test("theirsHashes: 500 unchanged files reconcile with one hashes call and no re
   const report = await reconcileOnAttach({ workspaceId: freshWs(), provider, desired, theirsHashes: async () => { calls += 1; return known; } });
   assert.equal(calls, 1);
   assert.equal(reads.length, 0);
-  assert.equal(report.recorded.length, MAX_ATTACH_FILES);
+  assert.equal(report.recorded.length, ATTACH_PAGE_FILES);
 });
 
 test("theirsHashes: a rejected call falls back to reading every file, same report", async () => {

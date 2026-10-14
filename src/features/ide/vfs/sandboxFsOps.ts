@@ -89,7 +89,7 @@ export function parseHashesOutput(output: string): Map<string, string | null> {
   return hashes;
 }
 
-// Half the bridge's MAX_HASH_PATHS: one attach (MAX_ATTACH_FILES) is one exec.
+// Half the bridge's MAX_HASH_PATHS: one attach page (reconcileOnAttach ATTACH_PAGE_FILES) is one exec.
 const HASH_BATCH = 500;
 
 /** parseHashesOutput over `paths`, one exec per HASH_BATCH paths. O(n) argv bytes. */

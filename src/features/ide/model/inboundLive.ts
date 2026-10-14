@@ -24,7 +24,7 @@ import { sandboxHashes, type FsOpTransport } from "../vfs/sandboxFsOps";
 import { ideOutput } from "./ideOutputBus";
 import { statInProvider, statManyInSandbox } from "./inboundArchive";
 import { createInboundSession, type InboundSession } from "./inboundSession";
-import { attachWorkspace, loadUnloadedBodies } from "./materialize";
+import { attachSummary, attachWorkspace, loadUnloadedBodies } from "./materialize";
 import { syncedHashOf } from "./ideSyncEngine";
 
 import type { Schedule } from "./inboundPending";
@@ -103,9 +103,8 @@ async function attachSandbox(workspaceId: string, session: InboundSession, provi
     await loadUnloadedBodies(session.views, fetchBody, (path) => syncedHashOf(workspaceId, path) !== null);
   }
   const theirsHashes = (paths: readonly string[]) => sandboxHashes(transport, paths);
-  const { written, unloaded, failed } = await attachWorkspace({ workspaceId, session, provider, theirsHashes });
-  const tail = `${unloaded > 0 ? `, ${unloaded} not loaded yet` : ""}${failed > 0 ? `, ${failed} FAILED` : ""}`;
-  ideOutput("fs-sync", `sandbox attached — materialized ${written} files${tail}`);
-  if (failed > 0) console.warn(`[ide] materialize: ${failed} files failed to reach the sandbox`);
+  const result = await attachWorkspace({ workspaceId, session, provider, theirsHashes });
+  ideOutput("fs-sync", attachSummary(result));
+  if (result.failed > 0) console.warn(`[ide] materialize: ${result.failed} files failed to reach the sandbox`);
   if (pulled) settled();
 }
