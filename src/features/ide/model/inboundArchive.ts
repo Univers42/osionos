@@ -16,6 +16,7 @@
 
 import { isFsError } from "../vfs/errors";
 import { buildVPath } from "../vfs/vpath";
+import { sandboxHashes, type FsOpTransport } from "../vfs/sandboxFsOps";
 import { ideOutput } from "./ideOutputBus";
 import { clearSyncedHash, syncedHashOf } from "./ideSyncEngine";
 
@@ -34,6 +35,15 @@ export async function statInProvider(provider: FsProvider, workspaceId: string, 
   } catch (error) {
     return isFsError(error) && error.code === "NotFound" ? "absent" : "unknown";
   }
+}
+
+/** The hashes op as a stat: absent, or present (a file, a directory, an unreadable
+ *  file). A path the bridge would refuse as a whole batch (`..`, a control
+ *  character) is left out of the request and of the answer, so it is asked alone. */
+export async function statManyInSandbox(transport: FsOpTransport, paths: readonly string[]): Promise<Map<string, StatResult>> {
+  const asked = paths.filter((path) => path !== "" && !path.startsWith("/") && !path.includes("..") && !/[\n\r\t\0]/.test(path));
+  const hashes = asked.length > 0 ? await sandboxHashes(transport, asked) : new Map<string, string | null>();
+  return new Map(asked.map((path) => [path, hashes.get(path) === null ? "absent" : "present"]));
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));

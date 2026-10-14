@@ -22,6 +22,7 @@ import { FLUSH_MAX_MS } from "../../../src/features/ide/model/inboundFlushWindow
 import { INBOUND_WINDOW_MS, createInboundPending, type Schedule } from "../../../src/features/ide/model/inboundPending.ts";
 import { createSerialQueue } from "../../../src/features/ide/model/inboundPipeline.ts";
 import { statInProvider, type StatResult } from "../../../src/features/ide/model/inboundArchive.ts";
+import type { StatMany } from "../../../src/features/ide/model/inboundStatBatch.ts";
 import { createInboundSession } from "../../../src/features/ide/model/inboundSession.ts";
 import { createInboundView } from "../../../src/features/ide/model/inboundView.ts";
 import { createLandedMemo } from "../../../src/features/ide/model/inboundLanded.ts";
@@ -92,7 +93,7 @@ export async function putFile(sandbox: FsProvider, workspaceId: string, path: st
 }
 
 /** `schedule`: the session's timers (default: the world's manual clock). */
-export type ExecWorldOptions = { files?: Record<string, string>; stat?: (path: string) => Promise<StatResult>; schedule?: Schedule };
+export type ExecWorldOptions = { files?: Record<string, string>; stat?: (path: string) => Promise<StatResult>; statMany?: StatMany; schedule?: Schedule };
 
 /** The whole inbound path: a session on a real serial queue, a mem sandbox, a manual clock. */
 export async function execWorld(pages: PageEntry[], opts: ExecWorldOptions = {}) {
@@ -109,6 +110,7 @@ export async function execWorld(pages: PageEntry[], opts: ExecWorldOptions = {})
   const session = createInboundSession({
     workspaceId, store, restore: async (id) => setArchived(store, id, null), schedule: opts.schedule ?? clock.schedule,
     stat: opts.stat ?? ((path) => statInProvider(sandbox, workspaceId, path)),
+    statMany: opts.statMany,
     enqueue: (task) => { enqueued.count += 1; void queue.run(task); },
   });
   const send = (evt: FsEvent): Promise<void> => queue.run(() => session.handle(evt));

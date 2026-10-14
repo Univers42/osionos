@@ -67,6 +67,8 @@ export interface InboundPending {
   cancel(pageId: string): void;
   /** True once, for the ticket still current: the archive leaves the pending set. */
   claim(ticket: ArchiveTicket): boolean;
+  /** Paths whose window ended and whose archive has not run yet (inboundStatBatch). */
+  duePaths(): readonly string[];
   addDeletedDir(dir: DeletedDir): void;
   /** The deepest registered directory D with `D + "/"` a prefix of `path`. O(depth). */
   deepestDeletedDir(path: string): DeletedDir | undefined;
@@ -93,6 +95,7 @@ export function createInboundPending(deps: PendingDeps): InboundPending {
   const archives = new Map<string, Timed<string>>();
   const dirs = new Map<string, Timed<DeletedDir>>();
   const restorable = new Map<string, ArchivedByInbound>();
+  const due = new Map<string, string>();
   let seq = 0;
   let disposed = false;
 
@@ -104,19 +107,26 @@ export function createInboundPending(deps: PendingDeps): InboundPending {
     schedule(pageId, path, onDue) {
       if (disposed) return;
       archives.get(pageId)?.stop();
+      due.delete(pageId);
       const ticket: ArchiveTicket = { pageId, path, seq: ++seq };
-      const stop = deps.schedule(() => deps.enqueue(() => (disposed ? Promise.resolve() : onDue(ticket))), windowMs);
-      archives.set(pageId, { value: path, seq: ticket.seq, stop });
+      const fire = () => {
+        due.set(pageId, path);
+        deps.enqueue(() => (disposed ? Promise.resolve() : onDue(ticket)));
+      };
+      archives.set(pageId, { value: path, seq: ticket.seq, stop: deps.schedule(fire, windowMs) });
     },
     cancel(pageId) {
       archives.get(pageId)?.stop();
       archives.delete(pageId);
+      due.delete(pageId);
     },
     claim(ticket) {
       if (disposed || archives.get(ticket.pageId)?.seq !== ticket.seq) return false;
       archives.delete(ticket.pageId);
+      due.delete(ticket.pageId);
       return true;
     },
+    duePaths: () => [...due.values()],
     addDeletedDir(dir) {
       if (disposed) return;
       dirs.get(dir.path)?.stop();
@@ -147,6 +157,7 @@ export function createInboundPending(deps: PendingDeps): InboundPending {
       archives.clear();
       dirs.clear();
       restorable.clear();
+      due.clear();
     },
   };
 }
