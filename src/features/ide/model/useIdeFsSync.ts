@@ -53,11 +53,12 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
     const queue = createSerialQueue((error) => {
       ideOutput("fs-sync", `event failed: ${error instanceof Error ? error.message : String(error)}`);
     });
-    // Ponytail: only APPLYING is leader-only. A follower tab's outbound writer
-    // still writes files with its own echo set and ledger, so the leader sees
-    // them as ordinary shell writes: they converge via apply/ignore, and both
-    // tabs editing one page yields a spurious conflict (placeholderText is lost
-    // on the round trip). Gating the writer too was judged not worth it.
+    // Ponytail: only APPLYING and removing files are leader-only (leadsInbound).
+    // A follower tab's outbound writer still writes and moves files with its own
+    // echo set and ledger, so the leader sees them as ordinary shell writes: they
+    // converge via apply/ignore, and both tabs editing one page yields a spurious
+    // conflict (placeholderText is lost on the round trip). Gating those too was
+    // judged not worth it.
     const leadership = acquireInboundLeadership(workspaceId, globalThis.navigator?.locks);
     const { session, attach } = createLiveInbound(workspaceId, queue);
     const route = { isLeader: () => leadership.isLeader(), queue, session, attach };

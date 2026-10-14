@@ -54,7 +54,7 @@ const messageOf = (error: unknown): string => (error instanceof Error ? error.me
  * directory is gone too. `rm Roadmap.omd` alone must not cascade onto children
  * whose files are still there. A child create still deferred in the drain counts:
  * the batch is made first (C3b5 R4). Any doubt keeps the page; nothing throws.
- * O(1) plus at most two sandbox stats, plus the deferred batch.
+ * At most two sandbox stats plus the deferred batch, and O(subtree) ledger work to archive.
  */
 export async function archiveIfGone(ticket: ArchiveTicket, ctx: ExecContext): Promise<void> {
   if (!ctx.pending.claim(ticket)) return;
@@ -85,34 +85,56 @@ async function keepReason(ticket: ArchiveTicket, ctx: ExecContext): Promise<stri
 }
 
 /**
- * B2: the ledger forgets the path, the restore memory keeps its last agreed hash.
- * Both happen BEFORE the store is asked, so no writer round can see the page archived
- * first: the page and every page under it — the store's archive cascades onto children
- * whose own check kept them — are marked as deleted in the shell, which the writer never
- * removes (outboundRun), since `git clone` puts the same bytes back at the same paths. The
- * store toasts a failed archive and keeps the pages (pageStore.actions applyCascadeOperation):
- * every page still live afterwards loses its mark, and a root still live gets its
- * agreement back while Output says the archive did not happen.
- * Caveat: only the root's agreement is cleared; a cascaded child keeps its own. A clone of
- * that child's bytes within 15 s of the editor saving the same bytes (ideFsEcho ECHO_TTL_MS)
- * reads as an echo: the file is in the sandbox but has no page until the next attach.
+ * B2: every page under the root and the root itself lose their agreement and are marked as
+ * deleted in the shell BEFORE the store is asked, so no writer round can see one archived
+ * first: the store's archive cascades onto children whose own check kept them, the writer
+ * never removes a marked page (outboundRun), and with no agreement left it never removes the
+ * same bytes a `git clone` puts back at the same path, nor skips writing a child restored in
+ * the app (devil A6). The store toasts a failed archive and keeps the pages (pageStore.actions
+ * applyCascadeOperation), or throws: either way every page still live gets its mark and its
+ * agreement back, and Output says the archive did not happen. The root's hash is remembered
+ * for a restore from the shell.
+ * Ponytail: a clone of a cascaded child's bytes within 15 s of the editor saving the same
+ * bytes (ideFsEcho ECHO_TTL_MS) reads as an echo: the file is in the sandbox but has no page
+ * until the shell writes it again (an attach adopts no file, reconcileOnAttach).
  */
 async function archiveNow(ticket: ArchiveTicket, ctx: ExecContext): Promise<void> {
   const state = ctx.view.pageState(ticket.pageId);
   if (state?.status !== "live" || state.path !== ticket.path) return;
   const syncedHash = syncedHashOf(ctx.workspaceId, state.filePath);
-  const subtree = ctx.view.subtreeOf(ticket.pageId);
-  clearSyncedHash(ctx.workspaceId, state.filePath);
-  markShellArchived(ctx.workspaceId, subtree);
-  await ctx.facade.archive(ticket.pageId);
-  unmarkShellArchived(ctx.workspaceId, subtree.filter((id) => ctx.view.pageState(id)?.status === "live"));
+  const held = holdSubtree(ctx, ctx.view.subtreeOf(ticket.pageId));
+  try {
+    await ctx.facade.archive(ticket.pageId);
+  } finally {
+    giveBackLive(ctx, held);
+  }
   if (ctx.view.pageState(ticket.pageId)?.status === "live") {
-    if (syncedHash !== null && syncedHashOf(ctx.workspaceId, state.filePath) === null) {
-      recordSyncedHash(ctx.workspaceId, state.filePath, syncedHash);
-    }
     ideOutput("fs-sync", `${ticket.path}: deleted in the shell, but the page could not be moved to the trash; it stays`);
     return;
   }
   ctx.pending.rememberArchived(ticket.pageId, { syncedHash, path: state.path });
   ideOutput("fs-sync", `${ticket.path}: deleted in the shell — the page is in the trash`);
+}
+
+type Held = { pageId: string; filePath: string; syncedHash: string | null }[];
+
+function holdSubtree(ctx: ExecContext, pageIds: readonly string[]): Held {
+  const held: Held = [];
+  for (const pageId of pageIds) {
+    const state = ctx.view.pageState(pageId);
+    if (state?.status !== "live") continue;
+    held.push({ pageId, filePath: state.filePath, syncedHash: syncedHashOf(ctx.workspaceId, state.filePath) });
+    clearSyncedHash(ctx.workspaceId, state.filePath);
+  }
+  markShellArchived(ctx.workspaceId, held.map(({ pageId }) => pageId));
+  return held;
+}
+
+/** A page the store kept: its mark goes, and its agreement comes back unless one was recorded meanwhile. */
+function giveBackLive(ctx: ExecContext, held: Held): void {
+  const live = held.filter(({ pageId }) => ctx.view.pageState(pageId)?.status === "live");
+  unmarkShellArchived(ctx.workspaceId, live.map(({ pageId }) => pageId));
+  for (const { filePath, syncedHash } of live) {
+    if (syncedHash !== null && syncedHashOf(ctx.workspaceId, filePath) === null) recordSyncedHash(ctx.workspaceId, filePath, syncedHash);
+  }
 }
