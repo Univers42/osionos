@@ -353,7 +353,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               <ChevronDown size={11} aria-hidden className="text-[var(--osio-code-fg-muted)]" />
             </button>
             {showLangPicker && (
-              <div className="absolute top-full left-0 mt-1.5 w-48 overflow-hidden rounded-lg border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-xl z-[var(--osio-z-popover)] osio-code-card">
+              <div className="absolute top-full left-0 mt-1.5 w-48 overflow-hidden rounded-lg border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-osio-e4 z-[var(--osio-z-popover)] osio-code-card">
                 <input
                   autoFocus
                   value={langQuery}

@@ -176,7 +176,7 @@ export const SearchPanel: React.FC = () => {
 
       {confirm ? (
         <div className="absolute inset-0 z-[var(--osio-z-modal)] flex items-center justify-center bg-[var(--osio-overlay)] p-4">
-          <div className="w-full max-w-xs rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 shadow-xl">
+          <div className="w-full max-w-xs rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 shadow-osio-e4">
             <p className="text-sm font-medium text-[var(--osio-fg-default)]">Replace all?</p>
             <p className="mt-1 text-xs text-[var(--osio-fg-muted)]">
               Replace {confirm.matches} occurrence(s) across {confirm.pages} page(s). This writes to the workspace and can be undone once.

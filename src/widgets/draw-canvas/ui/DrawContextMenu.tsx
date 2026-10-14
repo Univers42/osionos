@@ -113,7 +113,7 @@ export function DrawContextMenu({ state, onPickArrowhead, onRun, onClose }: Draw
         ref={menuRef}
         role="menu"
         aria-label="Canvas menu"
-        className="absolute z-[var(--osio-z-popover)] w-56 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-xl"
+        className="absolute z-[var(--osio-z-popover)] w-56 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-osio-e4"
         style={pos}
         onKeyDown={(event) => {
           if (event.key === "Escape") onClose();

@@ -63,7 +63,7 @@ export const LinkEditorPanel: React.FC<LinkEditorPanelProps> = ({
     <div
       data-link-editor-panel
       data-testid="inline-link-editor"
-      className="fixed z-[var(--osio-z-max)] w-80 space-y-2 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-3 shadow-xl"
+      className="fixed z-[var(--osio-z-max)] w-80 space-y-2 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-3 shadow-osio-e4"
       style={{
         left: Math.min(rect.left, (globalThis.innerWidth ?? 800) - 340),
         top: Math.max(12, rect.bottom + 8),

@@ -79,7 +79,7 @@ export const ImageFullscreen: React.FC<ImageFullscreenProps> = ({ url, alt, onCl
         src={url}
         alt={alt}
         onClick={stop}
-        className="max-h-[92vh] max-w-[92vw] rounded-lg object-contain shadow-2xl"
+        className="max-h-[92vh] max-w-[92vw] rounded-lg object-contain shadow-osio-e5"
       />
     </div>,
     document.body,
