@@ -38,7 +38,7 @@ function rowIdentity(entry: ShareEntry): { title: string; subtitle: string; icon
 
 function initialsBadge(name: string): React.ReactNode {
   const initials = name.split(/\s+/).map((part) => part[0] ?? '').join('').slice(0, 2).toUpperCase();
-  return <span className="text-[10px] font-semibold">{initials || '?'}</span>;
+  return <span className="text-3xs font-semibold">{initials || '?'}</span>;
 }
 
 /** One person/role/general-access row: identity + level dropdown + remove. */

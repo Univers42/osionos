@@ -64,7 +64,7 @@ export const PeoplePickerList: React.FC<PeoplePickerListProps> = ({
         className="w-full rounded-xs border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none focus:border-[var(--osio-accent)]"
       />
       {showConnections ? (
-        <p className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">Your connections</p>
+        <p className="px-2 pt-1 text-3xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">Your connections</p>
       ) : null}
       <ul className="mt-1 max-h-44 overflow-y-auto">
         {rows.map((person) => {

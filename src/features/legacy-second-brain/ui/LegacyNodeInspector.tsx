@@ -45,13 +45,13 @@ interface LegacyNodeInspectorProps {
 export const LegacyNodeInspector: React.FC<LegacyNodeInspectorProps> = ({ node, properties, consistency, onCommit, onPromote, onDemote, promoteAvailable }) => (
   <div className="flex flex-col gap-3">
     <div>
-      <span className="text-[11px] uppercase tracking-wide text-[var(--osio-fg-subtle)]">
+      <span className="text-2xs uppercase tracking-wide text-[var(--osio-fg-subtle)]">
         {node.kind === "note" ? "Note" : node.databaseId ?? node.kind}
       </span>
       <h2 className="text-base font-semibold text-[var(--osio-fg-default)]">{node.label}</h2>
       {node.group ? <p className="text-[var(--osio-fg-muted)]">{node.group}</p> : null}
       {consistency ? (
-        <p className="mt-1 text-[10px] uppercase tracking-wide text-[var(--osio-fg-subtle)]">
+        <p className="mt-1 text-3xs uppercase tracking-wide text-[var(--osio-fg-subtle)]">
           writes: {consistency === "atomic" ? "atomic · same mount" : consistency}
         </p>
       ) : null}

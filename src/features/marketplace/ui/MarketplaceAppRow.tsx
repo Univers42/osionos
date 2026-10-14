@@ -38,7 +38,7 @@ export const MarketplaceAppRow: React.FC<Props> = ({ app, installed, isDraft, on
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
             <span className="truncate text-sm font-medium text-[var(--osio-fg-default)]">{app.title}</span>
-            {isDraft ? <span className="shrink-0 rounded-xs bg-[var(--osio-block-tint-yellow-bg)] px-1 py-0.5 text-[10px] font-semibold uppercase text-[var(--osio-block-tint-yellow-fg)]">Draft</span> : null}
+            {isDraft ? <span className="shrink-0 rounded-xs bg-[var(--osio-block-tint-yellow-bg)] px-1 py-0.5 text-3xs font-semibold uppercase text-[var(--osio-block-tint-yellow-fg)]">Draft</span> : null}
           </span>
           <span className="block truncate text-xs text-[var(--osio-fg-muted)]">{meta.description}</span>
           <span className="mt-0.5 flex items-center gap-1 text-xs text-[var(--osio-fg-subtle)]">

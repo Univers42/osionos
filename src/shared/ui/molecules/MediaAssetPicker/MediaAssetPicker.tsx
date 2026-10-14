@@ -158,7 +158,7 @@ export const MediaAssetPicker: React.FC<MediaAssetPickerProps> = ({
             {searchStatus}
           </div>
           {fallbackNotice ? (
-            <p className="mt-1 text-[10px] text-[var(--osio-fg-subtle)]">
+            <p className="mt-1 text-3xs text-[var(--osio-fg-subtle)]">
               {fallbackNotice}
             </p>
           ) : null}

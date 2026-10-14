@@ -46,7 +46,7 @@ export const RunConsole: React.FC<Props> = ({ lines, running, exit, onClear, onS
 
   return (
     <div data-code-theme="dark" className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
-      <div className="flex shrink-0 items-center gap-2 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1 font-mono text-[11px] text-[var(--osio-code-fg-muted)]">
+      <div className="flex shrink-0 items-center gap-2 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1 font-mono text-2xs text-[var(--osio-code-fg-muted)]">
         <span className="font-semibold uppercase tracking-wide">Terminal</span>
         {running && (
           <span className="inline-flex items-center gap-1 text-[var(--osio-accent)]">
@@ -63,7 +63,7 @@ export const RunConsole: React.FC<Props> = ({ lines, running, exit, onClear, onS
         <button type="button" title="Clear" className={btn} onClick={onClear}><Trash2 size={12} /> Clear</button>
         <button type="button" title="Hide terminal" className={btn} onClick={onClose}><X size={13} /></button>
       </div>
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-[12px] leading-5">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-xs leading-5">
         {lines.length === 0 ? (
           <div className="italic text-[var(--osio-code-fg-muted)]">Run the file (⌘/Ctrl + Enter) to see output here.</div>
         ) : (

@@ -62,7 +62,7 @@ export const SharePeoplePicker: React.FC<SharePeoplePickerProps> = ({ people, ex
                 <span className="block truncate font-medium text-[var(--osio-fg-default)]">{person.name}</span>
                 <span className="block truncate text-xs text-[var(--osio-fg-muted)]">{person.email}</span>
               </span>
-              <span className="shrink-0 rounded-full bg-[var(--osio-bg-subtle)] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[var(--osio-fg-muted)]">
+              <span className="shrink-0 rounded-full bg-[var(--osio-bg-subtle)] px-1.5 py-0.5 text-3xs uppercase tracking-wide text-[var(--osio-fg-muted)]">
                 {person.role}
               </span>
             </button>

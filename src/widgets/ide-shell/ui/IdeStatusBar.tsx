@@ -25,7 +25,7 @@ interface Props {
 export const IdeStatusBar: React.FC<Props> = ({ fileCount, onToggleTerminal }) => {
   const conflicts = useIdeSyncConflicts((s) => conflictCount(s.byPageId));
   return (
-    <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 font-mono text-[11px] text-[var(--osio-code-fg-muted)]">
+    <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 font-mono text-2xs text-[var(--osio-code-fg-muted)]">
       <span className="inline-flex items-center gap-1 text-[var(--osio-accent)]">IDE</span>
       {conflicts > 0 && (
         <span

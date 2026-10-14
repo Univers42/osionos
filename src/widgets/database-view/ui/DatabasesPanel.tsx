@@ -48,7 +48,7 @@ const MountGroup: React.FC<{ source: LiveSourceMount; query: string }> = ({ sour
         {collapsed ? <ChevronRight size={14} className="shrink-0 text-[var(--osio-fg-subtle)]" /> : <ChevronDown size={14} className="shrink-0 text-[var(--osio-fg-subtle)]" />}
         <Database size={14} className="shrink-0 text-[var(--osio-fg-muted)]" />
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--osio-fg-default)]">{source.mount.name}</span>
-        <span className="shrink-0 rounded-xs bg-[var(--osio-bg-hover)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">{source.mount.engine}</span>
+        <span className="shrink-0 rounded-xs bg-[var(--osio-bg-hover)] px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">{source.mount.engine}</span>
         <span
           className="size-2 shrink-0 rounded-full"
           style={{ backgroundColor: dotColor(source) }}
@@ -78,7 +78,7 @@ const MountGroup: React.FC<{ source: LiveSourceMount; query: string }> = ({ sour
               >
                 <Table2 size={13} className="shrink-0 text-[var(--osio-fg-subtle)]" />
                 <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--osio-fg-default)]">{t.table}</span>
-                <span className="shrink-0 text-[11px] tabular-nums text-[var(--osio-fg-subtle)]">{t.columnCount} cols</span>
+                <span className="shrink-0 text-2xs tabular-nums text-[var(--osio-fg-subtle)]">{t.columnCount} cols</span>
               </button>
             ))
           )}
@@ -98,7 +98,7 @@ const CreatedDatabasesSection: React.FC<{ query: string }> = ({ query }) => {
 
   return (
     <div className="mb-2">
-      <p className="px-1.5 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
+      <p className="px-1.5 pb-0.5 pt-1 text-3xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
         Your databases
       </p>
       {visible.map((entry) => (
@@ -161,7 +161,7 @@ export const DatabasesPanel: React.FC = () => {
           <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
             <AlertTriangle size={24} strokeWidth={1.5} className="text-[var(--osio-danger)]" />
             <p className="text-xs text-[var(--osio-fg-subtle)]">Couldn&apos;t load your databases.</p>
-            {error ? <p className="text-[11px] break-all text-[var(--osio-danger)]">{error}</p> : null}
+            {error ? <p className="text-2xs break-all text-[var(--osio-danger)]">{error}</p> : null}
             <button type="button" onClick={reload} className="text-xs text-[var(--osio-accent-text)] hover:underline">Retry</button>
           </div>
         ) : visible.length === 0 ? (

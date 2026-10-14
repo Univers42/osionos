@@ -30,9 +30,9 @@ export const SearchResults: React.FC<Props> = ({ results, onOpen }) => {
           <div className="flex items-center gap-2 px-2 py-1 text-xs font-medium text-[var(--osio-fg-default)]">
             <span className="min-w-0 flex-1 truncate">{group.title}</span>
             {!group.editable ? (
-              <span className="text-[10px] text-[var(--osio-fg-subtle)]">read-only</span>
+              <span className="text-3xs text-[var(--osio-fg-subtle)]">read-only</span>
             ) : null}
-            <span className="rounded-xs bg-[var(--osio-bg-muted)] px-1.5 text-[10px] text-[var(--osio-fg-muted)]">
+            <span className="rounded-xs bg-[var(--osio-bg-muted)] px-1.5 text-3xs text-[var(--osio-fg-muted)]">
               {group.matchCount}
             </span>
           </div>
@@ -51,7 +51,7 @@ export const SearchResults: React.FC<Props> = ({ results, onOpen }) => {
             </button>
           ))}
           {group.matchCount > MAX_PER_GROUP ? (
-            <p className="px-5 py-0.5 text-[10px] text-[var(--osio-fg-subtle)]">
+            <p className="px-5 py-0.5 text-3xs text-[var(--osio-fg-subtle)]">
               +{group.matchCount - MAX_PER_GROUP} more
             </p>
           ) : null}

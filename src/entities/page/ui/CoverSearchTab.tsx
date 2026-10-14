@@ -124,17 +124,17 @@ export const CoverSearchTab: React.FC<CoverSearchTabProps> = ({ value, onSelect 
       </div>
 
       {refusal ? (
-        <p role="status" className="text-[10px] text-[var(--osio-fg-subtle)]">
+        <p role="status" className="text-3xs text-[var(--osio-fg-subtle)]">
           {usingFallback ? `${refusal} Showing matches from the built-in gallery.` : refusal}
         </p>
       ) : null}
       {usingFallback && !refusal ? (
-        <p className="text-[10px] text-[var(--osio-fg-subtle)]">
+        <p className="text-3xs text-[var(--osio-fg-subtle)]">
           Offline — showing matches from the built-in gallery.
         </p>
       ) : null}
       {!loading && shown.length === 0 && !refusal ? (
-        <p className="text-[10px] text-[var(--osio-fg-subtle)]">No results — try another keyword.</p>
+        <p className="text-3xs text-[var(--osio-fg-subtle)]">No results — try another keyword.</p>
       ) : null}
       {items.length > 0 && (lastCount === PER_PAGE || refusal) ? (
         <button

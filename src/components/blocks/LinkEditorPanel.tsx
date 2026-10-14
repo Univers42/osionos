@@ -70,7 +70,7 @@ export const LinkEditorPanel: React.FC<LinkEditorPanelProps> = ({
       }}
       onMouseDown={(event) => event.stopPropagation()}
     >
-      <label className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
+      <label className="block text-2xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
         Text
         <input
           className={`mt-1 ${FIELD_CLASS}`}
@@ -81,7 +81,7 @@ export const LinkEditorPanel: React.FC<LinkEditorPanelProps> = ({
           onKeyDown={handleKeyDown}
         />
       </label>
-      <label className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
+      <label className="block text-2xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
         URL
         <input
           className={`mt-1 ${FIELD_CLASS}`}

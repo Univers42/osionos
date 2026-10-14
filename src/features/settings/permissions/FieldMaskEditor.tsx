@@ -54,7 +54,7 @@ export const FieldMaskEditor: React.FC<FieldMaskEditorProps> = ({ policy, saving
     onSave(conditions);
   }
 
-  const chipClass = 'inline-flex items-center gap-1 rounded-md bg-[var(--osio-bg-subtle)] px-1.5 py-0.5 font-mono text-[11px] text-[var(--osio-fg-default)]';
+  const chipClass = 'inline-flex items-center gap-1 rounded-md bg-[var(--osio-bg-subtle)] px-1.5 py-0.5 font-mono text-2xs text-[var(--osio-fg-default)]';
 
   return (
     <div className="space-y-2 text-sm">

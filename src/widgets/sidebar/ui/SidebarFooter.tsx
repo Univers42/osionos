@@ -104,7 +104,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
             rightElement={
               <span
                 className={
-                  "rounded-xs px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide " +
+                  "rounded-xs px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide " +
                   (dev
                     ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg,#fff)]"
                     : "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-subtle)]")
@@ -124,7 +124,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
             rightElement={
               <span
                 className={
-                  "rounded-xs px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide " +
+                  "rounded-xs px-1.5 py-0.5 text-3xs font-semibold uppercase tracking-wide " +
                   (ideModeOn
                     ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg,#fff)]"
                     : "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-subtle)]")

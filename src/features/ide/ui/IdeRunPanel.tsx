@@ -66,12 +66,12 @@ export const IdeRunPanel: React.FC = () => {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 flex-col gap-1 px-3 pb-2">
         {!isCode ? (
-          <p className="py-4 text-center text-[11px] leading-5 text-[var(--osio-code-fg-muted)]">
+          <p className="py-4 text-center text-2xs leading-5 text-[var(--osio-code-fg-muted)]">
             Open a code file to run it.
           </p>
         ) : (
           <>
-            <div className="flex items-center gap-2 text-[11px]">
+            <div className="flex items-center gap-2 text-2xs">
               <span className="truncate font-mono text-[var(--osio-code-fg)]">{page?.title || "untitled"}</span>
               <span style={{ color: lang.accent }}>{lang.label}</span>
             </div>
@@ -94,24 +94,24 @@ export const IdeRunPanel: React.FC = () => {
                 <Trash2 size={12} /> Clear
               </button>
               <span className="flex-1" />
-              {running && <span className="text-[10px] text-[var(--osio-accent)]">running…</span>}
+              {running && <span className="text-3xs text-[var(--osio-accent)]">running…</span>}
               {!running && exit && (
                 <span
-                  className={"text-[10px] " + (failed ? "text-[var(--osio-danger,#ff6b6b)]" : "text-[var(--osio-success)]")}
+                  className={"text-3xs " + (failed ? "text-[var(--osio-danger,#ff6b6b)]" : "text-[var(--osio-success)]")}
                 >
                   {exit.timedOut ? "timed out" : `exit ${exit.code ?? "?"}`} · {exit.durationMs}ms
                 </span>
               )}
             </div>
             {!lang.runnable && (
-              <p className="text-[10px] text-[var(--osio-code-fg-muted)]">{lang.label} is not runnable.</p>
+              <p className="text-3xs text-[var(--osio-code-fg-muted)]">{lang.label} is not runnable.</p>
             )}
           </>
         )}
       </div>
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-auto border-t border-[var(--osio-code-border)] px-3 py-2 font-mono text-[11px] leading-5"
+        className="min-h-0 flex-1 overflow-auto border-t border-[var(--osio-code-border)] px-3 py-2 font-mono text-2xs leading-5"
       >
         {lines.length === 0 ? (
           <div className="italic text-[var(--osio-code-fg-muted)]">Run output appears here.</div>

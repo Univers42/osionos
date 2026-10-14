@@ -48,7 +48,7 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
       data-code-theme="dark"
       className="flex h-52 shrink-0 flex-col border-t border-[var(--osio-code-border)] bg-[var(--osio-code-bg)]"
     >
-      <div className="flex h-8 shrink-0 items-center gap-1 border-b border-[var(--osio-code-border)] px-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
+      <div className="flex h-8 shrink-0 items-center gap-1 border-b border-[var(--osio-code-border)] px-2 text-2xs font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
@@ -61,7 +61,7 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
           >
             {label}
             {id === "output" && conflicts > 0 && (
-              <span className="ml-1 rounded-xs bg-[var(--osio-warning,#d97706)] px-1 text-[10px] text-white">{conflicts}</span>
+              <span className="ml-1 rounded-xs bg-[var(--osio-warning,#d97706)] px-1 text-3xs text-white">{conflicts}</span>
             )}
           </button>
         ))}
@@ -103,7 +103,7 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
       <div className={tab === "terminal" ? "flex min-h-0 flex-1" : "hidden"}>
         <React.Suspense
           fallback={
-            <div className="min-h-0 flex-1 px-3 py-2 font-mono text-[12px] leading-5 text-[var(--osio-code-fg-muted)]">
+            <div className="min-h-0 flex-1 px-3 py-2 font-mono text-xs leading-5 text-[var(--osio-code-fg-muted)]">
               Starting terminal…
             </div>
           }
@@ -121,7 +121,7 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
       {tab === "problems" && <IdeProblemsPanel />}
       {tab === "output" && <IdeOutputPanel />}
       {tab === "debug" && (
-        <p className="flex min-h-0 flex-1 items-center justify-center px-4 text-center text-[12px] text-[var(--osio-code-fg-muted)]">
+        <p className="flex min-h-0 flex-1 items-center justify-center px-4 text-center text-xs text-[var(--osio-code-fg-muted)]">
           The debugger lands with the DAP client (ADR-003) — no fake console until it can attach for real.
         </p>
       )}

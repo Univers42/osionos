@@ -37,7 +37,7 @@ export const MatrixGrid: React.FC<MatrixGridProps> = ({ roles, resources, saving
           <tr>
             <th className="sticky left-0 border-b border-[var(--osio-db-line)] bg-[var(--osio-bg-subtle)] px-3 py-2">Role</th>
             {resources.map((resource) => (
-              <th key={resource} className="border-b border-[var(--osio-db-line)] px-1 py-2 text-center font-mono text-[11px]">{resource}</th>
+              <th key={resource} className="border-b border-[var(--osio-db-line)] px-1 py-2 text-center font-mono text-2xs">{resource}</th>
             ))}
           </tr>
         </thead>
@@ -47,7 +47,7 @@ export const MatrixGrid: React.FC<MatrixGridProps> = ({ roles, resources, saving
               <td className="sticky left-0 max-w-[180px] bg-[var(--osio-bg-surface)] px-3 py-1">
                 <div className="truncate font-medium text-[var(--osio-fg-default)]">{role.name}</div>
                 {typeof role.metadata?.['department'] === 'string' && (
-                  <div className="truncate text-[10px] text-[var(--osio-fg-subtle)]">
+                  <div className="truncate text-3xs text-[var(--osio-fg-subtle)]">
                     {String(role.metadata['department'])} · clearance {String(role.metadata['clearance'] ?? '—')}
                   </div>
                 )}

@@ -68,7 +68,7 @@ export const IdeExplorerPanel: React.FC = () => {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-8 shrink-0 items-center gap-0.5 pl-3 pr-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
+      <div className="flex h-8 shrink-0 items-center gap-0.5 pl-3 pr-1.5 text-2xs font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
         <span className="flex-1 truncate">{workspaceName}</span>
         <ToolButton title="New file" onClick={() => { setRenamingId(null); setCreate({ parentId: null, kind: "code" }); }}>
           <FilePlus size={14} />

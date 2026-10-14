@@ -36,7 +36,7 @@ const KINDS: Arrowhead[] = ["none", "arrow", "triangle", "dot", "diamond", "bar"
 function ExtremityRow({ title, active, onSelect }: { title: string; active: Arrowhead; onSelect: (kind: Arrowhead) => void }) {
   return (
     <div className="px-2 py-1.5">
-      <div className="px-1 pb-1 text-[11px] font-medium text-[var(--osio-fg-muted)]">{title}</div>
+      <div className="px-1 pb-1 text-2xs font-medium text-[var(--osio-fg-muted)]">{title}</div>
       <div className="flex gap-1">
         {KINDS.map((kind) => (
           <button
@@ -71,7 +71,7 @@ function Item({ label, hint, danger, onPick }: { label: string; hint?: string; d
       }`}
     >
       <span>{label}</span>
-      {hint ? <span className="text-[11px] text-[var(--osio-fg-muted)]">{hint}</span> : null}
+      {hint ? <span className="text-2xs text-[var(--osio-fg-muted)]">{hint}</span> : null}
     </button>
   );
 }

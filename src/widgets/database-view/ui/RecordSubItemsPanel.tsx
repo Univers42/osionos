@@ -70,7 +70,7 @@ export const RecordSubItemsPanel: React.FC<RecordSubItemsPanelProps> = ({ record
   return (
     <section className={compact ? "py-1" : "mx-auto max-w-3xl px-10 pb-10"}>
       {!compact && <div className="mb-1 border-t border-[var(--osio-border-default)] pt-4" />}
-      <h3 className={`${compact ? "pl-6" : "px-2"} pb-0.5 text-[11px] font-medium uppercase tracking-wide text-[var(--osio-fg-subtle)]`}>
+      <h3 className={`${compact ? "pl-6" : "px-2"} pb-0.5 text-2xs font-medium uppercase tracking-wide text-[var(--osio-fg-subtle)]`}>
         Sub-items{children.length ? ` · ${children.length}` : ""}
       </h3>
       {loading ? (

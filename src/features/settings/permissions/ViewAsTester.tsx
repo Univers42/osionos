@@ -88,7 +88,7 @@ export const ViewAsTester: React.FC<ViewAsTesterProps> = ({ people, resources })
             {result.allow ? 'ALLOW' : 'DENY'} <span className="font-normal text-[var(--osio-fg-muted)]">— {result.reason} ({result.mode})</span>
           </div>
           {result.mask && (
-            <code className="mt-1 block text-[11px] text-[var(--osio-fg-muted)]">
+            <code className="mt-1 block text-2xs text-[var(--osio-fg-muted)]">
               mask: {JSON.stringify(result.mask)}
             </code>
           )}

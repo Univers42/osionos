@@ -201,7 +201,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   return (
     <div data-code-theme="dark" data-osio-ide className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
       {conflict && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1.5 text-[12px] text-[var(--osio-warning,#d97706)]">
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1.5 text-xs text-[var(--osio-warning,#d97706)]">
           <span className="min-w-0 flex-1 truncate">
             The sandbox version of this file differs from your edits.
           </span>
@@ -227,7 +227,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
           <RunConsole lines={runner.lines} running={runner.running} exit={runner.exit} onClear={runner.clear} onStop={runner.stop} onClose={() => setShowConsole(false)} />
         </div>
       )}
-      <div className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1 font-mono text-[11px] text-[var(--osio-code-fg-muted)]">
+      <div className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1 font-mono text-2xs text-[var(--osio-code-fg-muted)]">
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: lang.accent }} />
           {lang.label}

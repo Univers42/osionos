@@ -131,7 +131,7 @@ export const CoverVideoTab: React.FC<CoverVideoTabProps> = ({ value, onSelect, o
       </div>
       {error ? <p className="text-xs text-[var(--osio-danger)]">{error}</p> : null}
 
-      <div className="flex items-center gap-2 text-[10px] text-[var(--osio-fg-subtle)]">
+      <div className="flex items-center gap-2 text-3xs text-[var(--osio-fg-subtle)]">
         <Film size={12} />
         Video covers play muted on a loop — they never make sound.
       </div>

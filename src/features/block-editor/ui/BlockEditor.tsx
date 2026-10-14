@@ -347,7 +347,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               aria-haspopup="listbox"
               aria-expanded={showLangPicker}
               title="Change language"
-              className="inline-flex items-center gap-1 rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] py-1 pl-2 pr-1.5 font-mono text-[11px] font-medium tracking-wide text-[var(--osio-code-fg)] transition-[background-color,transform] duration-150 hover:bg-[var(--osio-code-btn-hover)] active:scale-95"
+              className="inline-flex items-center gap-1 rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] py-1 pl-2 pr-1.5 font-mono text-2xs font-medium tracking-wide text-[var(--osio-code-fg)] transition-[background-color,transform] duration-150 hover:bg-[var(--osio-code-btn-hover)] active:scale-95"
             >
               {block.language || "plaintext"}
               <ChevronDown size={11} aria-hidden className="text-[var(--osio-code-fg-muted)]" />
@@ -395,7 +395,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           name="code-file-name"
           autoComplete="off"
           spellCheck={false}
-          className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
+          className="min-w-0 flex-1 bg-transparent font-mono text-2xs text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
         />
         <div className="flex shrink-0 items-center gap-0.5">
           <button
@@ -424,7 +424,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             <button
               type="button"
               title={codeView === "preview" ? "Show source" : "Show preview"}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-[var(--osio-code-fg-muted)] transition-colors hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-2xs font-medium text-[var(--osio-code-fg-muted)] transition-colors hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
               onClick={() =>
                 commitBlockUpdate(block.id, {
                   codeView: codeView === "preview" ? "source" : "preview",
@@ -438,7 +438,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             type="button"
             title="Copy code"
             className={[
-              "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-[color,background-color,transform] duration-150 hover:bg-[var(--osio-code-btn-hover)] active:scale-95",
+              "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-2xs font-medium transition-[color,background-color,transform] duration-150 hover:bg-[var(--osio-code-btn-hover)] active:scale-95",
               copiedCode ? "text-[var(--osio-success)]" : "text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]",
             ].join(" ")}
             onClick={handleCopyCode}
@@ -838,7 +838,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           style={{ ...calloutSurface(calloutType), ...surfaceStyle }}
         >
           <span
-            className="pointer-events-none absolute right-2 top-1.5 max-w-[45%] truncate select-none rounded-xs px-1 text-[10px] font-semibold uppercase tracking-wide opacity-0 transition-opacity group-hover/callout:opacity-60"
+            className="pointer-events-none absolute right-2 top-1.5 max-w-[45%] truncate select-none rounded-xs px-1 text-3xs font-semibold uppercase tracking-wide opacity-0 transition-opacity group-hover/callout:opacity-60"
             style={{ color: accent }}
             aria-hidden="true"
           >

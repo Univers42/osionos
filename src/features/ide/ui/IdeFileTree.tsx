@@ -106,7 +106,7 @@ export const IdeFileTree: React.FC<Props> = (props) => {
           />
         )}
         {tree.length === 0 && !props.create ? (
-          <p className="px-3 py-6 text-center text-[11px] leading-5 text-[var(--osio-code-fg-muted)]">
+          <p className="px-3 py-6 text-center text-2xs leading-5 text-[var(--osio-code-fg-muted)]">
             No code files yet. Use New File above to start a project.
           </p>
         ) : (

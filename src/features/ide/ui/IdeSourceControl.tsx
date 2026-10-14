@@ -28,7 +28,7 @@ export const IdeSourceControl: React.FC = () => {
 
   if (connected === false) {
     return (
-      <p className="px-3 py-6 text-center text-[11px] leading-5 text-[var(--osio-code-fg-muted)]">
+      <p className="px-3 py-6 text-center text-2xs leading-5 text-[var(--osio-code-fg-muted)]">
         Source control needs a running workspace sandbox. Start it, then reopen this panel.
       </p>
     );
@@ -57,12 +57,12 @@ export const IdeSourceControl: React.FC = () => {
       </div>
       <div className="flex gap-2 px-2 pb-2">
         <button type="button" onClick={onCommit} disabled={busy || !message.trim()}
-          className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-xs bg-[var(--osio-accent)] text-[12px] text-[var(--osio-accent-fg,#fff)] disabled:opacity-50">
+          className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-xs bg-[var(--osio-accent)] text-xs text-[var(--osio-accent-fg,#fff)] disabled:opacity-50">
           <GitCommitHorizontal size={14} /> Commit
         </button>
         <button type="button" onClick={() => void push(pat)} disabled={busy}
           title="Push (uses the token below)"
-          className="inline-flex h-7 items-center justify-center gap-1 rounded-xs border border-[var(--osio-code-border)] px-2 text-[12px] hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] disabled:opacity-50">
+          className="inline-flex h-7 items-center justify-center gap-1 rounded-xs border border-[var(--osio-code-border)] px-2 text-xs hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))] disabled:opacity-50">
           <Upload size={14} /> Push
         </button>
       </div>
@@ -71,11 +71,11 @@ export const IdeSourceControl: React.FC = () => {
         value={pat}
         onChange={(e) => setPat(e.target.value)}
         placeholder="Personal access token (for push)"
-        className="mx-2 mb-2 rounded-xs border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] px-2 py-1 text-[12px] outline-none focus:border-[var(--osio-accent)]"
+        className="mx-2 mb-2 rounded-xs border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--osio-accent)]"
       />
-      {error && <p className="px-3 pb-1 text-[11px] text-[var(--osio-danger,#ff6b6b)]">{error}</p>}
+      {error && <p className="px-3 pb-1 text-2xs text-[var(--osio-danger,#ff6b6b)]">{error}</p>}
       <div className="min-h-0 flex-1 overflow-auto px-1 pb-2">
-        <div className="px-2 py-0.5 text-[11px] uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
+        <div className="px-2 py-0.5 text-2xs uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
           Changes ({files.length})
         </div>
         {files.map((file) => (
@@ -85,7 +85,7 @@ export const IdeSourceControl: React.FC = () => {
           </div>
         ))}
         {files.length === 0 && !busy && (
-          <p className="px-3 py-4 text-center text-[11px] text-[var(--osio-code-fg-muted)]">No changes.</p>
+          <p className="px-3 py-4 text-center text-2xs text-[var(--osio-code-fg-muted)]">No changes.</p>
         )}
       </div>
     </div>

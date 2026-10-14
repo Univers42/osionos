@@ -81,9 +81,9 @@ export const IdeSearchPanel: React.FC = () => {
           className="w-full rounded-xs border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] px-2 py-1 text-[13px] text-[var(--osio-code-fg)] outline-none focus:border-[var(--osio-accent)]"
         />
       </div>
-      <div className="min-h-0 flex-1 overflow-auto px-1 pb-2 text-[12px] text-[var(--osio-code-fg)]">
+      <div className="min-h-0 flex-1 overflow-auto px-1 pb-2 text-xs text-[var(--osio-code-fg)]">
         {query.trim().length >= 2 && (
-          <p className="px-2 py-1 text-[11px] text-[var(--osio-code-fg-muted)]">
+          <p className="px-2 py-1 text-2xs text-[var(--osio-code-fg-muted)]">
             {totalMatches} {totalMatches === 1 ? "result" : "results"} in {results.length} {results.length === 1 ? "file" : "files"}
           </p>
         )}

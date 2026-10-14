@@ -102,7 +102,7 @@ export const AdminSpaceView: React.FC = () => {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{label}</span>
-                      <span className="rounded-xs bg-[var(--osio-bg-subtle)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--osio-fg-muted)]">.tmpl</span>
+                      <span className="rounded-xs bg-[var(--osio-bg-subtle)] px-1.5 py-0.5 text-3xs font-medium text-[var(--osio-fg-muted)]">.tmpl</span>
                     </div>
                     <p className="mt-1 text-sm text-[var(--osio-fg-muted)]">{desc}</p>
                   </div>

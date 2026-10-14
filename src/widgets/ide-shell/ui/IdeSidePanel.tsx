@@ -45,7 +45,7 @@ export const IdeSidePanel: React.FC<{ panel: IdePanel }> = ({ panel }) => {
       aria-label={TITLES[panel]}
       className="flex w-60 shrink-0 flex-col overflow-hidden border-r border-[var(--osio-code-border)] bg-[var(--osio-code-bg)]"
     >
-      <div className="flex h-8 shrink-0 items-center px-3 text-[11px] font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
+      <div className="flex h-8 shrink-0 items-center px-3 text-2xs font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
         {TITLES[panel]}
       </div>
       {panel === "search" ? (
@@ -57,7 +57,7 @@ export const IdeSidePanel: React.FC<{ panel: IdePanel }> = ({ panel }) => {
       ) : panel === "run" ? (
         <IdeRunPanel />
       ) : (
-        <p className="px-3 py-6 text-center text-[11px] leading-5 text-[var(--osio-code-fg-muted)]">
+        <p className="px-3 py-6 text-center text-2xs leading-5 text-[var(--osio-code-fg-muted)]">
           {TITLES[panel]} is not available yet.
         </p>
       )}

@@ -58,7 +58,7 @@ export const ConditionEditor: React.FC<ConditionEditorProps> = ({ policy, saving
         </label>
       </div>
       <div className="flex items-center justify-between">
-        <code className="truncate text-[10px] text-[var(--osio-fg-subtle)]">{JSON.stringify(policy.conditions ?? {})}</code>
+        <code className="truncate text-3xs text-[var(--osio-fg-subtle)]">{JSON.stringify(policy.conditions ?? {})}</code>
         <button
           type="button"
           disabled={saving}

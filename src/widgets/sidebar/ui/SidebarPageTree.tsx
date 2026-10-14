@@ -251,7 +251,7 @@ const SectionDropZone: React.FC<{ visibility: "private" | "shared"; workspaceId:
         }
       }}
       className={[
-        "mx-1 mb-1 rounded-md border border-dashed px-2 py-1 text-center text-[10px] transition-colors",
+        "mx-1 mb-1 rounded-md border border-dashed px-2 py-1 text-center text-3xs transition-colors",
         over
           ? "border-[var(--osio-accent)] bg-[var(--osio-accent-subtle)] text-[var(--osio-fg-default)]"
           : "border-[var(--osio-border-default)] text-[var(--osio-fg-subtle)]",
@@ -435,7 +435,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
           label={thread.name}
           active={activePageKind === "channel" && activePageId === thread.id}
           onClick={() => openChannel(thread)}
-          rightElement={<span className="pr-2 text-[10px] uppercase text-[var(--osio-fg-subtle)]">thread</span>}
+          rightElement={<span className="pr-2 text-3xs uppercase text-[var(--osio-fg-subtle)]">thread</span>}
         />
       </div>
     );
@@ -451,7 +451,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
           onClick={() => openChannel(channel)}
           rightElement={
             <div className="mr-1 flex items-center gap-0.5">
-              <span className="hidden rounded-md bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-[10px] text-[var(--osio-fg-subtle)] group-hover:inline sm:inline">
+              <span className="hidden rounded-md bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-3xs text-[var(--osio-fg-subtle)] group-hover:inline sm:inline">
                 {channelTypeLabel(channel.type)}
               </span>
               <button
@@ -484,7 +484,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
 
     return (
       <div key={category.label} className="mb-2">
-        <div className="mb-0.5 flex items-center justify-between px-2 text-[10px] font-semibold uppercase text-[var(--osio-fg-subtle)]">
+        <div className="mb-0.5 flex items-center justify-between px-2 text-3xs font-semibold uppercase text-[var(--osio-fg-subtle)]">
           <span>{category.label}</span>
           <button
             type="button"

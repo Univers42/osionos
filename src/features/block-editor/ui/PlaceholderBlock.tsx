@@ -81,7 +81,7 @@ export const PlaceholderBlock: React.FC<Props> = ({
         <span className="pointer-events-none absolute left-2 top-1 select-none text-sm text-[var(--osio-fg-subtle)]">{prompt}</span>
       ) : null}
       {mode === "prompt" ? (
-        <span className="pointer-events-none absolute right-1 top-1 rounded-xs bg-[var(--osio-accent)] px-1 text-[10px] font-medium text-[var(--osio-accent-fg)]">prompt</span>
+        <span className="pointer-events-none absolute right-1 top-1 rounded-xs bg-[var(--osio-accent)] px-1 text-3xs font-medium text-[var(--osio-accent-fg)]">prompt</span>
       ) : null}
     </div>
   );

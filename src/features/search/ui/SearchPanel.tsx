@@ -129,7 +129,7 @@ export const SearchPanel: React.FC = () => {
           />
           <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
             <FlagButton active={s.preserveCase} title="Preserve case" onClick={() => s.patch({ preserveCase: !s.preserveCase })}>
-              <span className="text-[10px] font-bold">AB</span>
+              <span className="text-3xs font-bold">AB</span>
             </FlagButton>
             <FlagButton
               active={false}
@@ -156,7 +156,7 @@ export const SearchPanel: React.FC = () => {
         ) : null}
       </div>
 
-      <div className="px-3 py-1 text-[11px] text-[var(--osio-fg-subtle)]">
+      <div className="px-3 py-1 text-2xs text-[var(--osio-fg-subtle)]">
         {s.status === "error" && s.error ? <span className="text-[var(--osio-danger)]">{s.error}</span>
           : s.status === "searching" ? "Searching…"
           : s.query ? `${totalMatches} result(s) in ${s.results.length} page(s)`
@@ -164,7 +164,7 @@ export const SearchPanel: React.FC = () => {
       </div>
 
       {summary ? (
-        <div className="mx-2 mb-1 flex items-center justify-between rounded-md bg-[var(--osio-bg-muted)] px-2 py-1 text-[11px] text-[var(--osio-fg-default)]">
+        <div className="mx-2 mb-1 flex items-center justify-between rounded-md bg-[var(--osio-bg-muted)] px-2 py-1 text-2xs text-[var(--osio-fg-default)]">
           <span className="min-w-0 flex-1 truncate">{summary}</span>
           {hasUndo ? (
             <button type="button" onClick={() => { undo(); setSummary(null); runSearch(); }} className="ml-2 shrink-0 font-medium text-[var(--osio-accent)] hover:underline">Undo</button>

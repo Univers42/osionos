@@ -69,11 +69,11 @@ export const IdeProblemsPanel: React.FC = () => {
   );
 
   if (groups.length === 0) {
-    return <p className="px-3 py-6 text-center text-[11px] leading-5 text-[var(--osio-code-fg-muted)]">No problems detected.</p>;
+    return <p className="px-3 py-6 text-center text-2xs leading-5 text-[var(--osio-code-fg-muted)]">No problems detected.</p>;
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto py-1 text-[12px]">
+    <div className="min-h-0 flex-1 overflow-auto py-1 text-xs">
       {groups.map((group) => (
         <div key={group.uri}>
           <button
@@ -83,7 +83,7 @@ export const IdeProblemsPanel: React.FC = () => {
           >
             <span className="truncate">{group.rel.split("/").pop()}</span>
             <span className="text-[var(--osio-code-fg-muted)]">{group.rel}</span>
-            <span className="ml-auto text-[10px] text-[var(--osio-code-fg-muted)]">{group.diags.length}</span>
+            <span className="ml-auto text-3xs text-[var(--osio-code-fg-muted)]">{group.diags.length}</span>
           </button>
           {group.diags
             .slice()
@@ -98,7 +98,7 @@ export const IdeProblemsPanel: React.FC = () => {
               >
                 <span className="mt-0.5 shrink-0">{severityIcon(d.severity)}</span>
                 <span className="min-w-0 flex-1 truncate text-[var(--osio-code-fg-muted)]">{d.message}</span>
-                <span className="shrink-0 text-[10px] text-[var(--osio-code-fg-muted)]">
+                <span className="shrink-0 text-3xs text-[var(--osio-code-fg-muted)]">
                   {d.line + 1}:{d.character + 1}
                 </span>
               </button>

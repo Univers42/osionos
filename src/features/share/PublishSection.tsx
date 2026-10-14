@@ -28,7 +28,7 @@ export const PublishSection: React.FC<{ pageId: string }> = ({ pageId }) => {
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="flex items-center gap-1.5 text-xs font-semibold text-[var(--osio-fg-default)]"><Globe size={13} /> Publish to web</p>
-          <p className="text-[11px] text-[var(--osio-fg-muted)]">Anyone with the link reads a snapshot.</p>
+          <p className="text-2xs text-[var(--osio-fg-muted)]">Anyone with the link reads a snapshot.</p>
         </div>
         {token ? (
           <button type="button" onClick={() => void doUnpublish()} disabled={busy} className="shrink-0 rounded-md border border-[var(--osio-border-default)] px-2.5 py-1 text-xs text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] disabled:opacity-50">Unpublish</button>
@@ -38,7 +38,7 @@ export const PublishSection: React.FC<{ pageId: string }> = ({ pageId }) => {
       </div>
       {token && (
         <div className="mt-2 flex items-center gap-2">
-          <input readOnly value={publicUrl} className="min-w-0 flex-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1 text-[11px] text-[var(--osio-fg-default)]" />
+          <input readOnly value={publicUrl} className="min-w-0 flex-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1 text-2xs text-[var(--osio-fg-default)]" />
           <button type="button" onClick={() => void navigator.clipboard.writeText(publicUrl)} className="shrink-0 rounded-md border border-[var(--osio-border-default)] px-2 py-1 text-xs text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">Copy</button>
         </div>
       )}
