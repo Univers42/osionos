@@ -21,7 +21,7 @@ import { bridgeFsTransport } from "../vfs/bridgeTransport";
 import { createSandboxProvider } from "../vfs/sandboxProvider";
 import { sandboxHashes, type FsOpTransport } from "../vfs/sandboxFsOps";
 import { ideOutput } from "./ideOutputBus";
-import { statInProvider } from "./inboundArchive";
+import { statInProvider, statManyInSandbox } from "./inboundArchive";
 import { createInboundSession, type InboundSession } from "./inboundSession";
 import { attachWorkspace, loadUnloadedBodies } from "./materialize";
 import { syncedHashOf } from "./ideSyncEngine";
@@ -52,6 +52,7 @@ export function createLiveInbound(workspaceId: string, queue: SerialQueue): Live
     store: pageFileStoreDeps(workspaceId),
     restore: (pageId) => usePageStore.getState().restorePage(pageId, workspaceId, getActivePageJwt() ?? ""),
     stat: (path) => statInProvider(sandbox, workspaceId, path),
+    statMany: (paths) => statManyInSandbox(transport, paths),
     schedule,
     enqueue: (task) => { void queue.run(task); },
   });
