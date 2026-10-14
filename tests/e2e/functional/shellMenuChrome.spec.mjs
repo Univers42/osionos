@@ -153,6 +153,28 @@ test.describe("shell menus draw the overlay chrome", () => {
     });
   }
 
+  // Centred, it reads as a modal: it takes focus (there is no trigger to keep it) and Escape closes it.
+  test("the Share dialog from the sidebar menu takes focus and closes on Escape", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await clearAndTypePageTitle(page, "Quarterly plan");
+    await treeRow(page, "Quarterly plan").click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Share", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Share" });
+    await expect(dialog).toBeVisible();
+    await expect.poll(() => dialog.evaluate((root) => root.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+  });
+
+  test("the anchored share popover closes on Escape", async ({ page, baseURL }) => {
+    await openPage(page, baseURL);
+    await page.getByRole("button", { name: "Share page" }).click();
+    const dialog = page.getByRole("dialog", { name: "Share" });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+  });
+
   test("the page context menu clamps above the viewport's bottom edge", async ({ page, baseURL }) => {
     await openPage(page, baseURL);
     await page.setViewportSize({ width: 1440, height: 420 });

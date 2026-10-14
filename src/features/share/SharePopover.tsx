@@ -43,9 +43,24 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
     function onPointerDown(event: PointerEvent) {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) onClose();
     }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !event.defaultPrevented) onClose();
+    }
     document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
   }, [onClose]);
+
+  // Centred, there is no trigger keeping focus, so it would stay on <body>: start
+  // in the people field, or on the dialog itself when that field is disabled.
+  useEffect(() => {
+    if (!centered) return;
+    const root = rootRef.current;
+    (root?.querySelector<HTMLInputElement>('input:not([disabled])') ?? root)?.focus();
+  }, [centered]);
 
   const generalEntries = model.entries.filter((entry) => entry.target.type === 'workspace' || entry.target.type === 'public');
   const peopleEntries = model.entries.filter((entry) => entry.target.type === 'user' || entry.target.type === 'role');
@@ -55,6 +70,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
       ref={rootRef}
       role="dialog"
       aria-label="Share"
+      tabIndex={-1}
       className={`osio-surface-overlay z-[var(--osio-z-popover)] ${centered ? CENTERED : ANCHORED}`}
     >
       <div className="mb-2 flex items-center justify-between px-2 pt-1">
