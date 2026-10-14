@@ -210,7 +210,7 @@ const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
               className="flex items-center gap-2 rounded-lg border border-[var(--osio-border-default)] px-2 py-1.5"
             >
               <span
-                className="h-5 w-5 rounded border border-[var(--osio-border-default)]"
+                className="h-5 w-5 rounded-[var(--osio-radius-sm)] border border-[var(--osio-border-default)]"
                 style={{ backgroundColor: profile.backgroundColor }}
               />
               <span className="min-w-0 flex-1 truncate text-sm text-[var(--osio-fg-default)]">
@@ -218,7 +218,7 @@ const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
               </span>
               <button
                 type="button"
-                className="rounded px-1.5 py-1 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+                className="rounded-[var(--osio-radius-sm)] px-1.5 py-1 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
                 onClick={() => removeProfile(profile.id)}
               >
                 Remove
