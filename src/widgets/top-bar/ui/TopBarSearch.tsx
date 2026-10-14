@@ -15,10 +15,12 @@ import { Search } from "lucide-react";
 import { cx } from "@osionos/ui/shared/classNames";
 import { isUnifiedSearchEnabled } from "@/shared/config/featureFlags";
 import { ConnectButton } from "@/features/connections/ConnectButton";
+import { useUserStore } from "@/features/auth";
 import type { PaletteCommand } from "../model/commands";
-import { matchCommands, searchMessagesPalette, searchPages, searchPagesRemote, type PaletteResult } from "../model/search";
+import { matchCommands, searchMessagesPalette, searchPages, searchPagesRemote, type PaletteResult, withoutArchived } from "../model/search";
 import { searchPeoplePalette } from "../model/searchPeople";
 import { isCommandMode, usePalette } from "../model/usePalette";
+import { usePageStore } from "@/store/usePageStore";
 
 /** Pull the peer id back out of a `person:<id>` palette result id. */
 function personId(result: PaletteResult): string | null {
@@ -36,6 +38,13 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
 
+  // Subscribe to page revisions for the active workspace so the component
+  // re-renders when a page is archived (archivePage bumps the revision).
+  const workspaceId = useUserStore.getState().activeWorkspace()?._id;
+  const pageRevision = usePageStore(
+    (state) => (workspaceId ? state.pageRevisions[workspaceId] ?? 0 : 0),
+  );
+
   const command = isCommandMode(query);
   // Instant in-memory results (loaded pages) shown immediately; the bridge then
   // returns the authoritative full-workspace matches (incl. nested notes).
@@ -46,7 +55,25 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
   const [remote, setRemote] = useState<{ q: string; rows: PaletteResult[] }>({ q: "", rows: [] });
   const [people, setPeople] = useState<{ q: string; rows: PaletteResult[] }>({ q: "", rows: [] });
   const [messages, setMessages] = useState<{ q: string; rows: PaletteResult[] }>({ q: "", rows: [] });
-  const pages = !command && remote.q === query && remote.rows.length ? remote.rows : instant;
+
+  // Filter remote page rows through withoutArchived using the live page store.
+  // The pageRevision subscription above ensures this re-evaluates when a page is archived.
+  const archivedPredicate = useMemo(
+    () => {
+      // pageRevision invalidates this memo when a page is archived (archivePage bumps it).
+      void pageRevision;
+      return (id: string) => {
+        const page = usePageStore.getState().pageById(id);
+        return page?.archivedAt != null;
+      };
+    },
+    [pageRevision],
+  );
+  const filteredRemote = useMemo(
+    () => withoutArchived(remote.rows, archivedPredicate),
+    [remote.rows, archivedPredicate],
+  );
+  const pages = !command && remote.q === query && filteredRemote.length ? filteredRemote : instant;
   // People (directory) then messages (chat FTS) are merged after page/command
   // matches, never in command mode.
   const results = useMemo<PaletteResult[]>(() => {
@@ -56,7 +83,7 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
   }, [command, pages, people, messages, query]);
 
   useEffect(() => {
-    if (command || !query.trim()) return;
+    if (!open || command || !query.trim()) return;
     const target = query;
     const timer = setTimeout(() => {
       searchPagesRemote(target).then((rows) => setRemote({ q: target, rows })).catch(() => undefined);
@@ -66,7 +93,7 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
       }
     }, 180);
     return () => clearTimeout(timer);
-  }, [command, query]);
+  }, [open, command, query]);
 
   useEffect(() => {
     if (focusSeq === 0) return;

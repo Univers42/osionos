@@ -26,10 +26,16 @@ const IdeTerminal = React.lazy(() =>
   import("@/features/ide/ui/IdeTerminal").then((m) => ({ default: m.IdeTerminal })),
 );
 
+// Lazy like the terminal: the debug panel pulls the DAP controller chunk.
+const DebugPanel = React.lazy(() =>
+  import("@/features/ide/ui/DebugPanel").then((m) => ({ default: m.DebugPanel })),
+);
+
 const TAB_LABEL: Record<DockTab, string> = {
   terminal: "Terminal",
   problems: "Problems",
   output: "Output",
+  debug: "Debug",
   ports: "Ports",
 };
 
@@ -159,6 +165,13 @@ export const WorkbenchDock: React.FC = () => {
         <div role="tabpanel" id={`dock-panel-${active}`} aria-labelledby={`dock-tab-${active}`} className="flex min-h-0 flex-1 flex-col">
           {active === "problems" && <IdeProblemsPanel />}
           {active === "output" && <IdeOutputPanel />}
+          {active === "debug" && (
+            <React.Suspense
+              fallback={<div className="min-h-0 flex-1 px-3 py-2 font-mono text-[12px] text-[var(--osio-code-fg-muted)]">Loading debugger…</div>}
+            >
+              <DebugPanel />
+            </React.Suspense>
+          )}
           {active === "ports" && <IdePortsPanel />}
         </div>
       )}

@@ -132,6 +132,17 @@ export function createDockerClient(env = process.env) {
       if (!/^[a-f0-9]+$/.test(String(execId))) return;
       await call("POST", `/exec/${execId}/resize?w=${w}&h=${h}`).catch(() => {});
     },
+    /** Inspect a finished exec to read its ExitCode. Returns `{ exitCode: null }`
+     *  without any call when execId is not a valid hex id (defensive: callers
+     *  may race with a destroyed socket); otherwise GET /exec/${execId}/json.
+     *  Non-200 or missing ExitCode → null. Pure for tests via the dockerRequest
+     *  seam (the live path is the IDE socket proxy allowlist). */
+    async inspectExec(execId) {
+      if (!/^[a-f0-9]+$/.test(String(execId))) return { exitCode: null };
+      const res = await call("GET", `/exec/${execId}/json`);
+      if (res.status !== 200) return { exitCode: null };
+      return { exitCode: res.body?.ExitCode ?? null };
+    },
     /** Attach a hijacked bidirectional exec stream (PTY / LSP relay). Resolves
      *  `{ stream, execId }`: write = process stdin, data = process stdout; the
      *  execId lets the caller resizeExec the PTY. The socket proxy passes the
@@ -156,7 +167,12 @@ export function createDockerClient(env = process.env) {
                 host, port, method: "POST", path: `/exec/${execId}/start`,
                 headers: { "content-type": "application/json", "content-length": startBody.length, Connection: "Upgrade", Upgrade: "tcp" },
               });
-              startReq.on("upgrade", (_res, socket) => resolve({ stream: socket, execId }));
+              // Bytes that came in the 101's own segment are handed over as `head`, not read
+              // again from the socket: dropped, they were the exec's first output.
+              startReq.on("upgrade", (_res, socket, head) => {
+                if (head.length > 0) socket.unshift(head);
+                resolve({ stream: socket, execId });
+              });
               startReq.on("error", reject);
               startReq.end(startBody);
             });

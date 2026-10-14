@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/20 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/14 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,7 +20,7 @@ import { createReconnectBackoff } from "./reconnectBackoff";
 import { isSandboxOnline, useSandboxHealthStore } from "./sandboxHealthStore";
 import { isDeliberateClose, isTokenExpiredClose } from "./wsCloseCodes";
 import { createLiveInbound } from "./inboundLive";
-import { createSerialQueue, acquireInboundLeadership } from "./inboundPipeline";
+import { createSerialQueue, leadAndAttachOnGain } from "./inboundPipeline";
 import { routeFsEvent } from "./inboundSession";
 
 /**
@@ -53,13 +53,17 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
     const queue = createSerialQueue((error) => {
       ideOutput("fs-sync", `event failed: ${error instanceof Error ? error.message : String(error)}`);
     });
-    // Ponytail: only APPLYING is leader-only. A follower tab's outbound writer
-    // still writes files with its own echo set and ledger, so the leader sees
-    // them as ordinary shell writes: they converge via apply/ignore, and both
-    // tabs editing one page yields a spurious conflict (placeholderText is lost
-    // on the round trip). Gating the writer too was judged not worth it.
-    const leadership = acquireInboundLeadership(workspaceId, globalThis.navigator?.locks);
+    // Ponytail: only APPLYING and REMOVING are leader-only (removesForItsUser: a
+    // remove also needs this tab's app intent, store/appRemovals). A follower
+    // tab's outbound writer still writes and moves files with its own echo set
+    // and ledger, so the leader sees them as ordinary shell writes: they
+    // converge via apply/ignore, and both tabs editing one page yields a
+    // spurious conflict (placeholderText is lost on the round trip). Gating
+    // those too was judged not worth it.
     const { session, attach } = createLiveInbound(workspaceId, queue);
+    // A tab that gains the lead after the socket's "ready" (the leader closed) gets no other
+    // one, and must attach before it may remove anything (inboundPipeline attachUnderLead).
+    const { leadership, readySeen } = leadAndAttachOnGain(workspaceId, globalThis.navigator?.locks, (task) => { void queue.run(task); }, attach);
     const route = { isLeader: () => leadership.isLeader(), queue, session, attach };
 
     const connect = async () => {
@@ -86,6 +90,7 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
         for (const line of lines) {
           const evt = parseFsEvent(line);
           if (!evt) continue;
+          if (evt.event === "ready") readySeen();
           publishFsEvent(workspaceId, evt);
           routeFsEvent(evt, route);
         }

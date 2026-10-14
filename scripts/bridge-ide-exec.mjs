@@ -10,8 +10,9 @@
 //                                                                              //
 // **************************************************************************** //
 
-// WS exec-attach relay: the interactive shell (P3, /api/ide/pty) and the LSP
-// transport (P5, /api/ide/lsp) — the SAME mechanism, differing only in argv.
+// WS exec-attach relay: the interactive shell (P3, /api/ide/pty), the LSP
+// transport (P5, /api/ide/lsp), the DAP transport (P5, /api/ide/debug), and
+// fs-sync (P4, /api/ide/fsync) — the SAME mechanism, differing only in argv.
 // Bridges a browser WebSocket to a hijacked `docker exec` stream on the
 // SERVER-derived sandbox container, through the P2 socket-proxy.
 //
@@ -20,17 +21,17 @@
 // The pure seams (resize parse, auth extraction, std-stream demux) are unit
 // tested in tests/bridge/ide-exec-parse.test.mjs; the docker glue stays
 // live-verified. Failures close with a WS code+reason (4001 auth · 4003 gate
-// off · 4004 no sandbox · 4008 bad lang · 4011 token expired · 4013 overflow · 4029 throttled) so
+// off · 4004 no sandbox · 4008 bad lang or adapter · 4011 token expired · 4013 overflow · 4029 throttled · 4137 LSP out of memory) so
 // the frontend can say WHY instead of "[connection closed]".
 
 import { handshake, encodeFrame, closeFrame, createFrameDecoder } from './ide-ws.mjs';
 import { createDockerClient } from './ide-docker.mjs';
-import { requireSandboxIdentity, deriveNames, buildShellExecSpec, buildFsAgentExecSpec } from './ide-sandbox-spec.mjs';
+import { requireSandboxIdentity, buildShellExecSpec, buildFsAgentExecSpec } from './ide-sandbox-spec.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import {
   bumpContainerSockets, containerHasActivity, getOrCreateSession, attachClient, detachClient, writeStdin,
 } from './ide-term-sessions.mjs';
-import { ensureSandbox } from './bridge-ide-sandbox.mjs';
+import { ensureSandbox, sandboxNames } from './bridge-ide-sandbox.mjs';
 
 // Each live socket pins bridge FDs; cap churn AND simultaneous streams per
 // user so one tenant can't exhaust the shared bridge. (PTY SESSIONS outlive
@@ -99,19 +100,50 @@ function rejectUpgrade(socket, status, text) {
 
 // The only language servers we relay to (P5). Adding one = one line here + the
 // server installed in the sandbox image. Command is server-fixed, never client.
-const LSP_SERVERS = {
+export const LSP_SERVERS = Object.freeze({
   typescript: ['typescript-language-server', '--stdio'],
   python: ['pyright-langserver', '--stdio'],
   // gopls / rust-analyzer / clangd all speak LSP over stdio with no flag.
   go: ['gopls'],
   rust: ['rust-analyzer'],
   clangd: ['clangd'],
-};
+  // jdtls-launch pins the JRE 21 runtime, heap and oom_score_adj; argv stays server-fixed.
+  java: ['jdtls-launch'],
+});
+
+// Debug adapters we relay to (P5). Server-fixed argv; Node is absent on purpose:
+// js-debug needs Node >= 20 and the `startDebugging` reverse request, neither
+// available in the sandbox image.
+export const DAP_SERVERS = Object.freeze({
+  python: ['debugpy-adapter'],
+});
+
+/** Return the argv array for `lang` from `table` only when `lang` is a string
+ *  and an own property of `table`. This blocks prototype-pollution keys
+ *  (`__proto__`, `constructor`, `toString`) that would otherwise return a
+ *  truthy inherited value and reach docker as a non-array `Cmd`. */
+export function serverCommand(table, lang) {
+  if (typeof lang !== 'string' || !Object.hasOwn(table, lang)) {
+    throw Object.assign(new Error('unsupported server'), { status: 400 });
+  }
+  return table[lang];
+}
 
 function lspExecSpec(lang) {
-  const cmd = LSP_SERVERS[lang];
-  if (!cmd) throw Object.assign(new Error('unsupported language server'), { status: 400 });
+  const cmd = serverCommand(LSP_SERVERS, lang);
   return { User: '10001:10001', WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
+}
+
+function dapExecSpec(lang) {
+  const cmd = serverCommand(DAP_SERVERS, lang);
+  return { User: '10001:10001', WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
+}
+
+/** Map an LSP process exit code to a WS close frame. Exit 137 = OOM kill → 4137 with a named
+ *  reason; everything else (including null/undefined) → 1000 'process ended'. Pure for tests. */
+export function lspCloseFor(exitCode) {
+  if (exitCode === 137) return { code: 4137, reason: 'language server out of memory' };
+  return { code: 1000, reason: 'process ended' };
 }
 
 /** An IDE token lives at most 15 minutes; a socket opened with one must not outlive it. App tokens
@@ -127,6 +159,15 @@ export function armTokenExpiry(socket, exp, now = Date.now()) {
   socket.once('close', () => clearTimeout(timer));
 }
 
+// A refusal the user can act on (every box in use: 503) goes out as the close reason; anything
+// else stays generic on the wire and goes to the log. Both catches below used to swallow the
+// error, so a full box cap and a refused create both read as "sandbox unavailable" with nothing
+// logged, and the UI blamed docker-ide (2026-10-14).
+function sandboxRefusal(kind, names, error, fallback) {
+  console.warn(`[osionos-ide] ${kind} could not reach ${names.containerName}: ${error?.message ?? error}`);
+  return error?.status === 503 && typeof error.message === 'string' ? error.message.slice(0, 120) : fallback;
+}
+
 /** Returns an upgrade handler `(request, socket) => boolean` — true when it owns
  *  the WS path. Attach to the bridge's http server `upgrade` event. `allowOrigin`
  *  is the browser-origin predicate (same allowlist as the REST CORS layer). */
@@ -135,8 +176,9 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     const url = new URL(request.url, 'http://ide.local');
     const isPty = url.pathname === '/api/ide/pty';
     const isLsp = url.pathname === '/api/ide/lsp';
+    const isDap = url.pathname === '/api/ide/debug';
     const isFsync = url.pathname === '/api/ide/fsync';
-    if (!isPty && !isLsp && !isFsync) return false;
+    if (!isPty && !isLsp && !isDap && !isFsync) return false;
 
     if (env.OSIONOS_IDE_SANDBOX !== '1' || !env.OSIONOS_IDE_DOCKER_HOST) { rejectUpgrade(socket, 404, 'Not Found'); return true; }
     // Browsers always send Origin on WS upgrades — refuse foreign pages. A
@@ -151,7 +193,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
       const identity = requireSandboxIdentity(session, url.searchParams.get('workspaceId'), env);
       userId = identity.userId;
       tokenExp = session.exp;
-      names = deriveNames(userId, identity.workspaceId);
+      names = sandboxNames(identity);
     } catch (error) {
       // The status tells an unlisted account apart; the reason stays generic.
       if (error?.status === 403) rejectUpgrade(socket, 403, 'Forbidden');
@@ -165,14 +207,19 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     if ((activeExecByUser.get(userId) ?? 0) >= MAX_CONCURRENT_EXEC) { rejectUpgrade(socket, 429, 'Too Many Streams'); return true; }
 
     if (!handshake(request, socket, { protocol: auth.protocol })) return true;
+    // From the 101 on, not once the attach lands: a client reset while the box starts or the
+    // exec is created emitted 'error' with no listener, and the unhandled ECONNRESET took the
+    // bridge down with every terminal shell it held (devil C2, 2026-10-14).
+    socket.on('error', () => socket.destroy());
     armTokenExpiry(socket, tokenExp);
 
     let spec;
     try {
       if (isPty) spec = buildShellExecSpec();
       else if (isFsync) spec = buildFsAgentExecSpec();
+      else if (isDap) spec = dapExecSpec(url.searchParams.get('lang'));
       else spec = lspExecSpec(url.searchParams.get('lang'));
-    } catch { socket.end(closeFrame(4008, 'unsupported language server')); return true; }
+    } catch { socket.end(closeFrame(4008, isDap ? 'unsupported debug adapter' : 'unsupported language server')); return true; }
 
     activeExecByUser.set(userId, (activeExecByUser.get(userId) ?? 0) + 1);
     bumpContainerSockets(names.containerName, 1);
@@ -185,6 +232,15 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
       bumpContainerSockets(names.containerName, -1);
     };
     socket.once('close', release); // covers a close during the pending attach
+    // http.Server keeps an upgraded socket half-open: a client that went away sends a FIN,
+    // the socket emits 'end' and never 'close', and `release` never ran. Six closed tabs and
+    // the account got "429 Too Many Streams" on every terminal until a restart (live VM,
+    // 2026-10-14: four sockets in CLOSE_WAIT, their docker attach streams still open).
+    socket.once('end', () => socket.destroy());
+    // Caveat: a client gone without a FIN (sleep, a dropped network) is noticed by TCP
+    // keepalive alone: probes start after 30 s idle, but their interval and count are the
+    // kernel's (75 s x 9 by default), so its slot comes back after about 11 minutes.
+    socket.setKeepAlive(true, 30_000);
 
     const docker = createDockerClient(env);
 
@@ -202,6 +258,9 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
           spawn: () => docker.attachExec(names.containerName, spec),
         });
       })().then((session) => {
+        // Gone before the attach landed: its 'close' already fired, so a client added now would
+        // never be detached. The shell itself stays, as on any detach.
+        if (socket.destroyed) return;
         const client = {
           sendBinary: (chunk) => (socket.destroyed ? true : socket.write(encodeFrame(chunk, 2))),
           sendClose: (code, reason) => { if (!socket.destroyed) socket.end(closeFrame(code, reason)); },
@@ -222,28 +281,48 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
         });
         socket.on('close', () => detachClient(session, client));
         socket.on('error', () => detachClient(session, client));
-      }).catch(() => { release(); if (!socket.destroyed) socket.end(closeFrame(4004, 'sandbox unavailable')); });
+      }).catch((error) => {
+        release();
+        const reason = sandboxRefusal('terminal', names, error, 'sandbox unavailable');
+        if (!socket.destroyed) socket.end(closeFrame(4004, reason));
+      });
       return true;
     }
 
-    // LSP/fs-sync may start a stopped box too (never one stopped at the hard cap — see
+    // LSP/DAP/fs-sync may start a stopped box too (never one stopped at the hard cap — see
     // ensureSandbox); a refusal lands in the catch below, which releases the stream cap.
-    ensureSandbox(env, names, { passive: true }).then(() => docker.attachExec(names.containerName, spec)).then(({ stream: duplex }) => {
+    ensureSandbox(env, names, { passive: true }).then(() => docker.attachExec(names.containerName, spec)).then(({ stream: duplex, execId }) => {
+      // Gone before the attach landed: its 'close' handler below would never run, so the attach
+      // stayed open and a Tty:false process never saw its stdin end (devil C2, 2026-10-14).
+      if (socket.destroyed) { duplex.destroy(); return; }
       const decode = createFrameDecoder();
-      // LSP is Tty:false — strip docker's 8-byte mux headers (see the demux
-      // doc). PTY/fsync are Tty:true and arrive raw.
-      const demux = isLsp ? createStdStreamDemux() : null;
+      // LSP, DAP and fs-sync are Tty:false — strip docker's 8-byte mux headers (see the
+      // demux doc). Only the PTY, handled above, is Tty:true and arrives raw.
+      const demux = createStdStreamDemux();
       // Backpressure: pause the container stream when the client stops draining,
       // so a slow/zero-window reader can't hoard unbounded bytes in the bridge.
       duplex.on('data', (chunk) => {
         if (socket.destroyed) return;
         let ok = true;
-        if (demux) { for (const payload of demux(chunk)) ok = socket.write(encodeFrame(payload, 2)) && ok; }
-        else ok = socket.write(encodeFrame(chunk, 2));
+        for (const payload of demux(chunk)) ok = socket.write(encodeFrame(payload, 2)) && ok;
         if (!ok) duplex.pause();
       });
       socket.on('drain', () => duplex.resume());
-      duplex.on('close', () => { if (!socket.destroyed) socket.end(closeFrame(1000, 'process ended')); });
+      duplex.on('close', () => {
+        if (socket.destroyed) return;
+        if (isLsp) {
+          // Inspect the exec to learn the exit code; on failure fall back to 1000.
+          docker.inspectExec(execId).then(({ exitCode }) => {
+            const { code, reason } = lspCloseFor(exitCode);
+            if (!socket.destroyed) socket.end(closeFrame(code, reason));
+          }).catch(() => {
+            if (!socket.destroyed) socket.end(closeFrame(1000, 'process ended'));
+          });
+        } else {
+          // DAP and fs-sync: close with 1000 'process ended'.
+          if (!socket.destroyed) socket.end(closeFrame(1000, 'process ended'));
+        }
+      });
       duplex.on('error', () => { if (!socket.destroyed) socket.end(closeFrame(1011, 'backend stream error')); });
       socket.on('data', (chunk) => {
         let messages;
@@ -251,12 +330,17 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
         for (const m of messages) {
           if (m.opcode === 8) { duplex.end(); return; } // client close
           if (m.opcode !== 1 && m.opcode !== 2) continue;
-          duplex.write(m.data); // LSP/fsync: per-connection, no resize channel
+          duplex.write(m.data); // LSP/DAP/fsync: per-connection, no resize channel
         }
       });
       socket.on('close', () => duplex.destroy());
       socket.on('error', () => duplex.destroy());
-    }).catch(() => { release(); if (!socket.destroyed) socket.end(closeFrame(4004, 'no running sandbox')); });
+    }).catch((error) => {
+      release();
+      const kind = isFsync ? 'fs-sync' : (isDap ? 'debug adapter' : 'language server');
+      const reason = sandboxRefusal(kind, names, error, 'no running sandbox');
+      if (!socket.destroyed) socket.end(closeFrame(4004, reason));
+    });
     return true;
   };
 }

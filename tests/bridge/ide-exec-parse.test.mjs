@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseResizeFrame, extractWsAuth, createStdStreamDemux, hasActiveExec } from "../../scripts/bridge-ide-exec.mjs";
+import { parseResizeFrame, extractWsAuth, createStdStreamDemux, hasActiveExec, lspCloseFor, serverCommand, LSP_SERVERS, DAP_SERVERS } from "../../scripts/bridge-ide-exec.mjs";
 import { handshake, closeFrame } from "../../scripts/ide-ws.mjs";
 
 test("parseResizeFrame accepts exactly one full APC frame", () => {
@@ -74,4 +74,53 @@ test("std-stream demux strips 8-byte mux headers, keeps stdout, drops stderr, su
 
 test("hasActiveExec is false for an unknown container", () => {
   assert.equal(hasActiveExec("ide-" + "0".repeat(32)), false);
+});
+
+test("lspCloseFor maps exit 137 to 4137 with OOM reason", () => {
+  assert.deepEqual(lspCloseFor(137), { code: 4137, reason: "language server out of memory" });
+});
+
+test("lspCloseFor maps other exit codes to 1000", () => {
+  assert.deepEqual(lspCloseFor(0), { code: 1000, reason: "process ended" });
+  assert.deepEqual(lspCloseFor(1), { code: 1000, reason: "process ended" });
+  assert.deepEqual(lspCloseFor(null), { code: 1000, reason: "process ended" });
+  assert.deepEqual(lspCloseFor(undefined), { code: 1000, reason: "process ended" });
+  assert.deepEqual(lspCloseFor(255), { code: 1000, reason: "process ended" });
+});
+
+test("serverCommand returns argv for a known language from DAP_SERVERS", () => {
+  assert.deepEqual(serverCommand(DAP_SERVERS, "python"), ["debugpy-adapter"]);
+});
+
+test("serverCommand returns argv for a known language from LSP_SERVERS", () => {
+  assert.deepEqual(serverCommand(LSP_SERVERS, "java"), ["jdtls-launch"]);
+});
+
+test("serverCommand throws for unknown language", () => {
+  assert.throws(() => serverCommand(DAP_SERVERS, "node"), { status: 400 });
+  assert.throws(() => serverCommand(LSP_SERVERS, "node"), { status: 400 });
+});
+
+test("serverCommand throws for empty string", () => {
+  assert.throws(() => serverCommand(DAP_SERVERS, ""), { status: 400 });
+  assert.throws(() => serverCommand(LSP_SERVERS, ""), { status: 400 });
+});
+
+test("serverCommand throws for undefined", () => {
+  assert.throws(() => serverCommand(DAP_SERVERS, undefined), { status: 400 });
+  assert.throws(() => serverCommand(LSP_SERVERS, undefined), { status: 400 });
+});
+
+test("serverCommand throws for prototype pollution keys", () => {
+  assert.throws(() => serverCommand(DAP_SERVERS, "__proto__"), { status: 400 });
+  assert.throws(() => serverCommand(DAP_SERVERS, "constructor"), { status: 400 });
+  assert.throws(() => serverCommand(DAP_SERVERS, "toString"), { status: 400 });
+  assert.throws(() => serverCommand(LSP_SERVERS, "__proto__"), { status: 400 });
+  assert.throws(() => serverCommand(LSP_SERVERS, "constructor"), { status: 400 });
+  assert.throws(() => serverCommand(LSP_SERVERS, "toString"), { status: 400 });
+});
+
+test("LSP_SERVERS and DAP_SERVERS are frozen", () => {
+  assert.equal(Object.isFrozen(LSP_SERVERS), true);
+  assert.equal(Object.isFrozen(DAP_SERVERS), true);
 });

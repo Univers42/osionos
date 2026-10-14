@@ -98,6 +98,37 @@ test("B2+B3: an archive clears the ledger at the path and remembers its hash; th
   assert.equal(syncedHashOf(world.workspaceId, "A.omd"), await sha16(world.textOf("A")));
 });
 
+// The writer removes an archived page's file only when the file still holds the agreement
+// it read when it planned (outboundRun). That agreement must be gone before the store can
+// show the page archived, whatever the store awaits: a writer round in between would read
+// the old one and remove a file `git clone` had just put back with the same bytes.
+test("B2: the agreement at the path is gone before the store is asked to archive the page", async () => {
+  const world = await synced([blockPage("A", "A")]);
+  const archive = world.store.archivePage;
+  const seen: (string | null)[] = [];
+  world.store.archivePage = async (id) => { seen.push(syncedHashOf(world.workspaceId, "A.omd")); return archive(id); };
+  await world.shellDelete("A.omd");
+  await world.elapse();
+  assert.ok(!isLive(world.pageOf("A")));
+  assert.deepEqual(seen, [null]);
+});
+
+// Live VM, 2026-10-14: seven archives answered 502; the store toasted and kept the pages,
+// and Output still said each one was in the trash.
+test("B2: an archive the store does not apply keeps the page and its agreement, and says so", async () => {
+  const world = await synced([blockPage("A", "A")]);
+  const agreed = syncedHashOf(world.workspaceId, "A.omd");
+  world.store.archivePage = async () => undefined;
+  useIdeOutputBus.getState().clear();
+  await world.shellDelete("A.omd");
+  await world.elapse();
+  assert.ok(isLive(world.pageOf("A")));
+  assert.equal(syncedHashOf(world.workspaceId, "A.omd"), agreed);
+  assert.equal(world.session.view.archivedByInbound("A"), undefined);
+  assert.ok(said("A.omd: deleted in the shell, but the page could not be moved to the trash"));
+  assert.ok(!said("A.omd: deleted in the shell — the page is in the trash"));
+});
+
 test("B2: mv A.omd B.omd ⇒ one page, same id, the ledger leaves A.omd and B.omd records the event hash", async () => {
   const world = await synced([blockPage("A", "A")]);
   await world.shellDelete("A.omd");

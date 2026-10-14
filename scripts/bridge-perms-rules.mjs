@@ -22,6 +22,7 @@
  */
 
 import { httpError } from './bridge-social-core.mjs';
+import { readBaasJson } from './bridge-baas-body.mjs';
 
 const TABLE = 'osionos_share_rules';
 const MIGRATION = 'models/osionos-share-rules-migration.sql';
@@ -101,9 +102,14 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		const response = await fetchImpl(`${config.baasUrl}/rest/v1/${table}?${query}`, {
 			method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(TIMEOUT_MS),
 		});
-		const text = await response.text().catch(() => '');
-		if (response.ok) return text ? JSON.parse(text) : [];
-		throw storeFailure(response.status, text);
+		// A non-2xx is classified by its status and its error code, so that body is read
+		// here — where one that never arrives falls back to '' and the status alone decides.
+		// Ponytail: with that body lost the SQLSTATE is lost too, so a status-500 answer
+		// that meant "table missing" reads as 502 (failed) instead of 503 (unavailable).
+		if (!response.ok) throw storeFailure(response.status, await response.text().catch(() => ''));
+		// An empty answer means "no rules", which is an access decision — so a body that
+		// stops mid-stream, or one that is not JSON, is reported as the broken read it is.
+		return readBaasJson(response, { service: 'share rules', empty: [], fail: (message) => httpError(message, 502) });
 	}
 
 	function storeFailure(status, text) {

@@ -23,9 +23,9 @@ import { bearerToken, readJsonBody } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createDockerClient } from './ide-docker.mjs';
 import { createStdStreamDemux } from './bridge-ide-exec.mjs';
-import { jsonReply as reply } from './bridge-ide-sandbox.mjs';
+import { jsonReply as reply, sandboxNames } from './bridge-ide-sandbox.mjs';
 import {
-  requireSandboxIdentity, deriveNames, buildGitExecSpec, buildSearchExecSpec, buildWriteExecSpec, buildFsOpSpec, buildPortsExecSpec, buildPortTunnelExecSpec,
+  requireSandboxIdentity, buildGitExecSpec, buildSearchExecSpec, buildWriteSpecs, buildFsOpSpec, buildPortsExecSpec, buildPortTunnelExecSpec,
 } from './ide-sandbox-spec.mjs';
 
 const BODY_LIMIT = 1024 * 1024; // editor writes carry (base64) file content
@@ -51,11 +51,21 @@ export function parseRipgrepJson(output) {
 /** Auth + identity + a running sandbox, or throw a {status} error. Rate-limit is
  *  charged BEFORE the shared-daemon inspect, so a flood is rejected locally with
  *  429 and never load-amplifies onto the docker daemon (review finding). */
+/** Runs exec specs one after another and answers the first non-zero exit, or the last. */
+async function runInOrder(ctx, specs) {
+  let result = { output: '', exitCode: 0 };
+  for (const spec of specs) {
+    result = await ctx.docker.runExec(ctx.names.containerName, spec);
+    if (result.exitCode !== 0) break;
+  }
+  return result;
+}
+
 async function resolveSandbox(request, payload, env, config, verifySession, bucket = { id: 'ide-ops', capacity: 60, refillPerSec: 1 }) {
   const session = verifySession(bearerToken(request), config);
   const identity = requireSandboxIdentity(session, payload?.workspaceId, env);
   takeToken(`${bucket.id}:${identity.userId}`, { capacity: bucket.capacity, refillPerSec: bucket.refillPerSec });
-  const names = { ...identity, ...deriveNames(identity.userId, identity.workspaceId) };
+  const names = sandboxNames(identity);
   const docker = createDockerClient(env);
   const info = await docker.inspect(names.containerName);
   if (!info?.State?.Running) throw Object.assign(new Error('No running sandbox. Open the workspace first.'), { status: 409 });
@@ -195,13 +205,15 @@ export function createIdeOpsHandler({ config, verifySession, env = process.env }
         // the bridge builds the server-derived spec and returns the RAW exec
         // result — parsing and the error taxonomy live client-side where they
         // are unit-tested. Legacy writes (no `op`, raw `content`) stay below.
-        const spec = buildFsOpSpec(payload.op, payload);
-        const { output, exitCode } = await ctx.docker.runExec(ctx.names.containerName, spec);
+        const specs = payload.op === 'write' && payload.part === undefined
+          ? buildWriteSpecs(String(payload.path ?? ''), payload.contentBase64)
+          : [buildFsOpSpec(payload.op, payload)];
+        const { output, exitCode } = await runInOrder(ctx, specs);
         reply(response, 200, { ok: exitCode === 0, exitCode, output: String(output).slice(0, 1024 * 1024) }, requestConfig);
       } else {
         const content = typeof payload.content === 'string' ? payload.content : '';
-        const spec = buildWriteExecSpec(String(payload.path ?? ''), Buffer.from(content).toString('base64'));
-        const { exitCode } = await ctx.docker.runExec(ctx.names.containerName, spec);
+        const specs = buildWriteSpecs(String(payload.path ?? ''), Buffer.from(content).toString('base64'));
+        const { exitCode } = await runInOrder(ctx, specs);
         reply(response, 200, { ok: exitCode === 0 }, requestConfig);
       }
     } catch (error) {

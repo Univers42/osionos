@@ -14,7 +14,9 @@ import React from "react";
 import { editor, KeyCode, KeyMod } from "../model/monacoRuntime";
 import { acquireModel, releaseModel } from "../model/monacoModels";
 import { loadMonacoLanguage } from "../model/monacoLanguages";
+import { indentsWithTabs } from "../model/ideLanguages";
 import { editorFontFamily, OSIO_THEME, watchEditorTheme } from "./monacoTheme";
+import { attachBreakpoints } from "./monacoBreakpoints";
 
 const SAVE_DEBOUNCE_MS = 1200;
 
@@ -44,7 +46,10 @@ export interface MonacoEditorConfig {
 // scroll, no indent/bracket guides, no bracket-pair colors (the palette owns
 // bracket color), and automaticLayout because the IDE's dockable panels and zen
 // mode resize the host without a window resize event. Metrics match the shipped
-// editor: 13px, 1.6 line-height (21px), 10px vertical padding, 4-space indent.
+// editor: 13px, 1.6 line-height (21px), 10px vertical padding, tab width 4.
+// Indentation is per model (indentsWithTabs + detectIndentation at mount), never
+// global: insertSpaces here made Monaco force spaces on every model, so a Makefile
+// typed in the IDE failed with "missing separator" and C broke 42's norm.
 const EDITOR_OPTIONS: editor.IStandaloneEditorConstructionOptions = {
   automaticLayout: true,
   fontSize: 13,
@@ -52,8 +57,6 @@ const EDITOR_OPTIONS: editor.IStandaloneEditorConstructionOptions = {
   fontLigatures: false,
   padding: { top: 10, bottom: 10 },
   tabSize: 4,
-  insertSpaces: true,
-  detectIndentation: false,
   minimap: { enabled: false },
   wordBasedSuggestions: "off",
   suggest: { showWords: false, preview: false },
@@ -116,6 +119,11 @@ export function useMonacoEditor(
     if (!host || !blockId) return;
     const current = configRef.current;
     const model = acquireModel(current.uri, current.readInitialText(), "plaintext", pageId);
+    model.detectIndentation(!indentsWithTabs(current.uri), 4);
+    // The sandbox is Linux whatever the browser runs on: Monaco's default line ending follows
+    // the user agent, so in a Windows browser a new Makefile was written "all:\r\n" and make
+    // refused it (2026-10-14). A file whose own text holds CRLF keeps it.
+    if (!current.readInitialText().includes("\r\n")) model.setEOL(editor.EndOfLineSequence.LF);
     const stopTheme = watchEditorTheme(host);
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const instance = editor.create(host, {
@@ -130,6 +138,7 @@ export function useMonacoEditor(
     // dispatcher): Cmd/Ctrl+Enter runs, Cmd/Ctrl+Alt+L formats.
     instance.addCommand(KeyMod.CtrlCmd | KeyCode.Enter, () => configRef.current.onRun());
     instance.addCommand(KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyL, () => configRef.current.onFormat());
+    const stopBreakpoints = attachBreakpoints(instance, current.uri);
 
     const reportStatus = () => {
       const position = instance.getPosition();
@@ -163,6 +172,7 @@ export function useMonacoEditor(
       flush();
       for (const sub of subscriptions) sub.dispose();
       stopTheme();
+      stopBreakpoints();
       instance.dispose();
       editorRef.current = null;
       releaseModel(model);

@@ -14,3 +14,26 @@
 [data-osio-ide] .monaco-editor .parameter-hints-widget {
   font-family: var(--osio-font-family-sans);
 }
+
+/* Debug gutter: 10px breakpoint dot, the stopped-line arrow, its wash. */
+[data-osio-ide] .monaco-editor .osio-breakpoint {
+  width: 10px;
+  height: 10px;
+  margin: 5px auto 0;
+  border-radius: 50%;
+  background: var(--osio-danger);
+  cursor: pointer;
+}
+
+[data-osio-ide] .monaco-editor .osio-debug-current {
+  width: 0;
+  height: 0;
+  margin: 5px auto 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 8px solid var(--osio-warning);
+}
+
+[data-osio-ide] .monaco-editor .osio-debug-line {
+  background: color-mix(in srgb, var(--osio-warning) 18%, transparent);
+}

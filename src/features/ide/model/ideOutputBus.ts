@@ -14,7 +14,7 @@ import { create } from "zustand";
 
 /** The dock's OUTPUT feed: infrastructure logs (fs-sync, terminal lifecycle,
  *  runner, conflicts) that previously vanished into the devtools console. */
-export type IdeOutputChannel = "fs-sync" | "terminal" | "runner" | "sync" | "lsp";
+export type IdeOutputChannel = "fs-sync" | "terminal" | "runner" | "sync" | "lsp" | "debug";
 export type IdeOutputLine = { channel: IdeOutputChannel; text: string; atMs: number };
 
 const MAX_LINES = 2000;

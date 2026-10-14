@@ -33,8 +33,9 @@ import {
   type ObjectDatabaseSyncHooks,
 } from "./objectDatabaseBridgeSync";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
+import { createKnownStateWriter, KNOWN_DATABASE_STATE_STORAGE_KEY } from "./knownDatabaseStorage";
 
-export const KNOWN_DATABASE_STATE_STORAGE_KEY = "osionos.knownDatabaseState.v1";
+export { KNOWN_DATABASE_STATE_STORAGE_KEY };
 const KNOWN_DATABASE_STATE_FLUSH_DELAY_MS = 1000;
 
 type KnownDatabaseStoreState = {
@@ -169,13 +170,7 @@ export function flushKnownDatabaseStatePersist() {
     // server push below, which holds slices past this tick) must not alias
     // the live store state the pending ref now points at.
     const nextState = cloneState(pendingState);
-    timed("persistKnownDatabaseState", () => {
-      try {
-        globalThis.localStorage.setItem(KNOWN_DATABASE_STATE_STORAGE_KEY, JSON.stringify(nextState));
-      } catch {
-        // localStorage can be unavailable or quota-limited.
-      }
-    });
+    timed("persistKnownDatabaseState", () => writeKnownState(JSON.stringify(nextState)));
     // Write-through: mirror every user-created database to the server (bridge →
     // Postgres, owner-isolated). No-ops offline / without a session — see module.
     pushDirtyObjectDatabases(nextState, seedDatabaseIds());
@@ -185,6 +180,9 @@ export function flushKnownDatabaseStatePersist() {
 if (globalThis.window !== undefined) {
   globalThis.addEventListener("beforeunload", flushKnownDatabaseStatePersist);
 }
+
+// Makes room in the page caches when the origin is full (knownDatabaseStorage).
+const writeKnownState = createKnownStateWriter(flushKnownDatabaseStatePersist);
 
 function scheduleKnownDatabaseStatePersist(state: NotionState) {
   pendingKnownDatabaseState = state;

@@ -111,7 +111,7 @@ async function postToken(body, bearer) {
 const granted = await postToken({ channelId: 'general', room: 'agency-standup', displayName: 'Helena Voss' }, session.token);
 const grantedPayload = granted.status === 200 ? verifyLivekitToken(granted.body.token, rtc.apiSecret) : null;
 check('POST /api/rtc/token issues a joinable token', granted.status === 200 && granted.body?.ok === true
-	&& grantedPayload?.sub === MEMBER_ID && grantedPayload?.video?.room === 'agency-standup'
+	&& grantedPayload?.sub === MEMBER_ID && grantedPayload?.video?.room === 'channel-general'
 	&& typeof granted.body?.url === 'string', `status=${granted.status} url=${granted.body?.url}`);
 const unauthorized = await postToken({ channelId: 'general', room: 'agency-standup' }, undefined);
 check('POST /api/rtc/token without bearer → 401', unauthorized.status === 401, `status=${unauthorized.status}`);

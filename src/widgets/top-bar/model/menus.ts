@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import { useUserStore } from "@/features/auth";
-import { openOrCreateTasksFile, runActiveFile, runDefaultTask } from "@/features/ide/model/ideTasks";
+import { debugActiveFile, openOrCreateTasksFile, runActiveFile, runDefaultTask } from "@/features/ide/model/ideTasks";
 import { isDrawEnabled, isQuickCaptureEnabled, isWhiteboardEnabled } from "@/shared/config/featureFlags";
 import { useQuickCapture } from "@/features/quick-capture/model/useQuickCapture";
 import { toggleThemeMode } from "@/shared/config/theme";
@@ -138,6 +138,7 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
         { id: "term.run-task", label: "Run Task", run: () => void runDefaultTask() },
         { id: "term.run-build", label: "Run Build Task", run: () => void runDefaultTask("build") },
         { id: "term.run-active", label: "Run Active File", run: () => void runActiveFile() },
+        { id: "term.debug-active", label: "Debug Python File", accelerator: "F5", run: () => void debugActiveFile() },
         { id: "term.run-test", label: "Run Selected Test", run: () => void runDefaultTask("test"), separatorAfter: true },
         { id: "term.configure", label: "Configure Tasks", run: () => void openOrCreateTasksFile() },
         { id: "term.configure-build", label: "Configure Default Build Task", run: () => void openOrCreateTasksFile() },

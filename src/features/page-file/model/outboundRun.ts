@@ -12,7 +12,7 @@
 
 import type { PageEntry } from "@/entities/page";
 import { sha16 } from "@/features/ide/model/ideFsEcho";
-import { clearSyncedHash, moveSyncedDir, recordOutboundWrite, recordSyncedHash, syncedHashOf } from "@/features/ide/model/ideSyncEngine";
+import { clearSyncedHash, moveSyncedDir, recordOutboundWrite, recordSyncedHash, syncedHashOf, takeShellArchived } from "@/features/ide/model/ideSyncEngine";
 import type { Move, OutboundPlan } from "./outboundPlan";
 import { kindOfPage } from "./pagePaths";
 import { pageFileText } from "./pageFileText";
@@ -38,7 +38,20 @@ export type OutboundRunCtx = {
   pageById(id: string): PageEntry | undefined;
   io: OutboundIo;
   hash?: OutboundHash;
+  /** True for a page this tab's user archived or deleted in the app (appRemovals takeAppRemoval);
+   *  asked once per planned remove, which consumes the intent. Any other remove leaves the file. */
+  mayRemove(pageId: string): boolean;
 };
+
+/** The skip reason of a file whose page went without this tab's user removing it; usePageFileWriter
+ *  counts these in its Output line. */
+export const LEFT_WITHOUT_PAGE = "its page was removed outside this tab, so the file stays";
+
+/** The keep reason for a path this browser never synced: no agreement exists, so the file stays. */
+export const NOT_AGREED = "not synced from this browser yet, so the file stays";
+
+/** The keep reason for bytes that differ from the one agreement this browser holds. */
+const SHELL_CHANGED = "changed in the shell since the last sync";
 
 export type OutboundReport = {
   moved: string[];
@@ -79,10 +92,12 @@ export function makeRun(ctx: OutboundRunCtx): Run {
  *  removes. Never throws — a phase-level failure lands in the report. O(n). */
 export async function runOutbound(ctx: OutboundRunCtx): Promise<Run> {
   const run = makeRun(ctx);
+  const agreedAtPlan = new Map(ctx.plan.removes.map((remove) => [remove.path, syncedHashOf(ctx.workspaceId, remove.path)]));
   try {
     await runMoves(ctx, run);
     await runWrites(ctx, run);
-    await runRemoves(ctx, run);
+    await runEnteredCode(ctx, run);
+    await runRemoves(ctx, run, agreedAtPlan);
   } catch (error) {
     run.report.failed.push({ path: "plan", reason: messageOf(error) });
   }
@@ -121,6 +136,7 @@ async function runWrites(ctx: OutboundRunCtx, run: Run): Promise<void> {
     const page = ctx.pageById(id);
     if (!page) { run.report.skipped.push({ path: id, reason: "page no longer live" }); continue; }
     const kind = kindOfPage(page);
+    // Edits of a code page are saved by its editor; only a page that newly enters the index is written, below.
     if (kind === "code") continue;
     const own = ctx.pathOf(id);
     if (own === undefined) { run.report.skipped.push({ path: id, reason: "not in the index" }); continue; }
@@ -129,15 +145,51 @@ async function runWrites(ctx: OutboundRunCtx, run: Run): Promise<void> {
 }
 
 /**
+ * Remake the missing file of each newly entered CODE page (restore/created) through writePageFile,
+ * so the agreement and echo bookkeeping match other writes. An existing file stays with the shell
+ * or the editor, reported nowhere. O(n) reads plus O(k) writes, k = missing files.
+ * Ponytail: read-then-write is not atomic. A shell file landing between this read and
+ * writePageFile's is kept and reported, but one landing after writePageFile's own read is
+ * overwritten (the same gap every write here has). And a shell `rm` handled by the inbound while
+ * this loop runs can be undone: the file comes back with no page behind it; delete it again.
+ */
+async function runEnteredCode(ctx: OutboundRunCtx, run: Run): Promise<void> {
+  for (const id of ctx.plan.enteredCode) {
+    const page = ctx.pageById(id);
+    if (page === undefined) continue;
+    const own = ctx.pathOf(id);
+    if (own === undefined) continue;
+    const target = fileOfEntry({ path: own, kind: kindOfPage(page) });
+    let current: string | null;
+    try {
+      current = await ctx.io.read(target);
+    } catch (error) {
+      run.report.failed.push({ path: target, reason: messageOf(error) });
+      continue;
+    }
+    if (current !== null) continue;
+    await writePageFile(ctx, run, page, target);
+  }
+}
+
+/** The reason a planned write or remove leaves the file as the shell has it, or null when
+ *  the change may proceed: never synced here (NOT_AGREED), bytes differing from the one
+ *  agreement held (SHELL_CHANGED); an absent file is written. O(1). */
+function keepReason(agreed: string | null | undefined, presentHash: string | null): string | null {
+  if (presentHash === null) return null;
+  if (agreed === undefined || agreed === null) return NOT_AGREED;
+  return presentHash === agreed ? null : SHELL_CHANGED;
+}
+
+/**
  * Write a page's text at `target` unless the shell owns what is there. Overwritten only when
  * absent or still the last agreed content: a file the shell changed since the last sync is
  * KEPT (the inbound side surfaces it as a conflict), never replaced — the same rule as removes.
+ * A path this browser never synced (no agreement at all) is kept too: nothing was agreed with
+ * the shell, so nothing may be replaced.
  * One read + one hash per write that is not already synced.
  * Ponytail: read-then-write is not atomic — a shell write landing between the two is
  * overwritten here, and its fs event then re-applies it inbound (the shell wins that ms race).
- * Ponytail: an inbound apply moves the page's `updatedAt`, so every shell save comes back
- * out once with only its `updated:` line changed (finding 19) — one extra write, never a loop
- * (its echo matches the ledger; ide-inbound-loop.test.ts). Fix: leave `updated` out of the file.
  */
 async function writePageFile(ctx: OutboundRunCtx, run: Run, page: PageEntry, target: string): Promise<void> {
   const { workspaceId, io } = ctx;
@@ -151,8 +203,9 @@ async function writePageFile(ctx: OutboundRunCtx, run: Run, page: PageEntry, tar
       run.report.skipped.push({ path: target, reason: "already synced" });
       return;
     }
-    if (currentHash !== null && currentHash !== syncedHashOf(workspaceId, target)) {
-      run.report.kept.push({ path: target, reason: "changed in the shell since the last sync" });
+    const reason = keepReason(syncedHashOf(workspaceId, target), currentHash);
+    if (reason !== null) {
+      run.report.kept.push({ path: target, reason });
       return;
     }
     const undo = recordOutboundWrite(workspaceId, target, hash);
@@ -168,10 +221,34 @@ async function writePageFile(ctx: OutboundRunCtx, run: Run, page: PageEntry, tar
   }
 }
 
-async function runRemoves(ctx: OutboundRunCtx, run: Run): Promise<void> {
+/** A file is removed only when it still holds what was agreed when the plan was made,
+ *  read before any await: the inbound side records the agreement of a file it just made
+ *  a NEW page from, at the same path, and a remove reading that one deleted the file.
+ *  A path this browser never synced (no agreement at all — a fresh browser) is kept, not
+ *  removed: nothing was agreed, so the shell's bytes may not be judged.
+ *  A page the shell deleted is never removed here (takeShellArchived), nor one this tab's user
+ *  did not remove in the app (mayRemove): a refetch that shows a page gone says nothing about
+ *  the bytes at its path, which a `git clone` may just have put back (devil P1, H1, R1). Both
+ *  skips forget the planned agreement, so no later round reads it as a match; the agreement
+ *  cleared is only ever the planned one, never a new page's recorded meanwhile. */
+async function runRemoves(ctx: OutboundRunCtx, run: Run, agreedAtPlan: ReadonlyMap<string, string | null>): Promise<void> {
+  const forgetPlanned = (path: string): void => {
+    if (syncedHashOf(ctx.workspaceId, path) === agreedAtPlan.get(path)) clearSyncedHash(ctx.workspaceId, path);
+  };
   for (const remove of ctx.plan.removes) {
+    const removedInApp = ctx.mayRemove(remove.id); // first, so the intent never outlives its round
+    if (takeShellArchived(ctx.workspaceId, remove.id)) {
+      forgetPlanned(remove.path);
+      run.report.skipped.push({ path: remove.path, reason: "deleted in the shell" });
+      continue;
+    }
     const page = ctx.pageById(remove.id);
     if (page && kindOfPage(page) === "dir") continue; // never delete a folder
+    if (!removedInApp) {
+      forgetPlanned(remove.path);
+      run.report.skipped.push({ path: remove.path, reason: LEFT_WITHOUT_PAGE });
+      continue;
+    }
     let current: string | null;
     try {
       current = await ctx.io.read(remove.path);
@@ -179,15 +256,15 @@ async function runRemoves(ctx: OutboundRunCtx, run: Run): Promise<void> {
       run.report.failed.push({ path: remove.path, reason: messageOf(error) });
       continue;
     }
-    if (current === null) { clearSyncedHash(ctx.workspaceId, remove.path); continue; }
+    if (current === null) { forgetPlanned(remove.path); continue; }
     try {
-      const hash = await run.hash(current);
-      if (hash !== syncedHashOf(ctx.workspaceId, remove.path)) {
-        run.report.kept.push({ path: remove.path, reason: "changed in the shell since the last sync" });
+      const reason = keepReason(agreedAtPlan.get(remove.path), await run.hash(current));
+      if (reason !== null) {
+        run.report.kept.push({ path: remove.path, reason });
         continue;
       }
       await ctx.io.remove(remove.path);
-      clearSyncedHash(ctx.workspaceId, remove.path);
+      forgetPlanned(remove.path);
       run.report.removed.push(remove.path);
     } catch (error) {
       run.report.failed.push({ path: remove.path, reason: messageOf(error) });

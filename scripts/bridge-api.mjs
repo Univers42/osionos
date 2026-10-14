@@ -22,6 +22,7 @@ import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
 import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
 import { publishRealtime } from './bridge-social-core.mjs';
+import { readBaasJson } from './bridge-baas-body.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
@@ -480,6 +481,11 @@ function requireBaasConfig(config) {
 	}
 }
 
+/** The 502 a broken BaaS body raises here; readBaasJson only words the message. */
+function baasFail(message) {
+	return Object.assign(new Error(message), { status: 502 });
+}
+
 async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer } = {}) {
 	requireBaasConfig(config);
 	const headers = {
@@ -495,17 +501,29 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
 		headers,
 		body: body === undefined ? undefined : JSON.stringify(body),
 	}, BAAS_FETCH_TIMEOUT_MS);
-	const text = await response.text().catch(() => '');
 	if (!response.ok) {
+		const text = await response.text().catch(() => '');
 		const status = responseStatusForBaasFailure(response.status);
 		throw Object.assign(new Error(`BaaS request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
 	}
-	if (!text) return null;
-	try {
-		return JSON.parse(text);
-	} catch {
-		return null;
+	return readBaasJson(response, { service: 'service-role PostgREST', empty: null, fail: baasFail });
+}
+
+/**
+ * Read one BaaS answer as JSON for a caller that has a fixed way of naming a failure.
+ * The non-2xx branch stays here — each reader maps that status itself and needs the
+ * body text to map it — while the broken-read rule for a 2xx lives in one place.
+ * `empty` is what the caller answers when the response carries no body at all; a body
+ * that stops mid-stream, or one that is not JSON, is a 502: every caller here answers
+ * "no rows" through `empty`, and a decision taken on that is taken on missing data.
+ */
+async function readJsonBody(response, { service, empty, failureStatus }) {
+	if (!response.ok) {
+		const text = await response.text().catch(() => '');
+		const status = failureStatus(response.status, text);
+		throw Object.assign(new Error(`${service} request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
 	}
+	return readBaasJson(response, { service, empty, fail: baasFail });
 }
 
 /**
@@ -552,17 +570,7 @@ async function baasQueryPost(config, fetchImpl, path, body, timeoutMs = BAAS_FET
 		headers: queryRouterHeaders(config, { 'Content-Type': 'application/json' }),
 		body: JSON.stringify(body),
 	}, timeoutMs);
-	const text = await response.text().catch(() => '');
-	if (!response.ok) {
-		const status = responseStatusForBaasFailure(response.status);
-		throw Object.assign(new Error(`query-router request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
-	}
-	if (!text) return null;
-	try {
-		return JSON.parse(text);
-	} catch {
-		return null;
-	}
+	return readJsonBody(response, { service: 'query-router', empty: null, failureStatus: responseStatusForBaasFailure });
 }
 
 /** GET from the query-router with the tenant api-key. Sibling of
@@ -575,17 +583,7 @@ async function baasQueryGet(config, fetchImpl, path, timeoutMs = BAAS_FETCH_TIME
 		method: 'GET',
 		headers: queryRouterHeaders(config),
 	}, timeoutMs);
-	const text = await response.text().catch(() => '');
-	if (!response.ok) {
-		const status = queryRouterStatus(response.status, text);
-		throw Object.assign(new Error(`query-router request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
-	}
-	if (!text) return null;
-	try {
-		return JSON.parse(text);
-	} catch {
-		return null;
-	}
+	return readJsonBody(response, { service: 'query-router', empty: null, failureStatus: queryRouterStatus });
 }
 
 /** POST to the query-router and return its RAW {status, body} verbatim. WRITES
@@ -606,7 +604,15 @@ async function baasQueryPassthrough(config, fetchImpl, path, body, timeoutMs = B
 	} catch (error) {
 		return { status: 502, body: { ok: false, message: error instanceof Error ? error.message : String(error) } };
 	}
-	const text = await response.text().catch(() => '');
+	let readFailed = false;
+	const text = await response.text().catch(() => { readFailed = true; return ''; });
+	// A write the engine answered but whose body never arrived has no status to classify,
+	// so it answers 502 the way an unreachable engine does — never a 200 with no rows.
+	// Only on a 2xx: a non-2xx already carries the status the write client classifies,
+	// and standing in front of it with a 502 takes that decision away from the client.
+	if (readFailed && response.ok) return { status: 502, body: { ok: false, message: 'BaaS response body could not be read (query-router).' } };
+	// Ponytail: a non-JSON answer is passed through verbatim and capped at 300 bytes, so a
+	// longer answer reaches the write client truncated (and can split a multi-byte char).
 	let parsed = null;
 	if (text) {
 		try { parsed = JSON.parse(text); } catch { parsed = { raw: text.slice(0, 300) }; }
@@ -635,17 +641,7 @@ export async function baasRegistryGet(config, fetchImpl, path, tenantId, timeout
 			...(config.serviceKey ? { apikey: config.serviceKey } : {}),
 		},
 	}, timeoutMs), timeoutMs, 'The adapter-registry');
-	const text = await response.text().catch(() => '');
-	if (!response.ok) {
-		const status = responseStatusForBaasFailure(response.status);
-		throw Object.assign(new Error(`adapter-registry request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
-	}
-	if (!text) return [];
-	try {
-		return JSON.parse(text);
-	} catch {
-		return [];
-	}
+	return readJsonBody(response, { service: 'adapter-registry', empty: [], failureStatus: responseStatusForBaasFailure });
 }
 
 function postgrestQuery(params) {
@@ -1088,16 +1084,75 @@ async function requirePageScopeAccess(request, pageId, payload, permission, conf
 // content then loads lazily per page on open (fetchPageContent).
 const PAGE_LIST_SELECT = 'id,title,icon,cover,cover_position,updated_at,created_at,workspace_id,owner_id,visibility,collaborators,parent_page_id,sort_order,database_id,archived_at,properties,surface,is_template,is_default_template,template_surface,recurrence';
 
-async function listPageRows(workspaceId, config, fetchImpl, filters = {}, select = '*') {
+// One chunk of the workspace-wide scan: small enough that no single response is the whole
+// workspace, large enough that an ordinary one is answered in a couple of requests.
+// Ponytail: 200 rows is sized for the commonest page, so a workspace of very large pages
+// still puts 200 of them in one chunk (too high by exactly that workspace's page size).
+const PAGE_LIST_CHUNK = 200;
+
+// The whole-workspace page read has to fit in PostgREST's memory alongside the rest of the
+// server, so the paths that need `content` answer 413 past this instead of asking for a
+// response no shared process can hold. 8,725 pages answered 57.9 MB in one response.
+// 16 MiB: one read holds ~3.9x its JSON in heap (~127 MiB at a 32 MiB cap), and two
+// concurrent reads must fit the ~259 MiB heap of a 512 MiB container.
+// Ponytail: the ~3.9x ratio is an estimate from synthetic rows, so heavier real rows
+// overshoot the heap it predicts (too low by that row shape's overhead).
+// Ponytail: the total counts rows already read, so the bytes held when the 413 is raised
+// can exceed the cap by up to one chunk (too low by at most that chunk).
+const PAGE_LIST_MAX_BYTES = 16 * 1024 * 1024;
+
+/** One page read. `select` is explicit at every call site: `'*'` and the metadata list cost
+ *  very different amounts, and only the caller knows which shape this read has to answer. */
+async function listPageRows(workspaceId, config, fetchImpl, filters = {}, select, { order = 'updated_at.desc', limit, idCursor } = {}) {
 	const query = postgrestQuery({
 		workspace_id: `eq.${workspaceId}`,
 		database_id: nullablePostgrestFilter(filters.databaseId),
 		parent_page_id: nullablePostgrestFilter(filters.parentPageId, (value) => requireUuid(value, 'parentPageId')),
 		surface: filters.surface ? `eq.${filters.surface}` : undefined,
+		archived_at: nullablePostgrestFilter(filters.archivedAt),
+		id: idCursor ? `gt.${idCursor}` : undefined,
 		select,
-		order: 'updated_at.desc',
+		order,
+		limit: limit === undefined ? undefined : String(limit),
 	});
 	return await baasRest(config, fetchImpl, `osionos_pages?${query}`) ?? [];
+}
+
+/**
+ * The whole-workspace page read for the paths that need `content` (the filtered list, the
+ * search fallback): the same rows `listPageRows` answers, walked in PAGE_LIST_CHUNK rows
+ * keyed on `id`, so one oversized response never has to exist. Returns every row, sorted
+ * as the unbounded read's `updated_at DESC` would have ordered them; past PAGE_LIST_MAX_BYTES
+ * it answers 413 rather than a truncated list.
+ */
+async function listPageRowsInChunks(workspaceId, config, fetchImpl, filters, select) {
+	// Ponytail: each chunk is its own snapshot — a page created or edited mid-scan can be missed or seen twice; fine for this list, never for the /api/pages/all hydrate.
+	// Ponytail: one chunk is at most PAGE_LIST_CHUNK x the largest row (268 MB at today's largest page); the byte cap bounds the total, not one chunk.
+	const rows = [];
+	let bytes = 0;
+	let cursor;
+	for (;;) {
+		const chunk = await listPageRows(workspaceId, config, fetchImpl, filters, select, { order: 'id.asc', limit: PAGE_LIST_CHUNK, idCursor: cursor });
+		bytes += Buffer.byteLength(JSON.stringify(chunk));
+		if (bytes > PAGE_LIST_MAX_BYTES) {
+			throw Object.assign(new Error(`Reading this workspace's pages reached ${bytes} bytes, over the ${PAGE_LIST_MAX_BYTES}-byte page-read cap. `
+				+ 'Narrow the read with parentPageId or databaseId, or use /api/pages/all for the metadata-only list.'), { status: 413 });
+		}
+		rows.push(...chunk);
+		if (chunk.length < PAGE_LIST_CHUNK) break;
+		cursor = chunk[chunk.length - 1].id;
+	}
+	// `ORDER BY updated_at DESC, id ASC`: nulls first, as Postgres orders a DESC column, and
+	// ids as raw strings so the tie order is the same order the keyset cursor walked.
+	const stamp = (row) => row.updated_at ?? null;
+	return rows.sort((left, right) => {
+		const leftUpdated = stamp(left);
+		const rightUpdated = stamp(right);
+		if (leftUpdated === rightUpdated) return String(left.id) < String(right.id) ? -1 : String(left.id) > String(right.id) ? 1 : 0;
+		if (leftUpdated === null) return -1;
+		if (rightUpdated === null) return 1;
+		return String(leftUpdated) > String(rightUpdated) ? -1 : 1;
+	});
 }
 
 async function listWorkspacePageRefs(workspaceId, config, fetchImpl) {
@@ -1162,8 +1217,11 @@ function idsFilter(ids) {
 	return `id=in.(${ids.map((id) => encodeURIComponent(id)).join(',')})`;
 }
 
-// Ponytail: 100 uuids ≈ 3.8 KB of path + query, under an 8 KB proxy line limit; the deployed proxy's real limit is not verified.
-const CASCADE_CHUNK_IDS = 100;
+// PostgREST echoes a read's path and query in Content-Location, and Kong reads the upstream
+// header block into a 4 KB buffer: 100 ids answered 502 "upstream sent too big header", 90
+// answered 200 (live Kong, 2026-10-14). 50 ids ≈ 2.1 KB echoed, ~1.8 KB left for the rest.
+// Caveat: sized for 36-character uuids and PAGE_AUTH_SELECT; a longer select or id eats the margin.
+const CASCADE_CHUNK_IDS = 50;
 
 function idChunks(ids) {
 	const chunks = [];
@@ -1171,6 +1229,11 @@ function idChunks(ids) {
 	return chunks;
 }
 
+/**
+ * The 2xx body of the bridge-identity upsert is read with the shared BaaS-body rule;
+ * this call keeps its own failure shape — a non-2xx is answered above, and
+ * `BaaS bridge persistence failed with …` must not change.
+ */
 export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) {
 	const persistenceEnabled = config.persistence === 'baas' || (config.persistence === 'auto' && config.serviceKey && config.baasUrl);
 	if (!persistenceEnabled) return null;
@@ -1193,7 +1256,9 @@ export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) 
 		const body = await response.text().catch(() => '');
 		throw Object.assign(new Error(`BaaS bridge persistence failed with ${response.status}: ${body.slice(0, 160)}`), { status: 502 });
 	}
-	const body = await response.json().catch(() => null);
+	// No workspace row answers a session with no workspace, so a broken body must not
+	// read as "this identity has no workspace".
+	const body = await readBaasJson(response, { service: 'bridge identity', empty: null, fail: baasFail });
 	const row = Array.isArray(body) ? body[0] : body;
 	if (!row || typeof row !== 'object') return null;
 	return {
@@ -2022,9 +2087,11 @@ async function handlePageList(url, request, response, config, fetchImpl) {
 		surface: PAGE_SURFACE_VALUES.has(url.searchParams.get('surface')) ? url.searchParams.get('surface') : undefined,
 	};
 	// Only the bulk /api/pages/all hydrate goes metadata-only (content loads lazily
-	// on page open); the filtered single-list path keeps '*' so nothing regresses.
-	const select = isFullList ? PAGE_LIST_SELECT : '*';
-	const rows = await listPageRows(workspaceId, config, fetchImpl, filters, select);
+	// on page open); the filtered single-list path keeps '*' so nothing regresses, read in
+	// chunks so a workspace of thousands of pages is never one response.
+	const rows = isFullList
+		? await listPageRows(workspaceId, config, fetchImpl, filters, PAGE_LIST_SELECT)
+		: await listPageRowsInChunks(workspaceId, config, fetchImpl, filters, '*');
 	json(response, 200, pageRowsToEntries(readablePageRows(rows, userId)), config);
 	return true;
 }
@@ -2111,7 +2178,7 @@ async function handlePageSearch(url, request, response, config, fetchImpl) {
 		rows = await baasRest(config, fetchImpl, path);
 	} catch (error) {
 		if (!isMissingSearchDocError(error)) throw error;
-		const scanned = readablePageRows(await listPageRows(workspaceId, config, fetchImpl, {}), userId);
+		const scanned = readablePageRows(await listPageRowsInChunks(workspaceId, config, fetchImpl, {}, '*'), userId);
 		json(response, 200, pageRowsToEntries(legacyRankedRows(scanned, query, limit)), config);
 		return true;
 	}
@@ -2466,7 +2533,10 @@ async function listWorkspaceDatabases(workspaceIds, config, fetchImpl) {
 async function readablePageGraph(workspaceIds, userId, config, fetchImpl) {
 	const rows = [];
 	for (const workspaceId of workspaceIds) {
-		const wsRows = await listPageRows(workspaceId, config, fetchImpl, {});
+		// Metadata only, and no archived rows: pagesToGraph reads nothing outside
+		// PAGE_LIST_SELECT and drops archived rows itself, so the graph is unchanged while
+		// the page content JSONB and the archived rows never cross the wire.
+		const wsRows = await listPageRows(workspaceId, config, fetchImpl, { archivedAt: null }, PAGE_LIST_SELECT);
 		rows.push(...wsRows.filter((row) => canReadPageRowAsMember(row, userId, workspaceIds)));
 	}
 	return pagesToGraph(rows);

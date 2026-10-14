@@ -16,7 +16,7 @@
 // name-collision rules as a rename in the workbench.
 
 import { isFsError } from "../vfs/errors";
-import { clearSyncedHash, moveSyncedDir, recordSyncedHash } from "./ideSyncEngine";
+import { clearSyncedHash, moveSyncedDir, recordSyncedHash, unmarkShellArchived } from "./ideSyncEngine";
 
 import type { ExecContext } from "./inboundExec";
 import type { InboundStep } from "./inboundPlan";
@@ -100,4 +100,5 @@ export async function restorePage(pageId: string, ctx: ExecContext): Promise<voi
   await ctx.restore(pageId);
   if (ctx.view.pageState(pageId)?.status !== "live") throw new Error("the page could not be restored");
   ctx.pending.forgetArchived(pageId);
+  unmarkShellArchived(ctx.workspaceId, ctx.view.subtreeOf(pageId));
 }

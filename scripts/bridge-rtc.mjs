@@ -16,7 +16,7 @@
  *
  * Route: POST /api/rtc/token
  *   headers: Authorization: Bearer <osionos app session token>
- *   body:    { channelId, room?, workspaceId?, displayName? }
+ *   body:    { channelId, room? (ignored), workspaceId?, displayName? }
  *   reply:   { ok, token, url, room, identity, workspaceId, role, expiresAt }
  *
  * Required env (wired on the osionos-bridge service in docker-compose.yml):
@@ -37,21 +37,24 @@
  * `verifySession(token, config)` must return `{ userId, workspaceIds }` or
  * throw `{ status }` — exactly bridge-api.mjs#verifyAppSessionToken.
  *
- * ABAC: `authorizeRtcJoin` is THE single authorization hook. Today it resolves
- * the channel's workspace (osionos_channels when present, else the requested /
- * session workspace) and requires an osionos_workspace_members row. The chat
- * workstream tightens it to per-channel membership by replacing that one
- * function — handler and token shape stay untouched.
+ * ABAC: `authorizeRtcJoin` is THE single authorization hook. A UUID channelId
+ * resolves its workspace from osionos_channels (fail closed); a non-UUID channelId
+ * keeps the requested/session workspace. Then an osionos_workspace_members row is
+ * required. The chat workstream tightens it to per-channel membership by
+ * replacing that one function — handler and token shape stay untouched.
  */
 
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { readBaasJson } from './bridge-baas-body.mjs';
 
 const MAX_TOKEN_TTL_SECONDS = 6 * 60 * 60; // LiveKit grants are capped at 6h here
 const DEFAULT_TOKEN_TTL_SECONDS = 60 * 60;
 const NBF_SKEW_SECONDS = 10;
 const RTC_BODY_LIMIT_BYTES = 16_384;
 const REST_TIMEOUT_MS = 2_500;
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// Any 8-4-4-4-12 hex id, whatever its version or variant digits: a channel id that skipped the
+// lookup because of those digits (a v7 id, the nil id) was checked against the requested workspace.
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function httpError(message, status) {
 	return Object.assign(new Error(message), { status });
@@ -130,28 +133,29 @@ async function baasRestGet(config, fetchImpl, path) {
 		signal: AbortSignal.timeout(REST_TIMEOUT_MS),
 	});
 	if (!response.ok) throw httpError(`BaaS request failed with ${response.status}.`, response.status >= 500 ? 502 : response.status);
-	return await response.json().catch(() => null);
+	// The room lookup decides membership, so a body that stops mid-stream, or one that is
+	// not JSON, must not answer as if the query matched nothing.
+	return readBaasJson(response, { service: 'LiveKit room lookup', empty: null, fail: (message) => httpError(message, 502) });
 }
 
 /**
  * THE ABAC hook — single function on purpose so the chat workstream can
  * tighten it later (per-channel membership) without touching the handler.
- * Today: resolve the channel's workspace via osionos_channels when that table
- * exists (forward-compatible), else fall back to the requested/session
- * workspace, then REQUIRE an osionos_workspace_members row for the user.
- * Returns `{ workspaceId, role, permissions }` or throws 403.
+ * Rule: a UUID channelId resolves its workspace from osionos_channels (fail
+ * closed — no fallback to the requested/session workspace); a non-UUID
+ * channelId keeps the requested/session workspace. Then an
+ * osionos_workspace_members row is REQUIRED for the user. Returns
+ * `{ workspaceId, role, permissions }` or throws 403/404.
+ * Ponytail: membership is per WORKSPACE, not per private channel — a member
+ * of a workspace can join the call of every channel in it, private ones included.
  */
 export async function authorizeRtcJoin({ userId, channelId, workspaceId, config, fetchImpl = fetch }) {
-	let targetWorkspaceId = UUID_REGEX.test(String(workspaceId ?? '')) ? String(workspaceId) : '';
-	if (UUID_REGEX.test(String(channelId ?? ''))) {
-		try {
-			const rows = await baasRestGet(config, fetchImpl, `osionos_channels?id=eq.${channelId}&select=workspace_id&limit=1`);
-			const mapped = Array.isArray(rows) ? rows[0]?.workspace_id : undefined;
-			if (typeof mapped === 'string' && UUID_REGEX.test(mapped)) targetWorkspaceId = mapped;
-		} catch {
-			// osionos_channels does not exist yet (chat workstream) — fall through
-			// to the workspace-membership check below.
-		}
+	let targetWorkspaceId = UUID_SHAPE.test(String(workspaceId ?? '')) ? String(workspaceId) : '';
+	if (UUID_SHAPE.test(String(channelId ?? ''))) {
+		const rows = await baasRestGet(config, fetchImpl, `osionos_channels?id=eq.${channelId}&select=workspace_id&limit=1`);
+		const mapped = Array.isArray(rows) ? rows[0]?.workspace_id : undefined;
+		if (typeof mapped !== 'string' || !UUID_SHAPE.test(mapped)) throw httpError('Channel not found.', 404);
+		targetWorkspaceId = mapped;
 	}
 	if (!targetWorkspaceId) throw httpError('No workspace could be resolved for this channel.', 422);
 	const members = await baasRestGet(
@@ -214,7 +218,10 @@ export function createRtcTokenHandler({ config, verifySession, rtc = rtcConfigFr
 			const payload = await readJsonBody(request);
 			const channelId = safeText(payload.channelId, 120);
 			if (!channelId) throw httpError('channelId is required.', 422);
-			const room = safeText(payload.room, 128).replaceAll(/[^\w.-]/g, '-') || `channel-${channelId}`;
+			// Only ids that are their own room name: a sanitised id could turn "<uuid with spaces>",
+			// which skips the channel lookup, into another channel's room.
+			if (!/^[\w.-]+$/.test(channelId)) throw httpError('channelId is invalid.', 422);
+			const room = `channel-${channelId}`;
 			const requestedWorkspaceId = safeText(payload.workspaceId, 80) || session.workspaceIds?.[0] || '';
 			const membership = await authorize({
 				userId: session.userId,

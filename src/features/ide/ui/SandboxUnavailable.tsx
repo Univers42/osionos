@@ -13,6 +13,7 @@
 import React from "react";
 
 import { useSandboxHealthStore, type SandboxHealthState } from "../model/sandboxHealthStore";
+import { HEALTH_REASONS } from "../model/sandboxHealthCore";
 
 const TITLES: Readonly<Partial<Record<SandboxHealthState, string>>> = {
   unavailable: "Sandbox unavailable",
@@ -20,6 +21,8 @@ const TITLES: Readonly<Partial<Record<SandboxHealthState, string>>> = {
   stopped: "Sandbox stopped",
 };
 
+// Only when the IDE backend cannot be reached: a full box cap or a refused start is not fixed by
+// starting docker-ide, and showing it for every "unavailable" sent people the wrong way (2026-10-14).
 const ADMIN_HINT = "An administrator must start the docker-ide service on the host.";
 
 interface Props {
@@ -87,7 +90,7 @@ export const SandboxUnavailable: React.FC<Props> = ({ compact = false, onRetried
     >
       <p className="text-sm font-semibold text-[var(--osio-code-fg)]">{title}</p>
       {reason && <p>{reason}</p>}
-      {state === "unavailable" && <p>{ADMIN_HINT}</p>}
+      {reason === HEALTH_REASONS.unreachable && <p>{ADMIN_HINT}</p>}
       {retryButton}
     </div>
   );

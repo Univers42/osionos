@@ -39,13 +39,16 @@ export function sandboxIo(world: World, writes: string[]): OutboundIo {
   };
 }
 
-/** One writer round from `from` to the store as it is now; returns the new snapshot. */
-export async function writerRound(world: World, from: Snapshot, writes: string[]): Promise<Snapshot> {
+/** One writer round from `from` to the store as it is now; returns the new snapshot. Every
+ *  remove is one the user asked for in this tab unless `mayRemove` says otherwise. */
+export async function writerRound(
+  world: World, from: Snapshot, writes: string[], mayRemove: (pageId: string) => boolean = () => true,
+): Promise<Snapshot> {
   const next = snapshotOf(world);
   const byId = new Map(next.pages.map((entry) => [entry._id, entry]));
   await runOutbound({
     workspaceId: world.workspaceId, plan: planOutbound(from, next), io: sandboxIo(world, writes),
-    pageById: (id) => byId.get(id), pathOf: (id) => next.index.pathForId(id),
+    pageById: (id) => byId.get(id), pathOf: (id) => next.index.pathForId(id), mayRemove,
   });
   return next;
 }

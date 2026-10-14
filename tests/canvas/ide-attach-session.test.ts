@@ -24,6 +24,8 @@ import { routeFsEvent } from "../../src/features/ide/model/inboundSession.ts";
 import { attach, editedWhileAway, fileIn, textOf } from "./fixtures/attachWorld.ts";
 import { blockPage, codePage, execWorld, folderPage, putFile } from "./fixtures/inboundWorld.ts";
 import { unloadedPage } from "./page-file-facade-fixtures.ts";
+import { attachSummary, loadUnloadedBodies } from "../../src/features/ide/model/materialize.ts";
+import { para } from "./fixtures/inboundWorld.ts";
 
 const NOT_LOADED = "page content not loaded, not reconciled";
 
@@ -40,6 +42,86 @@ test("16: every loaded page and code file is written, a folder always as <dir>/_
   assert.deepEqual(result.report.skipped, [{ path: "Later.omd", reason: NOT_LOADED }]);
   assert.deepEqual([result.written, result.unloaded, result.failed], [3, 1, 0], "not loaded is not a failure");
   assert.equal(syncedHashOf(world.workspaceId, "Docs/_folder.omd"), await sha16(textOf(world, "F")));
+});
+
+// The attach stopped at the 500th loaded file and counted the rest as FAILED: "329 FAILED" on the
+// demo workspace's Output, every reload (2026-10-14).
+test("a 501-file tree: every file reaches the sandbox and none is a failure", async () => {
+  const pages = Array.from({ length: 501 }, (_, i) => codePage(`C${i}`, `f${i}.c`, `int f${i};`));
+  const world = await execWorld(pages);
+  const result = await attach(world);
+  assert.deepEqual([result.written, result.unloaded, result.known, result.oversize, result.failed], [501, 0, 0, 0, 0]);
+  assert.equal(await fileIn(world, "f500.c"), "int f500;");
+});
+
+test("a second attach writes nothing and says how many files it found in sync", async () => {
+  const world = await execWorld([codePage("A", "a.c", "int a;"), codePage("B", "b.c", "int b;")]);
+  assert.equal((await attach(world)).written, 2);
+  const again = await attach(world);
+  assert.deepEqual([again.written, again.inSync, again.failed], [0, 2, 0]);
+  assert.equal(attachSummary(again), "sandbox attached — materialized 0 files, 2 already in sync");
+});
+
+test("an unloaded page this browser synced before is counted apart from one never synced", async () => {
+  const world = await execWorld([unloadedPage("K", "Known", null), unloadedPage("N", "New", null)]);
+  recordSyncedHash(world.workspaceId, "Known.omd", "0123456789abcdef");
+  const result = await attach(world);
+  assert.deepEqual([result.written, result.unloaded, result.known, result.failed], [0, 1, 1, 0]);
+});
+
+test("the Output line names caps and unloaded pages, and says FAILED only for a failure", () => {
+  assert.equal(attachSummary({ written: 3, inSync: 0, unloaded: 0, known: 0, oversize: 0, stopped: null, failed: 0 }), "sandbox attached — materialized 3 files");
+  assert.equal(
+    attachSummary({ written: 0, inSync: 7, unloaded: 2358, known: 500, oversize: 2, stopped: null, failed: 1 }),
+    "sandbox attached — materialized 0 files, 7 already in sync, 2358 not loaded (cap 500 per attach), 500 synced before, not re-checked, 2 over 512 KiB, not synced, 1 FAILED",
+  );
+});
+
+test("bodies attach would skip are fetched first, six at a time, so every page reaches the sandbox", async () => {
+  const unloaded = Array.from({ length: 8 }, (_, i) => unloadedPage(`U${i}`, `Page ${i}`, null));
+  const world = await execWorld([unloadedPage("F", "Docs", null, "folder"), blockPage("A", "Alpha", "F"), ...unloaded]);
+  const asked: string[] = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const count = await loadUnloadedBodies(world.session.views, async (id) => {
+    asked.push(id);
+    maxInFlight = Math.max(maxInFlight, (inFlight += 1));
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    world.store.updatePageContent(id, para(`body ${id}`));
+    inFlight -= 1;
+  });
+  assert.equal(count, 8);
+  assert.deepEqual(asked.sort(), unloaded.map((entry) => entry._id).sort(), "never a folder, never a loaded page");
+  assert.ok(maxInFlight <= 6, `at most six at once (saw ${maxInFlight})`);
+  const result = await attach(world);
+  assert.deepEqual([result.written, result.unloaded, result.failed], [10, 0, 0]);
+  assert.equal(await fileIn(world, "Page 3.omd"), textOf(world, "U3"));
+});
+
+test("a body is fetched only for a path this browser never synced: a reload costs no fetch", async () => {
+  const world = await execWorld([unloadedPage("K", "Known", null), unloadedPage("N", "New", null)]);
+  recordSyncedHash(world.workspaceId, "Known.omd", await sha16("agreed earlier"));
+  const asked: string[] = [];
+  const count = await loadUnloadedBodies(world.session.views, async (id) => { asked.push(id); }, (path) => syncedHashOf(world.workspaceId, path) !== null);
+  assert.deepEqual([count, asked], [1, ["N"]]);
+});
+
+test("a body that fails to load stays unloaded and attach still skips it", async () => {
+  const world = await execWorld([unloadedPage("U", "Later", null)]);
+  await loadUnloadedBodies(world.session.views, async () => { throw new Error("offline"); });
+  const result = await attach(world);
+  assert.deepEqual([result.written, result.unloaded, result.failed], [0, 1, 0]);
+});
+
+test("16: no ledger and a _folder.omd that differs only by a legacy updated: line — rewritten, not a conflict", async () => {
+  useIdeSyncConflicts.getState().clearWorkspace();
+  const world = await execWorld([folderPage("F", "Docs"), blockPage("A", "Alpha", "F")]);
+  const today = textOf(world, "F");
+  await putFile(world.sandbox, world.workspaceId, "Docs/_folder.omd", today.replace("---\n", '---\nupdated: "2026-10-14T02:28:44.444275+00:00"\n'));
+  const result = await attach(world);
+  assert.deepEqual(result.report.conflicts, [], "106 such folders were 106 conflicts after one clone");
+  assert.equal(await fileIn(world, "Docs/_folder.omd"), today, "the sandbox copy takes today's form");
+  assert.equal(useIdeSyncConflicts.getState().byPageId.F, undefined);
 });
 
 test("16: a _folder.omd changed on both sides is reported under its folder's id", async () => {

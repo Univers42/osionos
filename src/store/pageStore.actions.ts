@@ -40,10 +40,11 @@ import {
   instantiateTemplateContent,
 } from "./pageStore.helpers";
 import { replacePage } from "./replacePage";
-import { loadLedger, saveLedger } from "@osionos/outbox-ledger";
+import { loadLedger } from "@osionos/outbox-ledger";
 import { applyServerPages } from "./sync/applyServerPages";
 import { resolveFetchedPage } from "./sync/mergeServerPages";
-import { PAGE_OUTBOX_KEY, pageStamp } from "./sync/pageStamp";
+import { PAGE_OUTBOX_KEY, pageStamp, saveOutboxLedger } from "./sync/pageStamp";
+import { forgetAppRemovals, recordAppRemovals } from "./appRemovals";
 import {
   cascadeIdsFrom,
   applyArchived,
@@ -144,6 +145,9 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
 const FETCH_PAGES_TTL_MS = 30_000;
 const lastFetchedAt = new Map<string, number>();
 
+/** When the workspace's page list last landed from the server (ms since epoch), if ever. */
+export const pagesPulledAt = (workspaceId: string): number | undefined => lastFetchedAt.get(workspaceId);
+
 export function createFetchPages(set: SetFn, get: GetFn) {
   // `force` (default false) is an extra optional arg — assignable to the 2-param PageStore
   // type, so existing callers are unchanged; an explicit-refresh call site can pass true.
@@ -165,8 +169,13 @@ export function createFetchPages(set: SetFn, get: GetFn) {
         `/api/pages/all?workspaceId=${workspaceId}`,
         pageJwt,
       );
-      lastFetchedAt.set(workspaceId, Date.now()); // stamp only after a confirmed pull
-      if (Array.isArray(data)) applyServerPages(set, workspaceId, data, true);
+      // A 200 whose body is not a page list merged nothing: stamping it would tell
+      // the attach (inboundLive pullPages) a pull landed, and it would reconcile
+      // the localStorage cache against the sandbox on a server that said nothing.
+      if (Array.isArray(data)) {
+        lastFetchedAt.set(workspaceId, Date.now()); // stamp only after a confirmed pull
+        applyServerPages(set, workspaceId, data, true);
+      }
       set((s) => ({
         loadingIds: new Set(
           [...s.loadingIds].filter((id) => id !== workspaceId),
@@ -208,7 +217,7 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
       savePagesCache(get().pages, page.workspaceId);
       if (resolved.recordSynced) {
         ledger[pageId] = pageStamp(resolved.page);
-        saveLedger(PAGE_OUTBOX_KEY, ledger);
+        saveOutboxLedger(PAGE_OUTBOX_KEY, ledger);
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
@@ -436,6 +445,7 @@ export function createArchivePage(set: SetFn, get: GetFn) {
     const wsPages = get().pages[workspaceId] ?? [];
     const descendantIds = getAllDescendantIds(wsPages, pageId);
     const archivedIds = new Set([pageId, ...descendantIds]);
+    recordAppRemovals(workspaceId, archivedIds);
 
     set((s) => {
       const currentWsPages = s.pages[workspaceId] ?? [];
@@ -490,6 +500,9 @@ async function applyCascadeOperation(options: {
   const localDescendantIds = getAllDescendantIds(wsPages, pageId);
   const ids = cascadeIdsFrom(body, pageId, localDescendantIds, field);
   const idSet = new Set(ids);
+  // After the server confirmed, for the ids it named: the writer removes only these files.
+  if (field === "deletedIds" || archivedAt !== null) recordAppRemovals(workspaceId, ids);
+  else forgetAppRemovals(workspaceId, ids);
 
   set((s) => {
     const currentWsPages = s.pages[workspaceId] ?? [];
@@ -974,6 +987,7 @@ export function createRestorePage(set: SetFn, get: GetFn) {
     const wsPages = get().pages[workspaceId] ?? [];
     const descendantIds = getAllDescendantIds(wsPages, pageId);
     const restoredIds = new Set([pageId, ...descendantIds]);
+    forgetAppRemovals(workspaceId, restoredIds);
 
     set((s) => {
       const currentWsPages = s.pages[workspaceId] ?? [];
@@ -1015,6 +1029,7 @@ export function createDeletePage(set: SetFn, get: GetFn) {
     const wsPages = get().pages[workspaceId] ?? [];
     const descendantIds = getAllDescendantIds(wsPages, pageId);
     const deletedIds = new Set([pageId, ...descendantIds]);
+    recordAppRemovals(workspaceId, deletedIds);
 
     set((s) => {
       const currentWsPages = s.pages[workspaceId] ?? [];

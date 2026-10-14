@@ -13,6 +13,8 @@
 import React from "react";
 import { ExternalLink } from "lucide-react";
 
+import { embeddableUrl } from "../model/embeddableUrl";
+
 interface Props {
   url: string;
   title: string;
@@ -37,7 +39,8 @@ const LOAD_GRACE_MS = 8000;
  * not running — the header always offers an "Open externally" escape hatch, and a frame
  * that never loads degrades to a readable message instead of an empty pane.
  */
-export const EmbedAppView: React.FC<Props> = ({ url, title }) => {
+export const EmbedAppView: React.FC<Props> = ({ url: rawUrl, title }) => {
+  const url = embeddableUrl(rawUrl);
   const [stalled, setStalled] = React.useState(false);
   // A ref, not state: the timer below reads it after the fact, and re-rendering on
   // `load` would only re-run an effect that must not restart its own deadline.
@@ -60,7 +63,7 @@ export const EmbedAppView: React.FC<Props> = ({ url, title }) => {
   if (!url) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-[var(--osio-fg-subtle)]">
-        No URL configured for {title}.
+        {rawUrl.trim() ? `${title} cannot open in a pane: only http and https addresses can.` : `No URL configured for ${title}.`}
       </div>
     );
   }

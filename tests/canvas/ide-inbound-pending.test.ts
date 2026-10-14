@@ -110,3 +110,18 @@ test("B5: dispose drops every timer and the restore memory; a task queued before
   pending.schedule("D", "D.omd", async (ticket) => { due.push(ticket); });
   assert.equal(clock.pendingCount(), 0, "a disposed store schedules nothing");
 });
+
+test("duePaths: a path is listed from its window's end until its archive is claimed, cancelled or rescheduled", async () => {
+  const { clock, pending, drain } = harness();
+  const due: ArchiveTicket[] = [];
+  for (const id of ["A", "B", "C"]) pending.schedule(id, `${id}.omd`, async (ticket) => { due.push(ticket); });
+  assert.deepEqual(pending.duePaths(), [], "nothing is due inside the window");
+  clock.advance(INBOUND_WINDOW_MS);
+  assert.deepEqual(pending.duePaths(), ["A.omd", "B.omd", "C.omd"]);
+  await drain();
+  assert.equal(pending.claim(due[0]), true);
+  pending.cancel("B");
+  pending.schedule("C", "C2.omd", async () => undefined);
+  assert.deepEqual(pending.duePaths(), [], "claimed, cancelled, rescheduled: none still due");
+  pending.dispose();
+});

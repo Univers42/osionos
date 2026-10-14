@@ -75,10 +75,15 @@ export async function publishPage(page: PageEntry): Promise<{ result: PublishRes
  * after the document is gone, so an edit made moments before a reload reaches
  * the server without waiting for the outbox debounce. Fire-and-forget by
  * design — the ledger is NOT advanced (nothing can confirm during unload), so
- * the next session's outbox re-publishes idempotently; the localStorage cache
- * plus client-stamped LWW already guarantee no loss even when this request is
- * dropped (keepalive bodies are capped ~64KB — an oversized page throws
- * synchronously and is simply skipped).
+ * the next session's outbox publishes again from the unconfirmed pages kept
+ * under their own key (pendingPages), not from the page cache, which a full
+ * origin refuses silently. Not idempotent: the bridge takes the client's
+ * updatedAt with no precondition, so when a request did land and another
+ * device edited the page next, the second publish overwrites that edit. A
+ * request dropped here (offline, a 5xx, or a body over keepalive's ~64KB cap,
+ * which throws synchronously and is skipped)
+ * therefore loses nothing unless that key was refused too — and then the
+ * beforeunload guard asked the user to stay first.
  */
 export function publishPageKeepalive(page: PageEntry): void {
   const jwt = getActivePageJwt();

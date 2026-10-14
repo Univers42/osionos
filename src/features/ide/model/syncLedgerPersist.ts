@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/14 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,17 +15,29 @@
 // merge base, so attach could only clobber it or call it a conflict. Stored as
 // {[workspaceId]: {[path]: hash}} under one localStorage key.
 //
+// No ledger beats an old one. A write that does not fit, even alone, removes the
+// stored copies of the workspaces this tab changed: an older merge base left on
+// disk, after a reload that reverted the app side, applied the sandbox over the
+// revert instead of calling it a conflict (devil F2, the C3b5 R5 class).
+//
 // Ponytail: eviction is least-recently-WRITTEN by Map/JSON key order, and JS
 // enumerates integer-like keys ("42") first, so after a reload such a workspace
 // id or path is evicted out of turn. An evicted entry (bounds, quota) reads as
 // "never synced", which sends the attach reconcile to its tiebreak/conflict
 // path, never to a silent overwrite. Two tabs on one workspace: the last flush
-// wins that workspace, leaving the other tab's older (still real) agreements —
-// DEBOUNCE_MS below says what an older agreement gets wrong.
+// wins that workspace, so tab B's later flush puts back the base h(v1) it
+// hydrated after tab A had moved to h(v2) or forgotten the workspace (F2). An
+// older base is not a safe one: after a reload, an app back at v1 (an ABA edit)
+// with v2 in the sandbox reads as "only the sandbox changed", and the sandbox's
+// v2 is applied over the app instead of a conflict (devil Q2a, Q2b, 2026-10-14;
+// pinned in ide-sync-ledger.test.ts). DEBOUNCE_MS below is the one-tab case.
+
+import { ideOutput } from "./ideOutputBus";
 
 export type LedgerStorage = {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  removeItem?(key: string): void;
 };
 
 export type SyncLedgerStore = {
@@ -83,8 +95,11 @@ function readLedger(storage: LedgerStorage): Ledger {
 const serialize = (ledger: Ledger): string =>
   JSON.stringify(Object.fromEntries([...ledger].map(([workspaceId, paths]) => [workspaceId, Object.fromEntries(paths)])));
 
-/** Write, dropping least-recently-written workspaces while storage refuses (quota). */
-function writeLedger(storage: LedgerStorage, ledger: Ledger): void {
+let refusedSaid = false;
+
+/** Write, dropping least-recently-written workspaces while storage refuses (quota). When even
+ *  one does not fit, `changed` leave the stored document (header: no ledger beats an old one). */
+function writeLedger(storage: LedgerStorage, ledger: Ledger, changed: readonly string[]): void {
   trimOldest(ledger, MAX_LEDGER_WORKSPACES);
   for (;;) {
     try {
@@ -92,12 +107,32 @@ function writeLedger(storage: LedgerStorage, ledger: Ledger): void {
       return;
     } catch (error) {
       if (ledger.size <= 1) {
-        console.warn("[ide] sync ledger not persisted; after a reload these files reconcile as never synced", error);
+        forgetStored(storage, changed, error);
         return;
       }
       trimOldest(ledger, ledger.size - 1);
     }
   }
+}
+
+/** The stored document without `changed`, or no document; said once per session. O(entries). */
+function forgetStored(storage: LedgerStorage, changed: readonly string[], cause: unknown): void {
+  const stored = readLedger(storage);
+  if (changed.filter((workspaceId) => stored.delete(workspaceId)).length > 0) {
+    try {
+      storage.setItem(SYNC_LEDGER_KEY, serialize(stored)); // never longer than what is there
+    } catch {
+      try {
+        storage.removeItem?.(SYNC_LEDGER_KEY);
+      } catch {
+        // storage unavailable: nothing more can be removed
+      }
+    }
+  }
+  if (refusedSaid) return;
+  refusedSaid = true;
+  console.warn("[ide] sync ledger does not fit in browser storage", cause);
+  ideOutput("fs-sync", "the sync record does not fit in this browser's storage: after a reload, files that differ are reported as conflicts instead of merged");
 }
 
 /** Insert as the most recently written key, evicting the oldest past `max`. */
@@ -115,7 +150,7 @@ function persistWorkspaces(storage: LedgerStorage, changed: [string, Map<string,
     ledger.delete(workspaceId);
     if (paths.size > 0) ledger.set(workspaceId, paths);
   }
-  writeLedger(storage, ledger);
+  writeLedger(storage, ledger, changed.map(([workspaceId]) => workspaceId));
 }
 
 /** A ledger store over `storage` (null = memory-only). Each workspace hydrates

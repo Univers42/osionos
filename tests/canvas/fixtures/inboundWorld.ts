@@ -22,11 +22,13 @@ import { FLUSH_MAX_MS } from "../../../src/features/ide/model/inboundFlushWindow
 import { INBOUND_WINDOW_MS, createInboundPending, type Schedule } from "../../../src/features/ide/model/inboundPending.ts";
 import { createSerialQueue } from "../../../src/features/ide/model/inboundPipeline.ts";
 import { statInProvider, type StatResult } from "../../../src/features/ide/model/inboundArchive.ts";
+import type { StatMany } from "../../../src/features/ide/model/inboundStatBatch.ts";
 import { createInboundSession } from "../../../src/features/ide/model/inboundSession.ts";
 import { createInboundView } from "../../../src/features/ide/model/inboundView.ts";
 import { createLandedMemo } from "../../../src/features/ide/model/inboundLanded.ts";
 import { createMemProvider } from "../../../src/features/ide/vfs/memProvider.ts";
 import { buildVPath } from "../../../src/features/ide/vfs/vpath.ts";
+import { forgetAppRemovals, recordAppRemovals } from "../../../src/store/appRemovals.ts";
 import { textToBytes } from "../../../src/features/ide/vfs/bytes.ts";
 import type { FsProvider } from "../../../src/features/ide/vfs/types.ts";
 import { createPageFileFacade } from "../../../src/features/page-file/model/pageFileFacade.ts";
@@ -76,9 +78,14 @@ function subtreeOf(store: ReturnType<typeof createFixtureStore>, pageId: string)
 
 /** The REAL store's archive and restore (pageStore.actions.ts createArchivePage /
  *  createRestorePage): the subtree flips `archivedAt` and nothing else — the facade
- *  fixture's archive also bumps `updatedAt`, which would change a restored page's text. */
+ *  fixture's archive also bumps `updatedAt`, which would change a restored page's text.
+ *  Like the store once the server confirmed, an archive records an app-removal intent for
+ *  every id the server names (the subtree, archived pages included) and a restore drops
+ *  them: a fixture that recorded none hid the leading tab's own path (devil D5-L3). */
 function setArchived(store: ReturnType<typeof createFixtureStore>, pageId: string, archivedAt: string | null): void {
   const ids = subtreeOf(store, pageId);
+  if (archivedAt === null) forgetAppRemovals(store.workspaceId, ids);
+  else recordAppRemovals(store.workspaceId, ids);
   store._seed(store.pages().map((entry) => (ids.has(entry._id) ? { ...entry, archivedAt } : entry)));
 }
 
@@ -92,7 +99,7 @@ export async function putFile(sandbox: FsProvider, workspaceId: string, path: st
 }
 
 /** `schedule`: the session's timers (default: the world's manual clock). */
-export type ExecWorldOptions = { files?: Record<string, string>; stat?: (path: string) => Promise<StatResult>; schedule?: Schedule };
+export type ExecWorldOptions = { files?: Record<string, string>; stat?: (path: string) => Promise<StatResult>; statMany?: StatMany; schedule?: Schedule };
 
 /** The whole inbound path: a session on a real serial queue, a mem sandbox, a manual clock. */
 export async function execWorld(pages: PageEntry[], opts: ExecWorldOptions = {}) {
@@ -109,6 +116,7 @@ export async function execWorld(pages: PageEntry[], opts: ExecWorldOptions = {})
   const session = createInboundSession({
     workspaceId, store, restore: async (id) => setArchived(store, id, null), schedule: opts.schedule ?? clock.schedule,
     stat: opts.stat ?? ((path) => statInProvider(sandbox, workspaceId, path)),
+    statMany: opts.statMany,
     enqueue: (task) => { enqueued.count += 1; void queue.run(task); },
   });
   const send = (evt: FsEvent): Promise<void> => queue.run(() => session.handle(evt));

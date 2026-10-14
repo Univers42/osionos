@@ -122,32 +122,68 @@ export async function runDefaultTask(group?: "build" | "test"): Promise<void> {
   await runInTerminal(task.command);
 }
 
-/** Run the ACTIVE code file in the interactive PTY (saved content — the menu
- *  path has no live editor buffer; the in-editor Run button covers that). */
-export async function runActiveFile(): Promise<void> {
+/** The focused code file with its language, or null after an info toast
+ *  titled `title` saying `notCode` (no workspace, no page, or not code). */
+async function activeCodeFile(title: string, notCode: string) {
   const { workspaceId, store } = await workspaceContext();
-  if (!workspaceId) return;
-  const [{ useToastStore }] = await Promise.all([import("@osionos/ui/primitives/useToastStore")]);
-  const activeId = store.activePage?.id ?? null;
-  const page = activeId ? store.pageById(activeId) : undefined;
-  if (!page || page.surface !== "code") {
-    useToastStore.getState().push({ kind: "info", title: "Run Active File", description: "Open a code file first — it runs the focused file." });
-    return;
-  }
-  const [{ codeBlockOf }, { languageById, languageForFileName }, { pagePathOf }, { ideFsWrite }] = await Promise.all([
+  if (!workspaceId) return null;
+  const [{ useToastStore }, { codeBlockOf }, { languageById, languageForFileName }, { pagePathOf }] = await Promise.all([
+    import("@osionos/ui/primitives/useToastStore"),
     import("./codeFile"),
     import("./ideLanguages"),
     import("./pagePathOf"),
-    import("./ideFsClient"),
   ]);
+  const toast = (description: string): void => {
+    useToastStore.getState().push({ kind: "info", title, description });
+  };
+  const activeId = store.activePage?.id ?? null;
+  const page = activeId ? store.pageById(activeId) : undefined;
+  if (!page || page.surface !== "code") {
+    toast(notCode);
+    return null;
+  }
   const block = codeBlockOf(page);
   const lang = block?.language ? languageById(block.language) : languageForFileName(page.title);
-  if (!lang.runnable || !lang.runCmd) {
-    useToastStore.getState().push({ kind: "info", title: "Run Active File", description: `${lang.label} has no run command yet.` });
+  return { workspaceId, relPath: pagePathOf(page._id), text: block?.content ?? "", lang, toast };
+}
+
+/** Run the ACTIVE code file in the interactive PTY (saved content — the menu
+ *  path has no live editor buffer; the in-editor Run button covers that). */
+export async function runActiveFile(): Promise<void> {
+  const file = await activeCodeFile("Run Active File", "Open a code file first — it runs the focused file.");
+  if (!file) return;
+  if (!file.lang.runnable || !file.lang.runCmd) {
+    file.toast(`${file.lang.label} has no run command yet.`);
     return;
   }
-  const relPath = pagePathOf(page._id);
-  const shellPath = `'/workspace/${relPath.replace(/'/g, "'\\''")}'`;
-  await ideFsWrite(workspaceId, relPath, block?.content ?? "");
-  await runInTerminal(lang.runCmd.replaceAll("{file}", shellPath));
+  const { ideFsWrite } = await import("./ideFsClient");
+  const shellPath = `'/workspace/${file.relPath.replace(/'/g, "'\\''")}'`;
+  await ideFsWrite(file.workspaceId, file.relPath, file.text);
+  await runInTerminal(file.lang.runCmd.replaceAll("{file}", shellPath));
+}
+
+/** Debug a workspace file's CURRENT text: mirror it to the sandbox, then hand
+ *  it to the Python debugger (the dock opens on the starting transition). */
+export async function debugFile(relPath: string, text: string): Promise<void> {
+  const { workspaceId } = await workspaceContext();
+  if (!workspaceId) return;
+  const [{ ideFsWrite }, { startPythonDebug }] = await Promise.all([
+    import("./ideFsClient"),
+    import("./debugController"),
+  ]);
+  await ideFsWrite(workspaceId, relPath, text);
+  await startPythonDebug(workspaceId, relPath);
+}
+
+/** Debug the ACTIVE file (saved content — the menu path has no live editor
+ *  buffer; F5 in the editor debugs its live text). Non-Python → info toast. */
+export async function debugActiveFile(): Promise<void> {
+  const notPython = "Open a Python file first.";
+  const file = await activeCodeFile("Debug Python File", notPython);
+  if (!file) return;
+  if (file.lang.id !== "python") {
+    file.toast(notPython);
+    return;
+  }
+  await debugFile(file.relPath, file.text);
 }
