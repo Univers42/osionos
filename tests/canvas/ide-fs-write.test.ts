@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { ideFsWrite } from "../../src/features/ide/model/ideFsClient.ts";
+import { bridgeFsTransport, type BridgeFsDeps } from "../../src/features/ide/vfs/bridgeTransport.ts";
 import { sha16 } from "../../src/features/ide/model/ideFsEcho.ts";
 import { useIdeOutputBus } from "../../src/features/ide/model/ideOutputBus.ts";
 import { syncedHashOf } from "../../src/features/ide/model/ideSyncEngine.ts";
@@ -47,4 +48,50 @@ test("ideFsWrite: a failed save rolls the ledger back and says so in Output", as
     assert.equal(syncedHashOf(ws, "main.c"), null, name);
     assert.ok(useIdeOutputBus.getState().lines.some((line) => line.text.startsWith("main.c: not saved to the sandbox")), name);
   }
+});
+
+/** A bridge that throttles content A three times; every wait is released by the test. */
+function throttlingBridge() {
+  const landed: string[] = [];
+  const waits: (() => void)[] = [];
+  let throttledA = 0;
+  const deps: BridgeFsDeps = {
+    fetch: async (_ws, _path, init) => {
+      const body = JSON.parse(String(init?.body)) as { contentBase64: string };
+      const text = bytesToText(base64ToBytes(body.contentBase64));
+      if (text === "A" && throttledA < 3) {
+        throttledA += 1;
+        return { kind: "response", response: new Response("{}", { status: 429 }) };
+      }
+      landed.push(text);
+      return { kind: "response", response: new Response(JSON.stringify({ exitCode: 0, output: "" }), { status: 200 }) };
+    },
+    sleep: () => new Promise<void>((resolve) => { waits.push(resolve); }),
+  };
+  const release = async (): Promise<void> => { for (let i = 0; i < 20; i += 1) { await new Promise((r) => setTimeout(r, 0)); waits.shift()?.(); } };
+  return { deps, landed, release };
+}
+
+test("ideFsWrite: a save throttled three times never lands after the newer save of the same file", async () => {
+  const bridge = throttlingBridge();
+  const transport = bridgeFsTransport("ws-order", bridge.deps);
+  const first = ideFsWrite("ws-order", "gnl/get_next_line.c", "A", transport);
+  await new Promise((r) => setTimeout(r, 0));
+  const second = ideFsWrite("ws-order", "gnl/get_next_line.c", "B", transport); // the debounced save 1.2 s later
+  await bridge.release();
+  assert.deepEqual(await Promise.all([first, second]), [true, true]);
+  assert.equal(bridge.landed.at(-1), "B", `the sandbox holds the newer text (landed: ${bridge.landed.join(",")})`);
+  assert.equal(syncedHashOf("ws-order", "gnl/get_next_line.c"), await sha16("B"));
+});
+
+test("ideFsWrite: saves queued behind a slow one collapse to the newest; other files do not wait", async () => {
+  const bridge = throttlingBridge();
+  const transport = bridgeFsTransport("ws-collapse", bridge.deps);
+  const saves = ["A", "B", "C", "D"].map((text) => ideFsWrite("ws-collapse", "main.c", text, transport));
+  const other = ideFsWrite("ws-collapse", "Makefile", "all:\n", transport);
+  assert.equal(await other, true, "another file's save is not queued behind main.c");
+  await bridge.release();
+  assert.deepEqual(await Promise.all(saves), [true, true, true, true]);
+  assert.deepEqual(bridge.landed, ["all:\n", "A", "D"], "B and C were superseded before they ran");
+  assert.equal(syncedHashOf("ws-collapse", "main.c"), await sha16("D"));
 });
