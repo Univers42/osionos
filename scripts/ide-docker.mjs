@@ -167,7 +167,12 @@ export function createDockerClient(env = process.env) {
                 host, port, method: "POST", path: `/exec/${execId}/start`,
                 headers: { "content-type": "application/json", "content-length": startBody.length, Connection: "Upgrade", Upgrade: "tcp" },
               });
-              startReq.on("upgrade", (_res, socket) => resolve({ stream: socket, execId }));
+              // Bytes that came in the 101's own segment are handed over as `head`, not read
+              // again from the socket: dropped, they were the exec's first output.
+              startReq.on("upgrade", (_res, socket, head) => {
+                if (head.length > 0) socket.unshift(head);
+                resolve({ stream: socket, execId });
+              });
               startReq.on("error", reject);
               startReq.end(startBody);
             });

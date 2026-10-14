@@ -261,16 +261,15 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     // ensureSandbox); a refusal lands in the catch below, which releases the stream cap.
     ensureSandbox(env, names, { passive: true }).then(() => docker.attachExec(names.containerName, spec)).then(({ stream: duplex, execId }) => {
       const decode = createFrameDecoder();
-      // LSP is Tty:false — strip docker's 8-byte mux headers (see the demux
-      // doc). PTY/fsync are Tty:true and arrive raw.
-      const demux = isLsp ? createStdStreamDemux() : null;
+      // LSP and fs-sync are Tty:false — strip docker's 8-byte mux headers (see the
+      // demux doc). Only the PTY, handled above, is Tty:true and arrives raw.
+      const demux = createStdStreamDemux();
       // Backpressure: pause the container stream when the client stops draining,
       // so a slow/zero-window reader can't hoard unbounded bytes in the bridge.
       duplex.on('data', (chunk) => {
         if (socket.destroyed) return;
         let ok = true;
-        if (demux) { for (const payload of demux(chunk)) ok = socket.write(encodeFrame(payload, 2)) && ok; }
-        else ok = socket.write(encodeFrame(chunk, 2));
+        for (const payload of demux(chunk)) ok = socket.write(encodeFrame(payload, 2)) && ok;
         if (!ok) duplex.pause();
       });
       socket.on('drain', () => duplex.resume());
