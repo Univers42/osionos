@@ -16,6 +16,7 @@ import { WorkspaceSwitcher } from "@/features/auth";
 import { IconButton } from "@/shared/ui";
 import { useUIStore, type ActivePanel } from "@/shared/config/uiStore";
 import { PANEL_LOADERS, prefetchPanel, readyPanel } from "./panelLoaders";
+import { SIDEBAR_LABEL_TYPE } from "./sidebarLabelType";
 
 // Every panel is a lazy chunk the rail prefetches on hover (panelLoaders.ts).
 // The Explorer takes props, so it has its own: it and its open handler load
@@ -97,7 +98,7 @@ export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, o
     <div className="flex h-full min-h-0 flex-col" onKeyDown={returnFocusToContent}>
       <WorkspaceSwitcher />
       <div className="flex h-8 items-center justify-between px-3">
-        <span data-panel-title className="text-[length:var(--osio-font-size-xs)] font-medium normal-case leading-none tracking-normal text-[var(--osio-fg-muted)]">
+        <span data-panel-title className={SIDEBAR_LABEL_TYPE}>
           {PANEL_TITLES[activePanel]}
         </span>
         {peek ? (

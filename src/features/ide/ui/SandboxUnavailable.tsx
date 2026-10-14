@@ -15,7 +15,7 @@ import { ServerOff } from "lucide-react";
 import { Button } from "@/shared/ui";
 
 import { useSandboxHealthStore, type SandboxHealthState } from "../model/sandboxHealthStore";
-import { StateBlock } from "./ExplorerStates";
+import { CODE_BUTTON, StateBlock } from "./ExplorerStates";
 
 const TITLES: Readonly<Partial<Record<SandboxHealthState, string>>> = {
   unavailable: "Sandbox unavailable",
@@ -59,7 +59,7 @@ export const SandboxUnavailable: React.FC<Props> = ({ compact = false, onRetried
   };
 
   const retryButton = (
-    <Button size="sm" disabled={pending} aria-busy={pending} onClick={() => void onRetry()}>
+    <Button size="sm" className={CODE_BUTTON} disabled={pending} aria-busy={pending} onClick={() => void onRetry()}>
       {pending ? "Retrying…" : "Retry"}
     </Button>
   );

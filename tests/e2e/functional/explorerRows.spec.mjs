@@ -34,6 +34,8 @@ async function bootExplorer(page) {
   await page.addInitScript(() => localStorage.setItem("osio:perf", "1"));
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.getByRole("treeitem").first().waitFor({ timeout: 60_000 });
+  // A row's colour fade outlives the mouse leaving it; the specs compare settled values.
+  await page.addStyleTag({ content: "*,*::before,*::after{transition:none!important}" });
 }
 
 async function visitTwoPages(page) {
@@ -139,17 +141,35 @@ test("the inline new-file field opens inside its row without moving the lines be
   await expect(first).toBeVisible();
 });
 
-test("the offline sandbox state is a muted icon, a title and a kit Retry button", async ({ page }) => {
-  test.setTimeout(120_000);
-  await bootExplorer(page);
-  await page.getByRole("button", { name: "Panel", exact: true }).click();
-  const state = page.getByTestId("workbench-dock").getByRole("status").filter({ hasText: /Sandbox (unavailable|disabled|stopped)/ });
-  await expect(state).toBeVisible({ timeout: 30_000 });
-  await expect(state.locator("svg").first()).toBeVisible();
-  const retry = state.getByRole("button", { name: "Retry" });
-  expect((await read(retry, ["height"])).height).toBe(await tokenValue(page, "height", "--osio-control-h-sm"));
-  expect((await read(retry, ["borderTopLeftRadius"])).borderTopLeftRadius).toBe(await tokenValue(page, "border-top-left-radius", "--osio-control-radius"));
-});
+const codeToken = (el, property, token) =>
+  el.evaluate((node, [cssProperty, name]) => {
+    const probe = document.createElement("div");
+    probe.style.setProperty(cssProperty, `var(${name})`);
+    node.closest("[data-code-theme]").append(probe);
+    const value = getComputedStyle(probe).getPropertyValue(cssProperty);
+    probe.remove();
+    return value;
+  }, [property, token]);
+
+for (const mode of ["light", "dark"]) {
+  test(`the offline sandbox state is a muted icon, a title and a kit Retry button on the code palette (${mode})`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.addInitScript((value) => localStorage.setItem("osionos:theme-mode", value), mode);
+    await bootExplorer(page);
+    await page.getByRole("button", { name: "Panel", exact: true }).click();
+    const state = page.getByTestId("workbench-dock").getByRole("status").filter({ hasText: /Sandbox (unavailable|disabled|stopped)/ });
+    await expect(state).toBeVisible({ timeout: 30_000 });
+    await expect(state.locator("svg").first()).toBeVisible();
+    const retry = state.getByRole("button", { name: "Retry" });
+    expect((await read(retry, ["height"])).height).toBe(await tokenValue(page, "height", "--osio-control-h-sm"));
+    expect((await read(retry, ["borderTopLeftRadius"])).borderTopLeftRadius).toBe(await tokenValue(page, "border-top-left-radius", "--osio-control-radius"));
+    // The dock is dark in both themes, so its button must not follow the page theme.
+    const look = await read(retry, ["backgroundColor", "color", "borderTopColor"]);
+    expect(look.backgroundColor).toBe(await codeToken(retry, "background-color", "--osio-code-chip-bg"));
+    expect(look.color).toBe(await codeToken(retry, "color", "--osio-code-fg"));
+    expect(look.borderTopColor).toBe(await codeToken(retry, "border-top-color", "--osio-code-border"));
+  });
+}
 
 test("the row menu marks Delete as the destructive item, like the page options menu", async ({ page }) => {
   test.setTimeout(120_000);

@@ -21,6 +21,14 @@ const TONES = {
   code: { title: "text-[var(--osio-code-fg)]", body: "text-[var(--osio-code-fg-muted)]" },
 } as const;
 
+// The kit Button's default tone reads these five tokens; remapping them on the button
+// gives the always-dark code surface its own palette (the app's control tokens would
+// paint a white pill on it under the light theme) with no competing utilities.
+export const CODE_BUTTON =
+  "[--osio-bg-surface:var(--osio-code-chip-bg)] [--osio-control-border:var(--osio-code-border)] " +
+  "[--osio-border-strong:var(--osio-code-border)] [--osio-fg-default:var(--osio-code-fg)] " +
+  "[--osio-control-bg-hover:var(--osio-code-btn-hover)]";
+
 /** One empty / error / unavailable state for every IDE surface: a muted icon, a
  *  title, an optional line of detail, and the actions as kit Buttons. */
 export const StateBlock: React.FC<{

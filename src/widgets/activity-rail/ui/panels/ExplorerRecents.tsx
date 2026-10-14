@@ -19,6 +19,7 @@ import { favoritesForWorkspace } from "@/store/favorites/favoritesScope";
 import { usePageStore } from "@/store/usePageStore";
 import { FavoriteSidebarItem } from "../FavoriteSidebarItem";
 import { RecentPageRow } from "../RecentPageRow";
+import { SIDEBAR_LABEL_TYPE } from "../sidebarLabelType";
 
 /** Compact strip: the tree below is the main surface, so recents stay short. */
 export const EXPLORER_RECENTS_CAP = 5;
@@ -43,7 +44,7 @@ const StripSection: React.FC<StripSectionProps> = ({ label, children }) => {
           onClick={() => setOpen((current) => !current)}
           className="-mx-1.5 flex h-full min-w-0 flex-1 items-center gap-1 rounded-[6px] px-1.5 hover:bg-[var(--osio-bg-hover)]"
         >
-          <span className="truncate text-[length:var(--osio-font-size-xs)] font-medium normal-case leading-none tracking-normal text-[var(--osio-fg-muted)]">
+          <span data-section-label className={`truncate ${SIDEBAR_LABEL_TYPE}`}>
             {label}
           </span>
           <ChevronDown
