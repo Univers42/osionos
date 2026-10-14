@@ -105,9 +105,25 @@ Then run `npm run tokens` and update the id list in `tests/canvas/tokens-accents
 
 The utilities are for host markup that is not a kit component:
 
-```html
-<div role="menu" class="osio-surface-overlay">
-  <button role="menuitem" class="osio-menu-item" data-tone="danger">Delete</button>
+From `src/features/block-editor/ui/CalloutTypePicker.tsx`:
+
+```tsx
+<div
+  role="menu"
+  aria-label="Callout type"
+  className="absolute left-0 top-full z-50 mt-1 w-52 osio-surface-overlay"
+>
+  <div className="osio-menu-separator" />
+  <button
+    type="button"
+    role="menuitem"
+    onClick={() => setCustomOpen(true)}
+    className="osio-menu-item"
+    data-tone="muted"
+  >
+    <Smile size={16} />
+    <span>Custom emoji…</span>
+  </button>
 </div>
 ```
 
