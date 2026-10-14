@@ -71,9 +71,11 @@ export const PageContextMenu: React.FC<Props> = ({ x, y, ctx, onClose }) => {
 
   // Position after mount so we know the real height for bottom-edge clamping.
   // Defer the measure+setState out of the effect body (avoids cascading renders).
+  // offsetHeight, not getBoundingClientRect: the pop-in animation scales the box
+  // and would under-measure by ~2%, leaving the clamped menu off the margin.
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
-      const h = menuRef.current?.getBoundingClientRect().height ?? 0;
+      const h = menuRef.current?.offsetHeight ?? 0;
       setPos(clampPoint(x, y, h));
     });
     return () => cancelAnimationFrame(raf);

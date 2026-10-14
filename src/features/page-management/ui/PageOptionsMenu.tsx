@@ -291,7 +291,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
         size="xs"
         tone="muted"
         className={[
-          "rounded-md transition-colors duration-[120ms]",
+          "rounded-[var(--osio-radius-sm)] transition-colors duration-[var(--osio-dur-fast)]",
           isMenuOpen
             ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
             : "hover:bg-[var(--osio-bg-hover)]",

@@ -104,7 +104,17 @@ test.describe("shell menus draw the overlay chrome", () => {
   test("the share popover", async ({ page, baseURL }) => {
     await openPage(page, baseURL);
     await page.getByRole("button", { name: "Share page" }).click();
-    await expectChrome(page, page.getByRole("dialog", { name: "Share" }));
+    const dialog = page.getByRole("dialog", { name: "Share" });
+    await expectChrome(page, dialog);
+
+    // The recipe's padding is only 4px; the header, the people input and the
+    // footer must keep an inner inset so their text is not hard on the border.
+    const insets = await dialog.evaluate((root) => {
+      const left = root.getBoundingClientRect().left;
+      const footer = [...root.querySelectorAll("button")].find((b) => b.textContent.includes("Copy link"))?.previousElementSibling;
+      return [root.querySelector("h3"), root.querySelector("label"), footer].map((el) => Math.round(el.getBoundingClientRect().left - left));
+    });
+    for (const inset of insets) expect(inset).toBeGreaterThanOrEqual(8);
   });
 
   test("the rail home menu", async ({ page, baseURL }) => {
