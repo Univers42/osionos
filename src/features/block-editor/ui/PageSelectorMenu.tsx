@@ -22,7 +22,7 @@ import {
 const MENU_MARGIN = 8;
 const MENU_GAP = 6;
 const MENU_WIDTH = 288; // w-72
-const MENU_MAX_HEIGHT = 416; // max-h-[26rem]
+const MENU_MAX_HEIGHT = 416;
 
 interface PageSelectorMenuProps {
   position: { x: number; y: number; top: number };

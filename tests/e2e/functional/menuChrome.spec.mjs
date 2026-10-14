@@ -15,6 +15,8 @@ import {
   openFreshPage,
   selectSlashMenuEntry,
   selectText,
+  slashCommandEntry,
+  openSlashMenuFromEditor,
   slashMenu,
   toolbarButton,
 } from "../../browser/core/app.mjs";
@@ -47,6 +49,24 @@ const resolveToken = (page, property, token) =>
     probe.remove();
     return value;
   }, [property, token]);
+
+// Contrast of `top` painted over `base`, both any CSS colour (the fills are
+// translucent colour-mix values, so they are composited on a canvas first).
+const paintedContrast = (page, base, top) =>
+  page.evaluate(([baseColor, topColor]) => {
+    const pixel = (...colors) => {
+      const ctx = Object.assign(document.createElement("canvas"), { width: 1, height: 1 }).getContext("2d");
+      for (const color of colors) {
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, 1, 1);
+      }
+      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+      const lin = (c) => ((c /= 255) <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    };
+    const [a, b] = [pixel(baseColor), pixel(baseColor, topColor)].sort((x, y) => y - x);
+    return (a + 0.05) / (b + 0.05);
+  }, [base, top]);
 
 const rowMetrics = (row) =>
   row.evaluate((el) => {
@@ -139,13 +159,50 @@ test.describe("editor menu chrome", () => {
     });
   }
 
+  test("layout templates menu keeps every row on one line", async ({ page, baseURL }) => {
+    await page.addInitScript(() => localStorage.setItem("osio.canvas.v2", "1"));
+    await openFreshPage(page, baseURL);
+    const editor = await activateFirstEditor(page);
+    await openSlashMenuFromEditor(editor, "/layout");
+    const entry = slashCommandEntry(page, "Layout inline").last();
+    await entry.waitFor();
+    await entry.evaluate((node) => node.click());
+    await page.locator(".osionos-layout-toolbar").getByRole("button", { name: /Templates/i }).click();
+    const panel = page.getByRole("menu", { name: "Layout templates" });
+    await expect(panel).toBeVisible();
+    expect(await readChrome(panel)).toEqual(await referenceChrome(page));
+    const rows = panel.getByRole("menuitem");
+    for (let index = 0; index < (await rows.count()); index += 1) {
+      const fits = await rows.nth(index).evaluate((el) => el.scrollHeight <= el.clientHeight && el.scrollWidth <= el.clientWidth);
+      expect(fits, `template row ${index} overflows`).toBe(true);
+    }
+  });
+
   for (const mode of ["light", "dark"]) {
     test(`slash menu keeps the overlay chrome in ${mode}`, async ({ page, baseURL }) => {
       await page.addInitScript((value) => localStorage.setItem("osionos:theme-mode", value), mode);
       await openFreshPage(page, baseURL);
       await typeInFreshEditor(page, "/");
       await expect(slashMenu(page)).toBeVisible();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", mode);
       expect(await readChrome(slashMenu(page))).toEqual(await referenceChrome(page));
+    });
+
+    // A hover fill or hairline that vanishes into the panel leaves a menu
+    // without a visible pointer or section edge; dark palettes were the weak spot.
+    test(`context menu rows and separators stay visible in ${mode}`, async ({ page, baseURL }) => {
+      await page.addInitScript((value) => localStorage.setItem("osionos:theme-mode", value), mode);
+      await openFreshPage(page, baseURL);
+      await createParagraphs(page, ["Context target"]);
+      await openBlockContextMenuForEditor(getEditors(page).first());
+      const panel = page.getByTestId("block-context-menu");
+      const panelFill = (await readChrome(panel)).backgroundColor;
+      const row = panel.getByRole("menuitem").nth(1);
+      await row.hover();
+      const hoverFill = await row.evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(await paintedContrast(page, panelFill, hoverFill)).toBeGreaterThan(1.15);
+      const edge = await panel.locator(".osio-menu-separator").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(await paintedContrast(page, panelFill, edge)).toBeGreaterThan(1.15);
     });
   }
 });

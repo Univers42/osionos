@@ -23,6 +23,10 @@
   --osio-overlay-radius: var(--osio-radius-overlay);
   --osio-overlay-shadow: var(--osio-e3);
   --osio-overlay-padding: 4px;
+  /* A translucent foreground mix, not --osio-bg-hover: dark palettes put the
+   * elevated panel one step above bg-hover, so the solid fill vanishes there. */
+  --osio-menu-item-hover-bg: color-mix(in srgb, var(--osio-fg-default) 10%, transparent);
+  --osio-menu-separator: var(--osio-border-strong);
 
   /* Buttons and icon buttons. */
   --osio-control-radius: var(--osio-radius-control);
@@ -122,7 +126,7 @@
   &:hover,
   &[data-active="true"],
   &[aria-selected="true"] {
-    background-color: var(--osio-bg-hover);
+    background-color: var(--osio-menu-item-hover-bg);
   }
 
   &[aria-selected="true"] {
@@ -164,5 +168,5 @@
 @utility osio-menu-separator {
   height: 1px;
   margin-block: 4px;
-  background-color: var(--osio-border-default);
+  background-color: var(--osio-menu-separator);
 }
