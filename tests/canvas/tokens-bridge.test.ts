@@ -4,7 +4,7 @@
 // tokens that exist, and the committed stylesheet is what the generator writes.
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -114,4 +114,40 @@ test("the bridge reaches the page root and the database roots", () => {
   assert.match(bridge.css, /html:root\[data-theme\]/);
   assert.match(bridge.css, /\.notion-object-database/);
   assert.match(bridge.css, /\[data-dbms-source\]/);
+});
+
+// Nothing outside the database reads what the bridge defines (--color-* and the --osio-table-* / --osio-chart-*
+// tokens: grep over src, packages and the legacy graph engine, 2026-10-14), so it ships with the code that
+// renders a database instead of in the render-blocking entry CSS (the bridge was 2.3 KB gzip of it).
+const BRIDGE_IMPORTS = ["database-bridge.generated.css", "database-overrides.css"];
+const DATABASE_RENDERERS = [
+  "src/widgets/database-view/ui/DatabaseBlock.tsx",
+  "src/widgets/database-view/ui/WorkspaceDatabaseBlock.tsx",
+  "src/features/settings/people/PeopleDatabasePanel.tsx",
+];
+
+test("the entry stylesheet leaves the bridge to the database chunk", () => {
+  const entry = readAppFile("src/app/styles/global.css");
+  for (const file of BRIDGE_IMPORTS) assert.doesNotMatch(entry, new RegExp(`@import\\s+"[^"]*${file.replace(/\./g, "\\.")}"`), `global.css still imports ${file}`);
+});
+
+test("every component that renders ObjectDatabase imports the bridge with it", () => {
+  for (const path of DATABASE_RENDERERS) {
+    const source = readAppFile(path);
+    assert.match(source, /<ObjectDatabase\b/, `${path} no longer renders ObjectDatabase`);
+    for (const file of BRIDGE_IMPORTS) assert.match(source, new RegExp(`import ["']@/app/styles/${file.replace(/\./g, "\\.")}["']`), `${path} does not import ${file}`);
+  }
+});
+
+test("no other component renders ObjectDatabase without the bridge", () => {
+  const renderers = readdirSync(new URL("src", APP_ROOT), { recursive: true })
+    .map(String)
+    .filter((path) => path.endsWith(".tsx") && !path.startsWith("shared/notion-database-sys/"))
+    .map((path) => `src/${path}`)
+    .filter((path) => readAppFile(path).includes("<ObjectDatabase"));
+  assert.deepEqual(renderers.sort(), [...DATABASE_RENDERERS].sort());
+});
+
+test("the entry stylesheet does not compile the vendored database's utilities a second time", () => {
+  assert.match(readAppFile("src/app/styles/global.css"), /^@source not "\.\.\/\.\.\/shared\/notion-database-sys";$/m);
 });

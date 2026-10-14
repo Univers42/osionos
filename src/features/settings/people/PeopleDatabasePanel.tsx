@@ -16,6 +16,8 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ObjectDatabase, type ObjectDatabaseProps } from "@notion-db/object-database";
+import "@/app/styles/database-bridge.generated.css";
+import "@/app/styles/database-overrides.css";
 import { Button, Modal } from "@/shared/ui";
 import type { WorkspaceMemberRole } from "@/store/settings";
 import { PeopleSourceAdapter } from "./peopleSourceAdapter";
