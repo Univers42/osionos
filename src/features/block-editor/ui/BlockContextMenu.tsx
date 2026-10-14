@@ -17,16 +17,16 @@ import type {
   BlockContextMenuSection,
   BlockContextMenuState,
 } from "../model/blockContextMenu.helpers";
-import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
+import { useWholeRowScroll } from "@/shared/lib/dom/useWholeRowScroll";
 import {
   clampAnchoredPanelPosition,
   clampViewportMenuPosition,
   useClickOutside,
   useEscapeKey,
 } from "@/shared/ui";
+import { ColorProfilePanel, PROFILE_PANEL_WIDTH } from "./ColorProfilePanel";
 
 const SUBMENU_WIDTH = 224; // w-56 = 14rem = 224px
-const PROFILE_PANEL_WIDTH = 288;
 const VIEWPORT_PAD = 12;
 
 interface BlockContextMenuProps {
@@ -125,109 +125,6 @@ const SubmenuPanel: React.FC<SubmenuPanelProps> = ({
         />
       ))}
     </div>
-  );
-};
-
-interface ColorProfilePanelProps {
-  style: React.CSSProperties;
-}
-
-const ColorProfilePanel: React.FC<ColorProfilePanelProps> = ({ style }) => {
-  const profiles = useBlockColorProfileStore((state) => state.profiles);
-  const addProfile = useBlockColorProfileStore((state) => state.addProfile);
-  const removeProfile = useBlockColorProfileStore((state) => state.removeProfile);
-  const [name, setName] = useState("Custom profile");
-  const [textColor, setTextColor] = useState("#1f2937");
-  const [backgroundColor, setBackgroundColor] = useState("#f3f4f6");
-
-  const handleSubmit = useCallback((event: React.SyntheticEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    addProfile({
-      name,
-      textColor,
-      backgroundColor,
-    });
-    setName("Custom profile");
-  }, [addProfile, backgroundColor, name, textColor]);
-
-  return (
-    <aside
-      className="osio-surface-overlay fixed overflow-y-auto"
-      style={{ ...style, width: PROFILE_PANEL_WIDTH, zIndex: 10003 }}
-      aria-label="Color profile properties"
-    >
-      <div className="p-2">
-        <div className="mb-3">
-          <p className="text-xs font-medium text-[var(--osio-fg-muted)]">
-            Color profiles
-          </p>
-          <p className="text-sm text-[var(--osio-fg-default)]">
-            Reusable foreground and background pairs.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <label className="block text-xs font-medium text-[var(--osio-fg-muted)]">
-            <span>Name</span>
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="osio-field mt-1 w-full px-2 text-sm"
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs font-medium text-[var(--osio-fg-muted)]">
-              <span>Text</span>
-              <input
-                type="color"
-                value={textColor}
-                onChange={(event) => setTextColor(event.target.value)}
-                className="osio-field mt-1 w-full"
-              />
-            </label>
-            <label className="text-xs font-medium text-[var(--osio-fg-muted)]">
-              <span>Background</span>
-              <input
-                type="color"
-                value={backgroundColor}
-                onChange={(event) => setBackgroundColor(event.target.value)}
-                className="osio-field mt-1 w-full"
-              />
-            </label>
-          </div>
-          <button
-            type="submit"
-            className="w-full rounded-[var(--osio-control-radius)] bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--osio-accent-fg)] transition-opacity hover:opacity-90"
-          >
-            + Save profile
-          </button>
-        </form>
-
-        <div className="mt-3 space-y-1">
-          {profiles.map((profile) => (
-            <div
-              key={profile.id}
-              className="flex items-center gap-2 rounded-[var(--osio-radius-sm)] px-2 py-1.5 hover:bg-[var(--osio-menu-item-hover-bg)]"
-            >
-              <span
-                className="h-5 w-5 rounded-[var(--osio-radius-sm)] border border-[var(--osio-border-default)]"
-                style={{ backgroundColor: profile.backgroundColor }}
-              />
-              <span className="min-w-0 flex-1 truncate text-sm text-[var(--osio-fg-default)]">
-                {profile.name}
-              </span>
-              <button
-                type="button"
-                className="rounded-[var(--osio-radius-sm)] px-1.5 py-1 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-                onClick={() => removeProfile(profile.id)}
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    </aside>
   );
 };
 
@@ -339,6 +236,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
   width = 260,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
+  const regionRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const active = Boolean(menu);
@@ -385,10 +283,6 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
     );
   }, [openSubmenu, position, width]);
 
-  if (!menu || !position || sections.length === 0) {
-    return null;
-  }
-
   const normalizedQuery = query.trim().toLowerCase();
   const visibleSections = normalizedQuery
     ? sections
@@ -400,6 +294,12 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
         }))
         .filter((section) => section.items.length > 0)
     : sections;
+
+  useWholeRowScroll(regionRef, menu && visibleSections);
+
+  if (!menu || !position || sections.length === 0) {
+    return null;
+  }
 
   return createPortal(
     <>
@@ -432,7 +332,7 @@ export const BlockContextMenu: React.FC<BlockContextMenuProps> = ({
             className="osio-field w-full px-2 text-sm placeholder:text-[var(--osio-fg-subtle)]"
           />
         </div>
-        <div className="max-h-[400px] overflow-y-auto" role="menu">
+        <div ref={regionRef} className="relative max-h-[400px] overflow-y-auto" role="menu">
         {visibleSections.map((section, index) => (
           <div key={`${section.label ?? "section"}-${index}`}>
             {section.label ? (

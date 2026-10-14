@@ -46,6 +46,28 @@ test.describe("appearance preferences", () => {
     expect((await rootToken(page, "--osio-accent")).toLowerCase()).toBe(ember);
   });
 
+  test("in dark each swatch shows the accent the person will get", async ({ page, baseURL }) => {
+    await seed(page, { accent: "ember" });
+    await page.addInitScript(() => localStorage.setItem("osionos:theme-mode", "dark"));
+    await openFreshPage(page, baseURL);
+    await openAppearanceSettings(page);
+    await expect(html(page)).toHaveAttribute("data-theme", "dark");
+    for (const label of ["Terracotta", "Indigo", "Cobalt"]) {
+      await page.getByRole("button", { name: label, exact: true }).click();
+      const swatch = page.getByRole("button", { name: label, exact: true });
+      await expect(swatch).toHaveAttribute("aria-pressed", "true");
+      const accent = await page.evaluate(() => {
+        const probe = document.createElement("div");
+        probe.style.backgroundColor = "var(--osio-accent)";
+        document.body.append(probe);
+        const value = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return value;
+      });
+      await expect(swatch).toHaveCSS("background-color", accent);
+    }
+  });
+
   test("the default accent writes no attribute", async ({ page, baseURL }) => {
     await seed(page, { accent: "ember" });
     await openFreshPage(page, baseURL);

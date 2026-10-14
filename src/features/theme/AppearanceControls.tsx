@@ -35,20 +35,25 @@ export function useAppearance(): [Appearance, (patch: Partial<Appearance>) => vo
   return [appearance, change];
 }
 
-const Swatch: React.FC<{ label: string; selected: boolean; onSelect: () => void; className?: string; color?: string }> = ({
+// The swatch shows the accent the person will get: both modes' solids are custom
+// properties and the dark one takes over under <html data-theme="dark">, so a
+// swatch follows the theme without the component knowing it.
+const PRESET_COLOURS = 'bg-[var(--swatch-light)] [[data-theme=dark]_&]:bg-[var(--swatch-dark)]';
+
+const Swatch: React.FC<{ label: string; selected: boolean; onSelect: () => void; className?: string; colours?: { light: string; dark: string } }> = ({
   label,
   selected,
   onSelect,
   className = '',
-  color,
+  colours,
 }) => (
   <button
     type="button"
     aria-label={label}
     aria-pressed={selected}
     onClick={onSelect}
-    style={color ? { background: color } : undefined}
-    className={`${SWATCH} ${className} ${
+    style={colours ? ({ '--swatch-light': colours.light, '--swatch-dark': colours.dark } as React.CSSProperties) : undefined}
+    className={`${SWATCH} ${colours ? PRESET_COLOURS : ''} ${className} ${
       selected ? 'ring-2 ring-[var(--osio-fg-default)] ring-offset-2 ring-offset-[var(--osio-bg-surface)]' : 'hover:ring-2 hover:ring-[var(--osio-border-strong)] hover:ring-offset-2 hover:ring-offset-[var(--osio-bg-surface)]'
     }`}
   />
@@ -71,7 +76,7 @@ export const AccentControl: React.FC<{ appearance: Appearance; paletteId: string
           <Swatch
             key={preset.id}
             label={preset.label}
-            color={preset.swatch}
+            colours={{ light: preset.swatch, dark: preset.swatchDark }}
             selected={appearance.accent === preset.id}
             onSelect={() => onChange({ accent: preset.id })}
           />

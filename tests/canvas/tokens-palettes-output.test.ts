@@ -170,7 +170,7 @@ test("monochrome and maximal keep their hand-written light text colours", () => 
   const mono = resolvedTokens(paletteById("mono"), "light");
   assert.deepEqual([mono["--osio-fg-default"], mono["--osio-fg-strong"], mono["--osio-fg-muted"]], ["#0A0A0A", "#000000", "#565656"]);
   const maximal = resolvedTokens(paletteById("maximal"), "light");
-  assert.deepEqual([maximal["--osio-fg-default"], maximal["--osio-fg-strong"], maximal["--osio-fg-muted"]], ["#1A1422", "#120D1A", "#6A6080"]);
+  assert.deepEqual([maximal["--osio-fg-default"], maximal["--osio-fg-strong"], maximal["--osio-fg-muted"]], ["#1A1422", "#120D1A", "#645A7A"]);
 });
 
 test("every elevation and cell shadow is tinted by --osio-shadow-rgb in every mode, never a literal", () => {

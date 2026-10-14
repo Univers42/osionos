@@ -118,8 +118,10 @@ export interface AccentMeta {
   /** matches `[data-accent="<id>"]` in accents.generated.css; "cobalt" is the default and has no block. */
   id: string;
   label: string;
-  /** the preset's accent in light mode, for the picker swatch. */
+  /** the preset's solid accent in light mode, for the picker swatch. */
   swatch: string;
+  /** the same in dark mode: the accent a person gets there is lighter than the light one. */
+  swatchDark: string;
 }
 
 /** Every accent preset, default first, generated with its CSS by scripts/build-tokens.mjs. */

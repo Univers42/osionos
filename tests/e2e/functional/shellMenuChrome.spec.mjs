@@ -132,6 +132,27 @@ test.describe("shell menus draw the overlay chrome", () => {
     await expect(dialog.getByRole("heading", { name: "Share" })).toBeInViewport();
   });
 
+  // ShareHost has no trigger to anchor to; it once rendered below the viewport.
+  for (const [width, height] of [[1440, 900], [390, 844]]) {
+    test(`Share from the sidebar menu opens inside a ${width}x${height} viewport`, async ({ page, baseURL }) => {
+      await openFreshPage(page, baseURL);
+      await page.setViewportSize({ width, height });
+      await clearAndTypePageTitle(page, "Quarterly plan");
+      // A phone collapses the sidebar to its rail; the Explorer tab brings the tree back.
+      if (width < 768) await page.getByRole("tab", { name: "Explorer", exact: true }).click();
+      await treeRow(page, "Quarterly plan").click({ button: "right" });
+      await page.getByRole("menuitem", { name: "Share", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Share" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog).toBeInViewport({ ratio: 1 });
+      const box = await dialog.boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(width);
+      expect(box.y + box.height).toBeLessThanOrEqual(height);
+    });
+  }
+
   test("the page context menu clamps above the viewport's bottom edge", async ({ page, baseURL }) => {
     await openPage(page, baseURL);
     await page.setViewportSize({ width: 1440, height: 420 });

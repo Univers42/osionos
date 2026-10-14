@@ -73,17 +73,24 @@ test("every contrast pair asks for at least the AA ratio for text", () => {
   for (const pair of CONTRAST_PAIRS) assert.ok(pair.ratio >= 4.5, `${pair.text} on ${pair.background}`);
 });
 
-test("the default accent is the approved cobalt, and Update and links follow it", () => {
-  const light = resolved("light");
-  assert.equal(light["--osio-accent"], "#1F5BC4");
-  for (const mode of MODES) {
-    const tokens = resolved(mode);
-    assert.equal(tokens["--osio-update"], tokens["--osio-accent"]);
-    assert.equal(tokens["--osio-update-hover"], tokens["--osio-accent-hover"]);
-    assert.equal(tokens["--osio-link"], tokens["--osio-accent-text"]);
-    assert.equal(tokens["--osio-graph-select"], tokens["--osio-accent"]);
-  }
+test("the default accent is the approved cobalt", () => {
+  assert.equal(resolved("light")["--osio-accent"], "#1F5BC4");
 });
+
+// A pinned Update colour would keep the top-bar button on the palette's own hue
+// whichever accent is chosen: the pins must not name it.
+for (const palette of PALETTES) {
+  for (const mode of MODES) {
+    test(`palette "${palette.id}" ${mode}: Update and links follow the accent`, () => {
+      const tokens = resolvedTokens(palette, mode);
+      assert.equal(tokens["--osio-update"], tokens["--osio-accent"]);
+      assert.equal(tokens["--osio-update-hover"], tokens["--osio-accent-hover"]);
+      assert.equal(tokens["--osio-update-fg"], tokens["--osio-accent-fg"]);
+      assert.equal(tokens["--osio-link"], tokens["--osio-accent-text"]);
+      assert.equal(tokens["--osio-graph-select"], tokens["--osio-accent"]);
+    });
+  }
+}
 
 // A menu paints its panel with the raised colour and its highlighted row with
 // the muted one: if the two meet, the highlight disappears.
@@ -126,15 +133,11 @@ test("the colours kept outside the stylesheet match the generated palette", () =
 // Muted and subtle text are two tiers: when they are the same colour, a caption and a
 // placeholder look alike and the hierarchy is gone. 1.14 is just under Calm's dark step
 // (1.147, muted over subtle); the tiers had collapsed to 1.001-1.003 in Solarized, Rosé
-// Pine and Nord dark. Three light modes step less and are listed until their source moves:
-// Calm and Ember (n-9/n-10 are generated in ramps.mjs, 1.028) and Maximal (its hand-tuned
-// muted is pinned by tokens-palettes-output.test.ts, 1.090).
+// Pine and Nord dark, and to 1.03-1.09 in Calm, Ember and Maximal light.
 const MIN_TEXT_TIER_STEP = 1.14;
-const NARROW_TIERS = new Set(["warm light", "ember light", "maximal light"]);
 
 for (const palette of PALETTES) {
   for (const mode of MODES) {
-    if (NARROW_TIERS.has(`${palette.id} ${mode}`)) continue;
     test(`palette "${palette.id}" ${mode}: muted text is a visible step from subtle text, and the stronger of the two`, () => {
       const tokens = resolvedTokens(palette, mode);
       const surface = tokens["--osio-bg-surface"];
