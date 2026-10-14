@@ -128,7 +128,6 @@ export const PageContextMenu: React.FC<Props> = ({ x, y, ctx, onClose }) => {
           role="menuitem"
           data-action-index={flatIndex}
           disabled={disabled}
-          data-tone={action.danger ? "danger" : undefined}
           aria-haspopup={hasSubmenu || undefined}
           aria-expanded={hasSubmenu ? isSubOpen : undefined}
           className={MENU_ROW_CLASS}

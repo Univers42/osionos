@@ -162,7 +162,6 @@ export const SHARED_ACTIONS: PageMenuAction[] = [
     id: "delete",
     label: "Delete",
     icon: Trash2,
-    danger: true,
     scope: "both",
     section: "edit",
     run: (ctx) => ctx.onDelete(),
