@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { AssetRenderer } from "@univers42/ui-collection";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { FileText, ImageIcon, Music, Play } from "lucide-react";
 
 import {
@@ -21,10 +21,9 @@ import {
   type MediaBlockType,
 } from "@/entities/block";
 import {
-  getSlashMediaPickerTabs,
   type ResolvedCollectionMediaAsset,
   resolveCollectionMediaAsset,
-} from "@/shared/ui/assets/uiCollectionAssets";
+} from "@/shared/ui/assets/collectionMedia";
 
 interface MediaBlockPreviewProps {
   block: Block;
@@ -37,11 +36,7 @@ export function resolveMediaBlockAsset(
     return null;
   }
 
-  return resolveCollectionMediaAsset(
-    block.asset,
-    getSlashMediaPickerTabs(block.type),
-    MEDIA_BLOCK_LABELS[block.type],
-  );
+  return resolveCollectionMediaAsset(block.asset, MEDIA_BLOCK_LABELS[block.type]);
 }
 
 // Notion-style empty "void" row: an icon + prompt, full-width and muted. It reads
@@ -140,7 +135,7 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
       <div className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
         <div className="mb-3 flex items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--osio-bg-surface)] text-[var(--osio-fg-muted)]">
-            <AssetRenderer value={block.asset ?? ""} size={22} />
+            <IconValueView value={block.asset ?? ""} size={22} />
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-[var(--osio-fg-default)]">
@@ -167,7 +162,7 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
       className="flex items-center gap-3 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4 transition-colors hover:bg-[var(--osio-bg-hover)]"
     >
       <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--osio-bg-surface)] text-[var(--osio-fg-muted)]">
-        <AssetRenderer value={block.asset ?? ""} size={22} />
+        <IconValueView value={block.asset ?? ""} size={22} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-[var(--osio-fg-default)]">

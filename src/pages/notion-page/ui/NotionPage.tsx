@@ -17,10 +17,17 @@ import type { ActivePage } from "@/entities/page";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { pageConfigKey, resolvePageConfig, usePageConfigStore } from "@/shared/config/pageConfigStore";
+import { usePageAccessContext } from "@/shared/lib/auth/pageAccess";
+import { isPageReadOnly } from "@/shared/lib/auth/pageReadOnly";
 import { isPerfEnabled } from "@osionos/perf-probe";
 import { initRealtimeMessagesBridge } from "@/services/realtime-messages";
 import { PageHeaderBar } from "@/entities/page";
+import { LoadingPane } from "@/shared/ui";
 import { PageBody } from "./PageBody";
+import { PageBodyUnavailable } from "./PageBodyUnavailable";
+import { usePageBodyLoad } from "../model/usePageBodyLoad";
+import { PageConflictBanner } from "@/features/page-file/ui/PageConflictBanner";
+import { usePageHeaderBarProps } from "@/entities/page/model/usePageHeaderBarProps";
 import { PageHeader } from "./PageHeader";
 import { WikiPages } from "./WikiPages";
 import { PageOutlineRail } from "@/widgets/page-toc/PageOutlineRail";
@@ -37,6 +44,8 @@ interface OsionosPageProps {
   pageId: string;
   /** Per-pane active-page ref for the header; falls back to the global one. */
   activePageRef?: ActivePage | null;
+  /** "none" skips the in-page header bar: the workbench's EditorTitleBar owns it. */
+  chrome?: "bar" | "none";
 }
 
 /**
@@ -44,7 +53,7 @@ interface OsionosPageProps {
  * properties, connections — see PageHeader) + the block editor body (PageBody). The header
  * actions, comments, and property handlers live in their own files to keep this a thin shell.
  */
-export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef }) => {
+export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef, chrome = "bar" }) => {
   const renderCountRef = React.useRef(0);
   // Count COMMITTED renders in a dep-less effect: writing a ref during
   // render is illegal under react-hooks/refs (and invisible to React).
@@ -57,7 +66,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
   }, []);
 
   // Narrow shell tuple: the page object gets a new identity on every content
-  // commit (typing), but this shell only branches on the workspace id, the
+  // commit (typing), but this shell only branches on the
   // cover, and the first block's layout flags — subscribe to exactly those so
   // a commit inside PageBody doesn't re-render the header stack per pane.
   const shell = usePageStore(
@@ -68,6 +77,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
         workspaceId: page?.workspaceId,
         isWiki: page?.surface === "wiki",
         cover: page?.cover,
+        surface: page?.surface,
         soleBlock: page?.content?.length === 1,
         firstType: first?.type,
         firstLayoutMode: first?.layoutMode,
@@ -83,9 +93,18 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
   const activePage = activePageRef ?? globalActivePage;
   const activeUserId = useUserStore((s) => s.activeUserId);
   const safeUserId = activeUserId || "anonymous";
+  const headerBarProps = usePageHeaderBarProps(pageId, activePage?.workspaceId);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const storedPageConfig = usePageConfigStore((s) => s.configs[pageConfigKey(safeUserId, pageId)]);
   const pageConfig = useMemo(() => resolvePageConfig(storedPageConfig), [storedPageConfig]);
+  const body = usePageBodyLoad(pageId);
+
+  // A page the bridge would refuse the PATCH opens read-only: a keystroke there is
+  // dropped by the outbox and lost on the next reload. The selector returns a boolean,
+  // so typing (a new page identity per commit) never re-renders this shell.
+  const accessContext = usePageAccessContext();
+  const readOnlyByAccess = usePageStore((s) => isPageReadOnly(s.pageById(pageId), accessContext, false));
+  const readOnly = pageConfig.locked || readOnlyByAccess;
 
   useEffect(() => {
     initRealtimeMessagesBridge();
@@ -140,7 +159,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
         hasFullPageLayout ? "osionos-page--layout-canvas" : "",
         hasHeaderCanvas ? "osionos-page--header-canvas" : "",
         hasHeaderBand ? "osionos-page--header-band" : "",
-        pageConfig.locked ? "osionos-page--locked" : "",
+        readOnly ? "osionos-page--locked" : "",
         pageConfig.presentationMode ? "osionos-page--present" : "",
       ].filter(Boolean).join(" ")}
       style={pageStyle}
@@ -152,22 +171,25 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef 
     >
       {!hasFullPageLayout && <PageOutlineRail pageId={pageId} />}
 
-      <PageHeaderBar
-        key={pageId}
-        pageId={pageId}
-        workspaceId={shell.workspaceId ?? activePage?.workspaceId ?? ""}
-      />
+      {chrome === "bar" && <PageHeaderBar key={pageId} {...headerBarProps} />}
 
       <PageHeader
         pageId={pageId}
         activePage={activePage}
-        locked={pageConfig.locked}
+        locked={readOnly}
         commentsOpen={commentsOpen}
         onToggleComments={() => setCommentsOpen((value) => !value)}
         onCloseComments={() => setCommentsOpen(false)}
       />
 
-      <PageBody pageId={pageId} locked={pageConfig.locked} />
+      {/* Surfaced sandbox divergence (ADR-001 §7). Code pages own theirs inside
+          CodeFileView, so only the block editor shows this one. */}
+      {body.state === "ready" && shell.surface !== "code" && <PageConflictBanner pageId={pageId} />}
+      {body.state === "ready" && <PageBody pageId={pageId} locked={readOnly} />}
+      {body.state === "loading" && <LoadingPane label="Loading page" className="py-16" />}
+      {(body.state === "failed" || body.state === "signed-out") && (
+        <PageBodyUnavailable signedIn={body.state === "failed"} onRetry={body.retry} />
+      )}
 
       {shell.isWiki && shell.workspaceId ? (
         <div className="osionos-wiki-pages-wrap">

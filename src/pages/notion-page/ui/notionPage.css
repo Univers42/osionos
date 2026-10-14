@@ -1378,6 +1378,8 @@ button.osionos-page-breadcrumb:hover {
   caret-color: var(--osio-fg-default);
   resize: none;
   overflow: hidden;
+  /* Height follows the text in the normal layout pass (PageTitle.tsx keeps a JS fallback). */
+  field-sizing: content;
 }
 
 .osionos-page-title::placeholder {

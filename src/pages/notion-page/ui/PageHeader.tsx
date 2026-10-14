@@ -13,10 +13,11 @@
 import React from "react";
 import { LayoutDashboard, MessageSquare } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
-import { AssetRenderer } from "@univers42/ui-collection";
+import { IconImage } from "@univers42/ui-collection";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 
 import { usePageStore } from "@/store/usePageStore";
-import { IconImage, getCollectionEmojiValue } from "@/shared/ui/assets/uiCollectionAssets";
+import { getCollectionEmojiValue } from "@/shared/ui/assets/collectionEmoji";
 import { useRealtimeMessagesStore, type RealtimeMessage } from "@/services/realtime-messages";
 import {
   CoverAssetPicker,
@@ -30,7 +31,6 @@ import {
 import { classicHeaderTemplate } from "@/entities/page/model/headerTemplate";
 import { usePageHeaderActions } from "./usePageHeaderActions";
 import { usePageProperties } from "./usePageProperties";
-import { patchActivePageMetadata } from "./notionPageMeta";
 import { PageComments } from "./PageComments";
 import { TemplateHeader } from "./TemplateHeader";
 import { TemplateEditBanner } from "./TemplateEditBanner";
@@ -113,8 +113,8 @@ export const PageHeader: React.FC<Props> = ({ pageId, activePage, locked, commen
 
   function changeTitle(newTitle: string) {
     if (locked) return;
+    // updatePageTitle also patches the active page / breadcrumb / recents in the same set.
     updatePageTitle(pageId, newTitle);
-    patchActivePageMetadata(pageId, { title: newTitle });
   }
 
   const templateBanner = head.isTemplate ? <TemplateEditBanner pageId={pageId} /> : null;
@@ -187,7 +187,7 @@ export const PageHeader: React.FC<Props> = ({ pageId, activePage, locked, commen
         <div className="osionos-page-toolbar min-h-7 flex-wrap h-auto!">
           {!hasIcon && !locked && (
             <button type="button" className="osionos-page-toolbar-btn" onClick={actions.addIcon}>
-              <AssetRenderer value={getCollectionEmojiValue("sparkles")} size={14} />
+              <IconValueView value={getCollectionEmojiValue("sparkles")} size={14} />
               Add icon
             </button>
           )}

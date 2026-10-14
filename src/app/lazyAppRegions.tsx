@@ -18,15 +18,6 @@ import { lazy, Suspense } from "react";
  * entry chunk. The app shell (sidebar + auth) paints from the small entry
  * bundle while these regions stream in on demand.
  */
-// Import MainContent from its deep path, NOT the barrel: the barrel re-exports
-// PageBlocksRenderer, which statically pulls ReadOnlyBlock -> block-editor +
-// database-view (~1.1MB). Going through the barrel stapled that whole editor
-// tree onto the warm chunk; the deep path keeps the warm shell tiny and lets the
-// editor load on demand (when a page/dashboard actually mounts OsionosPage).
-const MainContentImpl = lazy(() =>
-  import("@/widgets/page-renderer/ui/MainContent").then((module) => ({ default: module.MainContent })),
-);
-
 const CanvasDebugRouteImpl = lazy(() =>
   import("@/features/block-editor/ui/canvas/__demo__/CanvasDebugRoute").then((module) => ({
     default: module.CanvasDebugRoute,
@@ -39,18 +30,16 @@ const StyleGuideRouteImpl = lazy(() =>
   })),
 );
 
-// The dedicated IDE layout (file tree + editor grid + terminal strip). Its own
-// chunk so the Monaco/IDE tree never touches the warm shell; loads only when
-// a workspace is flipped into IDE mode.
-const IdeShellImpl = lazy(() =>
-  import("@/widgets/ide-shell").then((module) => ({ default: module.IdeShell })),
+// Unified workbench (grid + dock + status bar). Own chunk.
+const WorkbenchImpl = lazy(() =>
+  import("@/widgets/workbench/ui/Workbench").then((module) => ({ default: module.Workbench })),
 );
 
-// Warm the page-renderer SHELL (grid + panes) in parallel with the entry bundle
-// so it is ready by the time auth resolves -- removes the lazy-load waterfall
-// from LCP without putting the editor back on the critical path. Deep path so we
-// warm only the shell, never the block-editor tree (that loads when a page opens).
-void import("@/widgets/page-renderer/ui/MainContent");
+// Warm the workbench SHELL (it statically holds the grid + panes) in parallel with
+// the entry bundle so it is ready by the time auth resolves -- removes the lazy-load
+// waterfall from LCP without putting the editor back on the critical path. Deep path
+// so we warm only the shell, never the block-editor tree (that loads when a page opens).
+void import("@/widgets/workbench/ui/Workbench");
 
 // Warm the page-editor chunk for the default Home view (it renders the dashboard
 // *page*, OsionosPage). Without warming, the editor only requests after the
@@ -86,10 +75,6 @@ const contentFallback = (
   </div>
 );
 
-export function LazyMainContent() {
-  return <Suspense fallback={contentFallback}>{<MainContentImpl />}</Suspense>;
-}
-
 export function LazyCanvasDebugRoute() {
   return <Suspense fallback={contentFallback}>{<CanvasDebugRouteImpl />}</Suspense>;
 }
@@ -98,6 +83,6 @@ export function LazyStyleGuideRoute() {
   return <Suspense fallback={contentFallback}>{<StyleGuideRouteImpl />}</Suspense>;
 }
 
-export function LazyIdeShell() {
-  return <Suspense fallback={contentFallback}>{<IdeShellImpl />}</Suspense>;
+export function LazyWorkbench() {
+  return <Suspense fallback={contentFallback}>{<WorkbenchImpl />}</Suspense>;
 }

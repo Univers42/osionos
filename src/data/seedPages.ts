@@ -13,7 +13,7 @@
 export type { SeedPage } from './seedBlockHelpers';
 
 import type { SeedPage } from './seedBlockHelpers';
-import { getCollectionEmojiValue } from '@/shared/ui/assets/uiCollectionAssets';
+import { getCollectionEmojiValue } from '@/shared/ui/assets/collectionEmoji';
 import {
   h1, h2, p, bullet, numbered, code, callout, divider,
 } from './seedBlockHelpers';

@@ -20,6 +20,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 /** Fixed namespace UUID for osionos record→note ids (random v4, frozen forever). */
 const RECORD_NOTE_NAMESPACE = '6f9619ff-8b86-d011-b42d-00c04fc964ff';
@@ -96,7 +97,9 @@ export function recordProperties(row, pkColumn) {
 /**
  * Build the osionos_pages upsert body for a record note. `databaseId` is
  * `baas:<dbId>:<table>` so the client template registry can key a RecordTemplate
- * off it. Owner-stamped + workspace-scoped by the caller (handleRecordOpen).
+ * off it. Owner-stamped by the FIRST opener + workspace-scoped by the caller
+ * (ensureRecordNote). 'shared': the note mirrors a record every member of the
+ * mounting workspace can already read, so any of them may read the note too.
  */
 export function recordNotePageBody({ dbId, table, pk, row, engine, workspaceId, userId, now }) {
 	const pkColumn = pkColumnForEngine(engine);
@@ -109,12 +112,31 @@ export function recordNotePageBody({ dbId, table, pk, row, engine, workspaceId, 
 		title: recordTitle(row, table, pk),
 		icon: 'icon:database',
 		surface: 'page',
-		visibility: 'private',
+		visibility: 'shared',
 		collaborators: [],
 		properties: recordProperties(row, pkColumn),
 		content: [],
 		updated_at: now,
 	};
+}
+
+// What a note takes from its record. Everything else — content, icon, cover, parent,
+// visibility, collaborators, owner, archived_at — belongs to the people writing in the
+// note: a note starts 'shared' and only its owner changes who may read it.
+const RECORD_DERIVED_FIELDS = ['title', 'properties'];
+
+/**
+ * The record-derived fields of `fresh` (a recordNotePageBody) that differ from the
+ * `stored` note, stamped with fresh.updated_at — or null when nothing changed, so a
+ * re-open of an unchanged record writes nothing and keeps updated_at.
+ * Ponytail: equality is isDeepStrictEqual on what PostgREST hands back; a value JSON
+ * does not round-trip (-0 comes back as 0) compares unequal and costs a needless
+ * refresh that bumps updated_at — never a lost edit.
+ */
+export function recordNoteRefresh(stored, fresh) {
+	const changed = RECORD_DERIVED_FIELDS.filter((key) => !isDeepStrictEqual(stored?.[key], fresh[key]));
+	if (changed.length === 0) return null;
+	return { ...Object.fromEntries(changed.map((key) => [key, fresh[key]])), updated_at: fresh.updated_at };
 }
 
 /**

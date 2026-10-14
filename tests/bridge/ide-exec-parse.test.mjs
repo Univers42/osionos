@@ -31,13 +31,12 @@ test("parseResizeFrame rejects paste noise that merely starts with the magic", (
 
 test("extractWsAuth prefers the subprotocol token and reports the app protocol", () => {
   const request = { headers: { "sec-websocket-protocol": "osio-ide.v1, osio-token.osionos_v1.abc.def" } };
-  const url = new URL("http://x/api/ide/pty?token=stale-query-token");
-  assert.deepEqual(extractWsAuth(request, url), { token: "osionos_v1.abc.def", protocol: "osio-ide.v1" });
+  assert.deepEqual(extractWsAuth(request), { token: "osionos_v1.abc.def", protocol: "osio-ide.v1" });
 });
 
-test("extractWsAuth falls back to the query token when no subprotocol is offered", () => {
-  const url = new URL("http://x/api/ide/pty?token=qtok");
-  assert.deepEqual(extractWsAuth({ headers: {} }, url), { token: "qtok", protocol: undefined });
+test("extractWsAuth ignores a query token when no subprotocol is offered", () => {
+  const request = { url: "/api/ide/pty?token=qtok", headers: {} };
+  assert.deepEqual(extractWsAuth(request), { token: undefined, protocol: undefined });
 });
 
 test("handshake echoes the selected subprotocol", () => {

@@ -84,7 +84,7 @@ function pageNode(row) {
 	};
 }
 
-/** Build the owner-scoped page graph: page+folder nodes + parent + relation + tag edges. */
+/** Build the page graph of `rows` (already filtered to what the caller may read): page+folder nodes + parent + relation + tag edges. */
 export function pagesToGraph(rows) {
 	const pages = (Array.isArray(rows) ? rows : []).filter(isGraphPageRow);
 	const ids = new Set(pages.map((row) => String(row.id)));

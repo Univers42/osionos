@@ -40,8 +40,8 @@ import {
 import { copyBlocks } from "./blockClipboard";
 import { getBlockDraftContent } from "./blockDraftStore";
 import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
+import { BLOCK_TRANSFORM_OPTIONS } from "./blockTransformOptions";
 import {
-  BLOCK_TRANSFORM_OPTIONS,
   changeBlockTypeInTree,
   changeBlockToColumnsInTree,
   changeBlockToToggleHeadingInTree,

@@ -16,7 +16,7 @@ import { Play } from "lucide-react";
 import {
   normalizeMediaSource,
   type CoverPickerAsset,
-} from "@/shared/ui/assets/uiCollectionAssets";
+} from "@/shared/ui/assets/collectionMedia";
 
 export function isGradientValue(value: string): boolean {
   return value.startsWith("linear-gradient") || value.startsWith("radial-gradient");

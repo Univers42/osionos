@@ -18,7 +18,7 @@ import { createIdeSandboxHandler } from "../../scripts/bridge-ide-sandbox.mjs";
 const CONFIG = { allowedOrigin: "https://localhost:3001" };
 const U = "11111111-1111-4111-8111-111111111111";
 const W = "22222222-2222-4222-8222-222222222222";
-const ENABLED = { OSIONOS_IDE_SANDBOX: "1", OSIONOS_IDE_DOCKER_HOST: "proxy:2375" };
+const ENABLED = { OSIONOS_IDE_SANDBOX: "1", OSIONOS_IDE_DOCKER_HOST: "proxy:2375", OSIONOS_IDE_ALLOWED_SUBJECTS: U };
 
 function fakeRes() {
   return { statusCode: 0, body: null,

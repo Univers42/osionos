@@ -16,7 +16,7 @@
 // terminal or the session POST), or an open tab would keep it alive indefinitely.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ensureSandbox, SANDBOX_HARD_MAX_MS } from "../../scripts/bridge-ide-sandbox.mjs";
+import { ensureSandbox, maxRunningBoxes, SANDBOX_HARD_MAX_MS } from "../../scripts/bridge-ide-sandbox.mjs";
 
 const ENV = { OSIONOS_IDE_SANDBOX: "1", OSIONOS_IDE_DOCKER_HOST: "proxy:2375" };
 const NEVER = "0001-01-01T00:00:00Z";
@@ -32,8 +32,9 @@ const names = () => {
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const iso = (ms) => new Date(ms).toISOString();
 
-/** A fake docker client over one container; `state` null = absent. */
-function fakeDocker(state, { createError = null, inspectOverrides = [] } = {}) {
+/** A fake docker client over one container; `state` null = absent. `othersRunning` other
+ *  managed boxes are running (the host-wide cap counts them). */
+function fakeDocker(state, { createError = null, inspectOverrides = [], othersRunning = 0 } = {}) {
   const calls = [];
   const view = () => state && { Created: iso(state.created), State: { Running: state.running, FinishedAt: state.finished } };
   return {
@@ -48,6 +49,12 @@ function fakeDocker(state, { createError = null, inspectOverrides = [] } = {}) {
       state = { created: Date.now(), running: false, finished: NEVER };
     },
     async start() { calls.push("start"); await tick(); if (state) state.running = true; },
+    async listManaged() {
+      calls.push("list");
+      await tick();
+      const others = Array.from({ length: othersRunning }, () => ({ State: "running" }));
+      return state?.running ? [...others, { State: "running" }] : others;
+    },
   };
 }
 const count = (calls, name) => calls.filter((c) => c === name).length;
@@ -132,4 +139,50 @@ test("a box another process restarted meanwhile is not force-removed", async () 
   const docker = fakeDocker(null, { inspectOverrides: [stopped, running] });
   assert.deepEqual(await ensureSandbox(ENV, names(), { docker }), { status: "running", reused: true });
   assert.equal(count(docker.calls, "remove"), 0);
+});
+
+test("maxRunningBoxes: an integer 1-50 from OSIONOS_IDE_MAX_BOXES, else 2", () => {
+  assert.equal(maxRunningBoxes({}), 2);
+  assert.equal(maxRunningBoxes({ OSIONOS_IDE_MAX_BOXES: "3" }), 3);
+  for (const bad of ["0", "51", "x", "2.5", "", " "]) assert.equal(maxRunningBoxes({ OSIONOS_IDE_MAX_BOXES: bad }), 2, bad);
+});
+
+test("the host-wide cap refuses a new box with 503 before creating or starting anything", async () => {
+  const docker = fakeDocker(null, { othersRunning: 2 });
+  await assert.rejects(ensureSandbox(ENV, names(), { docker }), (error) => error.status === 503);
+  assert.equal(count(docker.calls, "create") + count(docker.calls, "start") + count(docker.calls, "volume"), 0);
+});
+
+test("a higher OSIONOS_IDE_MAX_BOXES lets the third box start", async () => {
+  const docker = fakeDocker(null, { othersRunning: 2 });
+  const result = await ensureSandbox({ ...ENV, OSIONOS_IDE_MAX_BOXES: "3" }, names(), { docker });
+  assert.deepEqual(result, { status: "running", reused: false });
+});
+
+test("a box that already runs is reused even when the cap is reached", async () => {
+  const docker = fakeDocker({ created: Date.now(), running: true, finished: NEVER }, { othersRunning: 2 });
+  assert.deepEqual(await ensureSandbox(ENV, names(), { docker }), { status: "running", reused: true });
+  assert.equal(count(docker.calls, "create") + count(docker.calls, "list"), 0);
+});
+
+test("two different boxes provisioned at once cannot both pass the cap", async () => {
+  // One box already runs (cap 2): whichever request counts first starts; the other must see it.
+  let running = 1;
+  const shared = (state) => ({
+    async inspect() { await tick(); return state.exists ? { State: { Running: state.running } } : null; },
+    async remove() { await tick(); },
+    async ensureVolume() { await tick(); },
+    async create() { await tick(); state.exists = true; },
+    async start() { await tick(); await tick(); state.running = true; running += 1; },
+    async listManaged() { await tick(); return Array.from({ length: running }, () => ({ State: "running" })); },
+  });
+  const results = await Promise.allSettled([
+    ensureSandbox(ENV, names(), { docker: shared({ exists: false, running: false }) }),
+    ensureSandbox(ENV, names(), { docker: shared({ exists: false, running: false }) }),
+  ]);
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+  const refused = results.filter((r) => r.status === "rejected");
+  assert.equal(refused.length, 1);
+  assert.equal(refused[0].reason.status, 503);
+  assert.equal(running, 2);
 });

@@ -16,6 +16,12 @@ import { applyEmojiInsert, matchEmojiTrigger } from '@/shared/lib/emoji/emojiTri
 import { parseIconValue } from '@osionos/ui/shared/iconValue';
 import { EmojiPicker } from '@/shared/ui';
 
+// `field-sizing: content` (notionPage.css) sizes the title in the browser's own layout pass.
+// The fallback below (height 0, read scrollHeight, set it) forces a synchronous layout and
+// moves everything under the title twice per keystroke - 3.9 ms of a 5 000-page keystroke
+// (keystrokeProfile.spec.mjs, 2026-10-13) - so it runs only where the property is missing.
+const TITLE_SIZES_ITSELF = typeof CSS !== 'undefined' && CSS.supports('field-sizing', 'content');
+
 interface PageTitleProps {
   /** Current page title. */
   title: string;
@@ -45,11 +51,13 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
   const [emojiFilter, setEmojiFilter] = useState<string | null>(null);
 
   useLayoutEffect(() => {
-    if (ref.current) fitToContent(ref.current);
+    if (TITLE_SIZES_ITSELF || !ref.current) return;
+    fitToContent(ref.current);
   }, [title]);
 
-  // Small text and the page font change the glyphs, not the textarea's box (its
-  // height is pinned inline), so the observer below never hears of them. The page
+  // Without field-sizing the height is pinned inline, so two more cases need a
+  // re-measure. Small text and the page font change the glyphs, not the
+  // textarea's box, so the observer below never hears of them. The page
   // re-renders this component when they change, so compare after each render;
   // fitting changes the height only, so it cannot retrigger this.
   // Ponytail: a font change that reaches the title without re-rendering it (a
@@ -58,7 +66,7 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
   const fittedFont = useRef('');
   useLayoutEffect(() => {
     const textarea = ref.current;
-    if (!textarea) return;
+    if (TITLE_SIZES_ITSELF || !textarea) return;
     const { fontSize, fontFamily } = getComputedStyle(textarea);
     const font = `${fontSize} ${fontFamily}`;
     if (font === fittedFont.current) return;
@@ -71,7 +79,7 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
   // with the same width, which would otherwise loop.
   useEffect(() => {
     const textarea = ref.current;
-    if (!textarea || typeof ResizeObserver === 'undefined') return undefined;
+    if (TITLE_SIZES_ITSELF || !textarea || typeof ResizeObserver === 'undefined') return undefined;
     let lastWidth = textarea.clientWidth;
     const observer = new ResizeObserver(() => {
       if (textarea.clientWidth === lastWidth) return;

@@ -15,11 +15,15 @@ import { Pin } from "lucide-react";
 import { WorkspaceSwitcher } from "@/features/auth";
 import { IconButton } from "@/shared/ui";
 import { useUIStore, type ActivePanel } from "@/shared/config/uiStore";
-import { FilesPanel } from "./panels/FilesPanel";
 import { PANEL_LOADERS, prefetchPanel, readyPanel } from "./panelLoaders";
 
-// Only the Explorer loads eagerly; every other panel is a lazy chunk the rail
-// prefetches on hover (panelLoaders.ts).
+// Every panel is a lazy chunk the rail prefetches on hover (panelLoaders.ts).
+// The Explorer takes props, so it has its own: it and its open handler load
+// together, and the workbench's file tree stays off the first paint.
+const ExplorerPanel = React.lazy(() =>
+  Promise.all([import("./panels/ExplorerPanel"), import("../model/openWorkspaceEntry")]).then(([panel, entry]) => ({
+    default: (props: Omit<Props, "peek">) => <panel.ExplorerPanel {...props} onOpenFile={entry.openWorkspaceEntry} />,
+  })));
 const LAZY_PANELS = Object.fromEntries(
   Object.entries(PANEL_LOADERS).map(([panel, load]) => [panel, React.lazy(load)]),
 ) as Record<keyof typeof PANEL_LOADERS, React.LazyExoticComponent<React.ComponentType>>;
@@ -34,6 +38,9 @@ const PANEL_TITLES: Record<ActivePanel, string> = {
   public: "Shared", // label-only rename (AOC §12); id stays "public" (R-R3)
   marketplace: "Marketplace",
   database: "Databases",
+  scm: "Source Control",
+  run: "Run",
+  problems: "Problems",
 };
 
 interface Props {
@@ -51,7 +58,7 @@ const PanelBody = React.memo(function PanelBody({ panel, onOpenSettings, onOpenT
   // Chosen once per mount: swapping the lazy wrapper for the loaded component
   // later would be a different element type, and React would remount the panel.
   const [Body] = useState(() => readyPanel(panel) ?? LAZY_PANELS[panel as keyof typeof LAZY_PANELS]);
-  if (panel === "files") return <FilesPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />;
+  if (panel === "files") return <ExplorerPanel onOpenSettings={onOpenSettings} onOpenTrash={onOpenTrash} onOpenConsole={onOpenConsole} />;
   return Body ? <Body /> : null;
 });
 

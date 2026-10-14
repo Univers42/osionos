@@ -23,6 +23,12 @@
  * page that left the desired set is just forgotten from the ledger (no network). The
  * subscription is gated to page-relevant store changes; the ledger is reloaded per flush so
  * hydrate's seeds are honoured. No-op without a bridge. Mount once near the app root.
+ *
+ * One PATCH comes back in one of four results, each with its own rule:
+ *   "ok"      → written; advance the ledger. `ignored` lists the fields the bridge declined.
+ *   "refused" → 403: the viewer may not write the page; the edit is recovered, never dropped.
+ *   "gone"    → 404: the page is gone server-side; the recovery evicts the local copy.
+ *   "failed"  → transient (offline / 5xx / 429 / no session); leave pending and retry.
  */
 
 import { useEffect, useRef } from "react";
@@ -31,18 +37,105 @@ import { derivePageState, flushScheduledPagesCachePersist } from "@/store/pageSt
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useUserStore } from "@/features/auth";
 import { API_BASE } from "@/shared/api/client";
-import { canEditPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
+import {
+  canEditPage,
+  getCurrentPageAccessContext,
+  markPageWriteRefused,
+} from "@/shared/lib/auth/pageAccess";
 import { flushAllBlockDrafts } from "@/features/block-editor/model/blockDraftStore";
 import { buildDesiredPages, PAGE_OUTBOX_KEY } from "./pageStamp";
 import { publishPage, publishPageKeepalive } from "./pageOutbox";
 import { hydratePagesFromBaas } from "./hydratePages";
+import { recoverRefusedEdit } from "./refusedEditRecovery";
+import { refusedEditDeps } from "./refusedEditDeps";
+import {
+  MAX_RECOVERIES_PER_FLUSH,
+  OUTBOX_RECOVERING_KEY,
+  applyRecoveryOutcome,
+  clearRecoveringMarks,
+  ignoredWarning,
+} from "./outboxRecovery";
 import { computeSyncActions, loadLedger, saveLedger } from "@osionos/outbox-ledger";
+import type { SyncLedger } from "@osionos/outbox-ledger";
+import type { PageEntry } from "@/entities/page";
 
 const DEBOUNCE_MS = 800;
 /** First retry delay when the server pushes back; doubles up to MAX_RETRY_MS. */
 const RETRY_MS = 15000;
 /** Cap on the exponential backoff so a recovered server is still picked up promptly. */
 const MAX_RETRY_MS = 120000;
+
+/**
+ * One page's turn in the flush. `budget` is shared so the batch stays bounded. Outcomes are
+ * booked in `confirmed` / `forgotten`, never on a loaded ledger: the flush applies them to
+ * the ledger it reloads after the awaits.
+ */
+interface OutboxPageJob {
+  page: PageEntry;
+  id: string;
+  stamp: string;
+  confirmed: SyncLedger;
+  forgotten: Set<string>;
+  budget: { left: number };
+}
+
+/**
+ * Publish one page and book its outcome. O(1) besides the PATCH itself.
+ * A refusal or a missing page is not dropped here — the work still belongs to the
+ * viewer, so it goes through the recovery before anything is forgotten.
+ */
+async function publishOutboxPage(job: OutboxPageJob): Promise<"continue" | "stop"> {
+  const { page, id, stamp, confirmed, budget } = job;
+  const { result, ignored } = await publishPage(page);
+  if (result === "ok") {
+    confirmed[id] = stamp; // advance ONLY on confirm
+    const warn = ignoredWarning(page.title, ignored);
+    if (warn) refusedEditDeps().notify(warn);
+    return "continue";
+  }
+  if (result === "refused" || result === "gone") {
+    if (budget.left <= 0) return "stop"; // this flush already spent its recoveries
+    budget.left -= 1;
+    return recoverRefusedPublish(page, id, job.forgotten);
+  }
+  // Transient (offline / 5xx / 429): STOP. Hammering the rest of the batch is what
+  // turns a rate-limited server into a self-sustaining 429/502 storm. Back off and
+  // resume next cycle — the pages already confirmed above stay advanced.
+  return "stop";
+}
+
+/**
+ * Run the recovery for one refused/gone page. The mark is written BEFORE the network
+ * call so a hydrate landing mid-recovery keeps the local copy (it holds the only copy
+ * of the refused edit), and cleared by applyRecoveryOutcome once the edit is safely
+ * moved. O(1) besides the recovery's own GET + POST.
+ */
+async function recoverRefusedPublish(
+  page: PageEntry, id: string, forgotten: Set<string>,
+): Promise<"continue" | "stop"> {
+  const recovering = loadLedger(OUTBOX_RECOVERING_KEY);
+  recovering[id] = new Date().toISOString();
+  saveLedger(OUTBOX_RECOVERING_KEY, recovering);
+  const outcome = await recoverRefusedEdit(
+    page,
+    getCurrentPageAccessContext()?.privateWorkspaceIds[0] ?? null,
+    refusedEditDeps(),
+  );
+  // applyRecoveryOutcome books on a ledger: it gets this page's entry alone, and a removal
+  // there becomes a `forgotten` booking for the flush to apply.
+  const entry: SyncLedger = { [id]: "" };
+  const step = applyRecoveryOutcome(entry, recovering, id, outcome, markPageWriteRefused);
+  if (!Object.hasOwn(entry, id)) forgotten.add(id);
+  saveLedger(OUTBOX_RECOVERING_KEY, recovering);
+  return step;
+}
+
+/** A settled page no longer needs hydrate to protect its local copy. O(k). */
+function settleRecoveringMarks(ids: string[]): void {
+  if (ids.length === 0) return;
+  const recovering = loadLedger(OUTBOX_RECOVERING_KEY);
+  if (clearRecoveringMarks(recovering, ids)) saveLedger(OUTBOX_RECOVERING_KEY, recovering);
+}
 
 export function usePageSync(): void {
   const activeUserId = useUserStore((store) => store.activeUserId);
@@ -99,22 +192,27 @@ export function usePageSync(): void {
           (page) => !!context && canEditPage(page, context), // never publish a non-editable page
         );
         const { toPublish, toUnpublish } = computeSyncActions(desired, ledger);
+        const confirmed: SyncLedger = {};
+        const forgotten = new Set(toUnpublish); // left desired set → forget (no network)
         let failed = false;
+        const budget = { left: MAX_RECOVERIES_PER_FLUSH };
+        const settled: string[] = [];
         for (const id of toPublish) {
           const page = payloads.get(id);
           const stamp = desired.get(id);
           if (!page || stamp === undefined) continue;
-          const result = await publishPage(page);
-          if (result === "ok") { ledger[id] = stamp; continue; } // advance ONLY on confirm
-          if (result === "gone") { delete ledger[id]; continue; } // deleted/unowned → forget it
-          // Transient (offline / 5xx / 429): STOP. Hammering the rest of the batch is what
-          // turns a rate-limited server into a self-sustaining 429/502 storm. Back off and
-          // resume next cycle — the pages already confirmed above stay advanced.
-          failed = true;
-          break;
+          const step = await publishOutboxPage({ page, id, stamp, confirmed, forgotten, budget });
+          if (step === "stop") { failed = true; break; }
+          settled.push(id);
         }
-        for (const id of toUnpublish) delete ledger[id]; // left desired set → forget (no network)
-        saveLedger(PAGE_OUTBOX_KEY, ledger);
+        // Reloaded after the awaits: a content fetch or page-list merge may have recorded a
+        // page as synced meanwhile, and writing back the copy loaded above would drop that
+        // record and PATCH the server's own body back on the next flush.
+        const latest = loadLedger(PAGE_OUTBOX_KEY);
+        Object.assign(latest, confirmed);
+        for (const id of forgotten) delete latest[id];
+        saveLedger(PAGE_OUTBOX_KEY, latest);
+        settleRecoveringMarks([...settled, ...toUnpublish]);
         if (failed) scheduleRetry(); else clearRetry();
       } finally {
         flushing = false;

@@ -36,6 +36,7 @@ import {
 	blockedViewerBy,
 	directoryFuzzyFilter,
 	httpError,
+	memberWorkspacesAmong,
 	orgWorkspaceId,
 	readJsonBody,
 	requireUuid,
@@ -43,6 +44,7 @@ import {
 	safeText,
 	sendJson,
 } from './bridge-social-core.mjs';
+import { canReadPageRowAsMember } from './bridge-page-read.mjs';
 
 const AVATAR_MAX_BYTES = 200 * 1024;
 const AVATAR_BODY_LIMIT = 320 * 1024;
@@ -203,24 +205,27 @@ async function embedDirectory(deps, session, response, config) {
 /**
  * GET /api/profile/:userId/shares — the posts this member shared to their profile
  * (osionos_feed_shares target=profile), newest first + de-duped, with page
- * title/icon/cover for a gallery render. Pages outside osionos_pages (live-DB
- * rows) render as "Untitled".
+ * title/icon/cover for a gallery render. A page the VIEWER may not see (not a member
+ * of its workspace, or not allowed to read it) is left out. Pages outside
+ * osionos_pages (live-DB rows) render as "Untitled".
  */
-async function listProfileShares(deps, userId, response, config) {
+async function listProfileShares(deps, session, userId, response, config) {
 	const shares = await rest(config, deps.fetchImpl, `osionos_feed_shares?user_id=eq.${userId}&target=eq.profile&select=page_id,created_at&order=created_at.desc&limit=60`);
 	const list = Array.isArray(shares) ? shares : [];
 	const pageIds = [...new Set(list.map((row) => row.page_id).filter((id) => UUID_REGEX.test(String(id))))];
 	const pagesById = new Map();
 	if (pageIds.length > 0) {
-		const pages = await rest(config, deps.fetchImpl, `osionos_pages?id=in.(${pageIds.join(',')})&select=id,title,icon,cover`);
+		const pages = await rest(config, deps.fetchImpl, `osionos_pages?id=in.(${pageIds.join(',')})&select=id,title,icon,cover,workspace_id,owner_id,visibility,collaborators`);
 		for (const page of Array.isArray(pages) ? pages : []) pagesById.set(page.id, page);
 	}
+	const members = await memberWorkspacesAmong(config, deps.fetchImpl, session, [...pagesById.values()].map((page) => page.workspace_id));
 	const seen = new Set();
 	const items = [];
 	for (const row of list) {
 		if (seen.has(row.page_id)) continue; // one card per page (latest share), not every re-share
 		seen.add(row.page_id);
 		const page = pagesById.get(row.page_id);
+		if (page && !canReadPageRowAsMember(page, session.userId, members)) continue;
 		items.push({ pageId: row.page_id, title: page?.title || 'Untitled', icon: page?.icon ?? null, cover: page?.cover ?? null, sharedAt: row.created_at });
 	}
 	return sendJson(response, 200, { ok: true, shares: items }, config);
@@ -243,7 +248,7 @@ export function createProfileHandler({ config, verifySession, fetchImpl = fetch,
 			if (pathname === '/api/profile/heartbeat' && method === 'POST') return await heartbeat(deps, session, response, requestConfig);
 			const sharesMatch = /^\/api\/profile\/([0-9a-f-]{36})\/shares$/i.exec(pathname);
 			if (sharesMatch && method === 'GET') {
-				return await listProfileShares(deps, requireUuid(sharesMatch[1], 'userId'), response, requestConfig);
+				return await listProfileShares(deps, session, requireUuid(sharesMatch[1], 'userId'), response, requestConfig);
 			}
 			const profileMatch = /^\/api\/profile\/([0-9a-f-]{36})$/i.exec(pathname);
 			if (profileMatch && method === 'GET') {

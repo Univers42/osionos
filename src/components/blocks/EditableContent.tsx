@@ -68,6 +68,7 @@ import {
   type InlineColorOption,
 } from "@/shared/ui/assets/inlineTextStyles";
 import { usePageStore } from "@/store/usePageStore";
+import { queueInputFlush } from "@/shared/lib/editor-input/queuedInput";
 import {
   canReadPage,
   getCurrentPageAccessContext,
@@ -704,6 +705,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   const lastEmittedSourceRef = useRef(content);
   const pendingChangeRef = useRef<string | null>(null);
   const pendingChangeFrameRef = useRef<number | null>(null);
+  const releaseQueuedFlushRef = useRef<(() => void) | null>(null);
   // ponytail: dedup the inline re-serialize. `input` fires before `keyup` for every
   // content-mutating key, so keyup's fallback handleInput() re-walks the DOM for nothing.
   // Set here when input handled it, reset on keydown; keyup only runs when input did NOT.
@@ -802,6 +804,8 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   }, [content]);
 
   const cancelPendingChangeFrame = useCallback(() => {
+    releaseQueuedFlushRef.current?.();
+    releaseQueuedFlushRef.current = null;
     if (pendingChangeFrameRef.current === null) return;
     cancelAnimationFrame(pendingChangeFrameRef.current);
     pendingChangeFrameRef.current = null;
@@ -832,13 +836,13 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     }
     if (pendingChangeFrameRef.current !== null) return;
 
+    // A draft commit before the frame (a menu taking Enter) flushes this batch first.
+    releaseQueuedFlushRef.current = queueInputFlush(flushPendingChange);
     pendingChangeFrameRef.current = requestAnimationFrame(() => {
       pendingChangeFrameRef.current = null;
-      const nextSource = pendingChangeRef.current;
-      pendingChangeRef.current = null;
-      if (nextSource != null) emitChange(nextSource);
+      flushPendingChange();
     });
-  }, [emitChange, flushPendingChange]);
+  }, [flushPendingChange]);
 
 
   const renderContent = useCallback(

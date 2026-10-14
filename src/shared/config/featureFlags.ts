@@ -32,7 +32,6 @@ export type FeatureFlagName =
   | "osio.publish"
   | "osio.draw"
   | "osio.whiteboard"
-  | "osio.ide"
   | "osio.panezoom";
 
 /**
@@ -182,16 +181,6 @@ export function isDrawEnabled(): boolean {
  *  localStorage key, or `VITE_OSIO_WHITEBOARD=0`. */
 export function isWhiteboardEnabled(): boolean {
   return isFeatureFlagEnabled("osio.whiteboard", true);
-}
-
-/** The IDE / Dev-Mode surface: line-based code files (`surface: "code"`), a
- *  Monaco editor, and (server-gated) a sandboxed run terminal. Default OFF —
- *  the whole feature is additive and must never affect block pages. Turn on via
- *  `?osio.ide=1`, the `osio.ide` localStorage key, or `VITE_OSIO_IDE=1`. Code
- *  EXECUTION is double-gated: this flag AND the bridge env `OSIONOS_RUNNER_URL`
- *  must both be set, so the flag alone can never open an execution path. */
-export function isIdeEnabled(): boolean {
-  return isFeatureFlagEnabled("osio.ide", false);
 }
 
 /** Per-pane zoom: Ctrl +/-/0 and Ctrl+wheel zoom the selected split instead of

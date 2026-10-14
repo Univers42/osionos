@@ -35,7 +35,7 @@ async function openDatabaseHome(page) {
 /** The database as a single full-screen TAB (Files Gallery) — stable for editing flows.
  *  The folder rail (and its "Open as page" button) now lives in the Explorer
  *  sidebar's Gallery mode, not directly on the ?home=workspace surface (moved by
- *  commit 73da097 — see FilesPanel.tsx / ExplorerViewSwitch.tsx). */
+ *  commit 73da097 — see ExplorerPanel.tsx / ExplorerViewSwitch.tsx). */
 async function openDatabaseTab(page) {
   await page.goto("/?home=workspace");
   await page.getByRole("button", { name: "Gallery" }).click();

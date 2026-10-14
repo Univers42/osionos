@@ -20,8 +20,8 @@ import { codeBlockOf, createCodeFileBlock } from "../model/codeFile";
 import { languageById, languageForFileName } from "../model/ideLanguages";
 import { useCodeRunner } from "../model/useCodeRunner";
 import { canFormat, formatCode } from "../model/formatCode";
-import { pathForPage } from "../model/idePaths";
-import { useIdeModeStore } from "../model/ideModeStore";
+import { pagePathOf } from "../model/pagePathOf";
+import { isSandboxBound, useSandboxBound } from "../model/useSandboxBinding";
 import { ideFsWrite } from "../model/ideFsClient";
 import { recordSyncedHash } from "../model/ideSyncEngine";
 import { useIdeRevealBus } from "../model/ideRevealBus";
@@ -31,8 +31,6 @@ import type { IDisposable } from "../model/monacoRuntime";
 import { replaceEditorText, useMonacoEditor, type EditorStatus } from "./useMonacoEditor";
 import { RunConsole } from "./RunConsole";
 import "./monacoEditor.css";
-
-const resolvePage = (id: string) => usePageStore.getState().pageById(id);
 
 /**
  * The IDE editor for a `surface: "code"` page. Monaco owns the document
@@ -48,7 +46,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   const page = usePageStore((s) => s.pageById(pageId));
   const jwt = useUserStore((s) => s.activePageJwt() ?? "");
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
-  const isIdeMode = useIdeModeStore((s) => s.isIdeMode(workspaceId));
+  const bound = useSandboxBound(workspaceId);
   const block = codeBlockOf(page);
   const contentLoaded = Array.isArray(page?.content);
 
@@ -75,14 +73,14 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   const [showConsole, setShowConsole] = React.useState(false);
   const [formatError, setFormatError] = React.useState<string | null>(null);
 
-  // Store write + sandbox mirror (IDE mode only). ideFsWrite records the echo
-  // hash → no writeback loop. Reads the stores via getState() (no stale closure).
+  // Store write + sandbox mirror — sandbox-bound (IDE mode, or workbench with
+  // the sandbox online) only. ideFsWrite records the echo hash → no writeback loop; getState() avoids stale closures.
   const save = React.useCallback((content: string) => {
     if (!blockId) return;
     usePageStore.getState().updateBlock(pageId, blockId, { content });
     const wsId = useUserStore.getState().activeWorkspace()?._id ?? "";
-    if (wsId && useIdeModeStore.getState().isIdeMode(wsId)) {
-      void ideFsWrite(wsId, pathForPage(pageId, resolvePage), content);
+    if (wsId && isSandboxBound(wsId)) {
+      void ideFsWrite(wsId, pagePathOf(pageId), content);
     }
   }, [pageId, blockId]);
 
@@ -94,7 +92,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     pageId,
     blockId,
     monacoId: lang.monacoId,
-    uri: `file:///workspace/${pathForPage(pageId, resolvePage)}`,
+    uri: `file:///workspace/${pagePathOf(pageId)}`,
     readInitialText: () => codeBlockOf(usePageStore.getState().pageById(pageId))?.content ?? "",
     onSave: save,
     onStatus: setStatus,
@@ -102,21 +100,21 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     onFormat: () => formatRef.current(),
   });
 
-  // Run the CURRENT editor text. In IDE Workspace mode, run in the sandbox's REAL
+  // Run the CURRENT editor text. When the workspace is bound to a sandbox, run in its REAL
   // interactive PTY so stdin/input() work (the one-shot runner has no stdin →
   // input() gets EOF). Otherwise fall back to that stateless runner.
   const runNow = React.useCallback(() => {
     const source = editorRef.current?.getValue();
     if (source === undefined) return;
     const wsId = useUserStore.getState().activeWorkspace()?._id ?? "";
-    if (wsId && useIdeModeStore.getState().isIdeMode(wsId) && lang.runnable && lang.runCmd) {
-      const relPath = pathForPage(pageId, resolvePage);
+    if (wsId && isSandboxBound(wsId) && lang.runnable && lang.runCmd) {
+      const relPath = pagePathOf(pageId);
       const shellPath = `'/workspace/${relPath.replace(/'/g, "'\\''")}'`;
       const command = lang.runCmd.replaceAll("{file}", shellPath);
-      useIdeModeStore.getState().setBottomOpen(true); // reveal/connect the terminal
       // Write the latest text FIRST, then dispatch the run — so a fast PTY never
       // executes a stale file. If the terminal is still connecting, the bus keeps
       // the request until it opens; if already open, the subscribe fires it.
+      // The workbench opens its dock on run request (useOpenDockOnRunRequest).
       void ideFsWrite(wsId, relPath, source).then(() => useTerminalRunBus.getState().requestRun(command));
       return;
     }
@@ -179,22 +177,22 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
     instance.focus();
   }, [pendingReveal, pageId, blockId, editorRef]);
 
-  // Wire the language server ONLY in IDE mode (keeps the LSP layer out of the
-  // base editor chunk — dynamic import). Re-attaches on file/lang change; the
-  // URI matches the materialized on-disk path so cross-file resolution works.
+  // Wire the language server ONLY when sandbox-bound (IDE mode, or workbench
+  // with the sandbox online) — keeps the LSP layer out of the base editor chunk
+  // (dynamic import). Re-attaches on file/lang change; the URI matches the on-disk path for cross-file resolution.
   React.useEffect(() => {
-    if (!isIdeMode || !workspaceId || !blockId) return;
+    if (!bound || !workspaceId || !blockId) return;
     let active = true;
     let attached: IDisposable | null = null;
     void import("../model/lspMonaco").then(async ({ attachLsp }) => {
       const model = editorRef.current?.getModel();
       if (!active || !model) return;
-      const handle = await attachLsp(model, languageId, lang.monacoId, `file:///workspace/${pathForPage(pageId, resolvePage)}`, workspaceId);
+      const handle = await attachLsp(model, languageId, lang.monacoId, `file:///workspace/${pagePathOf(pageId)}`, workspaceId);
       if (!active) { handle?.dispose(); return; }
       attached = handle;
     });
     return () => { active = false; attached?.dispose(); };
-  }, [pageId, blockId, languageId, lang.monacoId, isIdeMode, workspaceId, editorRef]);
+  }, [pageId, blockId, languageId, lang.monacoId, bound, workspaceId, editorRef]);
 
   if (!contentLoaded || !blockId) return <LoadingPane />;
 

@@ -14,7 +14,7 @@ import React from "react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 // Deep paths, NOT the `@/widgets/database-view` barrel: this file is reached
-// WARM (FilesPanel → FolderRail) and the barrel statically pulls DatabaseBlock +
+// WARM (ExplorerPanel → FolderRail) and the barrel statically pulls DatabaseBlock +
 // WorkspaceDatabaseBlock (→ the editor) + dataSourceProvider (→ the ~458KB seed
 // JSON) onto the entry chunk. workspaceNav is zustand-only; workspaceDatabasePage
 // only touches the page/user stores — both already-warm, editor/JSON-free.

@@ -44,4 +44,4 @@ await __perfRun({ scenarios: [100], keystrokes: 5, memoryDelayMs: 0 })
 
 `keystrokeSyncWorkMs` is the maximum measured synchronous cache/signature-era hot-path work during the typing phase. It currently tracks `savePagesCache` because page version signatures were replaced by revision counters.
 
-Any `timed(...)` or `measure(...)` span over 4ms emits a `[perf]` warning. Component render-count probes log on unmount for `Sidebar`, `SidebarPageTree`, `MainContent`, `OsionosPage`, and `PageBody`.
+Any `timed(...)` or `measure(...)` span over 4ms emits a `[perf]` warning. Component render-count probes log on unmount for `MainContent`, `OsionosPage`, and `PageBody`.

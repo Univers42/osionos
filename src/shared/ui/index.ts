@@ -15,14 +15,11 @@
  *
  * The generic kit (atoms, primitives, molecules, hooks) lives in the package.
  * What stays here is what is osionos-specific and therefore cannot travel:
- * the `@univers42/ui-collection` asset catalogs under `assets/`, and the
- * components wired to this app's domain — `AssetPickerBoard` (configured from
- * those catalogs) and `MediaAssetPicker` (typed on the block model).
+ * the `@univers42/ui-collection` values the app hard-codes, under `assets/`,
+ * and the components wired to this app's domain.
  */
 
 export * from "@osionos/ui";
 export * from "./atoms/EquationView";
 export * from "./atoms/PanelSectionLabel";
-export * from "./molecules/AssetPickerBoard";
-export * from "./molecules/MediaAssetPicker";
 export * from "./molecules/NoteComposeModal";

@@ -13,7 +13,7 @@
 import React, { useRef, useState } from "react";
 import { SplitSquareHorizontal, SplitSquareVertical, X } from "lucide-react";
 import { IconButton } from "@osionos/ui/atoms/IconButton";
-import { useSidebarTreeDnd } from "@/widgets/sidebar/model/sidebarTreeDnd";
+import { useDragSession } from "@/store/dragSession";
 import { usePageStore } from "@/store/usePageStore";
 import { useWorkspaceLayout } from "../model/workspaceLayout";
 import { pageEntryToTab } from "../model/pageToTab";
@@ -38,7 +38,7 @@ export const TabStrip: React.FC<{ pane: PaneNode; zoom: number }> = ({ pane, zoo
   const { setActiveTab, closeTab, setActivePane, splitActivePane, closePane, moveTab, openTabAt, replaceTabWith, zoomPane } =
     useWorkspaceLayout.getState();
   const zoomPercent = Math.round(zoom * 100);
-  const endDrag = useSidebarTreeDnd((s) => s.endDrag);
+  const endDrag = useDragSession((s) => s.endDrag);
   const listRef = useRef<HTMLDivElement>(null);
   const [hint, setHint] = useState<DropHint | null>(null);
 
@@ -60,11 +60,11 @@ export const TabStrip: React.FC<{ pane: PaneNode; zoom: number }> = ({ pane, zoo
   // gated `onDragOver={dndActive ? … : undefined}` attachment was racing the
   // native drag events and silently rejecting drops.
   function onDragOver(event: React.DragEvent<HTMLDivElement>) {
-    const kind = useSidebarTreeDnd.getState().dragKind;
+    const kind = useDragSession.getState().dragKind;
     if (kind !== "page" && kind !== "tab") return;
     event.preventDefault(); // REQUIRED — without it the browser refuses the drop
     if (kind === "page") {
-      // MUST match the drag source's effectAllowed ("move", set in usePageRowDnd) —
+      // MUST match the drag source's effectAllowed ("move", set in src/features/ide/ui/WorkspaceExplorerRow.tsx) —
       // a "copy" dropEffect against an effectAllowed of "move" is incompatible, so
       // the browser silently CANCELS the drop (onDragOver shows the hint but the
       // drop event never fires). This was why the tab never landed.
@@ -74,7 +74,7 @@ export const TabStrip: React.FC<{ pane: PaneNode; zoom: number }> = ({ pane, zoo
   }
 
   function onDrop(event: React.DragEvent<HTMLDivElement>) {
-    const kind = useSidebarTreeDnd.getState().dragKind;
+    const kind = useDragSession.getState().dragKind;
     if (kind !== "page" && kind !== "tab") return;
     event.preventDefault();
     event.stopPropagation();
@@ -89,7 +89,7 @@ export const TabStrip: React.FC<{ pane: PaneNode; zoom: number }> = ({ pane, zoo
       setHint(null);
       return;
     }
-    const pageId = event.dataTransfer.getData("text/plain") || useSidebarTreeDnd.getState().draggingId || "";
+    const pageId = event.dataTransfer.getData("text/plain") || useDragSession.getState().draggingId || "";
     const page = pageId ? usePageStore.getState().pageById(pageId) : null;
     const drop = computeHint(event.clientX);
     if (page && page.surface !== "folder") {

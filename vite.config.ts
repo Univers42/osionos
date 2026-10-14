@@ -16,6 +16,8 @@ import { writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { defineConfig, loadEnv } from 'vite';
+import { lucideIconChunks } from './scripts/vite/lucideIconChunks';
+import { vendorChunkOf } from './scripts/vite/vendorChunks';
 
 // Single source of truth for where the markdown engine lives on disk. Relocating
 // it (e.g. into packages/ as a submodule) is a one-line change here plus the
@@ -49,6 +51,7 @@ export default defineConfig(({ mode }) => {
   const root = __dirname;
 
   const env = loadEnv(mode, root, '');
+  const lucide = lucideIconChunks();
   return {
     root,
     cacheDir: path.resolve(tmpdir(), `track-binocle-osionos-vite-cache-${process.getuid?.() ?? 'user'}`),
@@ -56,6 +59,7 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       bundleAnalyzer(),
+      lucide.plugin,
     ],
     define: {
       __OBJECT_DATABASE_DISABLE_WASM__: JSON.stringify(
@@ -194,29 +198,16 @@ export default defineConfig(({ mode }) => {
             // warm entry so they download in parallel instead of inflating it.
             if (/notion-database-sys[/\\].*[/\\]iconRegistry[AB]?\.ts$/.test(id)) return 'vendor-icon-registry';
             if (!id.includes('node_modules')) return undefined;
-            // lucide ships ~1500 icons as individual dynamic-import modules
-            // (lucide-react/dynamicIconImports, used by the icon picker). Left
-            // alone rollup emits one tiny chunk PER icon, which makes the prod
-            // build crawl. Bucket them into a fixed handful of chunks: the build
-            // stays fast and a lazily-loaded icon still pulls only its bucket.
-            const lucideIcon = /[/\\]lucide-react[/\\]dist[/\\]esm[/\\]icons[/\\]([^/\\]+)\.js$/.exec(id);
-            if (lucideIcon) {
-              const name = lucideIcon[1];
-              let hash = 0;
-              for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) | 0;
-              return `vendor-lucide-${((hash % 32) + 32) % 32}`;
-            }
-            if (/[/\\](react|react-dom|scheduler|use-sync-external-store)[/\\]/.test(id)) return 'vendor-react';
+            // Icons used by name share one chunk; the rest stay in hash buckets that only
+            // dynamicIconImports (the icon picker, page icons) loads (scripts/vite/lucideIconChunks.ts).
+            const lucideChunk = lucide.chunkOf(id);
+            if (lucideChunk) return lucideChunk;
             // NOT monaco-editor: a manual chunk absorbs its modules' static deps, and
             // Monaco's core has dynamic imports, so Vite's preload helper landed in
             // that chunk and every chunk using the helper — the entry included —
             // imported 3.3 MB of Monaco (measured 2026-09-19). Left to the import
             // graph, Monaco is reachable only through the lazy IDE editor.
-            if (/[/\\](motion|framer-motion|motion-dom)[/\\]/.test(id)) return 'vendor-motion';
-            if (id.includes('@univers42')) return 'vendor-ui-collection';
-            if (/[/\\]date-fns[/\\]/.test(id)) return 'vendor-date-fns';
-            if (/[/\\]@tanstack[/\\]/.test(id)) return 'vendor-tanstack';
-            return undefined;
+            return vendorChunkOf(id);
           },
         },
       },

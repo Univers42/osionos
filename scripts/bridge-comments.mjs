@@ -12,7 +12,8 @@
 
 /**
  * Block-anchored page comments (`/api/comments`). Read/post require page read
- * access (owner or workspace member) — `verifyPageAccess` is injected by
+ * access (bridge-page-read.mjs: a page the caller may read, else the same 404 as a
+ * missing page) — `verifyPageAccess` is injected by
  * bridge-api to avoid an import cycle. Edit/resolve/delete are author-only. A new
  * comment notifies + pushes the page owner. Reads are service-role-scoped by the
  * verified page access, so RLS own-row is defence in depth only.

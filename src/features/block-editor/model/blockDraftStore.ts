@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import { useCallback, useSyncExternalStore } from "react";
+import { flushQueuedInput } from "@/shared/lib/editor-input/queuedInput";
 
 export type BlockDraftCommitReason =
   | "idle"
@@ -144,6 +145,7 @@ export function commitBlockDraft(
   blockId: string,
   reason: BlockDraftCommitReason,
 ): boolean {
+  flushQueuedInput();
   const key = draftKey(sourceKey, blockId);
   const entry = draftEntries.get(key);
   if (!entry?.dirty) return false;
@@ -172,6 +174,7 @@ export function flushAllBlockDraftsForSource(
   sourceKey: string,
   reason: BlockDraftCommitReason,
 ): boolean {
+  flushQueuedInput();
   let committed = false;
   const keys = Array.from(draftEntries.keys());
   for (const key of keys) {

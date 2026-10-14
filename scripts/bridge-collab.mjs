@@ -34,6 +34,7 @@ import {
 	rest,
 	safeText,
 	sendJson,
+	workspaceMembership,
 } from './bridge-social-core.mjs';
 import { readRawBody } from './bridge-chat-media.mjs';
 import { ensureChatBucket, extFromMime, storageObjectKey, storagePut } from './bridge-storage-core.mjs';
@@ -128,11 +129,18 @@ async function listCollaboration(deps, session, url, response, config) {
 	return sendJson(response, 200, { ok: true, workspaces: list }, config);
 }
 
-/** GET /api/collaboration/:id — workspace meta + a single entry page. */
+/**
+ * GET /api/collaboration/:id — workspace meta + a single entry page. Only DISCOVERABLE
+ * workspaces have a preview (an unknown visibility stays hidden), and a non-member's
+ * entry page must be public: a page shared with the workspace stays inside it.
+ */
 async function getCollaboration(deps, session, workspaceId, response, config) {
 	const workspace = await fetchWorkspace(config, deps.fetchImpl, workspaceId);
-	if (!workspace || workspace.visibility === 'confidential') throw httpError('Workspace not found.', 404);
-	const pageRows = await rest(config, deps.fetchImpl, `osionos_pages?workspace_id=eq.${workspaceId}&visibility=in.(public,shared)&select=id,title,icon,cover,content&order=created_at.asc&limit=1`);
+	if (!workspace || !DISCOVERABLE.has(workspace.visibility)) throw httpError('Workspace not found.', 404);
+	const isMember = workspace.owner_id === session.userId
+		|| await workspaceMembership(config, deps.fetchImpl, session.userId, workspaceId) !== null;
+	const entryVisibility = isMember ? 'in.(public,shared)' : 'eq.public';
+	const pageRows = await rest(config, deps.fetchImpl, `osionos_pages?workspace_id=eq.${workspaceId}&visibility=${entryVisibility}&select=id,title,icon,cover,content&order=created_at.asc&limit=1`);
 	const page = Array.isArray(pageRows) ? pageRows[0] ?? null : null;
 	return sendJson(response, 200, {
 		ok: true,
@@ -149,10 +157,13 @@ async function addMember(config, fetchImpl, workspaceId, userId) {
 	});
 }
 
-/** POST /api/collaboration/:id/join {message?} — public joins, gated requests. */
+/**
+ * POST /api/collaboration/:id/join {message?} — public joins, gated requests. Only
+ * DISCOVERABLE workspaces take either; any other visibility answers like a missing one.
+ */
 async function joinCollaboration(deps, session, request, workspaceId, response, config) {
 	const workspace = await fetchWorkspace(config, deps.fetchImpl, workspaceId);
-	if (!workspace || workspace.visibility === 'confidential') throw httpError('Workspace not found.', 404);
+	if (!workspace || !DISCOVERABLE.has(workspace.visibility)) throw httpError('Workspace not found.', 404);
 	const payload = await readJsonBody(request);
 	if (workspace.visibility === 'public') {
 		await addMember(config, deps.fetchImpl, workspaceId, session.userId);

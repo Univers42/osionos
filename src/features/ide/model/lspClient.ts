@@ -10,15 +10,16 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { API_BASE, getActivePageJwt } from "@/shared/api/client";
+import { ideSocketTarget } from "../api/ideTransport";
+import { invalidateIdeToken } from "../api/ideToken";
 import { frameLsp, createLspFramer } from "./lspFraming";
-import { ideWsProtocols } from "./useIdeTerminal";
+import { isTokenExpiredClose } from "./wsCloseCodes";
 import { useDiagnosticsStore, type IdeDiagnostic } from "./diagnosticsStore";
 import { LspClient, type LspDiagnostic, type Transport } from "./lspProtocol";
 import { LSP_REQUEST_TIMEOUT_MS, whenInitialized } from "./lspReady";
 
 // The browser wiring around lspProtocol.ts: the WebSocket transport to the
-// bridge's `/api/ide/lsp?lang=` relay, one connection per (workspace, server),
+// IDE server's `/api/ide/lsp?lang=` relay, one connection per (workspace, server),
 // and the publishDiagnostics tap into the Problems store. No editor import —
 // the Monaco providers live in lspMonaco.ts on top of this.
 
@@ -64,41 +65,62 @@ function mapDiagnostic(uri: string, d: LspDiagnostic): IdeDiagnostic {
   };
 }
 
-/** A WebSocket LSP transport with the base-protocol codec (send frames, deframe
- *  received bytes). Queues sends until the socket opens. */
-function connect(serverLang: string, workspaceId: string): { transport: Transport; ws: WebSocket } {
-  const jwt = getActivePageJwt() ?? "";
-  const wsBase = (API_BASE || "").replace(/^http/, "ws"); // http→ws, https→wss
-  const url = `${wsBase}/api/ide/lsp?workspaceId=${encodeURIComponent(workspaceId)}&lang=${serverLang}`;
-  const ws = new WebSocket(url, ideWsProtocols(jwt));
-  ws.binaryType = "arraybuffer";
+/** The transport over the IDE server WebSocket (framing in, framing out, raw
+ *  received bytes). The socket opens once its token is minted; sends queue until
+ *  it is open. `closed` settles on close, error, or when no socket could be made. */
+function connect(serverLang: string, workspaceId: string): { transport: Transport; closed: Promise<void>; close: () => void } {
   const subs = new Set<(m: string) => void>();
   const framer = createLspFramer();
   const outbox: Uint8Array[] = [];
+  let ws: WebSocket | null = null;
+  let stopped = false;
+  let settle: () => void = () => undefined;
+  const closed = new Promise<void>((resolve) => { settle = resolve; });
 
-  ws.onopen = () => { for (const f of outbox) ws.send(f); outbox.length = 0; };
-  ws.onmessage = (ev) => {
-    const bytes = ev.data instanceof ArrayBuffer ? new Uint8Array(ev.data) : new TextEncoder().encode(String(ev.data));
-    framer.feed(bytes, (msg) => { for (const h of subs) h(msg); });
+  const dial = async (): Promise<void> => {
+    const target = await ideSocketTarget(workspaceId, "/api/ide/lsp", { lang: serverLang });
+    if (stopped || target.kind === "unavailable") {
+      settle();
+      return;
+    }
+    const socket = new WebSocket(target.url, target.protocols);
+    ws = socket;
+    socket.binaryType = "arraybuffer";
+    socket.onopen = () => { for (const f of outbox) socket.send(f); outbox.length = 0; };
+    socket.onmessage = (ev) => {
+      const bytes = ev.data instanceof ArrayBuffer ? new Uint8Array(ev.data) : new TextEncoder().encode(String(ev.data));
+      framer.feed(bytes, (msg) => { for (const h of subs) h(msg); });
+    };
+    // Expired token: the connection is dropped like any close and the next file open dials
+    // again, so only the cached token needs to go. Ponytail: no in-place redial, so a long
+    // open file loses diagnostics until another file of that language is opened.
+    socket.addEventListener("close", (ev) => { if (isTokenExpiredClose(ev.code)) invalidateIdeToken(workspaceId); settle(); });
+    socket.addEventListener("error", () => settle());
   };
+  // A mint that throws must still settle `closed`, or the connection is never dropped and redialled.
+  dial().catch(() => settle());
 
   const transport: Transport = {
     send(message) {
       const framed = frameLsp(message);
-      if (ws.readyState === WebSocket.OPEN) ws.send(framed);
+      if (ws?.readyState === WebSocket.OPEN) ws.send(framed);
       else outbox.push(framed);
     },
     subscribe(h) { subs.add(h); },
     unsubscribe(h) { subs.delete(h); },
   };
-  return { transport, ws };
+  const close = (): void => {
+    stopped = true;
+    try { ws?.close(); } catch { /* already closed */ }
+  };
+  return { transport, closed, close };
 }
 
 // One connection per (workspace, server). Dropped when its socket closes or its server
 // never initializes, so the next file open dials again — a restarted sandbox self-heals.
 interface LspConnection {
   client: LspClient;
-  ws: WebSocket;
+  close: () => void;
   closed: Promise<void>;
 }
 
@@ -107,18 +129,14 @@ const connections = new Map<string, LspConnection>();
 function dropConnection(key: string, conn: LspConnection): void {
   if (connections.get(key) === conn) connections.delete(key);
   conn.client.disconnect();
-  try { conn.ws.close(); } catch { /* already closed */ }
+  conn.close();
 }
 
 function getConnection(serverLang: string, workspaceId: string): { key: string; conn: LspConnection } {
   const key = `${workspaceId}::${serverLang}`;
   const existing = connections.get(key);
   if (existing) return { key, conn: existing };
-  const { transport, ws } = connect(serverLang, workspaceId);
-  const closed = new Promise<void>((resolve) => {
-    ws.addEventListener("close", () => resolve());
-    ws.addEventListener("error", () => resolve());
-  });
+  const { transport, closed, close } = connect(serverLang, workspaceId);
   const client = new LspClient({
     rootUri: "file:///workspace",
     timeout: LSP_REQUEST_TIMEOUT_MS,
@@ -131,7 +149,7 @@ function getConnection(serverLang: string, workspaceId: string): { key: string; 
       },
     },
   }).connect(transport);
-  const conn = { client, ws, closed };
+  const conn = { client, close, closed };
   connections.set(key, conn);
   void closed.then(() => { if (connections.get(key) === conn) { connections.delete(key); client.disconnect(); } });
   return { key, conn };
@@ -145,7 +163,7 @@ function getConnection(serverLang: string, workspaceId: string): { key: string; 
  */
 export async function acquireLspClient(languageId: string, workspaceId: string): Promise<LspClient | null> {
   const serverLang = lspServerFor(languageId);
-  if (!serverLang || !API_BASE || !workspaceId) return null;
+  if (!serverLang || !workspaceId) return null;
   try {
     const { key, conn } = getConnection(serverLang, workspaceId);
     const client = await whenInitialized(conn.client, conn.closed);
