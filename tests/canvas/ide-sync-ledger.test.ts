@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/14 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,6 +20,10 @@ import {
 import {
   recordSyncedHash, clearSyncedHash, syncedHashOf, recordOutboundWrite,
 } from "../../src/features/ide/model/ideSyncEngine.ts";
+import { sha16 } from "../../src/features/ide/model/ideFsEcho.ts";
+import { reconcileOnAttach } from "../../src/features/ide/model/reconcileOnAttach.ts";
+import { originStorage } from "./fixtures/originStorage.ts";
+import { seeded } from "./ide-attach-fixtures.ts";
 
 type FakeStorage = LedgerStorage & { reads: number; writes: number; raw(): string | null };
 
@@ -192,4 +196,47 @@ test("recordOutboundWrite: undo restores the previous agreement, never a newer o
   recordSyncedHash("wsU", "c.c", "h-later"); // e.g. an inbound apply landed meanwhile
   undo();
   assert.equal(syncedHashOf("wsU", "c.c"), "h-later");
+});
+
+// A later write that no longer fitted left h(v1) on disk while the tab agreed on h(v2). After a
+// reload, attach then took the older base for the truth: the sandbox's v2 applied over an app
+// reverted to v1, or the app's v2 written over a `git checkout` back to v1 (devil F2).
+const V1 = "int x = 1;\n";
+const V2 = "int x = 2; // shell\n";
+for (const [name, app, sandbox] of [["the app reverted to v1", V1, V2], ["git checkout put v1 back in the sandbox", V2, V1]] as const) {
+  test(`ledger F2, ${name}: a write that no longer fits leaves no older base, so attach reports a conflict`, async () => {
+    const origin = originStorage(400);
+    const store = createSyncLedgerStore({ storage: origin });
+    store.set("ws-f2", "a.c", await sha16(V1));
+    store.flush();
+    store.set("ws-f2", "a.c", await sha16(V2));
+    for (let i = 0; i < 20; i += 1) store.set("ws-f2", `src/longer/path/f${i}.c`, "0123456789abcdef");
+    store.flush(); // 21 paths do not fit in 400 characters, even alone
+    assert.equal(JSON.parse(origin.getItem(SYNC_LEDGER_KEY) ?? "{}")["ws-f2"], undefined, "no older base on disk");
+    configureSyncLedgerStorage(origin); // the reload
+    const { provider } = await seeded({ "a.c": sandbox });
+    const report = await reconcileOnAttach({ workspaceId: "ws-f2", provider, desired: [{ path: "a.c", content: app }] });
+    assert.deepEqual(report.conflicts.map((conflict) => conflict.path), ["a.c"]);
+    assert.deepEqual([report.inbound.length, report.written.length], [0, 0]);
+    configureSyncLedgerStorage(null);
+  });
+}
+
+test("ledger F2: workspaces this tab did not change keep their stored base", async () => {
+  const origin = originStorage(120, { [SYNC_LEDGER_KEY]: JSON.stringify({ other: { "b.c": "h-other" } }) });
+  const store = createSyncLedgerStore({ storage: origin });
+  for (let i = 0; i < 10; i += 1) store.set("ws-big", `src/f${i}.c`, "0123456789abcdef");
+  store.flush();
+  assert.deepEqual(JSON.parse(origin.getItem(SYNC_LEDGER_KEY) ?? "{}"), { other: { "b.c": "h-other" } });
+});
+
+test("ledger F2: every changed workspace leaves the stored document, not only the first", async () => {
+  const origin = originStorage(400);
+  const store = createSyncLedgerStore({ storage: origin });
+  store.set("ws-a", "a.c", "h-a1");
+  store.set("ws-b", "b.c", "h-b1");
+  store.flush();
+  for (const ws of ["ws-a", "ws-b"]) for (let i = 0; i < 12; i += 1) store.set(ws, `src/longer/path/f${i}.c`, "0123456789abcdef");
+  store.flush(); // neither workspace fits alone any more
+  assert.deepEqual(JSON.parse(origin.getItem(SYNC_LEDGER_KEY) ?? "{}"), {});
 });
