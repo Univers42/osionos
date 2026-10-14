@@ -445,9 +445,12 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
   const settingsResults = settingsQuery.trim() ? searchMatches.slice(0, 8) : [];
 
   // Below sm the section nav is a scrolling strip: a deep link to a tab past the
-  // right edge would open with its tab out of sight.
+  // right edge would open with its tab out of sight. Only then: on desktop the
+  // vertical nav would scroll its group labels away during the open animation.
   useEffect(() => {
-    navRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const nav = navRef.current;
+    if (!nav || nav.scrollWidth <= nav.clientWidth) return;
+    nav.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [activeTab]);
 
   function openSearchResult(entry: SettingsSearchEntry) {
