@@ -40,10 +40,10 @@ import {
   instantiateTemplateContent,
 } from "./pageStore.helpers";
 import { replacePage } from "./replacePage";
-import { loadLedger, saveLedger } from "@osionos/outbox-ledger";
+import { loadLedger } from "@osionos/outbox-ledger";
 import { applyServerPages } from "./sync/applyServerPages";
 import { resolveFetchedPage } from "./sync/mergeServerPages";
-import { PAGE_OUTBOX_KEY, pageStamp } from "./sync/pageStamp";
+import { PAGE_OUTBOX_KEY, pageStamp, saveOutboxLedger } from "./sync/pageStamp";
 import {
   cascadeIdsFrom,
   applyArchived,
@@ -208,7 +208,7 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
       savePagesCache(get().pages, page.workspaceId);
       if (resolved.recordSynced) {
         ledger[pageId] = pageStamp(resolved.page);
-        saveLedger(PAGE_OUTBOX_KEY, ledger);
+        saveOutboxLedger(PAGE_OUTBOX_KEY, ledger);
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
