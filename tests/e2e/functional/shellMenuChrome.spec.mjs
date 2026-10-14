@@ -61,9 +61,6 @@ async function openPage(page, baseURL) {
   await clearAndTypePageTitle(page, "Quarterly plan");
 }
 
-// The Explorer's tree row is the one with a context menu; the Recents row above it has none.
-const treeRow = explorerRow;
-
 test.describe("shell menus draw the overlay chrome", () => {
   test("the page header menu", async ({ page, baseURL }) => {
     await openPage(page, baseURL);
@@ -195,21 +192,9 @@ test.describe("shell menus draw the overlay chrome", () => {
     await expect(menu).toBeHidden();
     await expect(page.getByRole("tab", { name: "Home", exact: true })).toBeFocused();
   });
-
-  // These need the bridge (messaging channels) or a live data mount that the
-  // offline stack does not serve; DataSourcePicker is also not mounted by any
-  // screen today.
-  test.skip("the new chat menu: needs the messaging bridge", () => {});
-  test.skip("the chat composer menu: needs a chat channel from the bridge", () => {});
-  test.skip("the data source picker: not mounted by any screen", () => {});
 });
 
 test.describe("home cards draw the panel chrome", () => {
-  // HomeDatabaseMode (the only card layout under widgets/home-variants) is not
-  // mounted by any Home surface today; the surfaces that are mounted draw their
-  // cards inside the vendored database block.
-  test.skip("the database browser cards: no screen mounts HomeDatabaseMode", () => {});
-
   test("the panel recipe is the panel tokens", async ({ page, baseURL }) => {
     await page.goto(`${baseURL}/?home=workspace`, { waitUntil: "domcontentloaded" });
     await page.getByRole("tab", { name: "Home", exact: true }).waitFor();
