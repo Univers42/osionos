@@ -57,7 +57,7 @@ export const IdeSourceControl: React.FC = () => {
       </div>
       <div className="flex gap-2 px-2 pb-2">
         <button type="button" onClick={onCommit} disabled={busy || !message.trim()}
-          className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-xs bg-[var(--osio-accent)] text-xs text-[var(--osio-accent-fg,#fff)] disabled:opacity-50">
+          className="inline-flex h-7 flex-1 items-center justify-center gap-1 rounded-xs bg-[var(--osio-accent)] text-xs text-[var(--osio-accent-fg)] disabled:opacity-50">
           <GitCommitHorizontal size={14} /> Commit
         </button>
         <button type="button" onClick={() => void push(pat)} disabled={busy}
@@ -73,7 +73,7 @@ export const IdeSourceControl: React.FC = () => {
         placeholder="Personal access token (for push)"
         className="mx-2 mb-2 rounded-xs border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--osio-accent)]"
       />
-      {error && <p className="px-3 pb-1 text-2xs text-[var(--osio-danger,#ff6b6b)]">{error}</p>}
+      {error && <p className="px-3 pb-1 text-2xs text-[var(--osio-danger)]">{error}</p>}
       <div className="min-h-0 flex-1 overflow-auto px-1 pb-2">
         <div className="px-2 py-0.5 text-2xs uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
           Changes ({files.length})

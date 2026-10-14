@@ -43,8 +43,8 @@ export const MatrixCell: React.FC<MatrixCellProps> = ({ cell, roleName, resource
     {LEVEL_GLYPHS[cell.level]}
     {(cell.masked || cell.conditioned) && (
       <span className="absolute right-0.5 top-0.5 flex gap-0.5">
-        {cell.masked && <span className="rounded-xs bg-[var(--osio-accent-subtle)] px-0.5 text-[8px] leading-3 text-[var(--osio-accent-text)]">M</span>}
-        {cell.conditioned && <span className="rounded-xs bg-[var(--osio-bg-subtle)] px-0.5 text-[8px] leading-3 text-[var(--osio-fg-muted)]">C</span>}
+        {cell.masked && <span className="rounded-xs bg-[var(--osio-accent-subtle)] px-0.5 text-3xs leading-3 text-[var(--osio-accent-text)]">M</span>}
+        {cell.conditioned && <span className="rounded-xs bg-[var(--osio-bg-subtle)] px-0.5 text-3xs leading-3 text-[var(--osio-fg-muted)]">C</span>}
       </span>
     )}
   </button>

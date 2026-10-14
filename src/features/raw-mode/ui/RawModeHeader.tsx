@@ -50,7 +50,7 @@ export function RawModeHeader({ title, mode, dirty, showLineNumbers, onMode, onT
       </div>
       <button type="button" onClick={onToggleLineNumbers} aria-pressed={showLineNumbers} title="Toggle line numbers" className={`rounded-xs px-2 py-0.5 text-xs ${showLineNumbers ? "text-[var(--osio-fg-default)]" : "text-[var(--osio-fg-muted)]"} hover:bg-[var(--osio-bg-subtle)]`}>#</button>
       <div className="ml-auto flex items-center gap-1.5">
-        <button type="button" onClick={onSave} className="flex items-center gap-1 rounded-md bg-[var(--osio-accent)] px-2.5 py-1 text-xs font-medium text-[var(--osio-accent-fg,#fff)] hover:opacity-90"><Save size={12} /> Save</button>
+        <button type="button" onClick={onSave} className="flex items-center gap-1 rounded-md bg-[var(--osio-accent)] px-2.5 py-1 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90"><Save size={12} /> Save</button>
         <button type="button" onClick={onExit} title="Exit raw mode" className="flex items-center rounded-md px-1.5 py-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]"><X size={16} /></button>
       </div>
     </div>

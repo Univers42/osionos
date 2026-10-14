@@ -97,7 +97,7 @@ export const IdeRunPanel: React.FC = () => {
               {running && <span className="text-3xs text-[var(--osio-accent)]">running…</span>}
               {!running && exit && (
                 <span
-                  className={"text-3xs " + (failed ? "text-[var(--osio-danger,#ff6b6b)]" : "text-[var(--osio-success)]")}
+                  className={"text-3xs " + (failed ? "text-[var(--osio-danger)]" : "text-[var(--osio-success)]")}
                 >
                   {exit.timedOut ? "timed out" : `exit ${exit.code ?? "?"}`} · {exit.durationMs}ms
                 </span>

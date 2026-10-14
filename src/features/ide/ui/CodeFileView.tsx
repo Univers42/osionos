@@ -201,7 +201,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
   return (
     <div data-code-theme="dark" data-osio-ide className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
       {conflict && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1.5 text-xs text-[var(--osio-warning,#d97706)]">
+        <div className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1.5 text-xs text-[var(--osio-warning)]">
           <span className="min-w-0 flex-1 truncate">
             The sandbox version of this file differs from your edits.
           </span>
@@ -262,7 +262,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
           <SquareTerminal size={12} />
         </button>
         <span className="flex-1" />
-        {formatError && <span className="truncate text-[var(--osio-danger,#ff6b6b)]" title={formatError}>⚠ {formatError}</span>}
+        {formatError && <span className="truncate text-[var(--osio-danger)]" title={formatError}>⚠ {formatError}</span>}
         <span>Ln {status.line}, Col {status.col}</span>
         <span>{status.lines} {status.lines === 1 ? "line" : "lines"}</span>
         <span>Spaces: 4</span>

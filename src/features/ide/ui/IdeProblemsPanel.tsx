@@ -24,8 +24,8 @@ const EMPTY: never[] = [];
 const URI_PREFIX = "file:///workspace/";
 
 function severityIcon(severity: number) {
-  if (severity === 1) return <AlertCircle size={12} className="text-[var(--osio-danger,#f87171)]" />;
-  if (severity === 2) return <AlertTriangle size={12} className="text-[var(--osio-warning,#fbbf24)]" />;
+  if (severity === 1) return <AlertCircle size={12} className="text-[var(--osio-danger)]" />;
+  if (severity === 2) return <AlertTriangle size={12} className="text-[var(--osio-warning)]" />;
   return <Info size={12} className="text-[var(--osio-code-fg-muted)]" />;
 }
 

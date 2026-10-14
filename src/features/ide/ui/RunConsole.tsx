@@ -27,7 +27,7 @@ interface Props {
 /** Per-stream text colour for a run-output line. Shared with the Run panel. */
 export const streamClass: Record<RunLine["stream"], string> = {
   stdout: "text-[var(--osio-code-fg)]",
-  stderr: "text-[var(--osio-danger,#ff6b6b)]",
+  stderr: "text-[var(--osio-danger)]",
   system: "text-[var(--osio-code-fg-muted)]",
 };
 
@@ -54,7 +54,7 @@ export const RunConsole: React.FC<Props> = ({ lines, running, exit, onClear, onS
           </span>
         )}
         {!running && exit && (
-          <span className={failed ? "text-[var(--osio-danger,#ff6b6b)]" : "text-[var(--osio-success)]"}>
+          <span className={failed ? "text-[var(--osio-danger)]" : "text-[var(--osio-success)]"}>
             {exit.timedOut ? "timed out" : `exit ${exit.code ?? "?"}`} · {exit.durationMs}ms
           </span>
         )}

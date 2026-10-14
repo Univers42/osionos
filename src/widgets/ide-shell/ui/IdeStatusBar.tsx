@@ -29,7 +29,7 @@ export const IdeStatusBar: React.FC<Props> = ({ fileCount, onToggleTerminal }) =
       <span className="inline-flex items-center gap-1 text-[var(--osio-accent)]">IDE</span>
       {conflicts > 0 && (
         <span
-          className="inline-flex items-center gap-1 text-[var(--osio-warning,#d97706)]"
+          className="inline-flex items-center gap-1 text-[var(--osio-warning)]"
           title="Open a conflicted file to resolve (keep mine / take sandbox)"
         >
           <GitCompareArrows size={12} /> {conflicts} sync {conflicts === 1 ? "conflict" : "conflicts"}

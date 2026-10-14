@@ -61,7 +61,7 @@ export const IdeBottomStrip: React.FC<{ onClose: () => void }> = ({ onClose }) =
           >
             {label}
             {id === "output" && conflicts > 0 && (
-              <span className="ml-1 rounded-xs bg-[var(--osio-warning,#d97706)] px-1 text-3xs text-white">{conflicts}</span>
+              <span className="ml-1 rounded-xs bg-[var(--osio-warning)] px-1 text-3xs text-white">{conflicts}</span>
             )}
           </button>
         ))}
