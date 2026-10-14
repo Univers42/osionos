@@ -118,3 +118,13 @@ export function fileExtension(fileName: string): string {
 export function languageForFileName(fileName: string): IdeLanguage {
   return BY_EXT.get(fileExtension(fileName)) || PLAINTEXT_LANGUAGE;
 }
+
+const TAB_LANGUAGES = new Set(["c", "go"]);
+
+/** Make needs a real tab before every recipe line, gofmt writes tabs, and 42's norm
+ *  indents C with tabs: a new or unindented file of these kinds indents with tabs.
+ *  A file that is already indented keeps what its content shows (the editor detects it). */
+export function indentsWithTabs(fileName: string): boolean {
+  const base = fileName.trim().split("/").pop() ?? fileName;
+  return /^(GNUmakefile|[Mm]akefile)$|\.mk$/.test(base) || TAB_LANGUAGES.has(languageForFileName(base).id);
+}

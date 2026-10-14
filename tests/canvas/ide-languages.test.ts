@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { fileExtension, languageById, languageForFileName } from "../../src/features/ide/model/ideLanguages.ts";
+import { fileExtension, indentsWithTabs, languageById, languageForFileName } from "../../src/features/ide/model/ideLanguages.ts";
 import { codeBlockOf, createCodeFileBlock } from "../../src/features/ide/model/codeFile.ts";
 import type { PageEntry } from "../../src/entities/page/model/types.ts";
 
@@ -50,4 +50,13 @@ test("createCodeFileBlock + codeBlockOf round-trip", () => {
 test("an .omd page file opens as Markdown", () => {
   assert.equal(languageForFileName("Roadmap.omd")?.id, "markdown");
   assert.equal(languageForFileName("_folder.omd")?.id, "markdown");
+});
+
+test("indentsWithTabs: make needs tabs, gofmt and 42's norm write them, everything else spaces", () => {
+  for (const name of ["Makefile", "makefile", "GNUmakefile", "src/rules.mk", "libft/ft_strlen.c", "get_next_line.h", "main.go"]) {
+    assert.equal(indentsWithTabs(name), true, name);
+  }
+  for (const name of ["app.py", "index.ts", "README.md", "Makefile.md", "notes.omd", "main.cpp"]) {
+    assert.equal(indentsWithTabs(name), false, name);
+  }
 });
