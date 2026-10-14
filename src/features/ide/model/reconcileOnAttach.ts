@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { isFsError } from "../vfs/errors";
+import { isFsError, isProviderWide } from "../vfs/errors";
 import { collectBytes, textToBytes } from "../vfs/bytes";
 import { buildVPath, type VPath } from "../vfs/vpath";
 import type { FsProvider } from "../vfs/types";
@@ -29,17 +29,31 @@ import { recordOutboundWrite, recordSyncedHash, syncedHashOf } from "./ideSyncEn
 // conflicting copies are returned to the caller. With `theirsHashes` the reads
 // drop to the files that differ: a reload of 500 unchanged files is one call,
 // where 500 reads met the bridge's 120-request burst and skipped the rest as
-// "bridge 429". Caveat: the hashes are taken once, before any write, so a shell
-// that creates an absent file during the attach still has it overwritten — the
-// window a per-file read also had, only longer (the whole attach, not one file).
+// "bridge 429". Every desired file is reconciled, ATTACH_PAGE_FILES at a time
+// with one hashes call per page: the attach used to stop at the 500th file, and
+// a session that kept those bodies loaded never reached the rest (146 minitalk
+// and 2 gnl files on the demo workspace, 2026-10-14). Caveat: a page's hashes are
+// taken before its writes, so a shell that creates an absent file meanwhile still
+// has it overwritten — the window a per-file read also had, one page long.
+//
+// A provider-wide failure (vfs/errors isProviderWide: a 429 past the transport's
+// retries, no running sandbox) ends the walk. The files after it are skipped with
+// STOPPED_REASON and cost no call; only the at most `maxConcurrent` files already in
+// flight meet it too. A 1 200-file tree against a bridge whose burst ends at 120
+// requests made 5 535 requests before the stop, and makes 125 with it (ide-attach-stop,
+// 2026-10-14). A hashes call that fails per-op (a 500) is read around once — that page's
+// files are read one by one — and the walk ends right after it, so a bridge that answers
+// every hashes call with a 500 costs 1 hashes call and 500 reads over the same tree, not
+// 3 and 1 200.
 
-// Ponytail: files past the 500th (in desired order) and files over 512 KiB on
-// either side are skipped, not reconciled: a shell edit to one is neither
-// imported nor overwritten until the caps move. Both surface in `skipped`.
-export const MAX_ATTACH_FILES = 500;
+// Ponytail: a file over 512 KiB on either side is skipped, not reconciled: a
+// shell edit to one is neither imported nor overwritten until the cap moves. It
+// surfaces in `skipped` with OVERSIZE_REASON, which the Output line counts apart.
+export const ATTACH_PAGE_FILES = 500;
 export const MAX_ATTACH_FILE_BYTES = 512 * 1024;
-export const ATTACH_FILE_CAP_REASON = `past the ${MAX_ATTACH_FILES}-file attach cap, not reconciled`;
 const BYTE_CAP = `${MAX_ATTACH_FILE_BYTES / 1024} KiB`;
+export const OVERSIZE_REASON = `over the ${BYTE_CAP} cap, not reconciled`;
+export const STOPPED_REASON = "not reconciled, the sandbox stopped answering";
 // Ponytail: 8 parallel files is a guess at what the bridge's exec ops absorb,
 // not a measurement; callers with a better number pass maxConcurrent.
 const DEFAULT_MAX_CONCURRENT = 8;
@@ -56,7 +70,7 @@ export type ReconcileOptions = {
   /** Consulted only when the ledger has no entry and both sides differ. */
   tiebreak?: (path: string, theirs: string) => TiebreakSide;
   maxConcurrent?: number;
-  /** Every desired path's hash in one call (path → hash, null = absent): a file
+  /** One page's paths' hashes in one call (path → hash, null = absent): a file
    *  whose hash equals ours, or that is absent, is decided without a read. A path
    *  it leaves out, or a rejection, falls back to reading that file. */
   theirsHashes?: (paths: readonly string[]) => Promise<ReadonlyMap<string, string | null>>;
@@ -81,6 +95,10 @@ type Run = {
   report: ReconcileReport;
   dirs: Map<string, Promise<void>>;
   known: ReadonlyMap<string, string | null>;
+  /** The provider-wide failure that ended the walk, or null. */
+  stopped: string | null;
+  /** The first hashes call that failed per-op: only its page falls back to reads. */
+  hashesFailed: string | null;
 };
 type Target = { relPath: string; path: VPath; bytes: Uint8Array; hash: string };
 
@@ -110,7 +128,7 @@ async function readTheirs(provider: FsProvider, path: VPath): Promise<string | n
     if (isFsError(error) && error.code === "NotFound") return null;
     throw error;
   }
-  if (bytes.length > MAX_ATTACH_FILE_BYTES) throw new Error(`sandbox copy over the ${BYTE_CAP} cap, not reconciled`);
+  if (bytes.length > MAX_ATTACH_FILE_BYTES) throw new Error(`sandbox copy ${OVERSIZE_REASON}`);
   try {
     return strictUtf8.decode(bytes); // ignoreBOM keeps bytes ↔ text exact, so hashes match the fs-agent's
   } catch {
@@ -155,13 +173,19 @@ async function writeOurs(run: Run, target: Target): Promise<void> {
   run.report.written.push(target.relPath);
 }
 
+const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
 /** Classify one file and act on it; every failure becomes a `skipped` entry. */
 async function reconcileFile(run: Run, file: DesiredFile): Promise<void> {
   const { opts, report } = run;
+  if (run.stopped !== null) {
+    report.skipped.push({ path: file.path, reason: `${STOPPED_REASON} (${run.stopped})` });
+    return;
+  }
   try {
     const path = buildVPath(opts.provider.scheme, opts.workspaceId, file.path.split("/"));
     const bytes = textToBytes(file.content);
-    if (bytes.length > MAX_ATTACH_FILE_BYTES) throw new Error(`over the ${BYTE_CAP} cap, not reconciled`);
+    if (bytes.length > MAX_ATTACH_FILE_BYTES) throw new Error(OVERSIZE_REASON);
     const target: Target = { relPath: file.path, path, bytes, hash: await run.hash(file.content) };
     const known = run.known.get(file.path);
     const theirs = known === null ? null : known === target.hash ? file.content : await readTheirs(opts.provider, path);
@@ -180,8 +204,37 @@ async function reconcileFile(run: Run, file: DesiredFile): Promise<void> {
       else report.conflicts.push({ path: file.path, ours: file.content, theirs });
     }
   } catch (error) {
-    report.skipped.push({ path: file.path, reason: error instanceof Error ? error.message : String(error) });
+    if (isProviderWide(error)) run.stopped ??= messageOf(error);
+    report.skipped.push({ path: file.path, reason: isProviderWide(error) ? `${STOPPED_REASON} (${run.stopped})` : messageOf(error) });
   }
+}
+
+/**
+ * One page's hashes. A rejection that can belong to one op (a 500) is read around:
+ * that page's files are read one by one. It is also the last page read — see
+ * `endAfterFailedHashes` — unless no path would answer either (provider-wide).
+ */
+async function knownHashes(run: Run, paths: readonly string[]): Promise<ReadonlyMap<string, string | null>> {
+  if (!run.opts.theirsHashes || run.stopped !== null) return new Map();
+  try {
+    return await run.opts.theirsHashes(paths);
+  } catch (error) {
+    if (isProviderWide(error)) run.stopped = messageOf(error);
+    else if (run.hashesFailed === null) run.hashesFailed = messageOf(error);
+    return new Map();
+  }
+}
+
+/**
+ * Ends the walk after the page read around a failed hashes call: its reason names that
+ * call, and every later page is skipped through the same `stopped` mechanism — skipped
+ * with STOPPED_REASON, counted as `stopped`, never FAILED, and never attempted.
+ * Ponytail: one transient hashes failure therefore leaves every later page unreconciled
+ * until the next attach — the bridge that answered hashes a moment ago is not retried.
+ * O(1).
+ */
+function endAfterFailedHashes(run: Run): void {
+  if (run.hashesFailed !== null && run.stopped === null) run.stopped = `the sandbox hashes call failed (${run.hashesFailed})`;
 }
 
 /** Run `worker` over `items` with at most `limit` in flight. */
@@ -199,21 +252,22 @@ async function runBounded<T>(items: readonly T[], limit: number, worker: (item: 
 
 /** Reconcile `desired` into `provider` (see the file header for the rules). */
 export async function reconcileOnAttach(opts: ReconcileOptions): Promise<ReconcileReport> {
-  const run: Run = { opts, hash: opts.hash ?? sha16, report: emptyReconcileReport(), dirs: new Map(), known: new Map() };
+  const run: Run = { opts, hash: opts.hash ?? sha16, report: emptyReconcileReport(), dirs: new Map(), known: new Map(), stopped: null, hashesFailed: null };
   const seen = new Set<string>();
   const accepted: DesiredFile[] = [];
   for (const file of opts.desired) {
     if (seen.has(file.path)) run.report.skipped.push({ path: file.path, reason: "duplicate path, first entry wins" });
-    else if (accepted.length >= MAX_ATTACH_FILES) run.report.skipped.push({ path: file.path, reason: ATTACH_FILE_CAP_REASON });
     else {
       seen.add(file.path);
       accepted.push(file);
     }
   }
-  if (opts.theirsHashes && accepted.length > 0) {
-    run.known = await opts.theirsHashes(accepted.map((file) => file.path)).catch(() => new Map<string, string | null>());
-  }
   const limit = opts.maxConcurrent !== undefined && opts.maxConcurrent >= 1 ? Math.floor(opts.maxConcurrent) : DEFAULT_MAX_CONCURRENT;
-  await runBounded(accepted, limit, (file) => reconcileFile(run, file));
+  for (let at = 0; at < accepted.length; at += ATTACH_PAGE_FILES) {
+    const page = accepted.slice(at, at + ATTACH_PAGE_FILES);
+    run.known = await knownHashes(run, page.map((file) => file.path));
+    await runBounded(page, limit, (file) => reconcileFile(run, file));
+    endAfterFailedHashes(run);
+  }
   return run.report;
 }

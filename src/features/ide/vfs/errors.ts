@@ -49,3 +49,20 @@ export function fsError(code: FsErrorCode, uri?: string, detail?: string): FsErr
 export function isFsError(value: unknown): value is FsError {
   return value instanceof FsError;
 }
+
+// An error that says the provider cannot serve any path (unreachable, throttled,
+// switched off), as opposed to one path failing. A caller walking many paths stops
+// at the first one instead of meeting it once per path. A WeakSet keeps FsError's
+// shape (ADR-001 §4) unchanged.
+const providerWide = new WeakSet<FsError>();
+
+/** An FsError that no other path would escape either. */
+export function providerWideError(code: FsErrorCode, detail: string): FsError {
+  const error = fsError(code, undefined, detail);
+  providerWide.add(error);
+  return error;
+}
+
+export function isProviderWide(value: unknown): boolean {
+  return value instanceof FsError && providerWide.has(value);
+}
