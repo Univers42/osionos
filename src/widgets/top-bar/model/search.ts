@@ -105,6 +105,18 @@ export async function searchMessagesPalette(query: string, limit = 6): Promise<P
   }));
 }
 
+/**
+ * Drop page rows whose id the predicate marks as archived.
+ * Non-page rows (commands, people, messages) pass through unchanged.
+ * O(n) where n = rows.length.
+ */
+export function withoutArchived(
+  rows: PaletteResult[],
+  archived: (id: string) => boolean,
+): PaletteResult[] {
+  return rows.filter((row) => row.kind !== "page" || !archived(row.id));
+}
+
 /** Filter the flattened command registry for '>' command mode. */
 export function matchCommands(query: string, commands: PaletteCommand[], limit = 12): PaletteResult[] {
   const trimmed = query.trim().toLowerCase();
