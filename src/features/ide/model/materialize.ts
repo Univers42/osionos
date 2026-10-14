@@ -26,7 +26,7 @@ import { ideOutput } from "./ideOutputBus";
 import { useIdeSyncConflicts } from "./ideSyncConflicts";
 import { syncedHashOf } from "./ideSyncEngine";
 import {
-  reconcileOnAttach, MAX_ATTACH_FILE_BYTES, OVERSIZE_REASON, type DesiredFile, type ReconcileOptions, type ReconcileReport,
+  reconcileOnAttach, MAX_ATTACH_FILE_BYTES, OVERSIZE_REASON, STOPPED_REASON, type DesiredFile, type ReconcileOptions, type ReconcileReport,
 } from "./reconcileOnAttach";
 
 import type { ReadableViews } from "@/features/page-file/model/pageFileFacadeViews";
@@ -47,7 +47,10 @@ export interface AttachDeps {
  * body is not loaded, so not re-checked; `oversize`, over the byte cap; `failed`, anything else.
  */
 export type MaterializeResult = {
-  written: number; unloaded: number; known: number; oversize: number; failed: number; report: ReconcileReport;
+  written: number; inSync: number; unloaded: number; known: number; oversize: number;
+  /** Files the attach never reached once the sandbox stopped answering, and its first reason. */
+  stopped: { files: number; reason: string } | null;
+  failed: number; report: ReconcileReport;
 };
 
 /** A desired file and the page object it was read from — what 14' and 15 compare against. */
@@ -198,16 +201,25 @@ export async function attachWorkspace(deps: AttachDeps): Promise<MaterializeResu
   const unloaded = count((reason) => reason === NOT_LOADED);
   const known = count((reason) => reason === KNOWN_UNLOADED);
   const oversize = count((reason) => reason.endsWith(OVERSIZE_REASON));
-  const failed = report.skipped.length - unloaded - known - oversize;
-  return { written: report.written.length, unloaded, known, oversize, failed, report };
+  const stoppedFiles = count((reason) => reason.startsWith(STOPPED_REASON));
+  const stopped = stoppedFiles === 0 ? null
+    : { files: stoppedFiles, reason: report.skipped.find((skip) => skip.reason.startsWith(STOPPED_REASON))?.reason ?? STOPPED_REASON };
+  const failed = report.skipped.length - unloaded - known - oversize - stoppedFiles;
+  return { written: report.written.length, inSync: report.recorded.length, unloaded, known, oversize, stopped, failed, report };
 }
 
-/** The attach's Output line: a skip that is a cap or a page not loaded is never called FAILED. */
-export function attachSummary({ written, unloaded, known, oversize, failed }: Omit<MaterializeResult, "report">): string {
+/**
+ * The attach's Output line: a skip that is a cap or a page not loaded is never called FAILED.
+ * A reload writes nothing when both sides agree, so those files are named too: the demo
+ * workspace's line read "materialized 0 files" on a cold and a warm attach alike (2026-10-14).
+ */
+export function attachSummary({ written, inSync, unloaded, known, oversize, stopped, failed }: Omit<MaterializeResult, "report">): string {
   const parts = [
+    inSync > 0 ? `${inSync} already in sync` : "",
     unloaded > 0 ? `${unloaded} not loaded (cap ${BODY_FETCHES_PER_ATTACH} per attach)` : "",
     known > 0 ? `${known} synced before, not re-checked` : "",
     oversize > 0 ? `${oversize} over ${MAX_ATTACH_FILE_BYTES / 1024} KiB, not synced` : "",
+    stopped ? `${stopped.files} ${stopped.reason}` : "",
     failed > 0 ? `${failed} FAILED` : "",
   ];
   return `sandbox attached — materialized ${written} files${parts.filter(Boolean).map((part) => `, ${part}`).join("")}`;

@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { isFsError } from "../vfs/errors";
+import { isFsError, isProviderWide } from "../vfs/errors";
 import { collectBytes, textToBytes } from "../vfs/bytes";
 import { buildVPath, type VPath } from "../vfs/vpath";
 import type { FsProvider } from "../vfs/types";
@@ -35,6 +35,13 @@ import { recordOutboundWrite, recordSyncedHash, syncedHashOf } from "./ideSyncEn
 // and 2 gnl files on the demo workspace, 2026-10-14). Caveat: a page's hashes are
 // taken before its writes, so a shell that creates an absent file meanwhile still
 // has it overwritten — the window a per-file read also had, one page long.
+//
+// A provider-wide failure (vfs/errors isProviderWide: a 429 past the transport's
+// retries, no running sandbox) ends the walk. The files after it are skipped with
+// STOPPED_REASON and cost no call; only the at most `maxConcurrent` files already in
+// flight meet it too. A 1 200-file tree against a bridge whose burst ends at 120
+// requests made 5 535 requests before the stop, and makes 125 with it (ide-attach-stop,
+// 2026-10-14).
 
 // Ponytail: a file over 512 KiB on either side is skipped, not reconciled: a
 // shell edit to one is neither imported nor overwritten until the cap moves. It
@@ -43,6 +50,7 @@ export const ATTACH_PAGE_FILES = 500;
 export const MAX_ATTACH_FILE_BYTES = 512 * 1024;
 const BYTE_CAP = `${MAX_ATTACH_FILE_BYTES / 1024} KiB`;
 export const OVERSIZE_REASON = `over the ${BYTE_CAP} cap, not reconciled`;
+export const STOPPED_REASON = "not reconciled, the sandbox stopped answering";
 // Ponytail: 8 parallel files is a guess at what the bridge's exec ops absorb,
 // not a measurement; callers with a better number pass maxConcurrent.
 const DEFAULT_MAX_CONCURRENT = 8;
@@ -84,6 +92,8 @@ type Run = {
   report: ReconcileReport;
   dirs: Map<string, Promise<void>>;
   known: ReadonlyMap<string, string | null>;
+  /** The provider-wide failure that ended the walk, or null. */
+  stopped: string | null;
 };
 type Target = { relPath: string; path: VPath; bytes: Uint8Array; hash: string };
 
@@ -158,9 +168,15 @@ async function writeOurs(run: Run, target: Target): Promise<void> {
   run.report.written.push(target.relPath);
 }
 
+const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
 /** Classify one file and act on it; every failure becomes a `skipped` entry. */
 async function reconcileFile(run: Run, file: DesiredFile): Promise<void> {
   const { opts, report } = run;
+  if (run.stopped !== null) {
+    report.skipped.push({ path: file.path, reason: `${STOPPED_REASON} (${run.stopped})` });
+    return;
+  }
   try {
     const path = buildVPath(opts.provider.scheme, opts.workspaceId, file.path.split("/"));
     const bytes = textToBytes(file.content);
@@ -183,7 +199,19 @@ async function reconcileFile(run: Run, file: DesiredFile): Promise<void> {
       else report.conflicts.push({ path: file.path, ours: file.content, theirs });
     }
   } catch (error) {
-    report.skipped.push({ path: file.path, reason: error instanceof Error ? error.message : String(error) });
+    if (isProviderWide(error)) run.stopped ??= messageOf(error);
+    report.skipped.push({ path: file.path, reason: isProviderWide(error) ? `${STOPPED_REASON} (${run.stopped})` : messageOf(error) });
+  }
+}
+
+/** One page's hashes. A rejection falls back to reading each file, unless no path would answer. */
+async function knownHashes(run: Run, paths: readonly string[]): Promise<ReadonlyMap<string, string | null>> {
+  if (!run.opts.theirsHashes || run.stopped !== null) return new Map();
+  try {
+    return await run.opts.theirsHashes(paths);
+  } catch (error) {
+    if (isProviderWide(error)) run.stopped = messageOf(error);
+    return new Map();
   }
 }
 
@@ -202,7 +230,7 @@ async function runBounded<T>(items: readonly T[], limit: number, worker: (item: 
 
 /** Reconcile `desired` into `provider` (see the file header for the rules). */
 export async function reconcileOnAttach(opts: ReconcileOptions): Promise<ReconcileReport> {
-  const run: Run = { opts, hash: opts.hash ?? sha16, report: emptyReconcileReport(), dirs: new Map(), known: new Map() };
+  const run: Run = { opts, hash: opts.hash ?? sha16, report: emptyReconcileReport(), dirs: new Map(), known: new Map(), stopped: null };
   const seen = new Set<string>();
   const accepted: DesiredFile[] = [];
   for (const file of opts.desired) {
@@ -215,9 +243,7 @@ export async function reconcileOnAttach(opts: ReconcileOptions): Promise<Reconci
   const limit = opts.maxConcurrent !== undefined && opts.maxConcurrent >= 1 ? Math.floor(opts.maxConcurrent) : DEFAULT_MAX_CONCURRENT;
   for (let at = 0; at < accepted.length; at += ATTACH_PAGE_FILES) {
     const page = accepted.slice(at, at + ATTACH_PAGE_FILES);
-    run.known = opts.theirsHashes
-      ? await opts.theirsHashes(page.map((file) => file.path)).catch(() => new Map<string, string | null>())
-      : new Map();
+    run.known = await knownHashes(run, page.map((file) => file.path));
     await runBounded(page, limit, (file) => reconcileFile(run, file));
   }
   return run.report;

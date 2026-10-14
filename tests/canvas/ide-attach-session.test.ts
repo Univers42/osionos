@@ -54,6 +54,14 @@ test("a 501-file tree: every file reaches the sandbox and none is a failure", as
   assert.equal(await fileIn(world, "f500.c"), "int f500;");
 });
 
+test("a second attach writes nothing and says how many files it found in sync", async () => {
+  const world = await execWorld([codePage("A", "a.c", "int a;"), codePage("B", "b.c", "int b;")]);
+  assert.equal((await attach(world)).written, 2);
+  const again = await attach(world);
+  assert.deepEqual([again.written, again.inSync, again.failed], [0, 2, 0]);
+  assert.equal(attachSummary(again), "sandbox attached — materialized 0 files, 2 already in sync");
+});
+
 test("an unloaded page this browser synced before is counted apart from one never synced", async () => {
   const world = await execWorld([unloadedPage("K", "Known", null), unloadedPage("N", "New", null)]);
   recordSyncedHash(world.workspaceId, "Known.omd", "0123456789abcdef");
@@ -62,10 +70,10 @@ test("an unloaded page this browser synced before is counted apart from one neve
 });
 
 test("the Output line names caps and unloaded pages, and says FAILED only for a failure", () => {
-  assert.equal(attachSummary({ written: 3, unloaded: 0, known: 0, oversize: 0, failed: 0 }), "sandbox attached — materialized 3 files");
+  assert.equal(attachSummary({ written: 3, inSync: 0, unloaded: 0, known: 0, oversize: 0, stopped: null, failed: 0 }), "sandbox attached — materialized 3 files");
   assert.equal(
-    attachSummary({ written: 0, unloaded: 2358, known: 500, oversize: 2, failed: 1 }),
-    "sandbox attached — materialized 0 files, 2358 not loaded (cap 500 per attach), 500 synced before, not re-checked, 2 over 512 KiB, not synced, 1 FAILED",
+    attachSummary({ written: 0, inSync: 7, unloaded: 2358, known: 500, oversize: 2, stopped: null, failed: 1 }),
+    "sandbox attached — materialized 0 files, 7 already in sync, 2358 not loaded (cap 500 per attach), 500 synced before, not re-checked, 2 over 512 KiB, not synced, 1 FAILED",
   );
 });
 
