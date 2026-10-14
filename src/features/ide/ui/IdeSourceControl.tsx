@@ -75,7 +75,7 @@ export const IdeSourceControl: React.FC = () => {
       />
       {error && <p className="px-3 pb-1 text-2xs text-[var(--osio-danger)]">{error}</p>}
       <div className="min-h-0 flex-1 overflow-auto px-1 pb-2">
-        <div className="px-2 py-0.5 text-2xs uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
+        <div className="px-2 py-0.5 text-2xs font-medium text-[var(--osio-code-fg-muted)]">
           Changes ({files.length})
         </div>
         {files.map((file) => (

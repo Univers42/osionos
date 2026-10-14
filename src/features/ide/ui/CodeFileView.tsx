@@ -227,7 +227,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
           <RunConsole lines={runner.lines} running={runner.running} exit={runner.exit} onClear={runner.clear} onStop={runner.stop} onClose={() => setShowConsole(false)} />
         </div>
       )}
-      <div className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-0.5 font-mono text-2xs text-[var(--osio-code-fg-muted)]">
+      <div data-osio-ide-footer className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-0.5 font-mono text-2xs text-[var(--osio-code-fg-muted)]">
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: lang.accent }} />
           {lang.label}
@@ -252,7 +252,11 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
           </button>
         </Tooltip>
         <span className="flex-1" />
-        {formatError && <span className="truncate text-[var(--osio-danger)]" title={formatError}>⚠ {formatError}</span>}
+        {formatError && (
+          <Tooltip label={formatError}>
+            <span className="block max-w-[40ch] truncate text-[var(--osio-danger)]">⚠ {formatError}</span>
+          </Tooltip>
+        )}
         <span>Ln {status.line}, Col {status.col}</span>
         <span>{status.lines} {status.lines === 1 ? "line" : "lines"}</span>
         <span>Spaces: 4</span>

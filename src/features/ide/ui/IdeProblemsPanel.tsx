@@ -79,7 +79,7 @@ export const IdeProblemsPanel: React.FC = () => {
           <button
             type="button"
             onClick={() => open(group.rel)}
-            className="flex min-h-6 w-full items-center gap-1.5 px-3 py-0.5 text-left font-medium text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
+            className="flex min-h-6 w-full items-baseline gap-1.5 px-3 py-1 text-left font-medium text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
           >
             <span className="truncate">{group.rel.split("/").pop()}</span>
             <span className="min-w-0 truncate text-2xs text-[var(--osio-code-fg-muted)]">{group.rel}</span>

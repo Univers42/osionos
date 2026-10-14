@@ -87,7 +87,7 @@ test.describe("a code file's footer", () => {
       usePageStore.getState().patchPage(id, { surface: "code", title: "main.py" });
     }, pageId);
 
-    const footer = page.locator("[data-osio-ide] > div").last();
+    const footer = page.locator("[data-osio-ide] [data-osio-ide-footer]");
     const run = footer.getByRole("button", { name: /Run/ });
     await expect(run).toBeVisible();
     const radius = await tokenValue(page, "border-top-left-radius", "--osio-radius-control");

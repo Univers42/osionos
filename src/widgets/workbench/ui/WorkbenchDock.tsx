@@ -11,10 +11,11 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { Columns2, Plus, X } from "lucide-react";
+import { Columns2, Plus, Trash2, X } from "lucide-react";
 
 import { Tooltip } from "@/shared/ui";
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
+import { useIdeOutputBus } from "@/features/ide/model/ideOutputBus";
 import { useIdeSyncConflicts, conflictCount } from "@/features/ide/model/ideSyncConflicts";
 import { IdeOutputPanel } from "@/features/ide/ui/IdeOutputPanel";
 import { IdePortsPanel } from "@/features/ide/ui/IdePortsPanel";
@@ -91,6 +92,14 @@ const TerminalActions: React.FC = () => {
   );
 };
 
+const OutputActions: React.FC = () => (
+  <Tooltip label="Clear output" side="bottom">
+    <button type="button" aria-label="Clear output" onClick={() => useIdeOutputBus.getState().clear()} className={ICON_BTN}>
+      <Trash2 size={14} />
+    </button>
+  </Tooltip>
+);
+
 const DockTabs: React.FC<{ active: DockTab; conflicts: number }> = ({ active, conflicts }) => {
   const setTab = useWorkbenchStore((s) => s.setDockTab);
   const tabRefs = React.useRef<Partial<Record<DockTab, HTMLButtonElement | null>>>({});
@@ -155,6 +164,7 @@ export const WorkbenchDock: React.FC = () => {
         <DockTabs active={active} conflicts={conflicts} />
         <span className="flex-1" />
         {active === "terminal" && <TerminalActions />}
+        {active === "output" && <OutputActions />}
         <Tooltip label="Hide panel" side="bottom">
           <button type="button" aria-label="Hide panel" onClick={closeDock} className={ICON_BTN}>
             <X size={14} />

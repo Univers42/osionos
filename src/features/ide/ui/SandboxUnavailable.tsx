@@ -75,7 +75,8 @@ export const SandboxUnavailable: React.FC<Props> = ({ compact = false, onRetried
           <span className="font-semibold text-[var(--osio-code-fg)]">{title}</span>
           {reason ? ` — ${reason}` : ""}
         </span>
-        <span className="shrink-0">{retryButton}</span>
+        {/* The strip is one text line: its button takes the xs control height, not sm. */}
+        <span className="shrink-0 [--osio-control-h-sm:var(--osio-control-h-xs)]">{retryButton}</span>
       </div>
     );
   }
