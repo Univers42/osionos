@@ -72,6 +72,17 @@ test("a body that fails to load stays unloaded and attach still skips it", async
   assert.deepEqual([result.written, result.unloaded, result.failed], [0, 1, 0]);
 });
 
+test("16: no ledger and a _folder.omd that differs only by a legacy updated: line — rewritten, not a conflict", async () => {
+  useIdeSyncConflicts.getState().clearWorkspace();
+  const world = await execWorld([folderPage("F", "Docs"), blockPage("A", "Alpha", "F")]);
+  const today = textOf(world, "F");
+  await putFile(world.sandbox, world.workspaceId, "Docs/_folder.omd", today.replace("---\n", '---\nupdated: "2026-10-14T02:28:44.444275+00:00"\n'));
+  const result = await attach(world);
+  assert.deepEqual(result.report.conflicts, [], "106 such folders were 106 conflicts after one clone");
+  assert.equal(await fileIn(world, "Docs/_folder.omd"), today, "the sandbox copy takes today's form");
+  assert.equal(useIdeSyncConflicts.getState().byPageId.F, undefined);
+});
+
 test("16: a _folder.omd changed on both sides is reported under its folder's id", async () => {
   useIdeSyncConflicts.getState().clearWorkspace();
   const world = await execWorld([folderPage("F", "Docs"), blockPage("A", "Alpha", "F")]);

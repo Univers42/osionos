@@ -18,6 +18,7 @@
 // imports: node runs it against an in-memory sandbox.
 
 import type { PageEntry } from "@/entities/page";
+import { withoutLegacyUpdated } from "@/features/page-file/model/frontMatter";
 import { fileOfEntry } from "@/features/page-file/model/pageIndex";
 import { pageFileText } from "@/features/page-file/model/pageFileText";
 import { sha16 } from "./ideFsEcho";
@@ -156,7 +157,12 @@ export async function attachWorkspace(deps: AttachDeps): Promise<MaterializeResu
   const report = await reconcileOnAttach({
     workspaceId: deps.workspaceId, desired: files, provider: deps.provider,
     // No ledger + a loaded, empty page: the sandbox copy wins — decideInboundWrite's live rule.
-    tiebreak: (path) => (byPath.get(path)?.content === "" ? "theirs" : null),
+    // A copy that differs only by a legacy `updated:` line is this page: ours, in today's form.
+    tiebreak: (path, theirs) => {
+      const ours = byPath.get(path)?.content;
+      if (ours === "") return "theirs";
+      return ours !== undefined && withoutLegacyUpdated(theirs) === ours ? "ours" : null;
+    },
   });
   await rewriteChanged(deps, byPath, report);
   report.skipped.push(...skipped);
