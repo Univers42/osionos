@@ -177,7 +177,7 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
             onChange={handleSearchChange}
             onKeyDown={handleKeyDown}
           />
-          <IconButton label="Close" size="xs" onClick={onClose} className="absolute right-5 top-1/2 -translate-y-1/2">
+          <IconButton label="Close move page modal" size="xs" onClick={onClose} className="absolute right-5 top-1/2 -translate-y-1/2">
             <X size={14} />
           </IconButton>
         </div>
