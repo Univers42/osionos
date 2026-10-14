@@ -19,7 +19,7 @@ import test from "node:test";
 
 import { createBatchedStat } from "../../src/features/ide/model/inboundStatBatch.ts";
 import { statInProvider, type StatResult } from "../../src/features/ide/model/inboundArchive.ts";
-import { blockPage, execWorld } from "./fixtures/inboundWorld.ts";
+import { blockPage, codePage, execWorld, folderPage } from "./fixtures/inboundWorld.ts";
 import type { StatMany } from "../../src/features/ide/model/inboundStatBatch.ts";
 
 /** A sandbox where every path is absent, counting requests. */
@@ -87,4 +87,21 @@ test("stat batch, end to end: rm of 600 pages' files archives them all with two 
   assert.equal(pages.filter((page) => world.pageOf(page._id)?.archivedAt).length, 600);
   assert.deepEqual(requests, [500, 100]);
   assert.equal(single, 0);
+});
+
+test("stat batch caveat: a code file made again after the batch read it absent gets a page with the new text", async () => {
+  const world = await execWorld([folderPage("G", "gnl"), codePage("M", "Makefile", "all:\n\techo old\n", "G"), codePage("C", "main.c", "int main;\n", "G")], {
+    statMany: async (paths) => new Map(paths.map((path) => [path, "absent" as const])), // a snapshot taken before Makefile came back
+  });
+  await world.shellWrite("gnl/Makefile", "all:\n\techo old\n");
+  await world.shellWrite("gnl/main.c", "int main;\n");
+  await world.shellDelete("gnl/Makefile");
+  await world.shellDelete("gnl/main.c");
+  await world.elapse(); // both archived: Makefile on the stale "absent"
+  await world.shellWrite("gnl/Makefile", "");
+  const live = world.store.pages().filter((page) => !page.archivedAt && page.title === "Makefile");
+  assert.equal(live.length, 1, "one live Makefile page");
+  assert.notEqual(live[0]._id, "M", "a new page; the old one stays in the trash");
+  assert.equal(await world.session.facade.readContent(live[0]._id), "", "the file's text, not the old page's");
+  assert.ok(world.pageOf("M")?.archivedAt);
 });

@@ -21,8 +21,10 @@ import type { StatResult } from "./inboundArchive";
 // and the following archive checks read their answer from it.
 //
 // Caveat: an answer is up to `ttlMs` old when it is used. A file deleted and made
-// again inside that window reads "absent": its page is archived, and the create
-// queued behind it brings the page back from the file.
+// again inside that window reads "absent" and its page is archived; the write
+// queued behind it then makes a new page from the file (a code file), or restores
+// the same page (an .omd naming its id), so the file's text is never lost — but a
+// code file's page changes id, and the old one is left in the trash.
 
 /** One request for many paths; a path left out of the answer is asked alone. */
 export type StatMany = (paths: readonly string[]) => Promise<ReadonlyMap<string, StatResult>>;
