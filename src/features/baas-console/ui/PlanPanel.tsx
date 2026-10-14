@@ -13,8 +13,8 @@
 import React, { useState } from 'react';
 
 import { useTenantConsoleStore } from '../model/useTenantConsoleStore';
-import { Badge } from '@/shared/ui';
-import { ConsoleSection, ConsoleButton, ConsoleEmpty } from './consolePrimitives';
+import { Badge, Button } from '@/shared/ui';
+import { ConsoleSection, ConsoleEmpty } from './consolePrimitives';
 
 /** Manifest order of the known plan tiers (server validates the change). */
 const PLAN_TIERS = ['nano', 'basic', 'essential', 'pro', 'max'] as const;
@@ -77,13 +77,13 @@ export function PlanPanel() {
       )}
 
       <div className="mt-3 flex justify-end">
-        <ConsoleButton
+        <Button
           tone="primary"
           disabled={loading || unchanged || selected === null}
           onClick={() => { if (selected) void changePlan(selected); }}
         >
           {loading ? 'Changing…' : 'Change plan'}
-        </ConsoleButton>
+        </Button>
       </div>
     </ConsoleSection>
   );

@@ -18,8 +18,6 @@
 
 import React from "react";
 
-type Tone = "default" | "primary" | "danger" | "ghost";
-
 interface SectionProps {
   title: string;
   description?: string;
@@ -33,14 +31,6 @@ interface RowProps {
   value?: React.ReactNode;
   action?: React.ReactNode;
   children?: React.ReactNode;
-}
-
-interface ButtonProps {
-  onClick?: () => void;
-  tone?: Tone;
-  type?: "button" | "submit";
-  disabled?: boolean;
-  children: React.ReactNode;
 }
 
 /** A titled console block with optional icon, sub-text, a header action, and body. */
@@ -84,25 +74,6 @@ export const ConsoleRow: React.FC<RowProps> = ({ label, value, action, children 
     </div>
   );
 };
-
-const TONE_CLASS: Record<Tone, string> = {
-  default: "border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]",
-  primary: "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] hover:bg-[var(--osio-accent-hover)]",
-  danger: "bg-[var(--osio-danger)] text-[var(--osio-accent-fg)] hover:opacity-90",
-  ghost: "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
-};
-
-/** A console action button with a small set of semantic tones. */
-export const ConsoleButton: React.FC<ButtonProps> = ({ onClick, tone = "default", type = "button", disabled, children }) => (
-  <button
-    type={type}
-    onClick={onClick}
-    disabled={disabled}
-    className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-[120ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)] disabled:opacity-60 disabled:cursor-not-allowed ${TONE_CLASS[tone]}`}
-  >
-    {children}
-  </button>
-);
 
 /** A muted, centered "nothing here" placeholder (pass `message` or children). */
 export const ConsoleEmpty: React.FC<{ message?: string; children?: React.ReactNode }> = ({ message, children }) => (
