@@ -42,6 +42,46 @@ test.describe("page title", () => {
     expect(await clipped(title)).toBe(0);
   });
 
+  // The wave-2 fix re-measures on a width change only; a font-size change keeps
+  // the textarea's box, so the observer never fires and the text was clipped.
+  test("toggling Small text off re-measures the title, so no line is clipped", async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openFreshPage(page, baseURL);
+    await page.getByRole("button", { name: "Open page configuration" }).click();
+    await page.getByRole("button", { name: /Small text/ }).click();
+    await page.locator(".osionos-page--small-text").waitFor();
+    await clearAndTypePageTitle(page, LONG_TITLE.repeat(2));
+    const title = pageTitleEditor(page);
+    expect(await clipped(title)).toBe(0);
+    const small = (await title.boundingBox()).height;
+
+    await page.getByRole("button", { name: "Open page configuration" }).click();
+    await page.getByRole("button", { name: /Small text/ }).click();
+    await page.locator(".osionos-page--small-text").waitFor({ state: "detached" });
+    await expect.poll(async () => (await title.boundingBox()).height).toBeGreaterThan(small);
+    expect(await clipped(title)).toBe(0);
+  });
+
+  // The toolbar's four buttons wrap on a phone; a fixed height left the second
+  // row painted over the first line of the title.
+  test("on a phone the header controls never overlap the title", async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openFreshPage(page, baseURL);
+    await clearAndTypePageTitle(page, LONG_TITLE);
+    await page.setViewportSize({ width: 390, height: 844 });
+    const title = pageTitleEditor(page);
+    await title.hover();
+    const controls = page.locator(".osionos-page-toolbar-btn");
+    expect(await controls.count()).toBeGreaterThan(2);
+    await expect(controls.first()).toBeVisible();
+    const titleBox = await title.boundingBox();
+    for (const control of await controls.all()) {
+      const box = await control.boundingBox();
+      const overlaps = box.x < titleBox.x + titleBox.width && box.x + box.width > titleBox.x && box.y < titleBox.y + titleBox.height && box.y + box.height > titleBox.y;
+      expect(overlaps, `${await control.innerText()} overlaps the title`).toBe(false);
+    }
+  });
+
   test("clicking into the title paints no focus box, and a regular input keeps its ring", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     const title = pageTitleEditor(page);

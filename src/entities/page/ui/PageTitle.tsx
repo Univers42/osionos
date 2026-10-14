@@ -48,6 +48,21 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
     if (ref.current) fitToContent(ref.current);
   }, [title]);
 
+  // Small text and the page font change the glyphs, not the textarea's box (its
+  // height is pinned inline), so the observer below never hears of them. The page
+  // re-renders this component when they change, so compare after each render;
+  // fitting changes the height only, so it cannot retrigger this.
+  const fittedFont = useRef('');
+  useLayoutEffect(() => {
+    const textarea = ref.current;
+    if (!textarea) return;
+    const { fontSize, fontFamily } = getComputedStyle(textarea);
+    const font = `${fontSize} ${fontFamily}`;
+    if (font === fittedFont.current) return;
+    fittedFont.current = font;
+    fitToContent(textarea);
+  });
+
   // A narrower window wraps the title onto more lines without changing its text.
   // Only a width change re-measures: setting the height fires the observer again
   // with the same width, which would otherwise loop.
