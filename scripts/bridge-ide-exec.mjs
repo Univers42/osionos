@@ -20,7 +20,7 @@
 // The pure seams (resize parse, auth extraction, std-stream demux) are unit
 // tested in tests/bridge/ide-exec-parse.test.mjs; the docker glue stays
 // live-verified. Failures close with a WS code+reason (4001 auth · 4003 gate
-// off · 4004 no sandbox · 4008 bad lang · 4011 token expired · 4013 overflow · 4029 throttled) so
+// off · 4004 no sandbox · 4008 bad lang · 4011 token expired · 4013 overflow · 4029 throttled · 4137 LSP out of memory) so
 // the frontend can say WHY instead of "[connection closed]".
 
 import { handshake, encodeFrame, closeFrame, createFrameDecoder } from './ide-ws.mjs';
@@ -106,12 +106,21 @@ const LSP_SERVERS = {
   go: ['gopls'],
   rust: ['rust-analyzer'],
   clangd: ['clangd'],
+  // jdtls-launch pins the JRE 21 runtime, heap and oom_score_adj; argv stays server-fixed.
+  java: ['jdtls-launch'],
 };
 
 function lspExecSpec(lang) {
   const cmd = LSP_SERVERS[lang];
   if (!cmd) throw Object.assign(new Error('unsupported language server'), { status: 400 });
   return { User: '10001:10001', WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
+}
+
+/** Map an LSP process exit code to a WS close frame. Exit 137 = OOM kill → 4137 with a named
+ *  reason; everything else (including null/undefined) → 1000 'process ended'. Pure for tests. */
+export function lspCloseFor(exitCode) {
+  if (exitCode === 137) return { code: 4137, reason: 'language server out of memory' };
+  return { code: 1000, reason: 'process ended' };
 }
 
 /** An IDE token lives at most 15 minutes; a socket opened with one must not outlive it. App tokens
@@ -228,7 +237,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
 
     // LSP/fs-sync may start a stopped box too (never one stopped at the hard cap — see
     // ensureSandbox); a refusal lands in the catch below, which releases the stream cap.
-    ensureSandbox(env, names, { passive: true }).then(() => docker.attachExec(names.containerName, spec)).then(({ stream: duplex }) => {
+    ensureSandbox(env, names, { passive: true }).then(() => docker.attachExec(names.containerName, spec)).then(({ stream: duplex, execId }) => {
       const decode = createFrameDecoder();
       // LSP is Tty:false — strip docker's 8-byte mux headers (see the demux
       // doc). PTY/fsync are Tty:true and arrive raw.
@@ -243,7 +252,21 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
         if (!ok) duplex.pause();
       });
       socket.on('drain', () => duplex.resume());
-      duplex.on('close', () => { if (!socket.destroyed) socket.end(closeFrame(1000, 'process ended')); });
+      duplex.on('close', () => {
+        if (socket.destroyed) return;
+        if (isLsp) {
+          // Inspect the exec to learn the exit code; on failure fall back to 1000.
+          docker.inspectExec(execId).then(({ exitCode }) => {
+            const { code, reason } = lspCloseFor(exitCode);
+            if (!socket.destroyed) socket.end(closeFrame(code, reason));
+          }).catch(() => {
+            if (!socket.destroyed) socket.end(closeFrame(1000, 'process ended'));
+          });
+        } else {
+          // fs-sync: unchanged behaviour.
+          if (!socket.destroyed) socket.end(closeFrame(1000, 'process ended'));
+        }
+      });
       duplex.on('error', () => { if (!socket.destroyed) socket.end(closeFrame(1011, 'backend stream error')); });
       socket.on('data', (chunk) => {
         let messages;

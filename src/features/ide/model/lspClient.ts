@@ -13,10 +13,11 @@
 import { ideSocketTarget } from "../api/ideTransport";
 import { invalidateIdeToken } from "../api/ideToken";
 import { frameLsp, createLspFramer } from "./lspFraming";
-import { isTokenExpiredClose } from "./wsCloseCodes";
+import { isTokenExpiredClose, isLspOutOfMemoryClose } from "./wsCloseCodes";
 import { useDiagnosticsStore, type IdeDiagnostic } from "./diagnosticsStore";
 import { LspClient, type LspDiagnostic, type Transport } from "./lspProtocol";
 import { LSP_REQUEST_TIMEOUT_MS, whenInitialized } from "./lspReady";
+import { ideOutput } from "./ideOutputBus";
 
 // The browser wiring around lspProtocol.ts: the WebSocket transport to the
 // IDE server's `/api/ide/lsp?lang=` relay, one connection per (workspace, server),
@@ -32,6 +33,7 @@ const LSP_SERVER: Record<string, string> = {
   go: "go",
   rust: "rust",
   c: "clangd", cpp: "clangd",
+  java: "java",
 };
 // IDE languageId → the LSP `languageId` the server expects on didOpen.
 const LSP_DOC_LANG: Record<string, string> = {
@@ -40,6 +42,7 @@ const LSP_DOC_LANG: Record<string, string> = {
   go: "go",
   rust: "rust",
   c: "c", cpp: "cpp",
+  java: "java",
 };
 
 /** The sandbox LSP server key for an IDE language, or null if none. */
@@ -50,6 +53,19 @@ export function lspServerFor(languageId: string): string | null {
 /** The `languageId` sent on didOpen for an IDE language. */
 export function lspDocumentLanguage(languageId: string): string {
   return LSP_DOC_LANG[languageId] ?? languageId;
+}
+
+/** Human-readable label for an LSP server key (used in OUTPUT feed messages). */
+export function lspServerLabel(serverLang: string): string {
+  const labels: Record<string, string> = {
+    java: "Java",
+    typescript: "TypeScript",
+    python: "Python",
+    go: "Go",
+    rust: "Rust",
+    clangd: "C/C++",
+  };
+  return labels[serverLang] ?? serverLang;
 }
 
 function mapDiagnostic(uri: string, d: LspDiagnostic): IdeDiagnostic {
@@ -94,7 +110,13 @@ function connect(serverLang: string, workspaceId: string): { transport: Transpor
     // Expired token: the connection is dropped like any close and the next file open dials
     // again, so only the cached token needs to go. Ponytail: no in-place redial, so a long
     // open file loses diagnostics until another file of that language is opened.
-    socket.addEventListener("close", (ev) => { if (isTokenExpiredClose(ev.code)) invalidateIdeToken(workspaceId); settle(); });
+    // OOM kill (exit 137): surface a visible message in the OUTPUT feed so the user knows
+    // why diagnostics stopped.
+    socket.addEventListener("close", (ev) => {
+      if (isTokenExpiredClose(ev.code)) invalidateIdeToken(workspaceId);
+      if (isLspOutOfMemoryClose(ev.code)) ideOutput("lsp", `${lspServerLabel(serverLang)} language server stopped (out of memory)`);
+      settle();
+    });
     socket.addEventListener("error", () => settle());
   };
   // A mint that throws must still settle `closed`, or the connection is never dropped and redialled.

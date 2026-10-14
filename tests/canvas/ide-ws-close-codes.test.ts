@@ -15,10 +15,14 @@ import test from "node:test";
 
 import {
   IDE_TOKEN_EXPIRED_CLOSE,
+  LSP_OUT_OF_MEMORY_CLOSE,
   healthFromCloseCode,
   isDeliberateClose,
+  isLspOutOfMemoryClose,
   isTokenExpiredClose,
 } from "../../src/features/ide/model/wsCloseCodes.ts";
+
+import { lspServerFor, lspServerLabel } from "../../src/features/ide/model/lspClient.ts";
 
 test("4011 is the IDE token expiry: not deliberate, token-expired, no health verdict", () => {
   assert.equal(IDE_TOKEN_EXPIRED_CLOSE, 4011);
@@ -40,4 +44,28 @@ test("every other code keeps its meaning", () => {
   assert.equal(healthFromCloseCode(4003), "disabled");
   assert.equal(healthFromCloseCode(4004), "unavailable");
   assert.equal(healthFromCloseCode(4029), null);
+});
+
+test("4137 is LSP out of memory: deliberate, LSP OOM, no health verdict", () => {
+  assert.equal(LSP_OUT_OF_MEMORY_CLOSE, 4137);
+  assert.equal(isLspOutOfMemoryClose(4137), true);
+  assert.equal(isLspOutOfMemoryClose(1000), false);
+  assert.equal(isDeliberateClose(4137), true);
+  assert.equal(healthFromCloseCode(4137), null);
+});
+
+test("lspServerFor maps java and falls back to null", () => {
+  assert.equal(lspServerFor("java"), "java");
+  assert.equal(lspServerFor("typescript"), "typescript");
+  assert.equal(lspServerFor("unknown"), null);
+});
+
+test("lspServerLabel returns friendly names and falls back to key", () => {
+  assert.equal(lspServerLabel("java"), "Java");
+  assert.equal(lspServerLabel("typescript"), "TypeScript");
+  assert.equal(lspServerLabel("python"), "Python");
+  assert.equal(lspServerLabel("go"), "Go");
+  assert.equal(lspServerLabel("rust"), "Rust");
+  assert.equal(lspServerLabel("clangd"), "C/C++");
+  assert.equal(lspServerLabel("unknown"), "unknown");
 });

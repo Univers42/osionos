@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { parseResizeFrame, extractWsAuth, createStdStreamDemux, hasActiveExec } from "../../scripts/bridge-ide-exec.mjs";
+import { parseResizeFrame, extractWsAuth, createStdStreamDemux, hasActiveExec, lspCloseFor } from "../../scripts/bridge-ide-exec.mjs";
 import { handshake, closeFrame } from "../../scripts/ide-ws.mjs";
 
 test("parseResizeFrame accepts exactly one full APC frame", () => {
@@ -74,4 +74,16 @@ test("std-stream demux strips 8-byte mux headers, keeps stdout, drops stderr, su
 
 test("hasActiveExec is false for an unknown container", () => {
   assert.equal(hasActiveExec("ide-" + "0".repeat(32)), false);
+});
+
+test("lspCloseFor maps exit 137 to 4137 with OOM reason", () => {
+  assert.deepEqual(lspCloseFor(137), { code: 4137, reason: "language server out of memory" });
+});
+
+test("lspCloseFor maps other exit codes to 1000", () => {
+  assert.deepEqual(lspCloseFor(0), { code: 1000, reason: "process ended" });
+  assert.deepEqual(lspCloseFor(1), { code: 1000, reason: "process ended" });
+  assert.deepEqual(lspCloseFor(null), { code: 1000, reason: "process ended" });
+  assert.deepEqual(lspCloseFor(undefined), { code: 1000, reason: "process ended" });
+  assert.deepEqual(lspCloseFor(255), { code: 1000, reason: "process ended" });
 });
