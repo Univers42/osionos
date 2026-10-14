@@ -25,6 +25,7 @@ const BAD: Array<[string, string, RegExp]> = [
   ["shadow-sm", 'export const c = "shadow-sm";', /shadow-osio-e1/],
   ["shadow-md behind a variant", 'export const c = "p-2 hover:shadow-md";', /shadow-osio-e/],
   ["shadow-2xl", 'export const c = "shadow-2xl";', /shadow-osio-e/],
+  ["a stock shadow with an opacity modifier", 'export const c = "shadow-md/20";', /shadow-osio-e/],
   ["a bare shadow token", 'export const c = "flex shadow rounded-md";', /shadow-osio-e1/],
   ["a bare rounded token", 'export const c = "flex rounded border";', /rounded-xs/],
   ["a bare rounded behind a variant", 'export const c = "group-hover:rounded";', /rounded-xs/],

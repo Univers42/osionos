@@ -16,7 +16,7 @@ import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 
 // Style-literal guards. Each pattern lives in one named constant and is spliced
-// into an esquery selector, which cannot hold a "/" inside a regex: none does.
+// into an esquery selector, which cannot hold a "/" inside a regex: write it \x2f.
 // A class-token pattern opens with (^|[\s:!]) so only whole tokens match, with
 // or without a variant prefix.
 //
@@ -26,7 +26,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 // is flagged. A string that is only "rounded" inside a type position is skipped.
 // The escape hatch is HEX_ALLOWLIST below, or an eslint-disable with an issue link.
 const PX_FONT_SIZE = String.raw`(^|[\s:!])text-\[[0-9.]+px\]`;
-const STOCK_SHADOW = String.raw`(^|[\s:!])shadow(-(sm|md|lg|xl|2xl))?($|[\s!])`;
+const STOCK_SHADOW = String.raw`(^|[\s:!])shadow(-(sm|md|lg|xl|2xl))?(\x2f[0-9]+)?($|[\s!])`;
 const BARE_ROUNDED = String.raw`(^|[\s:!])rounded($|[\s!])`;
 const HEX_COLOR = String.raw`(?<![\w&])#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![\w])`;
 const RAMP_TOKEN = String.raw`--osio-(n-[0-9]+|a-[a-z]+)`;
