@@ -25,6 +25,7 @@ import { join } from "node:path";
 // them through a real local sh, so the exact scripts a live sandbox runs are
 // conformance-proven without a running stack.
 import { buildFsOpSpec } from "../../scripts/ide-sandbox-spec.mjs";
+import { createHostFsTransport } from "../../scripts/host-fs-ops.mjs";
 import { createSandboxProvider } from "../../src/features/ide/vfs/sandboxProvider.ts";
 import type { FsOpTransport } from "../../src/features/ide/vfs/sandboxFsOps.ts";
 import { parseVPath, joinV, buildVPath } from "../../src/features/ide/vfs/vpath.ts";
@@ -110,6 +111,7 @@ function hasSh(): boolean {
 }
 
 const TARGETS: { name: string; make: () => FsProvider }[] = [
+  { name: "host(node)", make: () => createSandboxProvider("host", createHostFsTransport(mkdtempSync(join(tmpdir(), "vfs-host-")))) },
   { name: "mem", make: () => createMemProvider("mem") },
   { name: "overlay(mem,mem)", make: () => createOverlayProvider("overlay", createMemProvider("mem"), createMemProvider("mem")) },
   { name: "page-backed", make: () => createPageProvider("osionos", memFacade()) },
