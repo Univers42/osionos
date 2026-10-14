@@ -43,8 +43,29 @@ test("the console has no private button; its call sites use the kit Button", () 
   }
 });
 
-test("MessageRow renders no raw <button>: icon actions are IconButtons, text actions are Buttons", () => {
-  assert.doesNotMatch(messageRow, /<button/);
+/** The opening tag of every `<tag …>` in `source`; a `>` inside `{…}` (an arrow function) does not end it. */
+function openingTags(source: string, tag: string): string[] {
+  const tags: string[] = [];
+  for (const match of source.matchAll(new RegExp(`<${tag}(?=[\\s>])`, "g"))) {
+    let depth = 0;
+    let end = match.index;
+    for (; end < source.length; end++) {
+      if (source[end] === "{") depth++;
+      else if (source[end] === "}") depth--;
+      else if (source[end] === ">" && depth === 0) break;
+    }
+    tags.push(source.slice(match.index, end + 1));
+  }
+  return tags;
+}
+
+// A reaction is a toggle chip: the kit Button sets its own control radius,
+// which wins over the chip's pill shape, so the chip is the one raw button.
+test("MessageRow: icon actions are IconButtons, text actions are Buttons, a reaction is a chip", () => {
+  const raw = openingTags(messageRow, "button");
+  assert.ok(raw.length > 0, "the reaction chip is gone");
+  for (const tag of raw) assert.match(tag, /className="osio-chip\b/, "a raw <button> that is not a chip");
+  for (const tag of openingTags(messageRow, "Button")) assert.doesNotMatch(tag, /osio-chip/, "a kit Button styled as a chip");
   const names = kitImports(messageRow);
   assert.ok(names.includes("IconButton") && names.includes("Button"));
 });

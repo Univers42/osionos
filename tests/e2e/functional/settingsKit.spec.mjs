@@ -81,6 +81,7 @@ test.describe("settings use the kit", () => {
     const tabCount = await tabs.count();
     expect(tabCount).toBeGreaterThan(10);
     // A kit Card made clickable is a panel, not a control: it takes the panel radius.
+    // Only a Card gets that exemption, so a Button drifting to the panel radius still fails.
     const panelRadius = await resolvedToken(page, "border-radius", "--osio-radius-panel");
     // Segments of the People view switcher: one rounded group, not separate buttons.
     const segmentLabels = ["Table", "Gallery"];
@@ -97,10 +98,15 @@ test.describe("settings use the kit", () => {
         .evaluateAll((nodes) =>
           nodes
             .filter((node) => node.getClientRects().length > 0)
-            .map((node) => ({ name: node.getAttribute("aria-label") ?? node.textContent?.trim().slice(0, 30), radius: getComputedStyle(node).borderRadius })),
+            .map((node) => ({
+              name: node.getAttribute("aria-label") ?? node.textContent?.trim().slice(0, 30),
+              radius: getComputedStyle(node).borderRadius,
+              isCard: node.classList.contains("rounded-[var(--osio-radius-panel)]"),
+            })),
         );
       expect(radii.length, `${tabName} shows buttons`).toBeGreaterThan(0);
-      expect(radii.filter((entry) => ![radius, panelRadius].includes(entry.radius) && !segmentLabels.includes(entry.name)), `${tabName}: buttons off the control radius`).toEqual([]);
+      const offRadius = radii.filter((entry) => !segmentLabels.includes(entry.name) && entry.radius !== (entry.isCard ? panelRadius : radius));
+      expect(offRadius, `${tabName}: buttons off the control radius`).toEqual([]);
     }
   });
 });

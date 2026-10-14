@@ -150,6 +150,10 @@ test.describe("shell menus draw the overlay chrome", () => {
     const menu = page.getByRole("menu");
     await expectChrome(page, menu);
     await expectMenuRows(page, menu);
+    // Focus inside the menu first: closing it removes that element, so only the
+    // code that hands focus back keeps the keyboard on the rail.
+    await menu.getByRole("menuitem").first().focus();
+    await expect(menu.getByRole("menuitem").first()).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(menu).toBeHidden();
     await expect(page.getByRole("tab", { name: "Home", exact: true })).toBeFocused();

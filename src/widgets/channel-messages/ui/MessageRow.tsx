@@ -151,16 +151,15 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
         {message.reactions.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {groupReactions(message).map(([emoji, users]) => (
-              <Button
+              <button
                 key={emoji}
-                size="sm"
-                tone="ghost"
-                className="osio-chip border border-[var(--osio-border-default)] aria-pressed:border-[var(--osio-accent)] aria-pressed:bg-[var(--osio-accent-subtle)]"
+                type="button"
+                className="osio-chip cursor-pointer border border-[var(--osio-border-default)] hover:border-[var(--osio-border-strong)] aria-pressed:border-[var(--osio-accent)] aria-pressed:bg-[var(--osio-accent-subtle)]"
                 aria-pressed={users.includes(userId)}
                 onClick={() => canInteract && onReact(message.id, emoji, !users.includes(userId))}
               >
                 {emoji} {users.length}
-              </Button>
+              </button>
             ))}
           </div>
         )}
