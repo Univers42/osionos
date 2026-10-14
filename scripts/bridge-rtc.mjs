@@ -45,6 +45,7 @@
  */
 
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { readBaasJson } from './bridge-baas-body.mjs';
 
 const MAX_TOKEN_TTL_SECONDS = 6 * 60 * 60; // LiveKit grants are capped at 6h here
 const DEFAULT_TOKEN_TTL_SECONDS = 60 * 60;
@@ -132,17 +133,7 @@ async function baasRestGet(config, fetchImpl, path) {
 	if (!response.ok) throw httpError(`BaaS request failed with ${response.status}.`, response.status >= 500 ? 502 : response.status);
 	// The room lookup decides membership, so a body that stops mid-stream, or one that is
 	// not JSON, must not answer as if the query matched nothing.
-	let readFailed = false;
-	const text = await response.text().catch(() => { readFailed = true; return ''; });
-	if (readFailed) throw httpError('BaaS response body could not be read (LiveKit room lookup).', 502);
-	// Ponytail: a body-less 200 still answers null — "no rows" and "the answer was lost
-	// after the headers" are the same null here, in the one direction of reading closed.
-	if (!text) return null;
-	try {
-		return JSON.parse(text);
-	} catch {
-		throw httpError(`BaaS response body was not valid JSON (${Buffer.byteLength(text)} bytes).`, 502);
-	}
+	return readBaasJson(response, { service: 'LiveKit room lookup', empty: null, fail: (message) => httpError(message, 502) });
 }
 
 /**
