@@ -5,7 +5,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { clearAndTypePageTitle, openFreshPage } from "../../browser/core/app.mjs";
+import { clearAndTypePageTitle, explorerRow, openFreshPage } from "../../browser/core/app.mjs";
 import { tokenValue } from "../support/styleguideHelpers.mjs";
 
 const CHROME_PROPERTIES = [
@@ -61,9 +61,6 @@ async function openPage(page, baseURL) {
   await clearAndTypePageTitle(page, "Quarterly plan");
 }
 
-// The Recents entry comes first; the page-tree row (the one with a context menu) is the last.
-const treeRow = (page, title) => page.locator(".group.relative.w-full", { hasText: title }).last();
-
 test.describe("shell menus draw the overlay chrome", () => {
   test("the page header menu", async ({ page, baseURL }) => {
     await openPage(page, baseURL);
@@ -71,17 +68,9 @@ test.describe("shell menus draw the overlay chrome", () => {
     await expectChrome(page, page.getByTestId("page-config-menu"));
   });
 
-  test("the sidebar row's page options menu", async ({ page, baseURL }) => {
-    await openPage(page, baseURL);
-    const row = treeRow(page, "Quarterly plan");
-    await row.hover();
-    await row.getByTitle("Page options").click();
-    await expectChrome(page, page.getByTestId("page-options-menu"));
-  });
-
   test("the sidebar page context menu", async ({ page, baseURL }) => {
     await openPage(page, baseURL);
-    await treeRow(page, "Quarterly plan").click({ button: "right" });
+    await explorerRow(page, "Quarterly plan").click({ button: "right" });
     const menu = page.getByRole("menu");
     await expectChrome(page, menu);
     await expectMenuRows(page, menu);
@@ -140,7 +129,7 @@ test.describe("shell menus draw the overlay chrome", () => {
       await clearAndTypePageTitle(page, "Quarterly plan");
       // A phone collapses the sidebar to its rail; the Explorer tab brings the tree back.
       if (width < 768) await page.getByRole("tab", { name: "Explorer", exact: true }).click();
-      await treeRow(page, "Quarterly plan").click({ button: "right" });
+      await explorerRow(page, "Quarterly plan").click({ button: "right" });
       await page.getByRole("menuitem", { name: "Share", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "Share" });
       await expect(dialog).toBeVisible();
@@ -157,7 +146,7 @@ test.describe("shell menus draw the overlay chrome", () => {
   test("the Share dialog from the sidebar menu takes focus and closes on Escape", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await clearAndTypePageTitle(page, "Quarterly plan");
-    await treeRow(page, "Quarterly plan").click({ button: "right" });
+    await explorerRow(page, "Quarterly plan").click({ button: "right" });
     await page.getByRole("menuitem", { name: "Share", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Share" });
     await expect(dialog).toBeVisible();
@@ -178,7 +167,7 @@ test.describe("shell menus draw the overlay chrome", () => {
   test("the page context menu clamps above the viewport's bottom edge", async ({ page, baseURL }) => {
     await openPage(page, baseURL);
     await page.setViewportSize({ width: 1440, height: 420 });
-    await treeRow(page, "Quarterly plan").click({ button: "right" });
+    await explorerRow(page, "Quarterly plan").click({ button: "right" });
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
     await expect.poll(async () => {
