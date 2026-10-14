@@ -77,7 +77,8 @@ test.describe("settings use the kit", () => {
     expect(radius).not.toBe("");
 
     await openSettings(page, "Preferences");
-    const tabs = page.getByRole("dialog", { name: "Settings" }).getByRole("tab");
+    // The section nav only: a panel's own segmented tabs (appearance) would shift the indices.
+    const tabs = page.getByRole("dialog", { name: "Settings" }).getByRole("complementary").getByRole("tab");
     const tabCount = await tabs.count();
     expect(tabCount).toBeGreaterThan(10);
     // A kit Card made clickable, or the import drop zone, is a panel, not a control: it is
