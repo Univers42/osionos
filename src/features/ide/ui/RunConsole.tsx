@@ -13,6 +13,7 @@
 import React from "react";
 import { Square, Trash2, X } from "lucide-react";
 
+import { Tooltip } from "@/shared/ui";
 import type { RunExit, RunLine } from "../model/useCodeRunner";
 
 interface Props {
@@ -42,15 +43,15 @@ export const RunConsole: React.FC<Props> = ({ lines, running, exit, onClear, onS
   }, [lines]);
 
   const failed = exit != null && (exit.timedOut || (exit.code ?? 0) !== 0);
-  const btn = "inline-flex h-6 items-center gap-1 rounded-xs px-1.5 text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]";
+  const btn = "osio-code-btn h-6 text-xs";
 
   return (
-    <div data-code-theme="dark" className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
-      <div className="flex shrink-0 items-center gap-2 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-1 font-mono text-2xs text-[var(--osio-code-fg-muted)]">
-        <span className="font-semibold uppercase tracking-wide">Terminal</span>
+    <div data-code-theme="dark" data-osio-code-chrome className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]">
+      <div className="flex h-9 shrink-0 items-center gap-2 border-t border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 text-xs text-[var(--osio-code-fg-muted)]">
+        <span className="font-medium text-[var(--osio-code-fg)]">Terminal</span>
         {running && (
-          <span className="inline-flex items-center gap-1 text-[var(--osio-accent)]">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--osio-accent)]" /> running…
+          <span className="inline-flex items-center gap-1 text-[var(--osio-code-caret)]">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--osio-code-caret)]" /> running…
           </span>
         )}
         {!running && exit && (
@@ -59,13 +60,15 @@ export const RunConsole: React.FC<Props> = ({ lines, running, exit, onClear, onS
           </span>
         )}
         <span className="flex-1" />
-        {running && <button type="button" title="Stop" className={btn} onClick={onStop}><Square size={12} /> Stop</button>}
-        <button type="button" title="Clear" className={btn} onClick={onClear}><Trash2 size={12} /> Clear</button>
-        <button type="button" title="Hide terminal" className={btn} onClick={onClose}><X size={12} /></button>
+        {running && <button type="button" className={`${btn} px-2`} onClick={onStop}><Square size={12} aria-hidden /> Stop</button>}
+        <button type="button" className={`${btn} px-2`} onClick={onClear}><Trash2 size={12} aria-hidden /> Clear</button>
+        <Tooltip label="Hide terminal" side="top">
+          <button type="button" aria-label="Hide terminal" className={`${btn} w-6`} onClick={onClose}><X size={14} aria-hidden /></button>
+        </Tooltip>
       </div>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto px-3 py-2 font-mono text-xs leading-5">
         {lines.length === 0 ? (
-          <div className="italic text-[var(--osio-code-fg-muted)]">Run the file (⌘/Ctrl + Enter) to see output here.</div>
+          <p className="osio-code-empty">Run the file (⌘/Ctrl + Enter) to see output here.</p>
         ) : (
           lines.map((line, i) => (
             <pre key={i} className={"whitespace-pre-wrap break-words " + streamClass[line.stream]}>{line.text}</pre>
