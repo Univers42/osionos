@@ -120,13 +120,13 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
         {editing ? (
           <form
             onSubmit={(event) => { event.preventDefault(); onEdit(message.id, draft); setEditing(false); }}
-            className="mt-1 flex items-center gap-2"
+            className="mt-1 flex flex-wrap items-center gap-2"
           >
             <input
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => { if (event.key === 'Escape') setEditing(false); }}
-              className="flex-1 rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none focus:border-[var(--osio-accent)]"
+              className="min-w-0 flex-1 rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none focus:border-[var(--osio-accent)]"
             />
             <Button type="submit" tone="primary" size="sm">Save</Button>
             <Button tone="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
@@ -142,7 +142,7 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
           <Button
             tone="ghost"
             size="sm"
-            className="mt-1"
+            className="mt-1 !text-[var(--osio-accent)]"
             onClick={() => onOpenThread(message)}
           >
             💬 {message.replyCount} {message.replyCount === 1 ? 'reply' : 'replies'}
@@ -154,7 +154,8 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
               <Button
                 key={emoji}
                 size="sm"
-                tone={users.includes(userId) ? 'default' : 'ghost'}
+                tone="ghost"
+                className="osio-chip border border-[var(--osio-border-default)] aria-pressed:border-[var(--osio-accent)] aria-pressed:bg-[var(--osio-accent-subtle)]"
                 aria-pressed={users.includes(userId)}
                 onClick={() => canInteract && onReact(message.id, emoji, !users.includes(userId))}
               >

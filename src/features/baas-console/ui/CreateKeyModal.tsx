@@ -80,7 +80,7 @@ function CreateKeyForm({ onCancel }: { onCancel: () => void }) {
       {error ? <p style={{ color: 'var(--osio-danger)' }}>{error}</p> : null}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <Button onClick={onCancel}>Cancel</Button>
-        <Button type="submit" disabled={busy || !name.trim()}>
+        <Button type="submit" tone="primary" disabled={busy || !name.trim()}>
           {busy ? 'Creating…' : 'Create'}
         </Button>
       </div>

@@ -77,20 +77,30 @@ test.describe("settings use the kit", () => {
     expect(radius).not.toBe("");
 
     await openSettings(page, "Preferences");
-    for (const tabName of ["Preferences", "Notifications", "osionos AI"]) {
-      await openSettingsTab(page, tabName);
+    const tabs = page.getByRole("dialog", { name: "Settings" }).getByRole("tab");
+    const tabCount = await tabs.count();
+    expect(tabCount).toBeGreaterThan(10);
+    // A kit Card made clickable is a panel, not a control: it takes the panel radius.
+    const panelRadius = await resolvedToken(page, "border-radius", "--osio-radius-panel");
+    // Segments of the People view switcher: one rounded group, not separate buttons.
+    const segmentLabels = ["Table", "Gallery"];
+    for (let index = 0; index < tabCount; index += 1) {
+      const tabName = (await tabs.nth(index).textContent())?.trim();
+      await tabs.nth(index).click();
+      await expect(page.getByRole("tabpanel")).toBeVisible();
       // Tabs are navigation rows and switches are pills: neither is a Button. The appearance
-      // controls belong to the theme panel, which is restyled on its own.
+      // controls belong to the theme panel, which is restyled on its own. The avatar and
+      // workspace-icon pickers are the picture itself made clickable, shaped by what they show.
       const radii = await page
         .getByRole("dialog", { name: "Settings" })
-        .locator('button:not([role="tab"]):not([role="switch"]):not([data-settings-anchor="appearance"] *)')
+        .locator('button:not([role="tab"]):not([role="switch"]):not([aria-label="Change avatar"]):not([aria-label="Change workspace icon"]):not([data-settings-anchor="appearance"] *)')
         .evaluateAll((nodes) =>
           nodes
             .filter((node) => node.getClientRects().length > 0)
             .map((node) => ({ name: node.getAttribute("aria-label") ?? node.textContent?.trim().slice(0, 30), radius: getComputedStyle(node).borderRadius })),
         );
       expect(radii.length, `${tabName} shows buttons`).toBeGreaterThan(0);
-      expect(radii.filter((entry) => entry.radius !== radius), `${tabName}: buttons off the control radius`).toEqual([]);
+      expect(radii.filter((entry) => ![radius, panelRadius].includes(entry.radius) && !segmentLabels.includes(entry.name)), `${tabName}: buttons off the control radius`).toEqual([]);
     }
   });
 });
