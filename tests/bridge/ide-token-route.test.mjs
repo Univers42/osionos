@@ -117,10 +117,12 @@ test('a workspace missing from the app token answers 403', async () => {
 	assert.equal(res.statusCode, 403);
 });
 
-test('a subject outside the allowlist answers 403', async () => {
+test('a subject outside the allowlist is refused with a 200 the browser does not log, and no token', async () => {
 	const user = freshUser();
-	const { res } = await call(envFor(user, { OSIONOS_IDE_ALLOWED_SUBJECTS: USER }), { auth: appToken(user), body: { workspaceId: WS } });
-	assert.equal(res.statusCode, 403);
+	// OTHER_WS: the allowlist is checked first, so an unlisted account learns nothing about workspaces.
+	const { res, json } = await call(envFor(user, { OSIONOS_IDE_ALLOWED_SUBJECTS: USER }), { auth: appToken(user), body: { workspaceId: OTHER_WS } });
+	assert.equal(res.statusCode, 200);
+	assert.deepEqual(json, { ok: false, reason: 'not-allowed', message: 'The IDE is not enabled for this account.' });
 });
 
 test('a malformed workspace id answers 400', async () => {

@@ -27,7 +27,7 @@ export function requireIdeSubject(userId, env) {
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
   if (!list.includes(String(userId).toLowerCase())) {
-    throw Object.assign(new Error("The IDE is not enabled for this account."), { status: 403 });
+    throw Object.assign(new Error("The IDE is not enabled for this account."), { status: 403, code: "not-allowed" });
   }
 }
 

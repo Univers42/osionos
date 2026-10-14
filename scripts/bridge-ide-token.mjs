@@ -57,6 +57,14 @@ export function createIdeTokenHandler({ config, verifySession, env = process.env
 			jsonReply(response, 200, { ok: true, token, expiresAt }, requestConfig);
 			return true;
 		} catch (error) {
+			// Outside the allowlist is the common case, not a fault: every account but the operators
+			// meets it on each page load, and a 403 there is a console error in every browser
+			// (groot's GR2 e2e, 2026-10-14). The answer is the same refusal, as a 200 the client
+			// maps to not-allowed; the order of checks, and what an unlisted account learns, are unchanged.
+			if (error?.code === 'not-allowed') {
+				jsonReply(response, 200, { ok: false, reason: 'not-allowed', message: error.message }, requestConfig);
+				return true;
+			}
 			return refuse(response, error, requestConfig);
 		}
 	};

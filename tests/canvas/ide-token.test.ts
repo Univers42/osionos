@@ -55,6 +55,13 @@ test("each status maps to its reason", async () => {
   }
 });
 
+test("a 200 refusal from the allowlist is not-allowed, and an ok:false without that reason is error", async () => {
+  const refused = fakeEnv({ handler: () => new Response('{"ok":false,"reason":"not-allowed"}', { status: 200 }) });
+  assert.deepEqual(await refused.source.get(WS), { kind: "unavailable", reason: "not-allowed" });
+  const other = fakeEnv({ handler: () => new Response('{"ok":false,"reason":"other"}', { status: 200 }) });
+  assert.deepEqual(await other.source.get(WS), { kind: "unavailable", reason: "error" });
+});
+
 test("a network error, a malformed body and an unparseable expiry are all error", async () => {
   const bodies = [() => Promise.reject(new Error("down")), () => new Response("not json", { status: 200 }), () => new Response('{"ok":true,"token":"t","expiresAt":"nope"}', { status: 200 })];
   for (const handler of bodies) {

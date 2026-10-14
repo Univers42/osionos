@@ -60,8 +60,11 @@ interface MintOutcome {
   result: IdeTokenResult;
 }
 
-async function parseMint(response: Response): Promise<CachedToken | null> {
-  const body = (await response.json().catch(() => null)) as { ok?: unknown; token?: unknown; expiresAt?: unknown } | null;
+// The bridge answers an account outside the IDE allowlist with 200 {ok:false, reason:"not-allowed"}
+// (a 403 would log a console error on every page load); an older bridge still answers 403.
+async function parseMint(response: Response): Promise<CachedToken | "not-allowed" | null> {
+  const body = (await response.json().catch(() => null)) as { ok?: unknown; token?: unknown; expiresAt?: unknown; reason?: unknown } | null;
+  if (body?.ok === false && body.reason === "not-allowed") return "not-allowed";
   if (body?.ok !== true || typeof body.token !== "string" || body.token === "") return null;
   const expiresAtMs = typeof body.expiresAt === "string" ? Date.parse(body.expiresAt) : Number.NaN;
   return Number.isFinite(expiresAtMs) ? { token: body.token, expiresAtMs } : null;
@@ -81,6 +84,7 @@ async function mint(deps: IdeTokenDeps, apiBase: string, token: string, workspac
   }
   if (response.status !== 200) return fail(REASON_BY_STATUS[response.status] ?? "error");
   const minted = await parseMint(response);
+  if (minted === "not-allowed") return fail("not-allowed");
   return minted ? { minted, result: { kind: "ok", token: minted.token } } : fail("error");
 }
 
