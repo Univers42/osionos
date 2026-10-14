@@ -142,8 +142,10 @@ async function runWrites(ctx: OutboundRunCtx, run: Run): Promise<void> {
  * Remake the missing file of each newly entered CODE page (restore/created) through writePageFile,
  * so the agreement and echo bookkeeping match other writes. An existing file stays with the shell
  * or the editor, reported nowhere. O(n) reads plus O(k) writes, k = missing files.
- * Ponytail: read-then-write is not atomic — a shell file landing between the check and the write
- * is kept by writePageFile, so this only remakes files absent at both reads, never clobbers.
+ * Ponytail: read-then-write is not atomic. A shell file landing between this read and
+ * writePageFile's is kept and reported, but one landing after writePageFile's own read is
+ * overwritten (the same gap every write here has). And a shell `rm` handled by the inbound while
+ * this loop runs can be undone: the file comes back with no page behind it; delete it again.
  */
 async function runEnteredCode(ctx: OutboundRunCtx, run: Run): Promise<void> {
   for (const id of ctx.plan.enteredCode) {

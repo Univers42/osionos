@@ -60,7 +60,7 @@ export function createLiveInbound(workspaceId: string, queue: SerialQueue): Live
   return { session, attach: () => attachSandbox(workspaceId, session, sandbox, transport) };
 }
 
-// Caveat: 30 s is a guess at the slowest page-list pull; a pull still running then leaves
+// Ponytail: 30 s is a guess at the slowest page-list pull; a pull still running then leaves
 // this attach unable to open removals (retention), and the next attach tries again.
 const PULL_WAIT_MS = 30_000;
 
@@ -78,7 +78,7 @@ function pagesLoaded(workspaceId: string, ms: number): Promise<void> {
  * Pulls the page list again and waits for it to land: true when a pull landed after `since`.
  * fetchPages returns at once while another pull is in flight (the first load, at startup), so
  * that one is awaited instead.
- * Caveat: a pull already in flight was sent before `since`; a takeover in that window sees the
+ * Ponytail: a pull already in flight was sent before `since`; a takeover in that window sees the
  * tree as of the send.
  */
 async function pullPages(workspaceId: string, jwt: string, since: number): Promise<boolean> {
