@@ -18,6 +18,7 @@ import "@xterm/xterm/css/xterm.css";
 import { useUserStore } from "@/features/auth";
 import { useIdeTerminal } from "@/features/ide/model/useIdeTerminal";
 import { isSandboxReachable, useSandboxHealthStore } from "@/features/ide/model/sandboxHealthStore";
+import { terminalFontFamily } from "@/features/ide/model/terminalFont";
 import { SandboxUnavailable } from "./SandboxUnavailable";
 
 // Ponytail: read once when the terminal opens. The dock is always the dark code
@@ -46,21 +47,24 @@ export const IdeTerminal: React.FC<{ termId?: string }> = ({ termId = "0" }) => 
   const [term, setTerm] = React.useState<Terminal | null>(null);
 
   React.useEffect(() => {
-    if (!hostRef.current) return;
-    const t = new Terminal({
-      cursorBlink: true,
-      fontSize: 12,
-      fontFamily: 'var(--osio-font-family-mono)',
-      scrollback: 5000,
-      theme: codeTheme(hostRef.current),
+    const host = hostRef.current;
+    if (!host) return;
+    const fontFamily = terminalFontFamily(getComputedStyle(host));
+    let live = true;
+    let t: Terminal | null = null;
+    // xterm measures its cell once, at open: before the webfont has loaded that would be
+    // the fallback face's width. A failed load still opens the terminal, on the fallback.
+    void document.fonts.load(`12px ${fontFamily}`).catch(() => []).then(() => {
+      if (!live) return;
+      t = new Terminal({ cursorBlink: true, fontSize: 12, fontFamily, scrollback: 5000, theme: codeTheme(host) });
+      const fit = new FitAddon();
+      t.loadAddon(fit);
+      t.open(host);
+      fit.fit();
+      fitRef.current = fit;
+      setTerm(t);
     });
-    const fit = new FitAddon();
-    t.loadAddon(fit);
-    t.open(hostRef.current);
-    fit.fit();
-    fitRef.current = fit;
-    setTerm(t);
-    return () => { t.dispose(); setTerm(null); };
+    return () => { live = false; t?.dispose(); setTerm(null); };
   }, []);
 
   React.useEffect(() => {
