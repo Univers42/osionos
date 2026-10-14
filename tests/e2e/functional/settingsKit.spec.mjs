@@ -111,4 +111,29 @@ test.describe("settings use the kit", () => {
       expect(offRadius, `${tabName}: buttons off the control radius`).toEqual([]);
     }
   });
+  test("at phone width the section nav is a strip above the panel and nothing is clipped", async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openFreshPage(page, baseURL);
+    await openSettings(page, "osionos AI");
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const panel = page.getByRole("tabpanel");
+    await expect.poll(async () => (await panel.boundingBox()).width).toBeGreaterThanOrEqual(300);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const upgrade = panel.getByRole("button", { name: "Upgrade" }).first();
+    await upgrade.scrollIntoViewIfNeeded();
+    await expect(upgrade).toBeInViewport({ ratio: 1 });
+
+    const tabs = page.getByRole("dialog", { name: "Settings" }).getByRole("complementary").getByRole("tab");
+    const count = await tabs.count();
+    expect(count).toBeGreaterThan(10);
+    const nav = await tabs.first().boundingBox();
+    expect((await panel.boundingBox()).y).toBeGreaterThan(nav.y);
+    for (let index = 0; index < count; index += 1) {
+      await tabs.nth(index).scrollIntoViewIfNeeded();
+      await tabs.nth(index).click();
+      await expect(tabs.nth(index)).toHaveAttribute("aria-selected", "true");
+      await expect(panel).toBeVisible();
+    }
+  });
 });

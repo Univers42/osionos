@@ -434,6 +434,7 @@ function flashSavedIndicator(setSaved: React.Dispatch<React.SetStateAction<boole
 export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'profile', onClose }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const [settingsQuery, setSettingsQuery] = useState('');
+  const navRef = useRef<HTMLElement>(null);
   const activeUserId = useUserStore((s) => s.activeUserId);
   const persona = useUserStore((s) => s.activePersona());
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
@@ -441,6 +442,12 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
   const current = prompts[activeTab];
   const searchMatches = useSettingsSearchIndex(settingsQuery);
   const settingsResults = settingsQuery.trim() ? searchMatches.slice(0, 8) : [];
+
+  // Below sm the section nav is a scrolling strip: a deep link to a tab past the
+  // right edge would open with its tab out of sight.
+  useEffect(() => {
+    navRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [activeTab]);
 
   function openSearchResult(entry: SettingsSearchEntry) {
     setActiveTab(entry.tab);
@@ -480,14 +487,14 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
 
   return (
     <Modal open onClose={onClose} title="Settings" description={current.subtitle} size="xl">
-      <div className="flex h-[min(900px,94vh)] w-full overflow-hidden">
-        <aside className="w-[240px] shrink-0 overflow-y-auto border-r border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)]">
-          <div className="flex min-h-full flex-col justify-between">
-            <div className="space-y-4 p-2">
+      <div className="flex h-[min(900px,94vh)] w-full flex-col overflow-hidden sm:flex-row">
+        <aside ref={navRef} className="w-full shrink-0 border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] sm:w-[240px] sm:overflow-y-auto sm:border-b-0 sm:border-r">
+          <div className="sm:flex sm:min-h-full sm:flex-col sm:justify-between">
+            <div className="flex gap-1 overflow-x-auto p-2 sm:block sm:space-y-4 sm:overflow-visible">
               {tabGroups.map((group) => (
-                <div key={group.label}>
-                  <p className="px-2 py-1.5 text-xs font-medium text-[var(--osio-fg-subtle)]">{group.label}</p>
-                  <div className="space-y-0.5">
+                <div key={group.label} className="flex gap-1 sm:block">
+                  <p className="hidden px-2 py-1.5 text-xs font-medium text-[var(--osio-fg-subtle)] sm:block">{group.label}</p>
+                  <div className="flex gap-1 sm:block sm:space-y-0.5">
                     {group.tabs.map((tab) => (
                       <button
                         key={tab.id}
@@ -495,7 +502,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
                         role="tab"
                         aria-selected={activeTab === tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm ${activeTab === tab.id ? 'bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]' : 'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]'}`}
+                        className={`flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 text-left text-sm sm:w-full ${activeTab === tab.id ? 'bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]' : 'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]'}`}
                       >
                         {tab.id === 'profile' ? <Avatar value={persona?.emoji} label={persona?.name} size={22} /> : <span className="flex h-5 w-5 items-center justify-center">{tab.icon}</span>}
                         <span className="truncate">{tab.id === 'profile' ? persona?.name ?? tab.label : tab.label}</span>
@@ -505,7 +512,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
                 </div>
               ))}
             </div>
-            <div className="sticky bottom-0 border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
+            <div className="sticky bottom-0 hidden border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4 sm:block">
               <Button className="w-full" onClick={() => { recordSettingsAction('cta_click_ai', { source: 'settings_footer' }); setActiveTab('ai'); }}>
                 <Sparkles size={16} /> Get osionos AI
               </Button>
