@@ -45,6 +45,10 @@
   --osio-chip-h: 22px;
   --osio-chip-px: 8px;
 
+  /* The off track is the only boundary of an off switch, so it takes the
+   * subtle text colour (4.5:1 on every surface) rather than a fill. */
+  --osio-toggle-off-bg: var(--osio-fg-subtle);
+
   --osio-tooltip-bg: var(--osio-fg-strong);
   --osio-tooltip-fg: var(--osio-bg-surface);
   --osio-tooltip-radius: var(--osio-radius-sm);
