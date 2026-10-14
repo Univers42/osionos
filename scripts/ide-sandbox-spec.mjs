@@ -398,15 +398,19 @@ export function buildShellExecSpec() {
 
 /** The fs-watcher exec spec (P4 writeback): runs the in-image fs-agent, which
  *  streams one JSON line per /workspace change (ignore set applied in-container).
- *  FIXED argv, no GIT_PAT. Tty:true so stdout arrives unmultiplexed (line-clean)
- *  — the consumer tolerates the CR the TTY adds and skips non-JSON lines. */
+ *  FIXED argv, no GIT_PAT. Stdin attached and no TTY, like a language server: dockerd
+ *  closes an exec's stdin when its stream closes only without a TTY, and the agent exits
+ *  on that EOF. Under Tty:true every reload left an agent behind (60-70 MB each; seven
+ *  held ~450 MB of the demo box's 1 GiB and `make -j8` failed, 2026-10-14). Stdout is
+ *  multiplexed, so the bridge demuxes it as it does the language servers'. */
 export function buildFsAgentExecSpec() {
   return {
     User: "10001:10001",
     WorkingDir: "/workspace",
+    AttachStdin: true,
     AttachStdout: true,
     AttachStderr: false,
-    Tty: true,
+    Tty: false,
     Cmd: ["node", "/usr/local/lib/osio-fs-agent.mjs"],
   };
 }
