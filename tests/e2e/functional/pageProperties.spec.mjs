@@ -29,12 +29,12 @@ const PROPERTIES = [
 const properties = (page) => page.getByRole("group", { name: "Page properties" });
 
 /** Gives the open page the properties above, as a page imported from a database has them. */
-async function seedProperties(page) {
+async function seedProperties(page, seed = PROPERTIES) {
   await page.evaluate(async (seed) => {
     const { usePageStore } = await import("/src/store/usePageStore.ts");
     const store = usePageStore.getState();
     store.patchPage(store.activePage?.id, { properties: seed });
-  }, PROPERTIES);
+  }, seed);
   await waitForRenderStability(page);
 }
 
@@ -94,6 +94,31 @@ test.describe("page properties", () => {
     expect(await computed(chips.first(), "border-top-left-radius")).toBe("9999px");
     await properties(page).getByRole("button", { name: "Remove alpha" }).click();
     await expect(chips).toHaveText(["beta"]);
+  });
+
+  test("relation chips are pills and the Relate picker is the overlay surface", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await seedProperties(page, [{ key: "related", label: "Related", type: "relation", value: ["page-that-no-longer-exists"] }]);
+    const chip = properties(page).locator(".osio-chip");
+    await expect(chip).toHaveCount(1);
+    expect(await computed(chip, "border-top-left-radius")).toBe("9999px");
+    const removeBox = await properties(page).getByRole("button", { name: /^Remove relation/ }).boundingBox();
+    expect(removeBox.height).toBeGreaterThanOrEqual(24);
+
+    await properties(page).getByRole("button", { name: "Relate" }).click();
+    const picker = properties(page).locator(".osio-surface-overlay");
+    await expect(picker).toBeVisible();
+    const reference = await page.evaluate(() => {
+      const probe = document.createElement("div");
+      probe.className = "osio-surface-overlay";
+      document.body.append(probe);
+      const style = getComputedStyle(probe);
+      const look = { radius: style.borderTopLeftRadius, shadow: style.boxShadow };
+      probe.remove();
+      return look;
+    });
+    expect(await computed(picker, "border-top-left-radius")).toBe(reference.radius);
+    expect(await computed(picker, "box-shadow")).toBe(reference.shadow);
   });
 
   test("a multi-select option is added from the dropdown", async ({ page, baseURL }) => {

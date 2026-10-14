@@ -41,13 +41,13 @@ export const PageRelationField: React.FC<Props> = ({ workspaceId, excludePageId,
   return (
     <div className="flex flex-wrap items-center gap-1">
       {ids.map((id) => (
-        <span key={id} className="inline-flex items-center gap-1 rounded-xs bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-xs text-[var(--osio-fg-default)]">
+        <span key={id} className="osio-chip">
           <button type="button" className="max-w-40 min-h-[24px] truncate hover:underline" onClick={() => openPage({ id, workspaceId, kind: "page", title: titleOf(id) })}>
             {titleOf(id)}
           </button>
           {editable ? (
             <button type="button" title="Remove relation" aria-label={`Remove relation ${titleOf(id)}`}
-              className="inline-flex min-h-[24px] min-w-[24px] items-center justify-center -my-1 -mr-0.5"
+              className="inline-flex min-h-[24px] min-w-[24px] items-center justify-center -mr-0.5"
               onClick={() => onChange(ids.filter((other) => other !== id))}>
               <X size={11} />
             </button>
@@ -62,14 +62,14 @@ export const PageRelationField: React.FC<Props> = ({ workspaceId, excludePageId,
             <Plus size={12} /> Relate
           </button>
           {picking ? (
-            <div className="absolute z-20 mt-1 max-h-56 w-56 overflow-auto rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-[var(--osio-shadow-menu)]">
+            <div className="osio-surface-overlay absolute z-20 mt-1 max-h-56 w-56 overflow-auto">
               {candidates.length === 0 ? (
                 <p className="px-2 py-1 text-xs text-[var(--osio-fg-subtle)]">No other pages</p>
               ) : (
                 candidates.map((page) => (
                   <button key={page.id} type="button" onClick={() => { onChange([...ids, page.id]); setPicking(false); }}
-                    className="block w-full truncate px-2 py-1 text-left text-sm hover:bg-[var(--osio-bg-hover)]">
-                    {page.title || "Untitled"}
+                    className="osio-menu-item">
+                    <span className="min-w-0 truncate">{page.title || "Untitled"}</span>
                   </button>
                 ))
               )}
