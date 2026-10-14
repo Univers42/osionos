@@ -20,12 +20,22 @@ import { IdeInlineInput } from "./IdeInlineInput";
 import { ExplorerRowIcon } from "./ExplorerRowIcon";
 
 export const EXPLORER_DRAG_MIME = "application/x-osio-workspace-path";
-/** Height the virtualizer assumes before a line is measured (a plain row's height). */
-export const EXPLORER_ROW_HEIGHT_PX = 22;
-// Same indent grid as IdeInlineInput (8px gutter + 12px per level) so inline rows line up.
-const INDENT_BASE_PX = 8;
+/** Height the virtualizer assumes before a line is measured: the sidebar page row's 28px. */
+export const EXPLORER_ROW_HEIGHT_PX = 28;
+// The sidebar page row's indent grid (SidebarNavItem: 10px + 12px per level), so a
+// file row at depth 0 starts where a page row does.
+const INDENT_BASE_PX = 10;
 const INDENT_STEP_PX = 12;
 const indentOf = (level: number) => ({ paddingLeft: INDENT_BASE_PX + (level - 1) * INDENT_STEP_PX });
+
+// The sidebar page row's look (SidebarNavItem in the kit), so the tree and the
+// Recents above it read as one list. The kit row spells its 6px radius and 28px
+// height as literals, so they are repeated here until it moves to a token;
+// explorerRows.spec.mjs fails if the two lists drift apart.
+const ROW =
+  "flex h-7 cursor-pointer select-none items-center gap-2 rounded-[6px] pr-2 text-base font-medium transition-colors duration-(--osio-dur-fast)";
+const ROW_ACTIVE = "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]";
+const ROW_IDLE = "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]";
 /** Where the virtualized list puts one line: its index, its offset, and the callback
  *  that measures its real height. */
 export type LinePlacement = { index: number; start: number; measure: (node: Element | null) => void };
@@ -36,7 +46,12 @@ const placed = ({ index, start, measure }: LinePlacement) => ({
   style: { position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${start}px)` } as const,
 });
 
-const ROW_FOCUS = "list-none outline-none [&:focus-visible>div]:outline [&:focus-visible>div]:outline-2 [&:focus-visible>div]:-outline-offset-2 [&:focus-visible>div]:outline-[var(--osio-accent)]";
+// The focus ring is the global :focus-visible rule on the li (it has a tabindex); the
+// radius makes that ring follow the row's corners. The li is as wide as its overflow:auto
+// scroller, so the rule's outside 1px offset would be clipped left and right: the ring is
+// drawn 2px inside instead. Inline, because an unlayered rule beats every utility class.
+const ROW_FOCUS = "list-none rounded-[6px]";
+const RING_INSET = { outlineOffset: -2 } as const;
 
 /** Drag source + drop target props for one row; a drop lands in the row itself
  *  when it is a folder, otherwise in its folder. */
@@ -81,6 +96,7 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
   const pageId = ctx.pageIdOf?.(rel, row.kind);
   const active = useIsActivePage(pageId ?? "");
   const dnd = useRowDnd(rel, isDir ? rel : item.parentRel, renaming, pageId);
+  const line = placed(placement);
 
   const onContextMenu = (event: React.MouseEvent): void => {
     if (renaming) return;
@@ -91,7 +107,8 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
 
   return (
     <li
-      {...placed(placement)}
+      {...line}
+      style={{ ...line.style, ...RING_INSET }}
       role="treeitem"
       data-rel={rel}
       aria-level={level}
@@ -108,11 +125,7 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
         onClick={() => ctx.activate(rel, row)}
         onContextMenu={onContextMenu}
         style={indentOf(level)}
-        className={
-          "flex cursor-pointer items-center gap-1.5 py-[3px] pr-2 text-sm text-[var(--osio-code-fg)] " +
-          (active ? "bg-[var(--osio-code-active-line)] " : "hover:bg-[var(--osio-code-btn-hover)] ") +
-          (dnd.dragOver ? "outline outline-1 outline-[var(--osio-accent)]" : "")
-        }
+        className={`${ROW} ${active ? ROW_ACTIVE : ROW_IDLE}${dnd.dragOver ? " outline outline-1 -outline-offset-1 outline-[var(--osio-accent)]" : ""}`}
       >
         <ExplorerRowIcon item={item} open={open} pageId={pageId} />
         {renaming ? (
@@ -120,12 +133,11 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
             initialValue={row.name}
             label={`Rename ${row.name}`}
             placeholder="Rename"
-            depth={0}
             onSubmit={(name) => ctx.submitRename(rel, name)}
             onCancel={ctx.cancelEdit}
           />
         ) : (
-          <span className="flex-1 truncate">{row.label || "Untitled"}</span>
+          <span className="min-w-0 flex-1 truncate text-left">{row.label || "Untitled"}</span>
         )}
       </div>
     </li>
@@ -138,11 +150,11 @@ export const ExplorerStatusRow: React.FC<{ dir: string; level: number; placement
   const state = ctx.dirs[dir];
   return (
     <li {...placed(placement)} role="none">
-      <div style={indentOf(level)} className="py-[3px] pr-2 text-xs text-[var(--osio-code-fg-muted)]">
+      <div style={indentOf(level)} className="flex min-h-7 flex-wrap items-center gap-x-1 pr-2 text-xs text-[var(--osio-fg-muted)]">
         {state?.status === "error" ? (
           <>
             Could not read this folder: {state.message}{" "}
-            <button type="button" onClick={() => ctx.retry(dir)} className="underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--osio-accent)]">Retry</button>
+            <button type="button" onClick={() => ctx.retry(dir)} className="rounded-xs underline hover:text-[var(--osio-fg-default)]">Retry</button>
           </>
         ) : "Loading…"}
       </div>
@@ -154,9 +166,10 @@ export const ExplorerStatusRow: React.FC<{ dir: string; level: number; placement
 export const ExplorerCreateRow: React.FC<{ level: number; kind: "file" | "dir"; placement: LinePlacement }> = ({ level, kind, placement }) => {
   const ctx = useExplorer();
   const label = kind === "dir" ? "New folder name" : "New file name";
+  const line = placed(placement);
   return (
-    <li {...placed(placement)} role="none">
-      <IdeInlineInput depth={level - 1} label={label} placeholder={label} onSubmit={ctx.submitCreate} onCancel={ctx.cancelEdit} />
+    <li {...line} role="none" style={{ ...line.style, ...indentOf(level) }} className="flex h-7 items-center pr-2">
+      <IdeInlineInput label={label} placeholder={label} onSubmit={ctx.submitCreate} onCancel={ctx.cancelEdit} />
     </li>
   );
 };

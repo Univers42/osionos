@@ -10,6 +10,7 @@ import {
   createBlockViaSlash,
   createCallout,
   createParagraphs,
+  explorerRow,
   getEditors,
   openBlockContextMenuForEditor,
   openFreshPage,
@@ -82,6 +83,14 @@ async function typeInFreshEditor(page, text) {
 }
 
 const MENUS = [
+  {
+    name: "explorer row menu",
+    open: async (page) => {
+      await explorerRow(page, "Getting Started").click({ button: "right" });
+      const panel = page.getByRole("menu");
+      return { panel, row: panel.getByRole("menuitem").first() };
+    },
+  },
   {
     name: "slash menu",
     open: async (page) => {

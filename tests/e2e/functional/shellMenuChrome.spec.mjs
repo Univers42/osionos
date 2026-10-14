@@ -5,7 +5,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { clearAndTypePageTitle, openFreshPage } from "../../browser/core/app.mjs";
+import { clearAndTypePageTitle, explorerRow, openFreshPage } from "../../browser/core/app.mjs";
 import { tokenValue } from "../support/styleguideHelpers.mjs";
 
 const CHROME_PROPERTIES = [
@@ -61,22 +61,14 @@ async function openPage(page, baseURL) {
   await clearAndTypePageTitle(page, "Quarterly plan");
 }
 
-// The Recents entry comes first; the page-tree row (the one with a context menu) is the last.
-const treeRow = (page, title) => page.locator(".group.relative.w-full", { hasText: title }).last();
+// The Explorer's tree row is the one with a context menu; the Recents row above it has none.
+const treeRow = explorerRow;
 
 test.describe("shell menus draw the overlay chrome", () => {
   test("the page header menu", async ({ page, baseURL }) => {
     await openPage(page, baseURL);
     await page.getByRole("button", { name: "Open page configuration" }).click();
     await expectChrome(page, page.getByTestId("page-config-menu"));
-  });
-
-  test("the sidebar row's page options menu", async ({ page, baseURL }) => {
-    await openPage(page, baseURL);
-    const row = treeRow(page, "Quarterly plan");
-    await row.hover();
-    await row.getByTitle("Page options").click();
-    await expectChrome(page, page.getByTestId("page-options-menu"));
   });
 
   test("the sidebar page context menu", async ({ page, baseURL }) => {
@@ -178,7 +170,9 @@ test.describe("shell menus draw the overlay chrome", () => {
   test("the page context menu clamps above the viewport's bottom edge", async ({ page, baseURL }) => {
     await openPage(page, baseURL);
     await page.setViewportSize({ width: 1440, height: 420 });
-    await treeRow(page, "Quarterly plan").click({ button: "right" });
+    // The tree is virtualised and this short a sidebar mounts only the first rows, so the lowest
+    // mounted row stands in for the page just created, which is scrolled out of the list.
+    await page.getByRole("treeitem").last().click({ button: "right" });
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
     await expect.poll(async () => {

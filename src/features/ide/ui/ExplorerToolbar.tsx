@@ -12,8 +12,9 @@
 
 import React from "react";
 import { ChevronsDownUp, Download, FilePlus, FolderInput, FolderPlus, RefreshCw } from "lucide-react";
+import { IconButton, PanelSectionLabel } from "@/shared/ui";
 
-const TOOL = "flex h-6 w-6 items-center justify-center rounded-xs text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--osio-accent)]";
+type Action = { label: string; onClick: () => void; icon: React.ReactNode };
 
 export const ExplorerToolbar: React.FC<{
   onNewFile: () => void;
@@ -22,13 +23,21 @@ export const ExplorerToolbar: React.FC<{
   onCollapseAll: () => void;
   onImportFolder?: () => void;
   onExportZip?: () => void;
-}> = ({ onNewFile, onNewFolder, onRefresh, onCollapseAll, onImportFolder, onExportZip }) => (
-  <div role="toolbar" aria-label="Workspace files actions" className="flex items-center justify-end gap-0.5 px-2 py-1">
-    <button type="button" title="New file" aria-label="New file" onClick={onNewFile} className={TOOL}><FilePlus size={14} /></button>
-    <button type="button" title="New folder" aria-label="New folder" onClick={onNewFolder} className={TOOL}><FolderPlus size={14} /></button>
-    {onImportFolder && <button type="button" title="Import folder" aria-label="Import folder" onClick={onImportFolder} className={TOOL}><FolderInput size={14} /></button>}
-    {onExportZip && <button type="button" title="Export as .zip" aria-label="Export as .zip" onClick={onExportZip} className={TOOL}><Download size={14} /></button>}
-    <button type="button" title="Collapse all" aria-label="Collapse all" onClick={onCollapseAll} className={TOOL}><ChevronsDownUp size={14} /></button>
-    <button type="button" title="Refresh" aria-label="Refresh" onClick={onRefresh} className={TOOL}><RefreshCw size={12} /></button>
-  </div>
-);
+}> = ({ onNewFile, onNewFolder, onRefresh, onCollapseAll, onImportFolder, onExportZip }) => {
+  const actions: (Action | null)[] = [
+    { label: "New file", onClick: onNewFile, icon: <FilePlus size={14} /> },
+    { label: "New folder", onClick: onNewFolder, icon: <FolderPlus size={14} /> },
+    onImportFolder ? { label: "Import folder", onClick: onImportFolder, icon: <FolderInput size={14} /> } : null,
+    onExportZip ? { label: "Export as .zip", onClick: onExportZip, icon: <Download size={14} /> } : null,
+    { label: "Collapse all", onClick: onCollapseAll, icon: <ChevronsDownUp size={14} /> },
+    { label: "Refresh", onClick: onRefresh, icon: <RefreshCw size={14} /> },
+  ];
+  return (
+    <div role="toolbar" aria-label="Workspace files actions" className="flex h-[30px] items-center gap-0.5 px-2">
+      <PanelSectionLabel className="mr-auto truncate">Files</PanelSectionLabel>
+      {actions.map((action) => action && (
+        <IconButton key={action.label} size="xs" label={action.label} onClick={action.onClick}>{action.icon}</IconButton>
+      ))}
+    </div>
+  );
+};

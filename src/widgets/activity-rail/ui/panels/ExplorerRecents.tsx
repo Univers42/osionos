@@ -19,6 +19,7 @@ import { favoritesForWorkspace } from "@/store/favorites/favoritesScope";
 import { usePageStore } from "@/store/usePageStore";
 import { FavoriteSidebarItem } from "../FavoriteSidebarItem";
 import { RecentPageRow } from "../RecentPageRow";
+import { SIDEBAR_LABEL_TYPE } from "../sidebarLabelType";
 
 /** Compact strip: the tree below is the main surface, so recents stay short. */
 export const EXPLORER_RECENTS_CAP = 5;
@@ -28,22 +29,32 @@ interface StripSectionProps {
   children: React.ReactNode;
 }
 
+// The kit SidebarSection's header (label, then a chevron that shows on hover), made a
+// real disclosure: it carries aria-expanded, and the body stays in the DOM when closed.
 const StripSection: React.FC<StripSectionProps> = ({ label, children }) => {
   const [open, setOpen] = useState(true);
   const bodyId = useId();
   return (
     <div>
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={bodyId}
-        onClick={() => setOpen((current) => !current)}
-        className="flex h-[26px] w-full items-center gap-1 rounded-[6px] px-2 text-xs font-medium text-[var(--osio-fg-subtle)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--osio-accent)]"
-      >
-        <ChevronDown size={12} className={open ? "" : "-rotate-90"} aria-hidden="true" />
-        <span className="truncate">{label}</span>
-      </button>
-      <div id={bodyId} hidden={!open}>
+      <div className="group relative mb-px flex h-[30px] items-center px-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={() => setOpen((current) => !current)}
+          className="-mx-1.5 flex h-full min-w-0 flex-1 items-center gap-1 rounded-[6px] px-1.5 hover:bg-[var(--osio-bg-hover)]"
+        >
+          <span data-section-label className={`truncate ${SIDEBAR_LABEL_TYPE}`}>
+            {label}
+          </span>
+          <ChevronDown
+            size={12}
+            aria-hidden="true"
+            className={`shrink-0 text-[var(--osio-fg-subtle)] opacity-0 transition-transform duration-(--osio-dur-fast) group-hover:opacity-100 group-focus-within:opacity-100 ${open ? "" : "-rotate-90"}`}
+          />
+        </button>
+      </div>
+      <div id={bodyId} hidden={!open} className="flex flex-col gap-px">
         {children}
       </div>
     </div>
@@ -73,7 +84,7 @@ export const ExplorerRecents: React.FC<Props> = ({ activeWorkspaceId }) => {
   if (!showFavorites && recents.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-1 px-2 pb-1.5">
+    <div className="flex shrink-0 flex-col pb-2">
       {showFavorites && (
         <StripSection label="Favorites">
           {workspaceFavoriteIds.map((id) => (
