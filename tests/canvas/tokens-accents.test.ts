@@ -87,6 +87,19 @@ test("the default preset swatch is the default palette's own accent", () => {
   assert.equal(cobalt.swatch, withAccent(PALETTES[0], "light", {})["--osio-accent"]);
 });
 
+// The dark accent is lighter than the light one; a swatch painted with the light solid promises a colour the person never gets.
+test("each swatch carries the solid accent of both modes", () => {
+  for (const entry of PICKER_ACCENTS) {
+    assert.match(entry.swatchDark, /^#[0-9A-F]{6}$/, entry.id);
+    const [light, dark] = (["light", "dark"] as const).map((mode) =>
+      entry.id === DEFAULT_ACCENT ? withAccent(PALETTES[0], mode, {})["--osio-accent"] : presetTokens(entry.id, mode)["--osio-a-solid"],
+    );
+    assert.equal(entry.swatch, light, `${entry.id} light`);
+    assert.equal(entry.swatchDark, dark, `${entry.id} dark`);
+    assert.notEqual(entry.swatch, entry.swatchDark, entry.id);
+  }
+});
+
 const stored = (value: unknown) => parseAppearance(JSON.stringify(value));
 
 test("a missing or malformed stored appearance is the default", () => {

@@ -5,14 +5,14 @@
 import type { AccentMeta } from "./theme";
 
 export const GENERATED_ACCENTS: readonly AccentMeta[] = [
-  { id: "cobalt", label: "Cobalt", swatch: "#1F5BC4" },
-  { id: "ember", label: "Terracotta", swatch: "#9C4426" },
-  { id: "indigo", label: "Indigo", swatch: "#4B54BB" },
-  { id: "violet", label: "Violet", swatch: "#7246AE" },
-  { id: "rose", label: "Rose", swatch: "#A92D4D" },
-  { id: "green", label: "Green", swatch: "#20753B" },
-  { id: "teal", label: "Teal", swatch: "#007171" },
-  { id: "graphite", label: "Graphite", swatch: "#5C636E" },
+  { id: "cobalt", label: "Cobalt", swatch: "#1F5BC4", swatchDark: "#75A4F6" },
+  { id: "ember", label: "Terracotta", swatch: "#9C4426", swatchDark: "#D79079" },
+  { id: "indigo", label: "Indigo", swatch: "#4B54BB", swatchDark: "#8F9EEE" },
+  { id: "violet", label: "Violet", swatch: "#7246AE", swatchDark: "#B093E4" },
+  { id: "rose", label: "Rose", swatch: "#A92D4D", swatchDark: "#E48494" },
+  { id: "green", label: "Green", swatch: "#20753B", swatchDark: "#7CB587" },
+  { id: "teal", label: "Teal", swatch: "#007171", swatchDark: "#71B2B1" },
+  { id: "graphite", label: "Graphite", swatch: "#5C636E", swatchDark: "#9FA5AE" },
 ];
 
 /** Palettes that keep their own accent: the accent presets and the custom hue do not apply over them. */
