@@ -55,7 +55,9 @@ test("write specs: content past one argv item (128 KiB) is staged in pieces unde
   const specs = buildWriteSpecs("big.c", b64);
   assert.deepEqual(specs.map((spec) => spec.Cmd[7]), ["first", "more", "last"]);
   assert.equal(new Set(specs.map((spec) => spec.Cmd[6])).size, 1, "every piece names the same stage");
-  assert.match(specs[0].Cmd[6], /^[0-9a-f]{16}$/);
+  // osio-fs-agent.mjs TRANSIENT_FILE (/\.vfstmp\d+$/) keeps the staged file out of the pages:
+  // a token with a letter in it would sync every piece back as a page.
+  assert.match(`big.c.vfstmp${specs[0].Cmd[6]}`, /\.vfstmp\d+$/);
   assert.equal(specs.map((spec) => spec.Cmd[5]).join(""), b64, "the pieces are the content, in order");
   assert.ok(specs.every((spec) => spec.Cmd[5].length <= WRITE_PIECE_B64 && spec.Cmd[5].length % 4 === 0), "each piece decodes alone");
 });
@@ -64,5 +66,5 @@ test("write specs: an oversize piece is a 413, a part without a valid stage a 40
   const big = "A".repeat(WRITE_PIECE_B64 + 4);
   assert.throws(() => buildFsOpSpec("write", { path: "a.c", contentBase64: big }), (e) => e.status === 413);
   assert.throws(() => buildFsOpSpec("write", { path: "a.c", contentBase64: "aGk=", part: "first", stage: "x;rm" }), (e) => e.status === 400);
-  assert.throws(() => buildFsOpSpec("write", { path: "a.c", contentBase64: "aGk=", part: "append", stage: "abcdef0123" }), (e) => e.status === 400);
+  assert.throws(() => buildFsOpSpec("write", { path: "a.c", contentBase64: "aGk=", part: "append", stage: "0123456789" }), (e) => e.status === 400);
 });

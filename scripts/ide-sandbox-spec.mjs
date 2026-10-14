@@ -259,8 +259,8 @@ export function buildFsOpSpec(op, params = {}) {
     }
     args.push(params.contentBase64);
     if (params.part !== undefined) {
-      if (!WRITE_PARTS.has(params.part) || !/^[a-z0-9]{8,32}$/.test(String(params.stage ?? ""))) {
-        throw Object.assign(new Error("a write part needs part first|more|last and an 8-32 character stage token"), { status: 400 });
+      if (!WRITE_PARTS.has(params.part) || !/^[0-9]{8,32}$/.test(String(params.stage ?? ""))) {
+        throw Object.assign(new Error("a write part needs part first|more|last and an 8-32 digit stage token"), { status: 400 });
       }
       args.push(params.stage, params.part);
     }
@@ -279,7 +279,8 @@ export function buildWriteSpecs(relPath, contentBase64) {
   if (typeof contentBase64 !== "string" || contentBase64.length <= WRITE_PIECE_B64) {
     return [buildFsOpSpec("write", { path: relPath, contentBase64 })];
   }
-  const stage = randomBytes(8).toString("hex");
+  // Digits only: osio-fs-agent ignores `<file>.vfstmp<digits>`, so the staged file never syncs back as a page.
+  const stage = randomBytes(8).readBigUInt64BE().toString().padStart(20, "0");
   const specs = [];
   for (let at = 0; at < contentBase64.length; at += WRITE_PIECE_B64) {
     const part = at === 0 ? "first" : at + WRITE_PIECE_B64 >= contentBase64.length ? "last" : "more";
