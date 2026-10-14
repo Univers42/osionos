@@ -183,6 +183,21 @@ test("remove phase: a page the shell deleted is never removed by the writer — 
   const first = await runOutbound(ctxFor(ws, plan, [page("pA", "One", null)], w.io));
   assert.deepEqual(w.removals, []);
   assert.deepEqual(first.report.skipped, [{ path: "One.omd", reason: "deleted in the shell" }]);
+  assert.equal(syncedHashOf(ws, "One.omd"), null, "the skipped page's agreement is forgotten with it");
+  recordSyncedHash(ws, "One.omd", await sha16("v1"));
   await runOutbound(ctxFor(ws, plan, [page("pA", "One", null)], w.io));
   assert.deepEqual(w.removals, ["One.omd"]);
+});
+
+// devil F1: only the tab that applies shell events holds the marks, and a follower's ledger is the
+// one it hydrated at load. Its writer, seeing the archive at a refetch, must not judge the remove.
+test("remove phase: a follower tab, without the leader's marks and holding the old agreement, removes nothing", async () => {
+  const ws = freshWs();
+  const w = world({ "One.omd": "v1" }); // the leader applied `rm One.omd`; `git clone` put v1 back
+  const plan = { moves: [], removes: [{ id: "pA", path: "One.omd" }], changed: [] };
+  recordSyncedHash(ws, "One.omd", await sha16("v1")); // what the follower hydrated at load
+  const run = await runOutbound({ ...ctxFor(ws, plan, [page("pA", "One", null)], w.io), mayRemove: () => false });
+  assert.deepEqual(w.removals, []);
+  assert.equal(w.files.get("One.omd"), "v1");
+  assert.deepEqual(run.report.skipped, [{ path: "One.omd", reason: "removed by the tab that applies shell events" }]);
 });
