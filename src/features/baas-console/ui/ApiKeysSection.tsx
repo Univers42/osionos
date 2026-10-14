@@ -40,7 +40,7 @@ function KeyRowItem({ apiKey, onRevoke }: { apiKey: ApiKey; onRevoke: (id: strin
       {revoked ? (
         <Badge tone="danger">revoked</Badge>
       ) : (
-        <Button tone="danger" onClick={() => onRevoke(apiKey.id)}>
+        <Button tone="danger-subtle" onClick={() => onRevoke(apiKey.id)}>
           <Trash2 size={14} aria-hidden /> Revoke
         </Button>
       )}
