@@ -75,7 +75,9 @@ export function pageStoreFacade(workspaceId: string): PageFacade {
       store().movePage(id, parentId, workspaceId);
     },
     async archive(id) {
-      store().archivePage(id, workspaceId, jwt());
+      // Awaited, as pageFileFacadeStore's is: a caller of archive() (inboundArchive gives every
+      // page still live its mark back once it returns) must see the server's answer first.
+      await store().archivePage(id, workspaceId, jwt());
     },
     toSegment: sanitizeSegment,
   };

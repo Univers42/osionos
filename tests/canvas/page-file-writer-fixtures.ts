@@ -55,5 +55,6 @@ export function world(seed: Record<string, string> = {}, failWrites: string[] = 
 export function ctxFor(ws: string, plan: OutboundPlan, pages: PageEntry[], io: OutboundIo): OutboundRunCtx {
   const index = pageIndexFor(ws, pages);
   const byId = new Map(pages.map((p) => [p._id, p]));
-  return { workspaceId: ws, plan, pageById: (id) => byId.get(id), pathOf: (id) => index.pathForId(id), io };
+  // Every remove these tests plan stands for a page the user removed in this tab's app.
+  return { workspaceId: ws, plan, pageById: (id) => byId.get(id), pathOf: (id) => index.pathForId(id), io, mayRemove: () => true };
 }

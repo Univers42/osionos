@@ -24,6 +24,7 @@ import { statInProvider, type StatResult } from "../../src/features/ide/model/in
 import { buildVPath } from "../../src/features/ide/vfs/vpath.ts";
 import { planOutbound, type Snapshot } from "../../src/features/page-file/model/outboundPlan.ts";
 import { runOutbound } from "../../src/features/page-file/model/outboundRun.ts";
+import { recordAppRemovals, takeAppRemoval } from "../../src/store/appRemovals.ts";
 import { b64, blockPage, execWorld, folderPage, putFile } from "./fixtures/inboundWorld.ts";
 import { sandboxIo, snapshotOf, writerRound } from "./fixtures/outboundWorld.ts";
 
@@ -40,12 +41,16 @@ async function round(w: World, from: Snapshot) {
   const run = await runOutbound({
     workspaceId: w.workspaceId, plan: planOutbound(from, next), io: sandboxIo(w, []),
     pageById: (id) => byId.get(id), pathOf: (id) => next.index.pathForId(id),
+    mayRemove: (id) => takeAppRemoval(w.workspaceId, id),
   });
   return { next, report: run.report };
 }
 
-const appArchive = (w: World, id: string): void =>
+/** What the store's archive does once the server confirmed: the intent, then the page. */
+const appArchive = (w: World, id: string): void => {
+  recordAppRemovals(w.workspaceId, [id]);
   w.store._seed(w.store.pages().map((entry) => (entry._id === id ? { ...entry, archivedAt: "2026-10-14T09:00:00Z" } : entry)));
+};
 
 /** proj/main.c made in the shell, its page and folder written back once. */
 async function codeTree() {

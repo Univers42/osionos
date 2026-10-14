@@ -44,6 +44,7 @@ import { loadLedger } from "@osionos/outbox-ledger";
 import { applyServerPages } from "./sync/applyServerPages";
 import { resolveFetchedPage } from "./sync/mergeServerPages";
 import { PAGE_OUTBOX_KEY, pageStamp, saveOutboxLedger } from "./sync/pageStamp";
+import { forgetAppRemovals, recordAppRemovals } from "./appRemovals";
 import {
   cascadeIdsFrom,
   applyArchived,
@@ -436,6 +437,7 @@ export function createArchivePage(set: SetFn, get: GetFn) {
     const wsPages = get().pages[workspaceId] ?? [];
     const descendantIds = getAllDescendantIds(wsPages, pageId);
     const archivedIds = new Set([pageId, ...descendantIds]);
+    recordAppRemovals(workspaceId, archivedIds);
 
     set((s) => {
       const currentWsPages = s.pages[workspaceId] ?? [];
@@ -490,6 +492,9 @@ async function applyCascadeOperation(options: {
   const localDescendantIds = getAllDescendantIds(wsPages, pageId);
   const ids = cascadeIdsFrom(body, pageId, localDescendantIds, field);
   const idSet = new Set(ids);
+  // After the server confirmed, for the ids it named: the writer removes only these files.
+  if (field === "deletedIds" || archivedAt !== null) recordAppRemovals(workspaceId, ids);
+  else forgetAppRemovals(workspaceId, ids);
 
   set((s) => {
     const currentWsPages = s.pages[workspaceId] ?? [];
@@ -974,6 +979,7 @@ export function createRestorePage(set: SetFn, get: GetFn) {
     const wsPages = get().pages[workspaceId] ?? [];
     const descendantIds = getAllDescendantIds(wsPages, pageId);
     const restoredIds = new Set([pageId, ...descendantIds]);
+    forgetAppRemovals(workspaceId, restoredIds);
 
     set((s) => {
       const currentWsPages = s.pages[workspaceId] ?? [];
@@ -1015,6 +1021,7 @@ export function createDeletePage(set: SetFn, get: GetFn) {
     const wsPages = get().pages[workspaceId] ?? [];
     const descendantIds = getAllDescendantIds(wsPages, pageId);
     const deletedIds = new Set([pageId, ...descendantIds]);
+    recordAppRemovals(workspaceId, deletedIds);
 
     set((s) => {
       const currentWsPages = s.pages[workspaceId] ?? [];

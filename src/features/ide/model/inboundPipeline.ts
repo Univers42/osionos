@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/14 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -76,14 +76,16 @@ export interface Leadership {
   release(): void;
 }
 
-// The tab's current leadership per workspace, for the writer (usePageFileWriter): only the
-// tab that applies shell events removes files. A page the shell deleted is marked in that
-// tab's memory (ideSyncEngine markShellArchived) and its agreement cleared there; a follower
-// sees the archive at its next refetch, holds the agreement it hydrated at load, and read it
-// as a match for the bytes a `git clone` had just put back (devil F1, 2026-10-14).
-// Ponytail: a leader that closes hands its successor no marks, and the successor's ledger
-// may still hold an agreement the closed tab cleared; a re-cloned file at a path no page owns
-// again is removed if that tab refetches before anything else rewrites the agreement.
+// The tab's current leadership per workspace, for the writer (usePageFileWriter): a file is
+// removed only by the tab that applies shell events AND holds its user's app intent for the
+// page (store/appRemovals). A tab that does not lead knows the tree only as of its last
+// refetch: after the leader's `rm -rf proj && git clone`, its user trashing the old `proj`
+// had the server name the old children, and the agreements it loaded matched the re-cloned
+// bytes, so it removed the clone (devil ST1 on 709fbea, 2026-10-14). That tab still spends
+// the intent and counts the file as left without a page.
+// Ponytail: a page trashed in a tab that does not lead keeps its file in the sandbox (the
+// writer's Output line counts it); a leader that closes hands its successor no marks and
+// no intents, so the successor removes nothing until its own user removes something.
 const leaderships = new Map<string, Leadership>();
 
 /** Whether this tab applies the workspace's shell events now. */
