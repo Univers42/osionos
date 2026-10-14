@@ -179,16 +179,13 @@ test.describe("appearance preferences", () => {
   test("the Monaco theme receives a #RRGGBB accent for a custom hue", async ({ page }) => {
     test.setTimeout(120_000);
     await page.addInitScript(() => {
-      localStorage.setItem("osio.ide", "1");
       localStorage.setItem("osionos:theme-mode", "light");
       localStorage.setItem("osionos:appearance", JSON.stringify({ accent: "custom", hue: 140 }));
     });
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: /IDE Workspace/i }).click();
-    const shell = page.locator("[data-osio-ide-shell]");
-    await shell.waitFor();
-    await shell.getByRole("button", { name: "New file" }).click();
-    const name = shell.locator('input[placeholder="file name"]');
+    // The workbench is the only layout: a file created in the sidebar Explorer opens in Monaco.
+    await page.getByRole("toolbar", { name: "Workspace files actions" }).getByRole("button", { name: "New file" }).click();
+    const name = page.getByRole("textbox", { name: "New file name" });
     await name.fill("hello.py");
     await name.press("Enter");
     await page.locator(".monaco-editor").first().waitFor({ timeout: 30_000 });
