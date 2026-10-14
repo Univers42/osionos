@@ -625,8 +625,9 @@ body {
   box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--osio-fg-default) 9%, transparent);
 }
 
-/* Editorial serif headings: the same stack and tracking as osio-h1..h4. */
-:where(h1, h2, h3, h4) {
+/* Editorial serif headings: the same stack and tracking as osio-h1..h4. One
+   :where() per tag so each is filed under its tag (pane zoom, below). */
+:where(h1), :where(h2), :where(h3), :where(h4) {
   font-family: var(--osio-font-heading);
   letter-spacing: var(--osio-letter-spacing-heading);
 }
@@ -943,26 +944,28 @@ body {
 
    The second rule stops a fixed-scale surface nested in another one (a
    database inside a layout cell) from being divided twice.
+
+   One selector per surface, each ending in a single-attribute :where(): Blink
+   files those under the attribute and tries them only on elements carrying it,
+   while one :where() holding the whole list, or a trailing `> *`, is tried on
+   every element at every full restyle (palette switch). Same specificity (0,1,0)
+   and the same elements as the list form.
    ========================================================================== */
-[data-osio-pane] :where(
-  [data-osio-fixed-scale],
-  [data-database-id],
-  [data-osio-ide],
-  [role="application"],
-  [data-block-type="draw"],
-  [data-block-type="layout"]
-) {
+[data-osio-pane] :where([data-osio-fixed-scale]),
+[data-osio-pane] :where([data-database-id]),
+[data-osio-pane] :where([data-osio-ide]),
+[data-osio-pane] :where([role="application"]),
+[data-osio-pane] :where([data-block-type="draw"]),
+[data-osio-pane] :where([data-block-type="layout"]) {
   zoom: calc(1 / var(--osio-pane-zoom, 1));
 }
 
-[data-osio-pane] :where(
-  [data-osio-fixed-scale],
-  [data-database-id],
-  [data-osio-ide],
-  [role="application"],
-  [data-block-type="draw"],
-  [data-block-type="layout"]
-) > * {
+[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="layout"]) :where([data-osio-fixed-scale]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="layout"]) :where([data-database-id]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="layout"]) :where([data-osio-ide]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="layout"]) :where([role="application"]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="layout"]) :where([data-block-type="draw"]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="layout"]) :where([data-block-type="layout"]) {
   --osio-pane-zoom: 1;
 }
 
