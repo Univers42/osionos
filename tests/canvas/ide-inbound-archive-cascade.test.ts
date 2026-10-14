@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { sha16 } from "../../src/features/ide/model/ideFsEcho.ts";
-import { recordSyncedHash } from "../../src/features/ide/model/ideSyncEngine.ts";
+import { recordSyncedHash, syncedHashOf } from "../../src/features/ide/model/ideSyncEngine.ts";
 import type { StatResult } from "../../src/features/ide/model/inboundArchive.ts";
 import { statInProvider } from "../../src/features/ide/model/inboundArchive.ts";
 import { blockPage, codePage, execWorld, folderPage, putFile } from "./fixtures/inboundWorld.ts";
@@ -90,4 +90,64 @@ test("a page the cascade archived comes back from the shell as itself, not a cop
   await w.shellWrite("src/A.omd", textOf("a"));
   assert.ok(live(w.pageOf("a")), "restored from the trash");
   assert.equal(w.store.pages().length, count, "no copy");
+});
+
+// The server's cascade stops at a page it refuses or skips and keeps it live; under the archived
+// folder that page has no place in the view, and its own check used to keep it quietly: its
+// ticket was cancelled with the cascaded ones, or it waited for an ancestor whose cascade could
+// never reach it (devil C1 on 3bb4956, probes P-C and skip, 2026-10-14).
+test("C1: a page the cascade skipped keeps its ticket and its agreement, and is archived alone next window", async () => {
+  const { w, archived, textOf } = await srcTree();
+  const cascade = w.store.archivePage;
+  w.store.archivePage = async (id, ...rest) => {
+    await cascade(id, ...rest);
+    if (id === "F") w.store._seed(w.store.pages().map((entry) => (entry._id === "m7" ? { ...entry, archivedAt: null } : entry)));
+  };
+  await rmRf(w);
+  await w.elapse();
+  assert.deepEqual(archived, ["F"]);
+  assert.ok(live(w.pageOf("m7")) && w.session.view.hasOwnPending("m7"), "the skipped page lost its ticket");
+  assert.equal(syncedHashOf(w.workspaceId, "src/f7.c"), await sha16(textOf("m7")), "the kept page got its agreement back");
+  await w.elapse();
+  assert.deepEqual(archived, ["F", "m7"]);
+  assert.ok(!live(w.pageOf("m7")));
+});
+
+test("C1: another member's page stops the cascade, so the caller's own page under it is archived alone", async () => {
+  const pages: PageEntry[] = [folderPage("F", "src"), blockPage("X", "X", "F"), blockPage("Y", "Y", "X"), codePage("m0", "f0.c", "int v0;\n", "F")];
+  const w = await execWorld(pages);
+  const files: Record<string, string> = {};
+  for (const entry of pages) {
+    const state = w.session.view.pageState(entry._id);
+    if (state?.status !== "live") continue;
+    files[entry._id] = state.filePath;
+    const text = await w.session.facade.readContent(entry._id);
+    await putFile(w.sandbox, w.workspaceId, state.filePath, text);
+    recordSyncedHash(w.workspaceId, state.filePath, await sha16(text));
+  }
+  w.store.canEdit = (entry) => entry._id !== "X";
+  const calls: string[] = [];
+  w.store.archivePage = async (id) => {
+    calls.push(id);
+    if (id === "X") return;
+    const ids = new Set([id]);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const entry of w.store.pages()) {
+        if (!entry.parentPageId || !ids.has(entry.parentPageId) || ids.has(entry._id) || entry._id === "X") continue;
+        ids.add(entry._id);
+        grew = true;
+      }
+    }
+    w.store._seed(w.store.pages().map((entry) => (ids.has(entry._id) ? { ...entry, archivedAt: "2026-10-14T00:00:00Z" } : entry)));
+  };
+  await w.shellDelete(files.Y);
+  await w.shellDelete(files.Y.slice(0, files.Y.lastIndexOf("/")));
+  await w.shellDelete(files.X);
+  await w.shellDelete(files.m0);
+  await w.shellDelete("src/_folder.omd");
+  await w.shellDelete("src");
+  for (let round = 0; round < 3; round += 1) await w.elapse();
+  assert.deepEqual(calls, ["Y", "F"]);
+  assert.deepEqual(["F", "X", "Y", "m0"].map((id) => live(w.pageOf(id))), [false, true, false, false]);
 });
