@@ -21,7 +21,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { activateFirstEditor, openFreshPage } from "../../browser/core/app.mjs";
+import { activateFirstEditor, explorerRow, openFreshPage } from "../../browser/core/app.mjs";
 import { insertInlineDatabase } from "../support/databaseHelpers.mjs";
 
 /** Computed `property` of a throwaway element declaring `property: value`,
@@ -334,7 +334,7 @@ test.describe("type scale", () => {
   test("sidebar action rows are as tall as page rows", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     const heightOf = (locator) => locator.evaluate((element) => element.getBoundingClientRect().height);
-    const pageRow = page.getByRole("button", { name: /Getting Started/ }).first();
+    const pageRow = explorerRow(page, "Getting Started").locator("> div");
     const sharedRow = page.getByRole("button", { name: "Start collaborating" });
     expect(await heightOf(sharedRow)).toBe(await heightOf(pageRow));
   });

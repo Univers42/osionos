@@ -19,18 +19,21 @@ import { usePageStore } from "@/store/usePageStore";
 import type { VisibleItem } from "../model/explorerRows";
 import { languageForFileName } from "../model/ideLanguages";
 
-const ICON = "shrink-0";
+// The page row's icon box (SidebarNavItem): 22px, glyph at 70%.
+const GLYPH_BOX = "flex h-[22px] w-[22px] shrink-0 items-center justify-center opacity-70";
+// Tucks the chevron slot toward its icon: the row's gap-2 is wider than a tree wants.
+const CHEVRON_SLOT = "-mr-1 w-3.5 shrink-0";
 
 /** Page icon glyph: subscribes to the page's icon via a single primitive selector. */
-function ExplorerPageGlyph({ pageId, size = 13 }: { pageId: string; size?: number }) {
+function ExplorerPageGlyph({ pageId }: { pageId: string }) {
   const iconValue = usePageStore((s) => {
     const index = s.pagesIndex[pageId];
     if (!index) return undefined;
     const page = s.pages[index.workspaceId]?.[index.index];
     return page ? explorerIconValue({ icon: page.icon, databaseId: page.databaseId }) : undefined;
   });
-  if (!iconValue) return <FileText size={size} className={ICON} />;
-  return <IconValueView value={iconValue} size={size} className="shrink-0" />;
+  if (!iconValue) return <FileText size={14} />;
+  return <IconValueView value={iconValue} size={14} className="shrink-0" />;
 }
 
 export const ExplorerRowIcon: React.FC<{ item: VisibleItem; open: boolean; pageId?: string }> = ({ item, open, pageId }) => {
@@ -40,17 +43,19 @@ export const ExplorerRowIcon: React.FC<{ item: VisibleItem; open: boolean; pageI
     const FolderIcon = open ? FolderOpen : Folder;
     return (
       <>
-        <Chevron size={14} className={`${ICON} opacity-70`} />
-        <FolderIcon size={14} className={ICON} />
+        <Chevron size={14} className={`${CHEVRON_SLOT} opacity-70`} />
+        <span className={GLYPH_BOX}><FolderIcon size={14} /></span>
       </>
     );
   }
-  // 14px spacer keeps files aligned with folder labels.
+  // The empty slot keeps files aligned with folder labels.
   return (
     <>
-      <span className="w-[14px] shrink-0" aria-hidden="true" />
-      {kind !== "page" && <FileCode2 size={12} className={ICON} style={{ color: languageForFileName(name).accent }} />}
-      {kind === "page" && (pageId ? <ExplorerPageGlyph pageId={pageId} size={13} /> : <FileText size={12} className={ICON} />)}
+      <span className={CHEVRON_SLOT} aria-hidden="true" />
+      <span className={GLYPH_BOX}>
+        {kind !== "page" && <FileCode2 size={14} style={{ color: languageForFileName(name).accent }} />}
+        {kind === "page" && (pageId ? <ExplorerPageGlyph pageId={pageId} /> : <FileText size={14} />)}
+      </span>
     </>
   );
 };

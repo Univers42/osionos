@@ -58,7 +58,7 @@ test("each rail panel shows its title and renders without errors", async ({ page
     const button = rail.getByRole("tab", { name, exact: true });
     await expect(button).toBeVisible();
     await button.click();
-    await expect(page.locator("span.uppercase", { hasText: name })).toBeVisible();
+    await expect(page.locator("span[data-panel-title]", { hasText: name })).toBeVisible();
     await page.waitForTimeout(500); // lazy panel chunk + first render
   }
   expect(errors).toEqual([]);

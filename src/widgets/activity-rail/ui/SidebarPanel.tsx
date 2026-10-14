@@ -97,11 +97,11 @@ export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, o
     <div className="flex h-full min-h-0 flex-col" onKeyDown={returnFocusToContent}>
       <WorkspaceSwitcher />
       <div className="flex h-8 items-center justify-between px-3">
-        <span className="text-[length:var(--osio-font-size-xs)] font-medium normal-case leading-none tracking-normal text-[var(--osio-fg-muted)]">
+        <span data-panel-title className="text-[length:var(--osio-font-size-xs)] font-medium normal-case leading-none tracking-normal text-[var(--osio-fg-muted)]">
           {PANEL_TITLES[activePanel]}
         </span>
         {peek ? (
-          <IconButton label="Keep the sidebar open" title="Keep the sidebar open" onClick={toggleDocked}>
+          <IconButton label="Keep the sidebar open" onClick={toggleDocked}>
             <Pin size={14} />
           </IconButton>
         ) : null}

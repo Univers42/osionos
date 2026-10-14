@@ -105,7 +105,7 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
           overflow-y-auto container loses the press to scroll-arbitration and its
           `dragstart` never fires (rows higher up, with scroll headroom, still
           grab fine — the scroll-position-dependent "can't grab lower" bug). */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-1.5 pb-5" style={{ touchAction: "pan-y" }}>
+      <nav className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden px-2 pt-1.5 pb-5" style={{ touchAction: "pan-y" }}>
         {explorerView === "gallery" ? (
           <FolderRail />
         ) : (
