@@ -6,7 +6,7 @@ import type { AccentMeta } from "./theme";
 
 export const GENERATED_ACCENTS: readonly AccentMeta[] = [
   { id: "cobalt", label: "Cobalt", swatch: "#1F5BC4" },
-  { id: "ember", label: "Ember", swatch: "#9C4426" },
+  { id: "ember", label: "Terracotta", swatch: "#9C4426" },
   { id: "indigo", label: "Indigo", swatch: "#4B54BB" },
   { id: "violet", label: "Violet", swatch: "#7246AE" },
   { id: "rose", label: "Rose", swatch: "#A92D4D" },

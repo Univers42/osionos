@@ -126,7 +126,7 @@ export function resolveSceneTheme(root: HTMLElement): SceneTheme {
     edgeHierarchy: read("--osio-graph-edge-hier", DARK_THEME.edgeHierarchy),
     label: rgb(ink),
     labelHalo: read("--osio-graph-halo", rgba(bgRgb, 0.85)),
-    selectRing: rgb(sel),
+    selectRing: read("--osio-graph-select", rgb(sel)),
     hoverRing: read("--osio-graph-hover", rgba(sel, 0.55)),
     noteRing: read("--osio-graph-note", rgb(note)),
     focusThread: read("--osio-graph-focus-thread", rgba(sel, 0.85)),

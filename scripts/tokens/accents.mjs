@@ -13,11 +13,13 @@
 // Ponytail: contrast is proved against every palette's surfaces with the tone
 // tables of ramps.mjs, in sRGB hex. The custom hue is written in the page as
 // oklch(L C var(--osio-accent-hue)); where C is outside the sRGB gamut at a hue
-// (teal at the lightness of the solid tone) the browser maps it its own way,
-// which can differ from the chroma clip proved here by a few hundredths of
-// lightness. The margin over 4.5:1 is what absorbs that, and the 360-hue sweep
-// in tests/canvas/tokens-accent-sweep.test.ts is what pins it.
-// A palette's pinned accent is replaced by a preset on purpose: choosing Ember
+// (teal at the lightness of the text tone) Chromium clips each linear channel,
+// which moves lightness as well as chroma. Both that clip and plain chroma
+// reduction are proved for all 360 hues (accentProblems and
+// tests/canvas/tokens-accent-sweep.test.ts); an engine that maps the gamut a
+// third way is not covered. Light text chroma sits at 0.10 because at 0.13 the
+// clip dropped teal hues (166-211) under 4.5:1 on Nord, Solarized and Midnight.
+// A palette's pinned accent is replaced by a preset on purpose: choosing Terracotta
 // in Nord is a choice the person made. A palette that promises AAA (7:1 for the
 // text on its accent) is the exception: no preset tone reaches 7:1 white-on-accent
 // at a lightness that still reads as a colour, so its blocks are not matched by
@@ -25,7 +27,7 @@
 
 import { aliasPinsOf, resolveTokens } from "./aliases.mjs";
 import { contrastFailures } from "./contrast.mjs";
-import { oklchToHex } from "./oklch.mjs";
+import { oklchToHex, oklchToHexClipped } from "./oklch.mjs";
 import { PALETTES } from "./palettes.mjs";
 import { ACCENT_TONES, INK_TONE, modeTokens } from "./ramps.mjs";
 
@@ -39,7 +41,7 @@ const MODES = ["light", "dark"];
 // Seeds: hue and chroma. Graphite is a neutral with a whisper of blue.
 export const ACCENT_PRESETS = [
   { id: "cobalt", label: "Cobalt" },
-  { id: "ember", label: "Ember", hue: 39, chroma: 0.125 },
+  { id: "ember", label: "Terracotta", hue: 39, chroma: 0.125 },
   { id: "indigo", label: "Indigo", hue: 275, chroma: 0.16 },
   { id: "violet", label: "Violet", hue: 300, chroma: 0.16 },
   { id: "rose", label: "Rose", hue: 10, chroma: 0.16 },
@@ -57,9 +59,9 @@ const TONES = {
 };
 
 // The custom hue's constants: [lightness, chroma] per tone. Lightness is the
-// tone table's own; chroma is the most that stays near the gamut at every hue.
+// tone table's own; chroma is the most that keeps every hue AA once the browser clips it.
 const CUSTOM_CHROMA = {
-  light: { solid: 0.14, hover: 0.13, text: 0.13, subtle: 0.02 },
+  light: { solid: 0.14, hover: 0.13, text: 0.10, subtle: 0.02 },
   dark: { solid: 0.12, hover: 0.1, text: 0.1, subtle: 0.04 },
 };
 
@@ -84,11 +86,15 @@ export function presetTokens(id, mode) {
   };
 }
 
-/** The five accent tokens of the custom accent at `hue` in `mode`, as hex (what the stylesheet means, in sRGB). */
-export function customTokens(mode, hue) {
+/**
+ * The five accent tokens of the custom accent at `hue` in `mode`, as hex: what the stylesheet paints in sRGB.
+ * `toHex` is the gamut model: the browser's per-channel clip by default, oklchToHex (chroma reduction) for the
+ * other reading of CSS Color 4.
+ */
+export function customTokens(mode, hue, toHex = oklchToHexClipped) {
   const tone = (name) => {
     const [l, c] = customTone(mode, name);
-    return oklchToHex({ l, c, h: hue });
+    return toHex({ l, c, h: hue });
   };
   return {
     "--osio-a-solid": tone("solid"),
@@ -165,7 +171,8 @@ export const FIXED_ACCENT_PALETTES: readonly string[] = ${JSON.stringify(FIXED_A
 export function accentProblems() {
   const candidates = [
     ...ACCENT_PRESETS.filter((preset) => preset.id !== DEFAULT_ACCENT).map((preset) => [preset.id, (mode) => presetTokens(preset.id, mode)]),
-    ...Array.from({ length: 360 }, (_, hue) => [`custom hue ${hue}`, (mode) => customTokens(mode, hue)]),
+    ...Array.from({ length: 360 }, (_, hue) => [`custom hue ${hue} clipped`, (mode) => customTokens(mode, hue)]),
+    ...Array.from({ length: 360 }, (_, hue) => [`custom hue ${hue} chroma-reduced`, (mode) => customTokens(mode, hue, oklchToHex)]),
   ];
   const problems = [];
   for (const [name, tokensFor] of candidates) {

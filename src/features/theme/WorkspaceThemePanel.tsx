@@ -117,6 +117,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
       </div>
 
       <AccentControl appearance={appearance} paletteId={palette} onChange={changeAppearance} />
+      <ShapeControls appearance={appearance} onChange={changeAppearance} />
 
       <div>
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">Color theme</p>
@@ -145,8 +146,6 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
           })}
         </div>
       </div>
-
-      <ShapeControls appearance={appearance} onChange={changeAppearance} />
     </div>
   );
 };

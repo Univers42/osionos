@@ -42,8 +42,8 @@
 					var axes = { density: ['compact'], radius: ['sharp', 'round'], uiScale: ['small', 'large'] };
 					for (var k in axes) if (axes[k].indexOf(a[k]) > -1) ds[k] = a[k];
 					if (typeof a.accent === 'string' && /^[a-z]+$/.test(a.accent) && a.accent !== 'cobalt') ds.accent = a.accent;
-					var h = Math.round(a.hue);
-					if (ds.accent === 'custom' && h >= 0 && h <= 359) root.style.setProperty('--osio-accent-hue', h);
+					var h = typeof a.hue === 'number' ? Math.round(a.hue) : -1;
+					if (ds.accent === 'custom') root.style.setProperty('--osio-accent-hue', h >= 0 && h <= 359 ? h : 260);
 				} catch (e) {}
 			})();
 		</script>

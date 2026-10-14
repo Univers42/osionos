@@ -117,7 +117,7 @@
   --osio-a-solid: oklch(0.497 0.14 var(--osio-accent-hue));
   --osio-a-hover: oklch(0.447 0.13 var(--osio-accent-hue));
   --osio-a-fg: #FFFFFF;
-  --osio-a-text: oklch(0.476 0.13 var(--osio-accent-hue));
+  --osio-a-text: oklch(0.476 0.1 var(--osio-accent-hue));
   --osio-a-subtle: oklch(0.955 0.02 var(--osio-accent-hue));
 }
 

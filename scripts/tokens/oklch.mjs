@@ -102,6 +102,16 @@ export function oklchToHex({ l, c, h }) {
   return rgbToHex({ r: encodeChannel(r) * 255, g: encodeChannel(g) * 255, b: encodeChannel(b) * 255 });
 }
 
+/**
+ * OKLCH to "#RRGGBB" the way a browser paints an out-of-gamut oklch(): each linear channel is clipped to 0..1, so
+ * chroma and lightness both move. Ponytail: Chromium's paint path (verified by 1x1 canvas read-back, 2026-10);
+ * another engine may map the colour differently, which is why the custom accent is also proved with oklchToHex.
+ */
+export function oklchToHexClipped({ l, c, h }) {
+  const { r, g, b } = oklchToLinearRgb({ l, c, h });
+  return rgbToHex({ r: encodeChannel(r) * 255, g: encodeChannel(g) * 255, b: encodeChannel(b) * 255 });
+}
+
 /** WCAG 2 relative luminance (0..1) of a hex colour. */
 export function relativeLuminance(hex) {
   const { r, g, b } = hexToRgb(hex);

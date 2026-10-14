@@ -35,7 +35,7 @@ test.describe("appearance preferences", () => {
     await seed(page);
     await openFreshPage(page, baseURL);
     await openAppearanceSettings(page);
-    await page.getByRole("button", { name: "Ember", exact: true }).click();
+    await page.getByRole("button", { name: "Terracotta", exact: true }).click();
     const ember = presetTokens("ember", "light")["--osio-a-solid"].toLowerCase();
     await expect(html(page)).toHaveAttribute("data-accent", "ember");
     expect((await rootToken(page, "--osio-accent")).toLowerCase()).toBe(ember);
@@ -179,5 +179,35 @@ test.describe("appearance preferences", () => {
     const want = customTokens("light", 140)["--osio-a-solid"];
     const channel = (hex, at) => Number.parseInt(hex.slice(at, at + 2), 16);
     for (const at of [1, 3, 5]) expect(Math.abs(channel(cursor, at) - channel(want, at))).toBeLessThanOrEqual(3);
+  });
+  // Chromium clips an out-of-gamut oklch() per channel, so the generator's numbers are not
+  // enough: read the painted pixels back and measure the contrast the person actually gets.
+  test("a teal custom hue keeps accent text readable on Nord's muted surface as painted", async ({ page, baseURL }) => {
+    await page.addInitScript(() => localStorage.setItem("osionos:palette", "nord"));
+    await seed(page, { accent: "custom", hue: 192 });
+    await openFreshPage(page, baseURL);
+    const ratio = await page.evaluate(() => {
+      const paint = (token) => {
+        const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+        ctx.fillRect(0, 0, 1, 1);
+        const linear = [...ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)].map((v) => ((v / 255 + 0.055) / 1.055) ** 2.4);
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+      };
+      const [a, b] = [paint("--osio-accent-text"), paint("--osio-bg-muted")];
+      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    });
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test("a stored hue that is a string falls back to 260 in the boot script as in theme.ts, so the accent never changes on mount", async ({ page, baseURL }) => {
+    await seed(page, { accent: "custom", hue: "140" });
+    await page.addInitScript(() => {
+      document.addEventListener("DOMContentLoaded", () => {
+        window.__firstHue = document.documentElement.style.getPropertyValue("--osio-accent-hue");
+      });
+    });
+    await openFreshPage(page, baseURL);
+    expect(await page.evaluate(() => window.__firstHue)).toBe("260");
   });
 });
