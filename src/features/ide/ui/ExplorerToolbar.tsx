@@ -15,7 +15,7 @@ import { ChevronsDownUp, Download, FilePlus, FolderInput, FolderPlus, RefreshCw 
 import { IconButton, PanelSectionLabel } from "@/shared/ui";
 
 type Action = { label: string; onClick: () => void; icon: React.ReactNode };
-/** The tree's section header: the "Files" label, and its actions at the right edge. */
+
 export const ExplorerToolbar: React.FC<{
   onNewFile: () => void;
   onNewFolder: () => void;

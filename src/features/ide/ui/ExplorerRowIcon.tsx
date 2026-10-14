@@ -19,7 +19,7 @@ import { usePageStore } from "@/store/usePageStore";
 import type { VisibleItem } from "../model/explorerRows";
 import { languageForFileName } from "../model/ideLanguages";
 
-// The page row's icon box (SidebarNavItem): 22px, glyph at 70%.
+// Same icon box as SidebarNavItem so a file row and a page row line up.
 const GLYPH_BOX = "flex h-[22px] w-[22px] shrink-0 items-center justify-center opacity-70";
 // Tucks the chevron slot toward its icon: the row's gap-2 is wider than a tree wants.
 const CHEVRON_SLOT = "-mr-1 w-3.5 shrink-0";

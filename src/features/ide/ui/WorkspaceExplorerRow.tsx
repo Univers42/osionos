@@ -47,8 +47,11 @@ const placed = ({ index, start, measure }: LinePlacement) => ({
 });
 
 // The focus ring is the global :focus-visible rule on the li (it has a tabindex); the
-// radius makes that ring follow the row's corners.
+// radius makes that ring follow the row's corners. The li is as wide as its overflow:auto
+// scroller, so the rule's outside 1px offset would be clipped left and right: the ring is
+// drawn 2px inside instead. Inline, because an unlayered rule beats every utility class.
 const ROW_FOCUS = "list-none rounded-[6px]";
+const RING_INSET = { outlineOffset: -2 } as const;
 
 /** Drag source + drop target props for one row; a drop lands in the row itself
  *  when it is a folder, otherwise in its folder. */
@@ -93,6 +96,7 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
   const pageId = ctx.pageIdOf?.(rel, row.kind);
   const active = useIsActivePage(pageId ?? "");
   const dnd = useRowDnd(rel, isDir ? rel : item.parentRel, renaming, pageId);
+  const line = placed(placement);
 
   const onContextMenu = (event: React.MouseEvent): void => {
     if (renaming) return;
@@ -103,7 +107,8 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
 
   return (
     <li
-      {...placed(placement)}
+      {...line}
+      style={{ ...line.style, ...RING_INSET }}
       role="treeitem"
       data-rel={rel}
       aria-level={level}

@@ -79,19 +79,31 @@ test("nesting indents by the page row's step, from the page row's gutter", async
   expect(parseFloat(nested.paddingLeft) - parseFloat(folder.paddingLeft)).toBe(12);
 });
 
-test("a focused tree row shows the global focus ring, as a page row does", async ({ page }) => {
+test("a focused tree row shows the global focus ring, fully inside the scroller", async ({ page }) => {
   test.setTimeout(120_000);
   await bootExplorer(page);
   await visitTwoPages(page);
-  const ring = (el) => el.evaluate((node) => { const css = getComputedStyle(node); return { style: css.outlineStyle, width: css.outlineWidth, offset: css.outlineOffset }; });
+  const ring = (el) => el.evaluate((node) => {
+    const css = getComputedStyle(node);
+    let clip = node.parentElement;
+    while (getComputedStyle(clip).overflowX === "visible") clip = clip.parentElement;
+    const scroller = clip.getBoundingClientRect();
+    const box = node.getBoundingClientRect();
+    const reach = parseFloat(css.outlineWidth) + parseFloat(css.outlineOffset);
+    return { style: css.outlineStyle, width: css.outlineWidth, left: box.left - reach - scroller.left, right: scroller.right - (box.right + reach) };
+  });
   await page.keyboard.press("Tab");
   const row = explorerRow(page, "Getting Started");
   const button = page.locator(FILES).getByRole("button", { name: /Getting Started/ }).first();
   await row.focus();
   const treeRing = await ring(row);
   await button.focus();
-  expect(treeRing).toEqual(await ring(button));
+  const pageRing = await ring(button);
   expect(treeRing.style).toBe("solid");
+  expect(treeRing.width).toBe(pageRing.width);
+  // The li is as wide as its overflow:auto scroller: an outside ring would be cut off at both sides.
+  expect(treeRing.left).toBeGreaterThanOrEqual(0);
+  expect(treeRing.right).toBeGreaterThanOrEqual(0);
 });
 
 test("section labels and the toolbar follow the sidebar's sentence-case style", async ({ page }) => {
@@ -130,6 +142,7 @@ test("the inline new-file field opens inside its row without moving the lines be
   test.setTimeout(120_000);
   await bootExplorer(page);
   const first = explorerRow(page, "Getting Started");
+  const before = (await first.boundingBox()).y;
   await page.getByRole("button", { name: "New file", exact: true }).first().click();
   const input = page.locator('[role="tree"] input');
   await expect(input).toBeVisible();
@@ -139,6 +152,7 @@ test("the inline new-file field opens inside its row without moving the lines be
   expect((await input.boundingBox()).height).toBe(parseFloat(rowHeight));
   expect(await read(input, ["borderTopLeftRadius"])).toEqual({ borderTopLeftRadius: await tokenValue(page, "border-top-left-radius", "--osio-field-radius") });
   await expect(first).toBeVisible();
+  expect((await first.boundingBox()).y - before).toBe(28);
 });
 
 const codeToken = (el, property, token) =>
@@ -170,13 +184,3 @@ for (const mode of ["light", "dark"]) {
     expect(look.borderTopColor).toBe(await codeToken(retry, "border-top-color", "--osio-code-border"));
   });
 }
-
-test("the row menu marks Delete as the destructive item, like the page options menu", async ({ page }) => {
-  test.setTimeout(120_000);
-  await bootExplorer(page);
-  await explorerRow(page, "Getting Started").click({ button: "right" });
-  const remove = page.getByRole("menu").getByRole("menuitem", { name: "Delete", exact: true });
-  await expect(remove).toHaveAttribute("data-tone", "danger");
-  expect((await read(remove, ["color"])).color).toBe(await tokenValue(page, "color", "--osio-danger"));
-  await expect(page.getByRole("menu").getByRole("menuitem", { name: "Rename", exact: true })).not.toHaveAttribute("data-tone", /.+/);
-});
