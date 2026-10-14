@@ -24,18 +24,26 @@
 			@font-face{font-family:"Inter Variable";font-style:normal;font-weight:100 900;font-display:swap;src:url("/fonts/inter-latin-wght-normal.woff2") format("woff2")}
 			html,body{font-family:"Inter Variable",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 		</style>
-		<!-- Appearance bootstrap: apply the stored light/dark mode + color palette
-		     BEFORE first paint so there is no flash of the default theme. Mirrors
-		     src/shared/config/theme.ts; App.tsx re-applies on mount. -->
+		<!-- Appearance bootstrap: apply the stored light/dark mode, color palette and
+		     personal appearance (accent, density, corners, text size) BEFORE first
+		     paint so there is no flash of the default theme. Mirrors
+		     src/shared/config/theme.ts; App.tsx re-validates and re-applies on mount
+		     (an unknown accent id set here is dropped there). -->
 		<script>
 			(function () {
 				try {
-					var ds = document.documentElement.dataset;
+					var root = document.documentElement, ds = root.dataset;
 					var m = localStorage.getItem('osionos:theme-mode');
 					ds.theme = (m === 'light' || m === 'dark') ? m
 						: (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
 					var p = localStorage.getItem('osionos:palette');
 					if (p) ds.palette = p;
+					var a = JSON.parse(localStorage.getItem('osionos:appearance')) || {};
+					var axes = { density: ['compact'], radius: ['sharp', 'round'], uiScale: ['small', 'large'] };
+					for (var k in axes) if (axes[k].indexOf(a[k]) > -1) ds[k] = a[k];
+					if (typeof a.accent === 'string' && /^[a-z]+$/.test(a.accent) && a.accent !== 'cobalt') ds.accent = a.accent;
+					var h = Math.round(a.hue);
+					if (ds.accent === 'custom' && h >= 0 && h <= 359) root.style.setProperty('--osio-accent-hue', h);
 				} catch (e) {}
 			})();
 		</script>
