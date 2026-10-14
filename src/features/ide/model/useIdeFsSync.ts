@@ -20,7 +20,7 @@ import { createReconnectBackoff } from "./reconnectBackoff";
 import { isSandboxOnline, useSandboxHealthStore } from "./sandboxHealthStore";
 import { isDeliberateClose, isTokenExpiredClose } from "./wsCloseCodes";
 import { createLiveInbound } from "./inboundLive";
-import { createSerialQueue, acquireInboundLeadership } from "./inboundPipeline";
+import { createSerialQueue, leadAndAttachOnGain } from "./inboundPipeline";
 import { routeFsEvent } from "./inboundSession";
 
 /**
@@ -63,10 +63,7 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
     const { session, attach } = createLiveInbound(workspaceId, queue);
     // A tab that gains the lead after the socket's "ready" (the leader closed) gets no other
     // one, and must attach before it may remove anything (inboundPipeline attachUnderLead).
-    let readySeen = false;
-    const leadership = acquireInboundLeadership(workspaceId, globalThis.navigator?.locks, () => {
-      if (readySeen) void queue.run(attach);
-    });
+    const { leadership, readySeen } = leadAndAttachOnGain(workspaceId, globalThis.navigator?.locks, (task) => { void queue.run(task); }, attach);
     const route = { isLeader: () => leadership.isLeader(), queue, session, attach };
 
     const connect = async () => {
@@ -93,7 +90,7 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
         for (const line of lines) {
           const evt = parseFsEvent(line);
           if (!evt) continue;
-          if (evt.event === "ready") readySeen = true;
+          if (evt.event === "ready") readySeen();
           publishFsEvent(workspaceId, evt);
           routeFsEvent(evt, route);
         }

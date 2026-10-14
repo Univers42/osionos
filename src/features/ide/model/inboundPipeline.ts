@@ -144,6 +144,25 @@ export function acquireInboundLeadership(
   return lead.leadership;
 }
 
+/**
+ * The leadership a sync effect holds, wired so that a tab which gains the lead AFTER its socket's
+ * "ready" (the leader closed) runs `attach`: no other "ready" comes, and the tab may remove
+ * nothing until it has attached (attachUnderLead). A gain before "ready" attaches nothing — that
+ * tab's own "ready" does. Call `readySeen` where the socket's "ready" arrives.
+ */
+export function leadAndAttachOnGain(
+  workspaceId: string,
+  locks: LockManagerLike | undefined,
+  run: (task: () => Promise<void>) => void,
+  attach: () => Promise<void>,
+): { leadership: Leadership; readySeen: () => void } {
+  let ready = false;
+  const leadership = acquireInboundLeadership(workspaceId, locks, () => {
+    if (ready) run(attach);
+  });
+  return { leadership, readySeen: () => { ready = true; } };
+}
+
 function requestLeadership(workspaceId: string, locks: LockManagerLike | undefined, gained: () => void): Leadership {
   let leader = false;
   let released = false;
