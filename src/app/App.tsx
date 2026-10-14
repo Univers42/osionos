@@ -154,7 +154,6 @@ const App: React.FC = () => {
   const initialized = useUserStore((s) => s.initialized);
   const error = useUserStore((s) => s.error);
   const activeUserId = useUserStore((s) => s.activeUserId);
-  const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
   const openSettings = (tab?: SettingsTab) => {
