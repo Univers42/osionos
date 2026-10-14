@@ -20,10 +20,24 @@ import { createHostFsTransport } from "../../scripts/host-fs-ops.mjs";
 import { outputOrThrow } from "../../src/features/ide/vfs/sandboxFsOps.ts";
 import type { FsOpName, FsOpParams, FsOpResult } from "../../src/features/ide/vfs/sandboxFsOps.ts";
 
+const realFs = await import("node:fs/promises");
 type Tr = (op: FsOpName, params: FsOpParams) => Promise<FsOpResult>;
 const seenOutputs: string[] = [];
 const seenRoots: string[] = [];
 const b64 = (s: string): string => Buffer.from(s).toString("base64");
+/** The real fs with every method the transport calls recorded as `method path`. */
+function tracedFs(log: string[], before?: (method: string, p: string) => Promise<void>): typeof realFs {
+  const source = realFs as unknown as Record<string, (...a: unknown[]) => Promise<unknown>>;
+  const out: Record<string, (p: string, ...rest: unknown[]) => Promise<unknown>> = {};
+  for (const name of ["realpath", "stat", "lstat", "open", "rename", "readdir", "mkdir", "unlink", "rmdir"]) {
+    out[name] = async (p: string, ...rest: unknown[]) => {
+      log.push(`${name} ${p}`);
+      if (before) await before(name, p);
+      return source[name](p, ...rest);
+    };
+  }
+  return out as unknown as typeof realFs;
+}
 async function freshRoot(): Promise<{ root: string; tr: Tr; rootReal: string }> {
   const root = mkdtempSync(join(tmpdir(), "vfs-host-"));
   const tr = createHostFsTransport(root) as Tr;
@@ -77,30 +91,70 @@ test("C4: deleting an escaping link removes only the link", async () => {
   assert.equal(await fsp.readFile(join(evil, "secret.txt"), "utf8"), secret);
 });
 
-test("C5: rename-swap race never exposes the outside dir", async () => {
-  const { root, tr } = await freshRoot();
-  const outside = `${root}-evil`; await fsp.mkdir(outside, { recursive: true });
-  const secret = "race-secret"; await fsp.writeFile(join(outside, "secret.txt"), secret);
-  await fsp.mkdir(join(root, "inner")); await fsp.symlink(outside, join(root, "evil"));
+test("C5a: a read parked in realpath keeps the rename off the disk", async () => {
+  const root = mkdtempSync(join(tmpdir(), "vfs-host-"));
+  const rootReal = await fsp.realpath(root);
+  const aAbs = join(rootReal, "a.txt");
+  await fsp.writeFile(aAbs, "alpha");
+  const log: string[] = [];
+  let park = (): void => {};
+  const parked = new Promise<void>((r) => { park = r; });
+  let openGate = (): void => {};
+  const gate = new Promise<void>((r) => { openGate = r; });
+  const holdRead = async (method: string, p: string): Promise<void> => { if (method === "realpath" && p === aAbs) { park(); await gate; } };
+  const tr = createHostFsTransport(root, { fs: tracedFs(log, holdRead) }) as Tr;
+  const reading = tr("read", { path: "a.txt" });
+  const renaming = tr("rename", { path: "a.txt", to: "b.txt" });
+  await parked;
+  assert.ok(log.includes(`realpath ${aAbs}`), "the read is parked in its own realpath");
+  assert.equal(log.filter((c) => c === `lstat ${aAbs}`).length, 0, "the rename has touched nothing");
+  openGate();
+  const [read, moved] = await Promise.all([reading, renaming]);
+  assert.equal(read.exitCode, 0);
+  assert.equal(Buffer.from(read.output, "base64").toString(), "alpha");
+  assert.equal(moved.exitCode, 0);
+  // the read's last fs call is its second stat; the rename's first is its lstat
+  assert.ok(log.lastIndexOf(`stat ${aAbs}`) < log.findIndex((c) => c === `lstat ${aAbs}`));
+  assert.equal(await fsp.readFile(join(rootReal, "b.txt"), "utf8"), "alpha");
+});
+
+test("C5b: the finding-2 rename dance never leaks the outside secret", async () => {
+  const root = mkdtempSync(join(tmpdir(), "vfs-host-"));
+  const outside = `${root}-evil`;
+  await fsp.mkdir(outside, { recursive: true });
+  const secret = "race-secret";
+  await fsp.writeFile(join(outside, "secret.txt"), secret);
+  // `inner` and `evil` are REAL folders and the link lives INSIDE `evil`.
+  await fsp.mkdir(join(root, "inner"));
+  await fsp.mkdir(join(root, "evil"));
+  await fsp.symlink(outside, join(root, "evil", "link"));
+  const tr = createHostFsTransport(root) as Tr;
   const secretB64 = Buffer.from(secret).toString("base64");
   const reads: string[] = [];
+  const swapped: string[] = [];
   for (let i = 0; i < 200; i++) {
-    const w = tr("write", { path: "inner/f.txt", contentBase64: b64(`v${i}`) });
-    const r = tr("read", { path: "inner/secret.txt" }).then((res) => { if (res.exitCode === 0) reads.push(res.output); return res; });
-    const a = tr("rename", { path: "inner", to: "tmp" }); const b = tr("rename", { path: "evil", to: "inner" });
-    const c = tr("rename", { path: "inner", to: "evil" }); const d = tr("rename", { path: "tmp", to: "inner" });
-    await Promise.all([w, r, a, b, c, d]);
+    // The secret is only reachable THROUGH the link, so the read names `inner/link/…`. One read
+    // lands while `inner` is the real folder, one while it is the renamed `evil` holding the link.
+    const r1 = tr("read", { path: "inner/link/secret.txt" }).then((res) => { reads.push(res.output); return res; });
+    const a = tr("rename", { path: "inner", to: "tmp" });
+    const b = tr("rename", { path: "evil", to: "inner" });
+    const r2 = tr("read", { path: "inner/link/secret.txt" }).then((res) => { reads.push(res.output); swapped.push(res.output); return res; });
+    const c = tr("rename", { path: "inner", to: "evil" });
+    const d = tr("rename", { path: "tmp", to: "inner" });
+    await Promise.all([r1, a, b, r2, c, d]);
   }
   for (const o of reads) assert.notEqual(o, secretB64);
+  assert.ok(reads.every((o) => o.startsWith("VFSERR:")), "every one of the 400 reads was refused");
+  assert.ok(swapped.every((o) => o === "VFSERR:ECONFINE"), "a read through the swapped-in link is refused by containment, not by absence");
   assert.deepEqual(await fsp.readdir(outside), ["secret.txt"]);
   assert.equal(await fsp.readFile(join(outside, "secret.txt"), "utf8"), secret);
 });
 
 test("C6: mode preserved and no vfstmp left after failed rename", async () => {
   const { root, tr } = await freshRoot();
-  const p = join(root, "run.sh"); await fsp.writeFile(p, "hi"); await fsp.chmod(p, 0o755);
+  const p = join(root, "run.sh"); await fsp.writeFile(p, "hi"); await fsp.chmod(p, 0o775);
   const w = await tr("write", { path: "run.sh", contentBase64: b64("bye") }); assert.equal(w.exitCode, 0);
-  assert.equal((await fsp.stat(p)).mode & 0o777, 0o755);
+  assert.equal((await fsp.stat(p)).mode & 0o777, 0o775);
   const real = await import("node:fs/promises");
   const evilFs = { ...real, rename: () => Promise.reject(Object.assign(new Error("boom"), { code: "EIO" })) };
   const tr2 = createHostFsTransport(root, { fs: evilFs }) as Tr;
