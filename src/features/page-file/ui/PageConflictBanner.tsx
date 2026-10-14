@@ -11,7 +11,9 @@
 /* ************************************************************************** */
 
 import React from "react";
+import { AlertTriangle } from "lucide-react";
 
+import { Button } from "@/shared/ui";
 import { usePageStore } from "@/store/usePageStore";
 import { canEditPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { useIdeSyncConflicts } from "@/features/ide/model/ideSyncConflicts";
@@ -19,9 +21,11 @@ import { useIdeSyncConflicts } from "@/features/ide/model/ideSyncConflicts";
 import type { ConflictResult } from "../model/pageConflictResolve";
 
 const READ_ONLY = "Read-only: you can't edit this page";
-const BTN = "shrink-0 rounded-xs border border-[var(--osio-code-border,var(--osio-border-default))] " +
-  "px-2 py-0.5 text-[var(--osio-code-fg,var(--osio-fg-default))] " +
-  "hover:bg-[var(--osio-code-btn-hover,var(--osio-bg-hover))] disabled:opacity-50";
+// The amber tint the template banner and the block colours share: the fg token is the
+// readable ink for a tinted fill, so the sentence itself stays on --osio-fg-default.
+const CARD = "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[var(--osio-radius-control)] border " +
+  "border-[var(--osio-block-tint-yellow-fg)]/30 bg-[var(--osio-block-tint-yellow-bg)] px-3 py-2 " +
+  "text-sm text-[var(--osio-fg-default)]";
 
 /** The block page's half of the divergence banner: the page kept your content, the file moved
  *  on, and only you can pick a side (ADR-001 §7). It subscribes to the conflict and to one
@@ -32,6 +36,7 @@ export const PageConflictBanner: React.FC<{ pageId: string }> = ({ pageId }) => 
     const page = s.pageById(pageId);
     return page !== undefined && canEditPage(page, getCurrentPageAccessContext());
   });
+  const readOnlyId = React.useId();
   const [busy, setBusy] = React.useState<"keep" | "take" | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -57,33 +62,28 @@ export const PageConflictBanner: React.FC<{ pageId: string }> = ({ pageId }) => 
 
   if (!conflict) return null;
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border,var(--osio-border-default))] bg-[var(--osio-code-header-bg,var(--osio-bg-subtle))] px-3 py-1.5 text-xs text-[var(--osio-code-fg,var(--osio-fg-default))]"
-    >
-      <span className="min-w-0 flex-1 truncate text-[var(--osio-warning)]">
-        The file version of this page changed too.
-      </span>
-      {!canEdit && <span className="shrink-0 text-[var(--osio-fg-muted)]">{READ_ONLY}</span>}
-      {error !== null && (
-        <span className="max-w-[45%] shrink-0 truncate text-[var(--osio-danger)]" title={error}>
-          {error}
-        </span>
-      )}
-      <button type="button" onClick={() => void act("keep")} disabled={busy !== null} aria-busy={busy !== null} className={BTN}>
-        Keep mine
-      </button>
-      <button
-        type="button"
-        onClick={() => void act("take")}
-        disabled={busy !== null || !canEdit}
-        aria-busy={busy !== null}
-        title={canEdit ? undefined : READ_ONLY}
-        className={BTN}
-      >
-        Take file
-      </button>
+    <div className="osionos-page-notice">
+      <div role="status" aria-live="polite" className={CARD}>
+        <AlertTriangle size={14} aria-hidden className="shrink-0 text-[var(--osio-warning)]" />
+        <span className="min-w-[12rem] flex-1">The file version of this page changed too.</span>
+        {!canEdit && <span id={readOnlyId} className="text-[var(--osio-fg-muted)]">{READ_ONLY}</span>}
+        {error !== null && <span className="min-w-0 break-words text-[var(--osio-danger)]">{error}</span>}
+        <div className="flex shrink-0 gap-2">
+          <Button size="sm" onClick={() => void act("keep")} disabled={busy !== null} aria-busy={busy !== null}>
+            Keep mine
+          </Button>
+          <Button
+            size="sm"
+            tone="danger-subtle"
+            onClick={() => void act("take")}
+            disabled={busy !== null || !canEdit}
+            aria-busy={busy !== null}
+            aria-describedby={canEdit ? undefined : readOnlyId}
+          >
+            Take file
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };
