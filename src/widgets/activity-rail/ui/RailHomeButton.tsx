@@ -24,6 +24,7 @@ import { Database, Home, Images, LayoutDashboard, Network } from "lucide-react";
 import { useHomeVariantStore, type HomeVariant } from "@/widgets/home-variants/model/homeVariantStore";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { homeTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { useEscapeKey } from "@/shared/ui";
 import { RailIcon } from "./RailIcon";
 
 const HOME_VARIANTS: Array<{ id: HomeVariant; label: string; Icon: typeof Home }> = [
@@ -49,6 +50,12 @@ export const RailHomeButton: React.FC = () => {
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
+
+  // Escape returns focus to the rail icon so keyboard users resume where they were.
+  useEscapeKey(() => {
+    setOpen(false);
+    ref.current?.querySelector("button")?.focus();
+  }, open);
 
   const toggle = () => {
     // The rail clips an in-flow dropdown; anchor with position:fixed to its right.

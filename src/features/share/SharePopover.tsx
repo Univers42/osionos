@@ -26,7 +26,9 @@ interface SharePopoverProps {
 
 /** Notion-style Share dialog: current access list, people picker, general
  *  access. Anchored by the caller (render inside a relatively-positioned
- *  parent, e.g. next to a toolbar "Share" button). */
+ *  parent, e.g. next to a toolbar "Share" button). Below the sm breakpoint the
+ *  right-anchored box would run off the left edge, so it spans the viewport
+ *  gutters instead (fixed, top auto = just under the trigger). */
 export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose }) => {
   const model = useShareModel(resource);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -47,7 +49,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
       ref={rootRef}
       role="dialog"
       aria-label="Share"
-      className="osio-surface-overlay absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 w-[380px] max-w-[calc(100vw-2*var(--osio-space-4))]"
+      className="osio-surface-overlay fixed inset-x-[var(--osio-space-4)] z-[var(--osio-z-popover)] mt-2 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:w-[380px]"
     >
       <div className="mb-2 flex items-center justify-between px-2 pt-1">
         <div>
@@ -60,12 +62,12 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
       </div>
 
       <div className="px-2">
-      <SharePeoplePicker
-        people={model.people}
-        excludedKeys={model.entries.map((entry) => entry.key)}
-        disabled={model.busy}
-        onPick={(person) => { void model.setLevel({ type: 'user', person }, 'can_view'); }}
-      />
+        <SharePeoplePicker
+          people={model.people}
+          excludedKeys={model.entries.map((entry) => entry.key)}
+          disabled={model.busy}
+          onPick={(person) => { void model.setLevel({ type: 'user', person }, 'can_view'); }}
+        />
       </div>
 
       <div className="mt-3 max-h-[260px] space-y-0.5 overflow-y-auto">
@@ -109,7 +111,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
         </div>
       )}
 
-      <div className="mt-2 flex items-center justify-between border-t border-[var(--osio-border-default)] px-2 pt-2">
+      <div data-testid="share-footer" className="mt-2 flex items-center justify-between border-t border-[var(--osio-border-default)] px-2 pt-2">
         {model.error
           ? <span className="truncate text-xs text-[var(--osio-danger)]">{model.error}</span>
           : <span className="text-xs text-[var(--osio-fg-subtle)]">{model.isLive ? 'Levels persist as engine policies.' : 'Levels persist as access rules.'}</span>}

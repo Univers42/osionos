@@ -111,10 +111,37 @@ test.describe("shell menus draw the overlay chrome", () => {
     // footer must keep an inner inset so their text is not hard on the border.
     const insets = await dialog.evaluate((root) => {
       const left = root.getBoundingClientRect().left;
-      const footer = [...root.querySelectorAll("button")].find((b) => b.textContent.includes("Copy link"))?.previousElementSibling;
-      return [root.querySelector("h3"), root.querySelector("label"), footer].map((el) => Math.round(el.getBoundingClientRect().left - left));
+      return [root.querySelector("h3"), root.querySelector("label"), root.querySelector("[data-testid=share-footer] > :first-child")].map((el) => Math.round(el.getBoundingClientRect().left - left));
     });
     for (const inset of insets) expect(inset).toBeGreaterThanOrEqual(8);
+  });
+
+  test("the share popover stays inside a phone viewport", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await clearAndTypePageTitle(page, "Quarterly plan");
+    await page.getByRole("button", { name: "Share page" }).click();
+    const dialog = page.getByRole("dialog", { name: "Share" });
+    await expect(dialog).toBeVisible();
+    const rect = await dialog.evaluate((root) => {
+      const { left, right } = root.getBoundingClientRect();
+      return { left, right, viewport: innerWidth };
+    });
+    expect(rect.left).toBeGreaterThanOrEqual(0);
+    expect(rect.right).toBeLessThanOrEqual(rect.viewport);
+    await expect(dialog.getByRole("heading", { name: "Share" })).toBeInViewport();
+  });
+
+  test("the page context menu clamps above the viewport's bottom edge", async ({ page, baseURL }) => {
+    await openPage(page, baseURL);
+    await page.setViewportSize({ width: 1440, height: 420 });
+    await treeRow(page, "Quarterly plan").click({ button: "right" });
+    const menu = page.getByRole("menu");
+    await expect(menu).toBeVisible();
+    await expect.poll(async () => {
+      const box = await menu.boundingBox();
+      return box.y + box.height;
+    }).toBeLessThanOrEqual(420 - 8);
   });
 
   test("the rail home menu", async ({ page, baseURL }) => {
@@ -123,6 +150,9 @@ test.describe("shell menus draw the overlay chrome", () => {
     const menu = page.getByRole("menu");
     await expectChrome(page, menu);
     await expectMenuRows(page, menu);
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await expect(page.getByRole("tab", { name: "Home", exact: true })).toBeFocused();
   });
 
   // These need the bridge (messaging channels) or a live data mount that the
