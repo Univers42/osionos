@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/14 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -76,10 +76,40 @@ export interface Leadership {
   release(): void;
 }
 
+// The tab's current leadership per workspace, for the writer (usePageFileWriter): a file is
+// removed only by the tab that applies shell events AND holds its user's app intent for the
+// page (store/appRemovals). A tab that does not lead knows the tree only as of its last
+// refetch: after the leader's `rm -rf proj && git clone`, its user trashing the old `proj`
+// had the server name the old children, and the agreements it loaded matched the re-cloned
+// bytes, so it removed the clone (devil ST1 on 709fbea, 2026-10-14). That tab still spends
+// the intent and counts the file as left without a page.
+// Ponytail: a page trashed in a tab that does not lead keeps its file in the sandbox (the
+// writer's Output line counts it); a leader that closes hands its successor no marks and
+// no intents, so the successor removes nothing until its own user removes something.
+const leaderships = new Map<string, Leadership>();
+
+/** Whether this tab applies the workspace's shell events now. */
+export function leadsInbound(workspaceId: string): boolean {
+  return leaderships.get(workspaceId)?.isLeader() ?? false;
+}
+
 export function acquireInboundLeadership(
   workspaceId: string,
   locks: LockManagerLike | undefined,
 ): Leadership {
+  const held = requestLeadership(workspaceId, locks);
+  const leadership: Leadership = {
+    isLeader: held.isLeader,
+    release: () => {
+      held.release();
+      if (leaderships.get(workspaceId) === leadership) leaderships.delete(workspaceId);
+    },
+  };
+  leaderships.set(workspaceId, leadership);
+  return leadership;
+}
+
+function requestLeadership(workspaceId: string, locks: LockManagerLike | undefined): Leadership {
   let leader = false;
   let released = false;
   let releaseHold: (() => void) | null = null;

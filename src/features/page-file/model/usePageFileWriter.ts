@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/14 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,7 @@ import { useEffect } from "react";
 
 import type { PageEntry } from "@/entities/page";
 import { ideOutput } from "@/features/ide/model/ideOutputBus";
+import { leadsInbound } from "@/features/ide/model/inboundPipeline";
 import { isSandboxOnline, useSandboxHealthStore } from "@/features/ide/model/sandboxHealthStore";
 import { bytesToText, collectBytes, textToBytes } from "@/features/ide/vfs/bytes";
 import { bridgeFsTransport } from "@/features/ide/vfs/bridgeTransport";
@@ -159,7 +160,8 @@ export function usePageFileWriter(workspaceId: string, enabled: boolean): void {
           pageById: (id) => byId.get(id),
           pathOf: (id) => index.pathForId(id),
           io,
-          mayRemove: (id) => takeAppRemoval(workspaceId, id),
+          // The intent is spent first: a tab that does not lead never gets to plan it again.
+          mayRemove: (id) => takeAppRemoval(workspaceId, id) && leadsInbound(workspaceId),
         });
         summarize(workspaceId, run.report);
       } finally {

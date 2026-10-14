@@ -24,9 +24,9 @@ import { statInProvider, type StatResult } from "../../src/features/ide/model/in
 import { buildVPath } from "../../src/features/ide/vfs/vpath.ts";
 import { planOutbound, type Snapshot } from "../../src/features/page-file/model/outboundPlan.ts";
 import { LEFT_WITHOUT_PAGE, runOutbound } from "../../src/features/page-file/model/outboundRun.ts";
-import { takeAppRemoval } from "../../src/store/appRemovals.ts";
+import { clearAppRemovals, takeAppRemoval } from "../../src/store/appRemovals.ts";
 import { b64, blockPage, execWorld, folderPage, putFile } from "./fixtures/inboundWorld.ts";
-import { sandboxIo, snapshotOf } from "./fixtures/outboundWorld.ts";
+import { sandboxIo, snapshotOf, writerRound } from "./fixtures/outboundWorld.ts";
 
 type World = Awaited<ReturnType<typeof execWorld>>;
 
@@ -94,9 +94,11 @@ test("H1: a tab with a stale agreement and none of the closed tab's marks keeps 
   await w.elapse(); // tab A: the cascade, its marks, the agreements cleared
   assert.ok(w.pageOf("c")?.archivedAt);
   await putFile(w.sandbox, w.workspaceId, childPath, text); // the clone, and no event reaches tab B
-  // Tab B, leader once A closed: its ledger hydrated before A cleared it, and it holds no marks.
+  // Tab B, leader once A closed: its ledger hydrated before A cleared it, and it holds none of
+  // A's marks or intents (both are memory per tab; its writer clears intents as it starts).
   takeShellArchived(w.workspaceId, "c");
   takeShellArchived(w.workspaceId, "P");
+  clearAppRemovals(w.workspaceId);
   recordSyncedHash(w.workspaceId, childPath, await sha16(text));
   const report = await round(w, base);
   assert.equal(await present(w, childPath), true, "the handover removed the re-cloned file");
@@ -114,4 +116,38 @@ test("R1: one tab after a reload, its page cache stale and its ledger agreeing, 
   const report = await round(w, base);
   assert.deepEqual(report.removed, []);
   assert.equal(await present(w, childPath), true, "the reload removed the re-cloned file");
+});
+
+// The leading tab's own `rm -rf proj && git clone`: its archive records intents for every page the
+// server names, as the store does, and the round that runs after the clone landed and before its
+// deferred create plans the removes. The shell's mark wins over the intent, so the clone stays
+// (devil I7 on 709fbea, 2026-10-14).
+test("I7a: the leader's own rm -rf and re-clone of a code tree keeps the clone", async () => {
+  const src = "int main(void) { return 0; }\n";
+  const w: World = await execWorld([]);
+  await w.shellWrite("proj/main.c", src);
+  const flushed = await writerRound(w, snapshotOf(w), []);
+  const child = flushed.index.idForPath("proj/main.c") ?? "";
+  await w.shellDelete("proj/main.c");
+  await w.shellDelete("proj");
+  await w.elapse();
+  assert.ok(w.pageOf(child)?.archivedAt, "the shell delete archived the page");
+  await putFile(w.sandbox, w.workspaceId, "proj/main.c", src);
+  await w.send({ event: "write", path: "proj/main.c", hash: await sha16(src), content: b64(src) });
+  const report = await round(w, flushed);
+  assert.deepEqual(report.skipped, [{ path: "proj/main.c", reason: "deleted in the shell" }], "the remove was planned, and the mark won");
+  assert.equal(await present(w, "proj/main.c"), true, "the leader removed its own clone");
+});
+
+test("I7b: the leader's folder cascade onto a block child, then a re-clone, keeps the clone", async () => {
+  const { w, childPath, text, base } = await cascadeTree();
+  await w.shellDelete(childPath);
+  await w.shellDelete("proj");
+  await w.elapse();
+  assert.ok(w.pageOf("c")?.archivedAt, "the folder's archive reached the child");
+  await putFile(w.sandbox, w.workspaceId, childPath, text);
+  await w.send({ event: "write", path: childPath, hash: await sha16(text), content: b64(text) });
+  const report = await round(w, base);
+  assert.deepEqual(report.skipped.filter((skip) => skip.path === childPath), [{ path: childPath, reason: "deleted in the shell" }], "the remove was planned, and the mark won");
+  assert.equal(await present(w, childPath), true, "the leader removed the re-cloned child");
 });

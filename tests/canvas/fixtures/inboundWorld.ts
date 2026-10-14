@@ -28,6 +28,7 @@ import { createInboundView } from "../../../src/features/ide/model/inboundView.t
 import { createLandedMemo } from "../../../src/features/ide/model/inboundLanded.ts";
 import { createMemProvider } from "../../../src/features/ide/vfs/memProvider.ts";
 import { buildVPath } from "../../../src/features/ide/vfs/vpath.ts";
+import { forgetAppRemovals, recordAppRemovals } from "../../../src/store/appRemovals.ts";
 import { textToBytes } from "../../../src/features/ide/vfs/bytes.ts";
 import type { FsProvider } from "../../../src/features/ide/vfs/types.ts";
 import { createPageFileFacade } from "../../../src/features/page-file/model/pageFileFacade.ts";
@@ -77,9 +78,14 @@ function subtreeOf(store: ReturnType<typeof createFixtureStore>, pageId: string)
 
 /** The REAL store's archive and restore (pageStore.actions.ts createArchivePage /
  *  createRestorePage): the subtree flips `archivedAt` and nothing else — the facade
- *  fixture's archive also bumps `updatedAt`, which would change a restored page's text. */
+ *  fixture's archive also bumps `updatedAt`, which would change a restored page's text.
+ *  Like the store once the server confirmed, an archive records an app-removal intent for
+ *  every id the server names (the subtree, archived pages included) and a restore drops
+ *  them: a fixture that recorded none hid the leading tab's own path (devil D5-L3). */
 function setArchived(store: ReturnType<typeof createFixtureStore>, pageId: string, archivedAt: string | null): void {
   const ids = subtreeOf(store, pageId);
+  if (archivedAt === null) forgetAppRemovals(store.workspaceId, ids);
+  else recordAppRemovals(store.workspaceId, ids);
   store._seed(store.pages().map((entry) => (ids.has(entry._id) ? { ...entry, archivedAt } : entry)));
 }
 

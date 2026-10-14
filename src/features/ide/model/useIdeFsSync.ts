@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/20 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/14 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -53,12 +53,13 @@ export function useIdeFsSync(workspaceId: string, enabled: boolean): void {
     const queue = createSerialQueue((error) => {
       ideOutput("fs-sync", `event failed: ${error instanceof Error ? error.message : String(error)}`);
     });
-    // Ponytail: only APPLYING is leader-only. A follower tab's outbound writer
-    // still writes files with its own echo set and ledger, so the leader sees
-    // them as ordinary shell writes: they converge via apply/ignore, and both
-    // tabs editing one page yields a spurious conflict (placeholderText is lost
-    // on the round trip). Gating the writer too was judged not worth it; it
-    // removes only what its own tab's user removed in the app (store/appRemovals).
+    // Ponytail: only APPLYING and REMOVING are leader-only (leadsInbound; a
+    // remove also needs this tab's app intent, store/appRemovals). A follower
+    // tab's outbound writer still writes and moves files with its own echo set
+    // and ledger, so the leader sees them as ordinary shell writes: they
+    // converge via apply/ignore, and both tabs editing one page yields a
+    // spurious conflict (placeholderText is lost on the round trip). Gating
+    // those too was judged not worth it.
     const leadership = acquireInboundLeadership(workspaceId, globalThis.navigator?.locks);
     const { session, attach } = createLiveInbound(workspaceId, queue);
     const route = { isLeader: () => leadership.isLeader(), queue, session, attach };
