@@ -188,6 +188,8 @@ const READ_CAP_BYTES = 512 * 1024;
 // still never sees half a file. sandboxProvider.ts WRITE_PIECE_B64 matches.
 export const WRITE_PIECE_B64 = 96 * 1024;
 const WRITE_PARTS = new Set(['first', 'more', 'last']);
+// One attach asks for at most 500 (MAX_ATTACH_FILES); 1000 paths of 255 bytes stay far under ARG_MAX.
+export const MAX_HASH_PATHS = 1000;
 
 // Portable sh snippets (busybox AND debian coreutils — the conformance corpus
 // executes them through the REAL local sh in tests). Failures print one
@@ -226,6 +228,19 @@ if [ -e "$b" ]; then
   if [ -d "$b" ] || [ -d "$a" ]; then echo VFSERR:EEXIST; exit 1; fi
 fi
 mv "$a" "$b"`,
+  // One sha256sum for every regular file (444 ms for 1000 files with a process
+  // per file, 11 ms with one); a missing path prints "-  ./path" in the same
+  // shape; a directory or an unreadable file prints nothing. Paths start at $1.
+  hashes: `n=$#
+for p do
+  f="./$p"
+  if [ -f "$f" ]; then set -- "$@" "$f"
+  elif [ ! -e "$f" ] && [ ! -L "$f" ]; then printf -- '-  %s\\n' "$f"
+  fi
+done
+shift "$n"
+[ $# -eq 0 ] || sha256sum -- "$@" 2>/dev/null
+exit 0`,
   write: `f="./$1"; d=$(dirname "$f"); mkdir -p "$d" || { echo VFSERR:EIO; exit 1; }
 if [ -d "$f" ]; then echo VFSERR:EISDIR; exit 1; fi
 t="$f.vfstmp\${3:-$$}"
@@ -240,6 +255,17 @@ mv "$t" "$f"`,
 export function buildFsOpSpec(op, params = {}) {
   const script = FS_OP_SCRIPTS[op];
   if (!script) throw Object.assign(new Error(`unknown fs op: ${String(op)}`), { status: 400 });
+  if (op === "hashes") {
+    const paths = params.paths;
+    if (!Array.isArray(paths) || paths.length === 0 || paths.length > MAX_HASH_PATHS) {
+      throw Object.assign(new Error(`hashes needs 1-${MAX_HASH_PATHS} paths`), { status: 400 });
+    }
+    for (const path of paths) {
+      assertRelPath(path);
+      if (!path) throw Object.assign(new Error("missing path"), { status: 400 });
+    }
+    return { ...FS_OP_COMMON, Cmd: ["sh", "-c", script, "sh", ...paths] };
+  }
   assertRelPath(params.path ?? "");
   const args = [params.path ?? ""];
   if (op === "read") {
