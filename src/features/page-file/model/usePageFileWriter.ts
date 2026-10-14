@@ -153,7 +153,7 @@ export function usePageFileWriter(workspaceId: string, enabled: boolean): void {
         });
         const plan = planOutbound(flushed, { index, pages });
         flushed = { index, pages };
-        if (plan.moves.length === 0 && plan.removes.length === 0 && plan.changed.length === 0) return;
+        if (plan.moves.length === 0 && plan.removes.length === 0 && plan.changed.length === 0 && plan.enteredCode.length === 0) return;
         const run = await runOutbound({
           workspaceId,
           plan,

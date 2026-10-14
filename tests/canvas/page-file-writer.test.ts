@@ -21,19 +21,19 @@ import { block, cp, freshWs, snap } from "./page-file-writer-fixtures.ts";
 test("planner baseline: no prev → an empty plan (the attach reconcile owns the full pass)", () => {
   const ws = freshWs();
   const pages = [cp("p1", "One", null), cp("p2", "Two", null, "page", [block("x")])];
-  assert.deepEqual(planOutbound(null, snap(ws, pages)), { moves: [], removes: [], changed: [] });
+  assert.deepEqual(planOutbound(null, snap(ws, pages)), { moves: [], removes: [], changed: [], enteredCode: [] });
 });
 test("identical snapshots → no moves, no removes, no writes", () => {
   const ws = freshWs();
   const s = snap(ws, [cp("p1", "One", null)]);
-  assert.deepEqual(planOutbound(s, s), { moves: [], removes: [], changed: [] });
+  assert.deepEqual(planOutbound(s, s), { moves: [], removes: [], changed: [], enteredCode: [] });
 });
 test("body edit on a shared index → positional fast path, index.entries never read", () => {
   const ws = freshWs();
   const before = [cp("p1", "One", null), cp("p2", "Two", null, "page", [block("v1")])];
   const after = [before[0], { ...before[1], content: [block("v2")] }];
   const guard = new Proxy(pageIndexFor(ws, before), { get(target, key) { if (key === "entries") throw new Error("fast path must not read index.entries"); return Reflect.get(target, key); } });
-  assert.deepEqual(planOutbound({ index: guard, pages: before }, { index: guard, pages: after }), { moves: [], removes: [], changed: ["p2"] });
+  assert.deepEqual(planOutbound({ index: guard, pages: before }, { index: guard, pages: after }), { moves: [], removes: [], changed: ["p2"], enteredCode: [] });
 });
 test("code pages never enter `changed`, even with content", () => {
   const ws = freshWs();
@@ -110,4 +110,31 @@ test("a path a live page owns again is never planned for removal", () => {
   const ws = freshWs();
   const plan = planOutbound(snap(ws, [page("pOld", "One", null)]), snap(ws, [page("pNew", "One", null)]));
   assert.deepEqual(plan.removes, []);
+});
+
+test("enteredCode: a code page newly in the index is listed, changed is untouched", () => {
+  const ws = freshWs();
+  const prev = snap(ws, []);
+  const code = cp("pC", "make.c", null, "code", [block("int main(){}")]);
+  const plan = planOutbound(prev, snap(ws, [code]));
+  assert.deepEqual(plan.enteredCode, ["pC"]);
+  assert.deepEqual(plan.changed, []);
+});
+
+test("enteredCode: an edit, a move and the baseline never list a code page", () => {
+  const wsEdit = freshWs();
+  const v1 = cp("pC", "make.c", null, "code", [block("v1")]);
+  const v2 = { ...v1, content: [block("v2")] };
+  assert.deepEqual(planOutbound(snap(wsEdit, [v1]), snap(wsEdit, [v2])).enteredCode, []);
+  const wsMove = freshWs();
+  const moved = { ...v1, title: "other.c" };
+  assert.deepEqual(planOutbound(snap(wsMove, [v1]), snap(wsMove, [moved])).enteredCode, []);
+  assert.deepEqual(planOutbound(null, snap(freshWs(), [v1])).enteredCode, []);
+});
+
+test("enteredCode: a code page without loaded content is never listed", () => {
+  const ws = freshWs();
+  const prev = snap(ws, []);
+  const unloaded = page("pC", "make.c", null, "code");
+  assert.deepEqual(planOutbound(prev, snap(ws, [unloaded])).enteredCode, []);
 });
