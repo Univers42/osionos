@@ -19,17 +19,23 @@ import { PublishSection } from './PublishSection';
 import { isPublishEnabled } from '@/shared/config/featureFlags';
 import type { ShareResource } from './types';
 
+const ANCHORED = 'fixed inset-x-[var(--osio-space-4)] mt-2 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:w-[380px]';
+// Both insets plus auto margins centre the box under its max width; the height cap keeps the footer reachable on a short screen.
+const CENTERED = 'fixed inset-x-[var(--osio-space-4)] top-[10vh] mx-auto max-h-[80vh] max-w-[380px] overflow-y-auto';
+
 interface SharePopoverProps {
   resource: ShareResource;
   onClose: () => void;
+  centered?: boolean;
 }
 
 /** Notion-style Share dialog: current access list, people picker, general
- *  access. Anchored by the caller (render inside a relatively-positioned
- *  parent, e.g. next to a toolbar "Share" button). Below the sm breakpoint the
- *  right-anchored box would run off the left edge, so it spans the viewport
- *  gutters instead (fixed, top auto = just under the trigger). */
-export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose }) => {
+ *  access. Anchored by default: render it inside a relatively-positioned parent
+ *  next to a "Share" button; from sm up it hangs below that parent's right
+ *  edge, below sm it is fixed between the 16px gutters at its static position
+ *  (just under the trigger). `centered` is for a host with no trigger to hang
+ *  from (ShareHost): fixed in the upper part of the viewport at every width. */
+export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, centered = false }) => {
   const model = useShareModel(resource);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -49,7 +55,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
       ref={rootRef}
       role="dialog"
       aria-label="Share"
-      className="osio-surface-overlay fixed inset-x-[var(--osio-space-4)] z-[var(--osio-z-popover)] mt-2 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:w-[380px]"
+      className={`osio-surface-overlay z-[var(--osio-z-popover)] ${centered ? CENTERED : ANCHORED}`}
     >
       <div className="mb-2 flex items-center justify-between px-2 pt-1">
         <div>
