@@ -69,7 +69,7 @@ export const IdeProblemsPanel: React.FC = () => {
   );
 
   if (groups.length === 0) {
-    return <p className="px-3 py-6 text-center text-2xs leading-5 text-[var(--osio-code-fg-muted)]">No problems detected.</p>;
+    return <p className="osio-code-empty">No problems detected.</p>;
   }
 
   return (
@@ -79,11 +79,11 @@ export const IdeProblemsPanel: React.FC = () => {
           <button
             type="button"
             onClick={() => open(group.rel)}
-            className="flex w-full items-center gap-1.5 px-3 py-1 text-left font-medium text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))]"
+            className="flex min-h-6 w-full items-center gap-1.5 px-3 py-0.5 text-left font-medium text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
           >
             <span className="truncate">{group.rel.split("/").pop()}</span>
-            <span className="text-[var(--osio-code-fg-muted)]">{group.rel}</span>
-            <span className="ml-auto text-3xs text-[var(--osio-code-fg-muted)]">{group.diags.length}</span>
+            <span className="min-w-0 truncate text-2xs text-[var(--osio-code-fg-muted)]">{group.rel}</span>
+            <span className="ml-auto text-2xs tabular-nums text-[var(--osio-code-fg-muted)]">{group.diags.length}</span>
           </button>
           {group.diags
             .slice()
@@ -94,11 +94,11 @@ export const IdeProblemsPanel: React.FC = () => {
                 type="button"
                 onClick={() => open(group.rel, { line: d.line, character: d.character })}
                 title={d.message}
-                className="flex w-full items-start gap-1.5 py-0.5 pl-6 pr-3 text-left hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))]"
+                className="flex min-h-6 w-full items-center gap-1.5 py-0.5 pl-8 pr-3 text-left hover:bg-[var(--osio-code-btn-hover)]"
               >
-                <span className="mt-0.5 shrink-0">{severityIcon(d.severity)}</span>
+                <span className="shrink-0">{severityIcon(d.severity)}</span>
                 <span className="min-w-0 flex-1 truncate text-[var(--osio-code-fg-muted)]">{d.message}</span>
-                <span className="shrink-0 text-3xs text-[var(--osio-code-fg-muted)]">
+                <span className="shrink-0 text-2xs tabular-nums text-[var(--osio-code-fg-muted)]">
                   {d.line + 1}:{d.character + 1}
                 </span>
               </button>
