@@ -495,16 +495,18 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
 		headers,
 		body: body === undefined ? undefined : JSON.stringify(body),
 	}, BAAS_FETCH_TIMEOUT_MS);
-	const text = await response.text().catch(() => '');
+	let readFailed = false;
+	const text = await response.text().catch(() => { readFailed = true; return ''; });
 	if (!response.ok) {
 		const status = responseStatusForBaasFailure(response.status);
 		throw Object.assign(new Error(`BaaS request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
 	}
+	if (readFailed) throw Object.assign(new Error('BaaS response body could not be read.'), { status: 502 });
 	if (!text) return null;
 	try {
 		return JSON.parse(text);
 	} catch {
-		return null;
+		throw Object.assign(new Error(`BaaS response body was not valid JSON (${Buffer.byteLength(text)} bytes).`), { status: 502 });
 	}
 }
 
@@ -1097,9 +1099,13 @@ const PAGE_LIST_CHUNK = 200;
 // The whole-workspace page read has to fit in PostgREST's memory alongside the rest of the
 // server, so the paths that need `content` answer 413 past this instead of asking for a
 // response no shared process can hold. 8,725 pages answered 57.9 MB in one response.
+// 16 MiB: one read holds ~3.9x its JSON in heap (~127 MiB at a 32 MiB cap), and two
+// concurrent reads must fit the ~259 MiB heap of a 512 MiB container.
+// Ponytail: the ~3.9x ratio is an estimate from synthetic rows, so heavier real rows
+// overshoot the heap it predicts (too low by that row shape's overhead).
 // Ponytail: the total counts rows already read, so the bytes held when the 413 is raised
 // can exceed the cap by up to one chunk (too low by at most that chunk).
-const PAGE_LIST_MAX_BYTES = 32 * 1024 * 1024;
+const PAGE_LIST_MAX_BYTES = 16 * 1024 * 1024;
 
 /** One page read. `select` is explicit at every call site: `'*'` and the metadata list cost
  *  very different amounts, and only the caller knows which shape this read has to answer. */

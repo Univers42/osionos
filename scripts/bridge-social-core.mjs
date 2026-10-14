@@ -97,16 +97,18 @@ export async function rest(config, fetchImpl, path, { method = 'GET', body, pref
 		body: body === undefined ? undefined : JSON.stringify(body),
 		signal: AbortSignal.timeout(REST_TIMEOUT_MS),
 	});
-	const text = await response.text().catch(() => '');
+	let readFailed = false;
+	const text = await response.text().catch(() => { readFailed = true; return ''; });
 	if (!response.ok) {
 		const status = response.status === 401 || response.status === 403 ? 403 : (response.status === 404 ? 404 : 502);
 		throw httpError(`BaaS request failed with ${response.status}: ${text.slice(0, 160)}`, status);
 	}
+	if (readFailed) throw httpError('BaaS response body could not be read.', 502);
 	if (!text) return null;
 	try {
 		return JSON.parse(text);
 	} catch {
-		return null;
+		throw httpError(`BaaS response body was not valid JSON (${Buffer.byteLength(text)} bytes).`, 502);
 	}
 }
 
