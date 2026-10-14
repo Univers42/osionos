@@ -74,7 +74,7 @@ describe('page cascade chunked writes', () => {
 		for (const id of chain) assert.equal(mock.page(id), undefined);
 		for (const id of directs) assert.equal(mock.page(id), undefined);
 		const deletes = deletesOf(mock);
-		assert.equal(deletes.length, 11);
+		assert.equal(deletes.length, 21);
 		for (const entry of recorded) assert.ok(entry.path.length <= 3900, `${entry.method} ${entry.path.length}`);
 		const order = new Map();
 		deletes.forEach((call, index) => { for (const id of deleteIds(call)) order.set(id, index); });
@@ -82,6 +82,21 @@ describe('page cascade chunked writes', () => {
 		assert.deepEqual(deleteIds(deletes[deletes.length - 1]), [ROOT]);
 		for (const call of deletes.slice(0, -1)) assert.ok(!deleteIds(call).includes(ROOT));
 		for (let k = 2; k <= 250; k += 1) assert.ok(order.get(chainId(k)) <= order.get(chainId(k - 1)), `c${k} after c${k - 1}`);
+	});
+
+	// PostgREST echoes a read's path and query in its Content-Location response header, and
+	// Kong reads an upstream header block into a 4 KB buffer: 100 ids answered 502 "upstream
+	// sent too big header", 90 answered 200 (live Kong, 2026-10-14). The 7 archives that
+	// failed that way in a re-clone left their pages live.
+	it('an archive of 1000 descendants reads them in queries short enough for Kong to echo back', async () => {
+		const { world } = buildWorld(250, 750);
+		const mock = createPostgrestMock(world);
+		const recorded = [];
+		const response = await withBridge(config, recording(mock, recorded), (base) => send(base, `/api/pages/${ROOT}`, asA, patch({ archivedAt: ARCHIVED_AT })));
+		assert.equal(response.status, 200, response.text);
+		const reads = recorded.filter((entry) => entry.method === 'GET' && entry.path.includes('id=in.('));
+		assert.ok(reads.length > 0);
+		for (const entry of reads) assert.ok(entry.path.length <= 2600, `GET ${entry.path.length}`);
 	});
 
 	it('a delete that fails part way leaves no live page whose parent it deleted, and a retry finishes', async () => {
@@ -168,11 +183,11 @@ describe('page cascade chunked writes', () => {
 		assert.notEqual(mock.page(chainId(250)), undefined);
 	});
 
-	it('200 descendants delete in three requests', async () => {
+	it('200 descendants delete in five requests', async () => {
 		const { world } = buildWorld(50, 150);
 		const mock = createPostgrestMock(world);
 		const response = await withBridge(config, mock.fetchImpl, (base) => send(base, `/api/pages/${ROOT}`, asA, { method: 'DELETE' }));
 		assert.equal(response.status, 200, response.text);
-		assert.equal(deletesOf(mock).length, 3);
+		assert.equal(deletesOf(mock).length, 5);
 	});
 });
