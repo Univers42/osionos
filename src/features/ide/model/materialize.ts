@@ -18,6 +18,7 @@
 // imports: node runs it against an in-memory sandbox.
 
 import type { PageEntry } from "@/entities/page";
+import { withoutLegacyUpdated } from "@/features/page-file/model/frontMatter";
 import { fileOfEntry } from "@/features/page-file/model/pageIndex";
 import { pageFileText } from "@/features/page-file/model/pageFileText";
 import { sha16 } from "./ideFsEcho";
@@ -76,13 +77,20 @@ const BODY_FETCH_CONCURRENCY = 6;
  * asked for. A fresh tab has loaded the open page alone: "materialized 0 files, 31 not loaded
  * yet", and the explorer, which lists the sandbox once it is online, showed 2 of 31 pages
  * (2026-10-14). A fetch that fails leaves its page unloaded; attach still skips and counts it.
+ * A path this browser already synced is skipped (`isSynced`): the volume outlives the box, so
+ * a page reaches it once, and a reload of a 700-page workspace no longer costs 500 fetches.
  * Caveat: one request per page, and the live fetcher rewrites the whole pages cache each time,
- * so the cost grows with the square of the page count; bounded by MAX_ATTACH_FILES, and a
- * workspace near that bound wants a batch endpoint.
+ * so a first attach grows with the square of the page count; bounded by MAX_ATTACH_FILES, and a
+ * workspace near that bound wants a batch endpoint. A page changed on another device after this
+ * browser last synced it keeps the sandbox copy until it is opened here (attach's own rule).
  */
-export async function loadUnloadedBodies(views: ReadableViews, fetchBody: (pageId: string) => Promise<void>): Promise<number> {
+export async function loadUnloadedBodies(
+  views: ReadableViews,
+  fetchBody: (pageId: string) => Promise<void>,
+  isSynced: (path: string) => boolean = () => false,
+): Promise<number> {
   const ids = views.indexOf().entries
-    .filter((entry) => entry.kind !== "dir" && views.pageById(entry.id)?.content === undefined)
+    .filter((entry) => entry.kind !== "dir" && views.pageById(entry.id)?.content === undefined && !isSynced(fileOfEntry(entry)))
     .slice(0, MAX_ATTACH_FILES)
     .map((entry) => entry.id);
   for (let i = 0; i < ids.length; i += BODY_FETCH_CONCURRENCY) {
@@ -156,7 +164,12 @@ export async function attachWorkspace(deps: AttachDeps): Promise<MaterializeResu
   const report = await reconcileOnAttach({
     workspaceId: deps.workspaceId, desired: files, provider: deps.provider,
     // No ledger + a loaded, empty page: the sandbox copy wins — decideInboundWrite's live rule.
-    tiebreak: (path) => (byPath.get(path)?.content === "" ? "theirs" : null),
+    // A copy that differs only by a legacy `updated:` line is this page: ours, in today's form.
+    tiebreak: (path, theirs) => {
+      const ours = byPath.get(path)?.content;
+      if (ours === "") return "theirs";
+      return ours !== undefined && withoutLegacyUpdated(theirs) === ours ? "ours" : null;
+    },
   });
   await rewriteChanged(deps, byPath, report);
   report.skipped.push(...skipped);

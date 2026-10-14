@@ -38,10 +38,9 @@ export interface LandedDeps {
 /**
  * Ponytail: session memory only — never persisted, never in the ledger
  * (`osio.ide.synced.v1` keeps plain hashes), one entry per path for the session's
- * life. The page hash includes `updated:`, so ANY change to the page object, a
- * server merge that only moves `updatedAt` included, makes it miss and the next
- * save conflicts as it did before (the safe direction). Upgrade path: leave
- * `updated` out of the file (finding 19).
+ * life. The page hash is the file text, so any change the file shows makes it miss
+ * and the next save conflicts as it did before (the safe direction); `updatedAt`
+ * is not in the file (finding 19), so a server merge that only moves it does not.
  */
 export function createLandedMemo(deps: LandedDeps): LandedMemo {
   const landed = new Map<string, { file: string; page: string }>();

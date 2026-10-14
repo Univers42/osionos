@@ -24,6 +24,7 @@ import {
   pageToFile,
 } from "../../src/features/page-file/model/pageFileCodec.ts";
 import { metaFromPage, patchFromMeta } from "../../src/features/page-file/model/pageFileMeta.ts";
+import { withoutLegacyUpdated } from "../../src/features/page-file/model/frontMatter.ts";
 import { META_PAGE, MARKDOWN_PROBES, OVERLAY_PROBES, blockFieldNames, corpus, insertAtTop, page, viaMarkdown } from "./page-file-codec-fixtures.ts";
 
 const write = (source: PageEntry): string => pageToFile(source);
@@ -51,7 +52,19 @@ test("the patch restores every front-matter meta field", () => {
     properties: [{ key: "Status", label: "Status", type: "select", value: "Live" }],
   });
   assert.equal(done.meta.id, "p-meta");
-  assert.equal(done.meta.updated, "2026-10-01T00:00:00.000Z");
+  assert.equal(done.meta.updated, undefined, "updatedAt is the server's, never the file's (finding 19)");
+});
+
+test("a page that only moved updatedAt writes the same bytes; a legacy updated: line still reads", () => {
+  assert.equal(write({ ...META_PAGE, updatedAt: "2031-01-01T00:00:00.000Z" }), write(META_PAGE));
+  const today = write(META_PAGE);
+  const legacy = today.replace('title: "Meta"\n', 'title: "Meta"\nupdated: "2026-10-01T00:00:00.000Z"\n');
+  assert.notEqual(legacy, today);
+  assert.deepEqual(fileToPage(legacy, META_PAGE).patch, read(META_PAGE).patch);
+  assert.equal(withoutLegacyUpdated(legacy), today);
+  assert.equal(withoutLegacyUpdated(today), today);
+  const body = "---\ntitle: \"x\"\n---\nupdated: \"kept, it is the body\"\n";
+  assert.equal(withoutLegacyUpdated(body), body, "only the front matter loses the line");
 });
 
 test("metaFromPage omits absent, null and empty fields", () => {

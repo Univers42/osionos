@@ -65,11 +65,30 @@ test("bodies attach would skip are fetched first, six at a time, so every page r
   assert.equal(await fileIn(world, "Page 3.omd"), textOf(world, "U3"));
 });
 
+test("a body is fetched only for a path this browser never synced: a reload costs no fetch", async () => {
+  const world = await execWorld([unloadedPage("K", "Known", null), unloadedPage("N", "New", null)]);
+  recordSyncedHash(world.workspaceId, "Known.omd", await sha16("agreed earlier"));
+  const asked: string[] = [];
+  const count = await loadUnloadedBodies(world.session.views, async (id) => { asked.push(id); }, (path) => syncedHashOf(world.workspaceId, path) !== null);
+  assert.deepEqual([count, asked], [1, ["N"]]);
+});
+
 test("a body that fails to load stays unloaded and attach still skips it", async () => {
   const world = await execWorld([unloadedPage("U", "Later", null)]);
   await loadUnloadedBodies(world.session.views, async () => { throw new Error("offline"); });
   const result = await attach(world);
   assert.deepEqual([result.written, result.unloaded, result.failed], [0, 1, 0]);
+});
+
+test("16: no ledger and a _folder.omd that differs only by a legacy updated: line — rewritten, not a conflict", async () => {
+  useIdeSyncConflicts.getState().clearWorkspace();
+  const world = await execWorld([folderPage("F", "Docs"), blockPage("A", "Alpha", "F")]);
+  const today = textOf(world, "F");
+  await putFile(world.sandbox, world.workspaceId, "Docs/_folder.omd", today.replace("---\n", '---\nupdated: "2026-10-14T02:28:44.444275+00:00"\n'));
+  const result = await attach(world);
+  assert.deepEqual(result.report.conflicts, [], "106 such folders were 106 conflicts after one clone");
+  assert.equal(await fileIn(world, "Docs/_folder.omd"), today, "the sandbox copy takes today's form");
+  assert.equal(useIdeSyncConflicts.getState().byPageId.F, undefined);
 });
 
 test("16: a _folder.omd changed on both sides is reported under its folder's id", async () => {

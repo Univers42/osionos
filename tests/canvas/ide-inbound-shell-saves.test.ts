@@ -138,12 +138,12 @@ test("C3.5: an app edit between two shell writes still conflicts; the page keeps
   assert.equal(bodyOf(world, id), "app edit");
 });
 
-test("C3.5: a page object replaced with only a new updatedAt conflicts (the memo dies with the page object)", async () => {
+test("C3.5: a page object replaced with only a new updatedAt is no change — the shell save applies (finding 19)", async () => {
   const { world, id } = await shellCreated();
   world.store._seed(world.store.pages().map((entry) => (entry._id === id ? { ...entry, updatedAt: "2030-01-01T00:00:00.000Z" } : entry)));
   await world.shellWrite("inbox/M.omd", "v2\n");
-  assert.deepEqual(conflictPaths(), ["inbox/M.omd"]);
-  assert.equal(bodyOf(world, id), "v1");
+  assert.deepEqual(conflictPaths(), []);
+  assert.equal(bodyOf(world, id), "v2");
 });
 
 test("C3.4: echo stays file-only — a hash equal to the landed page hash but not the ledger goes through the merge", async () => {

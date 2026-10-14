@@ -28,7 +28,7 @@ export type BlockOverlayEntry = { t: string; id: string } & Record<string, unkno
 export type BlockOverlay = Record<string, BlockOverlayEntry>;
 
 /** `.omd` front-matter. One `key: <JSON literal>` per line. Everything is
- *  optional on read (hand-written files); pageToFile always writes id/title/updated. */
+ *  optional on read (hand-written files); pageToFile always writes id/title. */
 export interface PageFileMeta {
   id?: string;
   title?: string;

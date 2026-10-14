@@ -20,7 +20,6 @@
  *   databaseId → database_id              isTemplate → template
  *   isDefaultTemplate → template_default  templateSurface → template_surface
  *   recurrence → recurrence               properties → properties
- *   updatedAt → updated
  *
  * `surface: "page"` is the default and is not written; no key is ever written
  * as null. The read side is the trust boundary a hand-edited file crosses:
@@ -161,13 +160,12 @@ export function metaFromPage(page: PageEntry): PageFileMeta {
   put(meta, "template_surface", oneOf(page.templateSurface, TEMPLATE_SURFACES));
   put(meta, "recurrence", recurrence(page.recurrence));
   put(meta, "properties", properties(page.properties));
-  put(meta, "updated", text(page.updatedAt));
   return meta;
 }
 
 /**
- * The inverse of `metaFromPage`, minus `id` and `updated` — the caller uses
- * those for identity and tie-breaks, so a file never re-assigns them. Unknown
+ * The inverse of `metaFromPage`, minus `id` — the caller uses it for identity, so a
+ * file never re-assigns it. A legacy `updated:` line is read and ignored. Unknown
  * keys are ignored and an out-of-range or wrongly-typed value is dropped.
  * O(1) fields plus O(p) for the property list.
  */
