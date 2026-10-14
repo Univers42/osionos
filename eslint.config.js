@@ -23,7 +23,9 @@ import reactHooks from "eslint-plugin-react-hooks";
 // Ponytail: every pattern matches string TEXT, not a class list. A class name
 // built by concatenation ("sha" + "dow-md") or from a variable escapes it, and a
 // non-colour string such as "#abc", or prose holding the lowercase word "shadow",
-// is flagged. A string that is only "rounded" inside a type position is skipped.
+// is flagged. A string that is exactly "rounded" or "shadow" is a stored value (a
+// block's mediaShape), not a class, unless it is a JSX attribute: cx("rounded")
+// therefore escapes.
 // The escape hatch is HEX_ALLOWLIST below, or an eslint-disable with an issue link.
 const PX_FONT_SIZE = String.raw`(^|[\s:!])text-\[[0-9.]+px\]`;
 const STOCK_SHADOW = String.raw`(^|[\s:!])shadow(-(sm|md|lg|xl|2xl))?(\x2f[0-9]+)?($|[\s!])`;
@@ -37,10 +39,19 @@ const bannedText = (pattern, message) => [
   { selector: `TemplateElement[value.raw=/${pattern}/]`, message },
 ];
 
+// A stock-class rule whose whole-word form is also a data value: the exact word is
+// only flagged where it can only be a class, a JSX attribute.
+const DATA_WORD = String.raw`^(rounded|shadow)$`;
+const bannedClassWord = (pattern, message) => [
+  { selector: `:not(TSLiteralType, JSXAttribute) > Literal[value=/${pattern}/]:not([value=/${DATA_WORD}/])`, message },
+  { selector: `JSXAttribute > Literal[value=/${pattern}/]`, message },
+  { selector: `TemplateElement[value.raw=/${pattern}/]`, message },
+];
+
 const CLASS_RULES = [
   ...bannedText(PX_FONT_SIZE, "Literal px font size in a class. Use text-3xs (10), text-2xs (11), text-xs (12), text-sm (14) or text-display."),
-  ...bannedText(STOCK_SHADOW, "Stock Tailwind shadow. Use shadow-osio-e1 .. shadow-osio-e5 (sm/bare = e1, md = e2, lg = e3, xl = e4, 2xl = e5)."),
-  ...bannedText(BARE_ROUNDED, "Bare rounded class. Use rounded-xs/sm/md/lg (radius tokens), osio-chip for tags, or osio-surface-overlay for panels."),
+  ...bannedClassWord(STOCK_SHADOW, "Stock Tailwind shadow. Use shadow-osio-e1 .. shadow-osio-e5 (sm/bare = e1, md = e2, lg = e3, xl = e4, 2xl = e5)."),
+  ...bannedClassWord(BARE_ROUNDED, "Bare rounded class. Use rounded-xs/sm/md/lg (radius tokens), osio-chip for tags, or osio-surface-overlay for panels."),
   ...bannedText(RAMP_TOKEN, "Ramp token in a component. Use a semantic token (--osio-bg-*, --osio-fg-*, --osio-accent-*); ramps are for src/app/styles only."),
 ];
 const HEX_RULE = bannedText(HEX_COLOR, "Raw hex colour. Use a semantic --osio-* token, or add the file to HEX_ALLOWLIST with its reason.");

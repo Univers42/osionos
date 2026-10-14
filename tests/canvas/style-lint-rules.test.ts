@@ -28,6 +28,8 @@ const BAD: Array<[string, string, RegExp]> = [
   ["a stock shadow with an opacity modifier", 'export const c = "shadow-md/20";', /shadow-osio-e/],
   ["a bare shadow token", 'export const c = "flex shadow rounded-md";', /shadow-osio-e1/],
   ["a bare rounded token", 'export const c = "flex rounded border";', /rounded-xs/],
+  ["a className that is exactly rounded", 'export const C = () => <div className="rounded" />;', /rounded-xs/],
+  ["a className that is exactly shadow", 'export const C = () => <div className="shadow" />;', /shadow-osio-e1/],
   ["a bare rounded behind a variant", 'export const c = "group-hover:rounded";', /rounded-xs/],
   ["a template literal with a px font size", "export const c = (x: string) => `${x} text-[10px]`;", /text-3xs/],
   ["a template literal with a stock shadow", "export const c = (x: string) => `shadow-lg ${x}`;", /shadow-osio-e/],
@@ -57,6 +59,7 @@ const GOOD: Array<[string, string]> = [
   ["a semantic token", 'export const c = "bg-[var(--osio-bg-surface)]";'],
   ["an HTML entity", 'export const c = "&#x2713; &#123;";'],
   ["a union member named rounded", "export type Shape = 'rounded' | 'circle';"],
+  ["a stored value that is exactly rounded", 'export const isShape = (v: string) => ["rounded", "circle"].includes(v);'],
   ["a template literal built from tokens", "export const c = (x: string) => `${x} rounded-md shadow-osio-e2 text-xs`;"],
 ];
 
