@@ -402,7 +402,10 @@ export function buildShellExecSpec() {
  *  closes an exec's stdin when its stream closes only without a TTY, and the agent exits
  *  on that EOF. Under Tty:true every reload left an agent behind (60-70 MB each; seven
  *  held ~450 MB of the demo box's 1 GiB and `make -j8` failed, 2026-10-14). Stdout is
- *  multiplexed, so the bridge demuxes it as it does the language servers'. */
+ *  multiplexed, so the bridge demuxes it as it does the language servers'.
+ *  --max-semi-space-size=1: with the reader stalled through 300 rewrites of a 400 KB file the
+ *  agent grew 48 -> 64/65 MB (V8's young generation high-water); with the flag 61/62 MB, and the
+ *  33,051-delete bulk test still lost none (s5j6, 2026-10-14). */
 export function buildFsAgentExecSpec() {
   return {
     User: "10001:10001",
@@ -411,6 +414,6 @@ export function buildFsAgentExecSpec() {
     AttachStdout: true,
     AttachStderr: false,
     Tty: false,
-    Cmd: ["node", "/usr/local/lib/osio-fs-agent.mjs"],
+    Cmd: ["node", "--max-semi-space-size=1", "/usr/local/lib/osio-fs-agent.mjs"],
   };
 }
