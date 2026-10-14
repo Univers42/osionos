@@ -15,7 +15,7 @@
 // reaches the docker API (devil conditions 8, 9, 11). Pure + no deps, so the
 // security logic is unit-tested without a daemon.
 
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -181,6 +181,13 @@ export function assertRelPath(relPath) {
 
 const FS_OP_COMMON = { User: "10001:10001", WorkingDir: "/workspace", AttachStdout: true, AttachStderr: false, Tty: true };
 const READ_CAP_BYTES = 512 * 1024;
+// A write's content rides one argv item, and Linux refuses an exec whose single
+// argument passes 128 KiB (MAX_ARG_STRLEN): a 400 KB file failed to save with
+// E2BIG. Bigger content arrives in pieces staged under one token (part first,
+// more, last); the last piece moves the staged file into place, so a reader
+// still never sees half a file. sandboxProvider.ts WRITE_PIECE_B64 matches.
+export const WRITE_PIECE_B64 = 96 * 1024;
+const WRITE_PARTS = new Set(['first', 'more', 'last']);
 
 // Portable sh snippets (busybox AND debian coreutils — the conformance corpus
 // executes them through the REAL local sh in tests). Failures print one
@@ -221,7 +228,10 @@ fi
 mv "$a" "$b"`,
   write: `f="./$1"; d=$(dirname "$f"); mkdir -p "$d" || { echo VFSERR:EIO; exit 1; }
 if [ -d "$f" ]; then echo VFSERR:EISDIR; exit 1; fi
-t="$f.vfstmp$$"; printf %s "$2" | base64 -d > "$t" && mv "$t" "$f"`,
+t="$f.vfstmp\${3:-$$}"
+if [ "$4" = more ] || [ "$4" = last ]; then printf %s "$2" | base64 -d >> "$t"; else printf %s "$2" | base64 -d > "$t"; fi || { rm -f "$t"; echo VFSERR:EIO; exit 1; }
+if [ "$4" = first ] || [ "$4" = more ]; then exit 0; fi
+mv "$t" "$f"`,
 };
 
 /** One exec spec per VFS op (ADR-001 second slice — closes the write-only
@@ -244,12 +254,38 @@ export function buildFsOpSpec(op, params = {}) {
     args.push(params.to, params.overwrite ? "1" : "");
   } else if (op === "write") {
     if (typeof params.contentBase64 !== "string") throw Object.assign(new Error("write needs base64 content"), { status: 400 });
+    if (params.contentBase64.length > WRITE_PIECE_B64) {
+      throw Object.assign(new Error(`write piece over ${WRITE_PIECE_B64} base64 characters; send it in parts`), { status: 413 });
+    }
     args.push(params.contentBase64);
+    if (params.part !== undefined) {
+      if (!WRITE_PARTS.has(params.part) || !/^[a-z0-9]{8,32}$/.test(String(params.stage ?? ""))) {
+        throw Object.assign(new Error("a write part needs part first|more|last and an 8-32 character stage token"), { status: 400 });
+      }
+      args.push(params.stage, params.part);
+    }
   }
   if (!params.path && op !== "list" && op !== "stat") {
     throw Object.assign(new Error("missing path"), { status: 400 });
   }
   return { ...FS_OP_COMMON, Cmd: ["sh", "-c", script, "sh", ...args] };
+}
+
+/** The exec specs that write one file, run in order until one exits non-zero:
+ *  one exec when the content fits an argv item, else pieces staged under one
+ *  random token (WRITE_PIECE_B64). Caveat: an exec that dies between pieces
+ *  (the container stopped) leaves `<file>.vfstmp<token>` beside the file. */
+export function buildWriteSpecs(relPath, contentBase64) {
+  if (typeof contentBase64 !== "string" || contentBase64.length <= WRITE_PIECE_B64) {
+    return [buildFsOpSpec("write", { path: relPath, contentBase64 })];
+  }
+  const stage = randomBytes(8).toString("hex");
+  const specs = [];
+  for (let at = 0; at < contentBase64.length; at += WRITE_PIECE_B64) {
+    const part = at === 0 ? "first" : at + WRITE_PIECE_B64 >= contentBase64.length ? "last" : "more";
+    specs.push(buildFsOpSpec("write", { path: relPath, contentBase64: contentBase64.slice(at, at + WRITE_PIECE_B64), stage, part }));
+  }
+  return specs;
 }
 
 /** A file-write exec spec (materialize / editor→container) — the legacy shape,
