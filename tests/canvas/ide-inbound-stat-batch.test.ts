@@ -105,3 +105,25 @@ test("stat batch caveat: a code file made again after the batch read it absent g
   assert.equal(await world.session.facade.readContent(live[0]._id), "", "the file's text, not the old page's");
   assert.ok(world.pageOf("M")?.archivedAt);
 });
+
+// Devil (b)3: a directory's archive cascades onto every page under it, so its check is
+// never answered from a batch up to 2 s old. Here every batched answer is a stale "absent"
+// and the clone has already put gnl/ back: the folder and Roadmap (whose Roadmap/ is back)
+// stay; only the code file read from the batch goes to the trash.
+test("stat batch: a folder's own directory and a page's children directory are asked fresh", async () => {
+  const fresh: string[] = [];
+  const world = await execWorld([folderPage("G", "gnl"), codePage("C", "main.c", "int main;\n", "G"), blockPage("R", "Roadmap"), blockPage("K", "Child", "R")], {
+    stat: async (path) => { fresh.push(path); return statInProvider(world.sandbox, world.workspaceId, path); },
+    statMany: async (paths) => new Map(paths.map((path) => [path, "absent" as const])),
+  });
+  await world.shellWrite("gnl/main.c", "int main;\n");
+  await world.shellWrite("Roadmap/Child.omd", await world.session.facade.readContent("K"));
+  await world.shellDelete("gnl/main.c");
+  await world.shellDelete("gnl");
+  await world.shellDelete("Roadmap.omd");
+  await world.shellWrite("gnl/.keep", "");
+  await world.elapse();
+  assert.ok(!world.pageOf("G")?.archivedAt, "gnl/ is back: the folder stays");
+  assert.ok(!world.pageOf("R")?.archivedAt, "Roadmap/ still holds Child: Roadmap stays");
+  assert.deepEqual(fresh.sort(), ["Roadmap", "gnl"]);
+});

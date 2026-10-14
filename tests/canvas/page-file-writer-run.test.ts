@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { recordSyncedHash, syncedHashOf } from "../../src/features/ide/model/ideSyncEngine.ts";
+import { markShellArchived, recordSyncedHash, syncedHashOf } from "../../src/features/ide/model/ideSyncEngine.ts";
 import { sha16 } from "../../src/features/ide/model/ideFsEcho.ts";
 import { pageFileText } from "../../src/features/page-file/model/pageFileText.ts";
 import { runOutbound } from "../../src/features/page-file/model/outboundRun.ts";
@@ -141,4 +141,48 @@ test("remove phase: an agreement recorded during the run → kept, never removed
   assert.deepEqual(w.removals, []);
   assert.equal(w.files.get("One.omd"), "cloned again");
   assert.deepEqual(run.report.removed, []);
+});
+
+// Devil R1: the agreement a remove clears is the one it planned with, never one a new
+// page recorded at the same path while the read or the remove was in flight.
+test("remove phase: the file is gone and a new page's agreement lands during the read → it stays", async () => {
+  const ws = freshWs();
+  const w = world({});
+  const read = w.io.read;
+  const fresh = await sha16("the new page");
+  w.io.read = async (path) => {
+    const text = await read(path);
+    recordSyncedHash(ws, path, fresh);
+    return text;
+  };
+  await runOutbound(ctxFor(ws, { moves: [], removes: [{ id: "gone", path: "x.c" }], changed: [] }, [], w.io));
+  assert.equal(syncedHashOf(ws, "x.c"), fresh);
+});
+
+test("remove phase: a new page's agreement recorded while the file is being removed → it stays", async () => {
+  const ws = freshWs();
+  recordSyncedHash(ws, "One.omd", await sha16("v1"));
+  const w = world({ "One.omd": "v1" });
+  const remove = w.io.remove;
+  const fresh = await sha16("the new page");
+  w.io.remove = async (path) => {
+    await remove(path);
+    recordSyncedHash(ws, path, fresh);
+  };
+  await runOutbound(ctxFor(ws, { moves: [], removes: [{ id: "pA", path: "One.omd" }], changed: [] }, [page("pA", "One", null)], w.io));
+  assert.deepEqual(w.removals, ["One.omd"]);
+  assert.equal(syncedHashOf(ws, "One.omd"), fresh);
+});
+
+test("remove phase: a page the shell deleted is never removed by the writer — once; the next remove is judged again", async () => {
+  const ws = freshWs();
+  recordSyncedHash(ws, "One.omd", await sha16("v1"));
+  markShellArchived(ws, ["pA"]);
+  const w = world({ "One.omd": "v1" });
+  const plan = { moves: [], removes: [{ id: "pA", path: "One.omd" }], changed: [] };
+  const first = await runOutbound(ctxFor(ws, plan, [page("pA", "One", null)], w.io));
+  assert.deepEqual(w.removals, []);
+  assert.deepEqual(first.report.skipped, [{ path: "One.omd", reason: "deleted in the shell" }]);
+  await runOutbound(ctxFor(ws, plan, [page("pA", "One", null)], w.io));
+  assert.deepEqual(w.removals, ["One.omd"]);
 });

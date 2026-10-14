@@ -12,7 +12,7 @@
 
 import type { PageEntry } from "@/entities/page";
 import { sha16 } from "@/features/ide/model/ideFsEcho";
-import { clearSyncedHash, moveSyncedDir, recordOutboundWrite, recordSyncedHash, syncedHashOf } from "@/features/ide/model/ideSyncEngine";
+import { clearSyncedHash, moveSyncedDir, recordOutboundWrite, recordSyncedHash, syncedHashOf, takeShellArchived } from "@/features/ide/model/ideSyncEngine";
 import type { Move, OutboundPlan } from "./outboundPlan";
 import { kindOfPage } from "./pagePaths";
 import { pageFileText } from "./pageFileText";
@@ -168,9 +168,18 @@ async function writePageFile(ctx: OutboundRunCtx, run: Run, page: PageEntry, tar
 
 /** A file is removed only when it still holds what was agreed when the plan was made,
  *  read before any await: the inbound side records the agreement of a file it just made
- *  a NEW page from, at the same path, and a remove reading that one deleted the file. */
+ *  a NEW page from, at the same path, and a remove reading that one deleted the file.
+ *  A page the shell deleted is never removed here (takeShellArchived), and the agreement
+ *  cleared is only ever the planned one, never a new page's recorded meanwhile. */
 async function runRemoves(ctx: OutboundRunCtx, run: Run, agreedAtPlan: ReadonlyMap<string, string | null>): Promise<void> {
+  const forgetPlanned = (path: string): void => {
+    if (syncedHashOf(ctx.workspaceId, path) === agreedAtPlan.get(path)) clearSyncedHash(ctx.workspaceId, path);
+  };
   for (const remove of ctx.plan.removes) {
+    if (takeShellArchived(ctx.workspaceId, remove.id)) {
+      run.report.skipped.push({ path: remove.path, reason: "deleted in the shell" });
+      continue;
+    }
     const page = ctx.pageById(remove.id);
     if (page && kindOfPage(page) === "dir") continue; // never delete a folder
     let current: string | null;
@@ -180,7 +189,7 @@ async function runRemoves(ctx: OutboundRunCtx, run: Run, agreedAtPlan: ReadonlyM
       run.report.failed.push({ path: remove.path, reason: messageOf(error) });
       continue;
     }
-    if (current === null) { clearSyncedHash(ctx.workspaceId, remove.path); continue; }
+    if (current === null) { forgetPlanned(remove.path); continue; }
     try {
       const hash = await run.hash(current);
       if (hash !== agreedAtPlan.get(remove.path)) {
@@ -188,7 +197,7 @@ async function runRemoves(ctx: OutboundRunCtx, run: Run, agreedAtPlan: ReadonlyM
         continue;
       }
       await ctx.io.remove(remove.path);
-      clearSyncedHash(ctx.workspaceId, remove.path);
+      forgetPlanned(remove.path);
       run.report.removed.push(remove.path);
     } catch (error) {
       run.report.failed.push({ path: remove.path, reason: messageOf(error) });
