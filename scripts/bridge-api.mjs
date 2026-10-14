@@ -1088,16 +1088,71 @@ async function requirePageScopeAccess(request, pageId, payload, permission, conf
 // content then loads lazily per page on open (fetchPageContent).
 const PAGE_LIST_SELECT = 'id,title,icon,cover,cover_position,updated_at,created_at,workspace_id,owner_id,visibility,collaborators,parent_page_id,sort_order,database_id,archived_at,properties,surface,is_template,is_default_template,template_surface,recurrence';
 
-async function listPageRows(workspaceId, config, fetchImpl, filters = {}, select = '*') {
+// One chunk of the workspace-wide scan: small enough that no single response is the whole
+// workspace, large enough that an ordinary one is answered in a couple of requests.
+// Ponytail: 200 rows is sized for the commonest page, so a workspace of very large pages
+// still puts 200 of them in one chunk (too high by exactly that workspace's page size).
+const PAGE_LIST_CHUNK = 200;
+
+// The whole-workspace page read has to fit in PostgREST's memory alongside the rest of the
+// server, so the paths that need `content` answer 413 past this instead of asking for a
+// response no shared process can hold. 8,725 pages answered 57.9 MB in one response.
+// Ponytail: the total counts rows already read, so the bytes held when the 413 is raised
+// can exceed the cap by up to one chunk (too low by at most that chunk).
+const PAGE_LIST_MAX_BYTES = 32 * 1024 * 1024;
+
+/** One page read. `select` is explicit at every call site: `'*'` and the metadata list cost
+ *  very different amounts, and only the caller knows which shape this read has to answer. */
+async function listPageRows(workspaceId, config, fetchImpl, filters = {}, select, { order = 'updated_at.desc', limit, idCursor } = {}) {
 	const query = postgrestQuery({
 		workspace_id: `eq.${workspaceId}`,
 		database_id: nullablePostgrestFilter(filters.databaseId),
 		parent_page_id: nullablePostgrestFilter(filters.parentPageId, (value) => requireUuid(value, 'parentPageId')),
 		surface: filters.surface ? `eq.${filters.surface}` : undefined,
+		archived_at: nullablePostgrestFilter(filters.archivedAt),
+		id: idCursor ? `gt.${idCursor}` : undefined,
 		select,
-		order: 'updated_at.desc',
+		order,
+		limit: limit === undefined ? undefined : String(limit),
 	});
 	return await baasRest(config, fetchImpl, `osionos_pages?${query}`) ?? [];
+}
+
+/**
+ * The whole-workspace page read for the paths that need `content` (the filtered list, the
+ * search fallback): the same rows `listPageRows` answers, walked in PAGE_LIST_CHUNK rows
+ * keyed on `id`, so one oversized response never has to exist. Returns every row, sorted
+ * as the unbounded read's `updated_at DESC` would have ordered them; past PAGE_LIST_MAX_BYTES
+ * it answers 413 rather than a truncated list.
+ */
+async function listPageRowsInChunks(workspaceId, config, fetchImpl, filters, select) {
+	// Ponytail: each chunk is its own snapshot — a page created or edited mid-scan can be missed or seen twice; fine for this list, never for the /api/pages/all hydrate.
+	// Ponytail: one chunk is at most PAGE_LIST_CHUNK x the largest row (268 MB at today's largest page); the byte cap bounds the total, not one chunk.
+	const rows = [];
+	let bytes = 0;
+	let cursor;
+	for (;;) {
+		const chunk = await listPageRows(workspaceId, config, fetchImpl, filters, select, { order: 'id.asc', limit: PAGE_LIST_CHUNK, idCursor: cursor });
+		bytes += Buffer.byteLength(JSON.stringify(chunk));
+		if (bytes > PAGE_LIST_MAX_BYTES) {
+			throw Object.assign(new Error(`Reading this workspace's pages reached ${bytes} bytes, over the ${PAGE_LIST_MAX_BYTES}-byte page-read cap. `
+				+ 'Narrow the read with parentPageId or databaseId, or use /api/pages/all for the metadata-only list.'), { status: 413 });
+		}
+		rows.push(...chunk);
+		if (chunk.length < PAGE_LIST_CHUNK) break;
+		cursor = chunk[chunk.length - 1].id;
+	}
+	// `ORDER BY updated_at DESC, id ASC`: nulls first, as Postgres orders a DESC column, and
+	// ids as raw strings so the tie order is the same order the keyset cursor walked.
+	const stamp = (row) => row.updated_at ?? null;
+	return rows.sort((left, right) => {
+		const leftUpdated = stamp(left);
+		const rightUpdated = stamp(right);
+		if (leftUpdated === rightUpdated) return String(left.id) < String(right.id) ? -1 : String(left.id) > String(right.id) ? 1 : 0;
+		if (leftUpdated === null) return -1;
+		if (rightUpdated === null) return 1;
+		return String(leftUpdated) > String(rightUpdated) ? -1 : 1;
+	});
 }
 
 async function listWorkspacePageRefs(workspaceId, config, fetchImpl) {
@@ -2025,9 +2080,11 @@ async function handlePageList(url, request, response, config, fetchImpl) {
 		surface: PAGE_SURFACE_VALUES.has(url.searchParams.get('surface')) ? url.searchParams.get('surface') : undefined,
 	};
 	// Only the bulk /api/pages/all hydrate goes metadata-only (content loads lazily
-	// on page open); the filtered single-list path keeps '*' so nothing regresses.
-	const select = isFullList ? PAGE_LIST_SELECT : '*';
-	const rows = await listPageRows(workspaceId, config, fetchImpl, filters, select);
+	// on page open); the filtered single-list path keeps '*' so nothing regresses, read in
+	// chunks so a workspace of thousands of pages is never one response.
+	const rows = isFullList
+		? await listPageRows(workspaceId, config, fetchImpl, filters, PAGE_LIST_SELECT)
+		: await listPageRowsInChunks(workspaceId, config, fetchImpl, filters, '*');
 	json(response, 200, pageRowsToEntries(readablePageRows(rows, userId)), config);
 	return true;
 }
@@ -2114,7 +2171,7 @@ async function handlePageSearch(url, request, response, config, fetchImpl) {
 		rows = await baasRest(config, fetchImpl, path);
 	} catch (error) {
 		if (!isMissingSearchDocError(error)) throw error;
-		const scanned = readablePageRows(await listPageRows(workspaceId, config, fetchImpl, {}), userId);
+		const scanned = readablePageRows(await listPageRowsInChunks(workspaceId, config, fetchImpl, {}, '*'), userId);
 		json(response, 200, pageRowsToEntries(legacyRankedRows(scanned, query, limit)), config);
 		return true;
 	}
@@ -2469,7 +2526,10 @@ async function listWorkspaceDatabases(workspaceIds, config, fetchImpl) {
 async function readablePageGraph(workspaceIds, userId, config, fetchImpl) {
 	const rows = [];
 	for (const workspaceId of workspaceIds) {
-		const wsRows = await listPageRows(workspaceId, config, fetchImpl, {});
+		// Metadata only, and no archived rows: pagesToGraph reads nothing outside
+		// PAGE_LIST_SELECT and drops archived rows itself, so the graph is unchanged while
+		// the page content JSONB and the archived rows never cross the wire.
+		const wsRows = await listPageRows(workspaceId, config, fetchImpl, { archivedAt: null }, PAGE_LIST_SELECT);
 		rows.push(...wsRows.filter((row) => canReadPageRowAsMember(row, userId, workspaceIds)));
 	}
 	return pagesToGraph(rows);

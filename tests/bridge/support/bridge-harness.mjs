@@ -13,10 +13,11 @@
 // HTTP harness for the bridge's page-ACL tests: an in-memory PostgREST, the query-router
 // record read, session tokens for two members of one team workspace, and a server runner.
 // Every request is logged so a test can prove a call did — or did not — happen.
-// Ponytail: eq/in compare case-insensitively (right for uuid columns, wrong for text
-// columns differing only by case); `order` is ignored (insertion order); wfts is a
-// substring match over title+content, not stemming. Unknown operators throw, so a new
-// query shape fails the test instead of silently matching every row.
+// Ponytail: eq/in/gt compare case-insensitively (right for uuid columns, wrong for text
+// columns differing only by case); `order` is honoured only as `id.asc`, every other value
+// is ignored (insertion order); wfts is a substring match over title+content, not stemming.
+// Unknown operators throw, so a new query shape fails the test instead of silently
+// matching every row.
 
 import { randomUUID } from 'node:crypto';
 import { configFromEnv, createBridgeServer, createUserSession, validateBridgePayload } from '../../../scripts/bridge-api.mjs';
@@ -56,6 +57,7 @@ function matchesFilter(row, key, expr) {
 	}
 	if (expr === 'is.null') return row[key] == null;
 	if (expr.startsWith('eq.')) return sameText(row[key], expr.slice(3));
+	if (expr.startsWith('gt.')) return String(row[key] ?? '').toLowerCase() > expr.slice(3).toLowerCase();
 	if (expr.startsWith('in.(') && expr.endsWith(')')) return expr.slice(4, -1).split(',').some((item) => sameText(row[key], item));
 	throw new Error(`postgrest mock: unsupported filter ${key}=${expr}`);
 }
@@ -71,7 +73,13 @@ function project(row, select) {
 
 function readRows(rows, params) {
 	const found = matchingRows(rows, params).map((row) => project(row, params.get('select')));
-	return params.has('limit') ? found.slice(0, Number(params.get('limit'))) : found;
+	// `id.asc` (a keyset scan) sorts by id before the limit; the comparison is the raw
+	// string order `gt.` uses, so the cursor and the page order agree the way Postgres' uuid
+	// order does. Every other `order` stays ignored, as before.
+	const ordered = params.get('order') === 'id.asc'
+		? [...found].sort((left, right) => String(left.id).toLowerCase() < String(right.id).toLowerCase() ? -1 : String(left.id).toLowerCase() > String(right.id).toLowerCase() ? 1 : 0)
+		: found;
+	return params.has('limit') ? ordered.slice(0, Number(params.get('limit'))) : ordered;
 }
 
 function upsertRows(rows, body, params, prefer) {
