@@ -17,35 +17,29 @@
 // silently, it stopped at 312 of ~3 180 pages, and an unconfirmed edit lived only in memory — a
 // reload during a bridge outage, or of a page over keepalive's 64 KB, lost it (2026-10-14).
 // Written before the cache. On a full origin the page caches go first (the hydrate rebuilds them
-// from the server); never the outbox ledger, nor the database state, which holds databases not yet
-// pushed (objectDatabaseBridgeSync keeps a failed push dirty).
+// from the server); never the outbox's keys (the ledger, the refused-edit marks), nor the database
+// state, which holds databases not yet pushed and makes room the same way (knownDatabaseStorage).
 // Ponytail: an edit made since the last outbox flush (800 ms debounce, 250 ms draft) reaches this
 // key at pagehide, so a tab killed hard (crash, OOM) loses it. Edits that no longer fit even here
 // (an outage while hundreds of files are cloned) are warned about once, and the browser asks
-// before the tab is left; a tab killed hard then loses them all.
+// before the tab is left; a tab killed hard then loses them all. The key is one per origin: an
+// open tab with nothing unconfirmed clears it, erasing what a closed tab kept at pagehide (devil
+// B1). A kept page restored at load is published over whatever the server holds, so an edit made
+// on another device meanwhile is overwritten (the bridge PATCH has no base-version precondition).
 
 import type { PageEntry } from "@/entities/page";
-import { evictPageCaches } from "@/store/pageStore.helpers";
+import { setItemEvictingPageCaches, type PageCacheStorage } from "@/store/pageStore.helpers";
 
 /** Outside the page cache's `osio:pages:` prefix, which its loader reads as workspaces. */
 export const PENDING_PAGES_KEY = "osio:pending-pages.v1";
 
-export type PendingStorage = Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">;
+export type PendingStorage = PageCacheStorage;
 
 function browserStorage(): PendingStorage | null {
   try {
     return typeof localStorage === "undefined" ? null : localStorage;
   } catch {
     return null;
-  }
-}
-
-function trySet(storage: PendingStorage, text: string): boolean {
-  try {
-    storage.setItem(PENDING_PAGES_KEY, text);
-    return true;
-  } catch {
-    return false;
   }
 }
 
@@ -67,10 +61,7 @@ export function keepPendingPages(pages: readonly PageEntry[], storage: PendingSt
     }
     return true;
   }
-  const text = JSON.stringify(byWorkspace(pages));
-  if (trySet(storage, text)) return true;
-  evictPageCaches(storage);
-  return trySet(storage, text);
+  return setItemEvictingPageCaches(PENDING_PAGES_KEY, JSON.stringify(byWorkspace(pages)), storage);
 }
 
 /** `keepPendingPages` that calls `warn` the first time pages cannot be kept, never again: each

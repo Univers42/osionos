@@ -272,14 +272,14 @@ function enqueuePagesCachePersist(
 // (sync/pendingPages), so a failure here loses nothing.
 let pagesCacheEvicted = false;
 
-/** Drop every workspace's page cache for this session (never the outbox ledger), to give its room
- *  to unconfirmed edits. Returns the characters freed. O(keys). */
+/** Drop every workspace's page cache for this session (never the outbox's keys), to give its room
+ *  to unconfirmed edits and the database state. Returns the characters freed. O(keys). */
 export function evictPageCaches(storage: Pick<Storage, "length" | "key" | "getItem" | "removeItem"> = localStorage): number {
   pagesCacheEvicted = true;
   const keys: string[] = [];
   for (let index = 0; index < storage.length; index += 1) {
     const key = storage.key(index);
-    if (key?.startsWith(PAGE_CACHE_WORKSPACE_PREFIX) && key !== PAGE_OUTBOX_KEY) keys.push(key);
+    if (isWorkspaceCacheKey(key)) keys.push(key);
   }
   let freed = 0;
   for (const key of keys) {
@@ -287,6 +287,26 @@ export function evictPageCaches(storage: Pick<Storage, "length" | "key" | "getIt
     storage.removeItem(key);
   }
   return freed;
+}
+
+export type PageCacheStorage = Pick<Storage, "length" | "key" | "getItem" | "setItem" | "removeItem">;
+
+/** `setItem`, and on a full origin once more after evicting the page caches, for a value the
+ *  server cannot rebuild. False when it still does not fit or storage is unavailable. O(bytes). */
+export function setItemEvictingPageCaches(key: string, text: string, storage?: PageCacheStorage): boolean {
+  try {
+    const target = storage ?? localStorage;
+    try {
+      target.setItem(key, text);
+      return true;
+    } catch {
+      evictPageCaches(target);
+    }
+    target.setItem(key, text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function flushScheduledPagesCachePersist() {
@@ -304,7 +324,7 @@ export function flushScheduledPagesCachePersist() {
 
   timed("savePagesCache", () => {
     for (const workspaceId of workspaceIds) {
-      if (workspaceCacheKey(workspaceId) === PAGE_OUTBOX_KEY) continue;
+      if (!isWorkspaceCacheKey(workspaceCacheKey(workspaceId))) continue;
       writeWorkspaceCache(workspaceCacheKey(workspaceId), pages[workspaceId]);
     }
     for (const legacyKey of LEGACY_PAGE_CACHE_KEYS) {
@@ -340,7 +360,7 @@ function loadSplitPagesCache(): Record<string, PageEntry[]> {
   try {
     for (let index = 0; index < localStorage.length; index += 1) {
       const key = localStorage.key(index);
-      if (!key?.startsWith(PAGE_CACHE_WORKSPACE_PREFIX) || key === PAGE_OUTBOX_KEY) continue;
+      if (!isWorkspaceCacheKey(key)) continue;
       const workspaceId = key.slice(PAGE_CACHE_WORKSPACE_PREFIX.length);
       const parsed = JSON.parse(localStorage.getItem(key) ?? "[]");
       pages[workspaceId] = Array.isArray(parsed) ? (parsed as PageEntry[]) : [];
@@ -373,6 +393,12 @@ function migrateLegacyPagesCache(): Record<string, PageEntry[]> {
 
 function workspaceCacheKey(workspaceId: string): string {
   return `${PAGE_CACHE_WORKSPACE_PREFIX}${workspaceId}`;
+}
+
+/** A workspace's page cache, never the outbox's own keys under the same prefix (the ledger, and
+ *  outboxRecovery's refused-edit marks, which eviction once deleted: devil S1, 2026-10-14). */
+function isWorkspaceCacheKey(key: string | null): key is string {
+  return key !== null && key.startsWith(PAGE_CACHE_WORKSPACE_PREFIX) && !key.startsWith(PAGE_OUTBOX_KEY);
 }
 
 function markDirtyWorkspaces(workspaceIds: string | string[]) {

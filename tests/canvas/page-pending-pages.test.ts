@@ -21,7 +21,7 @@ import { beforeEach, test } from "node:test";
 import { loadLedger } from "@osionos/outbox-ledger";
 
 import type { PageEntry } from "@/entities/page";
-import { flushScheduledPagesCachePersist, loadPagesCache, PAGE_OUTBOX_KEY, savePagesCache } from "@/store/pageStore.helpers";
+import { evictPageCaches, flushScheduledPagesCachePersist, loadPagesCache, PAGE_OUTBOX_KEY, savePagesCache } from "@/store/pageStore.helpers";
 import {
   createPendingKeeper,
   createUnloadGuard,
@@ -30,8 +30,11 @@ import {
   withPendingPages,
 } from "@/store/sync/pendingPages";
 import { saveOutboxLedger } from "@/store/sync/pageStamp";
+import { OUTBOX_RECOVERING_KEY } from "@/store/sync/outboxRecovery";
+import { createKnownStateWriter, KNOWN_DATABASE_STATE_STORAGE_KEY } from "@/widgets/database-view/model/knownDatabaseStorage";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 
-const DATABASES = "osionos.knownDatabaseState.v1";
+const DATABASES = KNOWN_DATABASE_STATE_STORAGE_KEY;
 let store = new Map<string, string>();
 let quota = Number.POSITIVE_INFINITY;
 
@@ -57,6 +60,7 @@ beforeEach(() => {
   store = new Map<string, string>();
   quota = Number.POSITIVE_INFINITY;
   Object.defineProperty(globalThis, "localStorage", { value: storage, configurable: true });
+  useToastStore.getState().clear();
 });
 
 test("a workspace cache that no longer fits is dropped, not left behind stale", () => {
@@ -138,4 +142,52 @@ test("the outbox ledger write makes room in the page caches, and the next load i
   quota = 0;
   assert.equal(saveOutboxLedger(PAGE_OUTBOX_KEY, { p1: "s3" }), false);
   assert.deepEqual(loadLedger(PAGE_OUTBOX_KEY), { p1: "s3" });
+});
+
+// devil S1: the recovering marks share the outbox's prefix; without them a refused edit's body is
+// taken by a newer server row.
+test("eviction keeps every outbox key, and the cache loader reads none of them as a workspace", () => {
+  store.set(PAGE_OUTBOX_KEY, JSON.stringify({ p1: "s1" }));
+  store.set(OUTBOX_RECOVERING_KEY, JSON.stringify({ r1: "2026-10-14T08:00:00Z" }));
+  store.set("osio:pages:ws1", JSON.stringify([page("p1", "ws1")]));
+  evictPageCaches(storage);
+  assert.deepEqual([...store.keys()].sort(), [PAGE_OUTBOX_KEY, OUTBOX_RECOVERING_KEY].sort());
+  assert.deepEqual(Object.keys(loadPagesCache()), []);
+});
+
+const storageWarnings = (): number =>
+  useToastStore.getState().toasts.filter((toast) => toast.title === "Browser storage is full").length;
+
+// devil D1, at the live origin's numbers: 1.44M of database state, a pending key that fits
+// without eviction, then a 5K database edit.
+test("a database write that no longer fits makes room in the page caches, never in the outbox", () => {
+  store.set(DATABASES, "d".repeat(1_440_000));
+  store.set("osio:pages:ws1", "c".repeat(950_000));
+  store.set(PAGE_OUTBOX_KEY, "l".repeat(120_000));
+  quota = 2_620_000;
+  assert.equal(keepPendingPages(Array.from({ length: 5 }, (_, index) => page(`p${index}`, "ws1", "x".repeat(21_200))), storage), true);
+  assert.equal(store.has("osio:pages:ws1"), true, "the pending key fitted without eviction");
+  const write = createKnownStateWriter(() => {}, storage);
+  assert.equal(write("d".repeat(1_445_000)), true);
+  assert.equal(store.get(DATABASES)?.length, 1_445_000);
+  assert.equal(store.has("osio:pages:ws1"), false);
+  assert.equal(store.get(PAGE_OUTBOX_KEY)?.length, 120_000);
+  assert.equal(storageWarnings(), 0);
+});
+
+test("a database state that still does not fit is warned about once, keeps its older copy and guards the unload", () => {
+  const listeners: string[] = [];
+  Object.defineProperty(globalThis, "addEventListener", { value: (type: string) => listeners.push(type), configurable: true });
+  Object.defineProperty(globalThis, "removeEventListener", { value: () => listeners.pop(), configurable: true });
+  store.set(DATABASES, "older");
+  quota = used() + 100;
+  const write = createKnownStateWriter(() => {}, storage);
+  assert.equal(write("d".repeat(1_000)), false);
+  assert.equal(write("d".repeat(2_000)), false);
+  assert.equal(store.get(DATABASES), "older");
+  assert.equal(storageWarnings(), 1);
+  assert.deepEqual(listeners, ["beforeunload"], "the browser asks before the tab is left");
+  quota = Number.POSITIVE_INFINITY;
+  assert.equal(write("d".repeat(3_000)), true);
+  assert.deepEqual(listeners, [], "kept: nothing to ask");
 });
