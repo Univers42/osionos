@@ -38,3 +38,22 @@ for (const { fileName, text, expected } of CASES) {
     await expect.poll(() => page.evaluate((id) => globalThis.__perfCodeText(id), pageId), { timeout: 15_000 }).toBe(expected);
   });
 }
+
+// A new file in a Windows browser: Monaco's default line ending follows the user agent, and the
+// sandbox is Linux — the editor wrote "all:\r\n" and make refused the rule (2026-10-14).
+test.describe("on a Windows browser", () => {
+  test.use({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" });
+  test("a new, empty Makefile is written with LF line endings", async ({ page }) => {
+    test.setTimeout(180_000);
+    await bootApp(page);
+    await page.locator("[data-osio-workbench]").waitFor({ state: "visible", timeout: 60_000 });
+    const pageId = await page.evaluate(() => globalThis.__perfOpenCodePage("Makefile", ""));
+    await page.locator(".monaco-editor textarea").first().waitFor({ state: "attached", timeout: 90_000 });
+    await page.locator(".monaco-editor .view-lines").first().click();
+    await page.keyboard.type("all:");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Tab");
+    await page.keyboard.type("echo ok");
+    await expect.poll(() => page.evaluate((id) => globalThis.__perfCodeText(id), pageId), { timeout: 15_000 }).toBe("all:\n\techo ok");
+  });
+});

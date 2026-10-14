@@ -120,6 +120,10 @@ export function useMonacoEditor(
     const current = configRef.current;
     const model = acquireModel(current.uri, current.readInitialText(), "plaintext", pageId);
     model.detectIndentation(!indentsWithTabs(current.uri), 4);
+    // The sandbox is Linux whatever the browser runs on: Monaco's default line ending follows
+    // the user agent, so in a Windows browser a new Makefile was written "all:\r\n" and make
+    // refused it (2026-10-14). A file whose own text holds CRLF keeps it.
+    if (!current.readInitialText().includes("\r\n")) model.setEOL(editor.EndOfLineSequence.LF);
     const stopTheme = watchEditorTheme(host);
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const instance = editor.create(host, {

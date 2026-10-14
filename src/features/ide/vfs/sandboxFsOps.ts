@@ -16,7 +16,7 @@ import type { ListedEntry } from "./types";
 /** The wire shape both transports return: the raw exec result the bridge
  *  relays. Parsing + taxonomy mapping happen HERE, unit-tested, never server-side. */
 export type FsOpResult = { exitCode: number | null; output: string };
-export type FsOpName = "read" | "list" | "stat" | "mkdir" | "delete" | "rename" | "write";
+export type FsOpName = "read" | "list" | "stat" | "mkdir" | "delete" | "rename" | "write" | "hashes";
 export type FsOpParams = {
   path: string;
   to?: string;
@@ -25,6 +25,7 @@ export type FsOpParams = {
   recursive?: boolean;
   overwrite?: boolean;
   contentBase64?: string;
+  paths?: readonly string[];
 };
 export type FsOpTransport = (op: FsOpName, params: FsOpParams) => Promise<FsOpResult>;
 
@@ -67,6 +68,38 @@ export function parseListOutput(output: string): ListedEntry[] {
     entries.push({ name: isDir ? line.slice(0, -1) : line, kind: isDir ? "dir" : "file" });
   }
   return entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+
+const HASH_LINE = /^(\\?)([0-9a-f]{64}|-) [ *]\.\/(.*)$/;
+const UNESCAPE = /\\(\\|n|r)/g;
+
+/** The hashes script's output → path → sha16 (the fs-agent's hash), or null for
+ *  a path that does not exist. A path with no line (a directory, an unreadable
+ *  file) is absent: unknown, not missing. GNU sha256sum prefixes a line whose
+ *  name holds a backslash with one and escapes the name; busybox never does. */
+export function parseHashesOutput(output: string): Map<string, string | null> {
+  const hashes = new Map<string, string | null>();
+  for (const line of clean(output).split("\n")) {
+    const match = HASH_LINE.exec(line);
+    if (!match) continue;
+    const [, escaped, hex, name] = match;
+    const path = escaped ? name.replace(UNESCAPE, (_, c: string) => (c === "n" ? "\n" : c === "r" ? "\r" : "\\")) : name;
+    hashes.set(path, hex === "-" ? null : hex.slice(0, 16));
+  }
+  return hashes;
+}
+
+// Half the bridge's MAX_HASH_PATHS: one attach (MAX_ATTACH_FILES) is one exec.
+const HASH_BATCH = 500;
+
+/** parseHashesOutput over `paths`, one exec per HASH_BATCH paths. O(n) argv bytes. */
+export async function sandboxHashes(transport: FsOpTransport, paths: readonly string[]): Promise<Map<string, string | null>> {
+  const hashes = new Map<string, string | null>();
+  for (let at = 0; at < paths.length; at += HASH_BATCH) {
+    const result = await transport("hashes", { path: "", paths: paths.slice(at, at + HASH_BATCH) });
+    for (const [path, hash] of parseHashesOutput(outputOrThrow(result, "sandbox:hashes"))) hashes.set(path, hash);
+  }
+  return hashes;
 }
 
 /** `kind|sizeBytes|mtimeSec` → stat fields. */

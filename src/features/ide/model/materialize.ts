@@ -25,7 +25,7 @@ import { sha16 } from "./ideFsEcho";
 import { ideOutput } from "./ideOutputBus";
 import { useIdeSyncConflicts } from "./ideSyncConflicts";
 import {
-  reconcileOnAttach, MAX_ATTACH_FILES, ATTACH_FILE_CAP_REASON, type DesiredFile, type ReconcileReport,
+  reconcileOnAttach, MAX_ATTACH_FILES, ATTACH_FILE_CAP_REASON, type DesiredFile, type ReconcileOptions, type ReconcileReport,
 } from "./reconcileOnAttach";
 
 import type { ReadableViews } from "@/features/page-file/model/pageFileFacadeViews";
@@ -36,6 +36,8 @@ export interface AttachDeps {
   workspaceId: string;
   session: Pick<InboundSession, "views" | "run">;
   provider: FsProvider;
+  /** One call for every path's sandbox hash (reconcileOnAttach's theirsHashes). */
+  theirsHashes?: ReconcileOptions["theirsHashes"];
 }
 
 /** `unloaded`: pages skipped because their body never loaded; `failed`: every other skip. */
@@ -162,7 +164,7 @@ export async function attachWorkspace(deps: AttachDeps): Promise<MaterializeResu
   const { files, skipped } = desiredSet(deps.session.views);
   const byPath = new Map(files.map((file) => [file.path, file]));
   const report = await reconcileOnAttach({
-    workspaceId: deps.workspaceId, desired: files, provider: deps.provider,
+    workspaceId: deps.workspaceId, desired: files, provider: deps.provider, theirsHashes: deps.theirsHashes,
     // No ledger + a loaded, empty page: the sandbox copy wins — decideInboundWrite's live rule.
     // A copy that differs only by a legacy `updated:` line is this page: ours, in today's form.
     tiebreak: (path, theirs) => {
