@@ -74,19 +74,19 @@ export const RailHomeButton: React.FC = () => {
           data-rail-home-menu
           role="menu"
           style={{ position: "fixed", top: pos.top, left: pos.left }}
-          className="z-[var(--osio-z-modal)] min-w-[184px] rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1.5 shadow-[var(--osio-shadow-menu)]"
+          className="osio-surface-overlay z-[var(--osio-z-modal)] min-w-[184px]"
         >
-          <div className="px-2.5 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">Home</div>
+          <div className="px-2 pb-1 pt-0.5 text-2xs font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">Home</div>
           {HOME_VARIANTS.map((item) => (
             <button
               key={item.id}
               type="button"
               role="menuitem"
               onClick={() => pick(item.id)}
-              className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors ${
+              className={`flex h-[var(--osio-control-h-sm)] w-full items-center gap-2 rounded-[var(--osio-radius-sm)] px-2 text-left text-sm transition-colors ${
                 variant === item.id
                   ? "bg-[var(--osio-accent-subtle)] text-[var(--osio-accent-text)]"
-                  : "text-[var(--osio-fg-default)] hover:bg-[var(--osio-accent-subtle)] hover:text-[var(--osio-accent-text)]"
+                  : "text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]"
               }`}
             >
               <item.Icon size={15} aria-hidden="true" />

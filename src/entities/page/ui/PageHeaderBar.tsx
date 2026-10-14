@@ -50,7 +50,7 @@ import {
   usePageActions,
 } from '@/entities/page';
 import type { PageConfig, PageFont, PageVersion } from '@/shared/config/pageConfigStore';
-import { Dropdown, useClickOutside, useEscapeKey, useToastStore } from '@/shared/ui';
+import { Dropdown, IconButton, useClickOutside, useEscapeKey, useToastStore } from '@/shared/ui';
 import { usePageStore } from '@/store/usePageStore';
 
 import { PageBreadcrumbs } from './PageBreadcrumbs';
@@ -114,11 +114,11 @@ const MenuButton: React.FC<MenuButtonProps> = ({ icon, label, onClick, checked, 
   <button
     type="button"
     onClick={onClick}
-    className={`flex min-h-8 w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-[var(--osio-bg-hover)] ${destructive ? 'text-[var(--osio-danger)]' : ''}`}
+    className={`flex h-[var(--osio-control-h-sm)] w-full items-center gap-2 rounded-[var(--osio-radius-sm)] px-2 text-left text-sm hover:bg-[var(--osio-bg-hover)] ${destructive ? 'text-[var(--osio-danger)]' : ''}`}
   >
     <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--osio-fg-muted)]">{icon}</span>
     <span className="min-w-0 flex-1 truncate">{label}</span>
-    {badge && <span className="rounded bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-xs text-[var(--osio-fg-muted)]">{badge}</span>}
+    {badge && <span className="rounded-full bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-xs text-[var(--osio-fg-muted)]">{badge}</span>}
     {shortcut && <span className="text-xs text-[var(--osio-fg-subtle)]">{shortcut}</span>}
     {trailing && <span className="max-w-20 truncate text-xs text-[var(--osio-fg-subtle)]">{trailing}</span>}
     {checked && <Check size={14} className="shrink-0 text-[var(--osio-accent)]" />}
@@ -126,7 +126,7 @@ const MenuButton: React.FC<MenuButtonProps> = ({ icon, label, onClick, checked, 
 );
 
 const AnalyticsPanel: React.FC<{ config: PageConfig }> = ({ config }) => (
-  <div className="border-t border-[var(--osio-border-default)] px-3 py-2 text-xs text-[var(--osio-fg-muted)]">
+  <div className="border-t border-[var(--osio-border-default)] px-2 py-2 text-xs text-[var(--osio-fg-muted)]">
     <p className="mb-1 font-medium text-[var(--osio-fg-default)]">Updates & analytics</p>
     <div className="grid grid-cols-2 gap-1">
       <span>Actions: {config.analytics.actions}</span>
@@ -140,15 +140,15 @@ const AnalyticsPanel: React.FC<{ config: PageConfig }> = ({ config }) => (
 );
 
 const VersionsPanel: React.FC<{ versions: PageVersion[]; onRestore: (version: PageVersion) => void; onSave: () => void }> = ({ versions, onRestore, onSave }) => (
-  <div className="border-t border-[var(--osio-border-default)] px-3 py-2 text-xs text-[var(--osio-fg-muted)]">
+  <div className="border-t border-[var(--osio-border-default)] px-2 py-2 text-xs text-[var(--osio-fg-muted)]">
     <div className="mb-1.5 flex items-center justify-between">
       <p className="font-medium text-[var(--osio-fg-default)]">Version history</p>
-      <button type="button" onClick={onSave} className="rounded border border-[var(--osio-border-default)] px-2 py-0.5 font-medium text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">Save version</button>
+      <button type="button" onClick={onSave} className="rounded-[var(--osio-radius-sm)] border border-[var(--osio-border-default)] px-2 py-0.5 font-medium text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]">Save version</button>
     </div>
     {versions.length === 0 ? <p>No version saved yet — edits autosave, or click “Save version”.</p> : (
       <div className="max-h-64 space-y-1 overflow-y-auto">
         {versions.map((version) => (
-          <button key={version.id} type="button" title="Restore this version" onClick={() => onRestore(version)} className="w-full rounded px-2 py-1 text-left hover:bg-[var(--osio-bg-hover)]">
+          <button key={version.id} type="button" title="Restore this version" onClick={() => onRestore(version)} className="w-full rounded-[var(--osio-radius-sm)] px-2 py-1 text-left hover:bg-[var(--osio-bg-hover)]">
             <span className="block text-[var(--osio-fg-default)]">{version.label}</span>
             <span>{new Date(version.createdAt).toLocaleString()}</span>
           </button>
@@ -219,18 +219,12 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
           <PageCommentsButton pageId={pageId} />
           <PageShareButton pageId={pageId} workspaceId={workspaceId} />
           <div className="relative">
-            <button
-              ref={triggerRef}
-              type="button"
-              onClick={() => setConfigOpen((open) => !open)}
-              className="flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
-              aria-label="Open page configuration"
-            >
+            <IconButton ref={triggerRef} label="Open page configuration" onClick={() => setConfigOpen((open) => !open)}>
               <MoreHorizontal size={18} />
-            </button>
+            </IconButton>
             {configOpen && (
-              <div ref={menuRef} className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 max-h-[80vh] w-72 overflow-y-auto rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-2 shadow-[var(--osio-shadow-menu)]">
-                <div className="px-3 pb-2">
+              <div ref={menuRef} data-testid="page-config-menu" className="osio-surface-overlay absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 max-h-[80vh] w-72 overflow-y-auto">
+                <div className="px-2 pb-2">
                   <div className="flex h-8 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2">
                     <Search size={14} className="text-[var(--osio-fg-muted)]" />
                     <input value={actionQuery} onChange={(event) => setActionQuery(event.target.value)} placeholder="Search actions..." className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
@@ -239,13 +233,13 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
 
                 {hasActionMatch && (
                   <>
-                    <div className="grid grid-cols-3 gap-1 px-3 pb-2">
+                    <div className="grid grid-cols-3 gap-1 px-2 pb-2">
                       {FONT_OPTIONS.map((font) => (
                         <button
                           key={font.id}
                           type="button"
                           onClick={() => runPageAction(actions.setFont(font.id), showActionError)}
-                          className={`rounded-md px-2 py-2 text-center hover:bg-[var(--osio-bg-hover)] ${actions.config.font === font.id ? 'text-[var(--osio-accent)]' : ''}`}
+                          className={`rounded-[var(--osio-radius-sm)] px-2 py-2 text-center hover:bg-[var(--osio-bg-hover)] ${actions.config.font === font.id ? 'text-[var(--osio-accent)]' : ''}`}
                         >
                           <span className={`block text-xl ${fontSampleClass(font.id)}`}>{font.sample}</span>
                           <span className="text-xs">{font.label}</span>
@@ -276,7 +270,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                           onClick={() => runPageAction(actions.removeHeaderCanvas(), showActionError)}
                         />
                       )}
-                      <div className="flex min-h-9 items-center gap-2 px-3 py-1.5 text-sm hover:bg-[var(--osio-bg-hover)]">
+                      <div className="flex min-h-[var(--osio-control-h-sm)] items-center gap-2 rounded-[var(--osio-radius-sm)] px-2 py-1 text-sm hover:bg-[var(--osio-bg-hover)]">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--osio-fg-muted)]"><Languages size={16} /></span>
                         <span className="min-w-0 flex-1 truncate">Translate</span>
                         <span className="flex min-w-0 max-w-32">
@@ -289,7 +283,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                             onChange={actions.setTranslateLocale}
                           />
                         </span>
-                        <button type="button" className="rounded bg-[var(--osio-accent)] px-2 py-1 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90" onClick={() => runPageAction(actions.translate(actions.translateLocale), showActionError)}>Apply</button>
+                        <button type="button" className="rounded-[var(--osio-radius-sm)] bg-[var(--osio-accent)] px-2 py-1 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90" onClick={() => runPageAction(actions.translate(actions.translateLocale), showActionError)}>Apply</button>
                       </div>
                     </div>
 
@@ -309,7 +303,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                     {/* Debug tools: layout/edit diagnostics; toggles keep the menu
                         open so several can be flipped in one visit, and persist. */}
                     <div className="border-t border-[var(--osio-border-default)] py-1">
-                      <div className="flex items-center gap-1.5 px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">
+                      <div className="flex items-center gap-1.5 px-2 pb-1 pt-1.5 text-3xs font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">
                         <Bug size={11} className="shrink-0" />
                         Tools
                       </div>
@@ -330,7 +324,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                 {actions.detailPanel === 'analytics' && <AnalyticsPanel config={actions.config} />}
                 {actions.detailPanel === 'versions' && <VersionsPanel versions={actions.versions} onRestore={(version) => runPageAction(actions.restoreVersion(version), showActionError)} onSave={() => runPageAction(actions.saveVersion(), showActionError)} />}
 
-                <div className="border-t border-[var(--osio-border-default)] px-3 py-2 text-xs text-[var(--osio-fg-subtle)]">
+                <div className="border-t border-[var(--osio-border-default)] px-2 py-2 text-xs text-[var(--osio-fg-subtle)]">
                   <p>Word count: {actions.wordCount} words</p>
                   <p>Last action: {actions.actionMessage ?? actions.config.lastAction?.action ?? 'None'}</p>
                 </div>

@@ -47,7 +47,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
       ref={rootRef}
       role="dialog"
       aria-label="Share"
-      className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 w-[380px] rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] p-3 shadow-[var(--osio-shadow-menu)]"
+      className="osio-surface-overlay absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 w-[380px]"
     >
       <div className="mb-2 flex items-center justify-between">
         <div>
