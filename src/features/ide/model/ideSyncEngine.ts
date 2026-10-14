@@ -39,6 +39,32 @@ export function syncedHashOf(workspaceId: string, relPath: string): string | nul
   return syncLedgerStore().get(workspaceId, relPath) ?? null;
 }
 
+// Pages the inbound side archived because the shell deleted their files, with every
+// descendant the store's archive cascades onto (inboundArchive archiveNow). The writer never
+// removes their files: what is at those paths now, the shell put there, and a `git clone`
+// over an `rm -rf` puts the same bytes back — an agreement left at a cascaded child's path
+// matched them, and the writer deleted the clone (devil C1, 2026-10-14). The writer takes a
+// mark when it skips that remove. In memory: a reload starts the writer with no baseline.
+// Caveat: a page restored from the trash in the app before any writer round keeps its mark,
+// so archiving it in the app later leaves its file in the sandbox — a leftover, never a loss.
+const shellArchived = new Map<string, Set<string>>();
+
+export function markShellArchived(workspaceId: string, pageIds: Iterable<string>): void {
+  let marks = shellArchived.get(workspaceId);
+  if (marks === undefined) shellArchived.set(workspaceId, (marks = new Set()));
+  for (const id of pageIds) marks.add(id);
+}
+
+export function unmarkShellArchived(workspaceId: string, pageIds: Iterable<string>): void {
+  const marks = shellArchived.get(workspaceId);
+  if (marks !== undefined) for (const id of pageIds) marks.delete(id);
+}
+
+/** True once for a marked page; the mark is gone after. */
+export function takeShellArchived(workspaceId: string, pageId: string): boolean {
+  return shellArchived.get(workspaceId)?.delete(pageId) ?? false;
+}
+
 /**
  * The ONE bookkeeping for a write we push into the sandbox (ideFsWrite, the
  * attach reconcile): the echo hash, so the fs-agent's re-emission is suppressed,

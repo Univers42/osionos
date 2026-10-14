@@ -72,6 +72,7 @@ export function createInboundSession(deps: InboundSessionDeps): InboundSession {
   const ctx: ExecContext = {
     workspaceId: deps.workspaceId, facade, view, pending, landed, restore: deps.restore,
     stat: deps.statMany ? createBatchedStat({ stat: deps.stat, statMany: deps.statMany, duePaths: pending.duePaths }) : deps.stat,
+    statDir: deps.stat,
     settle: () => drain.flush(), // only ever called from a queued task, after `drain` exists
   };
   const drain = createInboundDrain({ store: deps.store, views, ctx, schedule: deps.schedule, enqueue: deps.enqueue });

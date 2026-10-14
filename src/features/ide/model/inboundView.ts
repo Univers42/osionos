@@ -46,6 +46,8 @@ export interface ExecView extends InboundView {
   ownerOfDir(dirPath: string): string | undefined;
   /** The children directory of a non-folder page that HAS children in the index. O(1). */
   childrenDirOf(pageId: string): string | undefined;
+  /** A live page and every live page under it: what the store's archive cascades onto. O(pages). */
+  subtreeOf(pageId: string): readonly string[];
 }
 
 export function createInboundView(deps: InboundViewDeps): ExecView {
@@ -74,6 +76,7 @@ export function createInboundView(deps: InboundViewDeps): ExecView {
     agreedPageHash: (path, inboundHash) => deps.landed.pageHashAt(path, inboundHash),
     isEchoHash: (hash) => isEchoHash(hash),
     childrenOf: (entryId) => childrenOf(views, entryId),
+    subtreeOf: (pageId) => subtreeOf(views, pageId),
     localText: (pageId) => deps.readText(pageId),
     ownerOfDir: (dirPath) => views.indexOf().ownerOfDir(dirPath),
     childrenDirOf(pageId) {
@@ -129,6 +132,19 @@ function viewEntryOf(deps: InboundViewDeps, found: PageFacadeEntry, path: string
   if (synthetic) return { entryId: found.id, pageId, role: "folder-meta", path };
   const page = deps.views.pageById(pageId);
   return { entryId: found.id, pageId, role: page !== undefined && kindOfPage(page) === "code" ? "code-file" : "page-file", path };
+}
+
+function subtreeOf(views: ReadableViews, rootId: string): string[] {
+  const childrenByParent = new Map<string, string[]>();
+  for (const entry of views.indexOf().entries) {
+    if (entry.parentId === null) continue;
+    const siblings = childrenByParent.get(entry.parentId);
+    if (siblings === undefined) childrenByParent.set(entry.parentId, [entry.id]);
+    else siblings.push(entry.id);
+  }
+  const ids = [rootId];
+  for (let at = 0; at < ids.length; at += 1) ids.push(...(childrenByParent.get(ids[at]) ?? []));
+  return ids;
 }
 
 /** The pages directly inside a directory entry: each page once (its FILE, or a
