@@ -221,6 +221,24 @@ test.describe("editor menu chrome", () => {
     });
   }
 
+  // The browser draws a frame around its own colour swatch; an osio-field border
+  // on the input drew a second one around it. Save is the kit's primary button.
+  test("the colour profile panel has bare swatch inputs and a kit Save button", async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openFreshPage(page, baseURL);
+    await createParagraphs(page, ["Context target"]);
+    await openBlockContextMenuForEditor(getEditors(page).first());
+    await page.getByTestId("block-context-menu").getByRole("menuitem", { name: /Create color profile/ }).hover();
+    const panel = page.getByRole("complementary", { name: "Color profile properties" });
+    await expect(panel).toBeVisible();
+    for (const input of await panel.locator('input[type="color"]').all()) {
+      expect(await input.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("0px");
+    }
+    const save = panel.getByRole("button", { name: /Save profile/ });
+    expect(await save.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(await resolveToken(page, "background-color", "--osio-accent"));
+    expect(await save.evaluate((el) => getComputedStyle(el).height)).toBe(await resolveToken(page, "height", "--osio-control-h-sm"));
+  });
+
   test("the colour menu's section label is a sentence-case menu label", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await typeInFreshEditor(page, "/");
