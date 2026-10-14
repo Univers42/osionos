@@ -169,8 +169,13 @@ export function createFetchPages(set: SetFn, get: GetFn) {
         `/api/pages/all?workspaceId=${workspaceId}`,
         pageJwt,
       );
-      lastFetchedAt.set(workspaceId, Date.now()); // stamp only after a confirmed pull
-      if (Array.isArray(data)) applyServerPages(set, workspaceId, data, true);
+      // A 200 whose body is not a page list merged nothing: stamping it would tell
+      // the attach (inboundLive pullPages) a pull landed, and it would reconcile
+      // the localStorage cache against the sandbox on a server that said nothing.
+      if (Array.isArray(data)) {
+        lastFetchedAt.set(workspaceId, Date.now()); // stamp only after a confirmed pull
+        applyServerPages(set, workspaceId, data, true);
+      }
       set((s) => ({
         loadingIds: new Set(
           [...s.loadingIds].filter((id) => id !== workspaceId),

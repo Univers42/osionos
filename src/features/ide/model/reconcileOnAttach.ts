@@ -41,7 +41,10 @@ import { recordOutboundWrite, recordSyncedHash, syncedHashOf } from "./ideSyncEn
 // STOPPED_REASON and cost no call; only the at most `maxConcurrent` files already in
 // flight meet it too. A 1 200-file tree against a bridge whose burst ends at 120
 // requests made 5 535 requests before the stop, and makes 125 with it (ide-attach-stop,
-// 2026-10-14).
+// 2026-10-14). A hashes call that fails per-op (a 500) is read around once — that page's
+// files are read one by one — and the walk ends right after it, so a bridge that answers
+// every hashes call with a 500 costs 1 hashes call and 500 reads over the same tree, not
+// 3 and 1 200.
 
 // Ponytail: a file over 512 KiB on either side is skipped, not reconciled: a
 // shell edit to one is neither imported nor overwritten until the cap moves. It
@@ -94,6 +97,8 @@ type Run = {
   known: ReadonlyMap<string, string | null>;
   /** The provider-wide failure that ended the walk, or null. */
   stopped: string | null;
+  /** The first hashes call that failed per-op: only its page falls back to reads. */
+  hashesFailed: string | null;
 };
 type Target = { relPath: string; path: VPath; bytes: Uint8Array; hash: string };
 
@@ -204,15 +209,32 @@ async function reconcileFile(run: Run, file: DesiredFile): Promise<void> {
   }
 }
 
-/** One page's hashes. A rejection falls back to reading each file, unless no path would answer. */
+/**
+ * One page's hashes. A rejection that can belong to one op (a 500) is read around:
+ * that page's files are read one by one. It is also the last page read — see
+ * `endAfterFailedHashes` — unless no path would answer either (provider-wide).
+ */
 async function knownHashes(run: Run, paths: readonly string[]): Promise<ReadonlyMap<string, string | null>> {
   if (!run.opts.theirsHashes || run.stopped !== null) return new Map();
   try {
     return await run.opts.theirsHashes(paths);
   } catch (error) {
     if (isProviderWide(error)) run.stopped = messageOf(error);
+    else if (run.hashesFailed === null) run.hashesFailed = messageOf(error);
     return new Map();
   }
+}
+
+/**
+ * Ends the walk after the page read around a failed hashes call: its reason names that
+ * call, and every later page is skipped through the same `stopped` mechanism — skipped
+ * with STOPPED_REASON, counted as `stopped`, never FAILED, and never attempted.
+ * Ponytail: one transient hashes failure therefore leaves every later page unreconciled
+ * until the next attach — the bridge that answered hashes a moment ago is not retried.
+ * O(1).
+ */
+function endAfterFailedHashes(run: Run): void {
+  if (run.hashesFailed !== null && run.stopped === null) run.stopped = `the sandbox hashes call failed (${run.hashesFailed})`;
 }
 
 /** Run `worker` over `items` with at most `limit` in flight. */
@@ -230,7 +252,7 @@ async function runBounded<T>(items: readonly T[], limit: number, worker: (item: 
 
 /** Reconcile `desired` into `provider` (see the file header for the rules). */
 export async function reconcileOnAttach(opts: ReconcileOptions): Promise<ReconcileReport> {
-  const run: Run = { opts, hash: opts.hash ?? sha16, report: emptyReconcileReport(), dirs: new Map(), known: new Map(), stopped: null };
+  const run: Run = { opts, hash: opts.hash ?? sha16, report: emptyReconcileReport(), dirs: new Map(), known: new Map(), stopped: null, hashesFailed: null };
   const seen = new Set<string>();
   const accepted: DesiredFile[] = [];
   for (const file of opts.desired) {
@@ -245,6 +267,7 @@ export async function reconcileOnAttach(opts: ReconcileOptions): Promise<Reconci
     const page = accepted.slice(at, at + ATTACH_PAGE_FILES);
     run.known = await knownHashes(run, page.map((file) => file.path));
     await runBounded(page, limit, (file) => reconcileFile(run, file));
+    endAfterFailedHashes(run);
   }
   return run.report;
 }

@@ -28,7 +28,7 @@ import { attachSummary, attachWorkspace, loadUnloadedBodies } from "./materializ
 import { syncedHashOf } from "./ideSyncEngine";
 
 import type { Schedule } from "./inboundPending";
-import { attachUnderLead, type SerialQueue } from "./inboundPipeline";
+import { attachUnderLead, leadsInbound, type SerialQueue } from "./inboundPipeline";
 import type { FsProvider } from "../vfs/types";
 
 // Ponytail: a hidden tab's timers are throttled (Chrome: about once a minute
@@ -92,10 +92,14 @@ export function createLiveInbound(workspaceId: string, queue: SerialQueue): Live
   };
   // Every "ready" re-enters here, so it supersedes whatever retry was armed before it.
   const attach = async (): Promise<void> => {
+    // A retry whose timer fired before dispose is still queued behind the task in
+    // front of it: the session is gone by then, so this attach touches nothing at
+    // all — no pull, no provider call, no Output line.
+    if (retry.disposed) return;
     clearRetry(retry);
     const outcome = await attachSandbox({ workspaceId, session, provider: sandbox, transport });
     if (outcome === "reconciled") { retry.attempt = 0; return; }
-    armRetry(retry, enqueue, attach);
+    armRetry(retry, enqueue, attach, workspaceId);
   };
   return { session, attach };
 }
@@ -112,12 +116,19 @@ function clearRetry(retry: RetryState): void {
   retry.timer = undefined;
 }
 
-/** Re-queues `task` on the next backoff step, unless the effect is disposed. O(1). */
-function armRetry(retry: RetryState, enqueue: (task: () => Promise<void>) => void, task: () => Promise<void>): void {
+/**
+ * Re-queues `task` on the next backoff step, unless the effect is disposed or the tab
+ * stopped leading the workspace (the check routeFsEvent makes): a follower's retry is
+ * dropped, and its next leadership gain or "ready" attaches instead. O(1).
+ */
+function armRetry(retry: RetryState, enqueue: (task: () => Promise<void>) => void, task: () => Promise<void>, workspaceId: string): void {
   if (retry.disposed) return;
   const delay = RETRY_BACKOFF_MS[Math.min(retry.attempt, RETRY_BACKOFF_MS.length - 1)];
   retry.attempt += 1;
-  retry.timer = setTimeout(() => { retry.timer = undefined; enqueue(task); }, delay);
+  retry.timer = setTimeout(() => {
+    retry.timer = undefined;
+    if (leadsInbound(workspaceId)) enqueue(task);
+  }, delay);
 }
 
 // Caveat: 30 s is a guess at the slowest page-list pull; a pull still running then leaves

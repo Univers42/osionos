@@ -24,6 +24,10 @@
 // A2 (attach lane, 2026-10-14): an attach whose server pull did not land reconciles NOTHING
 // into the sandbox — the localStorage cache is never written over the sandbox — says so on
 // Output (ATTACH_DEFERRED) and is re-queued on a 5 s/15 s/30 s/60 s backoff until it lands.
+// A pull that landed is a 200 whose body WAS a page list: a 200 answering anything else merged
+// nothing (R4), so it defers too. The retry only runs while the tab still leads the workspace
+// (R3) and only if the sync effect is still mounted (R2): a retry whose timer fired before
+// dispose is still queued behind the task in front of it, and must touch nothing.
 import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import test from "node:test";
@@ -377,6 +381,72 @@ test("A2: disposal before the retry stops the schedule — no further page pull"
     assert.equal(pulls(), 1, "a disposed effect still pulled the pages");
   } finally {
     ctx.mock.timers.reset();
+    stop();
+    t.close();
+  }
+});
+
+test("A2: a retry queued before the effect was disposed pulls nothing and writes nothing", async () => {
+  const t = await tab(tree(), false);
+  const { stop } = await synced(t);
+  const pulls = countedPull(() => { throw new Error("BaaS request failed with 503"); });
+  const queue = createSerialQueue(() => undefined);
+  const live = createLiveInbound(t.ws, queue);
+  const lines = () => useIdeOutputBus.getState().lines.length;
+  const seen = { lines: lines(), writes: t.writes() };
+  let release = (): void => undefined;
+  const busy = new Promise<void>((resolve) => { release = resolve; });
+  const inFront = queue.run(async () => { await busy; });
+  const queued = queue.run(() => live.attach()); // the retry's place once its timer fired
+  live.session.dispose(); // the sync effect's cleanup, while this attach still waits
+  release();
+  await Promise.all([inFront, queued]);
+  assert.equal(pulls(), 0, "a disposed session still pulled the pages");
+  assert.equal(t.writes() - seen.writes, 0, "a disposed session still wrote to the sandbox");
+  assert.equal(lines(), seen.lines, "a disposed session still wrote an Output line");
+  stop();
+  t.close();
+});
+
+test("A2: a retry that fires after the lead was released is dropped, not queued", async (ctx) => {
+  const t = await tab(tree(), false);
+  const { stop } = await synced(t);
+  await t.leaderCloses(); // this tab leads now: only its attach may reconcile the tree
+  const pulls = countedPull(() => { throw new Error("BaaS request failed with 503"); });
+  const queue = createSerialQueue(() => undefined);
+  const live = createLiveInbound(t.ws, queue);
+  ctx.mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    await live.attach();
+    assert.equal(pulls(), 1, "setup: the leading attach pulled once and deferred");
+    t.close(); // the lead is released: another tab applies the tree now
+    ctx.mock.timers.tick(5_000);
+    await queue.idle();
+    assert.equal(pulls(), 1, "a retry from a tab that no longer leads pulled the pages again");
+  } finally {
+    live.session.dispose();
+    ctx.mock.timers.reset();
+    stop();
+    t.close();
+  }
+});
+
+test("A2: a 200 whose body is not a page list is not a pull: the attach defers and writes nothing", async () => {
+  const t = await tab(tree(), false);
+  const { stop, path } = await synced(t);
+  await t.leaderCloses();
+  await t.drop(path); // the shell removed X's file: a reconciled attach would write it back
+  const pulls = countedPull(() => ({})); // 200, but no page array: nothing was merged
+  const live = createLiveInbound(t.ws, createSerialQueue(() => undefined));
+  const deferred = () => useIdeOutputBus.getState().lines.filter((line) => line.channel === "fs-sync" && line.text === ATTACH_DEFERRED).length;
+  const seen = { writes: t.writes(), deferred: deferred() };
+  try {
+    await live.attach();
+    assert.equal(pulls(), 1, "the attach did not ask the server once more");
+    assert.equal(t.writes() - seen.writes, 0, "the sandbox was written from the localStorage cache");
+    assert.equal(deferred(), seen.deferred + 1, "Output does not say the reconcile was deferred");
+  } finally {
+    live.session.dispose();
     stop();
     t.close();
   }
