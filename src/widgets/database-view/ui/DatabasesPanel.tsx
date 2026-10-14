@@ -77,7 +77,7 @@ const MountGroup: React.FC<{ source: LiveSourceMount; query: string }> = ({ sour
                 className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left hover:bg-[var(--osio-bg-hover)]"
               >
                 <Table2 size={13} className="shrink-0 text-[var(--osio-fg-subtle)]" />
-                <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--osio-fg-default)]">{t.table}</span>
+                <span className="min-w-0 flex-1 truncate text-sm text-[var(--osio-fg-default)]">{t.table}</span>
                 <span className="shrink-0 text-2xs tabular-nums text-[var(--osio-fg-subtle)]">{t.columnCount} cols</span>
               </button>
             ))

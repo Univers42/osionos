@@ -52,7 +52,7 @@ export const IdeInlineInput: React.FC<Props> = ({ initialValue = "", placeholder
       }}
       onBlur={commit}
       style={{ marginLeft: 8 + depth * 12 }}
-      className="my-[2px] mr-2 w-[calc(100%-16px)] rounded-xs border border-[var(--osio-accent)] bg-[var(--osio-code-bg)] px-1 py-[1px] text-[13px] text-[var(--osio-code-fg)] outline-none"
+      className="my-[2px] mr-2 w-[calc(100%-16px)] rounded-xs border border-[var(--osio-accent)] bg-[var(--osio-code-bg)] px-1 py-[1px] text-sm text-[var(--osio-code-fg)] outline-none"
     />
   );
 };

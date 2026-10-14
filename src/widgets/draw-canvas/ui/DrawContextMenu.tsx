@@ -66,7 +66,7 @@ function Item({ label, hint, danger, onPick }: { label: string; hint?: string; d
       type="button"
       role="menuitem"
       onClick={onPick}
-      className={`flex h-8 w-full items-center justify-between gap-6 px-3 text-left text-[13px] transition-colors hover:bg-[var(--osio-bg-hover)] ${
+      className={`flex h-8 w-full items-center justify-between gap-6 px-3 text-left text-sm transition-colors hover:bg-[var(--osio-bg-hover)] ${
         danger ? "text-[var(--osio-danger,#e03131)]" : "text-[var(--osio-fg-default)]"
       }`}
     >

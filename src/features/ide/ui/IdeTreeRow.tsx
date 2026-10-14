@@ -62,7 +62,7 @@ export const IdeTreeRow: React.FC<{ node: IdeTreeNode; depth: number }> = ({ nod
         onClick={() => (node.isFolder ? tree.toggle(id) : tree.openFile(node))}
         style={{ paddingLeft: 8 + depth * 12 }}
         className={
-          "group flex cursor-pointer items-center gap-1.5 py-[3px] pr-1 text-[13px] " +
+          "group flex cursor-pointer items-center gap-1.5 py-[3px] pr-1 text-sm " +
           (isActive
             ? "bg-[var(--osio-code-active-line,rgba(127,127,127,0.14))] text-[var(--osio-code-fg)] "
             : "text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.10))] ") +

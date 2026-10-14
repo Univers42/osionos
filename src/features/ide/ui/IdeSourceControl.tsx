@@ -42,7 +42,7 @@ export const IdeSourceControl: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full flex-col text-[13px] text-[var(--osio-code-fg)]">
+    <div className="flex h-full flex-col text-xs text-[var(--osio-code-fg)]">
       <div className="flex items-center gap-2 p-2">
         <input
           value={message}

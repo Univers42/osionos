@@ -78,7 +78,7 @@ export const IdeSearchPanel: React.FC = () => {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search code files"
-          className="w-full rounded-xs border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] px-2 py-1 text-[13px] text-[var(--osio-code-fg)] outline-none focus:border-[var(--osio-accent)]"
+          className="w-full rounded-xs border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] px-2 py-1 text-sm text-[var(--osio-code-fg)] outline-none focus:border-[var(--osio-accent)]"
         />
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-1 pb-2 text-xs text-[var(--osio-code-fg)]">
