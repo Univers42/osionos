@@ -56,6 +56,11 @@ const THEME_KEYS = [
   ["width", "--radius-sm", "--osio-radius-sm"],
   ["width", "--radius-md", "--osio-radius"],
   ["width", "--radius-lg", "--osio-radius-lg"],
+  ["width", "--radius-xl", "--osio-radius-lg"],
+  ["width", "--radius-2xl", "--osio-radius-card"],
+  ["width", "--radius-3xl", "--osio-radius-card"],
+  ["transition-duration", "--default-transition-duration", "--osio-dur-fast"],
+  ["transition-timing-function", "--default-transition-timing-function", "--osio-ease-standard"],
   ["font-family", "--font-sans", "--osio-font-family-sans"],
   ["font-family", "--font-mono", "--osio-font-family-mono"],
   ["font-size", "--text-2xs", "--osio-font-size-2xs"],
@@ -120,6 +125,63 @@ test.describe("type scale", () => {
     }
     expect(themed).toEqual(tokens);
     expect(themed["--spacing"]).toBe("4px");
+  });
+
+  // The keys above prove the variables; this proves the utilities that read
+  // them. A class that Tailwind compiles to a literal (not a var()) would pass
+  // the keys test and still ignore the tokens.
+  test("stock-named utilities resolve to tokens after the database stylesheet loads", async ({ page }) => {
+    await insertInlineDatabase(page);
+    const classes = await page.evaluate(() => {
+      const read = (className, property) => {
+        const probe = document.createElement("div");
+        probe.className = className;
+        probe.style.position = "absolute";
+        document.body.appendChild(probe);
+        const value = getComputedStyle(probe)[property];
+        probe.remove();
+        return value;
+      };
+      return {
+        "rounded-xs": read("rounded-xs", "borderTopLeftRadius"),
+        "stock rounded": read("rounded", "borderTopLeftRadius"),
+        "rounded-xl": read("rounded-xl", "borderTopLeftRadius"),
+        "rounded-2xl": read("rounded-2xl", "borderTopLeftRadius"),
+        "shadow-osio-e3": read("shadow-osio-e3", "boxShadow"),
+        "transition-colors": read("transition-colors", "transitionDuration"),
+        "duration-(--osio-dur-fast)": read("transition duration-(--osio-dur-fast)", "transitionDuration"),
+      };
+    });
+    const tokens = {
+      "rounded-xs": await resolved(page, "width", "var(--osio-radius-xs)"),
+      // The codemod rewrites bare `rounded` to rounded-xs: same 4px, now a token.
+      "stock rounded": await resolved(page, "width", "var(--osio-radius-xs)"),
+      "rounded-xl": await resolved(page, "width", "var(--osio-radius-lg)"),
+      "rounded-2xl": await resolved(page, "width", "var(--osio-radius-card)"),
+      "shadow-osio-e3": await resolved(page, "box-shadow", "var(--osio-e3)"),
+      "transition-colors": await resolved(page, "transition-duration", "var(--osio-dur-fast)"),
+      "duration-(--osio-dur-fast)": await resolved(page, "transition-duration", "var(--osio-dur-fast)"),
+    };
+    // The compiled rule must reference the token, not carry a copy of its value:
+    // a copy would pass above and stop following the dark theme.
+    const rules = await page.evaluate(() => {
+      const texts = [];
+      const walk = (list) => {
+        for (const rule of list) {
+          if (rule.selectorText) texts.push(rule.cssText);
+          if (rule.cssRules) walk(rule.cssRules);
+        }
+      };
+      for (const sheet of document.styleSheets) walk(sheet.cssRules);
+      return texts;
+    });
+    const ruleOf = (selector) => rules.find((text) => text.startsWith(selector)) ?? "";
+    expect(ruleOf(".shadow-osio-e3")).toContain("var(--osio-e3)");
+    expect(ruleOf(".duration-\\(--osio-dur-fast\\)")).toContain("var(--osio-dur-fast)");
+    // Tailwind composes box-shadow as four empty ring layers followed by the
+    // utility's own shadow, so the token is the tail, not the whole value.
+    expect(classes["shadow-osio-e3"].endsWith(tokens["shadow-osio-e3"])).toBe(true);
+    expect({ ...classes, "shadow-osio-e3": "" }).toEqual({ ...tokens, "shadow-osio-e3": "" });
   });
 
   test("a document reads at 16px under a 30px heading", async ({ page, baseURL }) => {

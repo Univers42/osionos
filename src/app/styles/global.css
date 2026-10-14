@@ -241,6 +241,14 @@
   --shadow-osio-sm: var(--osio-shadow-sm);
   --shadow-osio-menu: var(--osio-shadow-menu);
   --shadow-osio-modal: var(--osio-shadow-modal);
+
+  /* The five elevation steps, so a class says shadow-osio-e2 instead of
+     shadow-md. Replaces the stock shadow-sm .. 2xl names, which eslint bans. */
+  --shadow-osio-e1: var(--osio-e1);
+  --shadow-osio-e2: var(--osio-e2);
+  --shadow-osio-e3: var(--osio-e3);
+  --shadow-osio-e4: var(--osio-e4);
+  --shadow-osio-e5: var(--osio-e5);
 }
 
 /* Sizes the stock Tailwind scale lacks: text-2xs, text-3xs, text-display. Static
@@ -266,6 +274,11 @@
   --radius-sm: var(--osio-radius-sm);
   --radius-md: var(--osio-radius);
   --radius-lg: var(--osio-radius-lg);
+  --radius-xl: var(--osio-radius-lg);
+  --radius-2xl: var(--osio-radius-card);
+  --radius-3xl: var(--osio-radius-card);
+  --default-transition-duration: var(--osio-dur-fast);
+  --default-transition-timing-function: var(--osio-ease-standard);
   --font-sans: var(--osio-font-family-sans);
   --font-serif: var(--osio-font-family-serif);
   --font-mono: var(--osio-font-family-mono);
