@@ -69,6 +69,7 @@ describe('collab realtime token (AOC §Sec1)', () => {
     const claims = decodeVerified(token, SECRET);
     assert.deepEqual(claims.namespaces, [`collab:${SPACE}`]);
     assert.equal(claims.sub, 'U');
+    assert.equal(claims.iss, 'grobase-realtime', 'the gateway refuses a token without an accepted issuer');
     assert.equal(claims.can_subscribe, true);
     assert.equal(claims.can_publish, true);
     assert.ok(claims.exp > Math.floor(Date.now() / 1000), 'not already expired');

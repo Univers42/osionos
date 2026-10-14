@@ -40,6 +40,9 @@ import { readRawBody } from './bridge-chat-media.mjs';
 import { ensureChatBucket, extFromMime, storageObjectKey, storagePut } from './bridge-storage-core.mjs';
 
 const REALTIME_TOKEN_TTL_SECONDS = 3600;
+// The gateway refuses a token without `iss` (REALTIME_JWT_ALLOW_NO_ISSUER off): without it
+// every collab socket got AUTH_FAILED (measured live 2026-10-14). One of its accepted issuers.
+const REALTIME_TOKEN_ISSUER = 'grobase-realtime';
 const b64urlJson = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
 
 /**
@@ -53,7 +56,7 @@ export function mintRealtimeToken({ secret, userId, namespaces, ttlSeconds = REA
 	if (!secret) throw httpError('Realtime signing secret (JWT_SECRET) is not configured.', 503);
 	const issuedAt = Math.floor(now / 1000);
 	const exp = issuedAt + Math.min(Math.max(Number(ttlSeconds) || REALTIME_TOKEN_TTL_SECONDS, 60), 86400);
-	const payload = { sub: String(userId), iat: issuedAt, exp, namespaces, can_subscribe: true, can_publish: true };
+	const payload = { iss: REALTIME_TOKEN_ISSUER, sub: String(userId), iat: issuedAt, exp, namespaces, can_subscribe: true, can_publish: true };
 	const signingInput = `${b64urlJson({ alg: 'HS256', typ: 'JWT' })}.${b64urlJson(payload)}`;
 	const signature = createHmac('sha256', secret).update(signingInput).digest('base64url');
 	return { token: `${signingInput}.${signature}`, expiresAt: new Date(exp * 1000).toISOString() };
