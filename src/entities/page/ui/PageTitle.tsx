@@ -24,6 +24,11 @@ interface PageTitleProps {
   readOnly?: boolean;
 }
 
+function fitToContent(textarea: HTMLTextAreaElement) {
+  textarea.style.height = '0px';
+  textarea.style.height = `${textarea.scrollHeight}px`;
+}
+
 /**
  * Editable page title matching osionos's styling.
  * Pressing Enter moves focus to the first content block.
@@ -40,10 +45,24 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
   const [emojiFilter, setEmojiFilter] = useState<string | null>(null);
 
   useLayoutEffect(() => {
-    if (!ref.current) return;
-    ref.current.style.height = '0px';
-    ref.current.style.height = `${ref.current.scrollHeight}px`;
+    if (ref.current) fitToContent(ref.current);
   }, [title]);
+
+  // A narrower window wraps the title onto more lines without changing its text.
+  // Only a width change re-measures: setting the height fires the observer again
+  // with the same width, which would otherwise loop.
+  useEffect(() => {
+    const textarea = ref.current;
+    if (!textarea || typeof ResizeObserver === 'undefined') return undefined;
+    let lastWidth = textarea.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (textarea.clientWidth === lastWidth) return;
+      lastWidth = textarea.clientWidth;
+      fitToContent(textarea);
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, []);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (readOnly) return;

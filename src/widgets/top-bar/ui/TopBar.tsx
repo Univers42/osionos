@@ -34,12 +34,10 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
   const menus = useMemo(() => buildMenus(ctx), [ctx]);
   const commands = useMemo(() => buildCommands(ctx), [ctx]);
 
-  // The bar sits on the canvas: UpdateButton's ring offset reads --osio-topbar-bg,
-  // whose :root default in global.css is outside the shell phase's territory.
   return (
     <header
       data-testid="app-topbar"
-      className="flex h-[var(--osio-topbar-h)] shrink-0 items-center gap-1.5 bg-transparent [--osio-topbar-bg:var(--osio-bg-canvas)] px-2"
+      className="flex h-[var(--osio-topbar-h)] shrink-0 items-center gap-1.5 bg-transparent px-2"
     >
       <div className="hidden md:block">
         <TopBarMenu groups={menus} />

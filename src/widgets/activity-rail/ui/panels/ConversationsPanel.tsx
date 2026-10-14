@@ -28,6 +28,7 @@ import { ChannelList } from "@/widgets/channel-list";
 import { DmList } from "@/widgets/dm-list";
 import { chatTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { PanelSectionLabel } from "@/shared/ui";
 
 type Kind = "all" | "people" | "channels" | "ai";
 
@@ -67,7 +68,7 @@ const AiSection: React.FC<{ filter: string }> = ({ filter }) => {
   return (
     <section className="px-2 py-1" aria-label="AI">
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-xs font-semibold uppercase text-[var(--osio-fg-subtle)]">AI</h2>
+        <PanelSectionLabel as="h2">AI</PanelSectionLabel>
         <button type="button" aria-label="New AI chat" title="New AI chat" onClick={startAiChat}
           className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]">
           <MessageSquarePlus size={14} />

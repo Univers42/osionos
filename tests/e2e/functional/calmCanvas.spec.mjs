@@ -175,4 +175,30 @@ test.describe("calm canvas shell", () => {
     expect(underline).toBe("0px");
     expect(await style(tab, "backgroundColor")).toBe(await resolved(page, "background-color", "--osio-bg-hover"));
   });
+
+  // Shadows are repainted every frame of a drag; shell.css drops them for its duration.
+  test("pane shadows are off while a splitter is dragged, and come back after", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await splitRight(page);
+    const first = pane(page).first();
+    expect(await style(first, "boxShadow")).not.toBe("none");
+
+    const box = await page.locator("[data-pane-splitter]").boundingBox();
+    const y = box.y + box.height / 2;
+    await page.mouse.move(box.x + box.width / 2, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 60, y, { steps: 6 });
+    await expect(page.locator("body[data-pane-resizing]")).toHaveCount(1);
+    expect(await style(first, "boxShadow")).toBe("none");
+    await page.mouse.up();
+
+    await expect(page.locator("body[data-pane-resizing]")).toHaveCount(0);
+    expect(await style(first, "boxShadow")).not.toBe("none");
+  });
+
+  test("the top bar's colour has one source: the canvas", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    const root = (name) => page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
+    expect(await root("--osio-topbar-bg")).toBe(await root("--osio-bg-canvas"));
+  });
 });

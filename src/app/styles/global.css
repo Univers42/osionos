@@ -341,7 +341,7 @@
   /* Global top bar (VSCode-style chrome). Height is theme-independent; bg/border
      reference theme-aware tokens so they resolve per [data-theme] with no dupes. */
   --osio-topbar-h: 40px;
-  --osio-topbar-bg: var(--osio-bg-subtle);
+  --osio-topbar-bg: var(--osio-bg-canvas);
   --osio-topbar-border: var(--osio-border-default);
 
   --sidebar-width: 260px;
@@ -583,7 +583,9 @@ body {
    component the keyboard is on as you Tab through the app. It only ever appears
    via keyboard (:focus-visible, never a mouse click), and the contenteditable
    text surfaces are excluded: while writing, the blinking caret is their focus
-   indicator. Built to be unmissable AND robust:
+   indicator. The page title is a textarea, which matches :focus-visible on every
+   focus including a click, but it is a writing surface too. Built to be
+   unmissable AND robust:
    - a translucent gray FILL via an inset box-shadow, so it tints OVER whatever
      background the element already has instead of replacing it — a solid button
      keeps its colour, a transparent nav row shows the gray fill;
@@ -591,7 +593,7 @@ body {
      survives the 40+ components that set `focus:outline-none` (the fill remains).
    Both derive from --osio-fg-default via color-mix, so they auto-adapt to light
    AND dark themes with one definition (no terracotta accent — a calm neutral). */
-:where(a, button, [role="button"], [role="link"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="tab"], input, select, textarea, [tabindex]):not([contenteditable=""], [contenteditable="true"], [role="textbox"]):focus-visible {
+:where(a, button, [role="button"], [role="link"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="tab"], input, select, textarea, [tabindex]):not([contenteditable=""], [contenteditable="true"], [role="textbox"], .osionos-page-title):focus-visible {
   outline: 2px solid color-mix(in srgb, var(--osio-fg-default) 45%, transparent);
   outline-offset: 1px;
   box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--osio-fg-default) 9%, transparent);

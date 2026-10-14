@@ -34,20 +34,22 @@ const BRIDGE_SELECTORS = ["html:root[data-theme]", "html[data-theme] .notion-obj
 
 const TINT = (colour, part) => `block-tint-${colour}-${part}`;
 
-// vendored family -> [palette tint, status token or null]. The status tokens
-// are solid colours; the tints are the palette's wash and ink.
+// vendored family -> [palette tint, status token or null, suffixes mapped elsewhere].
+// The status tokens are solid colours; the tints are the palette's wash and ink.
+// Emerald's bare name, -surface and -surface2 are the table's fill handle, focused cell and
+// fill range (MemoTableRow), which are selection, so ROLES maps them to the accent.
 const FAMILIES = {
   danger: ["red", "danger"], success: ["green", "success"], warning: ["yellow", "warning"],
   amber: ["yellow"], orange: ["orange"], purple: ["purple"], violet: ["purple"], indigo: ["blue"],
-  pink: ["pink"], rose: ["red"], cyan: ["blue"], teal: ["green"], emerald: ["green"],
+  pink: ["pink"], rose: ["red"], cyan: ["blue"], teal: ["green"], emerald: ["green", undefined, ["", "-surface", "-surface2"]],
 };
 const GRADIENT_CARDS = { blue: "blue", "purple-card": "purple", green: "green", orange: "orange", pink: "pink", cyan: "blue" };
 
-function familyLines(family, [colour, status]) {
+function familyLines(family, [colour, status, elsewhere = []]) {
   const ink = status ?? TINT(colour, "fg");
   const wash = TINT(colour, "bg");
   const toward = (pct) => `${wash}+${TINT(colour, "fg")} ${pct}`;
-  const names = (suffixes) => suffixes.map((suffix) => `${family}${suffix}`).join(" ");
+  const names = (suffixes) => suffixes.filter((suffix) => !elsewhere.includes(suffix)).map((suffix) => `${family}${suffix}`).join(" ");
   return [
     `${ink}: ${names(["", "-vivid", "-bold", "-text", "-text-bold", "-text-tag", "-text-soft", "-text-faint"])}`,
     `${wash}: ${names(["-surface", "-surface2"])}`,
@@ -56,7 +58,7 @@ function familyLines(family, [colour, status]) {
     `${toward(18)}: ${family}-surface-medium`,
     `${toward(28)}: ${family}-surface-strong`,
     `${TINT(colour, "fg")} 30: ${family}-border`,
-  ];
+  ].filter((line) => !line.endsWith(": "));
 }
 
 const cardLines = ([card, colour]) => [
@@ -132,8 +134,11 @@ focus-ring-color 28: focus-ring-muted ring-accent-faint
 block-tint-red-bg: hover-danger
 danger: hover-danger-text hover-danger-text-bold progress-critical
 success: progress-high
-success 80: ring-success
-success 50: ring-success-soft inset-success
+accent 80: ring-success
+accent 50: ring-success-soft inset-success
+accent: emerald
+accent 8: emerald-surface
+accent 12: emerald-surface2
 warning: progress-low
 block-tint-purple-fg: gradient-brand-to gradient-violet-from gradient-violet2-from gradient-violet2-to gradient-purple-from
 block-tint-blue-fg: gradient-violet-to
@@ -169,7 +174,14 @@ export function buildMapping(lines = ROLE_LINES) {
   return mapping;
 }
 
-/** Every --color-* name a stylesheet declares, sorted. */
+/**
+ * Every --color-* name a stylesheet declares, sorted.
+ *
+ * Ponytail: a regex, not a CSS parser. A name with an uppercase letter or an underscore
+ * (--color-Brand_1) does not match [a-z0-9-], so it is never collected, never reported as
+ * unmapped, and keeps its vendored literal; a name built by a preprocessor is invisible
+ * too. Widen the character class here if the vendored theme ever uses either.
+ */
 export function collectColorNames(css) {
   const code = css.replace(/\/\*[\s\S]*?\*\//g, "");
   return [...new Set(Array.from(code.matchAll(/(--color-[a-z0-9-]+)\s*:/g), (m) => m[1]))].sort();

@@ -53,9 +53,6 @@ export const PublicSwitcherPanel: React.FC = () => {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="px-2 pt-2 pb-1">
-        <p className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
-          Shared
-        </p>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
