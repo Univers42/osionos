@@ -22,6 +22,7 @@
  */
 
 import { httpError } from './bridge-social-core.mjs';
+import { readBaasJson } from './bridge-baas-body.mjs';
 
 const TABLE = 'osionos_share_rules';
 const MIGRATION = 'models/osionos-share-rules-migration.sql';
@@ -101,20 +102,14 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		const response = await fetchImpl(`${config.baasUrl}/rest/v1/${table}?${query}`, {
 			method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(TIMEOUT_MS),
 		});
-		let readFailed = false;
-		const text = await response.text().catch(() => { readFailed = true; return ''; });
-		if (!response.ok) throw storeFailure(response.status, text);
+		// A non-2xx is classified by its status and its error code, so that body is read
+		// here — where one that never arrives falls back to '' and the status alone decides.
+		// Ponytail: with that body lost the SQLSTATE is lost too, so a status-500 answer
+		// that meant "table missing" reads as 502 (failed) instead of 503 (unavailable).
+		if (!response.ok) throw storeFailure(response.status, await response.text().catch(() => ''));
 		// An empty answer means "no rules", which is an access decision — so a body that
 		// stops mid-stream, or one that is not JSON, is reported as the broken read it is.
-		if (readFailed) throw httpError('BaaS response body could not be read (share rules)', 502);
-		// Ponytail: a body-less 200 still answers [] — a table read that genuinely matched
-		// nothing and one whose answer was lost after the headers look the same here.
-		if (!text) return [];
-		try {
-			return JSON.parse(text);
-		} catch {
-			throw httpError(`BaaS response body was not valid JSON (${Buffer.byteLength(text)} bytes)`, 502);
-		}
+		return readBaasJson(response, { service: 'share rules', empty: [], fail: (message) => httpError(message, 502) });
 	}
 
 	function storeFailure(status, text) {
