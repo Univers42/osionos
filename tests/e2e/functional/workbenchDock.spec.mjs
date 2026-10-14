@@ -85,6 +85,10 @@ test.describe("dock card", () => {
     expect(await style(dockOf(page), "borderTopLeftRadius")).toBe("0px");
     expect(await style(dockOf(page), "boxShadow")).toBe("none");
     expect(await frameGap(page)).toBe(0);
+    const card = await rect(dockOf(page));
+    const hide = await rect(dockOf(page).getByRole("button", { name: "Hide panel" }));
+    expect(hide.right).toBeLessThanOrEqual(card.right);
+    expect(hide.left).toBeGreaterThanOrEqual(card.left);
   });
 
   test("zen runs the dock edge to edge", async ({ page, baseURL }) => {
@@ -245,6 +249,9 @@ test.describe("terminal", () => {
     const text = await rect(screen);
     expect(text.left - edge.left).toBeGreaterThanOrEqual(12);
     expect(edge.bottom - text.bottom).toBeGreaterThanOrEqual(8);
+    // xterm's stylesheet paints its scroll viewport #000 over the theme colour; the theme's surface must show instead.
+    expect(await style(dock.locator(".xterm-viewport").first(), "backgroundColor")).toBe("rgba(0, 0, 0, 0)");
+    expect(await style(dock.locator(".xterm-scrollable-element").first(), "backgroundColor")).toBe(await tokenAt(dock, "background-color", "--osio-code-bg"));
     const host = dock.locator(".xterm").first().locator("xpath=..");
     expect(await host.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     const wide = (await rect(screen)).width;

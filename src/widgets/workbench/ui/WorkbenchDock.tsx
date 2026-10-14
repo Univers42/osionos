@@ -99,7 +99,7 @@ const DockTabs: React.FC<{ active: DockTab; conflicts: number }> = ({ active, co
   };
 
   return (
-    <div role="tablist" aria-label="Panel tabs" className="flex items-center gap-0.5">
+    <div role="tablist" aria-label="Panel tabs" className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
       {DOCK_TABS.map((id, index) => (
         <button
           key={id}
@@ -113,7 +113,7 @@ const DockTabs: React.FC<{ active: DockTab; conflicts: number }> = ({ active, co
           data-dock-tab={id}
           onClick={() => setTab(id)}
           onKeyDown={(e) => onKeyDown(e, index)}
-          className="osio-code-btn h-7 shrink-0 px-3 text-xs"
+          className="osio-code-btn h-7 shrink-0 px-2 text-xs sm:px-3"
         >
           {TAB_LABEL[id]}
           {id === "output" && conflicts > 0 && (
@@ -144,6 +144,7 @@ export const WorkbenchDock: React.FC = () => {
       // gutter in from the canvas, and the splitter above it is the gap.
       className="mx-[var(--osio-frame-gap)] mb-[var(--osio-frame-gap)] flex shrink-0 flex-col overflow-hidden rounded-[var(--osio-radius-pane)] border-[length:var(--osio-dock-border-width)] border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-dock-shadow)]"
     >
+      {/* The tabs scroll sideways when the actions would otherwise be pushed out of the card (phone width). */}
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-2 text-xs text-[var(--osio-code-fg-muted)]">
         <DockTabs active={active} conflicts={conflicts} />
         <span className="flex-1" />

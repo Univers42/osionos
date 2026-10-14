@@ -27,7 +27,9 @@ function codeTheme(host: HTMLElement): ITheme {
   const css = getComputedStyle(host);
   const read = (name: string) => css.getPropertyValue(name).trim() || undefined;
   return {
-    background: "#00000000", // inherit the panel's --osio-code-bg
+    // Opaque on purpose: xterm 6 has no allowTransparency, and the surface it
+    // paints (.xterm-scrollable-element) is what shows through the viewport.
+    background: read("--osio-code-bg"),
     foreground: read("--osio-code-fg"),
     cursor: read("--osio-code-caret"),
     selectionBackground: read("--osio-code-selection"),

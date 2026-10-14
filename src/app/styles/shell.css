@@ -139,3 +139,10 @@ body[data-pane-resizing] [data-osio-pane] {
 [data-osio-terminal] .xterm {
   padding: var(--osio-space-2) var(--osio-space-3);
 }
+
+/* xterm.css paints the scroll viewport #000, which covers the surface the theme
+   sets on its scrollable element and reads as a black slab on the dock. The
+   extra .xterm outranks xterm.css, which loads after this file. */
+[data-osio-terminal] .xterm .xterm-viewport {
+  background-color: transparent;
+}
