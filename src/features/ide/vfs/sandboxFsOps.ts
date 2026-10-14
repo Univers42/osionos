@@ -57,7 +57,8 @@ export function outputOrThrow(result: FsOpResult, uri: string): string {
   throw fsError(tag ? TAG_TO_CODE[tag] ?? "Io" : "Io", uri, tag ?? `exec exit ${String(result.exitCode)}`);
 }
 
-/** `ls -1A -p` output → entries (trailing "/" marks a directory). */
+/** The list script's output → entries: one name a line, a trailing "/" marks a
+ *  directory, a name holding CR or LF is left out by the script; sorted here. */
 export function parseListOutput(output: string): ListedEntry[] {
   const entries: ListedEntry[] = [];
   for (const line of output.split("\n")) {

@@ -17,17 +17,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // The bridge's REAL spec builders (.mjs) — the sandbox target below executes
 // them through a real local sh, so the exact scripts a live sandbox runs are
 // conformance-proven without a running stack.
-import { buildFsOpSpec } from "../../scripts/ide-sandbox-spec.mjs";
+import { buildFsOpSpec, buildWriteSpecs } from "../../scripts/ide-sandbox-spec.mjs";
 import { createHostFsTransport } from "../../scripts/host-fs-ops.mjs";
 import { createSandboxProvider } from "../../src/features/ide/vfs/sandboxProvider.ts";
-import type { FsOpTransport } from "../../src/features/ide/vfs/sandboxFsOps.ts";
+import type { FsOpResult, FsOpTransport } from "../../src/features/ide/vfs/sandboxFsOps.ts";
 import { parseVPath, joinV, buildVPath } from "../../src/features/ide/vfs/vpath.ts";
 import { isFsError } from "../../src/features/ide/vfs/errors.ts";
 import { collectBytes, textToBytes, bytesToText } from "../../src/features/ide/vfs/bytes.ts";
@@ -83,27 +83,37 @@ function memFacade(): PageFacade {
 }
 
 /** Execute a built exec spec via the local sh — same argv a live sandbox runs. */
-function localShTransport(cwd: string): FsOpTransport {
+/** overPty runs each script under script(1), a real terminal: the bridge execs every fs op
+ *  with Tty:true, and a terminal changes what tools print (GNU ls shell-quotes
+ *  `with space.txt` on a tty, so the explorer showed the quotes and the open said ENOENT). */
+function localShTransport(cwd: string, overPty = false): FsOpTransport {
   return (op, params) =>
     new Promise((resolve) => {
-      let spec: { Cmd: string[] };
+      let specs: { Cmd: string[] }[];
       try {
-        spec = buildFsOpSpec(op, params) as { Cmd: string[] };
+        specs = (op === "write" ? buildWriteSpecs(params.path, params.contentBase64) : [buildFsOpSpec(op, params)]) as { Cmd: string[] }[];
       } catch (error) {
         resolve({ exitCode: 1, output: `VFSERR:${(error as Error).message}` });
         return;
       }
-      const [cmd, ...args] = spec.Cmd;
-      execFile(cmd, args, { cwd, maxBuffer: 8 * 1024 * 1024 }, (error, stdout) => {
-        const exitCode = error ? (typeof error.code === "number" ? error.code : 1) : 0;
-        resolve({ exitCode, output: String(stdout) });
+      const runOne = (spec: { Cmd: string[] }) => new Promise<FsOpResult>((done) => {
+        const quoted = spec.Cmd.map((arg) => `'${arg.replace(/'/g, "'\\''")}'`).join(" ");
+        const [cmd, ...args] = overPty ? ["script", "-qec", quoted, "/dev/null"] : spec.Cmd;
+        execFile(cmd, args, { cwd, maxBuffer: 8 * 1024 * 1024 }, (error, stdout) => {
+          done({ exitCode: error ? (typeof error.code === "number" ? error.code : 1) : 0, output: String(stdout) });
+        });
       });
+      void (async () => {
+        let result: FsOpResult = { exitCode: 0, output: "" };
+        for (const spec of specs) if ((result = await runOne(spec)).exitCode !== 0) break;
+        resolve(result);
+      })();
     });
 }
 
-function hasSh(): boolean {
+function hasSh(cmd = "sh", args = ["-c", "exit 0"]): boolean {
   try {
-    execFileSync("sh", ["-c", "exit 0"], { stdio: "ignore" });
+    execFileSync(cmd, args, { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -118,6 +128,9 @@ const TARGETS: { name: string; make: () => FsProvider }[] = [
   { name: "page-file", make: () => createPageProvider("workspace", createPageFileFacade(createFixtureStore("ws"))) },
   ...(hasSh()
     ? [{ name: "sandbox(sh)", make: () => createSandboxProvider("sandbox", localShTransport(mkdtempSync(join(tmpdir(), "vfs-")))) }]
+    : []),
+  ...(hasSh("script", ["-qec", "exit 0", "/dev/null"])
+    ? [{ name: "sandbox(sh on a tty)", make: () => createSandboxProvider("sandbox", localShTransport(mkdtempSync(join(tmpdir(), "vfs-")), true)) }]
     : []),
 ];
 
@@ -145,6 +158,14 @@ for (const target of TARGETS) {
     await writeText(p, at(p, "r.txt"), "0123456789");
     const slice = bytesToText(await collectBytes(await p.read(at(p, "r.txt"), { offset: 2, length: 3 })));
     assert.equal(slice, "234");
+  });
+
+  test(`vfs[${target.name}] a 400 KB source file saves and reads back whole`, async () => {
+    const p = target.make();
+    const big = Array.from({ length: 8000 }, (_, i) => `int f${i}(void) { return ${i}; } /* pad */`).join("\n");
+    assert.ok(big.length > 300_000);
+    await writeText(p, at(p, "big.c"), big);
+    assert.equal(await readText(p, at(p, "big.c")), big);
   });
 
   test(`vfs[${target.name}] error taxonomy: NotFound / AlreadyExists / create:false`, async () => {
@@ -270,6 +291,16 @@ test("mem watch: native create/write/delete events, stops on abort", async () =>
   controller.abort();
   await done;
   assert.deepEqual(events, ["create:w.txt", "write:w.txt", "delete:w.txt"]);
+});
+
+test("sandbox list: a name a shell made with a newline in it is left out, never split into two entries", async (t) => {
+  if (!hasSh()) return t.skip("no sh");
+  const dir = mkdtempSync(join(tmpdir(), "vfs-"));
+  writeFileSync(join(dir, "line\nbreak.txt"), "");
+  writeFileSync(join(dir, "ok.txt"), "");
+  writeFileSync(join(dir, ".hidden"), "");
+  const p = createSandboxProvider("sandbox", localShTransport(dir));
+  assert.deepEqual((await p.list(root(p))).map((entry) => entry.name), [".hidden", "ok.txt"]);
 });
 
 test("overlay: lower-layer read-through, whiteout delete, merged listing", async () => {

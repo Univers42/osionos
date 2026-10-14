@@ -25,12 +25,12 @@
 
 import { handshake, encodeFrame, closeFrame, createFrameDecoder } from './ide-ws.mjs';
 import { createDockerClient } from './ide-docker.mjs';
-import { requireSandboxIdentity, deriveNames, buildShellExecSpec, buildFsAgentExecSpec } from './ide-sandbox-spec.mjs';
+import { requireSandboxIdentity, buildShellExecSpec, buildFsAgentExecSpec } from './ide-sandbox-spec.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import {
   bumpContainerSockets, containerHasActivity, getOrCreateSession, attachClient, detachClient, writeStdin,
 } from './ide-term-sessions.mjs';
-import { ensureSandbox } from './bridge-ide-sandbox.mjs';
+import { ensureSandbox, sandboxNames } from './bridge-ide-sandbox.mjs';
 
 // Each live socket pins bridge FDs; cap churn AND simultaneous streams per
 // user so one tenant can't exhaust the shared bridge. (PTY SESSIONS outlive
@@ -136,6 +136,15 @@ export function armTokenExpiry(socket, exp, now = Date.now()) {
   socket.once('close', () => clearTimeout(timer));
 }
 
+// A refusal the user can act on (every box in use: 503) goes out as the close reason; anything
+// else stays generic on the wire and goes to the log. Both catches below used to swallow the
+// error, so a full box cap and a refused create both read as "sandbox unavailable" with nothing
+// logged, and the UI blamed docker-ide (2026-10-14).
+function sandboxRefusal(kind, names, error, fallback) {
+  console.warn(`[osionos-ide] ${kind} could not reach ${names.containerName}: ${error?.message ?? error}`);
+  return error?.status === 503 && typeof error.message === 'string' ? error.message.slice(0, 120) : fallback;
+}
+
 /** Returns an upgrade handler `(request, socket) => boolean` — true when it owns
  *  the WS path. Attach to the bridge's http server `upgrade` event. `allowOrigin`
  *  is the browser-origin predicate (same allowlist as the REST CORS layer). */
@@ -160,7 +169,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
       const identity = requireSandboxIdentity(session, url.searchParams.get('workspaceId'), env);
       userId = identity.userId;
       tokenExp = session.exp;
-      names = deriveNames(userId, identity.workspaceId);
+      names = sandboxNames(identity);
     } catch (error) {
       // The status tells an unlisted account apart; the reason stays generic.
       if (error?.status === 403) rejectUpgrade(socket, 403, 'Forbidden');
@@ -231,7 +240,11 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
         });
         socket.on('close', () => detachClient(session, client));
         socket.on('error', () => detachClient(session, client));
-      }).catch(() => { release(); if (!socket.destroyed) socket.end(closeFrame(4004, 'sandbox unavailable')); });
+      }).catch((error) => {
+        release();
+        const reason = sandboxRefusal('terminal', names, error, 'sandbox unavailable');
+        if (!socket.destroyed) socket.end(closeFrame(4004, reason));
+      });
       return true;
     }
 
@@ -279,7 +292,11 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
       });
       socket.on('close', () => duplex.destroy());
       socket.on('error', () => duplex.destroy());
-    }).catch(() => { release(); if (!socket.destroyed) socket.end(closeFrame(4004, 'no running sandbox')); });
+    }).catch((error) => {
+      release();
+      const reason = sandboxRefusal(isFsync ? 'fs-sync' : 'language server', names, error, 'no running sandbox');
+      if (!socket.destroyed) socket.end(closeFrame(4004, reason));
+    });
     return true;
   };
 }

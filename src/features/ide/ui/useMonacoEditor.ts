@@ -14,6 +14,7 @@ import React from "react";
 import { editor, KeyCode, KeyMod } from "../model/monacoRuntime";
 import { acquireModel, releaseModel } from "../model/monacoModels";
 import { loadMonacoLanguage } from "../model/monacoLanguages";
+import { indentsWithTabs } from "../model/ideLanguages";
 import { editorFontFamily, OSIO_THEME, watchEditorTheme } from "./monacoTheme";
 
 const SAVE_DEBOUNCE_MS = 1200;
@@ -44,7 +45,10 @@ export interface MonacoEditorConfig {
 // scroll, no indent/bracket guides, no bracket-pair colors (the palette owns
 // bracket color), and automaticLayout because the IDE's dockable panels and zen
 // mode resize the host without a window resize event. Metrics match the shipped
-// editor: 13px, 1.6 line-height (21px), 10px vertical padding, 4-space indent.
+// editor: 13px, 1.6 line-height (21px), 10px vertical padding, tab width 4.
+// Indentation is per model (indentsWithTabs + detectIndentation at mount), never
+// global: insertSpaces here made Monaco force spaces on every model, so a Makefile
+// typed in the IDE failed with "missing separator" and C broke 42's norm.
 const EDITOR_OPTIONS: editor.IStandaloneEditorConstructionOptions = {
   automaticLayout: true,
   fontSize: 13,
@@ -52,8 +56,6 @@ const EDITOR_OPTIONS: editor.IStandaloneEditorConstructionOptions = {
   fontLigatures: false,
   padding: { top: 10, bottom: 10 },
   tabSize: 4,
-  insertSpaces: true,
-  detectIndentation: false,
   minimap: { enabled: false },
   wordBasedSuggestions: "off",
   suggest: { showWords: false, preview: false },
@@ -116,6 +118,7 @@ export function useMonacoEditor(
     if (!host || !blockId) return;
     const current = configRef.current;
     const model = acquireModel(current.uri, current.readInitialText(), "plaintext", pageId);
+    model.detectIndentation(!indentsWithTabs(current.uri), 4);
     const stopTheme = watchEditorTheme(host);
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const instance = editor.create(host, {

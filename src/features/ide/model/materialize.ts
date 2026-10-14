@@ -69,6 +69,28 @@ function desiredSet(views: ReadableViews): { files: Snapshot[]; skipped: Skipped
   return { files, skipped };
 }
 
+const BODY_FETCH_CONCURRENCY = 6;
+
+/**
+ * Fetches the bodies attach would skip as not loaded, a few at a time, and returns how many it
+ * asked for. A fresh tab has loaded the open page alone: "materialized 0 files, 31 not loaded
+ * yet", and the explorer, which lists the sandbox once it is online, showed 2 of 31 pages
+ * (2026-10-14). A fetch that fails leaves its page unloaded; attach still skips and counts it.
+ * Caveat: one request per page, and the live fetcher rewrites the whole pages cache each time,
+ * so the cost grows with the square of the page count; bounded by MAX_ATTACH_FILES, and a
+ * workspace near that bound wants a batch endpoint.
+ */
+export async function loadUnloadedBodies(views: ReadableViews, fetchBody: (pageId: string) => Promise<void>): Promise<number> {
+  const ids = views.indexOf().entries
+    .filter((entry) => entry.kind !== "dir" && views.pageById(entry.id)?.content === undefined)
+    .slice(0, MAX_ATTACH_FILES)
+    .map((entry) => entry.id);
+  for (let i = 0; i < ids.length; i += BODY_FETCH_CONCURRENCY) {
+    await Promise.all(ids.slice(i, i + BODY_FETCH_CONCURRENCY).map((id) => fetchBody(id).catch(() => undefined)));
+  }
+  return ids.length;
+}
+
 /**
  * 15: a page the app changed while attach ran may have had its newer file
  * overwritten with the snapshot's text, so each written path whose page object

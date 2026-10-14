@@ -22,7 +22,7 @@ import { createSandboxProvider } from "../vfs/sandboxProvider";
 import { ideOutput } from "./ideOutputBus";
 import { statInProvider } from "./inboundArchive";
 import { createInboundSession, type InboundSession } from "./inboundSession";
-import { attachWorkspace } from "./materialize";
+import { attachWorkspace, loadUnloadedBodies } from "./materialize";
 
 import type { Schedule } from "./inboundPending";
 import type { SerialQueue } from "./inboundPipeline";
@@ -56,6 +56,8 @@ export function createLiveInbound(workspaceId: string, queue: SerialQueue): Live
 }
 
 async function attachSandbox(workspaceId: string, session: InboundSession, provider: FsProvider): Promise<void> {
+  const jwt = getActivePageJwt();
+  if (jwt) await loadUnloadedBodies(session.views, (pageId) => usePageStore.getState().fetchPageContent(pageId, jwt));
   const { written, unloaded, failed } = await attachWorkspace({ workspaceId, session, provider });
   const tail = `${unloaded > 0 ? `, ${unloaded} not loaded yet` : ""}${failed > 0 ? `, ${failed} FAILED` : ""}`;
   ideOutput("fs-sync", `sandbox attached — materialized ${written} files${tail}`);

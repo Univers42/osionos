@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildFsOpSpec, assertRelPath } from "../../scripts/ide-sandbox-spec.mjs";
+import { buildFsOpSpec, buildWriteSpecs, assertRelPath, WRITE_PIECE_B64 } from "../../scripts/ide-sandbox-spec.mjs";
 
 test("fs-op specs: argv shape, sh placeholder, no client string in the script", () => {
   const spec = buildFsOpSpec("read", { path: "src/main.c", offset: 2, length: 3 });
@@ -47,4 +47,24 @@ test("fs-op specs: rename/delete flags ride as argv '1'/'' — never booleans in
   assert.deepEqual(rename.Cmd.slice(4), ["a", "b", "1"]);
   const del = buildFsOpSpec("delete", { path: "a" });
   assert.deepEqual(del.Cmd.slice(4), ["a", ""]);
+});
+
+test("write specs: content past one argv item (128 KiB) is staged in pieces under one token", () => {
+  assert.deepEqual(buildWriteSpecs("a.c", "aGk=").map((spec) => spec.Cmd.slice(4)), [["a.c", "aGk="]], "small content: one exec, no part");
+  const b64 = "QUJD".repeat(Math.ceil((WRITE_PIECE_B64 * 2.5) / 4));
+  const specs = buildWriteSpecs("big.c", b64);
+  assert.deepEqual(specs.map((spec) => spec.Cmd[7]), ["first", "more", "last"]);
+  assert.equal(new Set(specs.map((spec) => spec.Cmd[6])).size, 1, "every piece names the same stage");
+  // osio-fs-agent.mjs TRANSIENT_FILE (/\.vfstmp\d+$/) keeps the staged file out of the pages:
+  // a token with a letter in it would sync every piece back as a page.
+  assert.match(`big.c.vfstmp${specs[0].Cmd[6]}`, /\.vfstmp\d+$/);
+  assert.equal(specs.map((spec) => spec.Cmd[5]).join(""), b64, "the pieces are the content, in order");
+  assert.ok(specs.every((spec) => spec.Cmd[5].length <= WRITE_PIECE_B64 && spec.Cmd[5].length % 4 === 0), "each piece decodes alone");
+});
+
+test("write specs: an oversize piece is a 413, a part without a valid stage a 400", () => {
+  const big = "A".repeat(WRITE_PIECE_B64 + 4);
+  assert.throws(() => buildFsOpSpec("write", { path: "a.c", contentBase64: big }), (e) => e.status === 413);
+  assert.throws(() => buildFsOpSpec("write", { path: "a.c", contentBase64: "aGk=", part: "first", stage: "x;rm" }), (e) => e.status === 400);
+  assert.throws(() => buildFsOpSpec("write", { path: "a.c", contentBase64: "aGk=", part: "append", stage: "0123456789" }), (e) => e.status === 400);
 });
