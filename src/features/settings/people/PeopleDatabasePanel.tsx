@@ -25,7 +25,7 @@ import { createGroup, inviteGuest } from "./peopleActions";
 import type { PeopleCtx, PeopleSourceKey } from "./peopleModel";
 
 const INPUT_CLASS =
-  "h-9 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]";
+  "h-9 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]";
 
 interface PanelProps {
   source: PeopleSourceKey;

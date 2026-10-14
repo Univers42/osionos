@@ -53,7 +53,7 @@ export const TodoDueDate: React.FC<{ dueAt?: string; checked?: boolean; onChange
         onClick={() => setEditing(true)}
         aria-label="Add date"
         title="Add date"
-        className="absolute right-1 top-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-xs text-[var(--osio-fg-subtle)] opacity-0 transition-opacity duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] group-hover:opacity-100 focus-visible:opacity-100"
+        className="absolute right-1 top-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-xs text-[var(--osio-fg-subtle)] opacity-0 transition-opacity duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] group-hover:opacity-100 focus-visible:opacity-100"
       >
         <CalendarPlus size={14} aria-hidden />
       </button>

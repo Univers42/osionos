@@ -125,7 +125,7 @@ const RecentPageActions: React.FC<RecentPageActionsProps> = ({
       />
       <button
         type="button"
-        className="p-1 rounded-md text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+        className="p-1 rounded-md text-[var(--osio-fg-muted)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
         onClick={(e) => onAddChild(e, recent)}
         title="Add child page"
       >
@@ -456,7 +456,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
               </span>
               <button
                 type="button"
-                className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--osio-fg-subtle)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--osio-fg-subtle)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
                 title="Toggle channel visibility"
                 onClick={(event) => handleToggleChannelVisibility(event, channel)}
               >
@@ -464,7 +464,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
               </button>
               <button
                 type="button"
-                className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--osio-fg-subtle)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--osio-fg-subtle)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
                 title="Create thread"
                 onClick={(event) => handleCreateThread(event, channel)}
               >
@@ -489,7 +489,7 @@ export const SidebarPageTree: React.FC<SidebarPageTreeProps> = ({
           <button
             type="button"
             title={`Create ${category.label.toLowerCase()}`}
-            className="flex h-5 w-5 items-center justify-center rounded-md transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
+            className="flex h-5 w-5 items-center justify-center rounded-md transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-accent)]"
             onClick={() => createChannel(category.createType, category.createName)}
           >
             <Plus size={14} />

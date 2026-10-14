@@ -347,7 +347,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               aria-haspopup="listbox"
               aria-expanded={showLangPicker}
               title="Change language"
-              className="inline-flex items-center gap-1 rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] py-1 pl-2 pr-1.5 font-mono text-2xs font-medium tracking-wide text-[var(--osio-code-fg)] transition-[background-color,transform] duration-150 hover:bg-[var(--osio-code-btn-hover)] active:scale-95"
+              className="inline-flex items-center gap-1 rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] py-1 pl-2 pr-1.5 font-mono text-2xs font-medium tracking-wide text-[var(--osio-code-fg)] transition-[background-color,transform] duration-(--osio-dur-fast) hover:bg-[var(--osio-code-btn-hover)] active:scale-95"
             >
               {block.language || "plaintext"}
               <ChevronDown size={11} aria-hidden className="text-[var(--osio-code-fg-muted)]" />
@@ -438,7 +438,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             type="button"
             title="Copy code"
             className={[
-              "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-2xs font-medium transition-[color,background-color,transform] duration-150 hover:bg-[var(--osio-code-btn-hover)] active:scale-95",
+              "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-2xs font-medium transition-[color,background-color,transform] duration-(--osio-dur-fast) hover:bg-[var(--osio-code-btn-hover)] active:scale-95",
               copiedCode ? "text-[var(--osio-success)]" : "text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]",
             ].join(" ")}
             onClick={handleCopyCode}

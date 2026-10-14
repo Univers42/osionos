@@ -82,7 +82,7 @@ export const FieldMaskEditor: React.FC<FieldMaskEditorProps> = ({ policy, saving
         <button
           type="button"
           disabled={saving || !redactField.trim()}
-          className="rounded-md border border-[var(--osio-border-default)] px-2 py-1.5 text-xs transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-md border border-[var(--osio-border-default)] px-2 py-1.5 text-xs transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] disabled:cursor-not-allowed disabled:opacity-60"
           onClick={() => { persist(hide, { ...redact, [redactField.trim()]: redactValue || '***' }); setRedactField(''); }}
         >
           Add

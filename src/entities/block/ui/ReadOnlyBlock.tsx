@@ -522,7 +522,7 @@ const ToggleBlockReadOnly: React.FC<{ block: Block; bulletDepth: number; numbere
           <ChevronRight
             size={14}
             className={[
-              "text-[var(--osio-fg-muted)] transition-transform duration-150",
+              "text-[var(--osio-fg-muted)] transition-transform duration-(--osio-dur-fast)",
               expanded ? "rotate-90" : "",
             ].join(" ")}
           />

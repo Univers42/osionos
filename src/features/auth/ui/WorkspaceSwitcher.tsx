@@ -88,7 +88,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
           onKeyDown={(event) => { if (!renaming && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setOpen(o => !o); } }}
           className={[
             'flex items-center gap-2 flex-1 min-w-0 h-8 px-2 rounded-[6px]',
-            'transition-colors duration-100 cursor-pointer select-none',
+            'transition-colors duration-(--osio-dur-fast) cursor-pointer select-none',
             open ? 'bg-[var(--osio-bg-muted)]' : 'hover:bg-[var(--osio-bg-hover)]',
           ].join(' ')}
         >
@@ -134,7 +134,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             className={[
               'flex items-center justify-center w-7 h-7 rounded-xs shrink-0',
               'text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]',
-              'transition-colors duration-100 cursor-pointer',
+              'transition-colors duration-(--osio-dur-fast) cursor-pointer',
             ].join(' ')}
             title="New page"
           >
@@ -151,14 +151,14 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             className={[
               'flex items-center justify-center w-6 h-7 rounded-xs shrink-0',
               'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]',
-              'transition-all duration-100 cursor-pointer',
+              'transition-all duration-(--osio-dur-fast) cursor-pointer',
             ].join(' ')}
             title="More options"
           >
             <ChevronDown
               size={14}
               className={[
-                'transition-transform duration-150',
+                'transition-transform duration-(--osio-dur-fast)',
                 open ? 'rotate-180' : '',
               ].join(' ')}
             />

@@ -49,7 +49,7 @@ export const FavoriteSidebarItem: React.FC<FavoriteSidebarItemProps> = ({ pageId
           title="Remove from favorites"
           aria-label="Remove from favorites"
           onClick={(event) => { event.stopPropagation(); void toggle(pageId); }}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--osio-accent)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
+          className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--osio-accent)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)]"
         >
           <Star size={13} fill="currentColor" />
         </button>

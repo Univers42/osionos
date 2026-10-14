@@ -24,7 +24,7 @@ export function BlockCollapseToggle({ collapsed, onToggle }: Readonly<{ collapse
       onClick={onToggle}
       className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
     >
-      <ChevronRight size={14} className={`transition-transform duration-150 ${collapsed ? "" : "rotate-90"}`} />
+      <ChevronRight size={14} className={`transition-transform duration-(--osio-dur-fast) ${collapsed ? "" : "rotate-90"}`} />
     </button>
   );
 }

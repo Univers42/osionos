@@ -55,7 +55,7 @@ export const SharePeoplePicker: React.FC<SharePeoplePickerProps> = ({ people, ex
               key={person.id}
               type="button"
               disabled={disabled}
-              className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => { onPick(person); setQuery(''); }}
             >
               <span className="min-w-0">

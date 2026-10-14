@@ -184,10 +184,10 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
             type="button"
             aria-label={`${expanded ? "Collapse" : "Expand"} ${pageEntry.title || "Untitled"}`}
             aria-expanded={expanded}
-            className="flex items-center justify-center w-5 h-5 shrink-0 rounded-md transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
+            className="flex items-center justify-center w-5 h-5 shrink-0 rounded-md transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)]"
             onClick={(e) => { e.stopPropagation(); setExpanded((o) => !o); }}
           >
-            <ChevronRight size={12} className={["transition-transform duration-150", expanded ? "rotate-90" : ""].join(" ")} />
+            <ChevronRight size={12} className={["transition-transform duration-(--osio-dur-fast)", expanded ? "rotate-90" : ""].join(" ")} />
           </button>
         ) : (
           <span className="flex items-center justify-center w-5 h-5 shrink-0">
@@ -212,7 +212,7 @@ export const PageTreeItem: React.FC<Props> = ({ pageId, workspaceId, jwt, depth 
             }}
             title="Double-click to rename · drag to move · Del to delete"
             className={[
-              "flex min-w-0 flex-1 items-center gap-0.5 h-full rounded-md text-sm text-left transition-colors duration-100 pr-20",
+              "flex min-w-0 flex-1 items-center gap-0.5 h-full rounded-md text-sm text-left transition-colors duration-(--osio-dur-fast) pr-20",
               isActive
                 ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-strong)]"
                 : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",

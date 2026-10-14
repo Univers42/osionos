@@ -47,7 +47,7 @@ function Avatar({ member, onSummon }: { member: PresenceState; onSummon?: Collab
       aria-label={`Summon ${member.displayName} to this page`}
       onClick={() => onSummon(member.memberId, member.displayName)}
       style={ring}
-      className={`${cls} transition-transform duration-150 hover:z-10 motion-safe:hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--osio-bg-elevated)]`}
+      className={`${cls} transition-transform duration-(--osio-dur-fast) hover:z-10 motion-safe:hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--osio-bg-elevated)]`}
     >
       {face}
     </button>

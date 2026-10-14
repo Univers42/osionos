@@ -208,7 +208,7 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
                 aria-selected={isActive}
                 tabIndex={isActive ? 0 : -1}
                 className={[
-                  'h-8 rounded-md border px-3 text-xs font-medium transition-colors duration-[120ms]',
+                  'h-8 rounded-md border px-3 text-xs font-medium transition-colors duration-(--osio-dur-fast)',
                   isActive
                     ? 'border-[var(--osio-accent)] bg-[var(--osio-accent-subtle)] text-[var(--osio-accent-text)]'
                     : 'border-transparent text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]',
@@ -235,7 +235,7 @@ export const CompactAssetPickerBoard: React.FC<CompactAssetPickerBoardProps> = (
                   aria-label={category.label}
                   title={category.label}
                   className={[
-                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors duration-[120ms]',
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors duration-(--osio-dur-fast)',
                     isActive
                       ? 'border-[var(--osio-border-default)] bg-[var(--osio-bg-muted)] text-[var(--osio-fg-strong)]'
                       : 'border-transparent text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]',

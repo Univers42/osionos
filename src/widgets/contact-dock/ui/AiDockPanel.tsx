@@ -120,7 +120,7 @@ export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
           type="submit"
           disabled={streaming || !draft.trim()}
           aria-label="Send to assistant"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] transition-opacity duration-150 ease-out hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] transition-opacity duration-(--osio-dur-fast) ease-out hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Send size={16} aria-hidden="true" />
         </button>

@@ -45,7 +45,7 @@ export const AgentsPanel: React.FC = () => {
               openPage({ id: agent._id, workspaceId, kind: "page", title: agent.title, icon: agent.icon })
             }
             className={[
-              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors duration-[120ms]",
+              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors duration-(--osio-dur-fast)",
               activePageId === agent._id
                 ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
                 : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",

@@ -140,7 +140,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
           <ChevronRight
             size={14}
             className={[
-              "text-[var(--osio-fg-muted)] transition-transform duration-150",
+              "text-[var(--osio-fg-muted)] transition-transform duration-(--osio-dur-fast)",
               expanded ? "rotate-90" : "",
             ].join(" ")}
           />

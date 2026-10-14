@@ -339,7 +339,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
               key={p.email}
               className={[
                 'w-full flex items-center gap-3 px-3 py-2 text-left',
-                'transition-colors duration-100',
+                'transition-colors duration-(--osio-dur-fast)',
                 isLoggedIn ? '' : 'opacity-60',
                 isActive
                   ? 'bg-[var(--osio-bg-muted)]'

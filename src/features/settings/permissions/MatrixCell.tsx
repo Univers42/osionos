@@ -38,7 +38,7 @@ export const MatrixCell: React.FC<MatrixCellProps> = ({ cell, roleName, resource
     title={`${roleName} × ${resource}: ${cell.level}${cell.masked ? ' (masked)' : ''} — click to cycle`}
     aria-label={`${roleName} on ${resource}: ${cell.level}. Click to cycle access.`}
     onClick={onCycle}
-    className={`relative flex h-8 w-full min-w-[52px] items-center justify-center rounded-md border border-transparent font-mono text-xs transition-colors duration-[120ms] hover:border-[var(--osio-db-line)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] disabled:cursor-not-allowed disabled:opacity-60 ${LEVEL_CLASSES[cell.level]}`}
+    className={`relative flex h-8 w-full min-w-[52px] items-center justify-center rounded-md border border-transparent font-mono text-xs transition-colors duration-(--osio-dur-fast) hover:border-[var(--osio-db-line)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] disabled:cursor-not-allowed disabled:opacity-60 ${LEVEL_CLASSES[cell.level]}`}
   >
     {LEVEL_GLYPHS[cell.level]}
     {(cell.masked || cell.conditioned) && (

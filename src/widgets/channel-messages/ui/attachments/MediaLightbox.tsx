@@ -91,7 +91,7 @@ export const MediaLightbox: React.FC<MediaLightboxProps> = ({ src, name, onClose
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => { e.preventDefault(); dragRef.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y }; }}
         style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`, cursor: scale > 1 ? 'grab' : 'zoom-in' }}
-        className="max-h-[90vh] max-w-[90vw] select-none rounded-md object-contain shadow-osio-e5 transition-transform duration-75"
+        className="max-h-[90vh] max-w-[90vw] select-none rounded-md object-contain shadow-osio-e5 transition-transform duration-(--osio-dur-fast)"
       />
     </div>,
     document.body,

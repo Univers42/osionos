@@ -25,7 +25,7 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import { homeTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useExplorerView, type ExplorerView } from "../../model/explorerView";
 
-const BTN = "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors duration-[120ms]";
+const BTN = "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors duration-(--osio-dur-fast)";
 
 export const ExplorerViewSwitch: React.FC = () => {
   const view = useExplorerView((s) => s.view);
