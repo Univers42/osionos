@@ -111,6 +111,36 @@ test.describe("settings use the kit", () => {
       expect(offRadius, `${tabName}: buttons off the control radius`).toEqual([]);
     }
   });
+  test("a reversible action is outlined danger text; an irreversible one keeps the solid fill", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await openSettings(page, "Page settings");
+    const danger = await resolvedToken(page, "background-color", "--osio-danger");
+    const dangerText = await resolvedToken(page, "color", "--osio-danger");
+    const move = page.getByRole("tabpanel").getByRole("button", { name: "Move", exact: true });
+    await expect(move).toBeVisible();
+    await expect(move).toHaveCSS("color", dangerText);
+    await expect(move).not.toHaveCSS("background-color", danger);
+    await expect(move).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+
+    await openSettingsTab(page, "General");
+    const remove = page.getByRole("tabpanel").getByRole("button", { name: "Delete workspace", exact: true });
+    await expect(remove).toHaveCSS("background-color", danger);
+  });
+
+  test("the selected landing page is an accent outline, not a solid primary button", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await openSettings(page, "General");
+    await page.getByRole("tabpanel").getByRole("button", { name: /Select page|Change page/ }).click();
+    const choices = page.getByRole("dialog", { name: "Select landing page" }).locator("button[aria-pressed]");
+    await expect(choices.first()).toBeVisible();
+    await choices.first().click();
+    await page.getByRole("tabpanel").getByRole("button", { name: /Select page|Change page/ }).click();
+    const selected = page.getByRole("dialog", { name: "Select landing page" }).locator('button[aria-pressed="true"]');
+    await expect(selected).toHaveCount(1);
+    await expect(selected).not.toHaveCSS("background-color", await resolvedToken(page, "background-color", "--osio-accent"));
+    await expect(selected).toHaveCSS("border-top-color", await resolvedToken(page, "border-top-color", "--osio-accent"));
+  });
+
   test("at phone width the section nav is a strip above the panel and nothing is clipped", async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openFreshPage(page, baseURL);

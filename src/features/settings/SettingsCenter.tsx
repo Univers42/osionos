@@ -105,6 +105,7 @@ import {
   type SettingsTab,
 } from '@/shared/ui';
 import { ConnectionsPanel } from './connections/ConnectionsPanel';
+import { PageSelectorModal } from './PageSelectorModal';
 
 interface SettingsCenterProps {
   initialTab?: SettingsTab;
@@ -734,7 +735,7 @@ const EmailManagerModal: React.FC<{ userId: string; fallbackEmail?: string; onCl
     email.verifiedAt ? 'Verified' : <Button key={`${email._id}-verify`} onClick={() => runAsync(verifyEmail(email._id))}>Verify</Button>,
     <div key={`${email._id}-actions`} className="flex gap-2">
       {!email.isPrimary && <Button onClick={() => runAsync(makePrimaryEmail(email._id))}>Make primary</Button>}
-      {!email.isPrimary && <Button tone="danger" onClick={() => runAsync(removeEmail(email._id))}>Remove</Button>}
+      {!email.isPrimary && <Button tone="danger-subtle" onClick={() => runAsync(removeEmail(email._id))}>Remove</Button>}
     </div>,
   ]);
   return (
@@ -789,7 +790,7 @@ const TwoFactorModal: React.FC<{ enabled: boolean; onEnabled: (enabled: boolean)
         {enabled ? <p className="text-sm text-[var(--osio-fg-muted)]">Two-step verification is enabled.</p> : <>{qrDataUrl && <img alt="Two-step verification QR code" className="h-40 w-40 rounded-md border border-[var(--osio-border-default)]" src={qrDataUrl} />}<input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={code} onChange={(event) => setCode(event.target.value.replaceAll(/\D/g, '').slice(0, 6))} placeholder="6-digit code" /></>}
         {recoveryCodes.length > 0 && <div className="grid grid-cols-2 gap-2 rounded-md bg-[var(--osio-bg-subtle)] p-3 text-xs font-mono">{recoveryCodes.map((item) => <span key={item}>{item}</span>)}</div>}
         <div className="flex justify-end gap-2">
-          {enabled && <Button tone="danger" onClick={() => { runAsync(postAccountAction('/api/account/2fa/disable', {}).then(() => { onEnabled(false); toast({ kind: 'success', title: 'Two-step verification disabled' }); onClose(); })); }}>Disable</Button>}
+          {enabled && <Button tone="danger-subtle" onClick={() => { runAsync(postAccountAction('/api/account/2fa/disable', {}).then(() => { onEnabled(false); toast({ kind: 'success', title: 'Two-step verification disabled' }); onClose(); })); }}>Disable</Button>}
           {!enabled && <Button tone="primary" disabled={code.length !== 6} onClick={() => { runAsync(postAccountAction<{ recoveryCodes?: string[] }>('/api/account/2fa/verify', { code }).then((response) => { onEnabled(true); setRecoveryCodes(response?.recoveryCodes ?? ['A12B-C34D', 'E56F-G78H', 'J90K-L12M', 'N34P-Q56R']); toast({ kind: 'success', title: 'Two-step verification enabled' }); })); }}>Verify</Button>}
         </div>
       </div>
@@ -803,7 +804,7 @@ const PasskeyManagerModal: React.FC<{ passkeys: Array<{ _id: string; nickname?: 
       <DataTable headers={['Name', 'Created', '']} rows={passkeys.map((passkey) => [
         <input key={`${passkey._id}-name`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={passkey.nickname ?? 'Passkey'} onBlur={(event) => onRename(passkey._id, event.target.value)} />,
         new Date(passkey.createdAt).toLocaleDateString(),
-        <Button key={`${passkey._id}-remove`} tone="danger" onClick={() => onRemove(passkey._id)}>Remove</Button>,
+        <Button key={`${passkey._id}-remove`} tone="danger-subtle" onClick={() => onRemove(passkey._id)}>Remove</Button>,
       ])} />
       <div className="flex justify-end gap-2"><Button onClick={onClose}>Done</Button><Button tone="primary" onClick={onAdd}>Add passkey</Button></div>
     </div>
@@ -1019,15 +1020,6 @@ const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspace
   );
 };
 
-const PageSelectorModal: React.FC<{ pages: PageEntry[]; selectedId: string | null; onSelect: (pageId: string | null) => void; onClose: () => void }> = ({ pages, selectedId, onSelect, onClose }) => (
-  <Modal open onClose={onClose} title="Select landing page" size="md">
-    <div className="space-y-2">
-      <Button className="w-full justify-start" onClick={() => onSelect(null)}>No landing page</Button>
-      {pages.slice(0, 20).map((page) => <Button key={page._id} className="w-full justify-start" tone={selectedId === page._id ? 'primary' : 'default'} aria-pressed={selectedId === page._id} onClick={() => onSelect(page._id)}>{page.icon ?? '📄'} {page.title || 'Untitled'}</Button>)}
-    </div>
-  </Modal>
-);
-
 const NotificationsPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }) => {
   const userId = activeUserId || 'anonymous';
   const settings = useNotificationSettingsStore((state) => state.data);
@@ -1106,7 +1098,7 @@ const MailCalendarPanel: React.FC<{ activeUserId: string; personaEmail?: string 
   return (
     <>
       <Section title="Connected emails">
-        {mailConnections.map((connection) => <SettingRow key={connection._id} title={connection.label.split(' · ')[0]} description={connection.label.split(' · ')[1] ?? personaEmail} action={<Button tone="danger" onClick={() => runAsync(disconnect(connection._id))}>Disconnect</Button>} />)}
+        {mailConnections.map((connection) => <SettingRow key={connection._id} title={connection.label.split(' · ')[0]} description={connection.label.split(' · ')[1] ?? personaEmail} action={<Button tone="danger-subtle" onClick={() => runAsync(disconnect(connection._id))}>Disconnect</Button>} />)}
         <Button onClick={() => setModal({ name: 'mail-provider' })}>Add address</Button>
       </Section>
       <Section title="Connected calendars">
@@ -1329,7 +1321,7 @@ const PageSettingsPanel = () => {
         <SettingRow title={<span className="inline-flex items-center gap-2"><Copy size={16} />Copy link</span>} description="Ctrl+Alt+L" action={<Button onClick={() => runMaybeAsync(actions.copyLink())}>Copy</Button>} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><FileText size={16} />Copy page contents</span>} action={<Button onClick={() => runMaybeAsync(actions.copyContents())}>Copy</Button>} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><Copy size={16} />Duplicate</span>} description="Ctrl+D" action={<Button onClick={() => runMaybeAsync(actions.duplicate())}>Duplicate</Button>} />
-        <SettingRow title={<span className="inline-flex items-center gap-2"><Trash2 size={16} />Move to Trash</span>} action={<Button tone="danger" onClick={() => runMaybeAsync(actions.moveToTrash())}>Move</Button>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Trash2 size={16} />Move to Trash</span>} action={<Button tone="danger-subtle" onClick={() => runMaybeAsync(actions.moveToTrash())}>Move</Button>} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={16} />Present</span>} description="Beta · Ctrl+Alt+P" action={<Toggle checked={actions.config.presentationMode} onChange={() => runMaybeAsync(actions.present())} label="Present" />} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><Sparkles size={16} />Use with AI</span>} description="Share this page context with osionos AI." action={<Button onClick={() => recordSettingsAction('page_use_with_ai', { pageId: activePage.id })}>Use</Button>} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={16} />Translate</span>} action={<div className="flex gap-2"><Dropdown label="Translate language" value={actions.translateLocale} options={TRANSLATION_LANGUAGES.map((language) => ({ value: language.locale, label: language.label }))} onChange={actions.setTranslateLocale} align="end" width="auto" /><Button onClick={() => runMaybeAsync(actions.translate())}>Translate</Button></div>} />
@@ -1505,7 +1497,7 @@ const TeamspacesPanel: React.FC<{ workspaceName?: string }> = ({ workspaceName =
     <input key={`${teamspace._id}-name`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={teamspace.name} onBlur={(event) => updateTeamspace(workspaceId, teamspace._id, { name: event.target.value })} />,
     teamspace.owners.join(', ') || activeUserId,
     <Dropdown key={`${teamspace._id}-access`} label={`${teamspace.name} access`} value={teamspace.access} options={[{ value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }, { value: 'private', label: 'Private' }]} onChange={(value) => updateTeamspace(workspaceId, teamspace._id, { access: value as 'open' | 'closed' | 'private' })} align="end" width="auto" />,
-    <Button key={`${teamspace._id}-archive`} tone="danger" onClick={() => archiveTeamspace(workspaceId, teamspace._id)}>Archive</Button>,
+    <Button key={`${teamspace._id}-archive`} tone="danger-subtle" onClick={() => archiveTeamspace(workspaceId, teamspace._id)}>Archive</Button>,
   ]);
 
   async function createNewTeamspace(name: string) {
