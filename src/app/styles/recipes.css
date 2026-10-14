@@ -32,6 +32,8 @@
   --osio-control-radius: var(--osio-radius-control);
   --osio-control-bg-hover: var(--osio-bg-hover);
   --osio-control-border: var(--osio-border-default);
+  /* The danger-subtle button's hover: a tint of the danger hue, not a fill. */
+  --osio-danger-subtle-bg-hover: color-mix(in srgb, var(--osio-danger) 10%, transparent);
 
   /* Text, date and select fields. */
   --osio-field-bg: var(--osio-bg-surface);
