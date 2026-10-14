@@ -91,6 +91,7 @@ import {
 import { defaultBillingState, defaultWorkspaceSettings } from '@/store/settings/defaults';
 import {
   Button,
+  Card,
   Dropdown,
   EmojiPicker,
   IconButton,
@@ -350,12 +351,12 @@ function anchorFromTitle(value: string): string {
 const MemberAccess: React.FC<{ label: string }> = ({ label }) => {
   const [value, setValue] = useState(label);
   const options = [label, 'Default', 'Off'].map((option) => ({ value: option, label: option }));
-  return <Dropdown value={value} options={options} onChange={(next) => { setValue(next); noopHandledAction('settings_select_change', { label, value: next }); }} align="end" width="auto" />;
+  return <Dropdown label={`Member access: ${label}`} value={value} options={options} onChange={(next) => { setValue(next); noopHandledAction('settings_select_change', { label, value: next }); }} align="end" width="auto" />;
 };
 
 const Section: React.FC<{ title: string; children: React.ReactNode; className?: string }> = ({ title, children, className = '' }) => (
   <section className={`space-y-4 ${className}`} data-settings-anchor={anchorFromTitle(title)}>
-    <h3 className="border-b border-[var(--osio-border-default)] pb-3 text-base font-medium text-[var(--osio-fg-default)]">{title}</h3>
+    <h3 className="text-base font-medium text-[var(--osio-fg-default)]">{title}</h3>
     <div>{children}</div>
   </section>
 );
@@ -413,7 +414,7 @@ const Avatar: React.FC<{ value?: string; label?: string; size?: number }> = ({ v
 );
 
 const FeatureCard: React.FC<{ icon?: React.ReactNode; title: string; description: string; action?: React.ReactNode }> = ({ icon, title, description, action }) => (
-  <div className="rounded-[var(--osio-radius-panel)] border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4">
+  <Card>
     <div className="flex items-start gap-3">
       {icon && <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--osio-bg-subtle)] text-[var(--osio-accent)]">{icon}</span>}
       <div className="min-w-0 flex-1">
@@ -422,7 +423,7 @@ const FeatureCard: React.FC<{ icon?: React.ReactNode; title: string; description
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
-  </div>
+  </Card>
 );
 
 function flashSavedIndicator(setSaved: React.Dispatch<React.SetStateAction<boolean>>) {
@@ -513,7 +514,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
         </aside>
 
         <section className="relative flex-1 overflow-hidden bg-[var(--osio-bg-surface)]" role="tabpanel" aria-label={current.title}>
-          <IconButton label="Close settings" onClick={onClose} className="absolute right-3 top-3 z-[var(--osio-z-raised)]"><X size={16} /></IconButton>
+          <IconButton label="Close settings" onClick={onClose} className="absolute right-3 top-3 z-[var(--osio-z-raised)] bg-[var(--osio-bg-surface)]"><X size={16} /></IconButton>
           <div className="h-full overflow-y-auto px-[clamp(18px,5vw,60px)] py-9">
             <div className="mx-auto flex w-full max-w-[800px] flex-col gap-9">
               <header className="space-y-2">
@@ -864,16 +865,16 @@ const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }) 
         <SettingRow title="Use Enter to add a new line" description="Applies to chat, comments, and other input fields. Press Cmd/Ctrl + Enter to send." action={<Toggle checked={Boolean(preferences?.enterAddsNewline)} onChange={(checked) => update({ enterAddsNewline: checked })} label="Use Enter to add a new line" />} />
       </Section>
       <Section title="Language & time">
-        <SettingRow title="Language" description="Choose the language you want to use osionos in" action={<Dropdown value={preferences?.language ?? 'en-US'} options={[{ value: 'en-US', label: 'English (US)' }, { value: 'fr-FR', label: 'Français' }, { value: 'es-ES', label: 'Español' }, { value: 'de-DE', label: 'Deutsch' }]} onChange={(value) => { changeLanguage(value); update({ language: value }); }} align="end" width="auto" />} />
-        <SettingRow title="Number format" description="Choose how numbers and currencies are formatted." action={<Dropdown value={preferences?.numberFormat ?? 'default'} options={[{ value: 'default', label: 'Default' }, { value: 'dot', label: '1,000.00' }, { value: 'comma', label: '1.000,00' }, { value: 'space', label: '1 000,00' }]} onChange={(value) => update({ numberFormat: value })} align="end" width="auto" />} />
+        <SettingRow title="Language" description="Choose the language you want to use osionos in" action={<Dropdown label="Language" value={preferences?.language ?? 'en-US'} options={[{ value: 'en-US', label: 'English (US)' }, { value: 'fr-FR', label: 'Français' }, { value: 'es-ES', label: 'Español' }, { value: 'de-DE', label: 'Deutsch' }]} onChange={(value) => { changeLanguage(value); update({ language: value }); }} align="end" width="auto" />} />
+        <SettingRow title="Number format" description="Choose how numbers and currencies are formatted." action={<Dropdown label="Number format" value={preferences?.numberFormat ?? 'default'} options={[{ value: 'default', label: 'Default' }, { value: 'dot', label: '1,000.00' }, { value: 'comma', label: '1.000,00' }, { value: 'space', label: '1 000,00' }]} onChange={(value) => update({ numberFormat: value })} align="end" width="auto" />} />
         <SettingRow title="Always show text direction controls" description="Show left-to-right and right-to-left controls in the editor." action={<Toggle checked={Boolean(preferences?.privacy?.textDirectionControls)} onChange={(checked) => update({ privacy: { ...preferences?.privacy, textDirectionControls: checked } })} label="Always show text direction controls" />} />
-        <SettingRow title="Start week" description="This will affect the way your calendars appear in osionos" action={<Dropdown value={preferences?.weekStart ?? 'monday'} options={[{ value: 'monday', label: 'Monday' }, { value: 'sunday', label: 'Sunday' }]} onChange={(value) => update({ weekStart: value as 'sunday' | 'monday' })} align="end" width="auto" />} />
-        <SettingRow title="Date format" description="Set the default format for new @date mentions" action={<Dropdown value={preferences?.dateFormat ?? 'relative'} options={[{ value: 'relative', label: 'Relative' }, { value: 'short', label: 'Short' }, { value: 'iso', label: 'ISO' }]} onChange={(value) => update({ dateFormat: value })} align="end" width="auto" />} />
+        <SettingRow title="Start week" description="This will affect the way your calendars appear in osionos" action={<Dropdown label="Start week" value={preferences?.weekStart ?? 'monday'} options={[{ value: 'monday', label: 'Monday' }, { value: 'sunday', label: 'Sunday' }]} onChange={(value) => update({ weekStart: value as 'sunday' | 'monday' })} align="end" width="auto" />} />
+        <SettingRow title="Date format" description="Set the default format for new @date mentions" action={<Dropdown label="Date format" value={preferences?.dateFormat ?? 'relative'} options={[{ value: 'relative', label: 'Relative' }, { value: 'short', label: 'Short' }, { value: 'iso', label: 'ISO' }]} onChange={(value) => update({ dateFormat: value })} align="end" width="auto" />} />
         <SettingRow title="Set time zone automatically using your location" description="Reminders, notifications, and emails will use your time zone" action={<Toggle checked={Boolean(preferences?.autoTimezone)} onChange={(checked) => update({ autoTimezone: checked, timezone: checked ? Intl.DateTimeFormat().resolvedOptions().timeZone : preferences?.timezone })} label="Set time zone automatically using your location" />} />
-        <SettingRow title="Time zone" description="Choose your time zone" action={<Dropdown value={preferences?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} options={timezones} onChange={(value) => update({ timezone: value, autoTimezone: false })} align="end" width="auto" />} />
+        <SettingRow title="Time zone" description="Choose your time zone" action={<Dropdown label="Time zone" value={preferences?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} options={timezones} onChange={(value) => update({ timezone: value, autoTimezone: false })} align="end" width="auto" />} />
       </Section>
       <Section title="Desktop app">
-        <SettingRow title="Open on start" description="Choose what page opens when you start osionos and when you switch workspaces" action={<Dropdown value={desktop?.openOnStart ?? 'last-visited-page'} options={[{ value: 'last-visited-page', label: 'Last visited page' }, { value: 'home', label: 'Home' }, { value: 'new-page', label: 'New page' }]} onChange={(value) => update({ desktop: { ...preferences?.desktop, openOnStart: value } })} align="end" width="auto" />} />
+        <SettingRow title="Open on start" description="Choose what page opens when you start osionos and when you switch workspaces" action={<Dropdown label="Open on start" value={desktop?.openOnStart ?? 'last-visited-page'} options={[{ value: 'last-visited-page', label: 'Last visited page' }, { value: 'home', label: 'Home' }, { value: 'new-page', label: 'New page' }]} onChange={(value) => update({ desktop: { ...preferences?.desktop, openOnStart: value } })} align="end" width="auto" />} />
       </Section>
       <Section title="Privacy">
         <SettingRow title="Cookie settings" description="See the Cookie Notice for more information" action={<Button onClick={() => setModal({ name: 'cookies' })}>{cookieButtonLabel}</Button>} />
@@ -1049,8 +1050,8 @@ const NotificationsPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }
       <Section title="In-app notifications">
         <FeatureCard icon={<CalendarDays size={16} />} title="Live meeting activity" description="Join video conferencing and start transcribing. Meeting is being transcribed and summarized." action={<Toggle checked={inApp?.liveMeetingActivity ?? true} onChange={(checked) => update({ inApp: { ...settings?.inApp, liveMeetingActivity: checked } })} label="Live meeting activity" />} />
       </Section>
-      <Section title="Slack notifications"><SettingRow title="Slack notifications" description="Get Slack notifications about activity in your osionos workspace" action={<Dropdown value={slack?.mode ?? 'off'} options={[{ value: 'off', label: 'Off' }, { value: 'mentions', label: 'Mentions only' }, { value: 'all', label: 'All activity' }]} onChange={(value) => update({ slack: { ...settings?.slack, mode: value } })} align="end" width="auto" />} /></Section>
-      <Section title="Discord notifications"><SettingRow title="Discord notifications" description="Get Discord notifications about activity in your osionos workspace" action={<Dropdown value={discord?.mode ?? 'off'} options={[{ value: 'off', label: 'Off' }, { value: 'mentions', label: 'Mentions only' }, { value: 'all', label: 'All activity' }]} onChange={(value) => update({ discord: { ...settings?.discord, mode: value } })} align="end" width="auto" />} /></Section>
+      <Section title="Slack notifications"><SettingRow title="Slack notifications" description="Get Slack notifications about activity in your osionos workspace" action={<Dropdown label="Slack notifications" value={slack?.mode ?? 'off'} options={[{ value: 'off', label: 'Off' }, { value: 'mentions', label: 'Mentions only' }, { value: 'all', label: 'All activity' }]} onChange={(value) => update({ slack: { ...settings?.slack, mode: value } })} align="end" width="auto" />} /></Section>
+      <Section title="Discord notifications"><SettingRow title="Discord notifications" description="Get Discord notifications about activity in your osionos workspace" action={<Dropdown label="Discord notifications" value={discord?.mode ?? 'off'} options={[{ value: 'off', label: 'Off' }, { value: 'mentions', label: 'Mentions only' }, { value: 'all', label: 'All activity' }]} onChange={(value) => update({ discord: { ...settings?.discord, mode: value } })} align="end" width="auto" />} /></Section>
       <Section title="Email notifications">
         {emailRows.map(([label, key, description]) => (
           <SettingRow key={label} title={label} description={description} action={<Toggle checked={email?.[key] ?? key !== 'alwaysSend'} onChange={(checked) => update({ email: { ...settings?.email, [key]: checked } })} label={label} />} />
@@ -1324,7 +1325,7 @@ const PageSettingsPanel = () => {
         <SettingRow title={<span className="inline-flex items-center gap-2"><Trash2 size={16} />Move to Trash</span>} action={<Button tone="danger" onClick={() => runMaybeAsync(actions.moveToTrash())}>Move</Button>} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={16} />Present</span>} description="Beta · Ctrl+Alt+P" action={<Toggle checked={actions.config.presentationMode} onChange={() => runMaybeAsync(actions.present())} label="Present" />} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><Sparkles size={16} />Use with AI</span>} description="Share this page context with osionos AI." action={<Button onClick={() => recordSettingsAction('page_use_with_ai', { pageId: activePage.id })}>Use</Button>} />
-        <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={16} />Translate</span>} action={<div className="flex gap-2"><Dropdown value={actions.translateLocale} options={TRANSLATION_LANGUAGES.map((language) => ({ value: language.locale, label: language.label }))} onChange={actions.setTranslateLocale} align="end" width="auto" /><Button onClick={() => runMaybeAsync(actions.translate())}>Translate</Button></div>} />
+        <SettingRow title={<span className="inline-flex items-center gap-2"><Globe size={16} />Translate</span>} action={<div className="flex gap-2"><Dropdown label="Translate language" value={actions.translateLocale} options={TRANSLATION_LANGUAGES.map((language) => ({ value: language.locale, label: language.label }))} onChange={actions.setTranslateLocale} align="end" width="auto" /><Button onClick={() => runMaybeAsync(actions.translate())}>Translate</Button></div>} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><Import size={16} />Import</span>} action={<><input ref={importInputRef} type="file" accept=".json,.md,.markdown,.txt" className="hidden" onChange={handleImport} /><Button onClick={() => importInputRef.current?.click()}>Import</Button></>} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><FileDown size={16} />Export</span>} action={<Button onClick={() => runMaybeAsync(actions.exportPage())}>Export</Button>} />
       </Section>
@@ -1496,7 +1497,7 @@ const TeamspacesPanel: React.FC<{ workspaceName?: string }> = ({ workspaceName =
   const rows = activeTeamspaces.map((teamspace) => [
     <input key={`${teamspace._id}-name`} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={teamspace.name} onBlur={(event) => updateTeamspace(workspaceId, teamspace._id, { name: event.target.value })} />,
     teamspace.owners.join(', ') || activeUserId,
-    <Dropdown key={`${teamspace._id}-access`} value={teamspace.access} options={[{ value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }, { value: 'private', label: 'Private' }]} onChange={(value) => updateTeamspace(workspaceId, teamspace._id, { access: value as 'open' | 'closed' | 'private' })} align="end" width="auto" />,
+    <Dropdown key={`${teamspace._id}-access`} label={`${teamspace.name} access`} value={teamspace.access} options={[{ value: 'open', label: 'Open' }, { value: 'closed', label: 'Closed' }, { value: 'private', label: 'Private' }]} onChange={(value) => updateTeamspace(workspaceId, teamspace._id, { access: value as 'open' | 'closed' | 'private' })} align="end" width="auto" />,
     <Button key={`${teamspace._id}-archive`} tone="danger" onClick={() => archiveTeamspace(workspaceId, teamspace._id)}>Archive</Button>,
   ]);
 
@@ -1557,7 +1558,7 @@ const BillingPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId = 'local
 
   return (
     <>
-      <Section title="Plan"><SettingRow title={billing.plan} description="For students & educators" action={<Dropdown value={billing.plan} options={[{ value: 'Free', label: 'Free' }, { value: 'Education Plus', label: 'Education Plus' }, { value: 'Business', label: 'Business' }]} onChange={(value) => update(workspaceId, { plan: value })} align="end" width="auto" />} /></Section>
+      <Section title="Plan"><SettingRow title={billing.plan} description="For students & educators" action={<Dropdown label="Billing plan" value={billing.plan} options={[{ value: 'Free', label: 'Free' }, { value: 'Education Plus', label: 'Education Plus' }, { value: 'Business', label: 'Business' }]} onChange={(value) => update(workspaceId, { plan: value })} align="end" width="auto" />} /></Section>
       <Section title="Payment details">
         <SettingRow title="Payment method" description={billing.paymentMethod ? 'Configured' : 'None'} action={<Button onClick={() => setModal({ name: 'billing-edit', payload: { field: 'paymentMethod', label: 'Payment method' } })}>Edit method</Button>} />
         <SettingRow title="Billed to" description={billing.billedTo ? 'Configured' : 'None'} action={<Button onClick={() => setModal({ name: 'billing-edit', payload: { field: 'billedTo', label: 'Billed to' } })}>Edit information</Button>} />

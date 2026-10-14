@@ -59,7 +59,7 @@ test.describe("settings use the kit", () => {
     await expect(page.getByRole("switch", { name: "Use Enter to add a new line" })).toHaveAttribute("aria-checked", after);
   });
 
-  test("a primary button is the accent colour", async ({ page, baseURL }) => {
+  test("a primary button is the accent colour at the kit's control height", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await openSettings(page, "osionos AI");
 
@@ -67,6 +67,8 @@ test.describe("settings use the kit", () => {
     await expect(upgrade).toBeVisible();
     const accent = await resolvedToken(page, "background-color", "--osio-accent");
     await expect(upgrade).toHaveCSS("background-color", accent);
+    // The private Button had no fixed height; only the kit Button sizes itself from the density token.
+    await expect(upgrade).toHaveCSS("height", await resolvedToken(page, "height", "--osio-control-h-md"));
   });
 
   test("buttons in the modal take the control radius", async ({ page, baseURL }) => {
