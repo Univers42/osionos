@@ -31,10 +31,10 @@ const STATE_LABEL: Record<SandboxHealthState, string> = {
 };
 
 const DOT_CLASS: Record<SandboxHealthState, string> = {
-  unknown: "bg-[var(--osio-text-muted)]",
+  unknown: "bg-[var(--osio-fg-subtle)]",
   online: "bg-[var(--osio-success)]",
   stopped: "bg-[var(--osio-warning)]",
-  disabled: "bg-[var(--osio-text-muted)]",
+  disabled: "bg-[var(--osio-fg-subtle)]",
   unavailable: "bg-[var(--osio-danger)]",
 };
 
@@ -114,7 +114,7 @@ const PanelToggleChip: React.FC = () => {
 export const WorkbenchStatusBar: React.FC = () => (
   <footer
     data-testid="workbench-statusbar"
-    className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-border-default)] bg-[var(--osio-topbar-bg)] px-2 text-2xs text-[var(--osio-text-secondary)]"
+    className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-border-default)] bg-[var(--osio-topbar-bg)] px-2 text-2xs text-[var(--osio-fg-muted)]"
     style={{ height: "var(--osio-statusbar-h)" }}
   >
     <BranchChip />
