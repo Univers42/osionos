@@ -341,7 +341,7 @@
   /* Global top bar (VSCode-style chrome). Height is theme-independent; bg/border
      reference theme-aware tokens so they resolve per [data-theme] with no dupes. */
   --osio-topbar-h: 40px;
-  --osio-topbar-bg: var(--osio-bg-subtle);
+  --osio-topbar-bg: var(--osio-bg-canvas);
   --osio-topbar-border: var(--osio-border-default);
 
   --sidebar-width: 260px;
