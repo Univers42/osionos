@@ -49,7 +49,7 @@ import { PAGE_DEBUG_TOOLS, usePageDebugStore } from "@/shared/debug/pageDebugSto
 import { getAllDescendantIds } from "@/store/pageStore.helpers";
 import type { PageEntry } from "@/entities/page";
 
-import styles from "./PageOptionsMenu.module.scss";
+import { MENU_PANEL_CLASS, MENU_ROW_CLASS } from "./menuChrome";
 
 const EMPTY_WORKSPACE_PAGES: PageEntry[] = [];
 const MENU_MARGIN = 12;
@@ -291,7 +291,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
         size="xs"
         tone="muted"
         className={[
-          "rounded-md transition-colors duration-[120ms]",
+          "rounded-[var(--osio-radius-sm)] transition-colors duration-[var(--osio-dur-fast)]",
           isMenuOpen
             ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
             : "hover:bg-[var(--osio-bg-hover)]",
@@ -310,7 +310,8 @@ export const PageOptionsMenu: React.FC<Props> = ({
         createPortal(
           <div
             ref={menuRef}
-            className={styles.dropdown}
+            data-testid="page-options-menu"
+            className={`${MENU_PANEL_CLASS} absolute w-[200px]`}
             style={{
               top: menuPosition?.top ?? 0,
               left: menuPosition?.left ?? 0,
@@ -319,7 +320,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
           >
             <button
               type="button"
-              className={styles.menuItem}
+              className={MENU_ROW_CLASS}
               onClick={handleDuplicateClick}
             >
               <Copy size={14} className="shrink-0" />
@@ -328,7 +329,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
 
             <button
               type="button"
-              className={styles.menuItem}
+              className={MENU_ROW_CLASS}
               onClick={handleMoveClick}
             >
               <ArrowRight size={14} className="shrink-0" />
@@ -338,7 +339,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
             <button
               type="button"
               data-testid="page-options-export"
-              className={styles.menuItem}
+              className={MENU_ROW_CLASS}
               onClick={(e) => {
                 e.stopPropagation();
                 setIsMenuOpen(false);
@@ -351,7 +352,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
 
             <button
               type="button"
-              className={styles.menuItem}
+              className={MENU_ROW_CLASS}
               onClick={handleConvertClick}
             >
               {isFolder ? (
@@ -364,7 +365,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
 
             <button
               type="button"
-              className={styles.menuItem}
+              className={MENU_ROW_CLASS}
               onClick={handleConvertWikiClick}
             >
               {isWiki ? (
@@ -377,7 +378,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
 
             <button
               type="button"
-              className={styles.menuItem}
+              className={MENU_ROW_CLASS}
               onClick={(e) => {
                 e.stopPropagation();
                 handleArchiveClick(e);
@@ -389,7 +390,8 @@ export const PageOptionsMenu: React.FC<Props> = ({
 
             <button
               type="button"
-              className={[styles.menuItem, styles.destructive].join(" ")}
+              className={MENU_ROW_CLASS}
+              data-tone="danger"
               onClick={(e) => {
                 e.stopPropagation();
                 handleDeleteClick(e);
@@ -401,8 +403,8 @@ export const PageOptionsMenu: React.FC<Props> = ({
 
             {/* Debug tools: layout/edit diagnostics. Toggles keep the menu open
                 so several can be flipped in one visit; state persists. */}
-            <div className="mx-2 my-1 border-t border-[var(--osio-border-default)]" />
-            <div className="flex items-center gap-1.5 px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">
+            <div className="my-1 border-t border-[var(--osio-border-default)]" />
+            <div className="flex items-center gap-1.5 px-2 pb-1 pt-1.5 text-3xs font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">
               <Bug size={11} className="shrink-0" />
               Tools
             </div>
@@ -411,7 +413,7 @@ export const PageOptionsMenu: React.FC<Props> = ({
                 key={tool.id}
                 type="button"
                 data-testid={`debug-tool-${tool.id}`}
-                className={styles.menuItem}
+                className={MENU_ROW_CLASS}
                 title={tool.hint}
                 onClick={(e) => {
                   e.stopPropagation();

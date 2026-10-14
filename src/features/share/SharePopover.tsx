@@ -26,7 +26,9 @@ interface SharePopoverProps {
 
 /** Notion-style Share dialog: current access list, people picker, general
  *  access. Anchored by the caller (render inside a relatively-positioned
- *  parent, e.g. next to a toolbar "Share" button). */
+ *  parent, e.g. next to a toolbar "Share" button). Below the sm breakpoint the
+ *  right-anchored box would run off the left edge, so it spans the viewport
+ *  gutters instead (fixed, top auto = just under the trigger). */
 export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose }) => {
   const model = useShareModel(resource);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -47,24 +49,26 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
       ref={rootRef}
       role="dialog"
       aria-label="Share"
-      className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 w-[380px] rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] p-3 shadow-[var(--osio-shadow-menu)]"
+      className="osio-surface-overlay fixed inset-x-[var(--osio-space-4)] z-[var(--osio-z-popover)] mt-2 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:w-[380px]"
     >
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between px-2 pt-1">
         <div>
           <h3 className="text-sm font-semibold text-[var(--osio-fg-default)]">Share</h3>
           <p className="text-xs text-[var(--osio-fg-muted)]">{resource.liveResourceName ? `live database · ${resource.liveResourceName}` : resource.resourceType}</p>
         </div>
-        <button type="button" aria-label="Close share dialog" className="rounded-md p-1 text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]" onClick={onClose}>
+        <button type="button" aria-label="Close share dialog" className="rounded-[var(--osio-radius-sm)] p-1 text-[var(--osio-fg-muted)] transition-colors duration-[var(--osio-dur-fast)] hover:bg-[var(--osio-bg-hover)]" onClick={onClose}>
           <X size={14} />
         </button>
       </div>
 
-      <SharePeoplePicker
-        people={model.people}
-        excludedKeys={model.entries.map((entry) => entry.key)}
-        disabled={model.busy}
-        onPick={(person) => { void model.setLevel({ type: 'user', person }, 'can_view'); }}
-      />
+      <div className="px-2">
+        <SharePeoplePicker
+          people={model.people}
+          excludedKeys={model.entries.map((entry) => entry.key)}
+          disabled={model.busy}
+          onPick={(person) => { void model.setLevel({ type: 'user', person }, 'can_view'); }}
+        />
+      </div>
 
       <div className="mt-3 max-h-[260px] space-y-0.5 overflow-y-auto">
         {model.loading && <p className="px-2 py-3 text-xs text-[var(--osio-fg-muted)]">Loading access…</p>}
@@ -84,12 +88,13 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
 
       {!model.isLive && (
         <div className="mt-2 border-t border-[var(--osio-border-default)] pt-2">
-          <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-[var(--osio-fg-subtle)]">General access</p>
+          <p className="osio-menu-label">General access</p>
           {generalEntries.length === 0 && (
             <button
               type="button"
               disabled={model.busy}
-              className="w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
+              className="osio-menu-item"
+              data-tone="muted"
               onClick={() => { void model.setLevel({ type: 'workspace' }, 'can_view'); }}
             >
               + Let everyone in the workspace view
@@ -107,13 +112,13 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
         </div>
       )}
 
-      <div className="mt-2 flex items-center justify-between border-t border-[var(--osio-border-default)] pt-2">
+      <div data-testid="share-footer" className="mt-2 flex items-center justify-between border-t border-[var(--osio-border-default)] px-2 pt-2">
         {model.error
           ? <span className="truncate text-xs text-[var(--osio-danger)]">{model.error}</span>
           : <span className="text-xs text-[var(--osio-fg-subtle)]">{model.isLive ? 'Levels persist as engine policies.' : 'Levels persist as access rules.'}</span>}
         <button
           type="button"
-          className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
+          className="inline-flex h-[var(--osio-control-h-sm)] shrink-0 items-center gap-1 rounded-[var(--osio-radius-sm)] px-2 text-xs text-[var(--osio-fg-muted)] transition-colors duration-[var(--osio-dur-fast)] hover:bg-[var(--osio-bg-hover)]"
           onClick={() => { void navigator.clipboard.writeText(globalThis.location?.href ?? ''); }}
         >
           <Link2 size={12} /> Copy link

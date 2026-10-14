@@ -16,7 +16,7 @@ import { ChevronRight } from "lucide-react";
 import { useClickOutside } from "@/shared/ui";
 import type { MenuActionCtx, PageMenuAction } from "./types";
 import { actionsForTarget } from "./registry";
-import styles from "../ui/PageOptionsMenu.module.scss";
+import { MENU_PANEL_CLASS, MENU_ROW_CLASS } from "../ui/menuChrome";
 
 interface Props {
   x: number;
@@ -71,9 +71,11 @@ export const PageContextMenu: React.FC<Props> = ({ x, y, ctx, onClose }) => {
 
   // Position after mount so we know the real height for bottom-edge clamping.
   // Defer the measure+setState out of the effect body (avoids cascading renders).
+  // offsetHeight, not getBoundingClientRect: the pop-in animation scales the box
+  // and would under-measure by ~2%, leaving the clamped menu off the margin.
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
-      const h = menuRef.current?.getBoundingClientRect().height ?? 0;
+      const h = menuRef.current?.offsetHeight ?? 0;
       setPos(clampPoint(x, y, h));
     });
     return () => cancelAnimationFrame(raf);
@@ -128,7 +130,7 @@ export const PageContextMenu: React.FC<Props> = ({ x, y, ctx, onClose }) => {
           disabled={disabled}
           aria-haspopup={hasSubmenu || undefined}
           aria-expanded={hasSubmenu ? isSubOpen : undefined}
-          className={styles.menuItem}
+          className={MENU_ROW_CLASS}
           style={{
             opacity: disabled ? 0.45 : undefined,
             background: flatIndex === activeIndex ? "var(--osio-bg-hover)" : undefined,
@@ -146,7 +148,7 @@ export const PageContextMenu: React.FC<Props> = ({ x, y, ctx, onClose }) => {
                 key={sub.id}
                 type="button"
                 role="menuitem"
-                className={styles.menuItem}
+                className={MENU_ROW_CLASS}
                 style={{ paddingLeft: 28 }}
                 onClick={(e) => { e.stopPropagation(); onClose(); void sub.run(ctx); }}
               >
@@ -168,7 +170,7 @@ export const PageContextMenu: React.FC<Props> = ({ x, y, ctx, onClose }) => {
       tabIndex={-1}
       onKeyDown={onKeyDown}
       onContextMenu={(e) => e.preventDefault()}
-      className={styles.dropdown}
+      className={MENU_PANEL_CLASS}
       style={{
         position: "fixed",
         top: pos?.top ?? y,

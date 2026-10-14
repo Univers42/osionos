@@ -171,3 +171,12 @@
   margin-block: 4px;
   background-color: var(--osio-menu-separator);
 }
+
+/* The static surface for a card that sits inside a pane. A floating panel uses
+   osio-surface-overlay instead: that one is lifted (e3), this one rests (e1). */
+@utility osio-surface-panel {
+  background-color: var(--osio-bg-surface);
+  border: 1px solid var(--osio-border-default);
+  border-radius: var(--osio-radius-panel);
+  box-shadow: var(--osio-e1);
+}
