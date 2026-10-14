@@ -37,6 +37,10 @@ const TAG_TO_CODE: Record<string, FsErrorCode> = {
   EISDIR: "IsADirectory",
   E2BIG: "TooLarge",
   EIO: "Io",
+  EACCES: "PermissionDenied",
+  EPERM: "PermissionDenied",
+  ECONFINE: "PermissionDenied",
+  EUNSUP: "Unsupported",
 };
 
 /** The TTY adds CRs; every parser strips them once, here. */

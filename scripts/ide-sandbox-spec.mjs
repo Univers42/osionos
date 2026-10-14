@@ -180,7 +180,7 @@ export function assertRelPath(relPath) {
 }
 
 const FS_OP_COMMON = { User: "10001:10001", WorkingDir: "/workspace", AttachStdout: true, AttachStderr: false, Tty: true };
-const READ_CAP_BYTES = 512 * 1024;
+export const READ_CAP_BYTES = 512 * 1024;
 
 // Portable sh snippets (busybox AND debian coreutils — the conformance corpus
 // executes them through the REAL local sh in tests). Failures print one
