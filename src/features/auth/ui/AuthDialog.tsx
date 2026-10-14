@@ -58,7 +58,7 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
               Les comptes persistés restent dans les sessions actives.
             </p>
           </div>
-          <IconButton label="Close" onClick={onClose}>
+          <IconButton label="Fermer" onClick={onClose}>
             <X size={16} />
           </IconButton>
         </div>

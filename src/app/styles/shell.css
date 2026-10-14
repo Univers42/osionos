@@ -46,6 +46,12 @@
   --osio-statusbar-px: 6px;
 }
 
+/* Zen hides the contact launcher (global.css), so nothing floats over the
+   status bar's end. */
+[data-zen="1"] {
+  --osio-statusbar-end: var(--osio-statusbar-px);
+}
+
 @media (max-width: 767.98px) {
   :root {
     --osio-frame-gap: 0px;

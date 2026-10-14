@@ -21,8 +21,8 @@ import { useIdeSyncConflicts } from "@/features/ide/model/ideSyncConflicts";
 import type { ConflictResult } from "../model/pageConflictResolve";
 
 const READ_ONLY = "Read-only: you can't edit this page";
-// The amber tint the template banner and the block colours share: the fg token is the
-// readable ink for a tinted fill, so the sentence itself stays on --osio-fg-default.
+// The template banner's amber card: the yellow block tint fills it and that tint's ink, at
+// 30%, draws the border. The sentence keeps --osio-fg-default, which already reads on the fill.
 const CARD = "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[var(--osio-radius-control)] border " +
   "border-[var(--osio-block-tint-yellow-fg)]/30 bg-[var(--osio-block-tint-yellow-bg)] px-3 py-2 " +
   "text-sm text-[var(--osio-fg-default)]";

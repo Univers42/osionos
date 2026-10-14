@@ -49,7 +49,7 @@ export const FolderRail: React.FC = () => {
   return (
     <nav className="flex flex-col gap-0.5">
       <div className="flex items-center justify-between px-2 pb-1">
-        <span className="text-xs font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">Folders</span>
+        <span className="text-xs font-medium text-[var(--osio-fg-muted)]">Folders</span>
         <button
           type="button"
           className="rounded-[var(--osio-radius-sm)] px-1.5 py-0.5 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
