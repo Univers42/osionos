@@ -299,7 +299,7 @@
   padding: 0 8px 8px 8px;
 }
 
-.osionos-layout-toolbar button {
+.osionos-layout-toolbar button:not([role="menuitem"]) {
   display: inline-flex;
   min-height: 30px;
   align-items: center;
@@ -314,7 +314,7 @@
   transition: background var(--osio-motion-fast), color var(--osio-motion-fast), border-color var(--osio-motion-fast);
 }
 
-.osionos-layout-toolbar button:hover {
+.osionos-layout-toolbar button:not([role="menuitem"]):hover {
   border-color: color-mix(in srgb, var(--osio-accent) 38%, var(--osio-border-default));
   background: var(--osio-bg-hover);
   color: var(--osio-fg-default);

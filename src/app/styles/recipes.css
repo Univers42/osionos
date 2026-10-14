@@ -23,6 +23,10 @@
   --osio-overlay-radius: var(--osio-radius-overlay);
   --osio-overlay-shadow: var(--osio-e3);
   --osio-overlay-padding: 4px;
+  /* A translucent foreground mix, not --osio-bg-hover: dark palettes put the
+   * elevated panel one step above bg-hover, so the solid fill vanishes there. */
+  --osio-menu-item-hover-bg: color-mix(in srgb, var(--osio-fg-default) 10%, transparent);
+  --osio-menu-separator: var(--osio-border-strong);
 
   /* Buttons and icon buttons. */
   --osio-control-radius: var(--osio-radius-control);
@@ -99,4 +103,71 @@
     outline: var(--osio-focus-ring-width) solid var(--osio-focus-ring-color);
     outline-offset: var(--osio-focus-ring-offset);
   }
+}
+
+/* Rows, section labels and separators inside a menu panel. `data-tone` carries
+ * the few colour variants because two colour utilities on one element are
+ * settled by stylesheet order, not class order. `aria-selected` is the
+ * keyboard-active row of a listbox whose focus stays elsewhere (the slash
+ * menu), so it gets an accent bar on top of the hover fill. */
+@utility osio-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--osio-space-2);
+  width: 100%;
+  height: var(--osio-control-h-sm);
+  padding-inline: 8px;
+  border-radius: var(--osio-radius-sm);
+  color: var(--osio-fg-default);
+  font-size: var(--osio-font-size-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--osio-dur-fast) var(--osio-ease-standard);
+
+  &:hover,
+  &[data-active="true"],
+  &[aria-selected="true"] {
+    background-color: var(--osio-menu-item-hover-bg);
+  }
+
+  &[aria-selected="true"] {
+    box-shadow: inset 2px 0 0 0 var(--osio-accent);
+  }
+
+  &:focus-visible {
+    outline: var(--osio-focus-ring-width) solid var(--osio-focus-ring-color);
+    outline-offset: calc(var(--osio-focus-ring-width) * -1);
+  }
+
+  &[data-tone="danger"] {
+    color: var(--osio-danger);
+  }
+
+  &[data-tone="accent"] {
+    color: var(--osio-accent-text);
+  }
+
+  &[data-tone="muted"] {
+    color: var(--osio-fg-muted);
+  }
+
+  &:disabled,
+  &[aria-disabled="true"] {
+    background-color: transparent;
+    color: var(--osio-fg-subtle);
+    cursor: default;
+  }
+}
+
+@utility osio-menu-label {
+  padding: 4px 8px;
+  color: var(--osio-fg-muted);
+  font-size: var(--osio-font-size-xs);
+  font-weight: 500;
+}
+
+@utility osio-menu-separator {
+  height: 1px;
+  margin-block: 4px;
+  background-color: var(--osio-menu-separator);
 }

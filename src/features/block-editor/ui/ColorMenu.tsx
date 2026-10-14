@@ -76,7 +76,7 @@ export const ColorMenu: React.FC<ColorMenuProps> = ({ position, onPick, onClose 
     <div
       ref={ref}
       data-testid="color-menu"
-      className="fixed z-[var(--osio-z-popover)] w-72 overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl"
+      className="fixed z-[var(--osio-z-popover)] w-72 overflow-hidden osio-surface-overlay"
       style={menuStyle}
     >
       <ColorSwatches onChange={(color) => (color ? onPick(color) : onClose())} />

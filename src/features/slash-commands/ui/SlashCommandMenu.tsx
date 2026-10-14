@@ -39,15 +39,6 @@ const MENU_GAP = 6;
 const COMMAND_MENU_WIDTH = 264;
 const COMMAND_MENU_MAX_HEIGHT = 420;
 
-// The keyboard-active row. `--osio-bg-muted` collides with the panel's
-// `--osio-bg-elevated` in the dark palettes (both ~#2A2723), so the highlight was
-// invisible there. A fg-derived gray always contrasts the panel in light AND dark,
-// and the inset accent bar makes the focused row unmistakable while arrowing.
-const ACTIVE_ROW_STYLE: React.CSSProperties = {
-  background: "color-mix(in srgb, var(--osio-fg-default) 14%, transparent)",
-  boxShadow: "inset 2px 0 0 0 var(--osio-accent)",
-};
-
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max));
 }
@@ -211,7 +202,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       // "/" inside that same cell opens this menu at the caret, so it must
       // stay the topmost, clickable layer above ALL of that, never obscured
       // by a passive side panel or by the active grid itself.
-      className="fixed z-[calc(var(--osio-z-popover)+26)] flex w-[264px] flex-col overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] shadow-[var(--osio-shadow-menu)]"
+      className="fixed z-[calc(var(--osio-z-popover)+26)] osio-surface-overlay flex w-[264px] flex-col overflow-hidden"
       style={menuStyle}
     >
       {/* Status echo of the command + arg you're typing after the "/" (the caret
@@ -219,7 +210,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           hidden entirely until you type, so there's no input-looking box on open. */}
       {command ? (
         <div
-          className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-border-default)] px-3 py-2"
+          className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-menu-separator)] px-2 py-2"
           aria-hidden="true"
         >
           <Search size={14} className="shrink-0 text-[var(--osio-fg-subtle)]" />
@@ -227,21 +218,21 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
             <span className="text-[var(--osio-fg-default)]">/{command}</span>
             {arg ? <span className="text-[var(--osio-fg-subtle)]">{` ${arg}`}</span> : null}
           </span>
-          <span className="shrink-0 text-[11px] tabular-nums text-[var(--osio-fg-subtle)]">{ordered.length}</span>
+          <span className="shrink-0 text-2xs tabular-nums text-[var(--osio-fg-muted)]">{ordered.length}</span>
         </div>
       ) : null}
 
-      <div id="slash-command-list" role="listbox" className="min-h-0 flex-1 overflow-y-auto py-1.5">
+      <div id="slash-command-list" role="listbox" className="min-h-0 flex-1 overflow-y-auto">
         {ordered.length === 0 ? (
-          <div className="px-3 py-6 text-center text-xs text-[var(--osio-fg-subtle)]">
+          <div className="px-2 py-6 text-center text-xs text-[var(--osio-fg-muted)]">
             No blocks match “/{command}”.
           </div>
         ) : (
           sections.map((section, sectionIndex) => (
             <React.Fragment key={section.id}>
-              {sectionIndex > 0 && <div className="mx-3 my-1 border-t border-[var(--osio-border-default)]" />}
+              {sectionIndex > 0 && <div className="osio-menu-separator" />}
               {section.label ? (
-                <p className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
+                <p className="osio-menu-label">
                   {section.label}
                 </p>
               ) : null}
@@ -258,18 +249,15 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                     aria-selected={isActive}
                     data-testid="slash-command-entry"
                     data-command-label={item.label}
-                    className={`mx-1 flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors duration-[120ms] [width:calc(100%-0.5rem)] ${
-                      isActive ? "font-medium" : "hover:bg-[var(--osio-bg-hover)]"
-                    }`}
-                    style={isActive ? ACTIVE_ROW_STYLE : undefined}
+                    className="osio-menu-item"
                     onMouseEnter={() => setActiveIdx(idx)}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => handleCommandSelect(item)}
                   >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--osio-bg-subtle)] text-xs text-[var(--osio-fg-muted)] [&>svg]:h-3.5 [&>svg]:w-3.5">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--osio-radius-sm)] bg-[var(--osio-bg-subtle)] text-xs text-[var(--osio-fg-muted)] [&>svg]:h-3.5 [&>svg]:w-3.5">
                       {item.icon}
                     </span>
-                    <span className="block min-w-0 flex-1 truncate text-sm text-[var(--osio-fg-default)]">
+                    <span className="block min-w-0 flex-1 truncate">
                       {item.label}
                     </span>
                   </button>
@@ -280,7 +268,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 border-t border-[var(--osio-border-default)] px-3 py-1.5 text-[11px] text-[var(--osio-fg-subtle)]">
+      <div className="flex shrink-0 items-center gap-2 border-t border-[var(--osio-menu-separator)] px-2 py-1.5 text-2xs text-[var(--osio-fg-muted)]">
         <span>↑↓ navigate</span>
         <span aria-hidden>·</span>
         <span>↵ select</span>
