@@ -17,6 +17,7 @@ import { control, installWorkspaceMountStubs } from "./workspace-mounts-stubs.ts
 installWorkspaceMountStubs();
 const { getWorkspaceMounts, subscribeWorkspaceMounts } = await import("../../src/features/ide/vfs/workspaceMounts.ts");
 const { useSandboxHealthStore } = await import("../../src/features/ide/model/sandboxHealthStore.ts");
+const { publishFsEvent } = await import("../../src/features/ide/model/ideFsEvents.ts");
 
 const WS = "ws-1";
 const setHealth = (state: "online" | "unavailable"): void => useSandboxHealthStore.setState({ state, workspaceId: WS });
@@ -125,4 +126,18 @@ test("watch: a rejecting backend watch removes its abort listener from the calle
   } finally {
     control.failPageStoreSubscribe = false;
   }
+});
+
+test("watch online: a file the shell writes reaches the explorer's watch (the fsync feed is wired)", async () => {
+  setHealth("online");
+  const { provider, path } = getWorkspaceMounts(WS).resolve(`workspace://${WS}/`);
+  const seen: string[] = [];
+  const stop = new AbortController();
+  const watching = provider.watch(path, (event) => { seen.push(`${event.type} ${event.path.segments.join("/")}`); }, stop.signal);
+  await Promise.resolve();
+  publishFsEvent(WS, { event: "write", path: "42/gnl/main.c", hash: "0000000000000000" });
+  publishFsEvent(WS, { event: "delete", path: "zz-probe.c" });
+  stop.abort();
+  await watching;
+  assert.deepEqual(seen, ["write 42/gnl/main.c", "delete zz-probe.c"], "the explorer refreshed only on its Refresh button before");
 });

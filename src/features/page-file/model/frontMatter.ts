@@ -118,3 +118,17 @@ export function splitFrontMatter(text: string): SplitFrontMatter {
   }
   return notFrontMatter(text, "front-matter: no closing ---");
 }
+
+/**
+ * A file written before `updated:` left the front matter (finding 19) differs from today's
+ * text by that one line, and the server moves `updated_at` on its own (a child added, an
+ * inbound apply): a browser with no ledger read every such folder as "changed on both
+ * sides" (106 conflicts after one clone, 2026-10-14). This is the text without that line.
+ */
+export function withoutLegacyUpdated(text: string): string {
+  if (!text.startsWith("---\n")) return text;
+  const close = text.indexOf("\n---", 3);
+  if (close < 0) return text;
+  return text.slice(0, close + 1).replace(/^updated: [^\n]*\n/m, "") + text.slice(close + 1);
+}
+

@@ -16,6 +16,7 @@ import { createSandboxProvider } from "./sandboxProvider";
 import { bridgeFsTransport } from "./bridgeTransport";
 import { pageFileFacade } from "@/features/page-file/model/pageFileFacadeStore";
 import { useSandboxHealthStore, isSandboxOnline } from "@/features/ide/model/sandboxHealthStore";
+import { subscribeFsEvents } from "@/features/ide/model/ideFsEvents";
 import type { MountTable, FsProvider } from "./types";
 
 /** The one scheme every workbench consumer resolves: `workspace://<workspaceId>/<path>`. */
@@ -95,7 +96,12 @@ function createBackends(workspaceId: string): Backends {
     const now = isOnlineHere(workspaceId);
     if (backend === null || now !== online) {
       backend = now
-        ? createSandboxProvider(WORKSPACE_SCHEME, bridgeFsTransport(workspaceId))
+        // The fsync stream's events are the explorer's live updates: without this feed the
+        // sandbox watch never fired, and files a shell made showed only after Refresh
+        // (2026-10-14, a clone of ft_printf_42 invisible until the tab reloaded).
+        ? createSandboxProvider(WORKSPACE_SCHEME, bridgeFsTransport(workspaceId), {
+          subscribe: (listener) => subscribeFsEvents(workspaceId, listener),
+        })
         : createPageProvider(WORKSPACE_SCHEME, pageFileFacade(workspaceId));
       online = now;
     }
