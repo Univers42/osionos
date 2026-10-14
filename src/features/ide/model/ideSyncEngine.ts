@@ -45,8 +45,9 @@ export function syncedHashOf(workspaceId: string, relPath: string): string | nul
 // over an `rm -rf` puts the same bytes back — an agreement left at a cascaded child's path
 // matched them, and the writer deleted the clone (devil C1, 2026-10-14). The writer takes a
 // mark when it skips that remove; a restore from the shell drops the marks of its subtree.
-// In memory, in the tab that applies shell events, the only one whose writer removes
-// (inboundPipeline leadsInbound): a reload starts the writer with no baseline.
+// The store's archive behind a shell delete also records an app removal (store/appRemovals):
+// the mark wins over it. In memory, in the tab that applies shell events: a reload starts the
+// writer with no baseline.
 // Ponytail: a mark the writer never takes stays until the tab reloads — a page restored from
 // the trash in the app before any writer round, or one whose path a new page owned first
 // (devil A5: its remove is never planned). Archiving such a page in the app later leaves its

@@ -24,9 +24,9 @@ import type { StatResult } from "./inboundArchive";
 // inside that window reads "absent" and its page goes to the trash. The write queued behind
 // it makes a new page from the file (a code file: a new id, the old page left in the trash)
 // or restores the same page (an .omd naming its id). The file itself survives because the
-// writer never removes a page the shell deleted (ideSyncEngine markShellArchived), and only
-// the tab holding those marks removes anything (inboundPipeline leadsInbound): until then
-// the writer deleted such files, 211 of a re-clone on the live VM (2026-10-14).
+// writer never removes a page the shell deleted (ideSyncEngine markShellArchived), nor one
+// its own tab's user did not remove in the app (store/appRemovals): until then the writer
+// deleted such files, 211 of a re-clone on the live VM (2026-10-14).
 // Directories are never answered from here (ExecContext.statDir): a stale "absent" on one
 // sends every page under it to the trash with it.
 

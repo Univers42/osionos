@@ -17,7 +17,6 @@ import {
   createSerialQueue,
   decodeUtf8Strict,
   acquireInboundLeadership,
-  leadsInbound,
 } from "../../src/features/ide/model/inboundPipeline.ts";
 import { createFakeLocks } from "./fixtures/fakeLocks.ts";
 
@@ -150,21 +149,6 @@ test("leadership: releasing hands the lock to the next waiting tab", async () =>
   assert.equal(first.isLeader(), false);
   assert.equal(second.isLeader(), true);
   second.release();
-});
-
-test("leadsInbound: this tab may remove files only while it holds the workspace lock", async () => {
-  const { locks } = createFakeLocks();
-  let otherTabCloses = (): void => {};
-  void locks.request("osio-inbound:ws-leads", { mode: "exclusive" }, () => new Promise<void>((resolve) => { otherTabCloses = resolve; }));
-  const tab = acquireInboundLeadership("ws-leads", locks);
-  await flush();
-  assert.equal(leadsInbound("ws-leads"), false);
-  otherTabCloses();
-  await flush();
-  assert.equal(leadsInbound("ws-leads"), true);
-  tab.release();
-  assert.equal(leadsInbound("ws-leads"), false);
-  assert.equal(leadsInbound("ws-never-connected"), false);
 });
 
 test("leadership: release before the grant never makes this tab leader", async () => {

@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { markShellArchived, recordSyncedHash, syncedHashOf } from "../../src/features/ide/model/ideSyncEngine.ts";
 import { sha16 } from "../../src/features/ide/model/ideFsEcho.ts";
 import { pageFileText } from "../../src/features/page-file/model/pageFileText.ts";
-import { runOutbound } from "../../src/features/page-file/model/outboundRun.ts";
+import { LEFT_WITHOUT_PAGE, runOutbound } from "../../src/features/page-file/model/outboundRun.ts";
 import { page } from "./page-tree-fixtures.ts";
 import { block, cp, ctxFor, freshWs, world } from "./page-file-writer-fixtures.ts";
 
@@ -189,15 +189,39 @@ test("remove phase: a page the shell deleted is never removed by the writer — 
   assert.deepEqual(w.removals, ["One.omd"]);
 });
 
-// devil F1: only the tab that applies shell events holds the marks, and a follower's ledger is the
-// one it hydrated at load. Its writer, seeing the archive at a refetch, must not judge the remove.
-test("remove phase: a follower tab, without the leader's marks and holding the old agreement, removes nothing", async () => {
+// devil F1, H1: a tab that did not remove the page itself (a follower, or a successor leader with
+// none of the closed tab's marks) holds the agreement it hydrated at load. Its writer, seeing the
+// archive at a refetch, must not read that as a match for what a `git clone` put back.
+test("remove phase: a page this tab's user did not remove keeps its file and loses its agreement", async () => {
   const ws = freshWs();
-  const w = world({ "One.omd": "v1" }); // the leader applied `rm One.omd`; `git clone` put v1 back
+  const w = world({ "One.omd": "v1" }); // another tab applied `rm One.omd`; `git clone` put v1 back
   const plan = { moves: [], removes: [{ id: "pA", path: "One.omd" }], changed: [] };
-  recordSyncedHash(ws, "One.omd", await sha16("v1")); // what the follower hydrated at load
-  const run = await runOutbound({ ...ctxFor(ws, plan, [page("pA", "One", null)], w.io), mayRemove: () => false });
+  recordSyncedHash(ws, "One.omd", await sha16("v1")); // what this tab hydrated at load
+  const asked: string[] = [];
+  const run = await runOutbound({
+    ...ctxFor(ws, plan, [page("pA", "One", null)], w.io),
+    mayRemove: (id) => { asked.push(id); return false; },
+  });
+  assert.deepEqual(asked, ["pA"]);
   assert.deepEqual(w.removals, []);
   assert.equal(w.files.get("One.omd"), "v1");
-  assert.deepEqual(run.report.skipped, [{ path: "One.omd", reason: "removed by the tab that applies shell events" }]);
+  assert.deepEqual(run.report.skipped, [{ path: "One.omd", reason: LEFT_WITHOUT_PAGE }]);
+  assert.equal(syncedHashOf(ws, "One.omd"), null, "no later round can read the stale agreement as a match");
+});
+
+test("remove phase: the shell's mark wins over an app removal, and both are spent in that round", async () => {
+  const ws = freshWs();
+  recordSyncedHash(ws, "One.omd", await sha16("v1"));
+  markShellArchived(ws, ["pA"]); // `rm One.omd`: the inbound archive records an app removal too
+  const w = world({ "One.omd": "v1" });
+  const plan = { moves: [], removes: [{ id: "pA", path: "One.omd" }], changed: [] };
+  const intents = new Set(["pA"]);
+  const mayRemove = (id: string): boolean => intents.delete(id);
+  const run = await runOutbound({ ...ctxFor(ws, plan, [page("pA", "One", null)], w.io), mayRemove });
+  assert.deepEqual(run.report.skipped, [{ path: "One.omd", reason: "deleted in the shell" }]);
+  assert.deepEqual(intents, new Set(), "the intent did not outlive the round");
+  recordSyncedHash(ws, "One.omd", await sha16("v1")); // the clone, agreed again
+  const again = await runOutbound({ ...ctxFor(ws, plan, [page("pA", "One", null)], w.io), mayRemove });
+  assert.deepEqual(w.removals, []);
+  assert.deepEqual(again.report.skipped, [{ path: "One.omd", reason: LEFT_WITHOUT_PAGE }]);
 });

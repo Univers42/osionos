@@ -76,38 +76,10 @@ export interface Leadership {
   release(): void;
 }
 
-// The tab's current leadership per workspace, for the writer (usePageFileWriter): only the
-// tab that applies shell events removes files. A page the shell deleted is marked in that
-// tab's memory (ideSyncEngine markShellArchived) and its agreement cleared there; a follower
-// sees the archive at its next refetch, holds the agreement it hydrated at load, and read it
-// as a match for the bytes a `git clone` had just put back (devil F1, 2026-10-14).
-// Ponytail: a leader that closes hands its successor no marks, and the successor's ledger
-// may still hold an agreement the closed tab cleared; a re-cloned file at a path no page owns
-// again is removed if that tab refetches before anything else rewrites the agreement.
-const leaderships = new Map<string, Leadership>();
-
-/** Whether this tab applies the workspace's shell events now. */
-export function leadsInbound(workspaceId: string): boolean {
-  return leaderships.get(workspaceId)?.isLeader() ?? false;
-}
-
 export function acquireInboundLeadership(
   workspaceId: string,
   locks: LockManagerLike | undefined,
 ): Leadership {
-  const held = requestLeadership(workspaceId, locks);
-  const leadership: Leadership = {
-    isLeader: held.isLeader,
-    release: () => {
-      held.release();
-      if (leaderships.get(workspaceId) === leadership) leaderships.delete(workspaceId);
-    },
-  };
-  leaderships.set(workspaceId, leadership);
-  return leadership;
-}
-
-function requestLeadership(workspaceId: string, locks: LockManagerLike | undefined): Leadership {
   let leader = false;
   let released = false;
   let releaseHold: (() => void) | null = null;

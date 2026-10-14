@@ -38,9 +38,14 @@ export type OutboundRunCtx = {
   pageById(id: string): PageEntry | undefined;
   io: OutboundIo;
   hash?: OutboundHash;
-  /** False in a tab that does not apply shell events: its removes are left to the one that does. */
-  mayRemove?: () => boolean;
+  /** True for a page this tab's user archived or deleted in the app (appRemovals takeAppRemoval);
+   *  asked once per planned remove, which consumes the intent. Any other remove leaves the file. */
+  mayRemove(pageId: string): boolean;
 };
+
+/** The skip reason of a file whose page went without this tab's user removing it; usePageFileWriter
+ *  counts these in its Output line. */
+export const LEFT_WITHOUT_PAGE = "its page was removed outside this tab, so the file stays";
 
 export type OutboundReport = {
   moved: string[];
@@ -171,18 +176,17 @@ async function writePageFile(ctx: OutboundRunCtx, run: Run, page: PageEntry, tar
 /** A file is removed only when it still holds what was agreed when the plan was made,
  *  read before any await: the inbound side records the agreement of a file it just made
  *  a NEW page from, at the same path, and a remove reading that one deleted the file.
- *  A page the shell deleted is never removed here (takeShellArchived), nor anything in a tab
- *  that does not apply shell events (mayRemove), and the agreement cleared is only ever the
- *  planned one, never a new page's recorded meanwhile. */
+ *  A page the shell deleted is never removed here (takeShellArchived), nor one this tab's user
+ *  did not remove in the app (mayRemove): a refetch that shows a page gone says nothing about
+ *  the bytes at its path, which a `git clone` may just have put back (devil P1, H1, R1). Both
+ *  skips forget the planned agreement, so no later round reads it as a match; the agreement
+ *  cleared is only ever the planned one, never a new page's recorded meanwhile. */
 async function runRemoves(ctx: OutboundRunCtx, run: Run, agreedAtPlan: ReadonlyMap<string, string | null>): Promise<void> {
   const forgetPlanned = (path: string): void => {
     if (syncedHashOf(ctx.workspaceId, path) === agreedAtPlan.get(path)) clearSyncedHash(ctx.workspaceId, path);
   };
-  if (ctx.mayRemove?.() === false) {
-    for (const remove of ctx.plan.removes) run.report.skipped.push({ path: remove.path, reason: "removed by the tab that applies shell events" });
-    return;
-  }
   for (const remove of ctx.plan.removes) {
+    const removedInApp = ctx.mayRemove(remove.id); // first, so the intent never outlives its round
     if (takeShellArchived(ctx.workspaceId, remove.id)) {
       forgetPlanned(remove.path);
       run.report.skipped.push({ path: remove.path, reason: "deleted in the shell" });
@@ -190,6 +194,11 @@ async function runRemoves(ctx: OutboundRunCtx, run: Run, agreedAtPlan: ReadonlyM
     }
     const page = ctx.pageById(remove.id);
     if (page && kindOfPage(page) === "dir") continue; // never delete a folder
+    if (!removedInApp) {
+      forgetPlanned(remove.path);
+      run.report.skipped.push({ path: remove.path, reason: LEFT_WITHOUT_PAGE });
+      continue;
+    }
     let current: string | null;
     try {
       current = await ctx.io.read(remove.path);

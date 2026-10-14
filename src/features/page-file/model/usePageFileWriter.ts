@@ -14,7 +14,6 @@ import { useEffect } from "react";
 
 import type { PageEntry } from "@/entities/page";
 import { ideOutput } from "@/features/ide/model/ideOutputBus";
-import { leadsInbound } from "@/features/ide/model/inboundPipeline";
 import { isSandboxOnline, useSandboxHealthStore } from "@/features/ide/model/sandboxHealthStore";
 import { bytesToText, collectBytes, textToBytes } from "@/features/ide/vfs/bytes";
 import { bridgeFsTransport } from "@/features/ide/vfs/bridgeTransport";
@@ -22,11 +21,12 @@ import { isFsError } from "@/features/ide/vfs/errors";
 import { createSandboxProvider } from "@/features/ide/vfs/sandboxProvider";
 import type { FsProvider } from "@/features/ide/vfs/types";
 import { buildVPath, parentV, type VPath } from "@/features/ide/vfs/vpath";
+import { clearAppRemovals, forgetLiveAppRemovals, takeAppRemoval } from "@/store/appRemovals";
 import { usePageStore } from "@/store/usePageStore";
 
 import { pageIndexFor } from "./pageIndexCache";
 import { planOutbound, type Snapshot } from "./outboundPlan";
-import { runOutbound, type OutboundIo, type OutboundReport } from "./outboundRun";
+import { LEFT_WITHOUT_PAGE, runOutbound, type OutboundIo, type OutboundReport } from "./outboundRun";
 
 /** Trailing edge: a run is scheduled 800 ms after the last page-store change. */
 export const WRITE_DEBOUNCE_MS = 800;
@@ -95,12 +95,14 @@ async function ensureDir(provider: FsProvider, dir: VPath | null): Promise<void>
 /** One OUTPUT line with the counts, then a line per kept/failed path. */
 function summarize(workspaceId: string, report: OutboundReport): void {
   const { moved, written, skipped, removed, kept, failed } = report;
+  const left = skipped.filter((item) => item.reason === LEFT_WITHOUT_PAGE).length;
   const total = moved.length + written.length + skipped.length + removed.length + kept.length + failed.length;
   if (total === 0) return;
   ideOutput(
     "fs-sync",
     `page files: ${written.length} written, ${moved.length} moved, ${removed.length} removed` +
-      `${kept.length ? `, ${kept.length} kept` : ""}${failed.length ? `, ${failed.length} FAILED` : ""}`,
+      `${kept.length ? `, ${kept.length} kept` : ""}${left ? `, ${left} left without a page` : ""}` +
+      `${failed.length ? `, ${failed.length} FAILED` : ""}`,
   );
   for (const item of [...kept, ...failed]) ideOutput("fs-sync", `${item.reason}: ${item.path}`);
 }
@@ -128,6 +130,9 @@ export function usePageFileWriter(workspaceId: string, enabled: boolean): void {
     let flushed: Snapshot | null =
       lastSeen.length === 0 ? null : { index: pageIndexFor(workspaceId, lastSeen), pages: lastSeen };
     let disposed = false;
+    // The baseline already holds every removal made while this writer was off, so none of their
+    // intents can be planned now; one kept would allow a later remove its user never asked for.
+    clearAppRemovals(workspaceId);
 
     const flush = async (): Promise<void> => {
       if (disposed || running) {
@@ -141,6 +146,10 @@ export function usePageFileWriter(workspaceId: string, enabled: boolean): void {
         if (pages.length === 0) return; // nothing to write; keep the baseline
         const index = pageIndexFor(workspaceId, pages);
         const byId = new Map(pages.map((page) => [page._id, page]));
+        forgetLiveAppRemovals(workspaceId, (id) => {
+          const page = byId.get(id);
+          return page !== undefined && !page.archivedAt;
+        });
         const plan = planOutbound(flushed, { index, pages });
         flushed = { index, pages };
         if (plan.moves.length === 0 && plan.removes.length === 0 && plan.changed.length === 0) return;
@@ -150,7 +159,7 @@ export function usePageFileWriter(workspaceId: string, enabled: boolean): void {
           pageById: (id) => byId.get(id),
           pathOf: (id) => index.pathForId(id),
           io,
-          mayRemove: () => leadsInbound(workspaceId),
+          mayRemove: (id) => takeAppRemoval(workspaceId, id),
         });
         summarize(workspaceId, run.report);
       } finally {
