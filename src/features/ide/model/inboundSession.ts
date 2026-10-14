@@ -21,6 +21,7 @@ import { ideOutput } from "./ideOutputBus";
 import { createInboundDrain } from "./inboundDrain";
 import { createLandedMemo } from "./inboundLanded";
 import { createInboundPending, type Schedule } from "./inboundPending";
+import { createBatchedStat, type StatMany } from "./inboundStatBatch";
 import { decodeUtf8Strict, type SerialQueue } from "./inboundPipeline";
 import { createInboundView, type ExecView } from "./inboundView";
 
@@ -39,6 +40,8 @@ export interface InboundSessionDeps {
   restore(pageId: string): Promise<void>;
   /** The sandbox's answer for one workspace path. */
   stat(path: string): Promise<StatResult>;
+  /** Many paths in one request: archive checks then batch (inboundStatBatch). */
+  statMany?: StatMany;
   schedule: Schedule;
   /** Puts a task on the event queue; never awaited from inside one (B8). */
   enqueue(task: () => Promise<void>): void;
@@ -67,7 +70,8 @@ export function createInboundSession(deps: InboundSessionDeps): InboundSession {
   const landed = createLandedMemo({ workspaceId: deps.workspaceId, readText });
   const view = createInboundView({ workspaceId: deps.workspaceId, store: deps.store, views, pending, landed, readText });
   const ctx: ExecContext = {
-    workspaceId: deps.workspaceId, facade, view, pending, landed, restore: deps.restore, stat: deps.stat,
+    workspaceId: deps.workspaceId, facade, view, pending, landed, restore: deps.restore,
+    stat: deps.statMany ? createBatchedStat({ stat: deps.stat, statMany: deps.statMany, duePaths: pending.duePaths }) : deps.stat,
     settle: () => drain.flush(), // only ever called from a queued task, after `drain` exists
   };
   const drain = createInboundDrain({ store: deps.store, views, ctx, schedule: deps.schedule, enqueue: deps.enqueue });
