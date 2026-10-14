@@ -40,12 +40,8 @@ export const PageOptionsMenu: React.FC<Props> = ({ pageId, pageTitle, workspaceI
         ref={triggerRef}
         size="xs"
         tone="muted"
-        className={[
-          "rounded-[var(--osio-radius-sm)] transition-colors duration-[var(--osio-dur-fast)]",
-          isMenuOpen
-            ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
-            : "hover:bg-[var(--osio-bg-hover)]",
-        ].join(" ")}
+        className={isMenuOpen ? "bg-[var(--osio-bg-muted)]" : undefined}
+        aria-expanded={isMenuOpen}
         onClick={(e) => {
           e.stopPropagation();
           setOpen(isMenuOpen ? null : "menu");

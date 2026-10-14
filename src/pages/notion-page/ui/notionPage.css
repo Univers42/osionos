@@ -104,6 +104,7 @@
 
 .osionos-page-header,
 .osionos-page-properties,
+.osionos-page-notice,
 .osionos-page-body {
   box-sizing: border-box;
   max-width: var(--page-content-max-width, var(--osio-page-max-width, 900px));
@@ -113,6 +114,12 @@
   margin-right: auto;
   padding-left: var(--page-content-padding-inline, clamp(16px, 11%, 96px));
   padding-right: var(--page-content-padding-inline, clamp(16px, 11%, 96px));
+}
+
+/* What a page shows in the content column besides blocks (the page-file conflict
+   banner, the unavailable-body state), clear of the header above and the body below. */
+.osionos-page-notice {
+  margin-block: var(--osio-space-2);
 }
 
 /* A wiki's page list sits in the same column as the body, at the UI's own text
@@ -128,11 +135,13 @@
 
 .osionos-page--full-width .osionos-page-header,
 .osionos-page--full-width .osionos-page-properties,
+.osionos-page--full-width .osionos-page-notice,
 .osionos-page--full-width .osionos-page-body,
 .osionos-page--full-width .osionos-wiki-pages-wrap {
   max-width: none;
 }
 
+.osionos-page--layout-canvas .osionos-page-notice,
 .osionos-page--layout-canvas .osionos-page-body {
   max-width: none;
   padding-left: clamp(16px, 3vw, 48px);

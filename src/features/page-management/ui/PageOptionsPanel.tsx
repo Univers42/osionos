@@ -383,9 +383,9 @@ export const PageOptionsPanel: React.FC<Props> = ({
 
             {/* Debug tools: layout/edit diagnostics. Toggles keep the menu open
                 so several can be flipped in one visit; state persists. */}
-            <div className="my-1 border-t border-[var(--osio-border-default)]" />
-            <div className="flex items-center gap-1.5 px-2 pb-1 pt-1.5 text-3xs font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">
-              <Bug size={11} className="shrink-0" />
+            <div className="osio-menu-separator" />
+            <div className="osio-menu-label flex items-center gap-1.5">
+              <Bug size={12} className="shrink-0" />
               Tools
             </div>
             {PAGE_DEBUG_TOOLS.map((tool) => (
