@@ -176,7 +176,7 @@ export const WorkbenchDock: React.FC = () => {
           {active === "output" && <IdeOutputPanel />}
           {active === "debug" && (
             <React.Suspense
-              fallback={<div className="min-h-0 flex-1 px-3 py-2 font-mono text-[12px] text-[var(--osio-code-fg-muted)]">Loading debugger…</div>}
+              fallback={<div className="min-h-0 flex-1 px-3 py-2 font-mono text-xs text-[var(--osio-code-fg-muted)]">Loading debugger…</div>}
             >
               <DebugPanel />
             </React.Suspense>
