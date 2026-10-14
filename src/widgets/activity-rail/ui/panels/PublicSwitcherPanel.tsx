@@ -17,6 +17,7 @@ import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useUserStore } from "@/features/auth";
 import { useUIStore } from "@/shared/config/uiStore";
 import type { Workspace } from "@/entities/user/model/types";
+import { PanelSectionLabel } from "@/shared/ui";
 
 const EMPTY: readonly Workspace[] = [];
 
@@ -53,9 +54,7 @@ export const PublicSwitcherPanel: React.FC = () => {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="px-2 pt-2 pb-1">
-        <p className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
-          Shared
-        </p>
+        <PanelSectionLabel className="px-1 pb-2">Shared</PanelSectionLabel>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}

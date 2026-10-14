@@ -25,7 +25,7 @@ import { CreateGroupModal } from '@/features/group-chat/CreateGroupModal';
 import { PeoplePickerList } from '@/shared/people/PeoplePickerList';
 import type { PersonHit } from '@/shared/people/usePeopleSearch';
 import { useContactsStore } from '@/store/social/useContactsStore';
-import { useToastStore } from '@/shared/ui';
+import { PanelSectionLabel, useToastStore } from '@/shared/ui';
 import { UnreadBadge } from '@/shared/chat/UnreadBadge';
 import { genId } from '@/widgets/workspace-grid/model/layoutTree';
 import { useWorkspaceLayout } from '@/widgets/workspace-grid/model/workspaceLayout';
@@ -81,7 +81,7 @@ export const DmList: React.FC<{ filter?: string }> = ({ filter = "" }) => {
   return (
     <section className="px-2 py-1">
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-xs font-semibold uppercase text-[var(--osio-fg-subtle)]">Direct messages</h2>
+        <PanelSectionLabel as="h2">Direct messages</PanelSectionLabel>
         <span className="flex items-center gap-0.5">
           <button
             type="button"

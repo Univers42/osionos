@@ -20,6 +20,7 @@ import { readAppMeta } from "@/features/marketplace/model/appMeta";
 import { MarketplaceAppRow } from "@/features/marketplace/ui/MarketplaceAppRow";
 import { MarketplaceDetailModal } from "@/features/marketplace/ui/MarketplaceDetailModal";
 import { MarketplaceAppEditor } from "@/features/marketplace/ui/MarketplaceAppEditor";
+import { PanelSectionLabel } from "@/shared/ui";
 
 /** Extensions panel: Drafts / Installed / Recommended, search, "+ Add app", detail overlay + editor. */
 export const MarketplacePanel: React.FC = () => {
@@ -58,7 +59,7 @@ export const MarketplacePanel: React.FC = () => {
   const section = (label: string, list: typeof apps) =>
     list.length ? (
       <div>
-        <p className="px-2 pb-1 pt-2 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">{label}</p>
+        <PanelSectionLabel className="px-2 pb-1 pt-2">{label}</PanelSectionLabel>
         {list.map((app) => (
           <MarketplaceAppRow
             key={app._id}

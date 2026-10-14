@@ -46,7 +46,6 @@ export const RailIcon: React.FC<Props> = ({ label, Icon, iconValue, active = fal
     onFocus={onIntent}
     className={cx(
       "relative grid h-10 w-10 place-items-center rounded-md transition-colors duration-[120ms]",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-subtle)]",
       active
         ? "text-[var(--osio-fg-default)]"
         : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",

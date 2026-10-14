@@ -145,4 +145,45 @@ test.describe("activity rail sidebar", () => {
     await expect(peek(page)).toHaveCount(0);
     await expect(explorer(page)).toBeVisible();
   });
+
+  // The rail icon's own accent ring (ring-offset on the OLD rail background) never painted: the global
+  // keyboard-focus rule is unlayered and wins the box-shadow. What shows is its outline and inset fill, so the
+  // test holds that nothing else, like a ring-offset halo in a stale colour, is drawn in either context.
+  test("a rail icon shows the global focus indicator and no ring offset, docked or in the peek card", async ({ page, baseURL }) => {
+    await gotoDocked(page, baseURL);
+    const indicatorOf = async (tab) => {
+      await page.keyboard.press("Tab");
+      await tab.focus();
+      return tab.evaluate((el) => {
+        const css = getComputedStyle(el);
+        return { outline: css.outlineStyle, shadow: css.boxShadow.split(/\)\s*,/).length };
+      });
+    };
+    expect(await indicatorOf(rail(page).getByRole("tab", { name: /^Search/ }))).toEqual({ outline: "solid", shadow: 1 });
+
+    await hideSidebar(page);
+    await page.mouse.move(300, 400);
+    await page.mouse.move(3, 400);
+    await expect(peek(page)).toHaveAttribute("data-open", "");
+    expect(await indicatorOf(peek(page).getByRole("tab", { name: /^Search/ }))).toEqual({ outline: "solid", shadow: 1 });
+  });
+
+  // Marketplace shows its labels only once it has apps, and Agents has no rail tab, so a fresh stack reaches
+  // neither; they use the same PanelSectionLabel as the two panels checked here.
+  test("every section label in a panel is sentence case, with no letter-spacing", async ({ page, baseURL }) => {
+    await gotoDocked(page, baseURL);
+    // An h2 label would be serif without the family override: the global h1-h4 rule sets the heading stack.
+    const bodyFamily = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
+    for (const [tab, panel] of [["Shared", "public"], ["Conversations", "conversations"]]) {
+      await rail(page).getByRole("tab", { name: new RegExp(`^${tab}`) }).click();
+      const labels = page.locator(`[data-sidebar-panel="${panel}"]:not([hidden]) [data-section-label]`);
+      await expect(labels.first()).toBeVisible();
+      for (const style of await labels.evaluateAll((els) => els.map((el) => {
+        const css = getComputedStyle(el);
+        return { text: el.textContent, transform: css.textTransform, spacing: css.letterSpacing, family: css.fontFamily };
+      }))) {
+        expect(style, `${panel}: ${style.text}`).toMatchObject({ transform: "none", spacing: "normal", family: bodyFamily });
+      }
+    }
+  });
 });
