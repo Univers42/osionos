@@ -18,7 +18,7 @@ import { isFsError } from "../vfs/errors";
 import { buildVPath } from "../vfs/vpath";
 import { sandboxHashes, type FsOpTransport } from "../vfs/sandboxFsOps";
 import { ideOutput } from "./ideOutputBus";
-import { clearSyncedHash, syncedHashOf } from "./ideSyncEngine";
+import { clearSyncedHash, recordSyncedHash, syncedHashOf } from "./ideSyncEngine";
 
 import type { FsProvider } from "../vfs/types";
 import type { ExecContext } from "./inboundExec";
@@ -88,13 +88,27 @@ function stillAt(ticket: ArchiveTicket, ctx: ExecContext): boolean {
   return state?.status === "live" && state.path === ticket.path;
 }
 
-/** B2: the ledger forgets the path, the restore memory keeps its last agreed hash. */
+/**
+ * B2: the ledger forgets the path, the restore memory keeps its last agreed hash.
+ * The ledger forgets it BEFORE the store is asked: the writer removes an archived page's
+ * file when it still holds the agreement read at plan time, and `git clone` puts the same
+ * bytes back at the same path (outboundRun). The store toasts a failed archive and keeps
+ * the page (pageStore.actions applyCascadeOperation), so a page still live afterwards is
+ * an archive that did not happen: its agreement comes back and Output says so.
+ */
 async function archiveNow(ticket: ArchiveTicket, ctx: ExecContext): Promise<void> {
   const state = ctx.view.pageState(ticket.pageId);
   if (state?.status !== "live" || state.path !== ticket.path) return;
   const syncedHash = syncedHashOf(ctx.workspaceId, state.filePath);
-  await ctx.facade.archive(ticket.pageId);
   clearSyncedHash(ctx.workspaceId, state.filePath);
+  await ctx.facade.archive(ticket.pageId);
+  if (ctx.view.pageState(ticket.pageId)?.status === "live") {
+    if (syncedHash !== null && syncedHashOf(ctx.workspaceId, state.filePath) === null) {
+      recordSyncedHash(ctx.workspaceId, state.filePath, syncedHash);
+    }
+    ideOutput("fs-sync", `${ticket.path}: deleted in the shell, but the page could not be moved to the trash; it stays`);
+    return;
+  }
   ctx.pending.rememberArchived(ticket.pageId, { syncedHash, path: state.path });
   ideOutput("fs-sync", `${ticket.path}: deleted in the shell — the page is in the trash`);
 }
