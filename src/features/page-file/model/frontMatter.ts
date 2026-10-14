@@ -22,7 +22,7 @@ export interface SplitFrontMatter {
 /** Valid key pattern: starts with letter or underscore, then alphanumeric/underscore. */
 export const FRONT_MATTER_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const FORBIDDEN_KEYS = new Set(["shadow-osio-[object Object]", "shadow-osio-function Object() { [native code] }", "prototype"]);
 
 /** Validates a key for front-matter use. Throws TypeError on invalid key. */
 function validateKey(key: string): void {

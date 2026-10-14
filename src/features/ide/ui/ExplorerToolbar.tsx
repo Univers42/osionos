@@ -13,7 +13,7 @@
 import React from "react";
 import { ChevronsDownUp, Download, FilePlus, FolderInput, FolderPlus, RefreshCw } from "lucide-react";
 
-const TOOL = "flex h-6 w-6 items-center justify-center rounded text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--osio-accent)]";
+const TOOL = "flex h-6 w-6 items-center justify-center rounded-xs text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--osio-accent)]";
 
 export const ExplorerToolbar: React.FC<{
   onNewFile: () => void;
@@ -29,6 +29,6 @@ export const ExplorerToolbar: React.FC<{
     {onImportFolder && <button type="button" title="Import folder" aria-label="Import folder" onClick={onImportFolder} className={TOOL}><FolderInput size={14} /></button>}
     {onExportZip && <button type="button" title="Export as .zip" aria-label="Export as .zip" onClick={onExportZip} className={TOOL}><Download size={14} /></button>}
     <button type="button" title="Collapse all" aria-label="Collapse all" onClick={onCollapseAll} className={TOOL}><ChevronsDownUp size={14} /></button>
-    <button type="button" title="Refresh" aria-label="Refresh" onClick={onRefresh} className={TOOL}><RefreshCw size={13} /></button>
+    <button type="button" title="Refresh" aria-label="Refresh" onClick={onRefresh} className={TOOL}><RefreshCw size={12} /></button>
   </div>
 );

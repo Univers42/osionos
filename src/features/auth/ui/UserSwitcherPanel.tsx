@@ -70,7 +70,7 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
               Les comptes persistés restent dans les sessions actives.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="rounded p-1 hover:bg-[var(--osio-bg-hover)]">
+          <button type="button" onClick={onClose} className="rounded-xs p-1 hover:bg-[var(--osio-bg-hover)]">
             <X size={16} />
           </button>
         </div>
@@ -79,14 +79,14 @@ const AuthDialog: React.FC<AuthDialogProps> = ({ onClose }) => {
           <button
             type="button"
             onClick={() => setMode('login')}
-            className={`rounded px-2 py-1 ${mode === 'login' ? 'bg-[var(--osio-bg-surface)] shadow-osio-sm' : ''}`}
+            className={`rounded-xs px-2 py-1 ${mode === 'login' ? 'bg-[var(--osio-bg-surface)] shadow-osio-sm' : ''}`}
           >
             Se connecter
           </button>
           <button
             type="button"
             onClick={() => setMode('signup')}
-            className={`rounded px-2 py-1 ${mode === 'signup' ? 'bg-[var(--osio-bg-surface)] shadow-osio-sm' : ''}`}
+            className={`rounded-xs px-2 py-1 ${mode === 'signup' ? 'bg-[var(--osio-bg-surface)] shadow-osio-sm' : ''}`}
           >
             Créer
           </button>
@@ -275,14 +275,14 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
             onClick={() => setSettingsTab('settings')}
             className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-[var(--osio-border-default)] px-2 py-1 text-xs hover:bg-[var(--osio-bg-hover)]"
           >
-            <Settings size={13} /> Settings
+            <Settings size={12} /> Settings
           </button>
           <button
             type="button"
             onClick={() => setSettingsTab('people')}
             className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-[var(--osio-border-default)] px-2 py-1 text-xs hover:bg-[var(--osio-bg-hover)]"
           >
-            <Users size={13} /> People
+            <Users size={12} /> People
           </button>
         </div>
       </header>
@@ -290,7 +290,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
       <div className="border-t border-[var(--osio-border-default)] py-2">
         <div className="mb-1 flex items-center justify-between px-3 text-xs font-medium text-[var(--osio-fg-muted)]">
           <span className="truncate">{activePersona?.email ?? 'No account selected'}</span>
-          <button type="button" className="rounded p-1 hover:bg-[var(--osio-bg-hover)]" aria-label="Account settings">
+          <button type="button" className="rounded-xs p-1 hover:bg-[var(--osio-bg-hover)]" aria-label="Account settings">
             <MoreHorizontal size={16} />
           </button>
         </div>
@@ -306,7 +306,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
             onClick={() => switchWorkspace(workspace._id)}
             className="flex h-8 w-full items-center gap-2 px-3 text-left text-sm hover:bg-[var(--osio-bg-hover)]"
           >
-            <span className="flex h-5 w-5 items-center justify-center rounded bg-[var(--osio-bg-muted)] text-xs">
+            <span className="flex h-5 w-5 items-center justify-center rounded-xs bg-[var(--osio-bg-muted)] text-xs">
               {icon
                 ? <IconValueView value={icon} size={14} />
                 : (workspace.name[0] ?? 'W').toUpperCase()}
@@ -337,7 +337,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
               key={p.email}
               className={[
                 'w-full flex items-center gap-3 px-3 py-2 text-left',
-                'transition-colors duration-100',
+                'transition-colors duration-(--osio-dur-fast)',
                 isLoggedIn ? '' : 'opacity-60',
                 isActive
                   ? 'bg-[var(--osio-bg-muted)]'

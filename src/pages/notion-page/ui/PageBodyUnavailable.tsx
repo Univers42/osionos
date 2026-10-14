@@ -35,7 +35,7 @@ export const PageBodyUnavailable: React.FC<Props> = ({ signedIn, onRetry }) => (
         <button
           type="button"
           onClick={onRetry}
-          className="mt-3 rounded border border-[var(--osio-border-default)] px-3 py-1 text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-surface)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--osio-accent)]"
+          className="mt-3 rounded-xs border border-[var(--osio-border-default)] px-3 py-1 text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-surface)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--osio-accent)]"
         >
           Retry
         </button>

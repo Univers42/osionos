@@ -61,7 +61,7 @@ export const SandboxUnavailable: React.FC<Props> = ({ compact = false, onRetried
       disabled={pending}
       aria-busy={pending}
       onClick={() => void onRetry()}
-      className="shrink-0 rounded border border-[var(--osio-code-border)] px-2 py-0.5 text-[11px] text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--osio-accent)] disabled:opacity-60"
+      className="shrink-0 rounded-xs border border-[var(--osio-code-border)] px-2 py-0.5 text-2xs text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--osio-accent)] disabled:opacity-60"
     >
       {pending ? "Retrying…" : "Retry"}
     </button>
@@ -69,7 +69,7 @@ export const SandboxUnavailable: React.FC<Props> = ({ compact = false, onRetried
 
   if (compact) {
     return (
-      <div role="status" aria-live="polite" className="flex items-center gap-2 px-3 py-1 text-[11px] text-[var(--osio-code-fg-muted)]">
+      <div role="status" aria-live="polite" className="flex items-center gap-2 px-3 py-1 text-2xs text-[var(--osio-code-fg-muted)]">
         <span className="min-w-0 flex-1 truncate" title={reason ?? undefined}>
           <span className="font-semibold text-[var(--osio-code-fg)]">{title}</span>
           {reason ? ` — ${reason}` : ""}
@@ -83,9 +83,9 @@ export const SandboxUnavailable: React.FC<Props> = ({ compact = false, onRetried
     <div
       role="status"
       aria-live="polite"
-      className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[var(--osio-code-bg)] px-4 text-center text-[12px] text-[var(--osio-code-fg-muted)]"
+      className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[var(--osio-code-bg)] px-4 text-center text-xs text-[var(--osio-code-fg-muted)]"
     >
-      <p className="text-[13px] font-semibold text-[var(--osio-code-fg)]">{title}</p>
+      <p className="text-sm font-semibold text-[var(--osio-code-fg)]">{title}</p>
       {reason && <p>{reason}</p>}
       {state === "unavailable" && <p>{ADMIN_HINT}</p>}
       {retryButton}

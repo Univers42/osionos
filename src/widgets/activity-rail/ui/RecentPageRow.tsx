@@ -46,7 +46,7 @@ export const RecentPageActions: React.FC<RecentPageActionsProps> = ({ recent, ac
       />
       <button
         type="button"
-        className="p-1 rounded-md text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+        className="p-1 rounded-md text-[var(--osio-fg-muted)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
         onClick={(e) => onAddChild(e, recent)}
         title="Add child page"
       >

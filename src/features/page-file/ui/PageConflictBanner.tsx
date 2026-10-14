@@ -19,7 +19,7 @@ import { useIdeSyncConflicts } from "@/features/ide/model/ideSyncConflicts";
 import type { ConflictResult } from "../model/pageConflictResolve";
 
 const READ_ONLY = "Read-only: you can't edit this page";
-const BTN = "shrink-0 rounded border border-[var(--osio-code-border,var(--osio-border-default))] " +
+const BTN = "shrink-0 rounded-xs border border-[var(--osio-code-border,var(--osio-border-default))] " +
   "px-2 py-0.5 text-[var(--osio-code-fg,var(--osio-fg-default))] " +
   "hover:bg-[var(--osio-code-btn-hover,var(--osio-bg-hover))] disabled:opacity-50";
 
@@ -60,7 +60,7 @@ export const PageConflictBanner: React.FC<{ pageId: string }> = ({ pageId }) => 
     <div
       role="status"
       aria-live="polite"
-      className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border,var(--osio-border-default))] bg-[var(--osio-code-header-bg,var(--osio-bg-subtle))] px-3 py-1.5 text-[12px] text-[var(--osio-code-fg,var(--osio-fg-default))]"
+      className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-code-border,var(--osio-border-default))] bg-[var(--osio-code-header-bg,var(--osio-bg-subtle))] px-3 py-1.5 text-xs text-[var(--osio-code-fg,var(--osio-fg-default))]"
     >
       <span className="min-w-0 flex-1 truncate text-[var(--osio-warning)]">
         The file version of this page changed too.

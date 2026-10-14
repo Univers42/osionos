@@ -109,7 +109,7 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
         onContextMenu={onContextMenu}
         style={indentOf(level)}
         className={
-          "flex cursor-pointer items-center gap-1.5 py-[3px] pr-2 text-[13px] text-[var(--osio-code-fg)] " +
+          "flex cursor-pointer items-center gap-1.5 py-[3px] pr-2 text-sm text-[var(--osio-code-fg)] " +
           (active ? "bg-[var(--osio-code-active-line)] " : "hover:bg-[var(--osio-code-btn-hover)] ") +
           (dnd.dragOver ? "outline outline-1 outline-[var(--osio-accent)]" : "")
         }
@@ -138,7 +138,7 @@ export const ExplorerStatusRow: React.FC<{ dir: string; level: number; placement
   const state = ctx.dirs[dir];
   return (
     <li {...placed(placement)} role="none">
-      <div style={indentOf(level)} className="py-[3px] pr-2 text-[12px] text-[var(--osio-code-fg-muted)]">
+      <div style={indentOf(level)} className="py-[3px] pr-2 text-xs text-[var(--osio-code-fg-muted)]">
         {state?.status === "error" ? (
           <>
             Could not read this folder: {state.message}{" "}

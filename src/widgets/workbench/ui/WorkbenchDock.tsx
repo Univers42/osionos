@@ -34,7 +34,7 @@ const TAB_LABEL: Record<DockTab, string> = {
 };
 
 const ICON_BTN =
-  "flex h-5 w-5 items-center justify-center rounded hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-code-fg)]";
+  "flex h-5 w-5 items-center justify-center rounded-xs hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-code-fg)]";
 
 function nextTabIndex(key: string, index: number): number | null {
   const count = DOCK_TABS.length;
@@ -50,7 +50,7 @@ const TerminalPane: React.FC = () => {
   const secondary = useIdeDockStore((s) => s.secondary);
   return (
     <React.Suspense
-      fallback={<div className="min-h-0 flex-1 px-3 py-2 font-mono text-[12px] text-[var(--osio-code-fg-muted)]">Starting terminal…</div>}
+      fallback={<div className="min-h-0 flex-1 px-3 py-2 font-mono text-xs text-[var(--osio-code-fg-muted)]">Starting terminal…</div>}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <IdeTerminal key={primary} termId={primary} />
@@ -71,10 +71,10 @@ const TerminalActions: React.FC = () => {
   return (
     <>
       <button type="button" title="New terminal (fresh session)" aria-label="New terminal" onClick={() => dock().newTerminal()} className={ICON_BTN}>
-        <Plus size={13} />
+        <Plus size={12} />
       </button>
       <button type="button" title={splitLabel} aria-label={splitLabel} onClick={() => (secondary ? dock().closeSecondary() : dock().splitTerminal())} className={ICON_BTN}>
-        <Columns2 size={13} />
+        <Columns2 size={12} />
       </button>
     </>
   );
@@ -108,13 +108,13 @@ const DockTabs: React.FC<{ active: DockTab; conflicts: number }> = ({ active, co
           data-dock-tab={id}
           onClick={() => setTab(id)}
           onKeyDown={(e) => onKeyDown(e, index)}
-          className={`rounded px-2 py-1 hover:text-[var(--osio-code-fg)] ${
+          className={`rounded-xs px-2 py-1 hover:text-[var(--osio-code-fg)] ${
             active === id ? "text-[var(--osio-code-fg)] underline decoration-[var(--osio-accent)] underline-offset-4" : ""
           }`}
         >
           {TAB_LABEL[id]}
           {id === "output" && conflicts > 0 && (
-            <span className="ml-1 rounded bg-[var(--osio-warning)] px-1 text-[10px] text-[var(--osio-warning-fg)]">{conflicts}</span>
+            <span className="ml-1 rounded-xs bg-[var(--osio-warning)] px-1 text-3xs text-[var(--osio-warning-fg)]">{conflicts}</span>
           )}
         </button>
       ))}
@@ -138,12 +138,12 @@ export const WorkbenchDock: React.FC = () => {
       style={{ height: clampDockHeight(height, globalThis.innerHeight), minHeight: "var(--osio-dock-min-h)" }}
       className="flex shrink-0 flex-col bg-[var(--osio-code-bg)]"
     >
-      <div className="flex h-8 shrink-0 items-center gap-1 border-b border-[var(--osio-code-border)] px-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
+      <div className="flex h-8 shrink-0 items-center gap-1 border-b border-[var(--osio-code-border)] px-2 text-2xs font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
         <DockTabs active={active} conflicts={conflicts} />
         <span className="flex-1" />
         {active === "terminal" && <TerminalActions />}
         <button type="button" title="Hide panel" aria-label="Hide panel" onClick={closeDock} className={ICON_BTN}>
-          <X size={13} />
+          <X size={12} />
         </button>
       </div>
       <div

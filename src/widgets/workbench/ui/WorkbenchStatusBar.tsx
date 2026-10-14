@@ -38,7 +38,7 @@ const DOT_CLASS: Record<SandboxHealthState, string> = {
   unavailable: "bg-[var(--osio-danger)]",
 };
 
-const CHIP_BASE = "inline-flex items-center gap-1.5 rounded px-1.5";
+const CHIP_BASE = "inline-flex items-center gap-1.5 rounded-xs px-1.5";
 const CHIP = `${CHIP_BASE} hover:bg-[var(--osio-bg-hover)]`;
 
 /** Read-only, so no hover affordance. Renders nothing until the sandbox answers with a branch. */
@@ -114,7 +114,7 @@ const PanelToggleChip: React.FC = () => {
 export const WorkbenchStatusBar: React.FC = () => (
   <footer
     data-testid="workbench-statusbar"
-    className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-border-default)] bg-[var(--osio-topbar-bg)] px-2 text-[11px] text-[var(--osio-text-secondary)]"
+    className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-border-default)] bg-[var(--osio-topbar-bg)] px-2 text-2xs text-[var(--osio-text-secondary)]"
     style={{ height: "var(--osio-statusbar-h)" }}
   >
     <BranchChip />

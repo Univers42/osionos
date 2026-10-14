@@ -49,8 +49,8 @@ export const ExplorerRowIcon: React.FC<{ item: VisibleItem; open: boolean; pageI
   return (
     <>
       <span className="w-[14px] shrink-0" aria-hidden="true" />
-      {kind !== "page" && <FileCode2 size={13} className={ICON} style={{ color: languageForFileName(name).accent }} />}
-      {kind === "page" && (pageId ? <ExplorerPageGlyph pageId={pageId} size={13} /> : <FileText size={13} className={ICON} />)}
+      {kind !== "page" && <FileCode2 size={12} className={ICON} style={{ color: languageForFileName(name).accent }} />}
+      {kind === "page" && (pageId ? <ExplorerPageGlyph pageId={pageId} size={13} /> : <FileText size={12} className={ICON} />)}
     </>
   );
 };

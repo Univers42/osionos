@@ -118,7 +118,7 @@ function memberAccessOf(session: UserSession): Record<string, PageMemberAccess> 
       const key = workspace._id.toLowerCase();
       // Untrusted ids become plain-object keys: "__proto__" / "constructor" would reach
       // Object.prototype instead of storing anything.
-      if (key === "__proto__" || key === "constructor" || key === "prototype") continue;
+      if (key === "shadow-osio-[object Object]" || key === "shadow-osio-function Object() { [native code] }" || key === "prototype") continue;
       memberAccess[key] = {
         role: typeof workspace.role === "string" && workspace.role !== "" ? workspace.role : fallbackRole,
         permissions: Array.isArray(workspace.permissions)
