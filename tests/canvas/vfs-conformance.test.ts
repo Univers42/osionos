@@ -17,7 +17,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -27,7 +27,8 @@ import { join } from "node:path";
 import { buildFsOpSpec, buildWriteSpecs } from "../../scripts/ide-sandbox-spec.mjs";
 import { createHostFsTransport } from "../../scripts/host-fs-ops.mjs";
 import { createSandboxProvider } from "../../src/features/ide/vfs/sandboxProvider.ts";
-import type { FsOpResult, FsOpTransport } from "../../src/features/ide/vfs/sandboxFsOps.ts";
+import { sandboxHashes, type FsOpResult, type FsOpTransport } from "../../src/features/ide/vfs/sandboxFsOps.ts";
+import { sha16 } from "../../src/features/ide/model/ideFsEcho.ts";
 import { parseVPath, joinV, buildVPath } from "../../src/features/ide/vfs/vpath.ts";
 import { isFsError } from "../../src/features/ide/vfs/errors.ts";
 import { collectBytes, textToBytes, bytesToText } from "../../src/features/ide/vfs/bytes.ts";
@@ -301,6 +302,19 @@ test("sandbox list: a name a shell made with a newline in it is left out, never 
   writeFileSync(join(dir, ".hidden"), "");
   const p = createSandboxProvider("sandbox", localShTransport(dir));
   assert.deepEqual((await p.list(root(p))).map((entry) => entry.name), [".hidden", "ok.txt"]);
+});
+
+test("sandbox hashes: the fs-agent's sha16 per file, null when absent, no entry for a directory — on sh and on a tty", async (t) => {
+  if (!hasSh()) return t.skip("no sh");
+  const dir = mkdtempSync(join(tmpdir(), "vfs-"));
+  const files: Record<string, string> = { "a.c": "int a;\n", "with space.c": "é\n", "back\\slash.c": "x", "src/deep.c": "deep" };
+  mkdirSync(join(dir, "src"));
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, name), text);
+  const expected = new Map<string, string | null>([["gone.c", null], ["src/gone 2.c", null]]);
+  for (const [name, text] of Object.entries(files)) expected.set(name, await sha16(text));
+  const paths = [...Object.keys(files), "src", "gone.c", "src/gone 2.c"];
+  const ptys = hasSh("script", ["-qec", "exit 0", "/dev/null"]) ? [false, true] : [false];
+  for (const overPty of ptys) assert.deepEqual(await sandboxHashes(localShTransport(dir, overPty), paths), expected, `overPty=${overPty}`);
 });
 
 test("overlay: lower-layer read-through, whiteout delete, merged listing", async () => {

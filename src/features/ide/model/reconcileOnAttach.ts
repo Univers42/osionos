@@ -26,7 +26,12 @@ import { recordOutboundWrite, recordSyncedHash, syncedHashOf } from "./ideSyncEn
 // Cost for N desired files of B total bytes: O(N) provider calls (one ranged
 // read, at most one write, parent mkdirs memoized per run), O(B) hashing, at
 // most `maxConcurrent` files in flight; memory O(B) because the inbound and
-// conflicting copies are returned to the caller.
+// conflicting copies are returned to the caller. With `theirsHashes` the reads
+// drop to the files that differ: a reload of 500 unchanged files is one call,
+// where 500 reads met the bridge's 120-request burst and skipped the rest as
+// "bridge 429". Caveat: the hashes are taken once, before any write, so a shell
+// that creates an absent file during the attach still has it overwritten — the
+// window a per-file read also had, only longer (the whole attach, not one file).
 
 // Ponytail: files past the 500th (in desired order) and files over 512 KiB on
 // either side are skipped, not reconciled: a shell edit to one is neither
@@ -51,6 +56,10 @@ export type ReconcileOptions = {
   /** Consulted only when the ledger has no entry and both sides differ. */
   tiebreak?: (path: string, theirs: string) => TiebreakSide;
   maxConcurrent?: number;
+  /** Every desired path's hash in one call (path → hash, null = absent): a file
+   *  whose hash equals ours, or that is absent, is decided without a read. A path
+   *  it leaves out, or a rejection, falls back to reading that file. */
+  theirsHashes?: (paths: readonly string[]) => Promise<ReadonlyMap<string, string | null>>;
 };
 
 export type ReconcileReport = {
@@ -66,7 +75,13 @@ export type ReconcileReport = {
 };
 
 type Verdict = "write" | "record" | "inbound" | "conflict";
-type Run = { opts: ReconcileOptions; hash: (content: string) => Promise<string>; report: ReconcileReport; dirs: Map<string, Promise<void>> };
+type Run = {
+  opts: ReconcileOptions;
+  hash: (content: string) => Promise<string>;
+  report: ReconcileReport;
+  dirs: Map<string, Promise<void>>;
+  known: ReadonlyMap<string, string | null>;
+};
 type Target = { relPath: string; path: VPath; bytes: Uint8Array; hash: string };
 
 export const emptyReconcileReport = (): ReconcileReport =>
@@ -147,8 +162,9 @@ async function reconcileFile(run: Run, file: DesiredFile): Promise<void> {
     const path = buildVPath(opts.provider.scheme, opts.workspaceId, file.path.split("/"));
     const bytes = textToBytes(file.content);
     if (bytes.length > MAX_ATTACH_FILE_BYTES) throw new Error(`over the ${BYTE_CAP} cap, not reconciled`);
-    const theirs = await readTheirs(opts.provider, path);
     const target: Target = { relPath: file.path, path, bytes, hash: await run.hash(file.content) };
+    const known = run.known.get(file.path);
+    const theirs = known === null ? null : known === target.hash ? file.content : await readTheirs(opts.provider, path);
     const verdict = decideAttach({
       oursHash: target.hash,
       theirsHash: theirs === null ? null : await run.hash(theirs),
@@ -183,7 +199,7 @@ async function runBounded<T>(items: readonly T[], limit: number, worker: (item: 
 
 /** Reconcile `desired` into `provider` (see the file header for the rules). */
 export async function reconcileOnAttach(opts: ReconcileOptions): Promise<ReconcileReport> {
-  const run: Run = { opts, hash: opts.hash ?? sha16, report: emptyReconcileReport(), dirs: new Map() };
+  const run: Run = { opts, hash: opts.hash ?? sha16, report: emptyReconcileReport(), dirs: new Map(), known: new Map() };
   const seen = new Set<string>();
   const accepted: DesiredFile[] = [];
   for (const file of opts.desired) {
@@ -193,6 +209,9 @@ export async function reconcileOnAttach(opts: ReconcileOptions): Promise<Reconci
       seen.add(file.path);
       accepted.push(file);
     }
+  }
+  if (opts.theirsHashes && accepted.length > 0) {
+    run.known = await opts.theirsHashes(accepted.map((file) => file.path)).catch(() => new Map<string, string | null>());
   }
   const limit = opts.maxConcurrent !== undefined && opts.maxConcurrent >= 1 ? Math.floor(opts.maxConcurrent) : DEFAULT_MAX_CONCURRENT;
   await runBounded(accepted, limit, (file) => reconcileFile(run, file));

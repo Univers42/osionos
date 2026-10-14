@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildFsOpSpec, buildWriteSpecs, assertRelPath, WRITE_PIECE_B64 } from "../../scripts/ide-sandbox-spec.mjs";
+import { buildFsOpSpec, buildWriteSpecs, assertRelPath, WRITE_PIECE_B64, MAX_HASH_PATHS } from "../../scripts/ide-sandbox-spec.mjs";
 
 test("fs-op specs: argv shape, sh placeholder, no client string in the script", () => {
   const spec = buildFsOpSpec("read", { path: "src/main.c", offset: 2, length: 3 });
@@ -67,4 +67,22 @@ test("write specs: an oversize piece is a 413, a part without a valid stage a 40
   assert.throws(() => buildFsOpSpec("write", { path: "a.c", contentBase64: big }), (e) => e.status === 413);
   assert.throws(() => buildFsOpSpec("write", { path: "a.c", contentBase64: "aGk=", part: "first", stage: "x;rm" }), (e) => e.status === 400);
   assert.throws(() => buildFsOpSpec("write", { path: "a.c", contentBase64: "aGk=", part: "append", stage: "0123456789" }), (e) => e.status === 400);
+});
+
+test("hashes spec: every path rides argv after the sh placeholder; 1-1000 valid paths or a 400", () => {
+  const spec = buildFsOpSpec("hashes", { paths: ["a.c", "src/with space.c", "-n.c"] });
+  assert.deepEqual(spec.Cmd.slice(0, 2), ["sh", "-c"]);
+  assert.deepEqual(spec.Cmd.slice(3), ["sh", "a.c", "src/with space.c", "-n.c"]);
+  assert.equal(spec.User, "10001:10001");
+  assert.ok(!spec.Cmd[2].includes("a.c"), "no client string in the script");
+  const refused = (paths) => assert.throws(() => buildFsOpSpec("hashes", { paths }), (e) => e.status === 400, JSON.stringify(paths)?.slice(0, 40));
+  refused(undefined);
+  refused("a.c");
+  refused([]);
+  refused([""]);
+  refused(["../etc/passwd"]);
+  refused(["/etc/passwd"]);
+  refused(["a\nb"]);
+  refused(Array.from({ length: MAX_HASH_PATHS + 1 }, (_, i) => `f${i}.c`));
+  assert.equal(buildFsOpSpec("hashes", { paths: Array.from({ length: MAX_HASH_PATHS }, (_, i) => `f${i}.c`) }).Cmd.length, 4 + MAX_HASH_PATHS);
 });

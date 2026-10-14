@@ -19,6 +19,7 @@ import { pageFileStoreDeps } from "@/features/page-file/model/pageFileFacadeStor
 
 import { bridgeFsTransport } from "../vfs/bridgeTransport";
 import { createSandboxProvider } from "../vfs/sandboxProvider";
+import { sandboxHashes, type FsOpTransport } from "../vfs/sandboxFsOps";
 import { ideOutput } from "./ideOutputBus";
 import { statInProvider } from "./inboundArchive";
 import { createInboundSession, type InboundSession } from "./inboundSession";
@@ -44,7 +45,8 @@ export interface LiveInbound {
 }
 
 export function createLiveInbound(workspaceId: string, queue: SerialQueue): LiveInbound {
-  const sandbox = createSandboxProvider("sandbox", bridgeFsTransport(workspaceId));
+  const transport = bridgeFsTransport(workspaceId);
+  const sandbox = createSandboxProvider("sandbox", transport);
   const session = createInboundSession({
     workspaceId,
     store: pageFileStoreDeps(workspaceId),
@@ -53,16 +55,17 @@ export function createLiveInbound(workspaceId: string, queue: SerialQueue): Live
     schedule,
     enqueue: (task) => { void queue.run(task); },
   });
-  return { session, attach: () => attachSandbox(workspaceId, session, sandbox) };
+  return { session, attach: () => attachSandbox(workspaceId, session, sandbox, transport) };
 }
 
-async function attachSandbox(workspaceId: string, session: InboundSession, provider: FsProvider): Promise<void> {
+async function attachSandbox(workspaceId: string, session: InboundSession, provider: FsProvider, transport: FsOpTransport): Promise<void> {
   const jwt = getActivePageJwt();
   if (jwt) {
     const fetchBody = (pageId: string) => usePageStore.getState().fetchPageContent(pageId, jwt);
     await loadUnloadedBodies(session.views, fetchBody, (path) => syncedHashOf(workspaceId, path) !== null);
   }
-  const { written, unloaded, failed } = await attachWorkspace({ workspaceId, session, provider });
+  const theirsHashes = (paths: readonly string[]) => sandboxHashes(transport, paths);
+  const { written, unloaded, failed } = await attachWorkspace({ workspaceId, session, provider, theirsHashes });
   const tail = `${unloaded > 0 ? `, ${unloaded} not loaded yet` : ""}${failed > 0 ? `, ${failed} FAILED` : ""}`;
   ideOutput("fs-sync", `sandbox attached — materialized ${written} files${tail}`);
   if (failed > 0) console.warn(`[ide] materialize: ${failed} files failed to reach the sandbox`);
