@@ -196,7 +196,17 @@ export function usePageSync(): void {
       const { toPublish } = computeSyncActions(desired, loadLedger(PAGE_OUTBOX_KEY));
       return toPublish.flatMap((id) => payloads.get(id) ?? []);
     };
-    const guard = createUnloadGuard(globalThis, () => !hydratedRef.current || keep(unconfirmedNow()));
+    // A draft typed in the last 250 ms is committed first, so the decision covers it.
+    // Ponytail: before the hydrate settles there is no keep, no keepalive and no prompt (the
+    // ledger is still empty, so every page would look unconfirmed), and the http-gate client has
+    // no timeout: a hydrate that never answers keeps the tab in that window. A draft typed while
+    // the guard is disarmed (nothing else unconfirmed) reaches the store only at pagehide, after
+    // beforeunload has decided: it is kept then, but nobody is asked if that keep fails.
+    const guard = createUnloadGuard(globalThis, () => {
+      if (!hydratedRef.current) return true;
+      flushAllBlockDrafts("unmount");
+      return keep(unconfirmedNow());
+    });
 
     const flush = async (): Promise<void> => {
       // Wait for hydrate to seed the ledger before the first publish (re-check shortly).
@@ -206,7 +216,7 @@ export function usePageSync(): void {
       try {
         const ledger = loadLedger(PAGE_OUTBOX_KEY); // reload so hydrate seeds are honoured
         const context = getCurrentPageAccessContext();
-        const pagesAtStart = usePageStore.getState().pages;
+        const { pages: pagesAtStart, pageRevisions: revisionsAtStart } = usePageStore.getState();
         const { desired, payloads } = buildDesiredPages(
           pagesAtStart,
           (page) => !!context && canEditPage(page, context), // never publish a non-editable page
@@ -236,7 +246,9 @@ export function usePageSync(): void {
         const done = new Set(settled);
         const left = toPublish.filter((id) => !done.has(id) && payloads.has(id));
         keep(left.flatMap((id) => payloads.get(id) ?? []));
-        if (left.length === 0 && usePageStore.getState().pages === pagesAtStart) guard.disarm();
+        const now = usePageStore.getState();
+        // The same two fields that arm it below: an edit made during the awaits keeps it armed.
+        if (left.length === 0 && now.pages === pagesAtStart && now.pageRevisions === revisionsAtStart) guard.disarm();
         settleRecoveringMarks([...settled, ...toUnpublish]);
         if (failed) scheduleRetry(); else clearRetry();
       } finally {
@@ -259,8 +271,11 @@ export function usePageSync(): void {
     // pagehide listener would also run, but AFTER ours is not guaranteed — the
     // explicit call is idempotent), (4) fire best-effort keepalive PATCHes for
     // every unconfirmed page. The ledger is NOT advanced — nothing can confirm
-    // during unload — so the next session re-publishes idempotently. When step 2
-    // fails, the beforeunload guard has already asked the user to stay.
+    // during unload — so the next session publishes them again. That is an
+    // overwrite, not an idempotent replay: the bridge takes the client's
+    // updatedAt with no precondition, so an edit made on another device in
+    // between is lost to it. When step 2 fails, the beforeunload guard has
+    // already asked the user to stay.
     const flushOnUnload = () => {
       if (!hydratedRef.current) return; // pre-hydrate the ledger is empty — everything would spray
       flushAllBlockDrafts("unmount");
