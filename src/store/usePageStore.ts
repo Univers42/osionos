@@ -12,6 +12,7 @@
 
 import { create } from "zustand";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { withPendingPages } from "./sync/pendingPages";
 import {
   loadRecents,
   saveRecents,
@@ -72,7 +73,7 @@ import { timed } from "@osionos/perf-probe";
 export type { PageEntry, ActivePageKind, ActivePage } from "@/entities/page";
 
 /** Zustand store managing page tree, active page, recents, and block-level CRUD. */
-const cachedPages = loadPagesCache();
+const cachedPages = withPendingPages(loadPagesCache());
 const cachedPageState = derivePageState(cachedPages);
 
 /**
