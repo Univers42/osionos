@@ -49,7 +49,7 @@ const MODES: { id: ThemeMode; label: string; Icon: typeof Sun }[] = [
 
 /** A small window-chrome mock painted in the palette's own colors. */
 const PalettePreview: React.FC<{ swatches: readonly string[] }> = ({ swatches }) => {
-  const [bg, surface, accent, update, ink] = swatches;
+  const [bg, surface, accent, ink] = swatches;
   return (
     <div className="flex h-14 w-full overflow-hidden rounded-md" style={{ background: bg }}>
       <div className="flex w-7 flex-col gap-1 p-1.5" style={{ borderRight: `1px solid ${surface}` }}>
@@ -61,10 +61,7 @@ const PalettePreview: React.FC<{ swatches: readonly string[] }> = ({ swatches })
         <div className="rounded-sm px-1.5 py-1" style={{ background: surface }}>
           <span className="block h-1.5 w-2/3 rounded-full" style={{ background: ink, opacity: 0.7 }} />
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="h-3 w-8 rounded-full" style={{ background: accent }} />
-          <span className="h-3 w-3 rounded-full" style={{ background: update }} />
-        </div>
+        <span className="h-3 w-8 rounded-full" style={{ background: accent }} />
       </div>
     </div>
   );

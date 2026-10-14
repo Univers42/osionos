@@ -29,7 +29,6 @@ test("the registry entry for the default palette carries its swatches, id and la
     light["--osio-bg-canvas"],
     light["--osio-bg-surface"],
     light["--osio-accent"],
-    light["--osio-update"],
     light["--osio-fg-default"],
   ]);
   assert.equal(warm.label, defaultPalette.label);

@@ -8,8 +8,9 @@ import { PALETTES } from "./palettes.mjs";
 export const GENERATED_REGISTRY = "src/shared/config/palettes.generated.ts";
 
 // The first swatch is the canvas the cards float on, not the page: a page is
-// the card itself, so it would repeat the surface swatch.
-const SWATCH_TOKENS = ["--osio-bg-canvas", "--osio-bg-surface", "--osio-accent", "--osio-update", "--osio-fg-default"];
+// the card itself, so it would repeat the surface swatch. No Update swatch: it
+// follows the accent in every palette, so it would repeat the accent one.
+const SWATCH_TOKENS = ["--osio-bg-canvas", "--osio-bg-surface", "--osio-accent", "--osio-fg-default"];
 
 const entry = (palette) => {
   const tokens = resolvedTokens(palette, palette.signatureMode);
