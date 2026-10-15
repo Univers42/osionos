@@ -102,7 +102,10 @@ describe('sharing keys from a non-owner are ignored, never a 403', () => {
 	}
 
 	it('lets the owner change visibility, collaborators and workspace', async () => {
-		const mock = createPostgrestMock(teamWorld({ memberRole: 'editor' }));
+		const world = teamWorld({ memberRole: 'editor' });
+		// A collaborator must be a member of the workspace the page ends up in.
+		world.osionos_workspace_members.push({ workspace_id: IDS.homeA, user_id: IDS.userB, role: 'viewer', permissions: ['read'] });
+		const mock = createPostgrestMock(world);
 		const collaborators = [{ userId: IDS.userB, role: 'viewer' }];
 		await withBridge(config, mock.fetchImpl, async (base) => {
 			const result = await send(base, `/api/pages/${IDS.privateA}`, asA, patch({ visibility: 'shared', collaborators, workspaceId: IDS.homeA }));
