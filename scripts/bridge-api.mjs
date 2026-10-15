@@ -44,6 +44,7 @@ import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
 import { createSocialHandler } from './bridge-social.mjs';
 import { assertPublicHttpUrl } from './bridge-chat-media.mjs';
+import { grantingMount, mountOpAccess, workspaceRoles } from './bridge-mount-acl.mjs';
 import { assertSessionNotCutOff, createSessionCutoffCache, refreshSessionCutoff, tokenIssuedAtMs } from './bridge-session-cutoff.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -2655,16 +2656,31 @@ async function handleGraphData(url, request, response, config, fetchImpl) {
 // workspaces, then the dbId must appear in one of those workspaces' mounts.
 
 /**
- * Resolve `{dbId}` to the wsdb mount the session may read, or 403. Returns the
- * matching osionos_workspace_databases row (engine + linking workspace_id).
+ * The session and its role in every workspace it reaches. A permission check refuses when
+ * the members rows cannot be read (503), where a listing could still trust the token.
  */
-async function resolveAccessibleMount(request, dbId, config, fetchImpl) {
+async function sessionWorkspaceRoles(request, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
-	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
-	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
-	const mounts = await fetchWorkspaceDatabases(accessible, config, fetchImpl);
-	const mount = mounts.find((row) => row && row.db_id === dbId);
-	if (!mount) throw Object.assign(new Error('Database is not linked to an accessible workspace.'), { status: 403 });
+	let rows;
+	try {
+		rows = await baasRest(config, fetchImpl, `osionos_workspace_members?${postgrestQuery({ user_id: `eq.${authContext.userId}`, select: 'workspace_id,role' })}`);
+	} catch (error) {
+		throw Object.assign(new Error('Workspace access could not be verified.', { cause: error }), { status: 503 });
+	}
+	const memberRows = (Array.isArray(rows) ? rows : []).filter((row) => UUID_REGEX.test(String(row?.workspace_id)));
+	return { authContext, roles: workspaceRoles(authContext, memberRows) };
+}
+
+/**
+ * Resolve `{dbId}` to the wsdb link row that grants `access` ('read' | 'write', see
+ * bridge-mount-acl.mjs), or 403. Returns the row (engine + linking workspace_id).
+ */
+async function resolveAccessibleMount(request, dbId, config, fetchImpl, access = 'read') {
+	const { authContext, roles } = await sessionWorkspaceRoles(request, config, fetchImpl);
+	const links = (await fetchWorkspaceDatabases([...roles.keys()], config, fetchImpl)).filter((row) => row && row.db_id === dbId);
+	if (links.length === 0) throw Object.assign(new Error('Database is not linked to an accessible workspace.'), { status: 403 });
+	const mount = grantingMount(links, roles, access);
+	if (!mount) throw Object.assign(new Error('Your role in the workspaces linking this database is read-only.'), { status: 403 });
 	return { authContext, mount };
 }
 
@@ -2675,10 +2691,8 @@ async function resolveAccessibleMount(request, dbId, config, fetchImpl) {
  * Databases navigator listing the same way `resolveAccessibleMount` scopes reads.
  */
 async function accessibleMountIds(request, config, fetchImpl) {
-	const authContext = verifyAppSessionToken(bearerToken(request), config);
-	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
-	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
-	const mounts = await fetchWorkspaceDatabases(accessible, config, fetchImpl);
+	const { roles } = await sessionWorkspaceRoles(request, config, fetchImpl);
+	const mounts = await fetchWorkspaceDatabases([...roles.keys()], config, fetchImpl);
 	return new Set(mounts.map((row) => row && row.db_id).filter(Boolean));
 }
 
@@ -2870,8 +2884,8 @@ const DB_SQLRO_PATH = /^\/api\/databases\/([^/]+)\/sql-ro$/;
 // batch). The query-router enforces per-engine capability and owner-scopes every
 // write to the tenant; every route below ALSO enforces the per-user mount ACL
 // (resolveAccessibleMount / accessibleMountIds) so a caller can only reach a
-// database linked to a workspace they own or belong to — databases are personal
-// to a user unless invited via osionos_workspace_members.
+// database linked to a workspace they own or belong to, and only writes it as an
+// editor, admin or owner there (bridge-mount-acl.mjs).
 const DB_OPS = new Set(['list', 'get', 'aggregate', 'insert', 'update', 'delete', 'upsert', 'batch']);
 
 /** GET /api/databases?tenant= — databases linked to a workspace the caller belongs to. */
@@ -2927,7 +2941,6 @@ async function handleDatabaseSchema(match, request, response, config, fetchImpl)
  *  update/delete/upsert/batch) via the query-router, status passed through. */
 async function handleDatabaseRows(match, request, response, config, fetchImpl) {
 	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
-	await resolveAccessibleMount(request, dbId, config, fetchImpl);
 	const table = safeText(decodeURIComponent(match[2]), 120);
 	if (!table) throw Object.assign(new Error('table is required.'), { status: 422 });
 	const payload = await readJson(request).catch(() => ({}));
@@ -2935,6 +2948,7 @@ async function handleDatabaseRows(match, request, response, config, fetchImpl) {
 	// Reads AND writes. An unknown op falls back to a safe list; the status is
 	// passed through so the write client can classify ok / conflict / rejected.
 	const op = typeof safe.op === 'string' && DB_OPS.has(safe.op) ? safe.op : 'list';
+	await resolveAccessibleMount(request, dbId, config, fetchImpl, mountOpAccess(op));
 	// The table is in the URL path; the query-router's strict validator rejects a
 	// redundant `resource` (and legacy `values`) the live-DB write client tags onto
 	// update/delete/upsert ops — strip them so writes don't silently 400 and vanish.
@@ -2967,7 +2981,7 @@ async function handleDatabaseTxn(request, response, config, fetchImpl) {
 	const payload = await readJson(request).catch(() => ({}));
 	const safe = payload && typeof payload === 'object' ? payload : {};
 	const dbId = requireUuid(typeof safe.mount === 'string' ? safe.mount : '', 'mount');
-	await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	await resolveAccessibleMount(request, dbId, config, fetchImpl, 'write');
 	const { status, body } = await baasQueryPassthrough(config, fetchImpl, '/txn', safe);
 	json(response, status || 502, body ?? {}, config);
 	return true;
@@ -2976,7 +2990,7 @@ async function handleDatabaseTxn(request, response, config, fetchImpl) {
 /** POST /api/databases/:dbId/schema/ddl — add/drop/alter a column (DDL). */
 async function handleDatabaseDdl(match, request, response, config, fetchImpl) {
 	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
-	await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	await resolveAccessibleMount(request, dbId, config, fetchImpl, 'write');
 	const payload = await readJson(request).catch(() => ({}));
 	const safe = payload && typeof payload === 'object' ? payload : {};
 	const { status, body } = await baasQueryPassthrough(config, fetchImpl, `/${dbId}/schema/ddl`, safe);
