@@ -31,7 +31,7 @@ function recordingFetch(upstreamPrefix, seen) {
 		const url = String(input);
 		if (url.startsWith(upstreamPrefix)) {
 			seen.push({ url, headers: new Headers(init.headers) });
-			if (url.endsWith('/databases')) return Response.json([{ id: dbId, name: 'osionos-finance', engine: 'mssql' }, { id: otherDbId, name: 'osionos-iot', engine: 'dynamodb' }]);
+			if (url.endsWith('/databases') || url.endsWith('/me/mounts')) return Response.json([{ id: dbId, name: 'osionos-finance', engine: 'mssql' }, { id: otherDbId, name: 'osionos-iot', engine: 'dynamodb' }]);
 			return Response.json({ dbId, engine: 'mssql', tables: [] });
 		}
 		if (url.includes('osionos_workspace_databases')) {
@@ -109,5 +109,88 @@ describe('adapter-registry through Kong', () => {
 	it('treats a blank OSIONOS_ADAPTER_REGISTRY_URL as unset: the container-DNS default', () => {
 		assert.equal(configFromEnv({ ...baseEnv, OSIONOS_ADAPTER_REGISTRY_URL: '' }).adapterRegistryUrl, 'http://mini-baas-adapter-registry-go:3021');
 		assert.equal(configFromEnv(baseEnv).adapterRegistryUrl, 'http://mini-baas-adapter-registry-go:3021');
+	});
+});
+
+// Over Tailscale Funnel the grobase WAF refuses /admin/v1 (rule 10130: the service key alone
+// would open admin routes from the internet), so a link reached that way lists the tenant's
+// mounts on the self-serve route with the tenant api-key, which carries the tenant itself.
+describe('tenant mount list through Kong', () => {
+	const mountsUrl = 'http://mini-baas-kong:8000/v1/tenants/me/mounts';
+	const env = { ...baseEnv, OSIONOS_TENANT_MOUNTS_URL: mountsUrl, OSIONOS_ADAPTER_REGISTRY_URL: 'http://mini-baas-kong:8000/admin/v1' };
+
+	/** The bridge in front of a mount route that answers `status`; records every upstream URL. */
+	async function listWithMountRouteAnswering(status) {
+		const config = configFromEnv(env);
+		const seen = [];
+		const fetchImpl = async (input) => {
+			const url = String(input);
+			seen.push(url);
+			if (url === mountsUrl) return new Response('{"error":"refused"}', { status });
+			return Response.json([{ id: 'd21fec9c-7404-406a-8d4c-a8c25c6451c3', workspace_id: workspaceId, db_id: dbId, engine: 'mssql', label: 'Finance · MSSQL' }]);
+		};
+		const server = createBridgeServer({ config, fetchImpl });
+		await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen));
+		const { token } = signAppSessionToken({ payload: { subject: userId, provider: 'test' }, workspace: { _id: workspaceId }, config });
+		try {
+			const response = await fetch(`http://127.0.0.1:${server.address().port}/api/databases`, { headers: { authorization: `Bearer ${token}` } });
+			return { status: response.status, body: await response.json(), seen };
+		} finally {
+			await new Promise((resolveClose) => server.close(resolveClose));
+		}
+	}
+
+	it('lists the caller\'s databases with the tenant key as a bearer and never calls the registry', async () => {
+		const { status, body, seen } = await bridgeGet(env, 'http://mini-baas-kong:8000/', '/api/databases');
+		assert.equal(status, 200);
+		assert.deepEqual(body.databases, [{ dbId, name: 'osionos-finance', engine: 'mssql' }]);
+		assert.deepEqual(seen.map((request) => request.url), [mountsUrl]);
+		assert.equal(seen[0].headers.get('authorization'), 'Bearer tenant-api-key');
+		assert.equal(seen[0].headers.has('apikey'), false);
+		assert.equal(seen[0].headers.has('x-api-key'), false);
+		assert.equal(seen[0].headers.has('x-baas-tenant-id'), false);
+		assert.equal([...seen[0].headers.values()].some((value) => value.includes('service-role-test-key')), false);
+	});
+
+	it('ignores a client tenant hint: the key decides the tenant', async () => {
+		const { status, seen } = await bridgeGet(env, 'http://mini-baas-kong:8000/', '/api/databases?tenant=other');
+		assert.equal(status, 200);
+		assert.deepEqual(seen.map((request) => request.url), [mountsUrl]);
+	});
+
+	it('answers 503 naming the route when grobase has no tenant mount route (404), and never falls back', async () => {
+		const { status, body, seen } = await listWithMountRouteAnswering(404);
+		assert.equal(status, 503);
+		assert.match(body.message, /\/v1\/tenants\/me\/mounts/);
+		assert.equal(body.databases, undefined);
+		assert.equal(seen.filter((url) => url.includes('/admin/v1')).length, 0);
+	});
+
+	for (const refused of [401, 403]) {
+		it(`answers 403 when grobase refuses the key (${refused})`, async () => {
+			const { status, body, seen } = await listWithMountRouteAnswering(refused);
+			assert.equal(status, 403);
+			assert.equal(body.databases, undefined);
+			assert.equal(seen.filter((url) => url.includes('/admin/v1')).length, 0);
+		});
+	}
+
+	it('answers 503 "rate limited" on a 429 from the shared self-serve bucket', async () => {
+		const { status, body } = await listWithMountRouteAnswering(429);
+		assert.equal(status, 503);
+		assert.match(body.message, /rate limited/);
+		assert.equal(body.databases, undefined);
+	});
+
+	it('answers 503 when no tenant api key is configured', async () => {
+		const { OSIONOS_BAAS_API_KEY: _unused, ...withoutKey } = env;
+		const { status, seen } = await bridgeGet(withoutKey, 'http://mini-baas-kong:8000/', '/api/databases');
+		assert.equal(status, 503);
+		assert.equal(seen.length, 0);
+	});
+
+	it('treats a blank OSIONOS_TENANT_MOUNTS_URL as unset: the registry path', () => {
+		assert.equal(configFromEnv({ ...baseEnv, OSIONOS_TENANT_MOUNTS_URL: '  ' }).tenantMountsUrl, '');
+		assert.equal(configFromEnv(baseEnv).tenantMountsUrl, '');
 	});
 });
