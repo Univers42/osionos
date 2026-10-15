@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/15 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,34 +14,13 @@
 
 import { policyToLevel } from './sharePermissionBridge';
 import type {
-  EnginePolicyRow, EngineRole, ShareAccessRule, ShareEntry, SharePerson,
+  EnginePolicyRow, EngineRole, ShareEntry, SharePerson,
 } from './types';
 
 export function entryKey(target: ShareEntry['target']): string {
   if (target.type === 'user') return `user:${target.person.id}`;
   if (target.type === 'role') return `role:${target.role}`;
   return target.type;
-}
-
-/** Stored AccessRules → dialog entries (normal page mode). */
-export function entriesFromRules(
-  rules: Array<ShareAccessRule & { _id: string }>,
-  people: SharePerson[],
-): ShareEntry[] {
-  const entries: ShareEntry[] = [];
-  for (const rule of rules) {
-    let target: ShareEntry['target'] | null = null;
-    if (rule.target.type === 'user') {
-      const person = people.find((candidate) => candidate.id === (rule.target as { userId?: string }).userId);
-      if (person) target = { type: 'user', person };
-    } else if (rule.target.type === 'role') {
-      target = { type: 'role', role: (rule.target as { role?: string }).role ?? '' };
-    } else {
-      target = { type: rule.target.type };
-    }
-    if (target) entries.push({ key: entryKey(target), target, level: rule.permission, sourceId: rule._id });
-  }
-  return entries;
 }
 
 /** Engine policies on one table → dialog entries (live database page mode).

@@ -6,45 +6,48 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/15 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-/** Bridge calls for the Share dialog: roster + page AccessRules (normal pages).
- *  All paths are bridge-relative under /api/perms/* (scripts/bridge-perms.mjs). */
+/** Bridge calls for the Share dialog. A page's sharing is its own row: read with
+ *  GET /api/pages/:id, changed with the owner-only PATCH /api/pages/:id, and the people it
+ *  can be shared with are its workspace's members (GET /api/workspaces/:id/members). The
+ *  agency roster (/api/perms/people) serves the live-database mode only. */
 
 import { api, getActivePageJwt } from '@/shared/api/client';
-import type { ShareAccessRule, SharePerson } from './types';
+import type { PageEntry } from '@/entities/page';
+import { usePageStore } from '@/store/usePageStore';
+import { assertSharingApplied, membersToPeople, sharingPatch, type PageSharing, type WorkspaceMember } from './pageShareModel';
+import type { SharePerson } from './types';
 
 interface PeopleResponse { people: SharePerson[] }
-interface RulesResponse { rules: Array<ShareAccessRule & { _id: string }> }
-interface RuleResponse { rule: ShareAccessRule & { _id: string } }
+interface MembersResponse { members?: WorkspaceMember[] }
 
-/** The app-session bearer every /api/perms route requires (the bridge answers 401 without it). */
 export function permsBearer(): string | undefined {
   return getActivePageJwt() ?? undefined;
 }
 
-/** Workspace roster (people directory served by the bridge). */
 export async function fetchPeople(): Promise<SharePerson[]> {
   const body = await api.get<PeopleResponse>('/api/perms/people', permsBearer());
   return body.people ?? [];
 }
 
-/** Stored AccessRules for one resource. */
-export async function fetchRules(workspaceId: string, resourceId: string): Promise<Array<ShareAccessRule & { _id: string }>> {
-  const query = `workspaceId=${encodeURIComponent(workspaceId)}&resourceId=${encodeURIComponent(resourceId)}`;
-  const body = await api.get<RulesResponse>(`/api/perms/rules?${query}`, permsBearer());
-  return body.rules ?? [];
+export async function fetchWorkspacePeople(workspaceId: string): Promise<SharePerson[]> {
+  const body = await api.get<MembersResponse>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members`, permsBearer());
+  return membersToPeople(body.members ?? []);
 }
 
-/** Upsert one AccessRule (same workspace/resource/target replaces). */
-export async function saveRule(rule: ShareAccessRule): Promise<ShareAccessRule & { _id: string }> {
-  const body = await api.post<RuleResponse>('/api/perms/rules', rule, permsBearer());
-  return body.rule;
+export async function fetchPageSharing(pageId: string): Promise<PageSharing> {
+  const page = await api.get<Pick<PageEntry, 'visibility' | 'collaborators'>>(`/api/pages/${encodeURIComponent(pageId)}`, permsBearer());
+  return { visibility: page.visibility ?? 'private', collaborators: page.collaborators ?? [] };
 }
 
-/** Delete a stored AccessRule by id. */
-export async function deleteRule(ruleId: string): Promise<void> {
-  await api.delete<{ deleted: boolean }>(`/api/perms/rules/${encodeURIComponent(ruleId)}`, permsBearer());
+/** Writes what changed, then mirrors it into the page store: the outbox resends the store's
+ *  `visibility` with every edit, so a stale copy there would undo the share. */
+export async function commitPageSharing(pageId: string, before: PageSharing, after: PageSharing): Promise<void> {
+  const patch = sharingPatch(before, after);
+  if (Object.keys(patch).length === 0) return;
+  assertSharingApplied(await api.patch<unknown>(`/api/pages/${encodeURIComponent(pageId)}`, patch, permsBearer()));
+  usePageStore.getState().patchPage(pageId, patch);
 }

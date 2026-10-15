@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/15 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,6 +17,7 @@ import { SharePeoplePicker } from './SharePeoplePicker';
 import { useShareModel } from './useShareModel';
 import { PublishSection } from './PublishSection';
 import { isPublishEnabled } from '@/shared/config/featureFlags';
+import { PAGE_SHARE_LEVELS, WORKSPACE_SHARE_LEVELS } from './pageShareModel';
 import type { ShareResource } from './types';
 
 interface SharePopoverProps {
@@ -25,8 +26,10 @@ interface SharePopoverProps {
 }
 
 /** Notion-style Share dialog: current access list, people picker, general
- *  access. Anchored by the caller (render inside a relatively-positioned
- *  parent, e.g. next to a toolbar "Share" button). */
+ *  access. For a page it lists and changes exactly what the bridge enforces: the
+ *  page's collaborators (workspace members only) and its visibility. Anchored by the
+ *  caller (render inside a relatively-positioned parent, e.g. next to a toolbar
+ *  "Share" button). */
 export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose }) => {
   const model = useShareModel(resource);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -41,6 +44,8 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
 
   const generalEntries = model.entries.filter((entry) => entry.target.type === 'workspace' || entry.target.type === 'public');
   const peopleEntries = model.entries.filter((entry) => entry.target.type === 'user' || entry.target.type === 'role');
+  const personLevels = model.isLive ? undefined : PAGE_SHARE_LEVELS;
+  const generalLevels = model.isLive ? undefined : WORKSPACE_SHARE_LEVELS;
 
   return (
     <div
@@ -69,12 +74,15 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
       <div className="mt-3 max-h-[260px] space-y-0.5 overflow-y-auto">
         {model.loading && <p className="px-2 py-3 text-xs text-[var(--osio-fg-muted)]">Loading access…</p>}
         {!model.loading && peopleEntries.length === 0 && (
-          <p className="px-2 py-3 text-xs text-[var(--osio-fg-muted)]">Only workspace defaults apply. Add people above.</p>
+          <p className="px-2 py-3 text-xs text-[var(--osio-fg-muted)]">
+            {model.isLive ? 'Only workspace defaults apply. Add people above.' : 'Only you can open this page. Add members of this workspace above.'}
+          </p>
         )}
         {peopleEntries.map((entry) => (
           <ShareRow
             key={entry.key}
             entry={entry}
+            levels={personLevels}
             busy={model.busy}
             onLevel={(level) => { void model.setLevel(entry.target, level); }}
             onRemove={() => { void model.removeEntry(entry); }}
@@ -99,6 +107,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
             <ShareRow
               key={entry.key}
               entry={entry}
+              levels={generalLevels}
               busy={model.busy}
               onLevel={(level) => { void model.setLevel(entry.target, level); }}
               onRemove={() => { void model.removeEntry(entry); }}
@@ -110,7 +119,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose })
       <div className="mt-2 flex items-center justify-between border-t border-[var(--osio-border-default)] pt-2">
         {model.error
           ? <span className="truncate text-xs text-[var(--osio-danger)]">{model.error}</span>
-          : <span className="text-xs text-[var(--osio-fg-subtle)]">{model.isLive ? 'Levels persist as engine policies.' : 'Levels persist as access rules.'}</span>}
+          : <span className="text-xs text-[var(--osio-fg-subtle)]">{model.isLive ? 'Levels persist as engine policies.' : 'Only the page owner can change access.'}</span>}
         <button
           type="button"
           className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
