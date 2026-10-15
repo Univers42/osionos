@@ -896,6 +896,32 @@ function mayModifyPage(existing, access) {
 	return role === 'editor' || role === 'owner'; // explicit page collaborator
 }
 
+const COLLABORATOR_ROLES = new Set(['viewer', 'editor']);
+
+/**
+ * A page is shared only with members of its workspace: the read path runs the workspace
+ * gate after the collaborator check, so anyone else would be listed and still refused.
+ * Only collaborators the PATCH adds are checked; one already on the page stays as it is,
+ * so an older share never blocks an unrelated edit.
+ */
+async function requireNewCollaboratorsAreMembers(payload, existing, config, fetchImpl) {
+	if (!hasOwn(payload, 'collaborators')) return;
+	const present = new Set(safeJsonArray(existing.collaborators).map((entry) => String(entry?.userId ?? '').toLowerCase()));
+	const added = safeJsonArray(payload.collaborators).filter((entry) => !present.has(String(entry?.userId ?? '').toLowerCase()));
+	if (added.some((entry) => !UUID_REGEX.test(String(entry?.userId ?? '')) || !COLLABORATOR_ROLES.has(entry.role))) {
+		throw Object.assign(new Error('A collaborator is { userId: <uuid>, role: "viewer" | "editor" }.'), { status: 422 });
+	}
+	if (added.length === 0) return;
+	const workspaceId = hasOwn(payload, 'workspaceId') ? payload.workspaceId : existing.workspace_id;
+	const ids = added.map((entry) => entry.userId.toLowerCase());
+	const rows = await baasRest(config, fetchImpl, `osionos_workspace_members?${postgrestQuery({ workspace_id: `eq.${workspaceId}`, user_id: `in.(${ids.join(',')})`, select: 'user_id' })}`);
+	const members = new Set((Array.isArray(rows) ? rows : []).map((row) => String(row.user_id).toLowerCase()));
+	const outsider = ids.find((id) => !members.has(id));
+	if (outsider) {
+		throw Object.assign(new Error(`User ${outsider} is not a member of this page's workspace. Add them to the workspace before sharing the page with them.`), { status: 422 });
+	}
+}
+
 function requirePageOwnership(existing, access) {
 	if (!mayModifyPage(existing, access)) throw Object.assign(new Error('You do not have permission to modify this page.'), { status: 403 });
 }
@@ -3273,6 +3299,7 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	if (hasOwn(payload, 'workspaceId') && payload.workspaceId !== existing.workspace_id) {
 		await requireWorkspaceAccess(request, payload.workspaceId, 'create', config, fetchImpl);
 	}
+	await requireNewCollaboratorsAreMembers(payload, existing, config, fetchImpl);
 	const updateRow = pageUpdateRowFromPayload(payload);
 	// return=minimal: the outbox (pageOutbox.publishPage) and the archive/restore
 	// callers all ignore the response body, so echoing the full updated row (incl.
