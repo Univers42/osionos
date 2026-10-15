@@ -13,9 +13,8 @@
 import React, { useState } from 'react';
 import { Copy } from 'lucide-react';
 import { Modal } from '@osionos/ui/primitives/Modal';
-import { Input } from '@/shared/ui';
+import { Button, Input } from '@/shared/ui';
 import { useTenantConsoleStore } from '../model/useTenantConsoleStore';
-import { ConsoleButton } from './consolePrimitives';
 
 const ALL_SCOPES = ['read', 'write', 'admin'] as const;
 const CODE_STYLE = {
@@ -37,8 +36,8 @@ function IssuedKeyView({ secret, onDone }: { secret: string; onDone: () => void 
       </strong>
       <code style={{ ...CODE_STYLE, wordBreak: 'break-all', userSelect: 'all' }}>{secret}</code>
       <div style={{ display: 'flex', gap: 8 }}>
-        <ConsoleButton onClick={copy}><Copy size={14} aria-hidden /> {copied ? 'Copied' : 'Copy'}</ConsoleButton>
-        <ConsoleButton onClick={onDone}>Done</ConsoleButton>
+        <Button onClick={copy}><Copy size={14} aria-hidden /> {copied ? 'Copied' : 'Copy'}</Button>
+        <Button onClick={onDone}>Done</Button>
       </div>
     </div>
   );
@@ -80,10 +79,10 @@ function CreateKeyForm({ onCancel }: { onCancel: () => void }) {
       </fieldset>
       {error ? <p style={{ color: 'var(--osio-danger)' }}>{error}</p> : null}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <ConsoleButton onClick={onCancel}>Cancel</ConsoleButton>
-        <ConsoleButton type="submit" disabled={busy || !name.trim()}>
+        <Button onClick={onCancel}>Cancel</Button>
+        <Button type="submit" tone="primary" disabled={busy || !name.trim()}>
           {busy ? 'Creating…' : 'Create'}
-        </ConsoleButton>
+        </Button>
       </div>
     </form>
   );

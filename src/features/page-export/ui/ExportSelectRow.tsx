@@ -40,7 +40,7 @@ export function ExportSelectRow<T extends string>({
           aria-label={label}
           value={value}
           onChange={(event) => onChange(event.target.value as T)}
-          className="cursor-pointer appearance-none rounded-md bg-transparent py-1 pl-2 pr-6 text-right text-sm font-medium text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
+          className="cursor-pointer appearance-none rounded-[var(--osio-radius-sm)] bg-transparent py-1 pl-2 pr-6 text-right text-sm font-medium text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
         >
           {options.map((option) => (
             <option key={option.value} value={option.value}>

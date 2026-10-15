@@ -18,6 +18,8 @@ import { ArrowLeft } from 'lucide-react';
 // still belongs here: it only matters once a database actually renders.
 import { ObjectDatabase, type ObjectDatabaseProps } from '@notion-db/object-database';
 import 'leaflet/dist/leaflet.css';
+import '@/app/styles/database-bridge.generated.css';
+import '@/app/styles/database-overrides.css';
 
 import type { Block } from '@/entities/block';
 import type { PageEntry, PagePropertyEntry } from '@/entities/page';

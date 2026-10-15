@@ -46,10 +46,10 @@ export const CommentsPanel: React.FC<Props> = ({ comments, loading, meId, onAdd,
               <span className="text-xs font-medium text-[var(--osio-fg-muted)]">{comment.authorId === meId ? "You" : "Member"}</span>
               {comment.authorId === meId && (
                 <span className="flex gap-2">
-                  <button type="button" onClick={() => void onResolve(comment.id, !comment.resolvedAt)} className="text-[10px] text-[var(--osio-fg-subtle)] hover:text-[var(--osio-accent)]">
+                  <button type="button" onClick={() => void onResolve(comment.id, !comment.resolvedAt)} className="text-3xs text-[var(--osio-fg-subtle)] hover:text-[var(--osio-accent)]">
                     {comment.resolvedAt ? "Reopen" : "Resolve"}
                   </button>
-                  <button type="button" onClick={() => void onRemove(comment.id)} className="text-[10px] text-[var(--osio-fg-subtle)] hover:text-[var(--osio-danger)]">
+                  <button type="button" onClick={() => void onRemove(comment.id)} className="text-3xs text-[var(--osio-fg-subtle)] hover:text-[var(--osio-danger)]">
                     Delete
                   </button>
                 </span>

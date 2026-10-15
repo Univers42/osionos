@@ -339,7 +339,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     () => (
       <div className="flex items-center gap-2 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
         <div className="flex shrink-0 items-center gap-2">
-          <Braces size={15} aria-hidden className="text-[var(--osio-accent)]" />
+          <Braces size={16} aria-hidden className="text-[var(--osio-accent)]" />
           <div ref={langPickerRef} className="relative">
             <button
               type="button"
@@ -347,13 +347,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               aria-haspopup="listbox"
               aria-expanded={showLangPicker}
               title="Change language"
-              className="inline-flex items-center gap-1 rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] py-1 pl-2 pr-1.5 font-mono text-[11px] font-medium tracking-wide text-[var(--osio-code-fg)] transition-[background-color,transform] duration-150 hover:bg-[var(--osio-code-btn-hover)] active:scale-95"
+              className="inline-flex items-center gap-1 rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] py-1 pl-2 pr-1.5 font-mono text-2xs font-medium tracking-wide text-[var(--osio-code-fg)] transition-[background-color,transform] duration-(--osio-dur-fast) hover:bg-[var(--osio-code-btn-hover)] active:scale-95"
             >
               {block.language || "plaintext"}
               <ChevronDown size={11} aria-hidden className="text-[var(--osio-code-fg-muted)]" />
             </button>
             {showLangPicker && (
-              <div className="absolute top-full left-0 mt-1.5 w-48 overflow-hidden rounded-lg border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-xl z-[var(--osio-z-popover)] osio-code-card">
+              <div className="absolute top-full left-0 mt-1.5 w-48 overflow-hidden rounded-lg border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-osio-e4 z-[var(--osio-z-popover)] osio-code-card">
                 <input
                   autoFocus
                   value={langQuery}
@@ -395,7 +395,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           name="code-file-name"
           autoComplete="off"
           spellCheck={false}
-          className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
+          className="min-w-0 flex-1 bg-transparent font-mono text-2xs text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
         />
         <div className="flex shrink-0 items-center gap-0.5">
           <button
@@ -410,7 +410,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             ].join(" ")}
             onClick={() => commitBlockUpdate(block.id, { lineNumbers: !codeShowLineNumbers })}
           >
-            <Hash size={13} />
+            <Hash size={12} />
           </button>
           <button
             type="button"
@@ -418,32 +418,32 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--osio-code-fg-muted)] transition-colors hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
             onClick={() => commitBlockUpdate(block.id, { codeTheme: block.codeTheme === "light" ? "dark" : "light" })}
           >
-            {block.codeTheme === "light" ? <Moon size={13} /> : <Sun size={13} />}
+            {block.codeTheme === "light" ? <Moon size={12} /> : <Sun size={12} />}
           </button>
           {isRenderable && (
             <button
               type="button"
               title={codeView === "preview" ? "Show source" : "Show preview"}
-              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium text-[var(--osio-code-fg-muted)] transition-colors hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-2xs font-medium text-[var(--osio-code-fg-muted)] transition-colors hover:bg-[var(--osio-code-btn-hover)] hover:text-[var(--osio-code-fg)]"
               onClick={() =>
                 commitBlockUpdate(block.id, {
                   codeView: codeView === "preview" ? "source" : "preview",
                 })
               }
             >
-              {codeView === "preview" ? <><Code size={13} /> Source</> : <><Eye size={13} /> Preview</>}
+              {codeView === "preview" ? <><Code size={12} /> Source</> : <><Eye size={12} /> Preview</>}
             </button>
           )}
           <button
             type="button"
             title="Copy code"
             className={[
-              "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-[color,background-color,transform] duration-150 hover:bg-[var(--osio-code-btn-hover)] active:scale-95",
+              "inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-2xs font-medium transition-[color,background-color,transform] duration-(--osio-dur-fast) hover:bg-[var(--osio-code-btn-hover)] active:scale-95",
               copiedCode ? "text-[var(--osio-success)]" : "text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]",
             ].join(" ")}
             onClick={handleCopyCode}
           >
-            {copiedCode ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
+            {copiedCode ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
           </button>
         </div>
       </div>
@@ -456,7 +456,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-2xl font-bold text-[var(--osio-fg-default)] leading-tight"
+          className="osio-h1 text-[var(--osio-fg-default)]"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 1")}
           onChange={onChange}
@@ -472,7 +472,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-xl font-semibold text-[var(--osio-fg-default)] leading-tight"
+          className="osio-h2 text-[var(--osio-fg-default)]"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 2")}
           onChange={onChange}
@@ -488,7 +488,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-lg font-semibold text-[var(--osio-fg-default)] leading-snug"
+          className="osio-h3 text-[var(--osio-fg-default)]"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 3")}
           onChange={onChange}
@@ -505,7 +505,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       return (
         <EditableContent
           content={block.content}
-          className="text-base font-semibold text-[var(--osio-fg-default)] leading-snug"
+          className="osio-h4 text-[var(--osio-fg-default)]"
           style={editableStyle}
           placeholder={getBlockPlaceholder(block, "Heading 4")}
           onChange={onChange}
@@ -809,7 +809,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <div className="flex-1 min-w-0">
             <EditableContent
               content={block.content}
-              className={`${getToggleHeadingClass(block.headingLevel)} text-[var(--osio-fg-muted)] leading-relaxed py-0.5 italic`}
+              className={`${getToggleHeadingClass(block.headingLevel)} text-[var(--osio-fg-muted)] py-0.5 italic`}
               style={editableStyle}
               placeholder="Quote… end a line with “— Source” to add a citation"
               onChange={onChange}
@@ -838,7 +838,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           style={{ ...calloutSurface(calloutType), ...surfaceStyle }}
         >
           <span
-            className="pointer-events-none absolute right-2 top-1.5 max-w-[45%] truncate select-none rounded px-1 text-[10px] font-semibold uppercase tracking-wide opacity-0 transition-opacity group-hover/callout:opacity-60"
+            className="pointer-events-none absolute right-2 top-1.5 max-w-[45%] truncate select-none rounded-xs px-1 text-3xs font-semibold uppercase tracking-wide opacity-0 transition-opacity group-hover/callout:opacity-60"
             style={{ color: accent }}
             aria-hidden="true"
           >
@@ -847,7 +847,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <div className="relative mt-0.5 shrink-0">
             <button
               type="button"
-              className="inline-flex cursor-pointer items-center justify-center rounded"
+              className="inline-flex cursor-pointer items-center justify-center rounded-xs"
               style={{ color: accent }}
               aria-label="Change callout type"
               title="Change callout type"
@@ -866,7 +866,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           <div className="min-w-0 max-w-full flex-1">
             <EditableContent
               content={block.content}
-              className={`py-0.5 leading-relaxed break-words text-[var(--osio-fg-default)] ${getToggleHeadingClass(block.headingLevel)}`}
+              className={`py-0.5 break-words text-[var(--osio-fg-default)] ${getToggleHeadingClass(block.headingLevel)}`}
               style={editableStyle}
               placeholder={getBlockPlaceholder(block, "Type… '/' for commands · Enter to add blocks inside")}
               onChange={onChange}
@@ -940,7 +940,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         <div
           role="separator"
           aria-label="Divider block"
-          className="group/divider relative flex w-full select-none items-center rounded py-0 outline-offset-4 transition-[outline-color] group-hover/block:outline-dashed group-hover/block:outline-1 group-hover/block:outline-[var(--osio-border-default)]"
+          className="group/divider relative flex w-full select-none items-center rounded-xs py-0 outline-offset-4 transition-[outline-color] group-hover/block:outline-dashed group-hover/block:outline-1 group-hover/block:outline-[var(--osio-border-default)]"
         >
           <hr className="pointer-events-none w-full border-0 border-t border-[var(--osio-fg-subtle)] transition-colors group-hover/block:border-[var(--osio-accent)]" />
         </div>

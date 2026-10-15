@@ -79,7 +79,7 @@ export const ComposerToolbar: React.FC<ComposerToolbarProps> = ({
         <Paperclip size={18} />
       </button>
       <button ref={gifBtn} type="button" className={BTN} disabled={disabled} aria-label="Add GIF" onClick={openGif}>
-        <span className="text-[11px] font-bold leading-none">GIF</span>
+        <span className="text-2xs font-bold leading-none">GIF</span>
       </button>
       <button ref={emojiBtn} type="button" className={BTN} disabled={disabled} aria-label="Add emoji" onClick={() => setEmojiOpen((v) => !v)}>
         <Smile size={18} />

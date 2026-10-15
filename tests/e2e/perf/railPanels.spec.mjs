@@ -44,7 +44,7 @@ async function openOnce(page, name) {
     runs: 1,
     warmups: 0,
     startEvent: "click",
-    until: { selector: "span.uppercase", text: name },
+    until: { selector: "span[data-panel-title]", text: name },
   });
 }
 
@@ -83,7 +83,7 @@ test("rail re-open (chunk loaded) per panel", async ({ page }) => {
     const tab = page.getByRole("tablist", RAIL).getByRole("tab", { name, exact: true });
     const stats = await measureToPaint(page, () => tab.click(), {
       startEvent: "click",
-      until: { selector: "span.uppercase", text: name },
+      until: { selector: "span[data-panel-title]", text: name },
       before: async () => collapseToRail(page),
     });
     assertBudget(SPEC, `reopen.${name}`, stats, { target: 16, budget: BUDGET.reopen }, { floor });

@@ -55,7 +55,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
   const [expanded, setExpanded] = useState(!block.collapsed);
   const updateBlock = usePageStore((s) => s.updateBlock);
   const summaryClassName = [
-    "text-[var(--osio-fg-default)] leading-relaxed py-0.5",
+    "text-[var(--osio-fg-default)] py-0.5",
     getToggleHeadingClass(block.headingLevel),
   ].join(" ");
   const commitBlockUpdate = useCallback(
@@ -135,12 +135,12 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
           onClick={handleToggle}
           aria-label={expanded ? "Collapse toggle" : "Expand toggle"}
           aria-expanded={expanded}
-          className="shrink-0 mt-[3px] w-5 h-5 rounded hover:bg-[var(--osio-bg-hover)] flex items-center justify-center"
+          className="shrink-0 mt-[3px] w-5 h-5 rounded-xs hover:bg-[var(--osio-bg-hover)] flex items-center justify-center"
         >
           <ChevronRight
             size={14}
             className={[
-              "text-[var(--osio-fg-muted)] transition-transform duration-150",
+              "text-[var(--osio-fg-muted)] transition-transform duration-(--osio-dur-fast)",
               expanded ? "rotate-90" : "",
             ].join(" ")}
           />

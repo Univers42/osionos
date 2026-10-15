@@ -9,7 +9,7 @@ import type { Automation } from "../model/types";
 import { AutomationRow } from "./AutomationRow";
 
 const TOOLBAR_BUTTON =
-  "flex items-center gap-1 rounded border border-[var(--osio-border-default)] px-2 py-1 text-xs text-[var(--osio-fg-muted)] hover:border-[var(--osio-accent)] hover:text-[var(--osio-fg-default)]";
+  "flex items-center gap-1 rounded-xs border border-[var(--osio-border-default)] px-2 py-1 text-xs text-[var(--osio-fg-muted)] hover:border-[var(--osio-accent)] hover:text-[var(--osio-fg-default)]";
 
 /**
  * The editable shortcut table (Settings → Keyboard shortcuts, and reachable via

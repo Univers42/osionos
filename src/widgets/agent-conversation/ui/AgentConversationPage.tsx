@@ -480,7 +480,7 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
               </button>
             ) : null}
             <button type="button" onClick={resetConversation} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--osio-border-default)] text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" aria-label="Reset conversation" title="Reset conversation">
-              <RotateCcw size={15} aria-hidden="true" />
+              <RotateCcw size={16} aria-hidden="true" />
             </button>
           </div>
         </header>
@@ -535,9 +535,9 @@ export const AgentConversationPage: React.FC<AgentConversationPageProps> = ({ pa
                       {message.toolEvents.map((event) => (
                         <div key={event.id} data-agent-tool={event.name} className="rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2.5 py-2 text-xs text-[var(--osio-fg-muted)]">
                           <div className="mb-1 flex items-center gap-2 font-medium text-[var(--osio-fg-default)]">
-                            {event.status === "running" ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : null}
-                            {event.status === "complete" ? <CheckCircle2 size={13} aria-hidden="true" /> : null}
-                            {event.status === "error" ? <XCircle size={13} aria-hidden="true" /> : null}
+                            {event.status === "running" ? <Loader2 size={12} className="animate-spin" aria-hidden="true" /> : null}
+                            {event.status === "complete" ? <CheckCircle2 size={12} aria-hidden="true" /> : null}
+                            {event.status === "error" ? <XCircle size={12} aria-hidden="true" /> : null}
                             <span>{event.name}</span>
                           </div>
                           <p>{event.detail}</p>

@@ -184,7 +184,7 @@ export const PageHeader: React.FC<Props> = ({ pageId, activePage, locked, commen
           <PageIcon icon={icon} onChangeIcon={actions.changeIcon} onRemoveIcon={actions.removeIcon} disabled={locked} />
         )}
 
-        <div className="osionos-page-toolbar flex-wrap">
+        <div className="osionos-page-toolbar min-h-7 flex-wrap h-auto!">
           {!hasIcon && !locked && (
             <button type="button" className="osionos-page-toolbar-btn" onClick={actions.addIcon}>
               <IconValueView value={getCollectionEmojiValue("sparkles")} size={14} />

@@ -94,7 +94,7 @@ export const ConnectionOnboarding: React.FC<{
                   <ul className="mt-2 flex flex-col gap-1">
                     {d.scopes.map((scope) => (
                       <li key={scope} className="flex items-center gap-2 text-xs text-[var(--osio-fg-muted)]">
-                        <ShieldCheck size={13} className="shrink-0 text-[var(--osio-accent)]" />
+                        <ShieldCheck size={12} className="shrink-0 text-[var(--osio-accent)]" />
                         {SCOPE_LABELS[scope] ?? scope}
                       </li>
                     ))}

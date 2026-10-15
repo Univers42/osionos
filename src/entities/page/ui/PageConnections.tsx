@@ -49,10 +49,10 @@ export const PageConnections: React.FC<Props> = ({ pageId, workspaceId }) => {
 
   return (
     <div className="mt-2 flex flex-col gap-1 text-sm">
-      {data.parent ? <ConnRow icon={<Folder size={13} />} label="In folder" refs={[data.parent]} onGo={go} /> : null}
-      {data.children.length ? <ConnRow icon={<CornerDownRight size={13} />} label="Contains" refs={data.children} onGo={go} /> : null}
-      {data.backlinks.length ? <ConnRow icon={<Link2 size={13} />} label="Linked from" refs={data.backlinks} onGo={go} /> : null}
-      {data.mentionRefs.length ? <ConnRow icon={<AtSign size={13} />} label="Mentions" refs={data.mentionRefs} onGo={go} /> : null}
+      {data.parent ? <ConnRow icon={<Folder size={12} />} label="In folder" refs={[data.parent]} onGo={go} /> : null}
+      {data.children.length ? <ConnRow icon={<CornerDownRight size={12} />} label="Contains" refs={data.children} onGo={go} /> : null}
+      {data.backlinks.length ? <ConnRow icon={<Link2 size={12} />} label="Linked from" refs={data.backlinks} onGo={go} /> : null}
+      {data.mentionRefs.length ? <ConnRow icon={<AtSign size={12} />} label="Mentions" refs={data.mentionRefs} onGo={go} /> : null}
     </div>
   );
 };
@@ -67,7 +67,7 @@ const ConnRow: React.FC<{ icon: React.ReactNode; label: string; refs: PageRef[];
     <span className="flex h-7 w-32 sm:w-40 shrink-0 items-center gap-1.5 px-1.5 text-[var(--osio-fg-muted)]">{icon}{label}</span>
     <div className="flex flex-1 flex-wrap items-center gap-1 py-0.5 min-w-0">
       {refs.map((ref) => {
-        const chip = "inline-flex items-center gap-1 rounded bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-xs";
+        const chip = "inline-flex items-center gap-1 rounded-xs bg-[var(--osio-bg-muted)] px-1.5 py-0.5 text-xs";
         if (ref.surface === "folder") {
           return <span key={ref.id} className={chip}><Folder size={11} />{ref.title || "Untitled"}</span>;
         }

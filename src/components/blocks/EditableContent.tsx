@@ -472,7 +472,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
       event.preventDefault();
     }}
   >
-    <div className="relative rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-1.5 py-1 shadow-xl">
+    <div className="relative rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-1.5 py-1 shadow-osio-e4">
       <div className="flex items-center gap-0.5">
         {blockType && onTurnInto ? (
           <>
@@ -539,7 +539,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
               ? "inline-text-color-palette"
               : "inline-background-color-palette"
           }
-          className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-2 w-45 h-60 shadow-xl"
+          className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-2 w-45 h-60 shadow-osio-e4"
         >
           <ColorPickerBoard
             defaultValue={defaultColor}
@@ -609,7 +609,7 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
       )}
 
       {shortcutsOpen && (
-        <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-2 shadow-xl">
+        <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-2 shadow-osio-e4">
           <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
             Keyboard shortcuts
           </p>
@@ -1592,7 +1592,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
             <div
               ref={linkPickerRef}
               data-testid="inline-link-picker"
-              className="fixed z-[var(--osio-z-max)] w-80 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-xl"
+              className="fixed z-[var(--osio-z-max)] w-80 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-osio-e4"
               style={{
                 left: selectionSnapshot.rect.left,
                 top: Math.max(12, selectionSnapshot.rect.bottom + 8),

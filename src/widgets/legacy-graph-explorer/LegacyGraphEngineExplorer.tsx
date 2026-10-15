@@ -145,14 +145,14 @@ export function LegacyGraphEngineExplorer(): ReactElement {
             <button
               type="button"
               onClick={() => data.setScope("workspace")}
-              className={`rounded px-1.5 py-0.5 transition-colors ${data.scope === "workspace" ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"}`}
+              className={`rounded-xs px-1.5 py-0.5 transition-colors ${data.scope === "workspace" ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"}`}
             >
               This workspace
             </button>
             <button
               type="button"
               onClick={() => data.setScope("all")}
-              className={`rounded px-1.5 py-0.5 transition-colors ${data.scope === "all" ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"}`}
+              className={`rounded-xs px-1.5 py-0.5 transition-colors ${data.scope === "all" ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"}`}
             >
               All workspaces
             </button>
@@ -160,7 +160,7 @@ export function LegacyGraphEngineExplorer(): ReactElement {
               type="button"
               onClick={() => data.setScope("all-data")}
               title="Every database your workspaces are linked to — notes + records from all engines"
-              className={`rounded px-1.5 py-0.5 transition-colors ${data.scope === "all-data" ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"}`}
+              className={`rounded-xs px-1.5 py-0.5 transition-colors ${data.scope === "all-data" ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"}`}
             >
               All data
             </button>

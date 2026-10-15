@@ -26,10 +26,10 @@ export type ChatCommandId = 'image' | 'file' | 'voice' | 'link';
 interface ChatCommand { id: ChatCommandId; label: string; hint: string; icon: React.ReactNode }
 
 const COMMANDS: ChatCommand[] = [
-  { id: 'image', label: 'Image', hint: 'Upload a photo', icon: <ImageIcon size={15} /> },
-  { id: 'file', label: 'File', hint: 'Attach a document', icon: <FileUp size={15} /> },
-  { id: 'voice', label: 'Voice message', hint: 'Record audio (max 1:00)', icon: <Mic size={15} /> },
-  { id: 'link', label: 'Link', hint: 'Paste a URL preview', icon: <Link2 size={15} /> },
+  { id: 'image', label: 'Image', hint: 'Upload a photo', icon: <ImageIcon size={16} /> },
+  { id: 'file', label: 'File', hint: 'Attach a document', icon: <FileUp size={16} /> },
+  { id: 'voice', label: 'Voice message', hint: 'Record audio (max 1:00)', icon: <Mic size={16} /> },
+  { id: 'link', label: 'Link', hint: 'Paste a URL preview', icon: <Link2 size={16} /> },
 ];
 
 interface ChatComposerMenuProps {
@@ -73,7 +73,7 @@ export const ChatComposerMenu: React.FC<ChatComposerMenuProps> = ({ filter, posi
     <div
       ref={ref}
       data-testid="chat-slash-menu"
-      className="fixed z-[var(--osio-z-popover)] max-h-64 w-60 overflow-y-auto rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] py-1 shadow-[var(--osio-shadow-menu)]"
+      className="osio-surface-overlay fixed z-[var(--osio-z-popover)] max-h-64 w-60 overflow-y-auto"
       style={style}
     >
       {items.map((command, index) => (
@@ -83,7 +83,7 @@ export const ChatComposerMenu: React.FC<ChatComposerMenuProps> = ({ filter, posi
           data-command-id={command.id}
           onMouseEnter={() => setActive(index)}
           onClick={() => onPick(command.id)}
-          className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${
+          className={`flex w-full items-center gap-2.5 rounded-[var(--osio-radius-sm)] px-2 py-1.5 text-left transition-colors ${
             index === activeIdx ? 'bg-[var(--osio-bg-muted)]' : 'hover:bg-[var(--osio-bg-hover)]'
           }`}
         >

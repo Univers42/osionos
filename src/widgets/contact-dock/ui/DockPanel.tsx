@@ -58,10 +58,10 @@ export const DockPanel: React.FC<DockPanelProps> = ({ onCollapse }) => {
     >
       <header className="flex min-h-11 shrink-0 items-center gap-[var(--osio-space-2)] border-b border-[var(--osio-border-default)] px-[var(--osio-space-3)]">
         <span className="flex-1 text-sm font-semibold text-[var(--osio-fg-default)]">Messaging</span>
-        <IconButton size="sm" aria-label="Start a new chat" onClick={() => setPickerOpen((o) => !o)}>
+        <IconButton size="sm" label="Start a new chat" onClick={() => setPickerOpen((o) => !o)}>
           <Plus size={16} aria-hidden="true" />
         </IconButton>
-        <IconButton size="sm" aria-label="Collapse messaging" onClick={onCollapse}>
+        <IconButton size="sm" label="Collapse messaging" onClick={onCollapse}>
           <X size={16} aria-hidden="true" />
         </IconButton>
       </header>
@@ -71,7 +71,7 @@ export const DockPanel: React.FC<DockPanelProps> = ({ onCollapse }) => {
           type="button"
           onClick={toggleAi}
           aria-pressed={aiOpen}
-          className="flex w-full min-h-11 items-center gap-[var(--osio-space-3)] rounded-md border-l-2 border-l-[var(--osio-accent)] bg-[var(--osio-accent-subtle)] px-[var(--osio-space-3)] py-[var(--osio-space-2)] text-left transition-colors duration-150 ease-out hover:opacity-90"
+          className="flex w-full min-h-11 items-center gap-[var(--osio-space-3)] rounded-md border-l-2 border-l-[var(--osio-accent)] bg-[var(--osio-accent-subtle)] px-[var(--osio-space-3)] py-[var(--osio-space-2)] text-left transition-colors duration-(--osio-dur-fast) ease-out hover:opacity-90"
         >
           <Sparkles size={18} className="text-[var(--osio-accent)]" aria-hidden="true" />
           <span className="flex-1 truncate text-sm font-medium text-[var(--osio-accent-text)]">Ask the assistant</span>

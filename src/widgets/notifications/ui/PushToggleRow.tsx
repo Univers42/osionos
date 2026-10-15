@@ -27,7 +27,7 @@ export const PushToggleRow: React.FC = () => {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-[var(--osio-border-default)] px-3 py-2.5">
       <span className="flex items-center gap-2 text-sm text-[var(--osio-fg-default)]">
-        {on ? <Bell size={15} className="text-[var(--osio-accent)]" /> : <BellOff size={15} className="text-[var(--osio-fg-subtle)]" />}
+        {on ? <Bell size={16} className="text-[var(--osio-accent)]" /> : <BellOff size={16} className="text-[var(--osio-fg-subtle)]" />}
         {label}
       </span>
       <button

@@ -38,14 +38,14 @@ function rowIdentity(entry: ShareEntry): { title: string; subtitle: string; icon
 
 function initialsBadge(name: string): React.ReactNode {
   const initials = name.split(/\s+/).map((part) => part[0] ?? '').join('').slice(0, 2).toUpperCase();
-  return <span className="text-[10px] font-semibold">{initials || '?'}</span>;
+  return <span className="text-3xs font-semibold">{initials || '?'}</span>;
 }
 
 /** One person/role/general-access row: identity + level dropdown + remove. */
 export const ShareRow: React.FC<ShareRowProps> = ({ entry, busy = false, onLevel, onRemove }) => {
   const identity = rowIdentity(entry);
   return (
-    <div className="flex items-center gap-3 rounded-md px-2 py-1.5 transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]">
+    <div className="flex items-center gap-3 rounded-md px-2 py-1.5 transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)]">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-muted)]">
         {identity.icon}
       </span>
@@ -57,7 +57,7 @@ export const ShareRow: React.FC<ShareRowProps> = ({ entry, busy = false, onLevel
       <button
         type="button"
         aria-label={`Remove access for ${identity.title}`}
-        className="rounded-md p-1 text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-danger)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="rounded-md p-1 text-[var(--osio-fg-muted)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-danger)] disabled:cursor-not-allowed disabled:opacity-60"
         onClick={onRemove}
         disabled={busy}
       >

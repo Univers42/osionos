@@ -12,6 +12,7 @@
     "bridge:api": "bash scripts/docker-run.sh bridge-api",
     "mcp:claude": "bash scripts/docker-run.sh mcp-claude",
     "build": "bash scripts/docker-run.sh build",
+    "tokens": "bash scripts/docker-run.sh tokens",
     "preview": "bash scripts/docker-run.sh preview",
     "typecheck": "bash scripts/docker-run.sh typecheck",
     "lint": "bash scripts/docker-run.sh lint",

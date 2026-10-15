@@ -276,7 +276,7 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
                 type="button"
                 aria-pressed={scope === option}
                 onClick={() => pickScope(option)}
-                className={`rounded px-1.5 py-0.5 transition-colors ${scope === option ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "hover:bg-[var(--osio-bg-hover)]"}`}
+                className={`rounded-xs px-1.5 py-0.5 transition-colors ${scope === option ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "hover:bg-[var(--osio-bg-hover)]"}`}
               >
                 {SCOPE_LABELS[option]}
               </button>
@@ -301,7 +301,7 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
             <button
               type="button"
               onClick={retry}
-              className="pointer-events-auto rounded border border-[var(--osio-border-default)] px-2 py-0.5 text-xs hover:bg-[var(--osio-bg-hover)]"
+              className="pointer-events-auto rounded-xs border border-[var(--osio-border-default)] px-2 py-0.5 text-xs hover:bg-[var(--osio-bg-hover)]"
             >
               Retry
             </button>

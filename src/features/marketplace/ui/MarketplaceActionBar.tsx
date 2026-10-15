@@ -50,7 +50,7 @@ export const MarketplaceActionBar: React.FC<{ app: PageEntry }> = ({ app }) => {
             aria-pressed={Boolean(entry?.autoUpdate)}
             className="inline-flex items-center gap-1.5 text-sm text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]"
           >
-            <span className={`flex h-4 w-4 items-center justify-center rounded border ${entry?.autoUpdate ? "border-[var(--osio-accent)] bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "border-[var(--osio-border-default)]"}`}>
+            <span className={`flex h-4 w-4 items-center justify-center rounded-xs border ${entry?.autoUpdate ? "border-[var(--osio-accent)] bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "border-[var(--osio-border-default)]"}`}>
               {entry?.autoUpdate ? <Check size={12} /> : null}
             </span>
             Auto Update
@@ -58,7 +58,7 @@ export const MarketplaceActionBar: React.FC<{ app: PageEntry }> = ({ app }) => {
         </>
       ) : null}
 
-      <button type="button" onClick={() => launchApp(app)} aria-label="Configure" className="rounded p-1.5 text-[var(--osio-fg-subtle)] hover:text-[var(--osio-fg-default)]">
+      <button type="button" onClick={() => launchApp(app)} aria-label="Configure" className="rounded-xs p-1.5 text-[var(--osio-fg-subtle)] hover:text-[var(--osio-fg-default)]">
         <Settings size={16} />
       </button>
     </div>

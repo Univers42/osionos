@@ -41,7 +41,7 @@ export const MessageSearchPanel: React.FC<MessageSearchPanelProps> = ({ channelI
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<'channel' | 'all'>('channel');
   const { hits, loading } = useMessageSearch(query, scope === 'channel' ? channelId : undefined);
-  const tabClass = (active: boolean) => `rounded px-2 py-0.5 ${active ? 'bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]' : 'text-[var(--osio-fg-muted)]'}`;
+  const tabClass = (active: boolean) => `rounded-xs px-2 py-0.5 ${active ? 'bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]' : 'text-[var(--osio-fg-muted)]'}`;
 
   return (
     <div className="absolute right-0 top-full z-[var(--osio-z-modal)] mt-2 w-96 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-menu)]">
@@ -55,7 +55,7 @@ export const MessageSearchPanel: React.FC<MessageSearchPanelProps> = ({ channelI
           placeholder="Search messages…"
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--osio-fg-subtle)]"
         />
-        <button type="button" aria-label="Close search" onClick={onClose} className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"><X size={14} /></button>
+        <button type="button" aria-label="Close search" onClick={onClose} className="rounded-xs p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"><X size={14} /></button>
       </div>
       <div className="flex gap-1 border-b border-[var(--osio-border-default)] p-1.5 text-xs">
         <button type="button" onClick={() => setScope('channel')} className={tabClass(scope === 'channel')}>This channel</button>

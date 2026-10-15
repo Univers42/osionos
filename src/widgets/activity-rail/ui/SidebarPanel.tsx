@@ -16,6 +16,7 @@ import { WorkspaceSwitcher } from "@/features/auth";
 import { IconButton } from "@/shared/ui";
 import { useUIStore, type ActivePanel } from "@/shared/config/uiStore";
 import { PANEL_LOADERS, prefetchPanel, readyPanel } from "./panelLoaders";
+import { SIDEBAR_LABEL_TYPE } from "./sidebarLabelType";
 
 // Every panel is a lazy chunk the rail prefetches on hover (panelLoaders.ts).
 // The Explorer takes props, so it has its own: it and its open handler load
@@ -94,14 +95,14 @@ export const SidebarPanel = React.memo(function SidebarPanel({ onOpenSettings, o
 
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[var(--osio-bg-subtle)]" onKeyDown={returnFocusToContent}>
+    <div className="flex h-full min-h-0 flex-col" onKeyDown={returnFocusToContent}>
       <WorkspaceSwitcher />
       <div className="flex h-8 items-center justify-between px-3">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--osio-fg-subtle)]">
+        <span data-panel-title className={SIDEBAR_LABEL_TYPE}>
           {PANEL_TITLES[activePanel]}
         </span>
         {peek ? (
-          <IconButton aria-label="Keep the sidebar open" title="Keep the sidebar open" onClick={toggleDocked}>
+          <IconButton label="Keep the sidebar open" onClick={toggleDocked}>
             <Pin size={14} />
           </IconButton>
         ) : null}

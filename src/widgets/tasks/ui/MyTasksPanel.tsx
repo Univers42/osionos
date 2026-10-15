@@ -70,7 +70,7 @@ export const MyTasksPanel: React.FC = () => {
       ) : (
         grouped.filter((group) => group.items.length > 0).map((group) => (
           <section key={group.key} className="mb-3">
-            <h3 className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--osio-fg-subtle)]">
+            <h3 className="px-2 pb-1 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--osio-fg-subtle)]">
               {group.label} <span className="text-[var(--osio-fg-subtle)]">· {group.items.length}</span>
             </h3>
             {group.items.map((task) => <TaskRow key={`${task.pageId}:${task.blockId}`} task={task} />)}
