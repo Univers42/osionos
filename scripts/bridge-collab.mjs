@@ -22,7 +22,7 @@
  * and join-request decisions are OWNER-only (osionos_workspaces.owner_id).
  */
 
-import { createHmac, createHash } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import {
 	UUID_REGEX,
 	bearerToken,
@@ -38,12 +38,9 @@ import {
 } from './bridge-social-core.mjs';
 import { readRawBody } from './bridge-chat-media.mjs';
 import { ensureChatBucket, extFromMime, storageObjectKey, storagePut } from './bridge-storage-core.mjs';
+import { REALTIME_TOKEN_ISSUER, signRealtimeJwt } from './bridge-realtime-socket.mjs';
 
 const REALTIME_TOKEN_TTL_SECONDS = 3600;
-// The gateway refuses a token without `iss` (REALTIME_JWT_ALLOW_NO_ISSUER off): without it
-// every collab socket got AUTH_FAILED (measured live 2026-10-14). One of its accepted issuers.
-const REALTIME_TOKEN_ISSUER = 'grobase-realtime';
-const b64urlJson = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
 
 /**
  * Mint a short-lived HS256 realtime token the grobase gateway accepts
@@ -56,10 +53,10 @@ export function mintRealtimeToken({ secret, userId, namespaces, ttlSeconds = REA
 	if (!secret) throw httpError('Realtime signing secret (JWT_SECRET) is not configured.', 503);
 	const issuedAt = Math.floor(now / 1000);
 	const exp = issuedAt + Math.min(Math.max(Number(ttlSeconds) || REALTIME_TOKEN_TTL_SECONDS, 60), 86400);
+	// The gateway refuses a token without `iss` (REALTIME_JWT_ALLOW_NO_ISSUER off): without it
+	// every collab socket got AUTH_FAILED (measured live 2026-10-14).
 	const payload = { iss: REALTIME_TOKEN_ISSUER, sub: String(userId), iat: issuedAt, exp, namespaces, can_subscribe: true, can_publish: true };
-	const signingInput = `${b64urlJson({ alg: 'HS256', typ: 'JWT' })}.${b64urlJson(payload)}`;
-	const signature = createHmac('sha256', secret).update(signingInput).digest('base64url');
-	return { token: `${signingInput}.${signature}`, expiresAt: new Date(exp * 1000).toISOString() };
+	return { token: signRealtimeJwt(payload, secret), expiresAt: new Date(exp * 1000).toISOString() };
 }
 
 const DISCOVERABLE = new Set(['request_to_join', 'public']);
