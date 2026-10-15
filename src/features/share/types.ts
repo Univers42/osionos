@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/15 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -58,19 +58,8 @@ export interface ShareEntry {
     | { type: 'workspace' }
     | { type: 'public' };
   level: ShareLevel;
-  /** AccessRule _id (page mode) or policy id (live mode) backing this entry. */
+  /** Policy id backing this entry (live mode); a page entry has none. */
   sourceId?: string;
-}
-
-/** AbacEngine AccessRule shape (packages/core/src/abac + accessRule.model). */
-export interface ShareAccessRule {
-  _id?: string;
-  workspaceId: string;
-  resourceId: string | null;
-  resourceType: 'workspace' | 'page' | 'database' | 'block';
-  target: { type: 'user'; userId: string } | { type: 'role'; role: string } | { type: 'workspace' } | { type: 'public' };
-  permission: ShareLevel;
-  explicit: boolean;
 }
 
 /** permission-engine CreatePolicyDto payload (live database pages). */

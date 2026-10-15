@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/15 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,6 +17,7 @@ import type { ShareEntry, ShareLevel } from './types';
 
 interface ShareRowProps {
   entry: ShareEntry;
+  levels?: readonly ShareLevel[];
   busy?: boolean;
   onLevel: (level: ShareLevel) => void;
   onRemove: () => void;
@@ -25,7 +26,7 @@ interface ShareRowProps {
 function rowIdentity(entry: ShareEntry): { title: string; subtitle: string; icon: React.ReactNode } {
   if (entry.target.type === 'user') {
     const { person } = entry.target;
-    return { title: person.name, subtitle: person.email, icon: initialsBadge(person.name) };
+    return { title: person.name, subtitle: person.email || person.role, icon: initialsBadge(person.name) };
   }
   if (entry.target.type === 'role') {
     return { title: entry.target.role, subtitle: 'Role', icon: <Shield size={14} /> };
@@ -42,7 +43,7 @@ function initialsBadge(name: string): React.ReactNode {
 }
 
 /** One person/role/general-access row: identity + level dropdown + remove. */
-export const ShareRow: React.FC<ShareRowProps> = ({ entry, busy = false, onLevel, onRemove }) => {
+export const ShareRow: React.FC<ShareRowProps> = ({ entry, levels, busy = false, onLevel, onRemove }) => {
   const identity = rowIdentity(entry);
   return (
     <div className="flex items-center gap-3 rounded-md px-2 py-1.5 transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]">
@@ -53,7 +54,7 @@ export const ShareRow: React.FC<ShareRowProps> = ({ entry, busy = false, onLevel
         <div className="truncate text-sm font-medium text-[var(--osio-fg-default)]">{identity.title}</div>
         <div className="truncate text-xs text-[var(--osio-fg-muted)]">{identity.subtitle}</div>
       </div>
-      <ShareLevelSelect value={entry.level} disabled={busy} onChange={onLevel} />
+      <ShareLevelSelect value={entry.level} levels={levels} disabled={busy} onChange={onLevel} />
       <button
         type="button"
         aria-label={`Remove access for ${identity.title}`}
