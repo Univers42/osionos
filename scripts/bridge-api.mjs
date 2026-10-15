@@ -426,7 +426,8 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 	return { token: `osionos_v1.${encodedPayload}.${signature}`, expiresAt: new Date(exp * 1000).toISOString() };
 }
 
-export function verifyAppSessionToken(token, config, now = Date.now()) {
+/** The signed payload of an osionos_v1 token: signature and shape only, no claim is checked. */
+function decodeAppSessionPayload(token, config) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const [version, encodedPayload, signature, extra] = safeText(token, 4096).split('.');
 	if (version !== APP_SESSION_TOKEN_VERSION || !encodedPayload || !signature || extra !== undefined) {
@@ -447,6 +448,11 @@ export function verifyAppSessionToken(token, config, now = Date.now()) {
 	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
 		throw Object.assign(new Error('App session token payload is invalid.'), { status: 401 });
 	}
+	return payload;
+}
+
+export function verifyAppSessionToken(token, config, now = Date.now()) {
+	const payload = decodeAppSessionPayload(token, config);
 	if (payload.iss !== 'osionos-bridge' || payload.aud !== 'osionos-app') {
 		throw Object.assign(new Error('App session token audience is invalid.'), { status: 401 });
 	}
