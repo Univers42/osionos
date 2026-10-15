@@ -44,6 +44,7 @@ import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
 import { createSocialHandler } from './bridge-social.mjs';
 import { assertPublicHttpUrl } from './bridge-chat-media.mjs';
+import { assertSessionNotCutOff, createSessionCutoffCache, refreshSessionCutoff, tokenIssuedAtMs } from './bridge-session-cutoff.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -419,6 +420,8 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 		is_admin: isAdmin === true,
 		jti,
 		iat,
+		// Milliseconds: a cut-off and a token minted in the same second must still be ordered.
+		iat_ms: Math.floor(now),
 		exp,
 	};
 	const encodedPayload = base64url(JSON.stringify(tokenPayload));
@@ -463,6 +466,7 @@ export function verifyAppSessionToken(token, config, now = Date.now()) {
 	if (!Number.isFinite(exp) || exp <= Math.floor(now / 1000)) {
 		throw Object.assign(new Error('App session token has expired.'), { status: 401 });
 	}
+	assertSessionNotCutOff(config.sessionCutoffs, String(payload.sub).toLowerCase(), tokenIssuedAtMs(payload));
 	const workspaceIds = Array.isArray(payload.workspace_ids)
 		? payload.workspace_ids.map(String).filter((workspaceId) => UUID_REGEX.test(workspaceId))
 		: [];
@@ -476,6 +480,30 @@ export function verifyAppSessionToken(token, config, now = Date.now()) {
 		isAdmin: payload.is_admin === true,
 		raw: payload,
 	};
+}
+
+async function lookupSessionCutoff(userId, config, fetchImpl) {
+	const rows = await baasRest(config, fetchImpl, `auth_session_cutoffs?${postgrestQuery({ select: 'sessions_valid_after', user_id: `eq.${userId}`, limit: 1 })}`);
+	if (!Array.isArray(rows)) throw baasFail('auth_session_cutoffs did not answer a row list.');
+	return rows[0]?.sessions_valid_after ?? null;
+}
+
+/**
+ * Brings the bearer's cut-off into the cache before any handler runs, so the synchronous
+ * verifier every route and module calls can enforce it. Only a token whose signature checks
+ * out triggers a lookup. Without service-role access there is no table to read: the check
+ * is skipped, as every BaaS-backed route already answers 503 there.
+ */
+async function prefetchSessionCutoff(request, config, fetchImpl) {
+	if (!config.sessionCutoffs || !config.baasUrl || !config.serviceKey) return;
+	let userId;
+	try {
+		userId = String(decodeAppSessionPayload(bearerToken(request), config).sub ?? '').toLowerCase();
+	} catch {
+		return;
+	}
+	if (!UUID_REGEX.test(userId)) return;
+	await refreshSessionCutoff(config.sessionCutoffs, userId, (id) => lookupSessionCutoff(id, config, fetchImpl));
 }
 
 function bearerToken(request) {
@@ -3871,6 +3899,7 @@ async function handleBridgeRequest(request, response, context) {
 		return;
 	}
 	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+	await prefetchSessionCutoff(request, context.config, context.fetchImpl);
 	// Workstream modules — each returns false when the path is not theirs:
 	// in-chat AI agent (SSE), perms proxy (WS-C), LiveKit tokens (WS-D),
 	// chat/profile/feed (WS-B).
@@ -3916,7 +3945,10 @@ async function handleBridgeRequest(request, response, context) {
 }
 
 export function createBridgeServer(options = {}) {
-	const config = options.config ?? configFromEnv();
+	const baseConfig = options.config ?? configFromEnv();
+	// One cut-off cache per server: every handler below closes over this config, and the
+	// per-request copies keep the same cache.
+	const config = baseConfig.sessionCutoffs ? baseConfig : { ...baseConfig, sessionCutoffs: createSessionCutoffCache() };
 	const handoffStore = options.handoffStore ?? new Map();
 	const replayStore = options.replayStore ?? new Map();
 	const fetchImpl = options.fetchImpl ?? fetch;
