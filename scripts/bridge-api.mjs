@@ -170,6 +170,10 @@ export function configFromEnv(env = process.env) {
 		// Behind a link the registry is not relayed, so the link sets Kong's
 		// service_role-only route (http://mini-baas-kong:8000/admin/v1); blank = default.
 		adapterRegistryUrl: (env.OSIONOS_ADAPTER_REGISTRY_URL || 'http://mini-baas-adapter-registry-go:3021').replace(/\/$/, ''),
+		// Set by a link that reaches grobase over Tailscale Funnel, where the WAF refuses
+		// /admin/v1 (rule 10130): the tenant's own mount list, opened by the tenant api-key.
+		// Blank = the registry above.
+		tenantMountsUrl: (env.OSIONOS_TENANT_MOUNTS_URL ?? '').trim().replace(/\/$/, ''),
 		tenantControlUrl: (env.OSIONOS_TENANT_CONTROL_URL ?? 'http://mini-baas-tenant-control:3022').replace(/\/$/, ''),
 		baasTenantId: env.OSIONOS_BAAS_TENANT_ID ?? env.VITE_BAAS_TENANT_ID ?? env.BAAS_TENANT_ID ?? '',
 		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''),
@@ -642,6 +646,38 @@ export async function baasRegistryGet(config, fetchImpl, path, tenantId, timeout
 		},
 	}, timeoutMs), timeoutMs, 'The adapter-registry');
 	return readJsonBody(response, { service: 'adapter-registry', empty: [], failureStatus: responseStatusForBaasFailure });
+}
+
+/** What the caller gets when grobase refuses the tenant mount list. Each refusal reads as an
+ *  outage, never as an empty list: a 404 is a tenant-control without the route, and a 429 is
+ *  the self-serve bucket that every Funnel client shares. */
+function tenantMountsFailure(status, url) {
+	if (status === 404) {
+		return { status: 503, message: `grobase does not serve GET ${new URL(url).pathname} — its tenant-control predates the self-serve mount list.` };
+	}
+	if (status === 401 || status === 403) return { status: 403, message: 'grobase refused the tenant api key on the mount list.' };
+	if (status === 429) return { status: 503, message: 'The tenant mount list is rate limited — retry shortly.' };
+	return { status: 502, message: `The tenant mount list failed with ${status}.` };
+}
+
+/** GET the tenant's own mounts from grobase's self-serve route (tenant-control
+ *  GET /v1/tenants/me/mounts). The api-key names the tenant, so no header the bridge or a
+ *  client sets can widen the list, and no service key leaves this process. */
+export async function baasTenantMountsGet(config, fetchImpl, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
+	if (!config.baasApiKey) {
+		throw Object.assign(new Error('osionos tenant api key is not configured (set OSIONOS_BAAS_API_KEY).'), { status: 503 });
+	}
+	const response = await engineFetchOrUnavailable(() => fetchWithTimeout(fetchImpl, config.tenantMountsUrl, {
+		method: 'GET',
+		headers: { Accept: 'application/json', Authorization: `Bearer ${config.baasApiKey}` },
+	}, timeoutMs), timeoutMs, 'The tenant mount list');
+	if (!response.ok) {
+		await response.body?.cancel().catch(() => {});
+		const failure = tenantMountsFailure(response.status, config.tenantMountsUrl);
+		throw Object.assign(new Error(failure.message), { status: failure.status });
+	}
+	const body = await readJsonBody(response, { service: 'tenant mount list', empty: [], failureStatus: responseStatusForBaasFailure });
+	return Array.isArray(body) ? body : (body?.mounts ?? []);
 }
 
 function postgrestQuery(params) {
@@ -2815,7 +2851,9 @@ async function handleDatabaseList(url, request, response, config, fetchImpl) {
 	// returns only db NAMES; schema/rows still require the bridge's tenant
 	// api-key, so a wrong hint can never read another tenant's data.
 	const tenantId = config.baasTenantId || (url.searchParams.get('tenant') ?? '').trim();
-	const rows = await baasRegistryGet(config, fetchImpl, '/databases', tenantId);
+	const rows = config.tenantMountsUrl
+		? await baasTenantMountsGet(config, fetchImpl)
+		: await baasRegistryGet(config, fetchImpl, '/databases', tenantId);
 	const databases = (Array.isArray(rows) ? rows : [])
 		.map((row) => ({
 			dbId: typeof row?.id === 'string' ? row.id : (typeof row?.dbId === 'string' ? row.dbId : ''),
