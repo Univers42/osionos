@@ -11,8 +11,9 @@
 /* ************************************************************************** */
 
 /**
- * Topbar people search: type a name, open the member's profile tab, or jump
- * straight into a DM.
+ * People search: type a name, open the member's profile tab, or jump straight
+ * into a DM. Nothing mounts it since the top navigation that opened it was
+ * removed; the contact dock's "Start a new chat" picker is the live search.
  */
 
 import React, { useRef, useState } from 'react';
@@ -79,7 +80,7 @@ const PersonRow: React.FC<{ person: PersonHit; onClose: () => void }> = ({ perso
         aria-label={`Message ${person.name}`}
         title={`Message ${person.name}`}
         onClick={() => startDm(person, onClose)}
-        className="rounded p-1.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+        className="rounded-xs p-1.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
       >
         <MessageCircle size={14} />
       </button>
@@ -88,7 +89,7 @@ const PersonRow: React.FC<{ person: PersonHit; onClose: () => void }> = ({ perso
         type="button"
         aria-label={`More actions for ${person.name}`}
         onClick={() => setMenuOpen((value) => !value)}
-        className="rounded p-1.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+        className="rounded-xs p-1.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
       >
         <MoreHorizontal size={14} />
       </button>
@@ -109,7 +110,7 @@ export const PeopleSearchBar: React.FC<PeopleSearchBarProps> = ({ onClose }) => 
   usePresenceHeartbeat();
 
   return (
-    <div className="absolute left-0 right-0 top-9 z-30 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-lg">
+    <div className="absolute left-0 right-0 top-9 z-30 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-osio-e3">
       <div className="flex items-center gap-2 border-b border-[var(--osio-border-default)] px-3 py-2">
         <Search size={14} className="shrink-0 text-[var(--osio-fg-muted)]" />
         <input
@@ -120,7 +121,7 @@ export const PeopleSearchBar: React.FC<PeopleSearchBarProps> = ({ onClose }) => 
           placeholder="Search people…"
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--osio-fg-subtle)]"
         />
-        <button type="button" aria-label="Close people search" onClick={onClose} className="rounded p-0.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]">
+        <button type="button" aria-label="Close people search" onClick={onClose} className="rounded-xs p-0.5 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]">
           <X size={14} />
         </button>
       </div>

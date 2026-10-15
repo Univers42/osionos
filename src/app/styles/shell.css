@@ -1,0 +1,159 @@
+/* The Calm canvas shell: the sidebar panel and every pane are rounded cards that
+   float on the canvas, a frame gap apart. These tokens are the only knobs; Zen,
+   compact density and phone widths turn the gap and the radius to 0 so the
+   cards run edge to edge. */
+:root {
+  --osio-frame-gap: 6px;
+  --osio-radius-pane: calc(12px * var(--osio-radius-scale, 1));
+  --osio-pane-border: var(--osio-border-default);
+  --osio-pane-shadow: var(--osio-e1);
+  --osio-pane-outline-active: color-mix(in srgb, var(--osio-accent) 40%, transparent);
+  --osio-pane-outline-offset: 0;
+  /* Resting divider between cards and between the sidebar and a pane: the gap
+     is the divider while there is one. */
+  --osio-pane-seam: transparent;
+  --osio-sidebar-border-end: var(--osio-pane-border);
+  --osio-splitter-hit-min: 6px;
+  /* The bottom dock is a card like a pane: same radius, gap and shadow, drawn on
+     the dark code surface. Its border colour is --osio-code-border, which only
+     exists on the dock itself, so only the width is a token here. */
+  --osio-dock-border-width: 1px;
+  --osio-dock-shadow: var(--osio-pane-shadow);
+  /* The status bar sits on the canvas; its chips start where the cards do. */
+  --osio-statusbar-px: var(--osio-frame-gap);
+  /* The contact launcher (a 48px button in a 16px padded corner) floats over the
+     bottom-right, so the Panel chip stops short of it. Ponytail: the 3rem
+     mirrors that button's h-12/w-12 by hand; a resized launcher leaves the
+     wrong gap here. */
+  --osio-statusbar-end: calc(var(--osio-space-4) * 2 + 3rem);
+}
+
+/* Edge to edge, the outline would be clipped by the window at the outer
+   edges: it moves inside the card instead. Card borders and shadows go with
+   the gap (side by side they would double into 2px lines and trace the window
+   edge); one seam hairline per division replaces them. */
+:root[data-density="compact"],
+[data-zen="1"] {
+  --osio-frame-gap: 0px;
+  --osio-radius-pane: 0px;
+  --osio-pane-outline-offset: -1px;
+  --osio-pane-border: transparent;
+  --osio-pane-shadow: none;
+  --osio-pane-seam: var(--osio-border-default);
+  --osio-sidebar-border-end: var(--osio-border-default);
+  --osio-dock-border-width: 0px;
+  --osio-dock-shadow: none;
+  --osio-statusbar-px: 6px;
+}
+
+/* Zen hides the contact launcher (global.css), so nothing floats over the
+   status bar's end. */
+[data-zen="1"] {
+  --osio-statusbar-end: var(--osio-statusbar-px);
+}
+
+@media (max-width: 767.98px) {
+  :root {
+    --osio-frame-gap: 0px;
+    --osio-radius-pane: 0px;
+    --osio-pane-outline-offset: -1px;
+    --osio-pane-border: transparent;
+    --osio-pane-shadow: none;
+    --osio-pane-seam: var(--osio-border-default);
+    --osio-sidebar-border-end: var(--osio-border-default);
+    --osio-dock-border-width: 0px;
+    --osio-dock-shadow: none;
+    --osio-statusbar-px: 6px;
+  }
+}
+
+[data-osio-pane-active] {
+  outline: 1px solid var(--osio-pane-outline-active);
+  outline-offset: var(--osio-pane-outline-offset);
+}
+
+/* Resizing relayouts the panes every frame; a blurred shadow behind each one
+   is paint work the drag does not need. */
+body[data-pane-resizing] [data-osio-pane] {
+  box-shadow: none;
+}
+
+/* Chrome on the dark code surfaces (the bottom dock, the run console). The
+   global keyboard-focus highlight derives from --osio-fg-default, which is dark
+   in a light app and vanishes on the dark card; this ring is the accent, drawn
+   inside because the card clips an outer one. The extra type selector lifts it
+   over the global rule, which is unlayered and would otherwise win the tie. */
+[data-osio-code-chrome] button:focus-visible {
+  outline: var(--osio-focus-ring-width) solid var(--osio-focus-ring-color);
+  outline-offset: calc(var(--osio-focus-ring-width) * -1);
+  box-shadow: none;
+}
+
+/* The dock splitter is the frame gap: its focus indicator is the accent
+   hairline, not a box around a few pixels (same lift as above). */
+[role="separator"][data-osio-dock-splitter]:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Buttons and tabs on a code surface. Colour comes from the code tokens, so the
+   same markup reads on the dock, the run console and a code card. Height and
+   padding stay with the caller: two utilities for one property are settled by
+   stylesheet order. */
+@utility osio-code-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--osio-space-1);
+  border-radius: var(--osio-control-radius);
+  color: var(--osio-code-fg-muted);
+  transition:
+    background-color var(--osio-dur-fast) var(--osio-ease-standard),
+    color var(--osio-dur-fast) var(--osio-ease-standard);
+
+  &[data-tone="accent"] {
+    color: var(--osio-code-caret);
+  }
+
+  &:hover:not(:disabled) {
+    background-color: var(--osio-code-btn-hover);
+    color: var(--osio-code-fg);
+  }
+
+  &[data-tone="accent"]:hover:not(:disabled) {
+    color: var(--osio-code-caret);
+  }
+
+  &:active:not(:disabled),
+  &[aria-selected="true"] {
+    background-color: var(--osio-code-btn-active);
+  }
+
+  &[aria-selected="true"] {
+    color: var(--osio-code-fg);
+  }
+}
+
+/* One empty state for every code panel. */
+@utility osio-code-empty {
+  padding: var(--osio-space-6) var(--osio-space-3);
+  text-align: center;
+  font-family: var(--osio-font-ui);
+  font-size: var(--osio-font-size-xs);
+  line-height: var(--osio-line-height-normal);
+  color: var(--osio-code-fg-muted);
+}
+
+/* xterm pads itself, not its host: the fit addon subtracts the padding of the
+   .xterm element but not of its parent, so a padded host overflows by exactly
+   that padding and grows a scrollbar. */
+[data-osio-terminal] .xterm {
+  padding: var(--osio-space-2) var(--osio-space-3);
+}
+
+/* xterm.css paints the scroll viewport #000, which covers the surface the theme
+   sets on its scrollable element and reads as a black slab on the dock. The
+   extra .xterm outranks xterm.css, which loads after this file. */
+[data-osio-terminal] .xterm .xterm-viewport {
+  background-color: transparent;
+}

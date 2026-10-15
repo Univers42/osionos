@@ -47,7 +47,7 @@ export const SqlResultTable: React.FC<{ result: SqlRoResult }> = ({ result }) =>
           ))}
         </tbody>
       </table>
-      {result.truncated && <p className="px-2 py-1 text-[10px] text-[var(--osio-fg-subtle)]">Showing the first rows (result truncated).</p>}
+      {result.truncated && <p className="px-2 py-1 text-3xs text-[var(--osio-fg-subtle)]">Showing the first rows (result truncated).</p>}
     </div>
   );
 };

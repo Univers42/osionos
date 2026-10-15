@@ -49,7 +49,7 @@ export const ProfileSharedPosts: React.FC<{ userId: string }> = ({ userId }) => 
             <button
               type="button"
               onClick={() => openShared(share)}
-              className="group flex w-full flex-col overflow-hidden rounded-xl border border-[var(--osio-border-default)] text-left transition-shadow hover:shadow-md"
+              className="group flex w-full flex-col overflow-hidden rounded-xl border border-[var(--osio-border-default)] text-left transition-shadow hover:shadow-osio-e2"
             >
               <span
                 className="flex aspect-[16/9] items-center justify-center bg-[var(--osio-bg-subtle)] text-2xl"

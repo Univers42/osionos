@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="light" data-palette="warm">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,33 +8,42 @@
 			name="description"
 			content="osionos is a fast, Notion-style workspace with a real-time block editor, rich Markdown engine, databases, and collaborative pages."
 		/>
-		<meta name="theme-color" content="#FAF9F5" media="(prefers-color-scheme: light)" />
-		<meta name="theme-color" content="#1B1A17" media="(prefers-color-scheme: dark)" />
+		<meta name="theme-color" content="#F2F0EC" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#16140F" media="(prefers-color-scheme: dark)" />
 		<meta name="color-scheme" content="light dark" />
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 		<link rel="apple-touch-icon" href="/favicon.svg" />
 		<link rel="preload" href="/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+		<link rel="preload" href="/fonts/newsreader-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
 		<!-- Apply the preloaded body font at HTML-parse time so the preload is USED
 		     within the browser's window (no "preloaded but not used" warning) and
 		     there's no flash before global.css loads. @font-face is also in
-		     global.css. The serif (Newsreader) is heading-only / not first-paint, so
-		     it is NOT preloaded — it loads on demand via global.css. -->
+		     global.css. Newsreader is preloaded too: the page title is a serif
+		     display line and is painted on first paint of every page. -->
 		<style>
 			@font-face{font-family:"Inter Variable";font-style:normal;font-weight:100 900;font-display:swap;src:url("/fonts/inter-latin-wght-normal.woff2") format("woff2")}
 			html,body{font-family:"Inter Variable",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 		</style>
-		<!-- Appearance bootstrap: apply the stored light/dark mode + color palette
-		     BEFORE first paint so there is no flash of the default theme. Mirrors
-		     src/shared/config/theme.ts; App.tsx re-applies on mount. -->
+		<!-- Appearance bootstrap: apply the stored light/dark mode, color palette and
+		     personal appearance (accent, density, corners, text size) BEFORE first
+		     paint so there is no flash of the default theme. Mirrors
+		     src/shared/config/theme.ts; App.tsx re-validates and re-applies on mount
+		     (an unknown accent id set here is dropped there). -->
 		<script>
 			(function () {
 				try {
-					var ds = document.documentElement.dataset;
+					var root = document.documentElement, ds = root.dataset;
 					var m = localStorage.getItem('osionos:theme-mode');
 					ds.theme = (m === 'light' || m === 'dark') ? m
 						: (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
 					var p = localStorage.getItem('osionos:palette');
 					if (p) ds.palette = p;
+					var a = JSON.parse(localStorage.getItem('osionos:appearance')) || {};
+					var axes = { density: ['compact'], radius: ['sharp', 'round'], uiScale: ['small', 'large'] };
+					for (var k in axes) if (axes[k].indexOf(a[k]) > -1) ds[k] = a[k];
+					if (typeof a.accent === 'string' && /^[a-z]+$/.test(a.accent) && a.accent !== 'cobalt') ds.accent = a.accent;
+					var h = typeof a.hue === 'number' ? Math.round(a.hue) : -1;
+					if (ds.accent === 'custom') root.style.setProperty('--osio-accent-hue', h >= 0 && h <= 359 ? h : 260);
 				} catch (e) {}
 			})();
 		</script>

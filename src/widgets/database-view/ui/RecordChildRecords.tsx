@@ -67,7 +67,7 @@ export const RecordChildRecords: React.FC<{ recordRef: LiveRecordRef; compact?: 
   const indent = compact ? "pl-6 pr-2" : "pl-2 pr-2";
   return (
     <div className="mt-2 pt-1">
-      <h4 className={`flex items-center gap-1.5 ${compact ? "pl-6" : "px-2"} pb-0.5 text-[11px] font-medium uppercase tracking-wide text-[var(--osio-fg-subtle)]`}>
+      <h4 className={`flex items-center gap-1.5 ${compact ? "pl-6" : "px-2"} pb-0.5 text-2xs font-medium uppercase tracking-wide text-[var(--osio-fg-subtle)]`}>
         <Boxes size={11} /> Child records{rows.length ? ` · ${rows.length}` : ""}
       </h4>
       <div className="flex flex-col">

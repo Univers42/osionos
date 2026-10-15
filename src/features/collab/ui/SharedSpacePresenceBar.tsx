@@ -98,7 +98,7 @@ export const SharedSpacePresenceBar: React.FC = () => {
         onClick={() => fileInput.current?.click()}
         className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]"
       >
-        <Paperclip size={15} aria-hidden />
+        <Paperclip size={16} aria-hidden />
       </button>
       <input ref={fileInput} type="file" hidden onChange={onPickFile} />
       <CollabCaretLayer />

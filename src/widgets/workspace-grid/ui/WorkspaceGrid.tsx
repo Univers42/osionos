@@ -94,7 +94,9 @@ const SplitView: React.FC<{ split: SplitNode }> = ({ split }) => {
         <React.Fragment key={child.id}>
           <div
             ref={(el) => { cellRefs.current[index] = el; }}
-            className="flex min-w-0 min-h-0 overflow-hidden"
+            // No overflow clip here: it would cut the card's shadow and outline; the
+            // pane inside is min-w-0 and clips its own content.
+            className="flex min-w-0 min-h-0"
             style={{ flexBasis: `${split.sizes[index]}%`, flexGrow: 0, flexShrink: 1 }}
           >
             <LayoutNodeView node={child} />
@@ -117,8 +119,10 @@ const SplitView: React.FC<{ split: SplitNode }> = ({ split }) => {
 export const WorkspaceGrid: React.FC = () => {
   const root = useWorkspaceLayout((s) => s.root);
   usePaneZoomGestures();
+  // The padding is the outer gutter: it sits inside this overflow clip so each
+  // card's shadow and active outline have room to paint instead of being cut.
   return (
-    <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden bg-[var(--osio-bg-page)]">
+    <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden p-[var(--osio-frame-gap)]">
       <LayoutNodeView node={root} />
     </div>
   );

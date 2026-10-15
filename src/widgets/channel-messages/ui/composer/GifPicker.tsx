@@ -77,7 +77,7 @@ export const GifPicker: React.FC<GifPickerProps> = ({ onPick }) => {
           </div>
         )}
       </div>
-      <p className="border-t border-[var(--osio-border-default)] px-2 py-1 text-right text-[10px] text-[var(--osio-fg-subtle)]">
+      <p className="border-t border-[var(--osio-border-default)] px-2 py-1 text-right text-3xs text-[var(--osio-fg-subtle)]">
         Powered by GIPHY
       </p>
     </div>

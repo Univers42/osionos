@@ -17,8 +17,8 @@
  *
  * REACHABLE SURFACE: the bottom-right floating ContactDock (the messaging pill →
  * DockPanel list of DMs → stacked DockChatTab thread w/ the full
- * ChannelMessagesView composer). In this workspace layout the SidebarTopNav
- * (Home/Messages/Discover) is NOT mounted, so the full-page MessagesView and its
+ * ChannelMessagesView composer). This workspace layout has no top navigation
+ * (Home/Messages/Discover), so the full-page MessagesView and its
  * Communities tab are not UI-reachable; tests 2 (gallery) and 6 (communities)
  * therefore assert against the exact bridge endpoints the gallery/community UI
  * consume (GET /channels/:id/media grouped, GET /api/communities/:id → 3

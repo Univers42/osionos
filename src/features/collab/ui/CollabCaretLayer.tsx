@@ -36,7 +36,7 @@ function CaretFlag({ left, top, height, color, name }: {
       <span style={{ display: 'block', width: 'var(--collab-caret-w)', height: '100%', background: color, borderRadius: '1px' }} />
       <span
         style={{ position: 'absolute', top: -16, left: 0, background: color, color: 'var(--osio-bg-elevated)' }}
-        className="whitespace-nowrap rounded-[4px] px-1 text-[10px] font-semibold leading-4 shadow-[var(--osio-shadow-menu)] motion-safe:animate-[collab-flag-in_120ms_ease-out]"
+        className="whitespace-nowrap rounded-[4px] px-1 text-3xs font-semibold leading-4 shadow-[var(--osio-shadow-menu)] motion-safe:animate-[collab-flag-in_120ms_ease-out]"
       >
         {name}
       </span>

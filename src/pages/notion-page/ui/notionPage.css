@@ -39,17 +39,9 @@
   overflow-y: auto;
   overflow-x: hidden;
   background: var(--osio-bg-page);
-  font-family: var(--page-font-family, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  font-family: var(--page-font-family, var(--osio-font-ui));
   position: relative;
   container-type: size;   /* powers PageOutlineRail 50cqh centering + @container narrow-hide */
-}
-
-.osionos-page--font-serif {
-  font-family: Georgia, "Times New Roman", serif;
-}
-
-.osionos-page--font-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
 .osionos-page--small-text {
@@ -57,7 +49,7 @@
 }
 
 .osionos-page--small-text .osionos-page-title {
-  font-size: calc(40px * var(--page-font-size-scale, 0.8));
+  font-size: calc(var(--osio-font-size-display) * var(--page-font-size-scale, 0.8));
 }
 
 /* ── Reading scale ────────────────────────────────────────────────────── */
@@ -76,16 +68,16 @@
 }
 
 /* Not prose: embedded apps, code, layout cells (fixed geometry, their own
-   font-size setting) and inline menus keep the chrome scale. */
-.osionos-page-body :where(
-  [data-database-id],
-  [data-block-type="code"],
-  [data-block-type="graph_view"],
-  [data-block-type="draw"],
-  [data-block-type="home_views"],
-  .osionos-layout-cell-editor,
-  [role="menu"]
-) {
+   font-size setting) and inline menus keep the chrome scale. One selector per
+   kind so Blink files each under its attribute or class instead of trying a
+   whole :where() list on every element at every restyle (global.css, pane zoom). */
+.osionos-page-body :where([data-database-id]),
+.osionos-page-body :where([data-block-type="code"]),
+.osionos-page-body :where([data-block-type="graph_view"]),
+.osionos-page-body :where([data-block-type="draw"]),
+.osionos-page-body :where([data-block-type="home_views"]),
+.osionos-page-body :where(.osionos-layout-cell-editor),
+.osionos-page-body :where([role="menu"]) {
   --text-sm: var(--osio-font-size-sm);
   --text-base: var(--osio-font-size-base);
   --text-lg: var(--osio-font-size-lg);
@@ -112,6 +104,7 @@
 
 .osionos-page-header,
 .osionos-page-properties,
+.osionos-page-notice,
 .osionos-page-body {
   box-sizing: border-box;
   max-width: var(--page-content-max-width, var(--osio-page-max-width, 900px));
@@ -121,6 +114,12 @@
   margin-right: auto;
   padding-left: var(--page-content-padding-inline, clamp(16px, 11%, 96px));
   padding-right: var(--page-content-padding-inline, clamp(16px, 11%, 96px));
+}
+
+/* What a page shows in the content column besides blocks (the page-file conflict
+   banner, the unavailable-body state), clear of the header above and the body below. */
+.osionos-page-notice {
+  margin-block: var(--osio-space-2);
 }
 
 /* A wiki's page list sits in the same column as the body, at the UI's own text
@@ -136,11 +135,13 @@
 
 .osionos-page--full-width .osionos-page-header,
 .osionos-page--full-width .osionos-page-properties,
+.osionos-page--full-width .osionos-page-notice,
 .osionos-page--full-width .osionos-page-body,
 .osionos-page--full-width .osionos-wiki-pages-wrap {
   max-width: none;
 }
 
+.osionos-page--layout-canvas .osionos-page-notice,
 .osionos-page--layout-canvas .osionos-page-body {
   max-width: none;
   padding-left: clamp(16px, 3vw, 48px);
@@ -307,7 +308,7 @@
   padding: 0 8px 8px 8px;
 }
 
-.osionos-layout-toolbar button {
+.osionos-layout-toolbar button:not([role="menuitem"]) {
   display: inline-flex;
   min-height: 30px;
   align-items: center;
@@ -322,7 +323,7 @@
   transition: background var(--osio-motion-fast), color var(--osio-motion-fast), border-color var(--osio-motion-fast);
 }
 
-.osionos-layout-toolbar button:hover {
+.osionos-layout-toolbar button:not([role="menuitem"]):hover {
   border-color: color-mix(in srgb, var(--osio-accent) 38%, var(--osio-border-default));
   background: var(--osio-bg-hover);
   color: var(--osio-fg-default);
@@ -1374,9 +1375,7 @@ button.osionos-page-breadcrumb:hover {
 .osionos-page-title {
   display: block;
   width: 100%;
-  font-size: 40px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: var(--osio-font-size-display);
   color: var(--osio-fg-default);
   outline: none;
   border: none;
@@ -1635,8 +1634,11 @@ button.osionos-page-breadcrumb:hover {
 /* ── Responsive (visual adjustments only — layout is fluid) ──────── */
 
 @media (max-width: 768px) {
+  /* Stays above the 30px reading h1 (3xl) at phone widths, so the title is
+     still the largest line. Ponytail: 8.5vw is eyeballed — a long title wraps
+     one line sooner on a 360px screen than at 30px. */
   .osionos-page-title {
-    font-size: 30px;
+    font-size: clamp(var(--osio-font-size-3xl), 8.5vw, var(--osio-font-size-display));
   }
 
   .osionos-page-icon {

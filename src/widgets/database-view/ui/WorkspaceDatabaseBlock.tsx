@@ -17,6 +17,8 @@ import {
   type ObjectDatabaseProps,
   type ObjectDatabaseTemplatesController,
 } from "@notion-db/object-database";
+import "@/app/styles/database-bridge.generated.css";
+import "@/app/styles/database-overrides.css";
 
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";

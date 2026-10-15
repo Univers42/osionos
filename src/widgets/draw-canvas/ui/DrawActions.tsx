@@ -37,7 +37,7 @@ const GROUP_STYLE: React.CSSProperties = {
   borderRadius: 12,
   background: "var(--osio-bg-panel)",
   border: "1px solid var(--osio-border-soft)",
-  boxShadow: "var(--osio-shadow-md, 0 4px 16px rgba(0,0,0,0.12))",
+  boxShadow: "var(--osio-e3)",
 };
 
 const BTN_STYLE: React.CSSProperties = {
@@ -80,7 +80,7 @@ function DrawActionsImpl({ engine }: { engine: DrawEngine | null }) {
       <button type="button" style={BTN_STYLE} onClick={exportJson} title="Export .osidraw JSON">
         JSON
       </button>
-      <button type="button" style={{ ...BTN_STYLE, color: "var(--osio-danger, #e03131)" }} onClick={reset} title="Reset canvas">
+      <button type="button" style={{ ...BTN_STYLE, color: "var(--osio-danger)" }} onClick={reset} title="Reset canvas">
         Reset
       </button>
     </div>

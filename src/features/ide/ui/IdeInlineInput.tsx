@@ -17,14 +17,15 @@ interface Props {
   placeholder?: string;
   /** Accessible name; a placeholder alone is not one. */
   label?: string;
-  depth: number;
   onSubmit: (name: string) => void;
   onCancel: () => void;
 }
 
 /** A single-line inline editor for creating or renaming a tree entry. Enter
- *  commits a non-empty trimmed value, Escape cancels, blur commits-or-cancels. */
-export const IdeInlineInput: React.FC<Props> = ({ initialValue = "", placeholder, label, depth, onSubmit, onCancel }) => {
+ *  commits a non-empty trimmed value, Escape cancels, blur commits-or-cancels.
+ *  The field is a control-h-xs (24px) box inside the 28px row, so it opens
+ *  without moving the lines around it. */
+export const IdeInlineInput: React.FC<Props> = ({ initialValue = "", placeholder, label, onSubmit, onCancel }) => {
   const [value, setValue] = React.useState(initialValue);
   const ref = React.useRef<HTMLInputElement | null>(null);
 
@@ -54,8 +55,7 @@ export const IdeInlineInput: React.FC<Props> = ({ initialValue = "", placeholder
         else if (event.key === "Escape") { event.preventDefault(); onCancel(); }
       }}
       onBlur={commit}
-      style={{ marginLeft: 8 + depth * 12 }}
-      className="my-[2px] mr-2 w-[calc(100%-16px)] rounded border border-[var(--osio-accent)] bg-[var(--osio-code-bg)] px-1 py-[1px] text-[13px] text-[var(--osio-code-fg)] outline-none"
+      className="osio-field min-w-0 flex-1 px-1.5 text-sm [--osio-field-h:var(--osio-control-h-xs)]"
     />
   );
 };

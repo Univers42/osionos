@@ -91,7 +91,7 @@ export const ChatShell: React.FC = () => {
           onClick={() => createConversation()}
           className="m-2 flex items-center gap-2 rounded-lg border border-[var(--osio-border-default)] px-3 py-2 text-sm text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]"
         >
-          <Plus size={15} /> New conversation
+          <Plus size={16} /> New conversation
         </button>
         <nav className="flex-1 overflow-y-auto px-2 pb-3" aria-label="Conversations">
           {conversations.map((c) => (

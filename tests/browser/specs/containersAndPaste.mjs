@@ -485,7 +485,7 @@ export const containerAndPasteScenarios = [
       await expect(editors.nth(1)).toHaveText("Heading 5");
       await expect(editors.nth(2)).toHaveText("Heading 6");
 
-      await expect(editors.nth(0)).toHaveClass(/text-base/);
+      await expect(editors.nth(0)).toHaveClass(/\bosio-h4\b/);
       await expect(editors.nth(1)).toHaveClass(/text-sm/);
       await expect(editors.nth(2)).toHaveClass(/text-xs/);
     },

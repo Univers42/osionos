@@ -25,7 +25,7 @@ import { CreateGroupModal } from '@/features/group-chat/CreateGroupModal';
 import { PeoplePickerList } from '@/shared/people/PeoplePickerList';
 import type { PersonHit } from '@/shared/people/usePeopleSearch';
 import { useContactsStore } from '@/store/social/useContactsStore';
-import { useToastStore } from '@/shared/ui';
+import { PanelSectionLabel, useToastStore } from '@/shared/ui';
 import { UnreadBadge } from '@/shared/chat/UnreadBadge';
 import { genId } from '@/widgets/workspace-grid/model/layoutTree';
 import { useWorkspaceLayout } from '@/widgets/workspace-grid/model/workspaceLayout';
@@ -81,14 +81,14 @@ export const DmList: React.FC<{ filter?: string }> = ({ filter = "" }) => {
   return (
     <section className="px-2 py-1">
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-xs font-semibold uppercase text-[var(--osio-fg-subtle)]">Direct messages</h2>
+        <PanelSectionLabel as="h2">Direct messages</PanelSectionLabel>
         <span className="flex items-center gap-0.5">
           <button
             type="button"
             aria-label="New group"
             title="New group"
             onClick={() => setGroupOpen(true)}
-            className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+            className="rounded-xs p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
           >
             <Users size={14} />
           </button>
@@ -97,7 +97,7 @@ export const DmList: React.FC<{ filter?: string }> = ({ filter = "" }) => {
             aria-label="Start a direct message"
             title="Start a direct message"
             onClick={() => setPickerOpen((open) => !open)}
-            className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+            className="rounded-xs p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
           >
             <Plus size={14} />
           </button>

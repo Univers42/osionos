@@ -47,7 +47,7 @@ const RoleMenu: React.FC<{ member: GroupMember; onPick: (role: string) => void }
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
+        className="inline-flex items-center gap-1 rounded-xs px-1.5 py-0.5 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
       >
         <ShieldCheck size={12} /> {member.role}
       </button>
@@ -101,7 +101,7 @@ export const GroupMembersPanel: React.FC<Props> = ({ channelId, members, onChang
               type="button"
               aria-label={`Remove ${member.name}`}
               onClick={() => setPendingRemove(member)}
-              className="rounded p-1 text-[var(--osio-fg-subtle)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-danger)]"
+              className="rounded-xs p-1 text-[var(--osio-fg-subtle)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-danger)]"
             >
               <Trash2 size={14} />
             </button>

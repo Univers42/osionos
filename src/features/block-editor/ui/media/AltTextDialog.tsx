@@ -48,7 +48,7 @@ export const AltTextDialog: React.FC<AltTextDialogProps> = ({ value, onSave, onC
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-md rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 shadow-xl"
+        className="w-full max-w-md rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 shadow-osio-e4"
       >
         <h2 className="mb-1 text-sm font-semibold text-[var(--osio-fg-default)]">Alt text</h2>
         <p className="mb-3 text-xs text-[var(--osio-fg-muted)]">

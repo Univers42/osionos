@@ -56,7 +56,7 @@ export const TopBarMenu: React.FC<TopBarMenuProps> = ({ groups }) => {
             onClick={() => setOpenId((current) => (current === group.id ? null : group.id))}
             onPointerEnter={() => setOpenId((current) => (current ? group.id : current))}
             className={cx(
-              "rounded px-2 py-1 text-sm text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]",
+              "rounded-xs px-2 py-1 text-sm text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]",
               openId === group.id && "bg-[var(--osio-bg-hover)] text-[var(--osio-fg-default)]",
             )}
           >

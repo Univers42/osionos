@@ -25,12 +25,12 @@ import { defineScenario } from "../core/scenario.mjs";
 
 const CONTAINER = "12. Block Combinations";
 
-/** The Tailwind size token applied to a container summary, e.g. "text-xl".
+/** The heading level applied to a container summary, read from its osio-hN class.
  *  (An inline font-size on the editor makes computed px unreliable, so the
  *  heading sizing is asserted via the class the renderer applies.) */
 async function summarySizeClass(editor) {
   const className = await editor.evaluate((node) => node.className);
-  return /\btext-(2xl|xl|lg|base|sm)\b/.exec(className)?.[1] ?? "(none)";
+  return /\bosio-h([1-4])\b/.exec(className)?.[1] ?? "(none)";
 }
 
 /** Whether any editor in the page currently renders the given text. */
@@ -68,8 +68,8 @@ export const markdownCombinationScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       const quote = await makeContainerHeading(page, '" ', "## ", "Big quote");
-      // "## " sets heading level 2 (text-xl), keeping the quote block.
-      expect(await summarySizeClass(quote)).toBe("xl");
+      // "## " sets heading level 2 (osio-h2), keeping the quote block.
+      expect(await summarySizeClass(quote)).toBe("2");
       await expect(quote).toHaveText("Big quote");
     },
   ),
@@ -80,8 +80,8 @@ export const markdownCombinationScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       const callout = await makeContainerHeading(page, ">![note] ", "# ", "Big callout");
-      // "# " => heading level 1 (text-2xl).
-      expect(await summarySizeClass(callout)).toBe("2xl");
+      // "# " => heading level 1 (osio-h1).
+      expect(await summarySizeClass(callout)).toBe("1");
       await expect(callout).toHaveText("Big callout");
     },
   ),
@@ -92,7 +92,7 @@ export const markdownCombinationScenarios = [
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       const toggle = await makeContainerHeading(page, "> ", "## ", "Big toggle");
-      expect(await summarySizeClass(toggle)).toBe("xl");
+      expect(await summarySizeClass(toggle)).toBe("2");
       await expect(toggle).toHaveText("Big toggle");
     },
   ),
@@ -119,8 +119,8 @@ export const markdownCombinationScenarios = [
       );
       expect(firstBlockType).toBe("toggle");
       const toggle = getEditors(page).first();
-      // Heading level 1 is preserved on the toggle summary (text-2xl).
-      expect(await summarySizeClass(toggle)).toBe("2xl");
+      // Heading level 1 is preserved on the toggle summary (osio-h1).
+      expect(await summarySizeClass(toggle)).toBe("1");
       await expect(toggle).toHaveText("My title");
     },
   ),
@@ -143,7 +143,7 @@ export const markdownCombinationScenarios = [
       );
       expect(firstBlockType).toBe("toggle");
       const toggle = getEditors(page).first();
-      expect(await summarySizeClass(toggle)).toBe("xl");
+      expect(await summarySizeClass(toggle)).toBe("2");
       await expect(toggle).toHaveText("Compact toggle");
     },
   ),
@@ -184,14 +184,14 @@ export const markdownCombinationScenarios = [
   defineScenario(
     CONTAINER,
     "Raw-mode round-trip",
-    "a toggle heading keeps its level (text-xl) through a raw-mode Save",
+    "a toggle heading keeps its level (osio-h2) through a raw-mode Save",
     async ({ page, appUrl }) => {
       await openFreshPage(page, appUrl);
       const editor = await activateFirstEditor(page);
       await editor.click();
       await page.keyboard.type("##> Toggle heading", { delay: 15 });
       await waitForRenderStability(page);
-      expect(await summarySizeClass(getEditors(page).first())).toBe("xl");
+      expect(await summarySizeClass(getEditors(page).first())).toBe("2");
 
       await page.locator('button[aria-label="Open page configuration"]').first().click();
       await page.getByRole("button", { name: "Raw / code mode" }).click();
@@ -206,7 +206,7 @@ export const markdownCombinationScenarios = [
         () => document.querySelector("[data-block-id]")?.dataset.blockType,
       );
       expect(first).toBe("toggle");
-      expect(await summarySizeClass(getEditors(page).first())).toBe("xl");
+      expect(await summarySizeClass(getEditors(page).first())).toBe("2");
     },
   ),
   defineScenario(

@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { APPEARANCE_ATTRIBUTES } from "@/shared/config/theme";
+
 import { editor } from "../model/monacoRuntime";
 import { buildEditorTheme, resolveEditorColors, SYNTAX_KEYS, type EditorTokenInput, type SyntaxKey } from "./editorPalette";
 
@@ -17,7 +19,7 @@ import { buildEditorTheme, resolveEditorColors, SYNTAX_KEYS, type EditorTokenInp
 // Tokens are read from the EDITOR HOST's computed style, not from :root — the
 // `--osio-code-*` chrome tokens are scoped to the code card and the syntax set
 // changes per palette/theme — then the theme is (re)defined whenever anything
-// that can change those values changes: the root's data-theme/data-palette, the
+// that can change those values changes: the root's data-theme/data-palette/accent, the
 // nearest `data-code-theme` card toggle, or the OS color scheme.
 
 export const OSIO_THEME = "osio";
@@ -58,7 +60,7 @@ function readTokens(host: HTMLElement): EditorTokenInput {
 
 /** The monospace stack the editor should use, resolved from the same host. */
 export function editorFontFamily(host: HTMLElement): string {
-  const mono = getComputedStyle(host).getPropertyValue("--osio-font-mono").trim();
+  const mono = getComputedStyle(host).getPropertyValue("--osio-font-family-mono").trim();
   return mono || MONO_FALLBACK;
 }
 
@@ -73,7 +75,7 @@ export function watchEditorTheme(host: HTMLElement): () => void {
   applyEditorTheme(host);
   const rerun = () => { if (host.isConnected) applyEditorTheme(host); };
   const rootObserver = new MutationObserver(rerun);
-  rootObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-palette", "class", "style"] });
+  rootObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-palette", "class", ...APPEARANCE_ATTRIBUTES] });
   const card = host.closest<HTMLElement>("[data-code-theme]");
   const cardObserver = card ? new MutationObserver(rerun) : null;
   cardObserver?.observe(card as HTMLElement, { attributes: true, attributeFilter: ["data-code-theme"] });

@@ -10,96 +10,35 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { Search, X, FileText, ChevronRight, Hash } from "lucide-react";
+import { IconValueView } from "@osionos/ui/atoms/IconValueView";
+import { IconButton, Input, Modal, PanelSectionLabel } from "@/shared/ui";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { isValidMove } from "@/store/pageStore.helpers";
 import { buildMoveBreadcrumbs } from "../model/moveBreadcrumbs";
-import type { PageEntry } from "@/entities/page";
-
-import styles from "./MovePageModal.module.scss";
+import { buildMovePageItems, type RenderableItem } from "../model/moveTree";
 
 interface Props {
   sourcePageId: string;
   onClose: () => void;
 }
 
-interface RenderableItem {
-  id: string | null;
-  workspaceId: string;
-  title: string;
-  type: "page" | "root";
-  depth?: number;
-  icon?: string;
-  hasChildren?: boolean;
-  breadcrumbs?: string;
-}
+// A search result carries its breadcrumb on a second line, so its row grows past the
+// menu row's fixed height; inline because two height utilities settle by stylesheet order.
+const TWO_LINE_ROW = { height: "auto", minHeight: "var(--osio-control-h-md)", paddingBlock: "var(--osio-space-1)" } as const;
 
-function buildMovePageItems(
-  pages: Record<string, PageEntry[]>,
-  workspaces: Array<{ _id: string; name: string }>,
-  sourcePageId: string,
-  privateWorkspaceIds: string[],
-  sourceOwnerId: string | null | undefined,
-  currentUserId: string,
-): RenderableItem[] {
-  const items: RenderableItem[] = [];
-
-  const recurse = (
-    workspaceId: string,
-    parentId: string | null = null,
-    depth = 0,
-  ) => {
-    const wsPages = pages[workspaceId] ?? [];
-    const children = wsPages.filter((p) => p.parentPageId === parentId);
-
-    children.forEach((page) => {
-      if (
-        page._id === sourcePageId ||
-        !isValidMove(pages, sourcePageId, page._id)
-      ) {
-        return;
-      }
-
-      const hasChildren = wsPages.some((p) => p.parentPageId === page._id);
-      items.push({
-        id: page._id,
-        workspaceId,
-        title: page.title || "Untitled",
-        type: "page",
-        depth,
-        icon: page.icon,
-        hasChildren,
-      });
-
-      recurse(workspaceId, page._id, depth + 1);
-    });
-  };
-
-  workspaces.forEach((ws) => {
-    // Hide private workspace roots when the page isn't owned by current user
-    const isPrivate = privateWorkspaceIds.includes(ws._id);
-    if (isPrivate && sourceOwnerId && sourceOwnerId !== currentUserId) {
-      return;
-    }
-
-    items.push({
-      id: null,
-      workspaceId: ws._id,
-      title: `Move to ${ws.name} Root`,
-      type: "root",
-      depth: 0,
-    });
-    recurse(ws._id);
-  });
-
-  return items;
-}
+const PageGlyph: React.FC<{ item: RenderableItem }> = ({ item }) => {
+  if (item.type === "root") return <Hash size={14} aria-hidden className="text-[var(--osio-fg-subtle)]" />;
+  if (item.icon) return <IconValueView value={item.icon} size={14} />;
+  return <FileText size={14} aria-hidden />;
+};
 
 export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   /* ── Store Selectors (Stable) ──────────────────────────────────── */
   const pages = usePageStore((s) => s.pages);
@@ -216,8 +155,6 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
       if (activeItem) {
         handleMove(activeItem.id, activeItem.workspaceId);
       }
-    } else if (e.key === "Escape") {
-      onClose();
     }
   };
 
@@ -227,137 +164,79 @@ export const MovePageModal: React.FC<Props> = ({ sourcePageId, onClose }) => {
   };
 
   return (
-    <>
-      <button
-        type="button"
-        className={styles.overlay}
-        aria-label="Close move page modal"
-        onClick={onClose}
-      />
-      <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 101,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "1rem",
-          pointerEvents: "none",
-        }}
-      >
-        <div className={styles.modal} style={{ pointerEvents: "auto" }}>
-          {/* Header / Search */}
-          <div className={styles.header}>
-            <Search size={16} className={styles.searchIcon} />
-            <input
-              autoFocus
-              className={styles.searchInput}
-              placeholder="Search for a page to move to..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              onKeyDown={handleKeyDown}
-            />
-            <button
-              type="button"
-              onClick={onClose}
-              className={styles.closeButton}
-            >
-              <X size={16} />
-            </button>
-          </div>
+    <Modal open onClose={onClose} title="Move page" size="sm" initialFocusRef={searchRef as React.RefObject<HTMLElement>}>
+      <div className="flex max-h-[80vh] flex-col">
+        <div className="relative border-b border-[var(--osio-border-default)] p-3">
+          <Search size={16} aria-hidden className="pointer-events-none absolute left-6 top-1/2 -translate-y-1/2 text-[var(--osio-fg-subtle)]" />
+          <Input
+            ref={searchRef}
+            className="pl-9 pr-9"
+            placeholder="Search for a page to move to..."
+            aria-label="Search for a page to move to"
+            value={searchTerm}
+            onChange={handleSearchChange}
+            onKeyDown={handleKeyDown}
+          />
+          <IconButton label="Close move page modal" size="xs" onClick={onClose} className="absolute right-5 top-1/2 -translate-y-1/2">
+            <X size={14} />
+          </IconButton>
+        </div>
 
-          {/* List Area */}
-          <div className={styles.scrollArea}>
-            {searchTerm.trim() ? (
-              <>
-                <div className={styles.sectionLabel}>Search Results</div>
-                {getFilteredPages.length > 0 ? (
-                  getFilteredPages.map((item, idx) => (
+        <div className="min-h-0 flex-1 overflow-y-auto p-1">
+          {searchTerm.trim() ? (
+            <>
+              <PanelSectionLabel className="px-2 pb-1 pt-2">Search results</PanelSectionLabel>
+              {getFilteredPages.length > 0 ? (
+                getFilteredPages.map((item, idx) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="osio-menu-item"
+                    style={TWO_LINE_ROW}
+                    data-active={idx === activeIndex}
+                    onClick={() => handleMove(item.id, item.workspaceId)}
+                    onMouseEnter={() => setActiveIndex(idx)}
+                  >
+                    <PageGlyph item={item} />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate">{item.title}</span>
+                      <span className="truncate text-xs text-[var(--osio-fg-subtle)]">{item.breadcrumbs}</span>
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <p className="px-2 py-8 text-center text-sm text-[var(--osio-fg-muted)]">
+                  No pages found matching &quot;{searchTerm}&quot;
+                </p>
+              )}
+            </>
+          ) : (
+            workspaces.map((ws) => (
+              <div key={ws._id} className="mb-2">
+                <PanelSectionLabel className="px-2 pb-1 pt-2">{ws.name}</PanelSectionLabel>
+                {getTreeItems.filter((item) => item.workspaceId === ws._id).map((item) => {
+                  const globalIdx = getTreeItems.indexOf(item);
+                  return (
                     <button
-                      key={item.id}
+                      key={`${item.workspaceId}-${item.id || "root"}`}
                       type="button"
-                      className={`${styles.listItem} ${idx === activeIndex ? styles.focused : ""}`}
+                      className="osio-menu-item"
+                      data-active={globalIdx === activeIndex}
+                      style={{ paddingLeft: `calc(var(--osio-space-2) + ${item.depth ?? 0} * var(--osio-space-4))` }}
                       onClick={() => handleMove(item.id, item.workspaceId)}
-                      onMouseEnter={() => setActiveIndex(idx)}
+                      onMouseEnter={() => setActiveIndex(globalIdx)}
                     >
-                      <span className={styles.itemIcon}>
-                        {item.icon ? (
-                          <span>{item.icon}</span>
-                        ) : (
-                          <FileText size={14} />
-                        )}
-                      </span>
-                      <div className="flex flex-col overflow-hidden">
-                        <span className={styles.itemTitle}>{item.title}</span>
-                        <span className={styles.breadcrumbs}>
-                          {item.breadcrumbs}
-                        </span>
-                      </div>
+                      <PageGlyph item={item} />
+                      <span className="min-w-0 flex-1 truncate">{item.title}</span>
+                      {item.hasChildren && <ChevronRight size={12} aria-hidden className="text-[var(--osio-fg-subtle)]" />}
                     </button>
-                  ))
-                ) : (
-                  <div className={styles.emptyState}>
-                    No pages found matching &quot;{searchTerm}&quot;
-                  </div>
-                )}
-              </>
-            ) : (
-              workspaces.map((ws) => {
-                const wsItems = getTreeItems.filter(
-                  (item) => item.workspaceId === ws._id,
-                );
-                return (
-                  <div key={ws._id} className="mb-4">
-                    <div className={styles.sectionLabel}>{ws.name}</div>
-                    {wsItems.map((item) => {
-                      const globalIdx = getTreeItems.indexOf(item);
-                      return (
-                        <button
-                          key={`${item.workspaceId}-${item.id || "root"}`}
-                          type="button"
-                          className={`${styles.listItem} ${globalIdx === activeIndex ? styles.focused : ""}`}
-                          style={{
-                            paddingLeft: `${(item.depth! + 1) * 1.5}rem`,
-                          }}
-                          onClick={() => handleMove(item.id, item.workspaceId)}
-                          onMouseEnter={() => setActiveIndex(globalIdx)}
-                        >
-                          <span className={styles.itemIcon}>
-                            {(() => {
-                              if (item.type === "root") {
-                                return (
-                                  <Hash
-                                    size={14}
-                                    className="text-[var(--osio-fg-subtle)]"
-                                  />
-                                );
-                              }
-
-                              if (item.icon) {
-                                return <span>{item.icon}</span>;
-                              }
-
-                              return <FileText size={14} />;
-                            })()}
-                          </span>
-                          <span className={styles.itemTitle}>{item.title}</span>
-                          {item.hasChildren && (
-                            <ChevronRight
-                              size={12}
-                              className="text-[var(--osio-fg-subtle)]"
-                            />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })
-            )}
-          </div>
+                  );
+                })}
+              </div>
+            ))
+          )}
         </div>
       </div>
-    </>
+    </Modal>
   );
 };

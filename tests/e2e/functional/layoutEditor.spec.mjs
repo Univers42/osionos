@@ -133,7 +133,7 @@ test.describe("layout editor", () => {
     // now belong to the `/layout` "Layout full page" command, covered by the
     // "full-page layout command" test below.
     await expect(page.getByRole("textbox", { name: "Page title" })).toHaveText("Workspace command center");
-    await expect(page.getByRole("combobox", { name: "Home variant" })).toHaveValue("Dashboard");
+    await expect(page.getByRole("combobox", { name: "Home variant" })).toContainText("Dashboard");
     await expect(page.locator('[data-block-type="heading_1"]').first()).toBeVisible();
     await expect(page.locator('[data-block-type="heading_2"]', { hasText: "Recently visited" }).first()).toBeVisible();
     await expect(page.locator('.osionos-database-block[data-database-view-id="v-home-recents-gallery"]')).toBeVisible();

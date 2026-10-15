@@ -36,7 +36,7 @@ const KINDS: Arrowhead[] = ["none", "arrow", "triangle", "dot", "diamond", "bar"
 function ExtremityRow({ title, active, onSelect }: { title: string; active: Arrowhead; onSelect: (kind: Arrowhead) => void }) {
   return (
     <div className="px-2 py-1.5">
-      <div className="px-1 pb-1 text-[11px] font-medium text-[var(--osio-fg-muted)]">{title}</div>
+      <div className="px-1 pb-1 text-2xs font-medium text-[var(--osio-fg-muted)]">{title}</div>
       <div className="flex gap-1">
         {KINDS.map((kind) => (
           <button
@@ -66,12 +66,12 @@ function Item({ label, hint, danger, onPick }: { label: string; hint?: string; d
       type="button"
       role="menuitem"
       onClick={onPick}
-      className={`flex h-8 w-full items-center justify-between gap-6 px-3 text-left text-[13px] transition-colors hover:bg-[var(--osio-bg-hover)] ${
-        danger ? "text-[var(--osio-danger,#e03131)]" : "text-[var(--osio-fg-default)]"
+      className={`flex h-8 w-full items-center justify-between gap-6 px-3 text-left text-sm transition-colors hover:bg-[var(--osio-bg-hover)] ${
+        danger ? "text-[var(--osio-danger)]" : "text-[var(--osio-fg-default)]"
       }`}
     >
       <span>{label}</span>
-      {hint ? <span className="text-[11px] text-[var(--osio-fg-muted)]">{hint}</span> : null}
+      {hint ? <span className="text-2xs text-[var(--osio-fg-muted)]">{hint}</span> : null}
     </button>
   );
 }
@@ -113,7 +113,7 @@ export function DrawContextMenu({ state, onPickArrowhead, onRun, onClose }: Draw
         ref={menuRef}
         role="menu"
         aria-label="Canvas menu"
-        className="absolute z-[var(--osio-z-popover)] w-56 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-xl"
+        className="absolute z-[var(--osio-z-popover)] w-56 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-osio-e4"
         style={pos}
         onKeyDown={(event) => {
           if (event.key === "Escape") onClose();

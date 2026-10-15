@@ -57,7 +57,7 @@ export const ChatComposer: React.FC<Props> = ({ value, onChange, onSubmit, onCon
           title="Connect a provider (Claude, …)"
           className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
         >
-          <Plug size={15} /> Connect
+          <Plug size={16} /> Connect
         </button>
         <ModelPicker value={model} onChange={onModelChange} />
         <button

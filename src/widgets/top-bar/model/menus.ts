@@ -14,7 +14,7 @@ import { useUserStore } from "@/features/auth";
 import { debugActiveFile, openOrCreateTasksFile, runActiveFile, runDefaultTask } from "@/features/ide/model/ideTasks";
 import { isDrawEnabled, isQuickCaptureEnabled, isWhiteboardEnabled } from "@/shared/config/featureFlags";
 import { useQuickCapture } from "@/features/quick-capture/model/useQuickCapture";
-import { applyTheme, persistThemeMode } from "@/shared/config/theme";
+import { toggleThemeMode } from "@/shared/config/theme";
 import { useUIStore } from "@/shared/config/uiStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
@@ -76,12 +76,6 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
     if (tab) state.closeTab(state.activePaneId, tab.tabId);
   };
 
-  const toggleTheme = () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    applyTheme(next);
-    persistThemeMode(next);
-  };
-
   return [
     {
       id: "file", label: "File", items: [
@@ -111,7 +105,7 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
     {
       id: "view", label: "View", items: [
         { id: "view.sidebar", label: "Show or hide the sidebar", accelerator: "Ctrl+Alt+B", run: () => useUIStore.getState().toggleDocked() },
-        { id: "view.theme", label: "Toggle theme", run: toggleTheme, separatorAfter: true },
+        { id: "view.theme", label: "Toggle theme", run: () => { toggleThemeMode(); }, separatorAfter: true },
         ...workbenchViewMenu(),
         { id: "view.home", label: "Home", run: () => layout().openTab(homeTab()) },
         { id: "view.trash", label: "Trash", run: () => layout().openTab(trashTab()) },

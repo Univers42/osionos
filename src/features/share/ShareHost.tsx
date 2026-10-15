@@ -30,7 +30,7 @@ export const ShareHost: React.FC = () => {
   if (!resource) return null;
   return (
     <Suspense fallback={null}>
-      <LazySharePopover resource={resource} onClose={close} />
+      <LazySharePopover resource={resource} onClose={close} centered />
     </Suspense>
   );
 };

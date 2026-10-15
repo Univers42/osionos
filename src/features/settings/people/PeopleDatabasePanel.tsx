@@ -16,6 +16,8 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ObjectDatabase, type ObjectDatabaseProps } from "@notion-db/object-database";
+import "@/app/styles/database-bridge.generated.css";
+import "@/app/styles/database-overrides.css";
 import { Button, Modal } from "@/shared/ui";
 import type { WorkspaceMemberRole } from "@/store/settings";
 import { PeopleSourceAdapter } from "./peopleSourceAdapter";
@@ -25,7 +27,7 @@ import { createGroup, inviteGuest } from "./peopleActions";
 import type { PeopleCtx, PeopleSourceKey } from "./peopleModel";
 
 const INPUT_CLASS =
-  "h-9 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 text-sm outline-none transition-colors duration-[120ms] focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]";
+  "h-9 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]";
 
 interface PanelProps {
   source: PeopleSourceKey;
@@ -121,7 +123,7 @@ export const PeopleDatabasePanel: React.FC<PanelProps> = ({ source, ctx, onCount
           <div className="inline-flex rounded-md border border-[var(--osio-border-default)] p-0.5">
             {descriptor.views.map((entry) => (
               <button key={entry.id} type="button" onClick={() => setViewId(entry.id)}
-                className={`rounded px-2 py-1 text-xs ${viewId === entry.id ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]" : "text-[var(--osio-fg-muted)]"}`}>
+                className={`rounded-xs px-2 py-1 text-xs ${viewId === entry.id ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]" : "text-[var(--osio-fg-muted)]"}`}>
                 {entry.label}
               </button>
             ))}

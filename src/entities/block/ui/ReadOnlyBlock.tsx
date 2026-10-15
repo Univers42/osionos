@@ -198,7 +198,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "heading_1":
       return (
         <>
-          <h1 data-block-type="heading_1" data-block-id={block.id} className="text-2xl font-bold text-[var(--osio-fg-default)] mt-6 mb-1 leading-tight" style={surface}>
+          <h1 data-block-type="heading_1" data-block-id={block.id} className="osio-h1 text-[var(--osio-fg-default)] mt-6 mb-1" style={surface}>
             <InlineMarkdown content={block.content} />
           </h1>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -208,7 +208,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "heading_2":
       return (
         <>
-          <h2 data-block-type="heading_2" data-block-id={block.id} className="text-xl font-semibold text-[var(--osio-fg-default)] mt-5 mb-1 leading-tight" style={surface}>
+          <h2 data-block-type="heading_2" data-block-id={block.id} className="osio-h2 text-[var(--osio-fg-default)] mt-5 mb-1" style={surface}>
             <InlineMarkdown content={block.content} />
           </h2>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -218,7 +218,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "heading_3":
       return (
         <>
-          <h3 data-block-type="heading_3" data-block-id={block.id} className="text-lg font-semibold text-[var(--osio-fg-default)] mt-4 mb-0.5 leading-snug" style={surface}>
+          <h3 data-block-type="heading_3" data-block-id={block.id} className="osio-h3 text-[var(--osio-fg-default)] mt-4 mb-0.5" style={surface}>
             <InlineMarkdown content={block.content} />
           </h3>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -228,7 +228,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "heading_4":
       return (
         <>
-          <h4 className="text-base font-semibold text-[var(--osio-fg-default)] mt-3 mb-0.5 leading-snug" style={surface}>
+          <h4 className="osio-h4 text-[var(--osio-fg-default)] mt-3 mb-0.5" style={surface}>
             <InlineMarkdown content={block.content} />
           </h4>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -301,7 +301,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
           <div className="flex items-start gap-2 pl-5">
             <span
               className={[
-                "shrink-0 mt-[3px] w-4 h-4 rounded border flex items-center justify-center",
+                "shrink-0 mt-[3px] w-4 h-4 rounded-xs border flex items-center justify-center",
                 block.checked
                   ? "bg-[var(--osio-accent)] border-[var(--osio-accent)] text-[var(--osio-accent-fg)]"
                   : "border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]",
@@ -389,7 +389,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         <blockquote className="my-0.5 flex" style={surface}>
           <div className="mr-3 w-1 shrink-0 rounded-full bg-[var(--osio-fg-muted)]" />
           <div className="min-w-0 flex-1">
-            <span className={`${getToggleHeadingClass(block.headingLevel)} block py-0.5 italic leading-relaxed text-[var(--osio-fg-default)]`}>
+            <span className={`${getToggleHeadingClass(block.headingLevel)} block py-0.5 italic text-[var(--osio-fg-default)]`}>
               <InlineMarkdown content={body} />
             </span>
             {cite ? (
@@ -517,19 +517,19 @@ const ToggleBlockReadOnly: React.FC<{ block: Block; bulletDepth: number; numbere
         <button
           type="button"
           onClick={() => setExpanded((o) => !o)}
-          className="shrink-0 mt-[3px] w-5 h-5 rounded hover:bg-[var(--osio-bg-hover)] flex items-center justify-center"
+          className="shrink-0 mt-[3px] w-5 h-5 rounded-xs hover:bg-[var(--osio-bg-hover)] flex items-center justify-center"
         >
           <ChevronRight
             size={14}
             className={[
-              "text-[var(--osio-fg-muted)] transition-transform duration-150",
+              "text-[var(--osio-fg-muted)] transition-transform duration-(--osio-dur-fast)",
               expanded ? "rotate-90" : "",
             ].join(" ")}
           />
         </button>
         <button
           type="button"
-          className={`${getToggleHeadingClass(block.headingLevel)} text-[var(--osio-fg-default)] leading-relaxed py-0.5 flex-1 cursor-pointer select-none text-left`}
+          className={`${getToggleHeadingClass(block.headingLevel)} text-[var(--osio-fg-default)] py-0.5 flex-1 cursor-pointer select-none text-left`}
           onClick={() => setExpanded((o) => !o)}
         >
           <InlineMarkdown content={block.content} />

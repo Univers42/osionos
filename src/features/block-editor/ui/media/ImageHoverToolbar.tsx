@@ -98,7 +98,7 @@ export const ImageHoverToolbar: React.FC<ImageHoverToolbarProps> = ({
       <div
         role="toolbar"
         aria-label="Image actions"
-        className="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-0.5 opacity-0 shadow-md transition-opacity group-hover/media:pointer-events-auto group-hover/media:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
+        className="pointer-events-none absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-0.5 opacity-0 shadow-osio-e2 transition-opacity group-hover/media:pointer-events-auto group-hover/media:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
       >
         <button type="button" aria-label="Comment" title="Comment" className={BTN} onClick={(e) => runToolbar(e, actions.comment)}>
           <MessageSquare size={16} />

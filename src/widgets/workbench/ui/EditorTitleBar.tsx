@@ -21,7 +21,7 @@ interface EditorTitleBarProps {
   tab: WorkspaceTab;
 }
 
-/** Same height/surface as PageHeaderBar so swapping between the two never shifts content. */
+/** Same height, surface and hairline as PageHeaderBar, so swapping between the two never shifts content. */
 const BAR_CLASS =
   "flex h-11 w-full min-w-0 shrink-0 items-center border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]";
 
@@ -31,9 +31,10 @@ const PageTitleBar: React.FC<{ tab: WorkspaceTab }> = ({ tab }) => {
   return <PageHeaderBar key={tab.pageId} {...headerProps} />;
 };
 
+// The span mirrors the breadcrumb's current-page crumb (6px inset, medium weight), so the title starts where one would.
 const PlainTitleBar: React.FC<{ title: string }> = ({ title }) => (
   <div className={`${BAR_CLASS} px-4`}>
-    <span className="min-w-0 truncate text-sm text-[var(--osio-fg-default)]">{title}</span>
+    <span className="min-w-0 truncate px-1.5 text-sm font-medium text-[var(--osio-fg-default)]">{title}</span>
   </div>
 );
 

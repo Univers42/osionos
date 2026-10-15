@@ -138,13 +138,15 @@ jobs:
           npm test
           npm run bench:ci
 
-      - name: Typecheck
+      # Types and lint, plus the package-boundary and token guards that used to
+      # run only on a developer's machine: the same gate as `npm run test:quality`.
+      - name: Quality gate
         if: matrix.scope == 'root'
-        run: make typecheck
+        run: make quality
 
-      - name: Lint
+      - name: Canvas unit tests
         if: matrix.scope == 'root'
-        run: make lint
+        run: make test-canvas
 
       - name: SonarQube scan
         if: matrix.scope == 'root' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)

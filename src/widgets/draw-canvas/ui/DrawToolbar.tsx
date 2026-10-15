@@ -63,7 +63,7 @@ const BAR_STYLE: React.CSSProperties = {
   borderRadius: 12,
   background: "var(--osio-bg-panel)",
   border: "1px solid var(--osio-border-soft)",
-  boxShadow: "var(--osio-shadow-md, 0 4px 16px rgba(0,0,0,0.12))",
+  boxShadow: "var(--osio-e3)",
 };
 
 function buttonStyle(active: boolean): React.CSSProperties {

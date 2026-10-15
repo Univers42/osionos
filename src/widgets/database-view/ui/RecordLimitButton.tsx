@@ -54,7 +54,7 @@ export const RecordLimitButton: React.FC<RecordLimitButtonProps> = ({ value, onC
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-0.5 text-xs text-[var(--osio-fg-subtle)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+          className="rounded-xs border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-0.5 text-xs text-[var(--osio-fg-subtle)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
           aria-label="Records to display"
         >
           ▤ {label}

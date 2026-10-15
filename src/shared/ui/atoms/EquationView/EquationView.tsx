@@ -74,7 +74,7 @@ export function EquationView({
         type="button"
         onClick={handleCopy}
         aria-label="Copy LaTeX equation"
-        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1 text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]"
+        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity rounded-xs border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1 text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]"
       >
         {copied ? (
           <Check size={12} className="text-[var(--osio-accent-text)]" />

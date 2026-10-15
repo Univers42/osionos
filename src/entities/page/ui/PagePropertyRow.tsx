@@ -31,7 +31,7 @@ interface Props {
 /** One row of the Notion-style page-properties table: [type icon · name] [value] [remove]. */
 export const PagePropertyRow: React.FC<Props> = ({ property, workspaceId, pageId, editable, onChangeValue, onRemove }) => (
   <div className="group flex items-start gap-1 min-w-0 max-w-full">
-    <div className="flex h-8 w-32 sm:w-40 shrink-0 items-center gap-1.5 rounded px-1.5 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]">
+    <div className="flex h-8 w-32 sm:w-40 shrink-0 items-center gap-1.5 rounded-xs px-1.5 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]">
       <PropIcon type={notionIconType(property.type)} className="h-4 w-4 shrink-0" />
       <span className="truncate">{property.label}</span>
     </div>
@@ -54,8 +54,8 @@ export const PagePropertyRow: React.FC<Props> = ({ property, workspaceId, pageId
     </div>
     {editable ? (
       <button type="button" onClick={() => onRemove(property.key)} title="Remove property"
-        className="mt-1 rounded p-1 text-[var(--osio-fg-subtle)] opacity-0 hover:bg-[var(--osio-bg-subtle)] group-hover:opacity-100">
-        <X size={13} />
+        className="mt-1 rounded-xs p-1 text-[var(--osio-fg-subtle)] opacity-0 hover:bg-[var(--osio-bg-subtle)] group-hover:opacity-100">
+        <X size={12} />
       </button>
     ) : null}
   </div>

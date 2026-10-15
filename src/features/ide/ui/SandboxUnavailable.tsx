@@ -11,9 +11,12 @@
 /* ************************************************************************** */
 
 import React from "react";
+import { ServerOff } from "lucide-react";
+import { Button } from "@/shared/ui";
 
 import { useSandboxHealthStore, type SandboxHealthState } from "../model/sandboxHealthStore";
 import { HEALTH_REASONS } from "../model/sandboxHealthCore";
+import { CODE_BUTTON, StateBlock } from "./ExplorerStates";
 
 const TITLES: Readonly<Partial<Record<SandboxHealthState, string>>> = {
   unavailable: "Sandbox unavailable",
@@ -59,39 +62,31 @@ export const SandboxUnavailable: React.FC<Props> = ({ compact = false, onRetried
   };
 
   const retryButton = (
-    <button
-      type="button"
-      disabled={pending}
-      aria-busy={pending}
-      onClick={() => void onRetry()}
-      className="shrink-0 rounded border border-[var(--osio-code-border)] px-2 py-0.5 text-[11px] text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--osio-accent)] disabled:opacity-60"
-    >
+    <Button size="sm" className={CODE_BUTTON} disabled={pending} aria-busy={pending} onClick={() => void onRetry()}>
       {pending ? "Retrying…" : "Retry"}
-    </button>
+    </Button>
   );
 
   if (compact) {
     return (
-      <div role="status" aria-live="polite" className="flex items-center gap-2 px-3 py-1 text-[11px] text-[var(--osio-code-fg-muted)]">
+      <div role="status" aria-live="polite" className="flex items-center gap-2 px-3 py-1 text-2xs text-[var(--osio-code-fg-muted)]">
+        <ServerOff size={14} aria-hidden="true" className="shrink-0" />
         <span className="min-w-0 flex-1 truncate" title={reason ?? undefined}>
           <span className="font-semibold text-[var(--osio-code-fg)]">{title}</span>
           {reason ? ` — ${reason}` : ""}
         </span>
-        {retryButton}
+        {/* The strip is one text line: its button takes the xs control height, not sm. */}
+        <span className="shrink-0 [--osio-control-h-sm:var(--osio-control-h-xs)]">{retryButton}</span>
       </div>
     );
   }
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[var(--osio-code-bg)] px-4 text-center text-[12px] text-[var(--osio-code-fg-muted)]"
-    >
-      <p className="text-[13px] font-semibold text-[var(--osio-code-fg)]">{title}</p>
-      {reason && <p>{reason}</p>}
-      {reason === HEALTH_REASONS.unreachable && <p>{ADMIN_HINT}</p>}
-      {retryButton}
+    <div role="status" aria-live="polite" className="flex h-full w-full items-center justify-center overflow-auto bg-[var(--osio-code-bg)]">
+      <StateBlock icon={ServerOff} title={title} tone="code" actions={retryButton}>
+        {reason && <p>{reason}</p>}
+        {reason === HEALTH_REASONS.unreachable && <p>{ADMIN_HINT}</p>}
+      </StateBlock>
     </div>
   );
 };
