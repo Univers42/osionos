@@ -30,7 +30,6 @@ export type FeatureFlagName =
   | "osio.comments"
   | "osio.sqlrun"
   | "osio.publish"
-  | "osio.draw"
   | "osio.whiteboard"
   | "osio.panezoom";
 
@@ -163,19 +162,12 @@ export function isPublishEnabled(): boolean {
   return isFeatureFlagEnabled("osio.publish", false);
 }
 
-/** The Draw whiteboard app (marketplace `osionos.draw`, `tab.kind === "draw"`).
- *  Default ON — the surface is only reachable once installed from the marketplace
- *  or via the View menu, so the flag is a kill-switch. Disable via `?osio.draw=0`,
- *  the `osio.draw` localStorage key, or `VITE_OSIO_DRAW=0`. */
-export function isDrawEnabled(): boolean {
-  return isFeatureFlagEnabled("osio.draw", true);
-}
-
 /** The Whiteboard tab: drawnosaurus embedded in an iframe (`tab.kind === "embed"`).
- *  Distinct from `osio.draw` above — that is the in-app canvas, this is a separate
- *  service that must be running. Default ON: drawnosaurus is part of the default
+ *  A separate service that must be running; it also backs the inline `whiteboard` block
+ *  and the built-in `osionos.whiteboard` app (rail icon, `/whiteboard`), which every account
+ *  has without installing anything. Default ON: drawnosaurus is part of the default
  *  `make all` pipeline, so the service is up on the standard path. The flag is a
- *  kill-switch, and the tab is additionally hidden when no URL is configured
+ *  kill-switch, and the app is additionally hidden when no URL is configured
  *  (`whiteboardAppUrl()`), so a build without `VITE_WHITEBOARD_APP_URL` never shows a
  *  tab that cannot load. Disable via `?osio.whiteboard=0`, the `osio.whiteboard`
  *  localStorage key, or `VITE_OSIO_WHITEBOARD=0`. */

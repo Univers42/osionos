@@ -24,7 +24,8 @@ import type { SerializeOptions } from "./pageMarkdownEscape";
 //   image    -> "![alt](asset "caption")"
 //   video    -> <video src="…"></video>     audio -> <audio src="…"></audio>
 //   file     -> <object data="…" title="name"></object>
-//   draw     -> ```osidraw h=<px> fence     app embeds -> ```osi* JSON fences
+//   draw     -> ```osidraw h=<px> fence (legacy, kept so no scene is lost)
+//   whiteboard -> ```osiwhiteboard JSON fence     app embeds -> ```osi* JSON fences
 //   columns  -> ":::columns" / ":::column <ratio>" containers
 // Paragraph text that would parse as another block gets a backslash escape.
 // Pure view state (collapsed) has no markdown form and is not emitted.
@@ -100,6 +101,12 @@ export function blockToMarkdown(block: Block, depth = 0, options?: SerializeOpti
         ? `\`\`\`osidraw${block.drawHeight ? ` h=${block.drawHeight}` : ""}\n${content}\n\`\`\``
         : "*[drawing]*";
       break;
+    case "whiteboard":
+      return appFence("osiwhiteboard", {
+        boardSlug: block.boardSlug,
+        whiteboardHeight: block.whiteboardHeight,
+        content: content || undefined,
+      });
     case "image": case "video": case "audio": case "file":
       line = mediaBlockToMarkdown(block);
       break;

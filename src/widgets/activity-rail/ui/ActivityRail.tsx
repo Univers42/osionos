@@ -19,19 +19,26 @@ import { useUserStore } from "@/features/auth";
 import { useAutomationStore } from "@/features/automations/model/useAutomationStore";
 import { shortcutLabel } from "@/features/automations/model/shortcutLabel";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
-import { mailTab, calendarTab, profileTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
+import { mailTab, calendarTab, whiteboardTab, profileTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useUnreadStore } from "@/store/chat/useUnreadStore";
 import { useInstalledApps } from "@/features/marketplace/model/useInstalledApps";
-import { installedTab } from "@/features/marketplace/model/installedAppLauncher";
+import { installedTab, railInstalledApps } from "@/features/marketplace/model/installedAppLauncher";
 import { RailIcon } from "./RailIcon";
 import { RailHomeButton } from "./RailHomeButton";
 import { prefetchPanel } from "./panelLoaders";
-import { RAIL_GROUPS, type RailItem } from "../model/railItems";
+import { RAIL_GROUPS, visibleRailItems, type RailApp, type RailItem } from "../model/railItems";
 import { useConnectionNotifications, useIncomingInviteCount } from "@/widgets/notifications/model/useConnectionNotifications";
 
 interface Props {
   onOpenSettings?: () => void;
 }
+
+const APP_TABS: Record<RailApp, () => WorkspaceTab> = {
+  mail: mailTab,
+  calendar: calendarTab,
+  whiteboard: whiteboardTab,
+};
 
 const Separator: React.FC = () => <div aria-hidden className="my-1 h-px w-6 shrink-0 bg-[var(--osio-border-default)]" />;
 
@@ -54,10 +61,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
   const inviteCount = useIncomingInviteCount();
 
   useEffect(() => useInstalledApps.getState().load(), []);
-  const installedApps = useMemo(
-    () => Object.values(installedMap).filter((e) => e.active),
-    [installedMap],
-  );
+  const installedApps = useMemo(() => railInstalledApps(installedMap), [installedMap]);
 
   const runItem = useCallback(
     (item: RailItem) => {
@@ -65,7 +69,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
         selectPanel(item.action.panel);
         return;
       }
-      useWorkspaceLayout.getState().openTab(item.action.app === "mail" ? mailTab() : calendarTab());
+      useWorkspaceLayout.getState().openTab(APP_TABS[item.action.app]());
     },
     [selectPanel],
   );
@@ -104,7 +108,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
       {RAIL_GROUPS.map((group) => (
         <React.Fragment key={group.id}>
           <Separator />
-          {group.items.map((item) => {
+          {visibleRailItems(group).map((item) => {
             const panel = item.action.kind === "panel" ? item.action.panel : null;
             return (
               <RailIcon

@@ -377,6 +377,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		handleSlashMediaSelect,
 		handleSlashCreatePageSelect,
 		handleSlashInlineSelect,
+		handleSlashWhiteboardSelect,
 		handlePageSelectorSelect,
 		handlePageSelectorCreate,
 		handleAddBlock,
@@ -819,6 +820,10 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 							handleSlashInlineSelect(item.insertText, currentBlocks);
 							return;
 						}
+						if (item.kind === "whiteboard") {
+							handleSlashWhiteboardSelect(parseSlashQuery(slashMenu.filter).arg, currentBlocks);
+							return;
+						}
 						if (item.kind === "database-view") {
 							handleSlashDatabaseViewSelect(item.databaseId, item.viewId, currentBlocks);
 							return;
@@ -1176,6 +1181,7 @@ function isMediaHandleBlock(type: Block["type"]): boolean {
 		case "database_full_page":
 		case "graph_view":
 		case "draw":
+		case "whiteboard":
 			return true;
 		default:
 			return false;
@@ -1202,7 +1208,8 @@ function getBlockSpacing(type: Block["type"]): { pt: string; pb: string; handleT
 		case "database_inline":
 		case "database_full_page":
 		case "graph_view":
-		case "draw":      return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
+		case "draw":
+		case "whiteboard": return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
 		// Boxed blocks: medium.
 		case "callout":
 		case "quote":     return { pt: "pt-2",   pb: "pb-1",   handleTop: "top-3" };
@@ -1373,7 +1380,8 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		block.type === "database_inline" ||
 		block.type === "database_full_page" ||
 		block.type === "graph_view" ||
-		block.type === "draw";
+		block.type === "draw" ||
+		block.type === "whiteboard";
 	const shellChrome = isEmbedBlock ? "" : "rounded-md";
 
 	return (
