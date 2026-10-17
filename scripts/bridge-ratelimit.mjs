@@ -30,24 +30,28 @@ function maybePrune(now) {
 	if (++opsSincePrune < 500) return;
 	opsSincePrune = 0;
 	for (const [key, bucket] of buckets.entries()) {
-		if (now - bucket.updatedAt > PRUNE_AFTER_MS) buckets.delete(key);
+		if (now - bucket.updatedAt > (bucket.retainMs ?? PRUNE_AFTER_MS)) buckets.delete(key);
 	}
 }
 
 /**
  * Consume one token from `key`'s bucket; throw 429 when it is empty.
  * `capacity` is the burst size, `refillPerSec` the steady-state rate.
+ * `retainMs` keeps an idle bucket past the 5-minute prune, which an hourly
+ * limit needs (a pruned bucket restarts full). The error carries `retryAfterSec`.
+ * Caveat: retainMs is read from the call that creates the bucket; a bucket is
+ * lost on a bridge restart, so a limit is per process lifetime.
  */
-export function takeToken(key, { capacity, refillPerSec, now = Date.now() }) {
+export function takeToken(key, { capacity, refillPerSec, retainMs, now = Date.now() }) {
 	maybePrune(now);
 	let bucket = buckets.get(key);
-	if (!bucket) { bucket = { tokens: capacity, updatedAt: now }; buckets.set(key, bucket); }
+	if (!bucket) { bucket = { tokens: capacity, updatedAt: now, retainMs }; buckets.set(key, bucket); }
 	const elapsedSec = Math.max(0, now - bucket.updatedAt) / 1000;
 	bucket.tokens = Math.min(capacity, bucket.tokens + elapsedSec * refillPerSec);
 	bucket.updatedAt = now;
 	if (bucket.tokens < 1) {
 		const retrySec = Math.ceil((1 - bucket.tokens) / refillPerSec);
-		throw httpError(`Too many requests — slow down and retry in ${retrySec}s.`, 429);
+		throw Object.assign(httpError(`Too many requests — slow down and retry in ${retrySec}s.`, 429), { retryAfterSec: retrySec });
 	}
 	bucket.tokens -= 1;
 	return true;

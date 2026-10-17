@@ -49,4 +49,21 @@ describe('takeToken', () => {
 		// A different key is unaffected by 'test:a' being drained.
 		assert.doesNotThrow(() => takeToken('test:b', { capacity: 1, refillPerSec: 1, now: 0 }));
 	});
+
+	it('puts the wait in seconds on the 429 so a route can send Retry-After', () => {
+		const key = 'test:retry-after';
+		takeToken(key, { capacity: 1, refillPerSec: 0.01, now: 0 });
+		assert.throws(() => takeToken(key, { capacity: 1, refillPerSec: 0.01, now: 0 }), (e) => e.status === 429 && e.retryAfterSec === 100);
+	});
+
+	it('a bucket with retainMs survives the idle prune that resets a default one', () => {
+		const hourly = { capacity: 1, refillPerSec: 1 / 3600, retainMs: 3_600_000 };
+		const plain = { capacity: 1, refillPerSec: 1 / 3600 };
+		takeToken('test:retain', { ...hourly, now: 0 });
+		takeToken('test:no-retain', { ...plain, now: 0 });
+		// 500+ other operations trigger the prune sweep ten minutes later: past the 5-minute default idle limit.
+		for (let i = 0; i < 600; i += 1) takeToken(`test:noise:${i}`, { capacity: 1, refillPerSec: 1, now: 600_000 });
+		assert.throws(() => takeToken('test:retain', { ...hourly, now: 600_000 }), (e) => e.status === 429);
+		assert.doesNotThrow(() => takeToken('test:no-retain', { ...plain, now: 600_000 }), 'the default bucket was pruned and starts full again');
+	});
 });
