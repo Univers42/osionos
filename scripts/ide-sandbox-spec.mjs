@@ -16,6 +16,7 @@
 // security logic is unit-tested without a daemon.
 
 import { createHash, randomBytes } from "node:crypto";
+import { isValidIdeUsername } from "./ide-username.mjs";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -97,6 +98,9 @@ export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, vol
       `http_proxy=${PROXY_URL}`, `https_proxy=${PROXY_URL}`,
       "NO_PROXY=localhost,127.0.0.1", "no_proxy=localhost,127.0.0.1",
       "GIT_TERMINAL_PROMPT=0",
+      // Pinned once here, not per exec: runc takes HOME from /etc/passwd otherwise, and that file is a
+      // user-writable tmpfs symlink (ADR 0009). The socket proxy requires this entry and refuses any other HOME=.
+      "HOME=/home/coder",
     ],
     Labels: {
       "osio.ide.managed": "1",
@@ -406,7 +410,9 @@ export const LOGIN_LAUNCHER_ARGV = Object.freeze(["/usr/local/bin/osio-login"]);
 /** An interactive-shell exec spec — a FIXED argv, no GIT_PAT, TTY on. The
  *  container is resolved by the derived name at the call site, never a client id.
  *  `safe` picks the fixed rc-free bash; anything but `true` gets the login launcher. */
-export function buildShellExecSpec({ safe = false } = {}) {
+export function buildShellExecSpec({ safe = false, username } = {}) {
+  // OSIO_USER reaches only the launcher: the safe shell never reads it, and it is re-validated in the box.
+  const identityEnv = safe === true || !isValidIdeUsername(username) ? [] : [`OSIO_USER=${username}`];
   return {
     User: "10001:10001",
     WorkingDir: "/workspace",
@@ -414,7 +420,7 @@ export function buildShellExecSpec({ safe = false } = {}) {
     AttachStdout: true,
     AttachStderr: true,
     Tty: true,
-    Env: ["TERM=xterm-256color"],
+    Env: ["TERM=xterm-256color", ...identityEnv],
     Cmd: [...(safe === true ? SAFE_SHELL_ARGV : LOGIN_LAUNCHER_ARGV)],
   };
 }

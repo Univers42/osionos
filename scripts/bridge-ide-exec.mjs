@@ -188,12 +188,13 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     if (origin && !allowOrigin(origin)) { rejectUpgrade(socket, 403, 'Forbidden'); return true; }
 
     const auth = extractWsAuth(request);
-    let userId, names, tokenExp;
+    let userId, names, tokenExp, username;
     try {
       const session = verifySession(auth.token, config);
       const identity = requireSandboxIdentity(session, url.searchParams.get('workspaceId'), env);
       userId = identity.userId;
       tokenExp = session.exp;
+      username = session.username;
       names = sandboxNames(identity);
     } catch (error) {
       // The status tells an unlisted account apart; the reason stays generic.
@@ -216,7 +217,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
 
     let spec;
     try {
-      if (isPty) spec = buildShellExecSpec({ safe: isSafe });
+      if (isPty) spec = buildShellExecSpec({ safe: isSafe, username });
       else if (isFsync) spec = buildFsAgentExecSpec();
       else if (isDap) spec = dapExecSpec(url.searchParams.get('lang'));
       else spec = lspExecSpec(url.searchParams.get('lang'));

@@ -11,10 +11,12 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { Columns2, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import { Columns2, Plus, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
 
 import { Tooltip } from "@/shared/ui";
+import { useUserStore } from "@/features/auth";
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
+import { restartSandbox } from "@/features/ide/model/restartSandbox";
 import { useIdeOutputBus } from "@/features/ide/model/ideOutputBus";
 import { useIdeSyncConflicts, conflictCount } from "@/features/ide/model/ideSyncConflicts";
 import { IdeOutputPanel } from "@/features/ide/ui/IdeOutputPanel";
@@ -77,6 +79,12 @@ const TerminalActions: React.FC = () => {
   const secondary = useIdeDockStore((s) => s.secondary);
   const dock = useIdeDockStore.getState;
   const splitLabel = secondary ? "Close split" : "Split terminal";
+  const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
+  const restartBox = (): void => {
+    void restartSandbox(workspaceId).then((restarted) => {
+      if (restarted) dock().newTerminal();
+    });
+  };
   return (
     <>
       <Tooltip label="New terminal (fresh session)" side="bottom">
@@ -87,6 +95,11 @@ const TerminalActions: React.FC = () => {
       <Tooltip label="Safe terminal (no ~/.bashrc or ~/.profile)" side="bottom">
         <button type="button" aria-label="Safe terminal" onClick={() => dock().newSafeTerminal()} className={ICON_BTN}>
           <ShieldCheck size={14} />
+        </button>
+      </Tooltip>
+      <Tooltip label="Restart box (clears /tmp; your files are kept)" side="bottom">
+        <button type="button" aria-label="Restart box" onClick={restartBox} className={ICON_BTN}>
+          <RotateCcw size={14} />
         </button>
       </Tooltip>
       <Tooltip label={splitLabel} side="bottom">

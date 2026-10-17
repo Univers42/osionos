@@ -23,17 +23,28 @@ import http from "node:http";
 // broad search from OOMing the shared bridge (review finding).
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
+/** Longest any single docker API call may stay silent. An exec whose user cannot be resolved can
+ *  block runc for good (a FIFO at /etc/passwd's target, docs/adr/0009), so no call may wait
+ *  without a bound; the env override can only lower it.
+ *  Caveat: this is socket inactivity, not total time: a daemon that trickles bytes is not cut. */
+export const DOCKER_REQUEST_TIMEOUT_MS = 20_000;
+
+function requestTimeoutMs(env) {
+  const asked = Number(env.OSIONOS_IDE_DOCKER_TIMEOUT_MS);
+  return Number.isInteger(asked) && asked >= 50 ? Math.min(asked, DOCKER_REQUEST_TIMEOUT_MS) : DOCKER_REQUEST_TIMEOUT_MS;
+}
+
 /** One JSON request to the docker API via the socket-proxy. Resolves
  *  { status, body } — the caller decides what a status means (404 is normal
  *  for "container absent"). */
-function dockerRequest({ host, port }, method, path, body) {
+function dockerRequest({ host, port, timeoutMs }, method, path, body) {
   return new Promise((resolve, reject) => {
     const payload = body === undefined ? null : Buffer.from(JSON.stringify(body));
     const req = http.request(
       { host, port, method, path, headers: {
         "content-type": "application/json",
         ...(payload ? { "content-length": payload.length } : {}),
-      }, timeout: 20_000 },
+      }, timeout: timeoutMs },
       (res) => {
         const chunks = [];
         let size = 0;
@@ -64,7 +75,8 @@ function dockerRequest({ host, port }, method, path, body) {
 export function createDockerClient(env = process.env) {
   const [host, portRaw] = String(env.OSIONOS_IDE_DOCKER_HOST || "").split(":");
   const port = Number(portRaw || 2375);
-  const endpoint = { host, port };
+  const timeoutMs = requestTimeoutMs(env);
+  const endpoint = { host, port, timeoutMs };
   const call = (method, path, body) => dockerRequest(endpoint, method, path, body);
 
   return {
@@ -147,14 +159,13 @@ export function createDockerClient(env = process.env) {
      *  `{ stream, execId }`: write = process stdin, data = process stdout; the
      *  execId lets the caller resizeExec the PTY. The socket proxy passes the
      *  upgrade through; the caller bridges it to a WS.
-     *  ponytail: exercised only against a live sandbox — no unit test, the relay
-     *  glue is trivial and the exec engine is covered by runExec's live test. */
+     *  Both requests are bounded by the docker timeout (tests/bridge/ide-exec-timeout.test.mjs). */
     attachExec(name, execSpec) {
       return new Promise((resolve, reject) => {
         const body = Buffer.from(JSON.stringify(execSpec));
         const createReq = http.request(
           { host, port, method: "POST", path: `/containers/${name}/exec`,
-            headers: { "content-type": "application/json", "content-length": body.length } },
+            headers: { "content-type": "application/json", "content-length": body.length }, timeout: timeoutMs },
           (res) => {
             const chunks = [];
             res.on("data", (c) => chunks.push(c));
@@ -166,10 +177,13 @@ export function createDockerClient(env = process.env) {
               const startReq = http.request({
                 host, port, method: "POST", path: `/exec/${execId}/start`,
                 headers: { "content-type": "application/json", "content-length": startBody.length, Connection: "Upgrade", Upgrade: "tcp" },
+                timeout: timeoutMs,
               });
+              startReq.on("timeout", () => startReq.destroy(new Error("docker exec start timeout")));
               // Bytes that came in the 101's own segment are handed over as `head`, not read
               // again from the socket: dropped, they were the exec's first output.
               startReq.on("upgrade", (_res, socket, head) => {
+                socket.setTimeout(0); // the bound is for the start, not for a shell that sits idle
                 if (head.length > 0) socket.unshift(head);
                 resolve({ stream: socket, execId });
               });
@@ -178,6 +192,7 @@ export function createDockerClient(env = process.env) {
             });
           },
         );
+        createReq.on("timeout", () => createReq.destroy(new Error("docker exec create timeout")));
         createReq.on("error", reject);
         createReq.end(body);
       });
