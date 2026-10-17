@@ -116,3 +116,10 @@ test("the create Env pins HOME once as its 8th entry and carries no name", () =>
 	assert.ok(!spec.Env.some((e) => /^(OSIO_USER|USER|LOGNAME)=/.test(e)));
 	for (const exec of [buildShellExecSpec({ username: "dylan" })]) assert.ok(!exec.Env.some((e) => e.startsWith("HOME=")));
 });
+
+test("withinBound: settles with the work, rejects past the bound", async () => {
+	const { withinBound } = await import("../../scripts/ide-username.mjs");
+	assert.equal(await withinBound(async () => 7, 1000), 7);
+	await assert.rejects(withinBound(() => new Promise(() => {}), 20, "slow thing"), /slow thing timed out/);
+	await assert.rejects(withinBound(async () => { throw new Error("boom"); }, 1000), /boom/);
+});

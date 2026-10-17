@@ -41,23 +41,33 @@ export function usernameFromToken(value) {
 	return isValidIdeUsername(value) ? value : DEFAULT_IDE_USERNAME;
 }
 
+/** Runs `work()` and rejects when it has not settled within `timeoutMs`. Every IDE lookup that sits
+ *  on the mint path goes through this, so a slow BaaS can delay a mint by the bound and no more.
+ *  Caveat: the work itself is not cancelled; a lookup that outlives the bound finishes unobserved. */
+export async function withinBound(work, timeoutMs, what = 'lookup') {
+	let timer;
+	const bound = new Promise((_, reject) => {
+		timer = setTimeout(() => reject(new Error(`${what} timed out`)), timeoutMs);
+	});
+	try {
+		return await Promise.race([work(), bound]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
 /** The sanitized osionos username for `userId`, or undefined when the lookup cannot answer within
  *  the bound. Any failure means "mint without `un`", never a failed mint. */
 export async function lookupIdeUsername(config, fetchImpl, userId, timeoutMs = IDE_USERNAME_LOOKUP_TIMEOUT_MS) {
-	let timer;
-	const bound = new Promise((_, reject) => {
-		timer = setTimeout(() => reject(new Error('username lookup timed out')), timeoutMs);
-	});
 	try {
-		const rows = await Promise.race([
-			rest(config, fetchImpl, `osionos_bridge_identities?user_id=eq.${userId}&select=username&limit=1`),
-			bound,
-		]);
+		const rows = await withinBound(
+			() => rest(config, fetchImpl, `osionos_bridge_identities?user_id=eq.${userId}&select=username&limit=1`),
+			timeoutMs,
+			'username lookup',
+		);
 		const stored = Array.isArray(rows) ? rows[0]?.username : undefined;
 		return typeof stored === 'string' && stored !== '' ? sanitizeIdeUsername(stored) : undefined;
 	} catch {
 		return undefined;
-	} finally {
-		clearTimeout(timer);
 	}
 }
