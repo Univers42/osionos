@@ -119,7 +119,11 @@ export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, vol
         { Type: "volume", Source: volumeName, Target: "/workspace" },
         { Type: "volume", Source: deriveHomeVolume(userId), Target: "/home/coder" },
       ],
-      Tmpfs: { "/tmp": "size=64m,mode=1777" },
+      // exec: with docker's default noexec, `go run`, dlopen of a /tmp library and installers
+      // failed (measured 2026-10-17). Docker still prepends nosuid,nodev, and the proxy admits only
+      // this exact string, because `,suid` or `,dev` would drop them. The boundary does not rest on
+      // noexec: every writer of /tmp can already run code from /workspace (ADR 0010).
+      Tmpfs: { "/tmp": "size=64m,mode=1777,exec" },
       PidsLimit: pidsLimit,
       Memory: memoryBytes,
       MemorySwap: memoryBytes, // no swap headroom beyond mem

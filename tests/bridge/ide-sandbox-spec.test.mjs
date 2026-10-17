@@ -54,6 +54,7 @@ test("container spec: hardening baked, no user params, no PAT (devil #8,#14)", (
     { Type: "volume", Source: deriveHomeVolume(U), Target: "/home/coder" },
   ]);
   assert.deepEqual(Object.keys(spec.HostConfig.Tmpfs), ["/tmp"]);
+  assert.equal(spec.HostConfig.Tmpfs["/tmp"], "size=64m,mode=1777,exec");
   assert.equal(spec.HostConfig.Binds, undefined);
   assert.equal(spec.HostConfig.Privileged, undefined);
   // core dumps off; caps present.
