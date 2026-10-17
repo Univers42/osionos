@@ -165,7 +165,7 @@ export const ExplorerStatusRow: React.FC<{ dir: string; level: number; placement
 /** One muted line in an expanded folder that holds nothing (the Private / Shared hints). */
 export const ExplorerHintRow: React.FC<{ text: string; level: number; placement: LinePlacement }> = ({ text, level, placement }) => (
   <li {...placed(placement)} role="none">
-    <div style={indentOf(level)} className="py-[3px] pr-2 text-[12px] text-[var(--osio-code-fg-muted)]">{text}</div>
+    <div style={indentOf(level)} className="py-[3px] pr-2 text-xs text-[var(--osio-code-fg-muted)]">{text}</div>
   </li>
 );
 
