@@ -29,11 +29,11 @@ interface Rig {
 
 const uriOf = (workspaceId: string, rel: string): string => `workspace://${workspaceId}/${rel.split("/").filter(Boolean).join("/")}`;
 
-function rig(options: { joined?: boolean; owner?: boolean } = {}): Rig {
+function rig(options: { owner?: boolean } = {}): Rig {
   const store = createFixtureStore("ws");
   const deps = createSectionDeps({
     pages: () => store.pages(),
-    joinedWorkspace: () => options.joined ?? false,
+    currentUserId: () => "me",
     mayChangeSharing: () => options.owner ?? true,
     patchPage: store.patchPage,
     subscribe: store.subscribe,
@@ -44,9 +44,9 @@ function rig(options: { joined?: boolean; owner?: boolean } = {}): Rig {
   return { store, ops: createWorkspaceFileOpsWith(mounts, "ws", uriOf) };
 }
 
-async function seed(store: FixtureStore, title: string, parentId: string | null, visibility?: "private" | "shared" | "public") {
+async function seed(store: FixtureStore, title: string, parentId: string | null, visibility?: "private" | "shared" | "public", ownerId = "me") {
   const created = await store.addPage({ title, parentId, surface: "page" });
-  if (visibility) store.patchPage(created._id, { visibility });
+  store.patchPage(created._id, { ownerId, ...(visibility ? { visibility } : {}) });
   return created._id;
 }
 
@@ -104,7 +104,7 @@ test("a new file in Private is a private page, in Shared a shared page", async (
   const beta = store.pages().find((p) => p.title === "Beta");
   assert.equal(alpha?.parentPageId, null);
   assert.equal(beta?.parentPageId, null);
-  assert.equal(visibilityOf(store, alpha?._id ?? ""), undefined);
+  assert.equal(visibilityOf(store, alpha?._id ?? ""), "private");
   assert.equal(visibilityOf(store, beta?._id ?? ""), "shared");
   assert.deepEqual(await names(ops, "Private"), ["Alpha.omd"]);
   assert.deepEqual(await names(ops, "Shared"), ["Beta.omd"]);
@@ -173,15 +173,29 @@ test("only the owner may change a page's section; a published page is not unpubl
   await rejectsWithCode(owner.ops.move("Private/Site.omd", "Shared"), "Unsupported");
 });
 
-test("in a joined workspace every root is Shared and Private takes nothing", async () => {
-  const { store, ops } = rig({ joined: true });
-  await seed(store, "Team", null, "private");
-  assert.deepEqual(await names(ops, "Shared"), ["Team.omd"]);
-  assert.deepEqual(await names(ops, "Private"), []);
-  await rejectsWithCode(ops.createFile("Private/X.omd"), "Unsupported");
-  await rejectsWithCode(ops.move("Shared/Team.omd", "Private"), "Unsupported");
-  await ops.createFile("Shared/Y.omd");
-  assert.deepEqual(await names(ops, "Shared"), ["Team.omd", "Y.omd"]);
+test("in a joined workspace I still have a Private section: my private pages stay there, teammates' pages are Shared", async () => {
+  const { store, ops } = rig();
+  await seed(store, "Mine", null, "private");
+  await seed(store, "Theirs", null, "shared", "you");
+  await seed(store, "TheirDraft", null, "private", "you");
+  assert.deepEqual(await names(ops, "Private"), ["Mine.omd"]);
+  assert.deepEqual(await names(ops, "Shared"), ["TheirDraft.omd", "Theirs.omd"]);
+});
+
+test("a create under Private is explicitly private and owned by the creator, whatever the workspace default", async () => {
+  const { store, ops } = rig();
+  await ops.createFile("Private/Secret.omd");
+  await ops.createDir("Private/Notes");
+  await ops.createFile("Shared/Open.omd");
+  const visibilities = store.pages().map((p) => [p.title, p.visibility]);
+  assert.deepEqual(visibilities.sort(), [["Notes", "private"], ["Open", "shared"], ["Secret", "private"]]);
+});
+
+test("a teammate's page cannot be pulled into Private by a non-owner", async () => {
+  const { store, ops } = rig({ owner: false });
+  await seed(store, "Theirs", null, "shared", "you");
+  await rejectsWithCode(ops.move("Shared/Theirs.omd", "Private"), "PermissionDenied");
+  assert.deepEqual(await names(ops, "Shared"), ["Theirs.omd"]);
 });
 
 test("remove archives through the section path", async () => {

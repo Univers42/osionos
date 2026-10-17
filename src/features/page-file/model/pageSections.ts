@@ -17,17 +17,21 @@ import type { PageEntry } from "@/entities/page";
 // explorer shows the same grouping. Display layer only: the real paths pageIndex/pagePaths
 // produce for sync, the outbound writer and the hash ledger never carry a section.
 //
-// Differences from the old helper, on purpose:
-//  - "shared-workspace" was every readable root whenever the user had ANY joined workspace; here
-//    it is every root of the ACTIVE workspace when that workspace is a joined one.
-// Same as the old helper, and worth knowing: only visibility "shared" is Shared in an owned
-// workspace ("public" stays Private), and ownership is not consulted.
+// Notion semantics, which differ from the old helper on purpose: every member has a Private
+// section in EVERY workspace, joined ones included. Private = a root I own that is not
+// "shared" (a published "public" page of mine stays Private, as in the old helper). Shared =
+// every other readable root: visibility "shared", or owned by someone else (a teammate's page
+// I can read as a collaborator). The old helper made every root Shared whenever the user had
+// any joined workspace and never looked at ownership.
+// Caveat: a root with no owner (offline seed, legacy page) counts as mine, because with no
+// owner there is nobody else it could belong to; in a joined workspace that can misfile a
+// teammate's legacy page under Private.
 
 export type PageSection = "private" | "shared";
 
 export interface SectionContext {
-  /** The active workspace is one the user joined, not one they own. */
-  readonly joinedWorkspace: boolean;
+  /** The signed-in user; null offline, where every ownerless page is theirs. */
+  readonly userId: string | null;
 }
 
 export const SECTION_NAME: Readonly<Record<PageSection, string>> = { private: "Private", shared: "Shared" };
@@ -38,7 +42,7 @@ export const SECTION_EMPTY_HINT: Readonly<Record<PageSection, string>> = {
   shared: "Nothing shared yet",
 };
 
-type Classifiable = Pick<PageEntry, "parentPageId" | "visibility" | "archivedAt">;
+type Classifiable = Pick<PageEntry, "parentPageId" | "visibility" | "archivedAt" | "ownerId">;
 
 /** Bound on the walk to a root: a parent cycle ends here instead of looping. */
 const MAX_DEPTH = 256;
@@ -61,7 +65,12 @@ export function sectionOf(
     root = parent;
   }
   if (root.archivedAt) return null;
-  return ctx.joinedWorkspace || root.visibility === "shared" ? "shared" : "private";
+  return isMine(root, ctx) && root.visibility !== "shared" ? "private" : "shared";
+}
+
+function isMine(root: Classifiable, ctx: SectionContext): boolean {
+  if (root.ownerId == null) return true;
+  return ctx.userId !== null && root.ownerId.toLowerCase() === ctx.userId.toLowerCase();
 }
 
 /** Live root pages grouped by section, input order kept. O(n). */

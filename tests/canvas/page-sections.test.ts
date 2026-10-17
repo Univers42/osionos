@@ -24,8 +24,8 @@ import {
   type SectionContext,
 } from "../../src/features/page-file/model/pageSections.ts";
 
-const OWN: SectionContext = { joinedWorkspace: false };
-const JOINED: SectionContext = { joinedWorkspace: true };
+const OWN: SectionContext = { userId: "me" };
+const OFFLINE: SectionContext = { userId: null };
 
 function page(_id: string, parentPageId: string | null, extra: Partial<PageEntry> = {}): PageEntry {
   return { _id, title: _id, workspaceId: "ws", surface: "page", parentPageId, archivedAt: null, ...extra };
@@ -42,10 +42,15 @@ const TABLE: Array<[string, PageEntry, SectionContext, "private" | "shared" | nu
   ["owned, visibility unset", page("a", null, { ownerId: "me" }), OWN, "private"],
   ["ownerless offline seed page", page("a", null), OWN, "private"],
   ["owned shared", page("a", null, { visibility: "shared", ownerId: "me" }), OWN, "shared"],
-  ["public stays private (old helper: only 'shared' is shared)", page("a", null, { visibility: "public", ownerId: "me" }), OWN, "private"],
+  ["my public page stays private (old helper: only 'shared' is shared)", page("a", null, { visibility: "public", ownerId: "me" }), OWN, "private"],
   ["another user's shared page", page("a", null, { visibility: "shared", ownerId: "you" }), OWN, "shared"],
-  ["another user's page in a joined workspace", page("a", null, { visibility: "private", ownerId: "you" }), JOINED, "shared"],
-  ["my own page in a joined workspace", page("a", null, { visibility: "private", ownerId: "me" }), JOINED, "shared"],
+  ["a teammate's page I can read as collaborator (visibility private)", page("a", null, { visibility: "private", ownerId: "you" }), OWN, "shared"],
+  ["my private page in a joined workspace stays Private", page("a", null, { visibility: "private", ownerId: "me" }), OWN, "private"],
+  ["my published page stays Private", page("a", null, { visibility: "public", ownerId: "me" }), OWN, "private"],
+  ["a teammate's public page", page("a", null, { visibility: "public", ownerId: "you" }), OWN, "shared"],
+  ["owner id compares case-insensitively", page("a", null, { visibility: "private", ownerId: "ME" }), OWN, "private"],
+  ["offline (no user), ownerless", page("a", null), OFFLINE, "private"],
+  ["offline (no user), someone's page", page("a", null, { ownerId: "you" }), OFFLINE, "shared"],
   ["archived root", page("a", null, { archivedAt: "2026-10-01T00:00:00Z" }), OWN, null],
   ["home surface follows the same rule", page("a", null, { surface: "home" }), OWN, "private"],
 ];
@@ -101,7 +106,8 @@ test("groupRootsBySection: roots only, per section, empty input gives two empty 
   const groups = groupRootsBySection(pages, OWN);
   assert.deepEqual(groups.private.map((p) => p._id), ["p1"]);
   assert.deepEqual(groups.shared.map((p) => p._id), ["s1"]);
-  assert.deepEqual(groupRootsBySection(pages, JOINED).private, []);
+  const teammates = pages.map((p) => ({ ...p, ownerId: "you" }));
+  assert.deepEqual(groupRootsBySection(teammates, OWN).private, []);
 });
 
 // Display-layer path translation. The REAL paths (pageIndex/pagePaths) are never changed.
