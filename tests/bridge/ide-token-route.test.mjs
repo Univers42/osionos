@@ -58,8 +58,8 @@ function fakeReq(method, { body, auth } = {}) {
 	return req;
 }
 
-async function call(env, { method = 'POST', body, auth, path = '/api/ide/token' } = {}) {
-	const handler = createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env });
+async function call(env, { method = 'POST', body, auth, path = '/api/ide/token', fetchImpl, cfg = config } = {}) {
+	const handler = createIdeTokenHandler({ config: cfg, verifySession: verifyAppSessionToken, env, ...(fetchImpl ? { fetchImpl } : {}) });
 	const res = fakeRes();
 	const handled = await handler(new URL(`http://x${path}`), fakeReq(method, { body, auth }), res);
 	return { handled, res, json: res.body ? JSON.parse(res.body) : null };
@@ -143,6 +143,43 @@ test('success mints a 900 s token for the user and workspace', async () => {
 	const claims = JSON.parse(Buffer.from(json.token.split('.')[1], 'base64url').toString('utf8'));
 	assert.equal(claims.exp - claims.iat, 900);
 	assert.equal(json.expiresAt, new Date(claims.exp * 1000).toISOString());
+});
+
+const baasConfig = { ...config, baasUrl: 'http://kong.test', serviceKey: 'svc' };
+const claimsOf = (token) => JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+
+test('a stored username is embedded as un', async () => {
+	const user = freshUser();
+	const fetchImpl = async () => Response.json([{ username: 'Dylan' }]);
+	const { json } = await call(envFor(user), { auth: appToken(user), body: { workspaceId: WS }, fetchImpl, cfg: baasConfig });
+	assert.equal(claimsOf(json.token).un, 'dylan');
+	assert.equal(verifyIdeToken(json.token, { secret: IDE_SECRET }).username, 'dylan');
+});
+
+test('an account outside the allowlist triggers no lookup', async () => {
+	const user = freshUser();
+	let calls = 0;
+	const fetchImpl = async () => { calls += 1; return Response.json([{ username: 'x' }]); };
+	await call(envFor(user, { OSIONOS_IDE_ALLOWED_SUBJECTS: USER }), { auth: appToken(user), body: { workspaceId: WS }, fetchImpl, cfg: baasConfig });
+	assert.equal(calls, 0);
+});
+
+test('a failing lookup still mints, without un', async () => {
+	const user = freshUser();
+	for (const fetchImpl of [async () => { throw new Error('down'); }, async () => new Response('x', { status: 503 }), async () => Response.json([{ username: null }])]) {
+		const { res, json } = await call(envFor(user), { auth: appToken(user), body: { workspaceId: WS }, fetchImpl, cfg: baasConfig });
+		assert.equal(res.statusCode, 200);
+		assert.equal('un' in claimsOf(json.token), false);
+	}
+});
+
+test('a hung lookup is cut at the bound and the mint still succeeds', async () => {
+	const user = freshUser();
+	const started = Date.now();
+	const { res, json } = await call(envFor(user), { auth: appToken(user), body: { workspaceId: WS }, fetchImpl: () => new Promise(() => {}), cfg: baasConfig });
+	assert.equal(res.statusCode, 200);
+	assert.equal('un' in claimsOf(json.token), false);
+	assert.ok(Date.now() - started < 5000);
 });
 
 test('the 11th rapid mint for one user answers 429', async () => {

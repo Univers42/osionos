@@ -25,7 +25,7 @@ const names = () => {
   seq += 1;
   const hex = String(seq).padStart(32, "0");
   return {
-    containerName: `ide-${hex}`, volumeName: `osio-ide-vol-${hex}`, digest: hex,
+    containerName: `ide-${hex}`, volumeName: `osio-ide-vol-${hex}`, homeVolumeName: `osio-ide-home-${hex}`, digest: hex,
     userId: "11111111-1111-4111-8111-111111111111", workspaceId: "22222222-2222-4222-8222-222222222222",
   };
 };
@@ -185,4 +185,11 @@ test("two different boxes provisioned at once cannot both pass the cap", async (
   assert.equal(refused.length, 1);
   assert.equal(refused[0].reason.status, 503);
   assert.equal(running, 2);
+});
+
+test("an absent sandbox gets its workspace volume and its per-user home volume before the create (H2)", async () => {
+  const docker = fakeDocker(null);
+  await ensureSandbox(ENV, names(), { docker });
+  assert.equal(count(docker.calls, "volume"), 2);
+  assert.ok(docker.calls.lastIndexOf("volume") < docker.calls.indexOf("create"));
 });

@@ -18,6 +18,7 @@ import { takeToken } from './bridge-ratelimit.mjs';
 import { requireSandboxIdentity } from './ide-sandbox-spec.mjs';
 import { ideTokenSecret, signIdeToken } from './ide-token.mjs';
 import { jsonReply } from './bridge-ide-sandbox.mjs';
+import { lookupIdeUsername } from './ide-username.mjs';
 
 const BODY_LIMIT_BYTES = 1024;
 
@@ -35,7 +36,7 @@ function refuse(response, error, requestConfig) {
 
 // Unlike the sandbox route this is not tied to OSIONOS_IDE_SANDBOX: the mint keeps working
 // after the bridge stops hosting sandboxes, so only the token secret switches it on.
-export function createIdeTokenHandler({ config, verifySession, env = process.env }) {
+export function createIdeTokenHandler({ config, verifySession, env = process.env, fetchImpl = fetch }) {
 	return async function handleIdeTokenRoute(url, request, response, requestConfig = config) {
 		if (url.pathname !== '/api/ide/token') return false;
 		if (!env.OSIONOS_IDE_TOKEN_SECRET) {
@@ -53,7 +54,9 @@ export function createIdeTokenHandler({ config, verifySession, env = process.env
 			takeToken(`ide-token:${session.userId}`, { capacity: 10, refillPerSec: 0.2 });
 			const body = await readJsonBody(request, BODY_LIMIT_BYTES);
 			const { userId, workspaceId } = requireSandboxIdentity(session, body?.workspaceId, env);
-			const { token, expiresAt } = signIdeToken({ userId, workspaceId, secret });
+			// After the allowlist, so a refused account costs no query; a failed or slow lookup mints without a name.
+			const username = await lookupIdeUsername(requestConfig, fetchImpl, userId);
+			const { token, expiresAt } = signIdeToken({ userId, workspaceId, secret, username });
 			jsonReply(response, 200, { ok: true, token, expiresAt }, requestConfig);
 			return true;
 		} catch (error) {
