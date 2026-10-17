@@ -163,6 +163,8 @@ export function armTokenExpiry(socket, exp, now = Date.now()) {
 // else stays generic on the wire and goes to the log. Both catches below used to swallow the
 // error, so a full box cap and a refused create both read as "sandbox unavailable" with nothing
 // logged, and the UI blamed docker-ide (2026-10-14).
+const OTHER_WORKSPACE_NOTICE = '\r\n[osionos] processes in your other workspace were stopped\r\n';
+
 function sandboxRefusal(kind, names, error, fallback) {
   console.warn(`[osionos-ide] ${kind} could not reach ${names.containerName}: ${error?.message ?? error}`);
   return isUserFacingRefusal(error) && typeof error.message === 'string' ? error.message.slice(0, 120) : fallback;
@@ -254,7 +256,8 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
       // A safe terminal is its own session: it must never reattach to the login shell of the same id.
       const sessionKey = `${userId}|${names.containerName}|${termId}${isSafe ? '|safe' : ''}`;
       (async () => {
-        await ensureSandbox(env, names);
+        const ensured = await ensureSandbox(env, names);
+        if (ensured.stoppedOtherWorkspaces > 0 && !socket.destroyed) socket.write(encodeFrame(Buffer.from(OTHER_WORKSPACE_NOTICE), 2));
         return getOrCreateSession({
           key: sessionKey,
           containerName: names.containerName,
