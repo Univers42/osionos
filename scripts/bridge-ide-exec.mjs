@@ -217,7 +217,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
 
     let spec;
     try {
-      if (isPty) spec = buildShellExecSpec({ safe: isSafe, username });
+      if (isPty) spec = buildShellExecSpec({ safe: isSafe, username, tz: url.searchParams.get('tz') });
       else if (isFsync) spec = buildFsAgentExecSpec();
       else if (isDap) spec = dapExecSpec(url.searchParams.get('lang'));
       else spec = lspExecSpec(url.searchParams.get('lang'));

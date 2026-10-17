@@ -140,3 +140,14 @@ test("the terminal runs the login launcher; safe=1 runs bash without profile or 
     await docker.close();
   }
 });
+
+test("the browser zone reaches the shell exec Env and never the create Env (C1.1)", async () => {
+  const docker = await fakeDocker();
+  try {
+    await openTerminal(docker.host, "&tz=Europe/Paris");
+    assert.ok(docker.execs.at(-1).Env.includes("TZ=Europe/Paris"));
+    assert.ok(!docker.creates[0].Env.some((e) => e.startsWith("TZ=")));
+  } finally {
+    await docker.close();
+  }
+});
