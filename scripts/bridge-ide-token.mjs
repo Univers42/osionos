@@ -19,6 +19,7 @@ import { requireSandboxIdentity } from './ide-sandbox-spec.mjs';
 import { ideTokenSecret, signIdeToken } from './ide-token.mjs';
 import { jsonReply } from './bridge-ide-sandbox.mjs';
 import { lookupIdeUsername } from './ide-username.mjs';
+import { requireIdeApproval } from './ide-access.mjs';
 
 const BODY_LIMIT_BYTES = 1024;
 
@@ -54,6 +55,8 @@ export function createIdeTokenHandler({ config, verifySession, env = process.env
 			takeToken(`ide-token:${session.userId}`, { capacity: 10, refillPerSec: 0.2 });
 			const body = await readJsonBody(request, BODY_LIMIT_BYTES);
 			const { userId, workspaceId } = requireSandboxIdentity(session, body?.workspaceId, env);
+			// approved / verified read a row here, after the mode check, so allowlist mode stays DB-free.
+			await requireIdeApproval(requestConfig, fetchImpl, userId, env);
 			// After the allowlist, so a refused account costs no query; a failed or slow lookup mints without a name.
 			const username = await lookupIdeUsername(requestConfig, fetchImpl, userId);
 			const { token, expiresAt } = signIdeToken({ userId, workspaceId, secret, username });
