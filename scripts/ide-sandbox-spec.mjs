@@ -410,16 +410,27 @@ export const LOGIN_LAUNCHER_ARGV = Object.freeze(["/usr/local/bin/osio-login"]);
 /** An interactive-shell exec spec — a FIXED argv, no GIT_PAT, TTY on. The
  *  container is resolved by the derived name at the call site, never a client id.
  *  `safe` picks the fixed rc-free bash; anything but `true` gets the login launcher. */
-export function buildShellExecSpec({ safe = false, username } = {}) {
+const TIME_ZONE_PATTERN = /^[A-Za-z0-9_+/-]{1,64}$/;
+
+/** null when the client sent no zone, the zone when it fits the pattern, else "UTC". The pattern only
+ *  bounds the characters (no shell metacharacter, no newline); it does not check the zone exists, and
+ *  an unknown zone makes tzdata fall back to UTC inside the box. */
+export function normalizeTimeZone(raw) {
+  if (raw === null || raw === undefined) return null;
+  return typeof raw === "string" && TIME_ZONE_PATTERN.test(raw) ? raw : "UTC";
+}
+
+export function buildShellExecSpec({ safe = false, username, tz = null } = {}) {
   // OSIO_USER reaches only the launcher: the safe shell never reads it, and it is re-validated in the box.
   const identityEnv = safe === true || !isValidIdeUsername(username) ? [] : [`OSIO_USER=${username}`];
+  const zone = normalizeTimeZone(tz);
   return {
     WorkingDir: "/workspace",
     AttachStdin: true,
     AttachStdout: true,
     AttachStderr: true,
     Tty: true,
-    Env: ["TERM=xterm-256color", ...identityEnv],
+    Env: ["TERM=xterm-256color", ...identityEnv, ...(zone ? [`TZ=${zone}`] : [])],
     Cmd: [...(safe === true ? SAFE_SHELL_ARGV : LOGIN_LAUNCHER_ARGV)],
   };
 }
