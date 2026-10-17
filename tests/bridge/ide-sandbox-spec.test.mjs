@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 
 import {
   requireSandboxIdentity, requireIdeSubject, deriveNames, deriveHomeVolume, buildContainerSpec, buildGitExecSpec, buildShellExecSpec,
-  buildSearchExecSpec, buildWriteExecSpec, SANDBOX_OOM_SCORE_ADJ,
+  buildSearchExecSpec, buildWriteExecSpec, buildFsOpSpec, buildPortTunnelExecSpec, buildFsAgentExecSpec, SANDBOX_OOM_SCORE_ADJ,
 } from "../../scripts/ide-sandbox-spec.mjs";
 
 const U = "11111111-1111-4111-8111-111111111111";
@@ -42,16 +42,17 @@ test("names: hashed, regex-safe, carry no raw id (devil #11)", () => {
 
 test("container spec: hardening baked, no user params, no PAT (devil #8,#14)", () => {
   const { volumeName } = deriveNames(U, W);
-  const spec = buildContainerSpec({ userId: U, workspaceId: W, image: "sha256:pinned", sandboxNet: "sandbox-net", volumeName });
+  const spec = buildContainerSpec({ userId: U, workspaceId: W, image: "sha256:pinned", sandboxNet: "sandbox-net", volumeName, uid: 20007 });
   assert.deepEqual(spec.HostConfig.CapDrop, ["ALL"]);
   assert.ok(spec.HostConfig.SecurityOpt.includes("no-new-privileges:true"));
   assert.equal(spec.HostConfig.ReadonlyRootfs, true);
-  assert.equal(spec.User, "10001:10001");
+  assert.equal(spec.User, "20007:10001");
+  assert.equal(spec.Labels["osio.ide.uid"], "20007");
   assert.equal(spec.HostConfig.NetworkMode, "sandbox-net");
   // exactly two mounts, fixed order [workspace, home], both derived volumes; no host binds (H1).
   assert.deepEqual(spec.HostConfig.Mounts, [
-    { Type: "volume", Source: volumeName, Target: "/workspace" },
-    { Type: "volume", Source: deriveHomeVolume(U), Target: "/home/coder" },
+    { Type: "volume", Source: volumeName, Target: "/workspace", VolumeOptions: { NoCopy: true } },
+    { Type: "volume", Source: deriveHomeVolume(U), Target: "/home/coder", VolumeOptions: { NoCopy: true } },
   ]);
   assert.deepEqual(Object.keys(spec.HostConfig.Tmpfs), ["/tmp"]);
   assert.equal(spec.HostConfig.Tmpfs["/tmp"], "size=64m,mode=1777,exec");
@@ -64,7 +65,7 @@ test("container spec: hardening baked, no user params, no PAT (devil #8,#14)", (
   assert.equal(spec.HostConfig.OomScoreAdj, 500);
   // block quota is opt-in (xfs+pquota only) — omitted by default, applied when asked.
   assert.equal(spec.HostConfig.StorageOpt, undefined);
-  const quota = buildContainerSpec({ userId: U, workspaceId: W, image: "x", sandboxNet: "n", volumeName, diskSize: "2G" });
+  const quota = buildContainerSpec({ userId: U, workspaceId: W, image: "x", sandboxNet: "n", volumeName, uid: 20007, diskSize: "2G" });
   assert.equal(quota.HostConfig.StorageOpt.size, "2G");
   assert.ok(spec.HostConfig.PidsLimit > 0 && spec.HostConfig.Memory > 0 && spec.HostConfig.NanoCpus > 0);
   // NO GIT_PAT in the long-lived container env (condition 13).
@@ -76,7 +77,7 @@ test("git exec: fixed argv, PAT only here — never the shell (devil #9,#13)", (
   const spec = buildGitExecSpec(["git", "push", "origin", "main"], "ghp_secret");
   assert.deepEqual(spec.Cmd, ["git", "push", "origin", "main"]);
   assert.deepEqual(spec.Env, ["GIT_PAT=ghp_secret"]);
-  assert.equal(spec.User, "10001:10001");
+  assert.equal("User" in spec, false);
   assert.throws(() => buildGitExecSpec(["rm", "-rf", "/"], "x"), /argv must start with git/);
   // the interactive shell spec carries no secret at all.
   const shell = buildShellExecSpec();
@@ -91,9 +92,9 @@ test("home volume: per user, hashed, constant target, no username (H1, H2)", () 
   assert.equal(deriveHomeVolume(U), home);
   assert.notEqual(deriveHomeVolume("44444444-4444-4444-8444-444444444444"), home);
   // one home across workspaces: the workspace never enters the derivation.
-  const a = buildContainerSpec({ userId: U, workspaceId: W, image: "x", sandboxNet: "n", volumeName: deriveNames(U, W).volumeName });
+  const a = buildContainerSpec({ userId: U, workspaceId: W, image: "x", sandboxNet: "n", volumeName: deriveNames(U, W).volumeName, uid: 20000 });
   const otherWs = "44444444-4444-4444-4444-444444444444";
-  const b = buildContainerSpec({ userId: U, workspaceId: otherWs, image: "x", sandboxNet: "n", volumeName: deriveNames(U, otherWs).volumeName });
+  const b = buildContainerSpec({ userId: U, workspaceId: otherWs, image: "x", sandboxNet: "n", volumeName: deriveNames(U, otherWs).volumeName, uid: 20000 });
   assert.equal(a.HostConfig.Mounts[1].Source, b.HostConfig.Mounts[1].Source);
   assert.notEqual(a.HostConfig.Mounts[0].Source, b.HostConfig.Mounts[0].Source);
 });
@@ -133,4 +134,26 @@ test("write path: no traversal, no absolute; path + content are argv items", () 
   assert.throws(() => buildWriteExecSpec("../etc/passwd"), /invalid.*path/);
   assert.throws(() => buildWriteExecSpec("/etc/passwd"), /invalid.*path/);
   assert.throws(() => buildWriteExecSpec(""), /invalid.*path/);
+});
+
+test("container spec: the uid is required and range-checked; no exec builder carries a User (A2.1, A2.2)", () => {
+  const volumeName = deriveNames(U, W).volumeName;
+  const base = { userId: U, workspaceId: W, image: "x", sandboxNet: "n", volumeName };
+  for (const bad of [undefined, 10001, 19999, 60000, "20000", 20000.5]) {
+    assert.throws(() => buildContainerSpec({ ...base, uid: bad }), /uid/, String(bad));
+  }
+  assert.equal(buildContainerSpec({ ...base, uid: 59999 }).User, "59999:10001");
+  const execs = [
+    buildGitExecSpec(["git", "status"], ""), buildSearchExecSpec("x"), buildFsOpSpec("stat", { path: "" }),
+    buildPortTunnelExecSpec(3000), buildShellExecSpec(), buildFsAgentExecSpec(),
+  ];
+  for (const spec of execs) assert.equal("User" in spec, false);
+});
+
+test("no IDE script hard-codes a numeric User (the LSP and DAP exec specs are not exported)", async () => {
+  const { readFile } = await import("node:fs/promises");
+  for (const file of ["bridge-ide-exec.mjs", "bridge-ide-ops.mjs", "bridge-ide-sandbox.mjs", "ide-sandbox-spec.mjs"]) {
+    const text = await readFile(new URL(`../../scripts/${file}`, import.meta.url), "utf8");
+    assert.doesNotMatch(text, /\bUser:\s*["'][0-9]/, file);
+  }
 });

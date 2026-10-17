@@ -110,7 +110,7 @@ test("the name rides the PTY exec Env only, never the create Env or the safe she
 });
 
 test("the create Env pins HOME once as its 8th entry and carries no name", () => {
-	const spec = buildContainerSpec({ image: "i", userId: USER, workspaceId: WS, containerName: "ide-" + "a".repeat(32), volumeName: "osio-ide-vol-" + "a".repeat(32), env: {} });
+	const spec = buildContainerSpec({ image: "i", userId: USER, workspaceId: WS, containerName: "ide-" + "a".repeat(32), volumeName: "osio-ide-vol-" + "a".repeat(32), uid: 20000, env: {} });
 	assert.equal(spec.Env.length, 8);
 	assert.equal(spec.Env.at(-1), "HOME=/home/coder");
 	assert.ok(!spec.Env.some((e) => /^(OSIO_USER|USER|LOGNAME)=/.test(e)));

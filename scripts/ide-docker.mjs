@@ -72,6 +72,8 @@ function dockerRequest({ host, port, timeoutMs }, method, path, body) {
   });
 }
 
+const isInitContainer = (container) => (container?.Names ?? []).some((n) => n.startsWith("/ideinit-"));
+
 export function createDockerClient(env = process.env) {
   const [host, portRaw] = String(env.OSIONOS_IDE_DOCKER_HOST || "").split(":");
   const port = Number(portRaw || 2375);
@@ -119,11 +121,26 @@ export function createDockerClient(env = process.env) {
       const res = await call("DELETE", `/containers/${name}?force=true&v=false`);
       if (res.status >= 300 && res.status !== 404) throw new Error(`remove failed (${res.status})`);
     },
-    /** Managed sandboxes, for the idle reaper. Filtered by our label server-side. */
+    /** The owner's uid, allocated and remembered by the socket proxy (ADR 0011). The proxy, not this
+     *  process, is the authority: it refuses a box create whose uid disagrees with its ledger. */
+    async allocateUid(owner) {
+      const res = await call("POST", "/osio/v1/uid", { owner });
+      const uid = res.body?.uid;
+      if (res.status !== 200 || !Number.isInteger(uid)) throw new Error(`uid allocation failed (${res.status})`);
+      return uid;
+    },
+    /** Block until the container stops and return its exit code. The wait sends no bytes until then,
+     *  so the request's silence bound is the total bound (rejects on timeout; the caller removes it). */
+    async waitStopped(name, waitMs) {
+      const res = await dockerRequest({ ...endpoint, timeoutMs: waitMs }, "POST", `/containers/${name}/wait?condition=not-running`);
+      if (res.status !== 200 || !Number.isInteger(res.body?.StatusCode)) throw new Error(`wait failed (${res.status})`);
+      return res.body.StatusCode;
+    },
+    /** Managed sandboxes, for the idle reaper. Init containers carry the managed label too and are not boxes. Filtered by our label server-side. */
     async listManaged() {
       const filters = encodeURIComponent(JSON.stringify({ label: ["osio.ide.managed=1"] }));
       const res = await call("GET", `/containers/json?all=true&filters=${filters}`);
-      return res.status === 200 && Array.isArray(res.body) ? res.body : [];
+      return res.status === 200 && Array.isArray(res.body) ? res.body.filter((c) => !isInitContainer(c)) : [];
     },
     /** Run a non-interactive exec (git op / search / probe) on a SERVER-derived
      *  container name and collect its output. Powers git (P6) + search (P7). */
