@@ -131,12 +131,12 @@ export function serverCommand(table, lang) {
 
 function lspExecSpec(lang) {
   const cmd = serverCommand(LSP_SERVERS, lang);
-  return { User: '10001:10001', WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
+  return { WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
 }
 
 function dapExecSpec(lang) {
   const cmd = serverCommand(DAP_SERVERS, lang);
-  return { User: '10001:10001', WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
+  return { WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
 }
 
 /** Map an LSP process exit code to a WS close frame. Exit 137 = OOM kill → 4137 with a named

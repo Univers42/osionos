@@ -31,6 +31,7 @@ import { bearerToken, readJsonBody } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createDockerClient } from './ide-docker.mjs';
 import { requireSandboxIdentity, deriveNames, deriveHomeVolume, buildContainerSpec } from './ide-sandbox-spec.mjs';
+import { HOME_REPAIR, runVolumeInit } from './ide-volume-init.mjs';
 import { containerHasActivity, disposeSessionsFor } from './ide-term-sessions.mjs';
 
 const BODY_LIMIT = 8 * 1024;
@@ -82,9 +83,8 @@ function startWithinCap(env, names, docker) {
     if (running >= maxRunningBoxes(env)) {
       throw Object.assign(new Error('All IDE sandboxes are in use; try again in a few minutes.'), { status: 503, code: SANDBOX_CAP });
     }
-    await docker.ensureVolume(names.volumeName);
-    await docker.ensureVolume(names.homeVolumeName);
-    await createOrAdopt(docker, names, env);
+    const uid = await prepareVolumes(env, names, docker);
+    await createOrAdopt(docker, names, env, uid);
     await docker.start(names.containerName);
     return { status: 'running', reused: false };
   });
@@ -98,27 +98,44 @@ function stoppedAtHardCap(container, hardMaxMs) {
 }
 
 /** Create the container, adopting one another process created first (409). */
-async function createOrAdopt(docker, names, env) {
+async function createOrAdopt(docker, names, env, uid) {
   const spec = buildContainerSpec({
     userId: names.userId, workspaceId: names.workspaceId,
-    image: env.OSIONOS_IDE_SANDBOX_IMAGE || 'osionos-ide-sandbox:latest',
-    sandboxNet: SANDBOX_NET, volumeName: names.volumeName,
+    image: sandboxImage(env),
+    sandboxNet: SANDBOX_NET, volumeName: names.volumeName, uid,
     diskSize: env.OSIONOS_IDE_STORAGE_QUOTA || '', // xfs+pquota only; off by default
   });
   try { await docker.create(names.containerName, spec); } catch (error) { if (error?.status !== 409) throw error; }
 }
 
+const sandboxImage = (env) => env.OSIONOS_IDE_SANDBOX_IMAGE || 'osionos-ide-sandbox:latest';
+
+/** Volumes, then the owner's uid from the socket proxy, then the ownership init, before the box exists.
+ *  Runs inside the start queue, after the cap check, so a refused start creates nothing. Caveat: an init
+ *  that hangs holds the queue for its 120 s bound; a typical run is a stat and returns at once. */
+async function prepareVolumes(env, names, docker) {
+  await docker.ensureVolume(names.volumeName);
+  await docker.ensureVolume(names.homeVolumeName);
+  const uid = await docker.allocateUid(names.userId);
+  await runVolumeInit(docker, names, { image: sandboxImage(env), uid });
+  return uid;
+}
+
+/** A box created before per-user uids has no uid label and runs as the shared 10001: it is replaced,
+ *  not reused, or its user would keep a uid every other legacy box shares (volumes are kept). */
+const isLegacyBox = (inspected) => !inspected?.Config?.Labels?.['osio.ide.uid'];
+
 /** One provision attempt: reuse a running box, else recreate it clean (volume kept).
  *  A passive caller (LSP / fs-sync) never revives a box stopped at the hard cap. */
 async function provision(env, names, { passive, docker, hardMaxMs }) {
   const existing = await docker.inspect(names.containerName);
-  if (existing?.State?.Running) return { status: 'running', reused: true };
+  if (existing?.State?.Running && !isLegacyBox(existing)) return { status: 'running', reused: true };
   if (existing) {
-    if (passive && stoppedAtHardCap(existing, hardMaxMs)) {
+    if (!existing.State?.Running && passive && stoppedAtHardCap(existing, hardMaxMs)) {
       throw Object.assign(new Error('sandbox reached its lifetime cap; open a terminal to restart it'), { code: HARD_CAP });
     }
     const again = await docker.inspect(names.containerName);
-    if (again?.State?.Running) return { status: 'running', reused: true };
+    if (again?.State?.Running && !isLegacyBox(again)) return { status: 'running', reused: true };
     if (again) await docker.remove(names.containerName);
   }
   return startWithinCap(env, names, docker);
@@ -217,9 +234,9 @@ export function createIdeSandboxHandler({ config, verifySession, env = process.e
       const result = await ensureContainer(names);
       jsonReply(response, 200, { ok: true, sandbox: names.digest, ...result }, requestConfig);
     } catch (error) {
-      // The cap is the one refusal the user can act on (wait), so it keeps its status and
-      // message; every other failure stays generic.
-      if (error?.code === SANDBOX_CAP) jsonReply(response, 503, { ok: false, message: error.message }, requestConfig);
+      // The cap and a failed home repair are the refusals the user can act on (wait, retry), so they keep
+      // their status and message; every other failure stays generic.
+      if (error?.code === SANDBOX_CAP || error?.code === HOME_REPAIR) jsonReply(response, 503, { ok: false, message: error.message }, requestConfig);
       else jsonReply(response, 502, { ok: false, message: 'Sandbox backend unavailable.' }, requestConfig);
     }
     return true;

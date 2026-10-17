@@ -34,21 +34,27 @@ const iso = (ms) => new Date(ms).toISOString();
 
 /** A fake docker client over one container; `state` null = absent. `othersRunning` other
  *  managed boxes are running (the host-wide cap counts them). */
-function fakeDocker(state, { createError = null, inspectOverrides = [], othersRunning = 0 } = {}) {
+function fakeDocker(state, { createError = null, inspectOverrides = [], othersRunning = 0, initExit = 0 } = {}) {
   const calls = [];
-  const view = () => state && { Created: iso(state.created), State: { Running: state.running, FinishedAt: state.finished } };
+  const created = [];
+  const view = () => state && { Created: iso(state.created), Config: { Labels: state.legacy ? {} : { "osio.ide.uid": "20000" } }, State: { Running: state.running, FinishedAt: state.finished } };
   return {
     calls,
+    created,
     async inspect() { calls.push("inspect"); await tick(); return inspectOverrides.length ? inspectOverrides.shift() : view(); },
-    async remove() { calls.push("remove"); await tick(); state = null; },
+    async remove(name) { calls.push(name?.startsWith("ideinit-") ? "init-remove" : "remove"); await tick(); if (!name?.startsWith("ideinit-")) state = null; },
     async ensureVolume() { calls.push("volume"); await tick(); },
-    async create() {
+    async allocateUid() { calls.push("uid"); await tick(); return 20000; },
+    async waitStopped() { calls.push("wait"); await tick(); return initExit; },
+    async create(name, spec) {
+      if (name.startsWith("ideinit-")) { calls.push("init-create"); created.push(spec); await tick(); return; }
       calls.push("create");
+      created.push(spec);
       await tick();
       if (createError) throw createError;
       state = { created: Date.now(), running: false, finished: NEVER };
     },
-    async start() { calls.push("start"); await tick(); if (state) state.running = true; },
+    async start(name) { calls.push(name.startsWith("ideinit-") ? "init-start" : "start"); await tick(); if (state && !name.startsWith("ideinit-")) state.running = true; },
     async listManaged() {
       calls.push("list");
       await tick();
@@ -134,7 +140,7 @@ test("another process creating the box first (409) is adopted, not an error", as
 });
 
 test("a box another process restarted meanwhile is not force-removed", async () => {
-  const running = { Created: iso(Date.now()), State: { Running: true, FinishedAt: NEVER } };
+  const running = { Created: iso(Date.now()), Config: { Labels: { "osio.ide.uid": "20000" } }, State: { Running: true, FinishedAt: NEVER } };
   const stopped = { Created: iso(Date.now() - 120_000), State: { Running: false, FinishedAt: iso(Date.now() - 60_000) } };
   const docker = fakeDocker(null, { inspectOverrides: [stopped, running] });
   assert.deepEqual(await ensureSandbox(ENV, names(), { docker }), { status: "running", reused: true });
@@ -169,11 +175,13 @@ test("two different boxes provisioned at once cannot both pass the cap", async (
   // One box already runs (cap 2): whichever request counts first starts; the other must see it.
   let running = 1;
   const shared = (state) => ({
-    async inspect() { await tick(); return state.exists ? { State: { Running: state.running } } : null; },
+    async inspect() { await tick(); return state.exists ? { Config: { Labels: { "osio.ide.uid": "20000" } }, State: { Running: state.running } } : null; },
     async remove() { await tick(); },
     async ensureVolume() { await tick(); },
-    async create() { await tick(); state.exists = true; },
-    async start() { await tick(); await tick(); state.running = true; running += 1; },
+    async allocateUid() { await tick(); return 20000; },
+    async waitStopped() { await tick(); return 0; },
+    async create(name) { await tick(); if (!name.startsWith("ideinit-")) state.exists = true; },
+    async start(name) { await tick(); if (name.startsWith("ideinit-")) return; await tick(); state.running = true; running += 1; },
     async listManaged() { await tick(); return Array.from({ length: running }, () => ({ State: "running" })); },
   });
   const results = await Promise.allSettled([
@@ -192,4 +200,31 @@ test("an absent sandbox gets its workspace volume and its per-user home volume b
   await ensureSandbox(ENV, names(), { docker });
   assert.equal(count(docker.calls, "volume"), 2);
   assert.ok(docker.calls.lastIndexOf("volume") < docker.calls.indexOf("create"));
+});
+
+const calledInOrder = (calls, ...names) => names.every((n, i) => calls.indexOf(n) !== -1 && (i === 0 || calls.indexOf(n) > calls.indexOf(names[i - 1])));
+
+test("the ownership init runs and is removed before every create, with the proxy's uid (A3.5)", async () => {
+  const docker = fakeDocker(null);
+  await ensureSandbox(ENV, names(), { docker });
+  assert.ok(calledInOrder(docker.calls, "uid", "init-create", "init-start", "wait", "create", "start"), docker.calls.join(","));
+  assert.ok(docker.calls.lastIndexOf("init-remove") > docker.calls.indexOf("wait"), "the init is removed after it ends");
+  const [init, box] = docker.created;
+  assert.equal(init.Env[0], "OSIO_UID=20000");
+  assert.equal(box.User, "20000:10001");
+  assert.equal(box.Labels["osio.ide.uid"], "20000");
+});
+
+test("a failed init means no box and the user-facing message 'home repair failed' (A3.5)", async () => {
+  const docker = fakeDocker(null, { initExit: 1 });
+  await assert.rejects(ensureSandbox(ENV, names(), { docker }), (e) => e.status === 503 && e.code === "HOME_REPAIR" && /home repair failed/.test(e.message));
+  assert.equal(count(docker.calls, "create") + count(docker.calls, "start"), 0);
+  assert.ok(docker.calls.includes("init-remove"), "a failed init is still removed");
+});
+
+test("a running box without the uid label is a pre-uid box: replaced, not reused", async () => {
+  const docker = fakeDocker({ created: Date.now(), running: true, finished: NEVER, legacy: true });
+  assert.deepEqual(await ensureSandbox(ENV, names(), { docker }), { status: "running", reused: false });
+  assert.equal(count(docker.calls, "remove"), 1);
+  assert.equal(count(docker.calls, "create"), 1);
 });

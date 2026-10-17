@@ -83,14 +83,17 @@ const PROXY_URL = "http://ide-egress:8080";
 /** The fixed container-create body. Hardening (conditions 5,14,15) is baked in;
  *  the ONLY inputs are the validated identity + server config. GIT_PAT is NOT in
  *  the container env — it is injected per git op via exec (condition 13). */
-export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, volumeName, memoryBytes = 1073741824, nanoCpus = 1_000_000_000, pidsLimit = 512, diskSize = "" }) {
+export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, volumeName, uid, memoryBytes = 1073741824, nanoCpus = 1_000_000_000, pidsLimit = 512, diskSize = "" }) {
   // Per-container block quota. overlay2 StorageOpt.size ONLY works over xfs+pquota
   // (NOT ext4-prjquota), so it's opt-in via OSIONOS_IDE_STORAGE_QUOTA — omitted by
   // default. The host is already blast-bounded by the docker-ide loopback data-root.
+  // The proxy refuses any other User; the uid comes from its ledger (ADR 0011). Execs carry no User: an
+  // exec with none inherits this one, and a User on an exec would be a way to pick another uid.
+  if (!Number.isInteger(uid) || uid < 20000 || uid > 59999) throw new Error("buildContainerSpec needs the owner's uid (20000-59999)");
   const storageOpt = diskSize ? { StorageOpt: { size: diskSize } } : {};
   return {
     Image: image,
-    User: "10001:10001",
+    User: `${uid}:10001`,
     WorkingDir: "/workspace",
     Cmd: ["sleep", "infinity"],
     Env: [
@@ -106,6 +109,7 @@ export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, vol
       "osio.ide.managed": "1",
       "osio.ide.owner": userId,
       "osio.ide.workspace": workspaceId,
+      "osio.ide.uid": String(uid),
     },
     HostConfig: {
       NetworkMode: sandboxNet,
@@ -115,9 +119,11 @@ export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, vol
       // Fixed order [workspace, home]: the socket proxy checks it positionally. The home is a
       // volume (not a tmpfs) so dotfiles and ~/.local installs outlive the box. Unbounded like
       // /workspace: diskSize is a rw-layer StorageOpt and does not apply to volumes.
+      // NoCopy: the copy-up that resets a volume root to the image dir's owner belongs to the init
+      // (ide-volume-init.mjs), never to the box's first mount (verdict G1).
       Mounts: [
-        { Type: "volume", Source: volumeName, Target: "/workspace" },
-        { Type: "volume", Source: deriveHomeVolume(userId), Target: "/home/coder" },
+        { Type: "volume", Source: volumeName, Target: "/workspace", VolumeOptions: { NoCopy: true } },
+        { Type: "volume", Source: deriveHomeVolume(userId), Target: "/home/coder", VolumeOptions: { NoCopy: true } },
       ],
       // exec: with docker's default noexec, `go run`, dlopen of a /tmp library and installers
       // failed (measured 2026-10-17). Docker still prepends nosuid,nodev, and the proxy admits only
@@ -164,7 +170,6 @@ export function buildGitExecSpec(argv, gitPat) {
     throw Object.assign(new Error("git argv must be strings"), { status: 400 });
   }
   return {
-    User: "10001:10001",
     WorkingDir: "/workspace",
     AttachStdout: true,
     AttachStderr: true,
@@ -182,7 +187,6 @@ export function buildSearchExecSpec(query, maxCount = 200) {
     throw Object.assign(new Error("invalid search query"), { status: 400 });
   }
   return {
-    User: "10001:10001",
     WorkingDir: "/workspace",
     AttachStdout: true,
     AttachStderr: false,
@@ -203,7 +207,7 @@ export function assertRelPath(relPath) {
   }
 }
 
-const FS_OP_COMMON = { User: "10001:10001", WorkingDir: "/workspace", AttachStdout: true, AttachStderr: false, Tty: true };
+const FS_OP_COMMON = { WorkingDir: "/workspace", AttachStdout: true, AttachStderr: false, Tty: true };
 export const READ_CAP_BYTES = 512 * 1024;
 // A write's content rides one argv item, and Linux refuses an exec whose single
 // argument passes 128 KiB (MAX_ARG_STRLEN): a 400 KB file failed to save with
@@ -396,7 +400,6 @@ export function buildPortTunnelExecSpec(port) {
     throw Object.assign(new Error("invalid preview port"), { status: 400 });
   }
   return {
-    User: "10001:10001",
     WorkingDir: "/workspace",
     AttachStdin: true,
     AttachStdout: true,
@@ -418,7 +421,6 @@ export function buildShellExecSpec({ safe = false, username } = {}) {
   // OSIO_USER reaches only the launcher: the safe shell never reads it, and it is re-validated in the box.
   const identityEnv = safe === true || !isValidIdeUsername(username) ? [] : [`OSIO_USER=${username}`];
   return {
-    User: "10001:10001",
     WorkingDir: "/workspace",
     AttachStdin: true,
     AttachStdout: true,
@@ -441,7 +443,6 @@ export function buildShellExecSpec({ safe = false, username } = {}) {
  *  33,051-delete bulk test still lost none (s5j6, 2026-10-14). */
 export function buildFsAgentExecSpec() {
   return {
-    User: "10001:10001",
     WorkingDir: "/workspace",
     AttachStdin: true,
     AttachStdout: true,
