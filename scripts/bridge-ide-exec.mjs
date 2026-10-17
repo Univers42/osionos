@@ -31,7 +31,7 @@ import { takeToken } from './bridge-ratelimit.mjs';
 import {
   bumpContainerSockets, containerHasActivity, getOrCreateSession, attachClient, detachClient, writeStdin,
 } from './ide-term-sessions.mjs';
-import { ensureSandbox, sandboxNames } from './bridge-ide-sandbox.mjs';
+import { ensureSandbox, isUserFacingRefusal, sandboxNames } from './bridge-ide-sandbox.mjs';
 
 // Each live socket pins bridge FDs; cap churn AND simultaneous streams per
 // user so one tenant can't exhaust the shared bridge. (PTY SESSIONS outlive
@@ -165,7 +165,7 @@ export function armTokenExpiry(socket, exp, now = Date.now()) {
 // logged, and the UI blamed docker-ide (2026-10-14).
 function sandboxRefusal(kind, names, error, fallback) {
   console.warn(`[osionos-ide] ${kind} could not reach ${names.containerName}: ${error?.message ?? error}`);
-  return error?.status === 503 && typeof error.message === 'string' ? error.message.slice(0, 120) : fallback;
+  return isUserFacingRefusal(error) && typeof error.message === 'string' ? error.message.slice(0, 120) : fallback;
 }
 
 /** Returns an upgrade handler `(request, socket) => boolean` — true when it owns

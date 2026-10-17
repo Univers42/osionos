@@ -105,7 +105,7 @@ test("a terminal refused at the box cap is told so, not 'sandbox unavailable'", 
   const docker = await fakeDocker({ running: ["ide-a", "ide-b"] }); // the default cap is 2
   try {
     const frame = await openTerminal(docker.host);
-    assert.deepEqual(closeOf(frame), { code: 4004, reason: "All IDE sandboxes are in use; try again in a few minutes." });
+    assert.deepEqual(closeOf(frame), { code: 4004, reason: "All sandboxes are busy, retry in a minute" });
     assert.equal(docker.creates.length, 0);
   } finally {
     await docker.close();
