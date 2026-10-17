@@ -22,10 +22,13 @@
  * Publishes are best-effort: chat/feed writes never fail because the gateway
  * is down. Env: REALTIME_PUBLISH_URL (default http://mini-baas-realtime:4000);
  * REALTIME_PUBLISH_APIKEY, the service_role key when that URL is grobase's edge
- * (http://mini-baas-kong:8000/realtime: Kong admits that key alone there).
+ * (http://mini-baas-kong:8000/realtime: Kong admits that key alone there). A ws://
+ * or wss:// URL (grobase's /realtime/v1/ws, behind a Funnel link) publishes over
+ * one authenticated socket instead: bridge-realtime-socket.mjs.
  */
 
 import { readBaasJson } from './bridge-baas-body.mjs';
+import { realtimeSocketPublisher } from './bridge-realtime-socket.mjs';
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const REST_TIMEOUT_MS = 2_500;
@@ -115,6 +118,7 @@ function readFailure(message) {
 /** Best-effort publish to the Rust realtime gateway; never throws. */
 export async function publishRealtime({ topic, eventType, payload, fetchImpl = fetch, env = process.env }) {
 	const base = (env.REALTIME_PUBLISH_URL || 'http://mini-baas-realtime:4000').replace(/\/$/, '');
+	if (/^wss?:\/\//i.test(base)) return realtimeSocketPublisher(base, env).publish(topic, eventType, payload);
 	const apikey = (env.REALTIME_PUBLISH_APIKEY ?? '').trim();
 	const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
 	if (apikey) headers.apikey = apikey;
