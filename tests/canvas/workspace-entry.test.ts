@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { PageEntry } from "../../src/entities/page/model/types.ts";
-import { pageIdForEntry } from "../../src/widgets/activity-rail/model/workspaceEntry.ts";
+import { pageIdForDir, pageIdForEntry } from "../../src/widgets/activity-rail/model/workspaceEntry.ts";
 
 function page(
   _id: string,
@@ -77,4 +77,23 @@ test("archived page path returns undefined", () => {
     { ...page("a", "Old", null), archivedAt: "2026-10-01T00:00:00Z" },
   ];
   assert.equal(pageIdForEntry(workspaceId, withArchived, "Old.omd"), undefined);
+});
+
+test("sectioned: the Private / Shared prefix is stripped before the page index lookup", () => {
+  assert.equal(pageIdForEntry(workspaceId, pages, "Private/Roadmap.omd", true), "r");
+  assert.equal(pageIdForEntry(workspaceId, pages, "Shared/Roadmap/Q3.omd", true), "q");
+  assert.equal(pageIdForEntry(workspaceId, pages, "Private/src/main.ts", true), "m");
+  assert.equal(pageIdForDir(workspaceId, pages, "Shared/src", true), "s");
+});
+
+test("sectioned: a section folder itself is no page, and an unprefixed path is not found", () => {
+  assert.equal(pageIdForEntry(workspaceId, pages, "Private", true), undefined);
+  assert.equal(pageIdForDir(workspaceId, pages, "Shared", true), undefined);
+  assert.equal(pageIdForEntry(workspaceId, pages, "Roadmap.omd", true), "r");
+});
+
+test("sectioned: a page called Private resolves through its section, not as the section", () => {
+  const named = [...pages, page("p", "Private", null)];
+  assert.equal(pageIdForEntry(workspaceId, named, "Private/Private.omd", true), "p");
+  assert.equal(pageIdForDir(workspaceId, named, "Private/Private", true), "p");
 });

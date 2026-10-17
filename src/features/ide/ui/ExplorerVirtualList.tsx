@@ -14,7 +14,7 @@ import React from "react";
 import type { Virtualizer } from "@tanstack/react-virtual";
 
 import type { RenderRow } from "../model/explorerRows";
-import { ExplorerCreateRow, ExplorerStatusRow, WorkspaceExplorerRow } from "./WorkspaceExplorerRow";
+import { ExplorerCreateRow, ExplorerHintRow, ExplorerStatusRow, WorkspaceExplorerRow } from "./WorkspaceExplorerRow";
 
 type Props = {
   rows: readonly RenderRow[];
@@ -32,6 +32,7 @@ export const ExplorerVirtualList: React.FC<Props> = ({ rows, virtualizer }) => (
       const placement = { index: line.index, start: line.start, measure: virtualizer.measureElement };
       if (row.type === "item") return <WorkspaceExplorerRow key={line.key} item={row.item} placement={placement} />;
       if (row.type === "status") return <ExplorerStatusRow key={line.key} dir={row.dir} level={row.level} placement={placement} />;
+      if (row.type === "hint") return <ExplorerHintRow key={line.key} text={row.text} level={row.level} placement={placement} />;
       return <ExplorerCreateRow key={line.key} level={row.level} kind={row.kind} placement={placement} />;
     })}
   </ul>
