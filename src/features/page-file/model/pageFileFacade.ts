@@ -29,6 +29,8 @@ export interface NewPage {
   parentId: string | null;
   surface: PageEntry["surface"];
   content?: Block[];
+  /** Absent = the store's rule (shared in a joined workspace, private otherwise). */
+  visibility?: "private" | "shared";
 }
 
 /** Every collaborator the facade needs, injected so node tests can drive it with

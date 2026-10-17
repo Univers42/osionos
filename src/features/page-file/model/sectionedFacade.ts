@@ -49,19 +49,11 @@ export function createSectionedFacade(inner: PageFacade, deps: SectionDeps): Pag
   const refuseSection = (id: string): void => {
     if (isSectionId(id)) throw fsError("Unsupported", undefined, UNSUPPORTED_ON_SECTION);
   };
-  const assertPlaceable = (section: PageSection): void => {
-    const refusal = deps.whyNotPlaceable(section);
-    if (refusal) throw fsError(refusal.code, undefined, refusal.reason);
-  };
 
   async function create(input: Parameters<PageFacade["create"]>[0]): Promise<PageFacadeEntry> {
     if (input.parentId !== null && !isSectionId(input.parentId)) return inner.create(input);
     const target = input.parentId === null ? "private" : sectionOfId(input.parentId);
-    assertPlaceable(target);
-    const created = await inner.create({ ...input, parentId: null });
-    const owner = ownerOf(created.id);
-    if (deps.sectionOfPage(owner) !== target) deps.setSection(owner, target);
-    return placed(created);
+    return placed(await inner.create({ ...input, parentId: null, visibility: target }));
   }
 
   async function move(id: string, parentId: string | null): Promise<void> {
@@ -74,7 +66,6 @@ export function createSectionedFacade(inner: PageFacade, deps: SectionDeps): Pag
     const owner = ownerOf(id);
     const nested = !deps.isRoot(owner);
     if (!nested && deps.sectionOfPage(owner) === target) return;
-    assertPlaceable(target);
     const refusal = deps.whyNotRelocatable(owner);
     if (refusal) throw fsError(refusal.code, undefined, refusal.reason);
     if (nested) await inner.move(id, null);

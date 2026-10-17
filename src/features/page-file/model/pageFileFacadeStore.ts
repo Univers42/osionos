@@ -35,12 +35,11 @@ export function pageFileFacade(workspaceId: string): PageFacade {
  *  Sync, the writer and the ledger keep using pageFileFacade / pageFileStoreDeps (real paths). */
 export function sectionedPageFileFacade(workspaceId: string): PageFacade {
   const deps = pageFileStoreDeps(workspaceId);
-  const joinedWorkspace = (): boolean => getCurrentPageAccessContext()?.sharedWorkspaceIds.includes(workspaceId) ?? false;
   return createSectionedFacade(
     createPageFileFacade(deps),
     createSectionDeps({
       pages: deps.pages,
-      joinedWorkspace,
+      currentUserId: () => getCurrentPageAccessContext()?.userId ?? null,
       mayChangeSharing: deps.canChangeSharing,
       patchPage: deps.patchPage,
       subscribe: deps.subscribe,
@@ -69,6 +68,7 @@ export function pageFileStoreDeps(workspaceId: string): PageFileStore {
     addPage: (input: NewPage) => store().addPage(workspaceId, input.title, jwt(), input.parentId ?? undefined, {
       surface: input.surface,
       content: input.content,
+      visibility: input.visibility,
     }),
     patchPage: (pageId, patch) => store().patchPage(pageId, patch),
     updatePageContent: (pageId, blocks) => store().updatePageContent(pageId, blocks),

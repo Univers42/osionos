@@ -20,8 +20,8 @@ import { sectionOf, type PageSection } from "./pageSections";
 
 export interface SectionSource {
   pages(): readonly PageEntry[];
-  /** The active workspace is one the user joined, not one they own. */
-  joinedWorkspace(): boolean;
+  /** The signed-in user's id, null when offline. */
+  currentUserId(): string | null;
   /** Owner-only: may this user change who sees the page (canChangePageVisibility). */
   mayChangeSharing(page: PageEntry): boolean;
   patchPage(pageId: string, patch: Partial<PageEntry>): void;
@@ -39,8 +39,6 @@ export interface SectionDeps {
   isRoot(pageId: string): boolean;
   /** Live root pages with their section, for change detection. */
   roots(): Iterable<readonly [string, PageSection]>;
-  /** Why nothing can be placed in `to`, or null. */
-  whyNotPlaceable(to: PageSection): SectionRefusal | null;
   /** Why this page cannot change section, or null. */
   whyNotRelocatable(pageId: string): SectionRefusal | null;
   setSection(pageId: string, to: PageSection): void;
@@ -59,7 +57,7 @@ function lookupFor(pages: readonly PageEntry[], cache: WeakMap<readonly PageEntr
 export function createSectionDeps(source: SectionSource): SectionDeps {
   const cache = new WeakMap<readonly PageEntry[], Map<string, PageEntry>>();
   const byId = (id: string): PageEntry | undefined => lookupFor(source.pages(), cache).get(id);
-  const context = () => ({ joinedWorkspace: source.joinedWorkspace() });
+  const context = () => ({ userId: source.currentUserId() });
   return {
     sectionOfPage: (pageId) => {
       const page = byId(pageId);
@@ -74,10 +72,6 @@ export function createSectionDeps(source: SectionSource): SectionDeps {
         if (section) yield [page._id, section] as const;
       }
     },
-    whyNotPlaceable: (to) =>
-      source.joinedWorkspace() && to === "private"
-        ? { code: "Unsupported", reason: "this is a workspace you joined: its pages are all shared" }
-        : null,
     whyNotRelocatable: (pageId) => {
       const page = byId(pageId);
       if (!page) return { code: "NotFound", reason: `no page ${pageId}` };
