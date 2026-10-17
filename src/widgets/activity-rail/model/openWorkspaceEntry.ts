@@ -14,6 +14,7 @@ import { useToastStore } from "@osionos/ui/primitives";
 
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
+import { isPageBacked } from "@/features/ide/vfs/workspaceMounts";
 import { pageIdForEntry } from "./workspaceEntry";
 
 /**
@@ -26,7 +27,7 @@ export function openWorkspaceEntry(relPath: string, kind: "page" | "code"): void
   const workspace = useUserStore.getState().activeWorkspace();
   if (!workspace) return;
   const store = usePageStore.getState();
-  const pageId = pageIdForEntry(workspace._id, store.pagesForWorkspace(workspace._id), relPath);
+  const pageId = pageIdForEntry(workspace._id, store.pagesForWorkspace(workspace._id), relPath, isPageBacked(workspace._id));
   const page = pageId ? store.pageById(pageId) : undefined;
   if (page) {
     store.openPage({

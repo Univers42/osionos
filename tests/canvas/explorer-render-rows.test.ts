@@ -84,3 +84,29 @@ test("indexByRel points at each item's line; keys are unique and stable", () => 
   const later = flattenForRender(DIRS, EXPANDED, null).map(renderRowKey);
   assert.ok(later.every((key) => keys.includes(key)), "removing the create line keeps every other key");
 });
+
+const HINTS = { Private: "No private pages", Shared: "Nothing shared yet" };
+
+test("an expanded, empty folder with a hint shows one hint line; a folder with rows or no hint shows none", () => {
+  const dirs: Record<string, DirState> = {
+    "": ready(["Private", "dir"], ["Shared", "dir"]),
+    Private: ready(),
+    Shared: ready(["Plan.omd", "file"]),
+  };
+  const rows = flattenForRender(dirs, new Set(["Private", "Shared"]), null, HINTS);
+  assert.deepEqual(rows.map(describe), ["1:Private", "2:hint:Private", "1:Shared", "2:Shared/Plan.omd"]);
+  const hint = rows[1];
+  assert.equal(hint.type === "hint" ? hint.text : "", "No private pages");
+  assert.deepEqual(flattenForRender(dirs, new Set(["Private"]), null).map(describe), ["1:Private", "1:Shared"]);
+  assert.deepEqual(flattenForRender(dirs, new Set(), null, HINTS).map(describe), ["1:Private", "1:Shared"]);
+});
+
+test("a hint is not a keyboard stop, has its own key, and yields to a pending create", () => {
+  const dirs: Record<string, DirState> = { "": ready(["Private", "dir"]), Private: ready() };
+  const expanded = new Set(["Private"]);
+  const rows = flattenForRender(dirs, expanded, null, HINTS);
+  assert.deepEqual(flattenVisible(dirs, expanded).map((item) => item.rel), ["Private"]);
+  assert.equal(renderRowKey(rows[1]), "h:Private");
+  const creating = flattenForRender(dirs, expanded, { parent: "Private", kind: "file" }, HINTS).map(describe);
+  assert.deepEqual(creating, ["1:Private", "2:create:Private"]);
+});

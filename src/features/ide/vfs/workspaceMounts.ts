@@ -14,7 +14,7 @@ import { createMountTable } from "./mountTable";
 import { createPageProvider } from "./pageProvider";
 import { createSandboxProvider } from "./sandboxProvider";
 import { bridgeFsTransport } from "./bridgeTransport";
-import { pageFileFacade } from "@/features/page-file/model/pageFileFacadeStore";
+import { sectionedPageFileFacade } from "@/features/page-file/model/pageFileFacadeStore";
 import { useSandboxHealthStore, isSandboxOnline } from "@/features/ide/model/sandboxHealthStore";
 import { subscribeFsEvents } from "@/features/ide/model/ideFsEvents";
 import type { MountTable, FsProvider } from "./types";
@@ -34,6 +34,11 @@ export function workspaceUri(workspaceId: string, relPath: string): string {
 function isOnlineHere(workspaceId: string): boolean {
   const health = useSandboxHealthStore.getState();
   return isSandboxOnline(health.state) && health.workspaceId === workspaceId;
+}
+
+/** The explorer shows Private / Shared folders only while the page tree is its backend. */
+export function isPageBacked(workspaceId: string): boolean {
+  return !isOnlineHere(workspaceId);
 }
 
 interface SwitchingWatch {
@@ -102,7 +107,7 @@ function createBackends(workspaceId: string): Backends {
         ? createSandboxProvider(WORKSPACE_SCHEME, bridgeFsTransport(workspaceId), {
           subscribe: (listener) => subscribeFsEvents(workspaceId, listener),
         })
-        : createPageProvider(WORKSPACE_SCHEME, pageFileFacade(workspaceId));
+        : createPageProvider(WORKSPACE_SCHEME, sectionedPageFileFacade(workspaceId));
       online = now;
     }
     return backend;
