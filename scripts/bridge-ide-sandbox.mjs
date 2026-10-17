@@ -30,7 +30,7 @@
 import { bearerToken, readJsonBody } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createDockerClient } from './ide-docker.mjs';
-import { requireSandboxIdentity, deriveNames, buildContainerSpec } from './ide-sandbox-spec.mjs';
+import { requireSandboxIdentity, deriveNames, deriveHomeVolume, buildContainerSpec } from './ide-sandbox-spec.mjs';
 import { containerHasActivity, disposeSessionsFor } from './ide-term-sessions.mjs';
 
 const BODY_LIMIT = 8 * 1024;
@@ -83,6 +83,7 @@ function startWithinCap(env, names, docker) {
       throw Object.assign(new Error('All IDE sandboxes are in use; try again in a few minutes.'), { status: 503, code: SANDBOX_CAP });
     }
     await docker.ensureVolume(names.volumeName);
+    await docker.ensureVolume(names.homeVolumeName);
     await createOrAdopt(docker, names, env);
     await docker.start(names.containerName);
     return { status: 'running', reused: false };
@@ -129,7 +130,7 @@ async function provision(env, names, { passive, docker, hardMaxMs }) {
  *  so a terminal could never start a stopped box, and a session POST joining that attempt got its
  *  502 (2026-10-14, reproduced inside the VM ide-server). */
 export function sandboxNames(identity) {
-  return { ...identity, ...deriveNames(identity.userId, identity.workspaceId) };
+  return { ...identity, ...deriveNames(identity.userId, identity.workspaceId), homeVolumeName: deriveHomeVolume(identity.userId) };
 }
 
 /** Ensure the per-(user,workspace) sandbox container exists and runs. Shared by the

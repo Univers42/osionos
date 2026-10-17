@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { Columns2, Plus, Trash2, X } from "lucide-react";
+import { Columns2, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 
 import { Tooltip } from "@/shared/ui";
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
@@ -56,16 +56,17 @@ function nextTabIndex(key: string, index: number): number | null {
 const TerminalPane: React.FC = () => {
   const primary = useIdeDockStore((s) => s.primary);
   const secondary = useIdeDockStore((s) => s.secondary);
+  const safeTerms = useIdeDockStore((s) => s.safeTerms);
   return (
     <React.Suspense
       fallback={<div className="min-h-0 flex-1 px-3 py-2 font-mono text-xs text-[var(--osio-code-fg-muted)]">Starting terminal…</div>}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <IdeTerminal key={primary} termId={primary} />
+        <IdeTerminal key={primary} termId={primary} safe={safeTerms.includes(primary)} />
       </div>
       {secondary && (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col border-l border-[var(--osio-code-border)]">
-          <IdeTerminal key={secondary} termId={secondary} />
+          <IdeTerminal key={secondary} termId={secondary} safe={safeTerms.includes(secondary)} />
         </div>
       )}
     </React.Suspense>
@@ -81,6 +82,11 @@ const TerminalActions: React.FC = () => {
       <Tooltip label="New terminal (fresh session)" side="bottom">
         <button type="button" aria-label="New terminal" onClick={() => dock().newTerminal()} className={ICON_BTN}>
           <Plus size={14} />
+        </button>
+      </Tooltip>
+      <Tooltip label="Safe terminal (no ~/.bashrc or ~/.profile)" side="bottom">
+        <button type="button" aria-label="Safe terminal" onClick={() => dock().newSafeTerminal()} className={ICON_BTN}>
+          <ShieldCheck size={14} />
         </button>
       </Tooltip>
       <Tooltip label={splitLabel} side="bottom">

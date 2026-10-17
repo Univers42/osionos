@@ -63,6 +63,16 @@ export function deriveNames(userId, workspaceId) {
   return { digest, containerName, volumeName };
 }
 
+/** The per-USER home volume, shared by all of a user's workspaces. Derived from the userId
+ *  alone and mounted at the constant /home/coder, so no username ever enters a path or a name. */
+export function deriveHomeVolume(userId) {
+  const homeVolumeName = `osio-ide-home-${createHash("sha256").update(String(userId)).digest("hex").slice(0, 32)}`;
+  if (!/^osio-ide-home-[0-9a-f]{32}$/.test(homeVolumeName)) {
+    throw new Error("derived home volume name failed validation"); // unreachable; defense in depth
+  }
+  return homeVolumeName;
+}
+
 /** Under host-wide memory pressure the kernel kills the highest oom_score_adj first: a box,
  *  never the databases that share the host (they run at the default 0). */
 export const SANDBOX_OOM_SCORE_ADJ = 500;
@@ -98,8 +108,14 @@ export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, vol
       CapDrop: ["ALL"],
       SecurityOpt: ["no-new-privileges:true"],
       ReadonlyRootfs: true,
-      Mounts: [{ Type: "volume", Source: volumeName, Target: "/workspace" }],
-      Tmpfs: { "/tmp": "size=64m,mode=1777", "/home/coder": "size=64m,mode=0700,uid=10001,gid=10001" },
+      // Fixed order [workspace, home]: the socket proxy checks it positionally. The home is a
+      // volume (not a tmpfs) so dotfiles and ~/.local installs outlive the box. Unbounded like
+      // /workspace: diskSize is a rw-layer StorageOpt and does not apply to volumes.
+      Mounts: [
+        { Type: "volume", Source: volumeName, Target: "/workspace" },
+        { Type: "volume", Source: deriveHomeVolume(userId), Target: "/home/coder" },
+      ],
+      Tmpfs: { "/tmp": "size=64m,mode=1777" },
       PidsLimit: pidsLimit,
       Memory: memoryBytes,
       MemorySwap: memoryBytes, // no swap headroom beyond mem
@@ -381,9 +397,16 @@ export function buildPortTunnelExecSpec(port) {
   };
 }
 
+/** The shell a persistent home can never lock: no profile, no rc, so a broken ~/.bashrc or
+ *  ~/.profile (or an rc hook pointing at a crashing binary) still leaves a way in. Never routed
+ *  through the login launcher, which reads the home. */
+export const SAFE_SHELL_ARGV = Object.freeze(["/bin/bash", "--noprofile", "--norc"]);
+export const LOGIN_LAUNCHER_ARGV = Object.freeze(["/usr/local/bin/osio-login"]);
+
 /** An interactive-shell exec spec — a FIXED argv, no GIT_PAT, TTY on. The
- *  container is resolved by the derived name at the call site, never a client id. */
-export function buildShellExecSpec() {
+ *  container is resolved by the derived name at the call site, never a client id.
+ *  `safe` picks the fixed rc-free bash; anything but `true` gets the login launcher. */
+export function buildShellExecSpec({ safe = false } = {}) {
   return {
     User: "10001:10001",
     WorkingDir: "/workspace",
@@ -392,7 +415,7 @@ export function buildShellExecSpec() {
     AttachStderr: true,
     Tty: true,
     Env: ["TERM=xterm-256color"],
-    Cmd: ["/bin/bash", "-l"],
+    Cmd: [...(safe === true ? SAFE_SHELL_ARGV : LOGIN_LAUNCHER_ARGV)],
   };
 }
 

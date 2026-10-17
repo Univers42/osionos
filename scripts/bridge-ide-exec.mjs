@@ -178,6 +178,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     const isLsp = url.pathname === '/api/ide/lsp';
     const isDap = url.pathname === '/api/ide/debug';
     const isFsync = url.pathname === '/api/ide/fsync';
+    const isSafe = url.searchParams.get('safe') === '1';
     if (!isPty && !isLsp && !isDap && !isFsync) return false;
 
     if (env.OSIONOS_IDE_SANDBOX !== '1' || !env.OSIONOS_IDE_DOCKER_HOST) { rejectUpgrade(socket, 404, 'Not Found'); return true; }
@@ -215,7 +216,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
 
     let spec;
     try {
-      if (isPty) spec = buildShellExecSpec();
+      if (isPty) spec = buildShellExecSpec({ safe: isSafe });
       else if (isFsync) spec = buildFsAgentExecSpec();
       else if (isDap) spec = dapExecSpec(url.searchParams.get('lang'));
       else spec = lspExecSpec(url.searchParams.get('lang'));
@@ -249,7 +250,8 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
       // shell, attach this socket as one of its clients. A reload reattaches
       // to the SAME shell and receives the replay ring first.
       const termId = /^\d{1,2}$/.test(url.searchParams.get('term') ?? '') ? url.searchParams.get('term') : '0';
-      const sessionKey = `${userId}|${names.containerName}|${termId}`;
+      // A safe terminal is its own session: it must never reattach to the login shell of the same id.
+      const sessionKey = `${userId}|${names.containerName}|${termId}${isSafe ? '|safe' : ''}`;
       (async () => {
         await ensureSandbox(env, names);
         return getOrCreateSession({

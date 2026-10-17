@@ -40,7 +40,7 @@ function codeTheme(host: HTMLElement): ITheme {
 /** xterm.js terminal over the sandbox PTY (P3). Lazy-loaded from IdeBottomStrip
  *  so xterm never lands in the warm IDE chunk — it loads on first terminal open.
  *  The transport (WS + resize) is useIdeTerminal; this file owns the emulator. */
-export const IdeTerminal: React.FC<{ termId?: string }> = ({ termId = "0" }) => {
+export const IdeTerminal: React.FC<{ termId?: string; safe?: boolean }> = ({ termId = "0", safe = false }) => {
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const hostRef = React.useRef<HTMLDivElement>(null);
   const fitRef = React.useRef<FitAddon | null>(null);
@@ -74,7 +74,7 @@ export const IdeTerminal: React.FC<{ termId?: string }> = ({ termId = "0" }) => 
     return () => ro.disconnect();
   }, [term]);
 
-  const { closedReason, reconnect } = useIdeTerminal(term, workspaceId, termId);
+  const { closedReason, reconnect } = useIdeTerminal(term, workspaceId, termId, safe);
   const reachable = useSandboxHealthStore((s) => isSandboxReachable(s.state));
 
   return (

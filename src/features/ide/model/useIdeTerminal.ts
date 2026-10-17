@@ -38,7 +38,7 @@ export interface IdeTerminalConnection {
  * on the SAME bridge-owned session (replay first); deliberate closes (shell
  * exit, auth/gate) stay closed with the reason printed.
  */
-export function useIdeTerminal(term: Terminal | null, workspaceId: string, termId = "0"): IdeTerminalConnection {
+export function useIdeTerminal(term: Terminal | null, workspaceId: string, termId = "0", safe = false): IdeTerminalConnection {
   // "connecting" until a WS callback moves it; "unavailable" is derived (no
   // synchronous setState in the effect — that trips react-hooks/set-state-in-effect).
   const [wsStatus, setWsStatus] = useState<IdeTerminalStatus>("connecting");
@@ -84,7 +84,7 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string, termI
     // shell with a replay of recent output. The token rides the subprotocol, not the URL.
     const connect = async () => {
       if (disposed) return;
-      const target = await ideSocketTarget(workspaceId, "/api/ide/pty", { term: termId });
+      const target = await ideSocketTarget(workspaceId, "/api/ide/pty", { term: termId, ...(safe ? { safe: "1" } : {}) });
       if (disposed) return;
       if (target.kind === "unavailable") {
         // A throttled or failed mint is transient; the rest cannot be fixed by dialling again.
@@ -147,7 +147,7 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string, termI
       runSub();
       try { ws?.close(); } catch { /* already closed */ }
     };
-  }, [term, termId, reachable, workspaceId, dialSeq]);
+  }, [term, termId, safe, reachable, workspaceId, dialSeq]);
 
   return { status: wsStatus, closedReason, reconnect };
 }

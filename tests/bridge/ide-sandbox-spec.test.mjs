@@ -14,7 +14,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  requireSandboxIdentity, requireIdeSubject, deriveNames, buildContainerSpec, buildGitExecSpec, buildShellExecSpec,
+  requireSandboxIdentity, requireIdeSubject, deriveNames, deriveHomeVolume, buildContainerSpec, buildGitExecSpec, buildShellExecSpec,
   buildSearchExecSpec, buildWriteExecSpec, SANDBOX_OOM_SCORE_ADJ,
 } from "../../scripts/ide-sandbox-spec.mjs";
 
@@ -48,10 +48,12 @@ test("container spec: hardening baked, no user params, no PAT (devil #8,#14)", (
   assert.equal(spec.HostConfig.ReadonlyRootfs, true);
   assert.equal(spec.User, "10001:10001");
   assert.equal(spec.HostConfig.NetworkMode, "sandbox-net");
-  // exactly one mount: the derived volume; no host binds.
-  assert.equal(spec.HostConfig.Mounts.length, 1);
-  assert.equal(spec.HostConfig.Mounts[0].Type, "volume");
-  assert.equal(spec.HostConfig.Mounts[0].Source, volumeName);
+  // exactly two mounts, fixed order [workspace, home], both derived volumes; no host binds (H1).
+  assert.deepEqual(spec.HostConfig.Mounts, [
+    { Type: "volume", Source: volumeName, Target: "/workspace" },
+    { Type: "volume", Source: deriveHomeVolume(U), Target: "/home/coder" },
+  ]);
+  assert.deepEqual(Object.keys(spec.HostConfig.Tmpfs), ["/tmp"]);
   assert.equal(spec.HostConfig.Binds, undefined);
   assert.equal(spec.HostConfig.Privileged, undefined);
   // core dumps off; caps present.
@@ -77,8 +79,30 @@ test("git exec: fixed argv, PAT only here — never the shell (devil #9,#13)", (
   assert.throws(() => buildGitExecSpec(["rm", "-rf", "/"], "x"), /argv must start with git/);
   // the interactive shell spec carries no secret at all.
   const shell = buildShellExecSpec();
-  assert.deepEqual(shell.Cmd, ["/bin/bash", "-l"]);
+  assert.deepEqual(shell.Cmd, ["/usr/local/bin/osio-login"]);
   assert.ok(!shell.Env.some((e) => e.startsWith("GIT_PAT")));
+});
+
+test("home volume: per user, hashed, constant target, no username (H1, H2)", () => {
+  const home = deriveHomeVolume(U);
+  assert.match(home, /^osio-ide-home-[0-9a-f]{32}$/);
+  assert.ok(!home.includes(U));
+  assert.equal(deriveHomeVolume(U), home);
+  assert.notEqual(deriveHomeVolume("44444444-4444-4444-8444-444444444444"), home);
+  // one home across workspaces: the workspace never enters the derivation.
+  const a = buildContainerSpec({ userId: U, workspaceId: W, image: "x", sandboxNet: "n", volumeName: deriveNames(U, W).volumeName });
+  const otherWs = "44444444-4444-4444-4444-444444444444";
+  const b = buildContainerSpec({ userId: U, workspaceId: otherWs, image: "x", sandboxNet: "n", volumeName: deriveNames(U, otherWs).volumeName });
+  assert.equal(a.HostConfig.Mounts[1].Source, b.HostConfig.Mounts[1].Source);
+  assert.notEqual(a.HostConfig.Mounts[0].Source, b.HostConfig.Mounts[0].Source);
+});
+
+test("safe shell: fixed rc-free argv, never the launcher; only safe === true selects it (H4)", () => {
+  assert.deepEqual(buildShellExecSpec({ safe: true }).Cmd, ["/bin/bash", "--noprofile", "--norc"]);
+  for (const notSafe of [undefined, false, "1", 1, "true"]) {
+    assert.deepEqual(buildShellExecSpec({ safe: notSafe }).Cmd, ["/usr/local/bin/osio-login"]);
+  }
+  assert.ok(!buildShellExecSpec({ safe: true }).Env.some((e) => e.startsWith("GIT_PAT")));
 });
 
 test("git subcommand allowlist blocks config (PAT-persist defeat) + junk", () => {

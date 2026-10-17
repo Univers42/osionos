@@ -25,6 +25,8 @@ const WS = "22222222-2222-4222-8222-222222222222";
 
 async function fakeDocker({ running = [] } = {}) {
   const creates = [];
+  const volumes = [];
+  const execs = [];
   const server = createServer((req, res) => {
     let raw = "";
     req.on("data", (chunk) => { raw += chunk; });
@@ -36,18 +38,19 @@ async function fakeDocker({ running = [] } = {}) {
       const path = req.url.split("?")[0];
       if (req.method === "GET" && path === "/containers/json") return send(200, running.map((name) => ({ Names: [`/${name}`], State: "running" })));
       if (req.method === "GET" && path.endsWith("/json")) return send(404, { message: "No such container" });
-      if (req.method === "POST" && path === "/volumes/create") return send(201, {});
+      if (req.method === "POST" && path === "/volumes/create") { volumes.push(JSON.parse(raw)); return send(201, {}); }
       if (req.method === "POST" && path === "/containers/create") { creates.push(JSON.parse(raw)); return send(201, { Id: "c1" }); }
       if (req.method === "POST" && path.endsWith("/start")) return send(204);
+      if (req.method === "POST" && path.endsWith("/exec")) execs.push(JSON.parse(raw));
       return send(500, { message: "not faked" }); // the shell exec: ends the attach
     });
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  return { creates, host: `127.0.0.1:${server.address().port}`, close: () => new Promise((resolve) => server.close(resolve)) };
+  return { creates, volumes, execs, host: `127.0.0.1:${server.address().port}`, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
 /** Opens /api/ide/pty through the real handler; resolves with the close frame the relay ends on. */
-function openTerminal(dockerHost) {
+function openTerminal(dockerHost, query = "") {
   const handler = createIdeExecUpgradeHandler({
     config: {},
     verifySession: () => ({ userId: USER, workspaceIds: [WS] }),
@@ -65,7 +68,7 @@ function openTerminal(dockerHost) {
     setKeepAlive() {},
   };
   const request = {
-    url: `/api/ide/pty?workspaceId=${WS}`,
+    url: `/api/ide/pty?workspaceId=${WS}${query}`,
     headers: { upgrade: "websocket", "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==", "sec-websocket-protocol": "osio-ide.v1, osio-token.t" },
   };
   assert.equal(handler(request, socket), true);
@@ -94,6 +97,34 @@ test("a terminal refused at the box cap is told so, not 'sandbox unavailable'", 
     const frame = await openTerminal(docker.host);
     assert.deepEqual(closeOf(frame), { code: 4004, reason: "All IDE sandboxes are in use; try again in a few minutes." });
     assert.equal(docker.creates.length, 0);
+  } finally {
+    await docker.close();
+  }
+});
+
+test("a terminal on an absent box creates the workspace volume and the per-user home volume (H1, H2)", async () => {
+  const docker = await fakeDocker();
+  try {
+    await openTerminal(docker.host);
+    const { deriveNames, deriveHomeVolume } = await import("../../scripts/ide-sandbox-spec.mjs");
+    const names = deriveNames(USER, WS);
+    assert.deepEqual(docker.volumes, [
+      { Name: names.volumeName, Driver: "local", Labels: { "osio.ide.managed": "1" } },
+      { Name: deriveHomeVolume(USER), Driver: "local", Labels: { "osio.ide.managed": "1" } },
+    ]);
+    assert.deepEqual(docker.creates[0].HostConfig.Mounts.map((m) => m.Target), ["/workspace", "/home/coder"]);
+    assert.deepEqual(Object.keys(docker.creates[0].HostConfig.Tmpfs), ["/tmp"]);
+  } finally {
+    await docker.close();
+  }
+});
+
+test("the terminal runs the login launcher; safe=1 runs bash without profile or rc (H4, L4)", async () => {
+  const docker = await fakeDocker();
+  try {
+    await openTerminal(docker.host);
+    await openTerminal(docker.host, "&safe=1");
+    assert.deepEqual(docker.execs.map((e) => e.Cmd), [["/usr/local/bin/osio-login"], ["/bin/bash", "--noprofile", "--norc"]]);
   } finally {
     await docker.close();
   }
