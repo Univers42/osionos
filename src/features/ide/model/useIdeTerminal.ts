@@ -19,6 +19,9 @@ import { isSandboxReachable, useSandboxHealthStore } from "./sandboxHealthStore"
 import { useTerminalRunBus } from "./terminalRunBus";
 import { isDeliberateClose, isTokenExpiredClose } from "./wsCloseCodes";
 
+/** The browser's IANA zone; the bridge validates it and the shell's TZ falls back to UTC. */
+const browserTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+
 export type IdeTerminalStatus = "connecting" | "open" | "closed" | "unavailable";
 
 export interface IdeTerminalConnection {
@@ -84,7 +87,7 @@ export function useIdeTerminal(term: Terminal | null, workspaceId: string, termI
     // shell with a replay of recent output. The token rides the subprotocol, not the URL.
     const connect = async () => {
       if (disposed) return;
-      const target = await ideSocketTarget(workspaceId, "/api/ide/pty", { term: termId, ...(safe ? { safe: "1" } : {}) });
+      const target = await ideSocketTarget(workspaceId, "/api/ide/pty", { term: termId, tz: browserTimeZone(), ...(safe ? { safe: "1" } : {}) });
       if (disposed) return;
       if (target.kind === "unavailable") {
         // A throttled or failed mint is transient; the rest cannot be fixed by dialling again.

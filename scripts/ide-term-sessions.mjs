@@ -41,18 +41,24 @@ export function createReplayRing(capBytes = RING_CAP_BYTES) {
 
 const sessions = new Map();
 const socketsByContainer = new Map();
+const lastSocketCloseMsByContainer = new Map();
 
 /** Count a live relay socket (PTY/LSP/fsync) against its container. */
 export function bumpContainerSockets(containerName, delta) {
   const next = (socketsByContainer.get(containerName) ?? 0) + delta;
-  if (next <= 0) socketsByContainer.delete(containerName);
-  else socketsByContainer.set(containerName, next);
+  if (next <= 0) {
+    socketsByContainer.delete(containerName);
+    if (delta < 0) lastSocketCloseMsByContainer.set(containerName, Date.now());
+  } else socketsByContainer.set(containerName, next);
 }
 
-/** The reaper's activity signal: live sockets, attached clients, or session
- *  output/stdin within `idleMs`. A bridge restart empties this (age-only reap). */
+/** The reaper's activity signal: a live relay socket, an attached client, or the
+ *  last socket/client having closed within `idleMs`. Shell OUTPUT is not activity:
+ *  a chatty detached job must not keep its box alive forever.
+ *  Caveat: a bridge restart empties this registry (the reaper adds a grace for that). */
 export function containerHasActivity(containerName, idleMs, now = Date.now()) {
   if ((socketsByContainer.get(containerName) ?? 0) > 0) return true;
+  if (idleMs > 0 && now - (lastSocketCloseMsByContainer.get(containerName) ?? -Infinity) < idleMs) return true;
   for (const session of sessions.values()) {
     if (session.containerName !== containerName || session.ended) continue;
     if (session.clients.size > 0 || now - session.lastActivityMs < idleMs) return true;
@@ -73,7 +79,6 @@ export async function getOrCreateSession({ key, containerName, spawn }) {
     lastActivityMs: Date.now(), ended: false,
   };
   stream.on("data", (chunk) => {
-    session.lastActivityMs = Date.now();
     session.ring.push(chunk);
     for (const client of session.clients) {
       if (!client.sendBinary(chunk)) stream.pause();
@@ -105,12 +110,20 @@ export function attachClient(session, client) {
 /** Detach WITHOUT killing the shell — a reload reattaches later. */
 export function detachClient(session, client) {
   session.clients.delete(client);
+  session.lastActivityMs = Date.now();
   session.stream.resume();
 }
 
 export function writeStdin(session, data) {
   session.lastActivityMs = Date.now();
   session.stream.write(data);
+}
+
+/** Forget close timestamps older than `idleMs`, so the map cannot grow with every box ever seen. */
+export function pruneActivity(idleMs, now = Date.now()) {
+  for (const [name, closedMs] of lastSocketCloseMsByContainer) {
+    if (now - closedMs >= idleMs) lastSocketCloseMsByContainer.delete(name);
+  }
 }
 
 /** Kill every session whose key starts with `keyPrefix` (a user|container
