@@ -16,21 +16,14 @@
 // security logic is unit-tested without a daemon.
 
 import { createHash, randomBytes } from "node:crypto";
+import { assertIdeSubject } from "./ide-access.mjs";
 import { isValidIdeUsername } from "./ide-username.mjs";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** A sandbox is a shell on a shared machine — access is opt-in per account.
- *  Unset, empty, or only-commas in OSIONOS_IDE_ALLOWED_SUBJECTS → everyone refused. */
-export function requireIdeSubject(userId, env) {
-  const list = String(env?.OSIONOS_IDE_ALLOWED_SUBJECTS ?? "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  if (!list.includes(String(userId).toLowerCase())) {
-    throw Object.assign(new Error("The IDE is not enabled for this account."), { status: 403, code: "not-allowed" });
-  }
-}
+/** A sandbox is a shell on a shared machine: access is opt-in. The rule (allowlist by default) lives
+ *  in ide-access.mjs, the same on the host and the plane. */
+export const requireIdeSubject = assertIdeSubject;
 
 /** Owner is the session `sub`; workspace must be one the session already holds.
  *  Both are UUIDs — this throws (403/400) before any name is derived so a
