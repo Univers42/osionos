@@ -74,6 +74,20 @@ function dockerRequest({ host, port, timeoutMs }, method, path, body) {
 
 const isInitContainer = (container) => (container?.Names ?? []).some((n) => n.startsWith("/ideinit-"));
 
+/** Sizes behind OSIONOS_IDE_VOLUME_QUOTA=on: the local driver's `size` option, which needs the volume
+ *  directory on an xfs mount with pquota. The socket proxy admits these two literals and nothing else
+ *  (ide-socket-proxy/create-shape.mjs), so a bridge bug cannot ask for a different size. */
+export const HOME_VOLUME_SIZE = "2G";
+export const WORKSPACE_VOLUME_SIZE = "5G";
+
+/** DriverOpts for a managed volume, or undefined (flag off, or a name that is neither prefix). */
+export function volumeDriverOpts(name, env = process.env) {
+  if (env.OSIONOS_IDE_VOLUME_QUOTA !== "on") return undefined;
+  if (name.startsWith("osio-ide-home-")) return { size: HOME_VOLUME_SIZE };
+  if (name.startsWith("osio-ide-vol-")) return { size: WORKSPACE_VOLUME_SIZE };
+  return undefined;
+}
+
 export function createDockerClient(env = process.env) {
   const [host, portRaw] = String(env.OSIONOS_IDE_DOCKER_HOST || "").split(":");
   const port = Number(portRaw || 2375);
@@ -94,7 +108,8 @@ export function createDockerClient(env = process.env) {
       return created.body?.Id;
     },
     async ensureVolume(name) {
-      const created = await call("POST", "/volumes/create", { Name: name, Driver: "local", Labels: { "osio.ide.managed": "1" } });
+      const driverOpts = volumeDriverOpts(name, env);
+      const created = await call("POST", "/volumes/create", { Name: name, Driver: "local", Labels: { "osio.ide.managed": "1" }, ...(driverOpts ? { DriverOpts: driverOpts } : {}) });
       if (created.status >= 300) throw new Error(`volume create failed (${created.status})`);
       return created.body?.Name;
     },
