@@ -68,6 +68,8 @@ test("stateFromResponse maps every status and body per the bridge contract", () 
   assert.deepEqual(stateFromResponse(401, {}), { state: "disabled", reason: HEALTH_REASONS.forbidden });
   assert.deepEqual(stateFromResponse(403, {}), { state: "disabled", reason: HEALTH_REASONS.forbidden });
   assert.deepEqual(stateFromResponse(429, {}), { state: "keep", reason: null });
+  assert.deepEqual(stateFromResponse(429, { code: "SANDBOX_BUSY" }), { state: "unavailable", reason: "All sandboxes are busy, retry in a minute" });
+  assert.deepEqual(stateFromResponse(429, { code: "CREATE_RATE" }), { state: "unavailable", reason: HEALTH_REASONS.createRate });
   assert.deepEqual(stateFromResponse(502, {}), { state: "unavailable", reason: "Sandbox backend unavailable (HTTP 502)." });
   assert.deepEqual(stateFromResponse(500, {}), { state: "unavailable", reason: "Sandbox backend unavailable (HTTP 500)." });
   assert.deepEqual(stateFromResponse(418, {}), { state: "unavailable", reason: "Unexpected sandbox response (HTTP 418)." });

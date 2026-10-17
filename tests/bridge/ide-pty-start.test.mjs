@@ -28,6 +28,7 @@ async function fakeDocker({ running = [] } = {}) {
   const inits = [];
   const volumes = [];
   const execs = [];
+  const stops = [];
   const server = createServer((req, res) => {
     let raw = "";
     req.on("data", (chunk) => { raw += chunk; });
@@ -37,7 +38,8 @@ async function fakeDocker({ running = [] } = {}) {
         res.end(body === undefined ? "" : JSON.stringify(body));
       };
       const path = req.url.split("?")[0];
-      if (req.method === "GET" && path === "/containers/json") return send(200, running.map((name) => ({ Names: [`/${name}`], State: "running" })));
+      if (req.method === "GET" && path === "/containers/json") return send(200, running.map((name) => ({ Names: [`/${name}`], State: "running", Labels: { "osio.ide.owner": name.startsWith("mine-") ? USER : "other" } })));
+      if (req.method === "POST" && path.endsWith("/stop")) { stops.push(path); return send(204); }
       if (req.method === "GET" && path.endsWith("/json")) return send(404, { message: "No such container" });
       if (req.method === "POST" && path === "/volumes/create") { volumes.push(JSON.parse(raw)); return send(201, {}); }
       if (req.method === "POST" && path === "/osio/v1/uid") return send(200, { uid: 20000 });
@@ -53,11 +55,11 @@ async function fakeDocker({ running = [] } = {}) {
     });
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  return { creates, inits, volumes, execs, host: `127.0.0.1:${server.address().port}`, close: () => new Promise((resolve) => server.close(resolve)) };
+  return { creates, inits, volumes, execs, stops, host: `127.0.0.1:${server.address().port}`, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
 /** Opens /api/ide/pty through the real handler; resolves with the close frame the relay ends on. */
-function openTerminal(dockerHost, query = "") {
+function openTerminal(dockerHost, query = "", writes = []) {
   const handler = createIdeExecUpgradeHandler({
     config: {},
     verifySession: () => ({ userId: USER, workspaceIds: [WS] }),
@@ -67,7 +69,7 @@ function openTerminal(dockerHost, query = "") {
   const ended = new Promise((resolve) => { settle = resolve; });
   const socket = {
     destroyed: false,
-    write() { return true; },
+    write(chunk) { writes.push(chunk); return true; },
     end(chunk) { this.destroyed = true; settle(chunk); },
     destroy() { this.destroyed = true; settle(null); },
     on() {},
@@ -147,6 +149,18 @@ test("the browser zone reaches the shell exec Env and never the create Env (C1.1
     await openTerminal(docker.host, "&tz=Europe/Paris");
     assert.ok(docker.execs.at(-1).Env.includes("TZ=Europe/Paris"));
     assert.ok(!docker.creates[0].Env.some((e) => e.startsWith("TZ=")));
+  } finally {
+    await docker.close();
+  }
+});
+
+test("opening a terminal while another workspace runs stops that box and tells the user (B2.4)", async () => {
+  const docker = await fakeDocker({ running: ["mine-ide-1"] });
+  const writes = [];
+  try {
+    await openTerminal(docker.host, "", writes);
+    assert.deepEqual(docker.stops, ["/containers/mine-ide-1/stop"]);
+    assert.ok(writes.some((w) => Buffer.isBuffer(w) && w.toString().includes("processes in your other workspace were stopped")));
   } finally {
     await docker.close();
   }
