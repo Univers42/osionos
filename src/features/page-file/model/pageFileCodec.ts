@@ -41,7 +41,7 @@ import {
  *
  *   MARKDOWN (parsed back from the body)     id/type/content/children structural
  *     checked  language  asset  mediaAlt  widthRatio  color (callout icon)
- *     drawHeight  buttonLabel/Href/Variant  tableData
+ *     drawHeight  boardSlug  whiteboardHeight  buttonLabel/Href/Variant  tableData
  *     databaseId  viewId  recordLimit
  *     layoutMode  layoutRole  layoutConfig  layoutCells  schemaVersion
  *   OVERLAY (front-matter `blocks`)          everything else in EXTRA_BLOCK_KEYS
@@ -59,7 +59,7 @@ import {
 export const MARKDOWN_KEYS: readonly string[] = Object.freeze([
   "id", "type", "content", "children",
   "checked", "language", "asset", "mediaAlt", "widthRatio",
-  "color", "drawHeight", "buttonLabel", "buttonHref", "buttonVariant",
+  "color", "drawHeight", "boardSlug", "whiteboardHeight", "buttonLabel", "buttonHref", "buttonVariant",
   "tableData", "databaseId", "viewId", "recordLimit",
   "layoutMode", "layoutRole", "layoutConfig", "layoutCells", "schemaVersion",
 ]);

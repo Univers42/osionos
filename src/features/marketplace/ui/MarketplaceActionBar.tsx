@@ -17,11 +17,28 @@ import { Button } from "@osionos/ui/atoms/Button";
 import type { PageEntry } from "@/entities/page";
 
 import { readAppMeta } from "../model/appMeta";
+import { BUILT_IN_APP_IDENTIFIERS } from "../model/installedAppLauncher";
 import { useInstalledApps } from "../model/useInstalledApps";
 import { launchApp } from "../model/marketplaceActions";
 
+const ConfigureButton: React.FC<{ app: PageEntry }> = ({ app }) => (
+  <button type="button" onClick={() => launchApp(app)} aria-label="Configure" className="rounded-xs p-1.5 text-[var(--osio-fg-subtle)] hover:text-[var(--osio-fg-default)]">
+    <Settings size={16} />
+  </button>
+);
+
+/** A built-in app is on for every account: a label, not a control. */
+const BuiltInActions: React.FC<{ app: PageEntry }> = ({ app }) => (
+  <div className="flex flex-wrap items-center gap-2">
+    <span data-testid="marketplace-built-in" className="rounded-xs bg-[var(--osio-bg-subtle)] px-2 py-1 text-xs font-medium text-[var(--osio-fg-muted)]">
+      Built in
+    </span>
+    <ConfigureButton app={app} />
+  </div>
+);
+
 /** State-aware app controls: Install ↔ Open/Deactivate(Activate)/Uninstall + Auto-Update + ⚙. */
-export const MarketplaceActionBar: React.FC<{ app: PageEntry }> = ({ app }) => {
+const InstallableActions: React.FC<{ app: PageEntry }> = ({ app }) => {
   const id = readAppMeta(app).identifier;
   const entry = useInstalledApps((s) => s.installed[id]);
   const { install, uninstall, setActive, toggleAutoUpdate } = useInstalledApps.getState();
@@ -58,9 +75,10 @@ export const MarketplaceActionBar: React.FC<{ app: PageEntry }> = ({ app }) => {
         </>
       ) : null}
 
-      <button type="button" onClick={() => launchApp(app)} aria-label="Configure" className="rounded-xs p-1.5 text-[var(--osio-fg-subtle)] hover:text-[var(--osio-fg-default)]">
-        <Settings size={16} />
-      </button>
+      <ConfigureButton app={app} />
     </div>
   );
 };
+
+export const MarketplaceActionBar: React.FC<{ app: PageEntry }> = ({ app }) =>
+  BUILT_IN_APP_IDENTIFIERS.has(readAppMeta(app).identifier) ? <BuiltInActions app={app} /> : <InstallableActions app={app} />;

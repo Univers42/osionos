@@ -85,12 +85,6 @@ export const LazyChatShell = lazy(() =>
   import("@/widgets/chat-shell").then((m) => ({ default: m.ChatShell })),
 );
 
-// Deep import (never a barrel): the Draw surface pulls @osionos/draw-engine, a
-// large canvas chunk that must never leak onto the warm pane path.
-export const LazyDrawView = lazy(() =>
-  import("@/widgets/draw-canvas/ui/DrawCanvasView").then((m) => ({ default: m.DrawCanvasView })),
-);
-
 // Deep import (never a barrel): the code editor pulls the Monaco core + its
 // language grammars, a large chunk that must never leak onto the warm pane path. Only reached
 // for surface==='code' pages.

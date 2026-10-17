@@ -82,9 +82,6 @@ const HEX_ALLOWLIST = [
   "src/shared/debug/PageDebugOverlay.tsx", // debug-only overlay, not product UI
   "src/shared/lib/color/resolveCssColor.ts", // canvas probe: needs concrete sentinel colours
   "src/features/ide/ui/IdeTerminal.tsx", // xterm's theme object takes a concrete colour
-  "src/widgets/draw-canvas/model/useResolvedDrawChrome.ts", // drawing ink is stored data, not theme
-  "src/widgets/draw-canvas/ui/DrawInspector.tsx", // drawing ink swatches are stored data, not theme
-  "src/widgets/draw-canvas/ui/DrawInspectorControls.tsx", // drawing ink is stored data, not theme
 ];
 
 export default [
@@ -150,31 +147,6 @@ export default [
               group: ["react", "react-dom", "react/*", "react-dom/*"],
               message:
                 "graph-engine core must be framework-agnostic. Keep React in packages/legacy-graph-engine/src/react/.",
-            },
-          ],
-        },
-      ],
-    },
-  },
-  {
-    // Import firewall: @osionos/draw-engine core stays decoupled and
-    // framework-agnostic. Scene data comes in via the engine facade; React lives
-    // in packages/draw-engine/src/react/.
-    files: ["packages/draw-engine/src/core/**/*.{ts,tsx}"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        {
-          patterns: [
-            {
-              group: ["@/*"],
-              message:
-                "draw-engine core must not import host-app code (@/...). Pass data in via the engine facade.",
-            },
-            {
-              group: ["react", "react-dom", "react/*", "react-dom/*"],
-              message:
-                "draw-engine core must be framework-agnostic. Keep React in packages/draw-engine/src/react/.",
             },
           ],
         },

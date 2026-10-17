@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { whiteboardAppUrl } from "@/shared/config/whiteboardApp";
+import { boardUrl } from "@/features/whiteboard/model/whiteboardClient";
 import { genId, type LayoutNode, type PaneNode, type WorkspaceTab } from "./layoutTree";
 
 /** Synthetic page ids for the always-available Home / Trash / Console tabs. */
@@ -23,7 +25,6 @@ export const COMMUNITY_TAB_ID = "__community__";
 export const MAIL_TAB_ID = "__mail__";
 export const CALENDAR_TAB_ID = "__calendar__";
 export const CHAT_TAB_ID = "__chat__";
-export const DRAW_TAB_ID = "__draw__";
 export const WHITEBOARD_TAB_ID = "__whiteboard__";
 
 const STORAGE_KEY = "osionos.workspace.layout.v2";
@@ -57,15 +58,8 @@ function wipeLegacyLayouts(): void {
 const VITE_ENV = ((import.meta as { env?: Record<string, string> }).env ?? {}) as Record<string, string>;
 const MAIL_APP_URL = (VITE_ENV["VITE_MAIL_APP_URL"] ?? "http://localhost:3002").trim();
 const CALENDAR_APP_URL = (VITE_ENV["VITE_CALENDAR_APP_URL"] ?? "http://localhost:3003").trim();
-const WHITEBOARD_APP_URL = (VITE_ENV["VITE_WHITEBOARD_APP_URL"] ?? "https://localhost:3007").trim();
 
-/** The configured Whiteboard origin, or "" when the build blanked it. `??` above keeps an
- *  explicit empty value (only an ABSENT var falls back), so setting
- *  `VITE_WHITEBOARD_APP_URL=` is how a build opts out of the tab entirely — the menu reads
- *  this so a tab that provably cannot load is never offered. */
-export function whiteboardAppUrl(): string {
-  return WHITEBOARD_APP_URL;
-}
+export { whiteboardAppUrl };
 
 /** Mail / Calendar open as in-app iframe tabs (stable id → focus, not duplicate). */
 export function mailTab(): WorkspaceTab {
@@ -89,17 +83,17 @@ export function consoleTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: CONSOLE_TAB_ID, workspaceId: "", kind: "console", title: "BaaS Console", icon: "icon:database" };
 }
 
-/** The Draw whiteboard tab — the Excalidraw/Figma-class drawing surface. Stable
- *  id → re-opening focuses the tab instead of duplicating it. */
-export function drawTab(): WorkspaceTab {
-  return { tabId: genId("tab"), pageId: DRAW_TAB_ID, workspaceId: "", kind: "draw", title: "Draw", icon: "icon:pen-tool" };
+/** The Whiteboard tab: drawnosaurus embedded, opening its board gallery. Stable id, so
+ *  re-opening focuses the tab instead of duplicating it. */
+export function whiteboardTab(): WorkspaceTab {
+  return { tabId: genId("tab"), pageId: WHITEBOARD_TAB_ID, workspaceId: "", kind: "embed", title: "Whiteboard", icon: "icon:pen-tool", url: whiteboardAppUrl() };
 }
 
-/** The Whiteboard tab — drawnosaurus, embedded. Opens its BOARD LIST, never a specific
- *  board: a board's identity is its slug, and osionos deliberately stores no slugs, so a
- *  deep link here would go stale the moment a board is renamed or removed. */
-export function whiteboardTab(): WorkspaceTab {
-  return { tabId: genId("tab"), pageId: WHITEBOARD_TAB_ID, workspaceId: "", kind: "embed", title: "Whiteboard", icon: "icon:pen-tool", url: WHITEBOARD_APP_URL };
+/** One board, opened full-size from an inline whiteboard block. Keyed by slug, so opening
+ *  the same board again focuses its tab. The slug is minted by the whiteboard service and
+ *  never changes when the board is renamed, so a stored tab does not go stale. */
+export function whiteboardBoardTab(slug: string, title: string): WorkspaceTab {
+  return { tabId: genId("tab"), pageId: `${WHITEBOARD_TAB_ID}:${slug}`, workspaceId: "", kind: "embed", title: title || "Whiteboard", icon: "icon:pen-tool", url: boardUrl(slug) };
 }
 
 /** A live external-database table tab (`baas:<dbId>:<table>` id). pageId == the
@@ -152,6 +146,22 @@ export function freshLayout(): { root: PaneNode; activePaneId: string } {
   return { root: pane, activePaneId: pane.id };
 }
 
+/** A tab whose kind was retired. The native Draw canvas is gone; its persisted tab
+ *  becomes the Whiteboard tab (same `tabId`, so the active-tab pointer still resolves).
+ *  Pure and idempotent: a migrated tree is returned unchanged (same reference). */
+function migrateLegacyTab(tab: WorkspaceTab): WorkspaceTab {
+  return (tab.kind as string) === "draw" ? { ...whiteboardTab(), tabId: tab.tabId } : tab;
+}
+
+export function migrateLegacyTabs(node: LayoutNode): LayoutNode {
+  if (node.type === "split") {
+    const children = node.children.map(migrateLegacyTabs);
+    return children.every((child, index) => child === node.children[index]) ? node : { ...node, children };
+  }
+  const tabs = node.tabs.map(migrateLegacyTab);
+  return tabs.every((tab, index) => tab === node.tabs[index]) ? node : { ...node, tabs };
+}
+
 export function loadLayout(scope: string): { root: LayoutNode; activePaneId: string } {
   // No window (SSR/tests) OR no known identity yet → a clean layout. Returning
   // fresh when the scope is unknown is what stops a DIFFERENT identity's persisted
@@ -164,7 +174,7 @@ export function loadLayout(scope: string): { root: LayoutNode; activePaneId: str
     if (!raw) return freshLayout();
     const parsed = JSON.parse(raw) as { root?: LayoutNode; activePaneId?: string };
     if (!parsed?.root || !parsed.activePaneId) return freshLayout();
-    return { root: parsed.root, activePaneId: parsed.activePaneId };
+    return { root: migrateLegacyTabs(parsed.root), activePaneId: parsed.activePaneId };
   } catch {
     return freshLayout();
   }

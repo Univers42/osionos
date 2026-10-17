@@ -17,6 +17,7 @@ import type { PageEntry } from "@/entities/page";
 import { useMarketplaceApps, createApp } from "@/features/marketplace/model/useMarketplaceApps";
 import { useInstalledApps } from "@/features/marketplace/model/useInstalledApps";
 import { readAppMeta } from "@/features/marketplace/model/appMeta";
+import { BUILT_IN_APP_IDENTIFIERS } from "@/features/marketplace/model/installedAppLauncher";
 import { MarketplaceAppRow } from "@/features/marketplace/ui/MarketplaceAppRow";
 import { MarketplaceDetailModal } from "@/features/marketplace/ui/MarketplaceDetailModal";
 import { MarketplaceAppEditor } from "@/features/marketplace/ui/MarketplaceAppEditor";
@@ -48,7 +49,7 @@ export const MarketplacePanel: React.FC = () => {
       const m = readAppMeta(a);
       if (q && ![a.title, m.company, m.description].some((s) => s.toLowerCase().includes(q))) continue;
       if (!m.published) dft.push(a);
-      else if (install.isInstalled(m.identifier)) inApp.push(a);
+      else if (BUILT_IN_APP_IDENTIFIERS.has(m.identifier) || install.isInstalled(m.identifier)) inApp.push(a);
       else rec.push(a);
     }
     return { drafts: dft, installed: inApp, recommended: rec };
@@ -60,17 +61,22 @@ export const MarketplacePanel: React.FC = () => {
     list.length ? (
       <div>
         <PanelSectionLabel className="px-2 pb-1 pt-2">{label}</PanelSectionLabel>
-        {list.map((app) => (
-          <MarketplaceAppRow
-            key={app._id}
-            app={app}
-            installed={install.isInstalled(readAppMeta(app).identifier)}
-            isDraft={!readAppMeta(app).published}
-            onOpen={() => open(app)}
-            onInstall={readAppMeta(app).published ? () => install.install(app) : undefined}
-            onConfig={() => open(app)}
-          />
-        ))}
+        {list.map((app) => {
+          const meta = readAppMeta(app);
+          const isBuiltIn = BUILT_IN_APP_IDENTIFIERS.has(meta.identifier);
+          return (
+            <MarketplaceAppRow
+              key={app._id}
+              app={app}
+              installed={isBuiltIn || install.isInstalled(meta.identifier)}
+              isDraft={!meta.published}
+              isBuiltIn={isBuiltIn}
+              onOpen={() => open(app)}
+              onInstall={meta.published ? () => install.install(app) : undefined}
+              onConfig={() => open(app)}
+            />
+          );
+        })}
       </div>
     ) : null;
 

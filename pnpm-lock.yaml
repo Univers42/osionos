@@ -110,9 +110,6 @@ importers:
       recharts:
         specifier: ^3.8.1
         version: 3.8.1(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react-is@16.13.1)(react@19.2.5)(redux@5.0.1)
-      roughjs:
-        specifier: ^4.6.6
-        version: 4.6.6
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0
