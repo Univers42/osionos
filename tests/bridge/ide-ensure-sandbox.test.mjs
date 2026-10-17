@@ -18,7 +18,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ensureSandbox, maxRunningBoxes, SANDBOX_HARD_MAX_MS } from "../../scripts/bridge-ide-sandbox.mjs";
 
-const ENV = { OSIONOS_IDE_SANDBOX: "1", OSIONOS_IDE_DOCKER_HOST: "proxy:2375" };
+const ENV = { OSIONOS_IDE_SANDBOX: "1", OSIONOS_IDE_DOCKER_HOST: "proxy:2375", OSIONOS_IDE_CREATES_PER_USER_HOUR: "1000", OSIONOS_IDE_CREATES_GLOBAL_HOUR: "1000" };
 const NEVER = "0001-01-01T00:00:00Z";
 let seq = 0;
 const names = () => {
@@ -153,9 +153,9 @@ test("maxRunningBoxes: an integer 1-50 from OSIONOS_IDE_MAX_BOXES, else 2", () =
   for (const bad of ["0", "51", "x", "2.5", "", " "]) assert.equal(maxRunningBoxes({ OSIONOS_IDE_MAX_BOXES: bad }), 2, bad);
 });
 
-test("the host-wide cap refuses a new box with 503 before creating or starting anything", async () => {
+test("the host-wide cap refuses a new box with 429 SANDBOX_BUSY before creating or starting anything", async () => {
   const docker = fakeDocker(null, { othersRunning: 2 });
-  await assert.rejects(ensureSandbox(ENV, names(), { docker }), (error) => error.status === 503);
+  await assert.rejects(ensureSandbox(ENV, names(), { docker }), (error) => error.status === 429 && error.code === "SANDBOX_BUSY");
   assert.equal(count(docker.calls, "create") + count(docker.calls, "start") + count(docker.calls, "volume"), 0);
 });
 
@@ -191,7 +191,7 @@ test("two different boxes provisioned at once cannot both pass the cap", async (
   assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
   const refused = results.filter((r) => r.status === "rejected");
   assert.equal(refused.length, 1);
-  assert.equal(refused[0].reason.status, 503);
+  assert.equal(refused[0].reason.status, 429);
   assert.equal(running, 2);
 });
 
