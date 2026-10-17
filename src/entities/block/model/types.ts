@@ -46,6 +46,7 @@ export type BlockType =
   | 'database_full_page'
   | 'graph_view'
   | 'draw'
+  | 'whiteboard'
   | 'home_views'
   | 'placeholder';
 
@@ -144,7 +145,9 @@ export interface Block {
   mediaAspect?: string;     /** CSS aspect-ratio for image blocks (e.g. "16 / 9"); "original"/unset = natural */
   mediaAlt?: string;        /** Alt text for image media blocks (accessibility + failed-load text) */
   placeholderText?: string; /** Temporary placeholder hint for empty transformed blocks */
-  drawHeight?: number;      /** 'draw' block canvas height in px (default 420). Scene JSON lives in `content`. */
+  drawHeight?: number;      /** LEGACY 'draw' block canvas height in px. The retired Draw tool; its scene JSON still lives in `content`. */
+  boardSlug?: string;       /** 'whiteboard' block: slug of the drawnosaurus board it embeds. Unset until the board is created. */
+  whiteboardHeight?: number; /** 'whiteboard' block frame height in px (default 520). `content` holds the board title. */
   buttonLabel?: string;     /** Visible label for a 'button' block (falls back to content) */
   buttonHref?: string;      /** Button target: internal page link `page://<id>`, a `/...` path, else presentational */
   buttonVariant?: 'primary' | 'secondary'; /** Button style for a 'button' block (default: primary) */

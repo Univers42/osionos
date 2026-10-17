@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { filterFromText, pinAnchor } from "@/features/slash-commands/model/slashQueryText";
 import React, {
   useEffect,
   useMemo,
@@ -25,7 +26,7 @@ import {
   type InlineEditorSelectionOffsets,
 } from "@osionos/markdown-engine/dom";
 import { getCalloutIconForKind } from "@osionos/markdown-engine/terminal";
-import { useSlashSelect } from "@/features/slash-commands";
+import { useSlashSelect, useSlashWhiteboardSelect } from "@/features/slash-commands";
 import { createHeaderBandBlock } from "@/features/slash-commands/model/profileHeaderPreset";
 import { contentWithoutHeader, isRemovableHeader } from "@/entities/block/model/headerCanvas";
 import { useUserStore } from "@/features/auth";
@@ -946,22 +947,23 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   const tryHandleSlashMenu = useCallback(
     (blockId: string, text: string): boolean => {
       if (text.endsWith("/") && !slashMenu) {
-        setSlashMenu({ blockId, position: getCaretRect(blockId), filter: "" });
+        setSlashMenu({ blockId, position: getCaretRect(blockId), filter: "", anchor: text.length - 1 });
         return true;
       }
 
       if (slashMenu?.blockId !== blockId) return false;
 
-      const slashIdx = text.lastIndexOf("/");
-      if (slashIdx >= 0) {
-        const newFilter = text.slice(slashIdx + 1);
-        setSlashMenu((prev) => {
-          if (prev?.filter === newFilter) return prev;
-          return prev ? { ...prev, filter: newFilter } : null;
-        });
-      } else {
+      const anchor = slashMenu.anchor ?? pinAnchor(text);
+      const newFilter = filterFromText(text, anchor);
+      if (newFilter === null) {
         setSlashMenu(null);
+        return true;
       }
+      setSlashMenu((prev) => {
+        if (!prev) return null;
+        if (prev.filter === newFilter && prev.anchor === anchor) return prev;
+        return { ...prev, filter: newFilter, anchor };
+      });
 
       return true;
     },
@@ -2025,6 +2027,14 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     createDatabasePageInPrivateWorkspace,
     focusBlock,
   });
+  const handleSlashWhiteboardSelect = useSlashWhiteboardSelect({
+    pageId,
+    slashMenu,
+    setSlashMenu,
+    updateBlock,
+    insertBlock,
+    getBlocks: () => contentRef.current,
+  });
 
   const handlePageSelectorSelect = useCallback(
     (targetPageId: string) => {
@@ -2178,6 +2188,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     handleSlashMediaSelect,
     handleSlashCreatePageSelect,
     handleSlashInlineSelect,
+    handleSlashWhiteboardSelect,
     handlePageSelectorSelect,
     handlePageSelectorCreate,
     handleAddBlock,

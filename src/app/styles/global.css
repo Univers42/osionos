@@ -956,16 +956,18 @@ body {
 [data-osio-pane] :where([data-osio-ide]),
 [data-osio-pane] :where([role="application"]),
 [data-osio-pane] :where([data-block-type="draw"]),
+[data-osio-pane] :where([data-block-type="whiteboard"]),
 [data-osio-pane] :where([data-block-type="layout"]) {
   zoom: calc(1 / var(--osio-pane-zoom, 1));
 }
 
-[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="layout"]) :where([data-osio-fixed-scale]),
-[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="layout"]) :where([data-database-id]),
-[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="layout"]) :where([data-osio-ide]),
-[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="layout"]) :where([role="application"]),
-[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="layout"]) :where([data-block-type="draw"]),
-[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="layout"]) :where([data-block-type="layout"]) {
+[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([data-osio-fixed-scale]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([data-database-id]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([data-osio-ide]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([role="application"]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([data-block-type="draw"]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([data-block-type="whiteboard"]),
+[data-osio-pane] :where([data-osio-fixed-scale], [data-database-id], [data-osio-ide], [role="application"], [data-block-type="draw"], [data-block-type="whiteboard"], [data-block-type="layout"]) :where([data-block-type="layout"]) {
   --osio-pane-zoom: 1;
 }
 

@@ -15,6 +15,7 @@ import { create } from "zustand";
 import { api, getActivePageJwt } from "@/shared/api/client";
 import type { PageEntry } from "@/entities/page";
 
+import { migrateInstalledMap } from "./installedMigrations";
 import { readAppMeta, type AppLaunchKind } from "./appMeta";
 
 /**
@@ -59,7 +60,13 @@ export const useInstalledApps = create<InstalledAppsState>((set, get) => ({
     set({ loaded: true });
     api
       .get<{ installed: InstalledMap }>("/api/marketplace/installed", getActivePageJwt() ?? undefined)
-      .then((r) => set({ installed: r?.installed ?? {} }))
+      .then((r) => {
+        // Migrate only a map the server actually returned: on the catch path `installed`
+        // is still {}, and persisting a migrated {} would wipe the user's real installs.
+        const { map, changed } = migrateInstalledMap(r?.installed ?? {});
+        set({ installed: map });
+        if (changed) persist(map);
+      })
       .catch(() => {});
   },
   install: (app) => {

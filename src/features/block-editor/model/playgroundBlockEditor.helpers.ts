@@ -59,6 +59,8 @@ export interface SlashMenuState {
   blockId: string;
   position: { x: number; y: number; top: number };
   filter: string;
+  /** Index of the "/" that opened the menu; pinned on the first filter update when opened without one. */
+  anchor?: number;
 }
 
 export interface PageSelectorMenuState {

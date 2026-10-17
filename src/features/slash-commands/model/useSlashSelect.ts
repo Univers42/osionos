@@ -21,7 +21,7 @@ import {
   findBlockInTree,
 } from "@/entities/block";
 import { createDefaultTableBlock } from "@/entities/block/model/tableBlocks";
-import { createDefaultDrawBlock } from "@/entities/block/model/drawBlocks";
+import { stripSlashQuery as stripSlashQueryText } from "./slashQueryText";
 import type { SlashMenuState } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
 import { createViewShowcaseLayoutContent } from "@/widgets/database-view/model/databaseViewShowcase";
 import { createProfileHeaderContent, PROFILE_HEADER_COVER } from "./profileHeaderPreset";
@@ -52,9 +52,8 @@ interface UseSlashSelectOptions {
   focusBlock: (blockId: string, end?: boolean) => void;
 }
 
-function stripSlashQuery(content: string): string {
-  const slashIdx = content.lastIndexOf("/");
-  return slashIdx >= 0 ? content.slice(0, slashIdx) : content;
+export function stripSlashQuery(content: string, anchor?: number): string {
+  return stripSlashQueryText(content, anchor);
 }
 
 function appendInternalPageLink(content: string, pageId: string): string {
@@ -63,8 +62,8 @@ function appendInternalPageLink(content: string, pageId: string): string {
   return `${trimmed}${separator}[[page:${pageId}]] `;
 }
 
-function appendInlineText(content: string, insertText: string): string {
-  const cleanContent = stripSlashQuery(content);
+function appendInlineText(content: string, insertText: string, anchor?: number): string {
+  const cleanContent = stripSlashQuery(content, anchor);
   const separator = cleanContent.length > 0 && cleanContent === cleanContent.trimEnd() ? " " : "";
   return `${cleanContent}${separator}${insertText}`;
 }
@@ -98,7 +97,7 @@ export function useSlashSelect({
       setSlashMenu(null);
 
       const block = findBlockInTree(content, blockId);
-      const cleanContent = stripSlashQuery(block?.content ?? "");
+      const cleanContent = stripSlashQuery(block?.content ?? "", slashMenu.anchor);
       if (block) {
         updateBlock(pageId, blockId, {
           content: cleanContent,
@@ -142,12 +141,6 @@ export function useSlashSelect({
 
       if (selectedType === "table_block") {
         const newBlock = createDefaultTableBlock();
-        insertBlock(pageId, blockId, newBlock);
-        return;
-      }
-
-      if (selectedType === "draw") {
-        const newBlock = createDefaultDrawBlock();
         insertBlock(pageId, blockId, newBlock);
         return;
       }
@@ -306,7 +299,7 @@ export function useSlashSelect({
       setSlashMenu(null);
 
       const block = findBlockInTree(content, blockId);
-      const cleanContent = stripSlashQuery(block?.content ?? "");
+      const cleanContent = stripSlashQuery(block?.content ?? "", slashMenu.anchor);
 
       if (block) {
         updateBlock(pageId, blockId, {
@@ -349,7 +342,7 @@ export function useSlashSelect({
       setSlashMenu(null);
 
       const block = findBlockInTree(content, blockId);
-      const cleanContent = stripSlashQuery(block?.content ?? "");
+      const cleanContent = stripSlashQuery(block?.content ?? "", slashMenu.anchor);
 
       if (!block || cleanContent.trim().length > 0) {
         if (block) {
@@ -400,7 +393,7 @@ export function useSlashSelect({
       const block = findBlockInTree(content, blockId);
       if (!block) return;
 
-      const cleanContent = stripSlashQuery(block.content ?? "");
+      const cleanContent = stripSlashQuery(block.content ?? "", slashMenu.anchor);
       const createdPage = await createPageInPrivateWorkspace();
       const nextContent = createdPage
         ? appendInternalPageLink(cleanContent, createdPage.id)
@@ -431,7 +424,7 @@ export function useSlashSelect({
       const block = findBlockInTree(content, blockId);
       if (!block) return;
 
-      const nextContent = appendInlineText(block.content ?? "", insertText);
+      const nextContent = appendInlineText(block.content ?? "", insertText, slashMenu.anchor);
       updateBlock(pageId, blockId, {
         content: nextContent,
         placeholderText: undefined,

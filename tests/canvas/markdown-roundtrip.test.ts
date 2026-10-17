@@ -137,6 +137,21 @@ test("a drawing keeps its scene JSON and canvas height", () => {
   assert.equal(out.drawHeight, 512);
 });
 
+test("a whiteboard keeps its title, board slug and height", () => {
+  const out = roundTrip(make({ type: "whiteboard", content: "Sprint plan", boardSlug: "abc123def456", whiteboardHeight: 640 }));
+  assert.equal(out.type, "whiteboard");
+  assert.equal(out.content, "Sprint plan");
+  assert.equal(out.boardSlug, "abc123def456");
+  assert.equal(out.whiteboardHeight, 640);
+});
+
+test("a whiteboard with no board yet survives as a whiteboard", () => {
+  const out = roundTrip(make({ type: "whiteboard", content: "Draft" }));
+  assert.equal(out.type, "whiteboard");
+  assert.equal(out.content, "Draft");
+  assert.equal(out.boardSlug, undefined);
+});
+
 test("button survives with label, href and variant", () => {
   const out = roundTrip(
     make({ type: "button", buttonLabel: "Go", buttonHref: "page://abc", buttonVariant: "secondary" }),

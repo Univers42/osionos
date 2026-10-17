@@ -215,14 +215,13 @@ const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
     blockType: "equation",
   },
   {
-    id: "advanced:draw",
-    kind: "block",
+    id: "advanced:whiteboard",
+    kind: "whiteboard",
     section: "advanced",
-    label: "Draw",
-    aliases: ["draw", "drawing", "whiteboard", "sketch", "canvas", "excalidraw", "diagram"],
+    label: "Whiteboard",
     icon: <PenTool className="h-4 w-4" />,
-    description: "Sketch on an embedded canvas",
-    blockType: "draw",
+    description: "New whiteboard board — /whiteboard <name>",
+    requiresApp: "osionos.whiteboard",
   },
   {
     // Template-only: gated to template pages in SlashCommandMenu.

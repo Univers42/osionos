@@ -12,15 +12,14 @@
 
 import { useUserStore } from "@/features/auth";
 import { debugActiveFile, openOrCreateTasksFile, runActiveFile, runDefaultTask } from "@/features/ide/model/ideTasks";
-import { isDrawEnabled, isQuickCaptureEnabled, isWhiteboardEnabled } from "@/shared/config/featureFlags";
+import { isQuickCaptureEnabled, isWhiteboardEnabled } from "@/shared/config/featureFlags";
 import { useQuickCapture } from "@/features/quick-capture/model/useQuickCapture";
 import { toggleThemeMode } from "@/shared/config/theme";
 import { useUIStore } from "@/shared/config/uiStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
 import { usePageStore } from "@/store/usePageStore";
-import { clearDrawBinding } from "@/widgets/draw-canvas/model/drawHandoff";
-import { consoleTab, drawTab, homeTab, trashTab, whiteboardAppUrl, whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { consoleTab, homeTab, trashTab, whiteboardAppUrl, whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { usePalette } from "./usePalette";
@@ -110,15 +109,6 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
         { id: "view.home", label: "Home", run: () => layout().openTab(homeTab()) },
         { id: "view.trash", label: "Trash", run: () => layout().openTab(trashTab()) },
         { id: "view.console", label: "BaaS Console", run: () => layout().openTab(consoleTab()) },
-        ...(isDrawEnabled()
-          ? [{
-              id: "view.draw",
-              label: "New drawing",
-              // Unbind first: a blank drawing must not write into the draw BLOCK
-              // that last expanded into this (singleton) tab.
-              run: () => { clearDrawBinding(); layout().openTab(drawTab()); },
-            }]
-          : []),
         // Two gates, not one: the flag is the kill-switch, the URL is the capability.
         // A build with VITE_WHITEBOARD_APP_URL blanked cannot load the embed at all, so
         // the item is withheld rather than offered and then failing.

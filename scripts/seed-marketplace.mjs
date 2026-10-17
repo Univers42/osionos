@@ -11,8 +11,11 @@
 /* ************************************************************************** */
 
 // Emits idempotent SQL (to stdout) seeding the shared global marketplace: a system
-// workspace + database, Mail & Calendar published apps + their child sub-pages, and a
-// per-user install record so the apps are INSTALLED for dev.pro.photo (5cc30a3f) only.
+// workspace + database, the published apps (Mail, Calendar, Desktop, Whiteboard, ...) + their
+// child sub-pages, and a per-user install record so the apps are INSTALLED for dev.pro.photo
+// (5cc30a3f) only. Apps marked `builtIn` ship inside osionos: they are listed here for their
+// description pages but are never part of an install record. Apps listed in RETIRED are
+// removed (children, then the page) on every run.
 // Apply with:  node seed-marketplace.mjs | docker exec -i mini-baas-postgres psql -U postgres -d postgres
 
 import { createHash } from "node:crypto";
@@ -56,7 +59,7 @@ const SUBPAGES = (m) => [
   { slug: "details", title: "Details", icon: "icon:file-text", content: [blk("heading_2", "Overview"), blk("paragraph", m.overview), ...m.features.map((f) => blk("bulleted_list", f))] },
   { slug: "features", title: "Features", icon: "icon:sparkles", content: [blk("heading_2", "Features"), ...m.features.map((f) => blk("bulleted_list", f))] },
   { slug: "changelog", title: "Changelog", icon: "icon:history", content: [blk("heading_3", `${m.version}`), blk("bulleted_list", "Initial release inside the osionos marketplace.")] },
-  { slug: "installation", title: "Installation", icon: "icon:download", rail: true, content: [blk("paragraph", `Install from the Marketplace panel; the app opens at ${m.launchUrl}.`)] },
+  { slug: "installation", title: "Installation", icon: "icon:download", rail: true, content: [blk("paragraph", m.builtIn ? `Built in to osionos: nothing to install. Open it from its rail icon; the app runs at ${m.launchUrl}.` : `Install from the Marketplace panel; the app opens at ${m.launchUrl}.`)] },
   { slug: "categories", title: "Categories", icon: "icon:tag", rail: true, content: [blk("paragraph", m.categories.join(", "))] },
   { slug: "resources", title: "Resources", icon: "icon:link", rail: true, content: [blk("paragraph", m.website)] },
 ];
@@ -93,21 +96,33 @@ const APPS = [
     features: ["Native-feel window shell", "Loopback to the local suite", "Offline-friendly"],
   },
   {
-    id: "osionos.draw", title: "Draw", icon: "icon:pen-tool", company: "osionos", website: "https://localhost:3001",
-    description: "An Excalidraw-class whiteboard — shapes, freehand, diagrams & real-time collaboration inside osionos.",
-    overview: "Draw is a full drawing and diagramming surface: hand-drawn shapes, arrows that stay connected to what they link, Figma-style frames, and multiplayer editing — a native osionos app, not an iframe.",
-    version: "0.1.0", categories: ["Productivity", "Design"], launchKind: "panel",
-    launchUrl: "https://localhost:3001",
-    features: ["Shapes, arrows & freehand drawing", "Connectors that follow the shapes they link", "Figma-style frames", "Real-time multiplayer", "Keyboard-first — draw without the mouse"],
+    id: "osionos.whiteboard", title: "Whiteboard", icon: "icon:pen-tool", company: "osionos", website: "https://localhost:3007", builtIn: true,
+    description: "Built in: an infinite collaborative canvas — sketch, diagram &amp; plan on boards you open full-screen or drop into any page with /whiteboard.",
+    overview: "Whiteboard is built into osionos: it is on for every account, with nothing to install. Its rail icon opens your board gallery, where every board shows a live picture of its contents; click one to open it. In any page, type /whiteboard &lt;name&gt; to create a new board on the spot and embed it inline — with no name it is Untitled. Open full turns an embedded board into a tab of its own. Boards autosave, and everyone on the same board edits it together in real time. Drawings from the retired Draw tool import as boards or download as .osidraw.",
+    version: "1.0.0", categories: ["Productivity", "Design"], launchKind: "embed",
+    launchUrl: "https://localhost:3007",
+    features: [
+      "Built in: always on, no install step",
+      "Board gallery behind the rail icon, with a live picture of every board",
+      "/whiteboard &lt;name&gt; creates a board and embeds it inline (Untitled without a name)",
+      "Open full opens an embedded board in its own tab",
+      "Hand-drawn shapes, arrows that stay attached, freehand, text &amp; images",
+      "Autosave and real-time collaboration",
+      "Drawings from the retired Draw tool import as boards or download as .osidraw",
+    ],
   },
 ];
 
 const out = [];
 out.push("BEGIN;");
-// 0) widen the surface CHECK to allow 'app' (+ 'wiki' to match the bridge) — additive, safe.
-out.push(`DO $$ DECLARE c text;
+// 0) make the surface CHECK allow 'app' (+ 'wiki' to match the bridge). Skipped when the
+// existing CHECK already allows 'app': the fixed list below is older than databases that
+// gained surfaces since, and re-adding it there fails on their rows (baas, 2026-10-17) —
+// or, on a database it does fit, narrows what the table accepts.
+out.push(`DO $$ DECLARE c text; def text;
 BEGIN
-  SELECT conname INTO c FROM pg_constraint WHERE conrelid='public.osionos_pages'::regclass AND contype='c' AND pg_get_constraintdef(oid) ILIKE '%surface%';
+  SELECT conname, pg_get_constraintdef(oid) INTO c, def FROM pg_constraint WHERE conrelid='public.osionos_pages'::regclass AND contype='c' AND pg_get_constraintdef(oid) ILIKE '%surface%';
+  IF def LIKE '%''app''%' THEN RETURN; END IF;
   IF c IS NOT NULL THEN EXECUTE format('ALTER TABLE public.osionos_pages DROP CONSTRAINT %I', c); END IF;
   ALTER TABLE public.osionos_pages ADD CONSTRAINT osionos_pages_surface_check CHECK (surface IS NULL OR surface = ANY (ARRAY['page','agent','home','folder','wiki','app']));
 END $$;`);
@@ -117,6 +132,14 @@ VALUES (${q(WS)}, ${q(SYS)}, 'Marketplace', 'marketplace', 'system', 'public', n
 ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, visibility=EXCLUDED.visibility, updated_at=now();`);
 out.push(pageInsert({ id: DB, parent: null, title: "Marketplace", icon: "icon:store", surface: "app", dbId: null, props: [], content: [] }));
 
+// 2a) retire apps that no longer ship. Children are scoped to the system owner so a user's
+// own page can never be deleted by a parent-id match.
+const RETIRED = ["osionos.draw"];
+for (const id of RETIRED) {
+  out.push(`DELETE FROM public.osionos_pages WHERE parent_page_id = ${q(det(id))} AND owner_id = ${q(SYS)};`);
+  out.push(`DELETE FROM public.osionos_pages WHERE id = ${q(det(id))} AND owner_id = ${q(SYS)};`);
+}
+
 // 2) apps + their child sub-pages
 const installed = {};
 for (const m of APPS) {
@@ -125,7 +148,7 @@ for (const m of APPS) {
   for (const sub of SUBPAGES(m)) {
     out.push(pageInsert({ id: det(`${m.id}:${sub.slug}`), parent: appId, title: sub.title, icon: sub.icon, surface: "page", dbId: null, props: [], content: sub.content }));
   }
-  installed[m.id] = { identifier: m.id, title: m.title, icon: m.icon, launchKind: m.launchKind ?? "embed", launchUrl: m.launchUrl, autoUpdate: true, active: true, installedAt: "2026-06-01T00:00:00Z" };
+  if (!m.builtIn) installed[m.id] = { identifier: m.id, title: m.title, icon: m.icon, launchKind: m.launchKind ?? "embed", launchUrl: m.launchUrl, autoUpdate: true, active: true, installedAt: "2026-06-01T00:00:00Z" };
 }
 
 // 3) install Mail + Calendar for dev.pro.photo only (per-user simulation)

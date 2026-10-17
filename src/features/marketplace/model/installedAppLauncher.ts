@@ -10,22 +10,35 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { drawTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { genId, type WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
 
-import type { InstalledEntry } from "./useInstalledApps";
+import type { InstalledEntry, InstalledMap } from "./useInstalledApps";
 
-/** Reserved identifiers whose rail launchers are already static (avoid duplicate rail icons). */
-export const STATIC_APP_IDENTIFIERS = new Set(["osionos.mail", "osionos.calendar"]);
+/** Apps that ship inside osionos: always on for every account, so the marketplace offers
+ *  no Install, Deactivate or Uninstall for them. `osionos.draw` is the Whiteboard's retired
+ *  identifier, still present in maps stored before `migrateInstalledMap` ran. */
+export const BUILT_IN_APP_IDENTIFIERS: ReadonlySet<string> = new Set(["osionos.whiteboard", "osionos.draw"]);
+
+/** Identifiers whose rail launcher is already static: an installed copy must not add a
+ *  second icon. Built-in apps are static by definition. */
+export const STATIC_APP_IDENTIFIERS: ReadonlySet<string> = new Set(["osionos.mail", "osionos.calendar", ...BUILT_IN_APP_IDENTIFIERS]);
+
+/** The installed apps the rail appends after its static items: active, and not already static. */
+export function railInstalledApps(installed: InstalledMap): InstalledEntry[] {
+  return Object.values(installed).filter((entry) => entry.active && !STATIC_APP_IDENTIFIERS.has(entry.identifier));
+}
 
 /** Identifiers that open a NATIVE in-app pane (own `tab.kind`) rather than the
  *  default iframe embed — their launcher returns the app's own tab factory. */
 const NATIVE_APP_TABS: Record<string, () => WorkspaceTab> = {
-  "osionos.draw": drawTab,
+  "osionos.whiteboard": whiteboardTab,
+  // Safety net for an installed map not yet migrated (see installedMigrations.ts).
+  "osionos.draw": whiteboardTab,
 };
 
-/** Build the workspace tab that activates an installed app. Native apps (Draw)
- *  open their own pane kind; everything else opens as an embed iframe at its
+/** Build the workspace tab that activates an installed app. Native apps (Whiteboard)
+ *  open their stable-id tab; everything else opens as an embed iframe at its
  *  launch URL. */
 export function installedTab(entry: InstalledEntry): WorkspaceTab {
   const native = NATIVE_APP_TABS[entry.identifier];
