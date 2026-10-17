@@ -160,7 +160,7 @@ const FIXED_SCALE = [
   ["data-database-id", "db"],
   ["data-osio-ide", ""],
   ["role", "application"],
-  ["data-block-type", "draw"],
+  ["data-block-type", "whiteboard"],
   ["data-block-type", "layout"],
 ];
 

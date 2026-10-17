@@ -14,7 +14,6 @@ import React, { lazy, Suspense, useState, useMemo } from "react";
 import { EquationView } from "@/shared/ui";
 import type { Block } from '@/entities/block';
 import { flattenColumns } from '@/entities/block';
-import { DRAW_BLOCK_DEFAULT_HEIGHT } from '@/entities/block/model/drawBlocks';
 import { getNumberedMarker, getBulletMarker } from '@/entities/block/model/listMarkers';
 import { getToggleHeadingClass } from '@/entities/block/model/toggleHeading';
 import { ChevronRight } from "lucide-react";
@@ -40,9 +39,12 @@ const DatabaseBlock = lazy(() =>
   import("@/widgets/database-view/ui/DatabaseBlock").then((m) => ({ default: m.DatabaseBlock })),
 );
 
-// The embedded /draw canvas, read-only (scene rendered, no tools).
-const DrawBlockCanvas = lazy(() =>
-  import("@/widgets/draw-canvas/ui/DrawBlockCanvas").then((m) => ({ default: m.DrawBlockCanvas })),
+// Read-only whiteboard: a static card, never a live iframe.
+const WhiteboardBlockCard = lazy(() =>
+  import("@/features/whiteboard/ui/WhiteboardBlockCard").then((m) => ({ default: m.WhiteboardBlockCard })),
+);
+const LegacyDrawNotice = lazy(() =>
+  import("@/features/whiteboard/ui/LegacyDrawNotice").then((m) => ({ default: m.LegacyDrawNotice })),
 );
 
 // The Home "view launcher" (home_views block) — lazy, same discipline.
@@ -473,12 +475,16 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
 
     case "draw":
       return (
-        <div
-          className="my-3 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
-          style={{ height: block.drawHeight ?? DRAW_BLOCK_DEFAULT_HEIGHT }}
-        >
+        <Suspense fallback={databaseLoadingFallback}>
+          <LegacyDrawNotice block={block} />
+        </Suspense>
+      );
+
+    case "whiteboard":
+      return (
+        <div className="my-3">
           <Suspense fallback={databaseLoadingFallback}>
-            <DrawBlockCanvas block={block} readOnly />
+            <WhiteboardBlockCard block={block} />
           </Suspense>
         </div>
       );

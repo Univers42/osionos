@@ -22,6 +22,8 @@ import {
   PLACEHOLDER_COMMAND_ID,
 } from "@/features/slash-commands/model/slashMenuCatalog";
 import { useWholeRowScroll } from "@/shared/lib/dom/useWholeRowScroll";
+import { isSlashCommandAvailable } from "@/features/slash-commands/model/slashAvailability";
+import { isBuiltInAppReady } from "@/features/whiteboard/model/whiteboardAvailability";
 import { usePageStore } from "@/store/usePageStore";
 import type {
   SlashCreatePageCommand,
@@ -31,6 +33,7 @@ import type {
   SlashInlineCommand,
   SlashMediaPickerCommand,
   SlashTurnIntoCommand,
+  SlashWhiteboardCommand,
 } from "@/features/slash-commands/model/types";
 
 type SelectableSlashCommand = Exclude<SlashCommand, SlashMediaPickerCommand>;
@@ -39,6 +42,8 @@ const MENU_MARGIN = 8;
 const MENU_GAP = 6;
 const COMMAND_MENU_WIDTH = 264;
 const COMMAND_MENU_MAX_HEIGHT = 420;
+
+const AVAILABILITY = { isAppReady: isBuiltInAppReady };
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max));
@@ -49,7 +54,7 @@ interface SlashCommandMenuProps {
   position: { x: number; y: number; top: number };
   filter: string;
   onSelect: (
-    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand,
+    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand | SlashWhiteboardCommand,
   ) => void;
   onMediaSelect: (kind: MediaBlockType, value: string) => void;
   onClose: () => void;
@@ -76,7 +81,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   // `/placeholder` is template-only: hide it unless this editor's page is a template.
   const isTemplatePage = usePageStore((s) => (pageId ? Boolean(s.pageById(pageId)?.isTemplate) : false));
   const filtered = useMemo(
-    () => filterSlashCommands(filter).filter((c) => c.id !== PLACEHOLDER_COMMAND_ID || isTemplatePage),
+    () => filterSlashCommands(filter).filter((c) => (c.id !== PLACEHOLDER_COMMAND_ID || isTemplatePage) && isSlashCommandAvailable(c, AVAILABILITY)),
     [filter, isTemplatePage],
   );
   // Typing a query → one flat, relevance-ranked list so the best match sits on top
@@ -119,6 +124,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
         onMediaSelect(command.mediaKind, "");
         return;
       }
+      if (!isSlashCommandAvailable(command, AVAILABILITY)) return;
       onSelect(command as SelectableSlashCommand);
     },
     [onMediaSelect, onSelect],
@@ -262,7 +268,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                       {item.icon}
                     </span>
                     <span className="block min-w-0 flex-1 truncate">
-                      {item.label}
+                      {item.kind === "whiteboard" && arg ? `Create board “${arg}”` : item.label}
                     </span>
                   </button>
                 );

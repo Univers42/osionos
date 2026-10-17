@@ -32,8 +32,6 @@
       ],
       "@osionos/legacy-graph-engine": ["./packages/legacy-graph-engine/src/index.ts"],
       "@osionos/legacy-graph-engine/*": ["./packages/legacy-graph-engine/src/*"],
-      "@osionos/draw-engine": ["./packages/draw-engine/src/index.ts"],
-      "@osionos/draw-engine/*": ["./packages/draw-engine/src/*"],
       "@osionos/markdown-engine": ["./packages/markdown-engine/index.ts"],
       "@osionos/markdown-engine/blocks": ["./packages/markdown-engine/blocks.ts"],
       "@osionos/markdown-engine/inline": ["./packages/markdown-engine/inline.ts"],

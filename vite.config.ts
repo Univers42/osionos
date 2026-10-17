@@ -105,14 +105,6 @@ export default defineConfig(({ mode }) => {
           find: /^@osionos\/legacy-graph-engine\//,
           replacement: `${path.resolve(root, 'packages/legacy-graph-engine/src')}/`,
         },
-        {
-          find: /^@osionos\/draw-engine$/,
-          replacement: path.resolve(root, 'packages/draw-engine/src/index.ts'),
-        },
-        {
-          find: /^@osionos\/draw-engine\//,
-          replacement: `${path.resolve(root, 'packages/draw-engine/src')}/`,
-        },
         // markdown-engine subpaths. These MUST stay above the '@' catch-all
         // below: that entry is a bare STRING, which Vite prefix-matches, so it
         // would rewrite '@osionos/markdown-engine' to '<root>/srcosionos/...'.

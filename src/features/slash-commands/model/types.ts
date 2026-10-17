@@ -35,6 +35,8 @@ export interface SlashCommandBase {
   description: string;
   section: string;
   calloutIcon?: string;
+  /** Built-in app identifier that must be ready (flag on, URL configured) for this command to exist. */
+  requiresApp?: string;
 }
 
 export interface SlashBlockCommand extends SlashCommandBase {
@@ -73,13 +75,18 @@ export interface SlashMediaPickerCommand extends SlashCommandBase {
   mediaKind: MediaBlockType;
 }
 
+export interface SlashWhiteboardCommand extends SlashCommandBase {
+  kind: "whiteboard";
+}
+
 export type SlashCommand =
   | SlashBlockCommand
   | SlashTurnIntoCommand
   | SlashCreatePageCommand
   | SlashInlineCommand
   | SlashDatabaseViewCommand
-  | SlashMediaPickerCommand;
+  | SlashMediaPickerCommand
+  | SlashWhiteboardCommand;
 
 export interface SlashCommandSection {
   id: string;

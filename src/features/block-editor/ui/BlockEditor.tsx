@@ -30,7 +30,8 @@ import {
   calloutDisplayIcon,
   calloutSurface,
   resolveCalloutType,
-  DRAW_BLOCK_DEFAULT_HEIGHT,
+  WHITEBOARD_BLOCK_DEFAULT_HEIGHT,
+  WHITEBOARD_MIN_HEIGHT,
   type Block,
 } from "@/entities/block";
 
@@ -51,12 +52,13 @@ import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
+import { LegacyDrawNotice } from "@/features/whiteboard/ui/LegacyDrawNotice";
 import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
 
-// The embedded /draw canvas — lazy, same boundary (pulls the draw-engine + roughjs).
-const DrawBlockCanvas = lazy(() =>
-  import("@/widgets/draw-canvas/ui/DrawBlockCanvas").then((m) => ({ default: m.DrawBlockCanvas })),
+// The inline whiteboard (iframe of the drawnosaurus board) — lazy, same boundary.
+const WhiteboardBlock = lazy(() =>
+  import("@/features/whiteboard/ui/WhiteboardBlock").then((m) => ({ default: m.WhiteboardBlock })),
 );
 
 // The Home "view launcher" (home_views block) — lazy, same boundary discipline.
@@ -1053,21 +1055,23 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       );
 
     case "draw":
+      return <LegacyDrawNotice block={block} onConvert={(updates) => commitBlockUpdate(block.id, updates)} />;
+
+    case "whiteboard":
       return (
         <div // NOSONAR - keyboard navigation wrapper for non-editable block
           onKeyDown={(e) => {
-            // Only the wrapper's own keys — the canvas owns its hotkeys
-            // (tools, Delete, ⌘Z) and must not have them stolen.
+            // Only the wrapper's own keys: the board owns its hotkeys.
             if (e.target !== e.currentTarget) return;
             onKeyDown(e);
           }}
           tabIndex={-1}
-          aria-label="Drawing block"
+          aria-label="Whiteboard block"
           className="relative my-0 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]"
-          style={{ height: block.drawHeight ?? DRAW_BLOCK_DEFAULT_HEIGHT }}
+          style={{ height: Math.max(WHITEBOARD_MIN_HEIGHT, block.whiteboardHeight ?? WHITEBOARD_BLOCK_DEFAULT_HEIGHT) }}
         >
           <Suspense fallback={null}>
-            <DrawBlockCanvas block={block} pageId={pageId} onUpdateBlock={commitBlockUpdate} />
+            <WhiteboardBlock block={block} onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)} />
           </Suspense>
         </div>
       );
