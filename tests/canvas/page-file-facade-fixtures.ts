@@ -91,7 +91,7 @@ export function createFixtureStore(workspaceId: string): FixtureStore {
     },
     addPage: async (input: NewPage) => {
       const _id = `p${nextId++}`;
-      const newPage = page(_id, input.title, input.parentId, input.surface, input.content);
+      const newPage = { ...page(_id, input.title, input.parentId, input.surface, input.content), ...(input.visibility ? { visibility: input.visibility } : {}) };
       pages = [...pages, newPage];
       notify();
       return newPage;

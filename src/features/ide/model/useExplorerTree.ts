@@ -17,6 +17,7 @@ import { buildExplorerRows, type DirState } from "./explorerRows";
 import type { WorkspaceFileOps } from "./workspaceFileOps";
 
 const WATCH_DEBOUNCE_MS = 150;
+const NO_FOLDERS: readonly string[] = [];
 
 /** One sentence a user can act on, whatever the thrown thing was. */
 export function describeError(error: unknown): string {
@@ -30,9 +31,9 @@ export function describeError(error: unknown): string {
  *  Ponytail: refresh is whole-cache, not per-path, and watch events are debounced
  *  into one such refresh, so a busy provider costs one listing per loaded folder
  *  per 150 ms burst, never a missed update. */
-export function useExplorerTree(ops: WorkspaceFileOps) {
+export function useExplorerTree(ops: WorkspaceFileOps, defaultExpanded: readonly string[] = NO_FOLDERS) {
   const [dirs, setDirs] = useState<Readonly<Record<string, DirState>>>({});
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(defaultExpanded));
   const [watchNotice, setWatchNotice] = useState<string | null>(null);
   const generation = useRef(0);
   const loaded = useRef(new Set<string>());
@@ -73,7 +74,7 @@ export function useExplorerTree(ops: WorkspaceFileOps) {
   if (boundOps !== ops) {
     setBoundOps(ops);
     setDirs({});
-    setExpanded(new Set());
+    setExpanded(new Set(defaultExpanded));
   }
 
   // The cleanup runs on unmount and before a new ops: it aborts and invalidates
@@ -85,11 +86,12 @@ export function useExplorerTree(ops: WorkspaceFileOps) {
     const controller = new AbortController();
     abort.current = controller;
     void fetchDir("");
+    for (const dir of defaultExpanded) void fetchDir(dir);
     return () => {
       generation.current += 1;
       controller.abort();
     };
-  }, [fetchDir]);
+  }, [fetchDir, defaultExpanded]);
 
   useEffect(() => {
     if (!ops.canWatch()) return undefined;

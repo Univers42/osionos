@@ -31,7 +31,7 @@ export type PageFacadeEntry = {
 export type PageFacade = {
   list(): PageFacadeEntry[];
   readContent(id: string): Promise<string>;
-  create(input: { title: string; parentId: string | null; kind: "file" | "dir"; content?: string }): Promise<PageFacadeEntry>;
+  create(input: { title: string; parentId: string | null; kind: "file" | "dir"; content?: string; visibility?: "private" | "shared" }): Promise<PageFacadeEntry>;
   writeContent(id: string, content: string): Promise<void>;
   rename(id: string, title: string): Promise<void>;
   move(id: string, parentId: string | null): Promise<void>;
