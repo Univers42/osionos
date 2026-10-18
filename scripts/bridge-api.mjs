@@ -2689,6 +2689,18 @@ async function accessibleMountIds(request, config, fetchImpl) {
 	return new Set(mounts.map((row) => row && row.db_id).filter(Boolean));
 }
 
+const QUERY_ROUTER_TABLE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * G6 F3: `table` comes from the URL but the mount ACL only vouches for `dbId`, so a segment
+ * that decodes to path separators could address another upstream path. Plain identifiers
+ * only (422 otherwise), and encoded anyway.
+ */
+function queryRouterTablePath(dbId, table) {
+	if (!QUERY_ROUTER_TABLE.test(table)) throw Object.assign(new Error('table must be a plain identifier.'), { status: 422 });
+	return `/${dbId}/tables/${encodeURIComponent(table)}`;
+}
+
 /** Fetch one record via the query-router (engine-aware pk column). */
 async function fetchRecordRow(dbId, table, pk, engine, config, fetchImpl) {
 	const pkColumn = pkColumnForEngine(engine);
@@ -2696,7 +2708,7 @@ async function fetchRecordRow(dbId, table, pk, engine, config, fetchImpl) {
 	// non-numeric pk (e.g. mongo `evt-000001`) stays a string. Sending "1234" as a
 	// string to an int column makes the data-plane 409 on the type mismatch.
 	const pkValue = /^\d+$/.test(pk) ? Number(pk) : pk;
-	const result = await baasQueryPost(config, fetchImpl, `/${dbId}/tables/${table}`, {
+	const result = await baasQueryPost(config, fetchImpl, queryRouterTablePath(dbId, table), {
 		op: 'get',
 		filter: { [pkColumn]: pkValue },
 	});
@@ -2946,7 +2958,7 @@ async function handleDatabaseRows(match, request, response, config, fetchImpl) {
 	// redundant `resource` (and legacy `values`) the live-DB write client tags onto
 	// update/delete/upsert ops — strip them so writes don't silently 400 and vanish.
 	const { resource: _resource, values: _values, ...opBody } = safe;
-	const { status, body } = await baasQueryPassthrough(config, fetchImpl, `/${dbId}/tables/${table}`, { ...opBody, op });
+	const { status, body } = await baasQueryPassthrough(config, fetchImpl, queryRouterTablePath(dbId, table), { ...opBody, op });
 	json(response, status || 502, body ?? { rows: [], affected_rows: 0 }, config);
 	return true;
 }
