@@ -379,7 +379,7 @@ await step('5. analyst login + live transactions table (Erik’s notebook embed)
 /* 6 ── field masks: decide carries the amount mask; UI enforcement recorded */
 await step('6. analyst field mask — /api/perms/decide redacts transactions.amount', async () => {
 	apiTokens.erik = apiTokens.erik ?? (await bridgeLogin(erik.email, erik.password)).token;
-	const { ok, payload } = await fetchJson(`${bridgeUrl}/api/perms/decide`, {
+	const { ok, payload } = await fetchJson(`${bridgeUrl}/api/perms/decide?workspaceId=${ORG_WS_ID}`, {
 		method: 'POST',
 		headers: bearer(apiTokens.erik), // /api/perms/* requires an app session
 		body: JSON.stringify({ user: { id: erik.id }, resource_type: 'table', resource_name: 'transactions', op: 'list' }),

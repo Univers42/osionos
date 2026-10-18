@@ -49,10 +49,10 @@ export function useShareModel(resource: ShareResource): ShareModel {
     setLoading(true);
     setError(null);
     try {
-      const roster = await fetchPeople();
+      const roster = await fetchPeople(resource.workspaceId);
       setPeople(roster);
       if (isLive) {
-        const [roleRows, policyRows] = await Promise.all([fetchRoles(), fetchPolicies()]);
+        const [roleRows, policyRows] = await Promise.all([fetchRoles(resource.workspaceId), fetchPolicies(resource.workspaceId)]);
         setRoles(roleRows);
         setEntries(entriesFromPolicies(policyRows, roleRows, roster, resource.liveResourceName ?? ''));
       } else {

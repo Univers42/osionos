@@ -15,6 +15,7 @@
 
 import { api } from '@/shared/api/client';
 import { permsBearer } from './shareApi';
+import { permsPathFor } from './permsPath';
 import type { EnginePolicyPayload, EnginePolicyRow, EngineRole } from './types';
 
 export interface DecideRequest {
@@ -32,14 +33,14 @@ export interface DecideResponse {
 }
 
 /** All engine roles (id/name/description/metadata). */
-export async function fetchRoles(): Promise<EngineRole[]> {
-  const body = await api.get<{ roles: EngineRole[] }>('/api/perms/roles', permsBearer());
+export async function fetchRoles(workspaceId: string): Promise<EngineRole[]> {
+  const body = await api.get<{ roles: EngineRole[] }>(permsPathFor('/api/perms/roles', workspaceId), permsBearer());
   return body.roles ?? [];
 }
 
 /** Every resource policy, including ids (needed for deletes). */
-export async function fetchPolicies(): Promise<EnginePolicyRow[]> {
-  const body = await api.get<{ policies: EnginePolicyRow[] }>('/api/perms/policies', permsBearer());
+export async function fetchPolicies(workspaceId: string): Promise<EnginePolicyRow[]> {
+  const body = await api.get<{ policies: EnginePolicyRow[] }>(permsPathFor('/api/perms/policies', workspaceId), permsBearer());
   return body.policies ?? [];
 }
 
@@ -54,6 +55,6 @@ export async function deletePolicy(policyId: string): Promise<void> {
 }
 
 /** Central ABAC decision (the "View as" tester). */
-export async function decide(request: DecideRequest): Promise<DecideResponse> {
-  return api.post<DecideResponse>('/api/perms/decide', request, permsBearer());
+export async function decide(workspaceId: string, request: DecideRequest): Promise<DecideResponse> {
+  return api.post<DecideResponse>(permsPathFor('/api/perms/decide', workspaceId), request, permsBearer());
 }
