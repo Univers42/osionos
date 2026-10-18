@@ -18,13 +18,16 @@
  *
  * Every route needs an app session (Authorization: Bearer <osionos_v1 token>). The five engine
  * reads below (people, roles, policies, bundle, decide) also need `?workspaceId=` of a workspace
- * the caller can read: 422 without it, 403 on a workspace they are not in.
+ * the caller can read: 422 without it, 403 on a workspace they are not in. The engine and the
+ * roster are tenant-wide, so beyond that: people is narrowed to the workspace's members unless
+ * the caller is an admin; roles, policies and bundle are admin-only; decide is limited to the
+ * caller's own user.id unless they are an admin.
  *   GET    /api/perms/people        → agency roster (.agency-people.env rows)
- *   GET    /api/perms/roles         → { roles:[{id,name,description,metadata}] }
- *   GET    /api/perms/policies      → { policies:[…incl. id] }
+ *   GET    /api/perms/roles         → { roles:[{id,name,description,metadata}] }  (admin only)
+ *   GET    /api/perms/policies      → { policies:[…incl. id] }                    (admin only)
  *   POST   /api/perms/policies      → create resource policy          (admin only)
  *   DELETE /api/perms/policies/:id  → delete resource policy          (admin only)
- *   GET    /api/perms/bundle        → PolicyBundle (user_roles + policies)
+ *   GET    /api/perms/bundle        → PolicyBundle (user_roles + policies)       (admin only)
  *   POST   /api/perms/decide        → ABAC decision {allow,reason,mode,mask?}
  *   GET    /api/perms/rules?workspaceId&resourceId → AccessRules      (workspace `read`)
  *   POST   /api/perms/rules         → upsert an AccessRule             (workspace `update`)
@@ -47,7 +50,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bearerToken, httpError } from './bridge-social-core.mjs';
+import { bearerToken, httpError, rest } from './bridge-social-core.mjs';
 import { createShareRuleStore, normalizeShareRule } from './bridge-perms-rules.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -163,7 +166,7 @@ export function createPermsHandler({
 				if (!workspaceId) return fail(response, 422);
 				await requireWorkspaceAccess(request, workspaceId, 'read', requestConfig, fetchImpl);
 			}
-			const handled = await (routeEngine(ctx, { engine, reply, fail, settings }) ?? rules(ctx));
+			const handled = await (routeEngine(ctx, { engine, reply, fail, settings, fetchImpl }) ?? rules(ctx));
 			return handled ?? fail(response, 404);
 		} catch (error) {
 			const status = Number(error?.status) || 500;
@@ -181,14 +184,35 @@ function isEngineRead(method, tail) {
 	return (method === 'GET' && ENGINE_READ_TAILS.has(tail)) || (method === 'POST' && tail === 'decide');
 }
 
+/** The roster is tenant-wide (the engine is keyed by X-Tenant-Id, not by workspace), so a
+ *  non-admin sees only the people who share the workspace they named. */
+async function peopleInWorkspace(ctx, workspaceId, { fetchImpl, settings }) {
+	const everyone = loadPeople(settings.peopleEnv);
+	if (ctx.session.isAdmin === true) return everyone;
+	const rows = await rest(ctx.requestConfig, fetchImpl, `osionos_workspace_members?workspace_id=eq.${encodeURIComponent(workspaceId)}&select=user_id&limit=1000`);
+	const memberIds = new Set(rows.map((row) => String(row.user_id).toLowerCase()));
+	return everyone.filter((person) => memberIds.has(String(person.id).toLowerCase()));
+}
+
+/** A non-admin may only ask what the engine says about themselves; refusing beats rewriting,
+ *  because a silent rewrite would show the "View as" tester the wrong person's answer. */
+function decideBodyFor(session, body) {
+	if (session.isAdmin === true) return body;
+	const asked = body?.user?.id;
+	if (asked !== undefined && String(asked).toLowerCase() !== session.userId.toLowerCase()) throw httpError('decide is limited to your own account', 403);
+	return { ...body, user: { ...body?.user, id: session.userId } };
+}
+
 /** Engine + roster routes; undefined when `tail` is not one of them. */
-function routeEngine(ctx, { engine, reply, fail, settings }) {
-	const { method, tail, response, request, session } = ctx;
-	if (method === 'GET' && tail === 'people') return reply(response, 200, { people: loadPeople(settings.peopleEnv) });
+function routeEngine(ctx, { engine, reply, fail, settings, fetchImpl }) {
+	const { method, tail, response, request, session, url } = ctx;
+	const isAdminOnlyRead = method === 'GET' && ['roles', 'policies', 'bundle'].includes(tail);
+	if (isAdminOnlyRead && session.isAdmin !== true) return fail(response, 403);
+	if (method === 'GET' && tail === 'people') return peopleInWorkspace(ctx, url.searchParams.get('workspaceId'), { fetchImpl, settings }).then((people) => reply(response, 200, { people }));
 	if (method === 'GET' && tail === 'roles') return engine(ctx, 'GET', '/permissions/bundles/roles');
 	if (method === 'GET' && tail === 'policies') return engine(ctx, 'GET', '/permissions/bundles/policies');
 	if (method === 'GET' && tail === 'bundle') return engine(ctx, 'GET', '/permissions/bundles/latest');
-	if (method === 'POST' && tail === 'decide') return readJsonBody(request).then((body) => engine(ctx, 'POST', '/permissions/decide', body));
+	if (method === 'POST' && tail === 'decide') return readJsonBody(request).then((body) => engine(ctx, 'POST', '/permissions/decide', decideBodyFor(session, body)));
 	const isPolicyWrite = (method === 'POST' && tail === 'policies') || (method === 'DELETE' && /^policies\/[0-9a-f-]{36}$/i.test(tail));
 	if (!isPolicyWrite) return undefined;
 	if (session.isAdmin !== true) return fail(response, 403);
