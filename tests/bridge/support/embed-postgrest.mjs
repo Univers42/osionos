@@ -11,8 +11,9 @@
 /* ************************************************************************** */
 
 // A strict evaluator for the PostgREST resource-embedding reads the membership statements
-// emit (ADR 0004): members -> workspace -> pages and pages -> workspace -> members. It
-// implements exactly those shapes and THROWS on anything else, so a new embed, filter,
+// emit (ADR 0004): members -> workspace -> pages and pages -> workspace -> members, and the
+// sign-in read members -> workspace (its own columns). It implements
+// exactly those shapes and THROWS on anything else, so a new embed, filter,
 // operator, column or an unhinted relationship fails a test instead of matching every row.
 // Differences from the permissive harness it plugs into: `is.null` is true only for a
 // column the table declares (a missing key on an undeclared column throws), and a nested
@@ -21,7 +22,7 @@
 // differing only by case); to-one embeds resolve through the seeded osionos_workspaces table.
 
 const TABLE_COLUMNS = {
-	osionos_workspaces: ['id'],
+	osionos_workspaces: ['id', 'owner_id', 'name', 'slug', 'settings', 'created_at', 'updated_at'],
 	osionos_workspace_members: ['workspace_id', 'user_id', 'role', 'permissions'],
 	osionos_pages: [
 		'id', 'title', 'icon', 'cover', 'cover_position', 'updated_at', 'created_at', 'workspace_id', 'owner_id',

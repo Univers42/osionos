@@ -26,16 +26,19 @@ import {
 	UUID_REGEX,
 	bearerToken,
 	blockedViewerBy,
+	connectionEdgesPath,
 	directoryFuzzyFilter,
-	ensureColleagueConnections,
 	httpError,
 	identitySummaries,
+	insertColleagueEdges,
+	mergeEdgesNewestFirst,
 	publishRealtime,
 	readJsonBody,
 	requireUuid,
 	rest,
 	safeText,
 	sendJson,
+	sharedWorkspacePeers,
 } from './bridge-social-core.mjs';
 
 const PRESENCE_WINDOW_MS = 90 * 1000;
@@ -80,28 +83,40 @@ async function directorySearch(deps, session, url, response, config) {
 	return sendJson(response, 200, { ok: true, people }, config);
 }
 
+const peerOf = (row, userId) => (row.requester_id === userId ? row.addressee_id : row.requester_id);
+
 /** GET /api/connections — caller's edges + peer identity summary, block-aware. */
 async function listConnections(deps, session, url, response, config) {
-	// Teammates are connected by default: reconcile colleague edges before reading,
-	// so the list always reflects the current shared-workspace roster. Best-effort.
-	await ensureColleagueConnections(config, deps.fetchImpl, session.userId);
+	const userId = session.userId;
 	const status = safeText(url.searchParams.get('status'), 16);
 	const direction = safeText(url.searchParams.get('direction'), 16) || 'all';
-	let path = `osionos_connections?or=(requester_id.eq.${session.userId},addressee_id.eq.${session.userId})&select=*&order=created_at.desc`;
-	if (status) path += `&status=eq.${encodeURIComponent(status)}`;
-	const rows = await rest(config, deps.fetchImpl, path);
-	const blockers = await blockedViewerBy(config, deps.fetchImpl, session.userId);
-	const filtered = (Array.isArray(rows) ? rows : []).filter((row) => {
-		const outgoing = row.requester_id === session.userId;
+	// Teammates are connected by default, so the roster is reconciled before the list is built.
+	// The co-member read never rejects; the edges and blocks reads reject by design. Promise.all
+	// handles all three from the start: awaiting them one by one would leave the second
+	// rejection unhandled, and Node 22 exits the process on that.
+	const [coMembers, edges, blockers] = await Promise.all([
+		sharedWorkspacePeers(config, deps.fetchImpl, userId),
+		rest(config, deps.fetchImpl, connectionEdgesPath(userId)),
+		blockedViewerBy(config, deps.fetchImpl, userId),
+	]);
+	const stored = Array.isArray(edges) ? edges : [];
+	const paired = new Set(stored.map((row) => peerOf(row, userId)));
+	const inserted = await insertColleagueEdges(config, deps.fetchImpl, userId, coMembers.filter((peer) => !paired.has(peer)));
+	// F4: the edges were read concurrently with the co-member read and before the insert, so an
+	// edge a concurrent request (the caller's other tab, or the peer's own sync) creates in that
+	// window is in neither list: the response can be stale by one call and the next GET shows it.
+	// One filter for both lists: a co-member blocked before any edge existed still gets an
+	// accepted row from the insert, and only the blockers check hides it here.
+	const rows = mergeEdgesNewestFirst(inserted, stored).filter((row) => {
+		if (status && row.status !== status) return false;
+		const outgoing = row.requester_id === userId;
 		if (direction === 'incoming' && outgoing) return false;
 		if (direction === 'outgoing' && !outgoing) return false;
-		const peer = outgoing ? row.addressee_id : row.requester_id;
-		return !blockers.has(peer);
+		return !blockers.has(peerOf(row, userId));
 	});
-	const peers = filtered.map((row) => (row.requester_id === session.userId ? row.addressee_id : row.requester_id));
-	const identities = await identitySummaries(config, deps.fetchImpl, peers);
-	const connections = filtered.map((row) => {
-		const peer = row.requester_id === session.userId ? row.addressee_id : row.requester_id;
+	const identities = await identitySummaries(config, deps.fetchImpl, rows.map((row) => peerOf(row, userId)));
+	const connections = rows.map((row) => {
+		const peer = peerOf(row, userId);
 		const summary = identities.get(peer);
 		const online = summary?.lastSeenAt ? Date.now() - new Date(summary.lastSeenAt).getTime() < 90_000 : false;
 		return {
@@ -109,7 +124,7 @@ async function listConnections(deps, session, url, response, config) {
 			// nested peer matches the frontend ContactEdge type (store/social/types.ts)
 			peer: { id: peer, name: summary?.name ?? 'Member', avatar: summary?.avatar ?? null, online },
 			status: row.status,
-			direction: row.requester_id === session.userId ? 'outgoing' : 'incoming',
+			direction: row.requester_id === userId ? 'outgoing' : 'incoming',
 			introMessage: row.intro_message ?? null,
 			source: row.source ?? 'manual',
 			createdAt: row.created_at ?? null,
