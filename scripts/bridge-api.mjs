@@ -23,6 +23,7 @@ import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh,
 import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
 import { publishRealtime } from './bridge-social-core.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
+import { assertSessionNotCutOff, sessionCutoffsFromConfig, startSessionCutoffPoller, tokenIssuedAtMs } from './bridge-session-cutoff.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
@@ -183,6 +184,8 @@ export function configFromEnv(env = process.env) {
 		serviceKey: env.SERVICE_ROLE_KEY ?? env.KONG_SERVICE_API_KEY ?? env.BAAS_SERVICE_ROLE_KEY ?? '',
 		requireBaas: env.OSIONOS_BRIDGE_REQUIRE_BAAS === 'true',
 		persistence: env.OSIONOS_BRIDGE_PERSISTENCE ?? 'auto',
+		// 'off' is the operator's escape hatch for a deployment without public.auth_session_cutoffs.
+		sessionCutoffsMode: String(env.OSIONOS_SESSION_CUTOFFS ?? '').trim().toLowerCase() === 'off' ? 'off' : 'on',
 		translationApiUrl: (env.OSIONOS_TRANSLATION_API_URL ?? env.VITE_TRANSLATION_API_URL ?? '').trim(),
 		timestampSkewMs: Number(env.OSIONOS_BRIDGE_TIMESTAMP_SKEW_MS ?? DEFAULT_TIMESTAMP_SKEW_MS),
 		handoffTtlMs: Number(env.OSIONOS_BRIDGE_HANDOFF_TTL_MS ?? DEFAULT_HANDOFF_TTL_MS),
@@ -431,6 +434,8 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 		is_admin: isAdmin === true,
 		jti,
 		iat,
+		// Milliseconds: a cut-off and a token minted in the same second must still be ordered.
+		iat_ms: Math.floor(now),
 		exp,
 	};
 	const encodedPayload = base64url(JSON.stringify(tokenPayload));
@@ -469,6 +474,7 @@ export function verifyAppSessionToken(token, config, now = Date.now()) {
 	if (!Number.isFinite(exp) || exp <= Math.floor(now / 1000)) {
 		throw Object.assign(new Error('App session token has expired.'), { status: 401 });
 	}
+	assertSessionNotCutOff(config.sessionCutoffs, String(payload.sub).toLowerCase(), tokenIssuedAtMs(payload));
 	const workspaceIds = Array.isArray(payload.workspace_ids)
 		? payload.workspace_ids.map(String).filter((workspaceId) => UUID_REGEX.test(workspaceId))
 		: [];
@@ -520,7 +526,7 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
 	if (!response.ok) {
 		const text = await response.text().catch(() => '');
 		const status = responseStatusForBaasFailure(response.status);
-		throw Object.assign(new Error(`BaaS request failed with ${response.status}: ${text.slice(0, 160)}`), { status });
+		throw Object.assign(new Error(`BaaS request failed with ${response.status}: ${text.slice(0, 160)}`), { status, upstreamStatus: response.status, upstreamText: text.slice(0, 160) });
 	}
 	return readBaasJson(response, { service: 'service-role PostgREST', empty: null, fail: baasFail });
 }
@@ -2078,10 +2084,11 @@ async function readJson(request, maxBytes = DEFAULT_JSON_BODY_LIMIT_BYTES) {
 	return body ? JSON.parse(body) : {};
 }
 
-function json(response, status, body, config) {
+function json(response, status, body, config, extraHeaders = {}) {
 	response.writeHead(status, {
 		'content-type': 'application/json; charset=utf-8',
 		'cache-control': 'no-store',
+		...extraHeaders,
 		'access-control-allow-origin': config.allowedOrigin,
 		'access-control-allow-credentials': 'true',
 		vary: 'Origin',
@@ -2274,8 +2281,15 @@ async function handleClaudeAgentStream(request, response, config, spawnImpl = sp
 	});
 }
 
+// Only a lower-case snake_case `code` is ours: Node's own errors carry codes like ECONNRESET, which a
+// client has no business parsing.
+const APP_ERROR_CODE = /^[a-z][a-z0-9_]*$/;
+
 function errorJson(response, error, config) {
-	json(response, error.status ?? 500, { ok: false, message: error instanceof Error ? error.message : 'Bridge request failed.' }, config);
+	const body = { ok: false, message: error instanceof Error ? error.message : 'Bridge request failed.' };
+	if (typeof error?.code === 'string' && APP_ERROR_CODE.test(error.code)) body.code = error.code;
+	const retryAfter = Number.isFinite(error?.retryAfterSeconds) ? { 'retry-after': String(error.retryAfterSeconds) } : {};
+	json(response, error.status ?? 500, body, config, retryAfter);
 }
 
 function writeOptionsResponse(response, config) {
@@ -3919,7 +3933,8 @@ async function handlePagesPost(url, request, response, config, fetchImpl) {
 
 async function handleBridgeGet(url, request, response, config, fetchImpl) {
 	if (url.pathname === '/api/auth/bridge/health') {
-		json(response, 200, { ok: true, service: 'osionos-bridge' }, config);
+		const cutoffs = config.sessionCutoffs;
+		json(response, 200, { ok: true, service: 'osionos-bridge', session_cutoffs: cutoffs?.status() ?? 'off', session_cutoffs_age_ms: cutoffs?.ageMs() ?? null }, config);
 		return true;
 	}
 	if (url.pathname === '/api/geocode') {
@@ -4149,7 +4164,11 @@ async function handleBridgeRequest(request, response, context) {
 }
 
 export function createBridgeServer(options = {}) {
-	const config = options.config ?? configFromEnv();
+	const baseConfig = options.config ?? configFromEnv();
+	// One tracker per server, hung off the config every handler closes over; the per-request
+	// copies (requestOriginConfig) spread it, so they share the same object.
+	const sessionCutoffs = baseConfig.sessionCutoffs ?? sessionCutoffsFromConfig(baseConfig, { now: options.now, log: options.sessionCutoffLog });
+	const config = { ...baseConfig, sessionCutoffs };
 	const handoffStore = options.handoffStore ?? new Map();
 	const replayStore = options.replayStore ?? new Map();
 	const meter = createRequestMeter({ enabled: options.perf ?? process.env.OSIONOS_BRIDGE_PERF === '1', baasUrl: config.baasUrl, log: options.perfLog });
@@ -4200,11 +4219,18 @@ export function createBridgeServer(options = {}) {
 	// bridge does no WebSocket work (realtime is Kong), so every upgrade is refused.
 	server.on('upgrade', (_request, socket) => socket.destroy());
 	server.on('close', () => transport?.close());
+	let cutoffPoller = null;
+	server.on('listening', () => {
+		cutoffPoller = startSessionCutoffPoller(sessionCutoffs, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionCutoffPoll);
+	});
+	server.on('close', () => cutoffPoller?.stop());
+	server.sessionCutoffs = sessionCutoffs;
 	return server;
 }
 
 export function startBridgeServer(config = configFromEnv()) {
 	const server = createBridgeServer({ config });
+	console[server.sessionCutoffs.enforced ? 'info' : 'warn'](server.sessionCutoffs.bootLine());
 	server.listen(config.port, '0.0.0.0', () => {
 		console.info(`[osionos-bridge] listening on 0.0.0.0:${config.port}`);
 	});
