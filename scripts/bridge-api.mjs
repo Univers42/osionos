@@ -87,7 +87,7 @@ const EMAIL_DOMAIN_LABEL = '(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)';
 const EMAIL_REGEX = new RegExp(String.raw`^${EMAIL_LOCAL_PART}@(?>${EMAIL_DOMAIN_LABEL}\.)+[A-Za-z]{2,63}$`.replace('(?>', '(?:'));
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const APP_SESSION_TOKEN_VERSION = 'osionos_v1';
-const BRIDGE_FIELDS = new Set(['provider', 'subject', 'email', 'name', 'jti']);
+const BRIDGE_FIELDS = new Set(['provider', 'subject', 'email', 'name', 'jti', 'emailVerified']);
 const SENSITIVE_FIELD_PATTERN = /password|pass|secret|service|role|key|jwt|token|cookie|consent|birth|city|address|phone|profile|metadata|database|connection/i;
 const DEFAULT_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
 const DEFAULT_HANDOFF_TTL_MS = 90 * 1000;
@@ -377,7 +377,14 @@ export function validateBridgePayload(payload) {
 	if (!UUID_REGEX.test(subject)) throw Object.assign(new Error('Bridge subject must be a Prismatica UUID.'), { status: 422 });
 	if (!EMAIL_REGEX.test(email)) throw Object.assign(new Error('Bridge email is invalid.'), { status: 422 });
 	if (!UUID_REGEX.test(jti)) throw Object.assign(new Error('Bridge jti must be a UUID.'), { status: 422 });
-	return { provider, subject, email, name, jti };
+	const normalized = { provider, subject, email, name, jti };
+	// Present only when the gateway sent it: the HMAC is over this copy, so an
+	// old gateway that signs without the field must still verify.
+	if (hasOwn(payload, 'emailVerified')) {
+		if (typeof payload.emailVerified !== 'boolean') throw Object.assign(new Error('Bridge emailVerified must be a boolean.'), { status: 422 });
+		normalized.emailVerified = payload.emailVerified;
+	}
+	return normalized;
 }
 
 function pruneExpiringMap(map, now) {
@@ -1386,9 +1393,15 @@ async function memberWorkspaceEntries(userId, excludeIds, config, fetchImpl) {
  * emails (sticky — only ever sets true) and reads the PERSISTED flag back, so
  * admin status survives later removal of OSIONOS_ADMIN_EMAILS. Fail-safe: any
  * error degrades to the env-only answer (never throws, never blocks login).
+ *
+ * Promotion needs payload.emailVerified === true: an address nobody proved they
+ * own must not become admin by registering it. Caveat: accounts created while
+ * baas autoconfirm was on all carry email_confirmed_at, so this does not undo an
+ * admin address someone already registered.
  */
 async function resolveAdminFlag(payload, config, fetchImpl) {
-	const isAdminEmail = config.adminEmails.includes(String(payload.email ?? '').toLowerCase());
+	const isAdminEmail = payload.emailVerified === true
+		&& config.adminEmails.includes(String(payload.email ?? '').toLowerCase());
 	if (!config.serviceKey || !config.baasUrl) return isAdminEmail;
 	const hash = encodeURIComponent(emailHash(payload.email, config));
 	try {
