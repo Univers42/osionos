@@ -49,13 +49,13 @@ const REALTIME_TOKEN_TTL_SECONDS = 3600;
  * entry must equal the topic's namespace; an empty list grants nothing), so the
  * token's reach is precisely the namespaces passed in — never a wildcard.
  */
-export function mintRealtimeToken({ secret, userId, namespaces, ttlSeconds = REALTIME_TOKEN_TTL_SECONDS, now = Date.now() }) {
+export function mintRealtimeToken({ secret, userId, namespaces, ttlSeconds = REALTIME_TOKEN_TTL_SECONDS, canPublish = true, now = Date.now() }) {
 	if (!secret) throw httpError('Realtime signing secret (JWT_SECRET) is not configured.', 503);
 	const issuedAt = Math.floor(now / 1000);
 	const exp = issuedAt + Math.min(Math.max(Number(ttlSeconds) || REALTIME_TOKEN_TTL_SECONDS, 60), 86400);
 	// The gateway refuses a token without `iss` (REALTIME_JWT_ALLOW_NO_ISSUER off): without it
 	// every collab socket got AUTH_FAILED (measured live 2026-10-14).
-	const payload = { iss: REALTIME_TOKEN_ISSUER, sub: String(userId), iat: issuedAt, exp, namespaces, can_subscribe: true, can_publish: true };
+	const payload = { iss: REALTIME_TOKEN_ISSUER, sub: String(userId), iat: issuedAt, exp, namespaces, can_subscribe: true, can_publish: canPublish === true };
 	return { token: signRealtimeJwt(payload, secret), expiresAt: new Date(exp * 1000).toISOString() };
 }
 

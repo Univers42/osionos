@@ -26,6 +26,7 @@ import { readBaasJson } from './bridge-baas-body.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
+import { createRealtimeTokenHandler } from './bridge-realtime-token.mjs';
 import { createIdeTokenHandler } from './bridge-ide-token.mjs';
 import { createConnectorHandler } from './bridge-connector.mjs';
 import { createOAuthHandler } from './bridge-oauth.mjs';
@@ -3918,6 +3919,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.feed(url, request, response, context.config)) return;
 	if (await context.social.social(url, request, response, context.config)) return;
 	if (await context.social.collab(url, request, response, context.config)) return;
+	if (await context.social.realtimeToken(url, request, response, context.config)) return;
 	if (request.method === 'POST' && url.pathname === '/api/agent/claude/stream') {
 		await handleClaudeAgentStream(request, response, context.config, context.spawnImpl);
 		return;
@@ -3975,6 +3977,7 @@ export function createBridgeServer(options = {}) {
 		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		realtimeToken: createRealtimeTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 	};
 	const server = createServer(async (request, response) => {
 		let responseConfig = requestOriginConfig(config, request);
