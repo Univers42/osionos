@@ -1,6 +1,6 @@
 // The built-in whiteboard app: /whiteboard [name] creates a board and inserts an inline
 // block that iframes it. Every account has it with no install step, so none of these cases
-// installs anything or waits for the installed-apps endpoint. /draw is not an alias. The
+// installs anything or waits for the installed-apps endpoint. /draw and /drawing find it. The
 // drawnosaurus service (https://localhost:3007) is mocked, so no real board is created.
 
 import { expect, test } from "@playwright/test";
@@ -106,15 +106,25 @@ test.describe("built-in whiteboard", () => {
     await expect(whiteboardRows(page)).toHaveCount(1);
   });
 
-  test("/draw is not an alias: it shows no whiteboard row", async ({ page, baseURL }) => {
+  for (const typed of ["/draw", "/drawing"]) {
+    test(`${typed} finds the whiteboard row`, async ({ page, baseURL }) => {
+      await openFreshPage(page, baseURL);
+      const editor = await activateFirstEditor(page);
+      await openSlashMenuFromEditor(editor, typed);
+      await expect(whiteboardRows(page)).toHaveCount(1);
+    });
+  }
+
+  test("/draw <name> creates a board with that name, not with the word draw", async ({ page, baseURL }) => {
+    const created = [];
+    await mockWhiteboardService(page, (body) => created.push(body));
     await openFreshPage(page, baseURL);
     const editor = await activateFirstEditor(page);
-    // Control first: the same open menu proves it is live before it is asked for /draw.
-    await openSlashMenuFromEditor(editor, "/whiteboard");
-    await expect(whiteboardRows(page)).toHaveCount(1);
-    for (let typed = 0; typed < "whiteboard".length; typed += 1) await page.keyboard.press("Backspace");
-    await page.keyboard.type("draw");
-    await page.waitForTimeout(500);
-    await expect(whiteboardRows(page)).toHaveCount(0);
+
+    await openSlashMenuFromEditor(editor, "/draw Sprint plan");
+    await selectSlashMenuEntry(page, "Create board");
+
+    await expect(page.locator('[data-block-type="whiteboard"] iframe')).toHaveAttribute("src", new RegExp(`/boards/${SLUG}$`));
+    expect(created).toEqual([{ title: "Sprint plan" }]);
   });
 });
