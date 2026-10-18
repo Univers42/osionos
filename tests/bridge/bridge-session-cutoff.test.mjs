@@ -283,6 +283,7 @@ const ROUTES = [
 	['bridge-api workspace list', 'GET', '/api/workspaces', true],
 	['bridge-api page read', 'GET', `/api/pages/${IDS.privateA}`, true],
 	['bridge-api workspace validate', 'POST', '/api/auth/workspace/validate', true, { workspaceId: IDS.homeA, permission: 'read' }],
+	['bridge-api logout', 'POST', '/api/auth/bridge/logout', true],
 ];
 
 describe('P12: a revoked token gets 401 through every module that receives verifySession', () => {

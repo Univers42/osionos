@@ -4083,7 +4083,54 @@ async function handleAutomationWebhook(request, response, config, fetchImpl) {
 	json(response, 200, { ok: status >= 200 && status < 300, status }, config);
 }
 
+/** Reads the request to its end and refuses any byte: logout names its subject only through the token. */
+async function requireEmptyBody(request) {
+	let bytes = 0;
+	for await (const chunk of request) {
+		bytes += chunk.length;
+		if (bytes > DEFAULT_JSON_BODY_LIMIT_BYTES) throw Object.assign(new Error('Request body too large.'), { status: 413 });
+	}
+	if (bytes > 0) throw Object.assign(new Error('Sign-out takes no request body.'), { status: 400, code: 'logout_body_not_allowed' });
+}
+
+/** An explicit timestamp from the bridge clock: a column DEFAULT would leave an existing row untouched on conflict. */
+async function writeSessionCutoff(config, fetchImpl, userId, writtenAtMs) {
+	try {
+		await baasRest(config, fetchImpl, `auth_session_cutoffs?${postgrestQuery({ on_conflict: 'user_id' })}`, {
+			method: 'POST',
+			body: { user_id: userId, sessions_valid_after: new Date(writtenAtMs).toISOString() },
+			prefer: 'resolution=merge-duplicates',
+		});
+	} catch (error) {
+		if (error?.upstreamStatus === 409 && /23503/.test(error.upstreamText ?? '')) {
+			throw Object.assign(new Error('No account matches this session.'), { status: 409, code: 'user_not_found' });
+		}
+		throw Object.assign(new Error('Sign-out could not be recorded; try again shortly.'), { status: 503, code: 'session_cutoffs_unavailable', retryAfterSeconds: 5 });
+	}
+}
+
+/** Signs the caller out everywhere: every osionos_v1 token issued before now stops verifying. */
+async function handleBridgeLogout(request, response, config, fetchImpl) {
+	const clock = config.sessionCutoffs?.now ?? Date.now;
+	const session = verifyAppSessionToken(bearerToken(request), config, clock());
+	await requireEmptyBody(request);
+	const writtenAtMs = Math.floor(clock());
+	await writeSessionCutoff(config, fetchImpl, session.userId, writtenAtMs);
+	config.sessionCutoffs?.applyLocal(session.userId, writtenAtMs * 1000);
+	response.writeHead(204, {
+		'cache-control': 'no-store',
+		'access-control-allow-origin': config.allowedOrigin,
+		'access-control-allow-credentials': 'true',
+		vary: 'Origin',
+	});
+	response.end();
+}
+
 async function handleBridgePost(url, request, response, config, handoffStore, replayStore, fetchImpl) {
+	if (url.pathname === '/api/auth/bridge/logout') {
+		await handleBridgeLogout(request, response, config, fetchImpl);
+		return true;
+	}
 	if (url.pathname === '/api/auth/login' || url.pathname === '/api/auth/register') {
 		await handleAuthProxy(url, request, response, config, handoffStore, fetchImpl);
 		return true;
