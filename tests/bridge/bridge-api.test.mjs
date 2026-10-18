@@ -154,6 +154,11 @@ function createMockBaasFetch() {
 					updated_at: '2026-01-01T00:00:00.000Z',
 				}]);
 			}
+			const ownerMember = { user_id: subject, workspace_id: workspaceId, role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] };
+			// The members-anchored list statement: the caller's members row with the workspace's pages under it.
+			if (table === 'osionos_workspace_members') {
+				return jsonResponse([{ ...ownerMember, workspace: { pages: selectedRows(pages, [], `eq.${workspaceId}`) } }]);
+			}
 			if (table !== 'osionos_pages') return jsonResponse({ message: 'not found' }, 404);
 
 			const method = init.method ?? 'GET';
@@ -184,7 +189,11 @@ function createMockBaasFetch() {
 				return new Response(null, { status: 204 });
 			}
 
-			return jsonResponse(selectedRows(pages, ids, workspaceFilter));
+			const rows = selectedRows(pages, ids, workspaceFilter);
+			// A page read that asks for the caller's member row gets it under `workspace`.
+			return jsonResponse(parsed.searchParams.get('select')?.includes('osionos_workspace_members')
+				? rows.map((row) => ({ ...row, workspace: { members: [ownerMember] } }))
+				: rows);
 		},
 	};
 }
