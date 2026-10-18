@@ -186,6 +186,29 @@ describe('wiring in createBridgeServer', () => {
 		assert.deepEqual(await refused.json(), { ok: false, message: 'This address is not allowed.' });
 	});
 
+	it('charges every webhook to a webhook:<userId> bucket (burst 10), then answers 429', async () => {
+		const sessionFor = (subject) => createUserSession(validateBridgePayload({
+			provider: 'prismatica',
+			subject,
+			email: 'burst@example.com',
+			name: 'Burst',
+			jti: '2c76c7f0-f07e-442d-96fd-77d601764c3b',
+		}), bridgeConfig, { workspaceId: '1cc0693b-59dd-4d51-86d9-de86d088f9df', workspaceName: 'W', workspaceSlug: 'w' }, Date.now()).session.accessToken;
+		const send = async (jwt) => {
+			base ??= await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${server.address().port}`)));
+			return (await fetch(`${base}/api/automations/webhook`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', authorization: `Bearer ${jwt}` },
+				body: JSON.stringify({ url: 'https://127.0.0.1/hook', payload: {} }),
+			})).status;
+		};
+		const burster = sessionFor('4f6d2a70-5b3f-4c92-8f06-8f4644fd1209');
+		const statuses = [];
+		for (let n = 0; n < 12; n += 1) statuses.push(await send(burster));
+		assert.deepEqual(statuses, [...Array(10).fill(422), 429, 429]);
+		assert.equal(await send(sessionFor('5f6d2a70-5b3f-4c92-8f06-8f4644fd1209')), 422);
+	});
+
 	it('guards the automation webhook: https only, no private targets, session required', async () => {
 		assert.equal((await post('/api/automations/webhook', { url: 'https://example.com/' }, false)).status, 401);
 		assert.equal((await post('/api/automations/webhook', { url: 'http://example.com/hook' })).status, 422);
@@ -219,7 +242,7 @@ describe('webhook delivery (unfurler.postJson)', () => {
 
 	it('refuses a webhook host that resolves to a private address without connecting', async () => {
 		const net = loopbackNet({ ports: [443], names: { 'internal.test': ['10.0.0.1'] } });
-		await assert.rejects(createUnfurler({ netOptions: net.options }).postJson('https://internal.test/hook', {}), (error) => error.status === 422);
+		await assert.rejects(createUnfurler({ netOptions: net.options }).postJson('https://internal.test/hook', {}), (error) => error.status === 502);
 		assert.deepEqual(net.attempts, []);
 	});
 });

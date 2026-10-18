@@ -18,9 +18,10 @@
  * URL fields are re-parsed and kept only when absolute http(s) without userinfo,
  * and oEmbed `html` is never returned, only the `src` of its first <iframe>.
  *
- * Caveat: HTML is read with regexes over the first 512 KB, not a real parser.
- * Tags past the cap, tags built by script, and a `>` inside an unquoted attribute
- * are missed (under-reporting: the card falls back to fewer fields). Charset is
+ * Caveat: HTML is read by a bounded tag scan over the document head only (up to
+ * `</head>` or 64 KB), not a real parser. Tags past that, tags built by script,
+ * tags longer than 1024 chars, and a `>` inside an unquoted attribute are missed
+ * (under-reporting: the card falls back to fewer fields). Charset is
  * taken from the Content-Type header only, so a page declaring its charset in a
  * <meta> tag can show mojibake. Frameability reads response headers only: a
  * `frame-ancestors` list that names this app's origin is reported as not
@@ -30,8 +31,16 @@
 import { safeText } from './bridge-social-core.mjs';
 import { MAX_URL_LENGTH } from './bridge-unfurl-net.mjs';
 
-const TAG_BODY = '((?:"[^"]*"|\'[^\']*\'|[^>"\'])*)';
+// Every scan below is bounded per tag: an unbounded `(?:"[^"]*"|...)*` body went
+// quadratic on repeated unclosed tags (64 KB = 1.8 s, 512 KB = 152 s, measured),
+// and the deadline cannot interrupt synchronous parsing.
+const MAX_HEAD_BYTES = 65_536;
+const MAX_TAG_LENGTH = 1024;
 const MAX_TAGS = 400;
+// Characters one tag scan may examine in total: 4 x the head cap keeps worst-case
+// work at a few million steps no matter how many unclosed tags the page repeats.
+const MAX_SCAN_WORK = 262_144;
+const MAX_TITLE_LENGTH = 2000;
 const NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
 const MIME_PATTERN = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i;
 export const CAPS = Object.freeze({ title: 300, description: 500, siteName: 100, provider: 100 });
@@ -55,13 +64,51 @@ function attributesOf(source) {
 	return attributes;
 }
 
+/** Index of the `>` closing the tag whose attributes start at `from`, quotes respected; -1 past the length bound. */
+function tagEnd(html, from, work = { left: MAX_SCAN_WORK }) {
+	const limit = Math.min(html.length, from + MAX_TAG_LENGTH, from + work.left);
+	let quote = '';
+	for (let i = from; i < limit; i++) {
+		const char = html[i];
+		if (quote) quote = char === quote ? '' : quote;
+		else if (char === '"' || char === "'") quote = char;
+		else if (char === '>') {
+			work.left -= i - from;
+			return i;
+		}
+	}
+	work.left -= limit - from;
+	return -1;
+}
+
+export function documentHead(html) {
+	const capped = html.length > MAX_HEAD_BYTES ? html.slice(0, MAX_HEAD_BYTES) : html;
+	const close = /<\/head\b/i.exec(capped);
+	return close ? capped.slice(0, close.index) : capped;
+}
+
 function tagsNamed(html, name) {
 	const found = [];
-	for (const match of html.matchAll(new RegExp(`<${name}\\b${TAG_BODY}>`, 'gi'))) {
-		found.push(attributesOf(match[1]));
+	const work = { left: MAX_SCAN_WORK };
+	for (const match of html.matchAll(new RegExp(`<${name}\\b`, 'gi'))) {
+		if (work.left <= 0) break;
+		const start = match.index + match[0].length;
+		const end = tagEnd(html, start, work);
+		if (end < 0) continue;
+		found.push(attributesOf(html.slice(start, end)));
 		if (found.length >= MAX_TAGS) break;
 	}
 	return found;
+}
+
+function titleOf(html) {
+	const open = /<title\b/i.exec(html);
+	if (!open) return '';
+	const start = tagEnd(html, open.index + open[0].length);
+	if (start < 0) return '';
+	const body = html.slice(start + 1, start + 1 + MAX_TITLE_LENGTH + 8);
+	const close = /<\/title/i.exec(body);
+	return close ? body.slice(0, close.index) : '';
 }
 
 /** Absolute http(s) URL without userinfo and within the length cap, else null. */
@@ -75,14 +122,15 @@ export function absoluteHttpUrl(value, base) {
 }
 
 function greatestCommonDivisor(a, b) {
-	return b === 0 ? a : greatestCommonDivisor(b, a % b);
+	while (b !== 0) [a, b] = [b, a % b];
+	return a;
 }
 
 /** "w/h" from pixel sizes, reduced; "16/9" when missing or out of the 4-digit range. */
 export function aspectOf(width, height) {
 	const w = Math.round(Number(width));
 	const h = Math.round(Number(height));
-	if (!(w > 0 && h > 0)) return '16/9';
+	if (!(w >= 1 && h >= 1 && w <= 16_384 && h <= 16_384)) return '16/9';
 	const divisor = greatestCommonDivisor(w, h);
 	return w / divisor > 9999 || h / divisor > 9999 ? '16/9' : `${w / divisor}/${h / divisor}`;
 }
@@ -117,12 +165,12 @@ function linkHref(html, base, matches) {
 const relTokens = (tag) => (tag.rel ?? '').toLowerCase().split(/\s+/);
 
 /** Everything the HTML itself says: text, image, favicon, player, oEmbed endpoint. `base` is the final URL. */
-export function extractPage(html, base) {
+export function extractPage(fullHtml, base) {
+	const html = documentHead(fullHtml);
 	const metas = metaMap(html);
-	const titleTag = /<title\b[^>]*>([\s\S]{0,2000}?)<\/title>/i.exec(html);
 	const origin = new URL(base).origin;
 	return {
-		title: cleanText(firstMeta(metas, 'og:title', 'twitter:title') || titleTag?.[1], CAPS.title),
+		title: cleanText(firstMeta(metas, 'og:title', 'twitter:title') || titleOf(html), CAPS.title),
 		description: cleanText(firstMeta(metas, 'og:description', 'twitter:description', 'description'), CAPS.description),
 		siteName: cleanText(metas.get('og:site_name'), CAPS.siteName),
 		image: absoluteHttpUrl(firstMeta(metas, 'og:image', 'twitter:image'), base),

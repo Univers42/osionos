@@ -127,4 +127,16 @@ describe('budgets', () => {
 		await assert.rejects(unfurler.resolve(`http://public.test:${target.port}/9`), status(503));
 		await Promise.all(running);
 	});
+
+	it('webhook deliveries count against the same in-flight cap', async () => {
+		const target = await startServer(() => {});
+		after(target.close);
+		const unfurler = createUnfurler({ maxInFlight: 2, netOptions: named(target.port, { requestMs: 600, deadlineMs: 600 }).options });
+		const hook = (n) => unfurler.postJson(`http://public.test:${target.port}/${n}`, {});
+		const running = [hook(1), unfurler.resolve(`http://public.test:${target.port}/2`)].map((promise) => promise.catch((error) => error));
+		await nextTick();
+		await assert.rejects(hook(3), status(503));
+		await assert.rejects(unfurler.resolve(`http://public.test:${target.port}/4`), status(503));
+		assert.deepEqual((await Promise.all(running)).map((error) => error.status), [504, 504]);
+	});
 });

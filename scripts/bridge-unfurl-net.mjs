@@ -32,7 +32,7 @@
  * deployment's own address plan. A private network that uses globally routable
  * space (or an IPv6 range inside 2000::/3) is not blocked. With several
  * resolv.conf servers c-ares tries each, so DNS can take longer than its timeout;
- * the resolve deadline still bounds it. Hostnames ending .local/.internal are
+ * the resolve deadline still bounds it. Hostnames ending .local/.internal/.flycast are
  * refused by name as defence in depth, which also rejects public sites that use
  * those suffixes.
  */
@@ -97,15 +97,15 @@ function ipv6Bytes(text) {
 	return bytes;
 }
 
-// ::ffff:0:0/96 and 64:ff9b::/96 carry the v4 in the last 4 bytes; 64:ff9b:1::/48
-// (RFC 8215) carries it in bytes 6-7 and 9-10 (byte 8 is the reserved u octet).
+// ::ffff:0:0/96 and 64:ff9b::/96 carry the v4 in the last 4 bytes. 64:ff9b:1::/48
+// (RFC 8215, local-use) is deliberately NOT decoded: it falls outside 2000::/3 and
+// is refused whole by isGlobalUnicastV6.
 function embeddedV4(bytes) {
 	const dotted = (parts) => parts.join('.');
 	const zeros = (from, to) => bytes.subarray(from, to).every((byte) => byte === 0);
 	if (zeros(0, 10) && bytes[10] === 0xff && bytes[11] === 0xff) return dotted(bytes.subarray(12));
 	if (bytes[0] === 0 && bytes[1] === 0x64 && bytes[2] === 0xff && bytes[3] === 0x9b) {
 		if (zeros(4, 12)) return dotted(bytes.subarray(12));
-		if (bytes[4] === 0 && bytes[5] === 1) return dotted([bytes[6], bytes[7], bytes[9], bytes[10]]);
 	}
 	return null;
 }
@@ -146,7 +146,7 @@ export function parseTargetUrl(raw, allowedPorts = DEFAULT_PORTS) {
 	if (url.href.length > MAX_URL_LENGTH) throw unfurlError('invalid');
 	if (!allowedPorts.has(Number(url.port) || (url.protocol === 'https:' ? 443 : 80))) throw unfurlError('blocked');
 	const host = hostOf(url);
-	if (!net.isIP(host) && /(^|\.)(localhost|local|internal)$/.test(host)) throw unfurlError('blocked');
+	if (!net.isIP(host) && /(^|\.)(localhost|local|internal|flycast)$/.test(host)) throw unfurlError('blocked');
 	return url;
 }
 
@@ -190,7 +190,11 @@ export async function resolveAddresses(url, ctx) {
 	const host = hostOf(url);
 	const addresses = net.isIP(host) ? [host] : await raceSignal(ctx.resolveHost(host), ctx.signal);
 	if (addresses.length === 0) throw unfurlError('unreachable');
-	if (addresses.some((address) => ctx.isBlocked(address))) throw unfurlError('blocked');
+	if (addresses.some((address) => ctx.isBlocked(address))) {
+		// A DNS answer that is blocked looks like a missing name to the caller:
+		// 422 vs 502 would let a user enumerate internal Docker/Fly hostnames.
+		throw unfurlError(net.isIP(host) ? 'blocked' : 'unreachable');
+	}
 	return addresses;
 }
 
