@@ -3788,10 +3788,24 @@ function bridgeTokenFromRedirect(redirectUrl) {
 	return new URLSearchParams(redirectUrl.slice(hashIndex + 1)).get('bridge_token') ?? '';
 }
 
-async function gatewayCall(fetchImpl, config, path, { headers = {}, body = '{}' } = {}) {
+// Appended, never replaced: the gateway rate-limits per client IP, and without
+// this every app sign-in arrives from the bridge's own address and shares one bucket.
+// Caveat: the incoming x-forwarded-for is client-controlled; how many trailing hops
+// the gateway trusts is its own setting, not decided here.
+function forwardedForHeader(request) {
+	const incoming = String(request.headers['x-forwarded-for'] ?? '').trim();
+	return [incoming, request.socket?.remoteAddress ?? ''].filter(Boolean).join(', ');
+}
+
+async function gatewayCall(fetchImpl, config, path, { headers = {}, body = '{}', forwardedFor = '' } = {}) {
 	const res = await fetchWithTimeout(fetchImpl, `${config.gatewayUrl}${path}`, {
 		method: 'POST',
-		headers: { 'content-type': 'application/json', accept: 'application/json', ...headers },
+		headers: {
+			'content-type': 'application/json',
+			accept: 'application/json',
+			...(forwardedFor ? { 'x-forwarded-for': forwardedFor } : {}),
+			...headers,
+		},
 		body,
 	}, 12000);
 	const data = await res.json().catch(() => ({}));
@@ -3809,23 +3823,27 @@ async function handleAuthProxy(url, request, response, config, handoffStore, fet
 	const password = safeText(payload.password, 512);
 	if (!email || !password) throw Object.assign(new Error('Email and password are required.'), { status: 422 });
 	const turnstileToken = 'localhost-turnstile-token';
+	const forwardedFor = forwardedForHeader(request);
 
 	if (url.pathname === '/api/auth/register') {
 		const rawName = safeText(payload.username ?? payload.name ?? email.split('@')[0], 64);
 		const username = (rawName.replace(/[^\w.-]/g, '') || `user${Date.now()}`).slice(0, 32);
 		const { res: rRes, data: rData } = await gatewayCall(fetchImpl, config, '/api/auth/register', {
 			body: JSON.stringify({ email, password, turnstileToken, profile: { username, confirmPassword: password } }),
+			forwardedFor,
 		});
 		if (!rRes.ok) { json(response, rRes.status || 422, { message: rData.message || 'Registration failed.' }, config); return; }
 	}
 
 	const { res: lRes, data: lData } = await gatewayCall(fetchImpl, config, '/api/auth/login', {
 		body: JSON.stringify({ email, password, turnstileToken }),
+		forwardedFor,
 	});
 	if (!lRes.ok || !lData.access_token) { json(response, lRes.status || 401, { message: lData.message || 'Invalid credentials.' }, config); return; }
 
 	const { res: sRes, data: sData } = await gatewayCall(fetchImpl, config, '/api/auth/osionos-session', {
 		headers: { authorization: `Bearer ${lData.access_token}` },
+		forwardedFor,
 	});
 	const bridgeToken = bridgeTokenFromRedirect(sData.redirectUrl);
 	if (!sRes.ok || !bridgeToken) { json(response, 502, { message: sData.message || 'Could not establish the app session.' }, config); return; }
