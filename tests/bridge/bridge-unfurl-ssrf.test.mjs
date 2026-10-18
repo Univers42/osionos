@@ -36,7 +36,7 @@ describe('address classification', () => {
 		'100.64.0.1', '100.100.100.100', '198.18.0.1', '192.0.0.8', '192.0.2.1', '198.51.100.1', '203.0.113.1',
 		'224.0.0.1', '240.0.0.1', '255.255.255.255',
 		'::', '::1', 'fe80::1', 'fc00::1', 'fdaa::3', 'fd7a:115c:a1e0::1', 'ff02::1', '::7f00:1',
-		'::ffff:127.0.0.1', '::ffff:7f00:1', '::ffff:a00:1', '64:ff9b::7f00:1', '64:ff9b:1::a00:1',
+		'::ffff:127.0.0.1', '::ffff:7f00:1', '::ffff:a00:1', '64:ff9b::7f00:1', '64:ff9b:1::a00:1', '64:ff9b:1:ab0a::1:0', '64:ff9b:1:ffff:ffff:ffff:ffff:ffff',
 		'2001:db8::1', '2001::1', '2002:7f00:1::', '3fff::1',
 		'127.1', 'not-an-ip',
 	];
@@ -57,6 +57,8 @@ describe('URL acceptance', () => {
 		assert.throws(() => parseTargetUrl(`http://example.com/${'a'.repeat(2048)}`), status(422));
 		assert.throws(() => parseTargetUrl('http://localhost/'), status(422));
 		assert.throws(() => parseTargetUrl('http://metadata.internal/'), status(422));
+		assert.throws(() => parseTargetUrl('http://app.flycast/'), status(422));
+		assert.throws(() => parseTargetUrl('http://app.vm.flycast./'), status(422));
 		assert.throws(() => parseTargetUrl(42), status(422));
 		assert.throws(() => parseTargetUrl(`${' '.repeat(3000)}http://example.com/`), status(422));
 	});
@@ -108,10 +110,19 @@ describe('DNS answers', () => {
 		after(target.close);
 		const net = loopbackNet({ ports: [target.port], names: { 'mixed.test': ['93.184.216.34', '10.0.0.1'], 'v6.test': ['2606:4700::1111', 'fdaa::3'] } });
 		for (const host of ['mixed.test', 'v6.test']) {
-			await assert.rejects(safeFetch(`http://${host}:${target.port}/`, {}, createFetchContext(net.options)), status(422));
+			await assert.rejects(safeFetch(`http://${host}:${target.port}/`, {}, createFetchContext(net.options)), status(502));
 		}
 		assert.deepEqual(net.attempts, []);
 		assert.equal(target.seen.connections, 0);
+	});
+
+	it('answers a blocked DNS answer exactly like a missing name (no internal-name oracle)', async () => {
+		const net = loopbackNet({ ports: [80], names: { 'db.internal-docker.test': ['10.0.0.5'] } });
+		const reply = async (host) => safeFetch(`http://${host}/`, {}, createFetchContext(net.options)).catch((error) => ({ status: error.status, message: error.message }));
+		const blocked = await reply('db.internal-docker.test');
+		const missing = await reply('no-such-name.test');
+		assert.deepEqual(blocked, missing);
+		assert.equal(blocked.status, 502);
 	});
 
 	it('refuses a host that resolves to nothing', async () => {
@@ -186,7 +197,7 @@ describe('redirects', () => {
 	it('refuses a 302 to a host resolving to 10.x', async () => {
 		const target = await redirectingServer();
 		const net = loopbackNet({ ports: [target.port], names: { 'public.test': ['127.0.0.1'], 'internal.test': ['10.0.0.1'] } });
-		await assert.rejects(safeFetch(`http://public.test:${target.port}/to-internal`, {}, createFetchContext(net.options)), status(422));
+		await assert.rejects(safeFetch(`http://public.test:${target.port}/to-internal`, {}, createFetchContext(net.options)), status(502));
 		assert.deepEqual(net.attempts, ['public.test']);
 	});
 

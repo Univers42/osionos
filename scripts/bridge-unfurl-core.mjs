@@ -56,6 +56,16 @@ const isSuccess = (status) => status >= 200 && status < 300;
 // what turns the bridge into a scanner.
 const UNFURL_BUCKET = { capacity: 20, refillPerSec: 0.5 };
 
+// Webhooks are user-configured automations, not pasted links: a burst of 10 covers
+// a rule firing on a bulk edit, 0.2/s (12/min) stops a loop from using the bridge
+// as a relay. Separate from the unfurl bucket so one cannot starve the other.
+const WEBHOOK_BUCKET = { capacity: 10, refillPerSec: 0.2 };
+
+/** Charge one outbound webhook to the user; throws 429 when their bucket is empty. */
+export function admitWebhook(userId) {
+	takeToken(`webhook:${userId}`, WEBHOOK_BUCKET);
+}
+
 /** Charge one outbound lookup to the user; throws 429 when their bucket is empty. */
 export function admitUnfurl(userId) {
 	takeToken(`unfurl:${userId}`, UNFURL_BUCKET);
@@ -118,6 +128,17 @@ export function createUnfurler({ netOptions = {}, maxInFlight = MAX_IN_FLIGHT, n
 		return entry;
 	}
 
+	// Shared by resolve and postJson so webhooks cannot bypass the process-wide cap.
+	async function withSlot(task) {
+		if (inFlight >= maxInFlight) throw unfurlError('busy');
+		inFlight += 1;
+		try {
+			return await task();
+		} finally {
+			inFlight -= 1;
+		}
+	}
+
 	async function resolve(rawUrl) {
 		const url = parseTargetUrl(rawUrl, netOptions.allowedPorts);
 		const requested = url.href;
@@ -125,31 +146,27 @@ export function createUnfurler({ netOptions = {}, maxInFlight = MAX_IN_FLIGHT, n
 		const hit = recall(url.href);
 		if (hit?.failure) throw unfurlError(hit.failure);
 		if (hit) return { ...hit.embed, url: requested };
-		if (inFlight >= maxInFlight) throw unfurlError('busy');
-		inFlight += 1;
 		try {
-			const embed = await fetchEmbed(url, createFetchContext(netOptions));
+			const embed = await withSlot(() => fetchEmbed(url, createFetchContext(netOptions)));
 			remember(url.href, { embed }, SUCCESS_TTL_MS);
 			return { ...embed, url: requested };
 		} catch (error) {
 			const kind = error?.unfurlKind ?? 'unreachable';
+			if (kind === 'busy') throw error;
 			remember(url.href, { failure: kind }, FAILURE_TTL_MS);
 			throw error?.unfurlKind ? error : unfurlError(kind);
-		} finally {
-			inFlight -= 1;
 		}
 	}
 
 	/** POST a JSON body without following redirects; resolves the upstream status, body discarded. */
 	async function postJson(rawUrl, payload) {
 		const ctx = createFetchContext({ ...netOptions, limits: { ...netOptions.limits, deadlineMs: 5000, requestMs: 5000 } });
-		const reply = await safeFetch(rawUrl, {
+		return withSlot(async () => (await safeFetch(rawUrl, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify(payload),
 			redirects: 0,
-		}, ctx);
-		return reply.status;
+		}, ctx)).status);
 	}
 
 	return { resolve, postJson, cacheSize: () => cache.size };

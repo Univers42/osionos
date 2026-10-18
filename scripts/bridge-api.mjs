@@ -48,7 +48,7 @@ import { createSocialHandler } from './bridge-social.mjs';
 import { createRequestMeter } from './bridge-perf.mjs';
 import { createBaasTransport } from './bridge-baas-transport.mjs';
 import { createEmbedHandler } from './bridge-embed.mjs';
-import { defaultUnfurler } from './bridge-unfurl-core.mjs';
+import { admitWebhook, defaultUnfurler } from './bridge-unfurl-core.mjs';
 import { parseTargetUrl } from './bridge-unfurl-net.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -4065,17 +4065,18 @@ async function handleAuthProxy(url, request, response, config, handoffStore, fet
 // through the shared guard in bridge-unfurl-net.mjs (public addresses, ports
 // 80/443 only).
 async function handleAutomationWebhook(request, response, config, unfurler = defaultUnfurler) {
-	verifyAppSessionToken(bearerToken(request), config);
+	const session = verifyAppSessionToken(bearerToken(request), config);
 	const payload = await readJson(request);
 	const target = parseTargetUrl(safeText(payload.url, 2048));
 	if (target.protocol !== 'https:') {
 		throw Object.assign(new Error('Automation webhooks must use https.'), { status: 422 });
 	}
+	admitWebhook(session.userId);
 	let status;
 	try {
 		status = await unfurler.postJson(target.href, payload.payload ?? {});
 	} catch (error) {
-		if (error?.status === 422) throw error;
+		if (error?.status === 422 || error?.status === 503) throw error;
 		json(response, 502, { ok: false, message: 'Webhook endpoint did not respond.' }, config);
 		return;
 	}
