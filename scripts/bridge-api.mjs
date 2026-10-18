@@ -1440,32 +1440,47 @@ export function createUserSession(payload, config, persisted = null, now = Date.
 	};
 }
 
+// One embed instead of ids-then-RPC: the FK hint is the one the page reads use (workspace_id).
+const MEMBER_WORKSPACES_SELECT = 'user_id,workspace_id,role,permissions,workspace:osionos_workspaces!workspace_id(id,owner_id,name,slug,settings,created_at,updated_at)';
+
+function updatedAtStamp(entry) {
+	const stamp = Date.parse(entry.updatedAt);
+	return Number.isNaN(stamp) ? Number.NEGATIVE_INFINITY : stamp;
+}
+
 /**
- * Org/teamspace workspaces for session enrichment — RPC-backed ONLY (no
- * fallback synthesis: a workspace appears here iff an osionos_workspace_members
- * row exists). Best-effort: any failure yields [] and the handoff proceeds.
+ * The session entries of an anchored members read, as the list RPC answered them: a workspace the
+ * row cannot name is dropped, so is a non-UUID id or an excluded one, newest updated_at first.
+ * Returns null when any row is not the user's: the anchor did not apply, and a row nobody can
+ * vouch for would put another tenant's workspace into the token.
  */
-async function memberWorkspaceEntries(userId, excludeIds, config, fetchImpl) {
+function memberRowsToEntries(rows, userId, excludeIds) {
+	if (rows.some((row) => !sameId(row?.user_id, userId))) return null;
+	return rows
+		.filter((row) => row.workspace && sameId(row.workspace.id, row.workspace_id))
+		.filter((row) => UUID_REGEX.test(String(row.workspace_id)) && !excludeIds.includes(String(row.workspace_id)))
+		.map((row) => workspaceRowToEntry(row.workspace, { role: row.role, permissions: row.permissions }))
+		.sort((left, right) => Math.sign(updatedAtStamp(right) - updatedAtStamp(left)) || 0);
+}
+
+/**
+ * Org/teamspace workspaces for session enrichment: a workspace appears here iff an
+ * osionos_workspace_members row exists (no fallback synthesis). Best-effort: any failure
+ * yields [] and the handoff proceeds, but never silently, because a WAF refusing this query
+ * would otherwise mint private-only tokens with no error anywhere.
+ * Caveat: sort ties keep the order PostgREST answered, where the list RPC left them unspecified.
+ */
+export async function memberWorkspaceEntries(userId, excludeIds, config, fetchImpl) {
+	if (!config.serviceKey || !config.baasUrl) return [];
 	try {
-		const ids = (await memberWorkspaceIds(userId, config, fetchImpl)).filter((id) => !excludeIds.includes(id));
-		if (ids.length === 0) return [];
-		const rows = await baasRest(config, fetchImpl, 'rpc/osionos_bridge_list_workspaces', {
-			method: 'POST',
-			body: { p_user_id: userId, p_workspace_ids: ids },
-		});
-		return (Array.isArray(rows) ? rows : []).map((row) => workspaceRowToEntry({
-			id: row.workspace_id,
-			owner_id: row.owner_id,
-			name: row.workspace_name,
-			slug: row.workspace_slug,
-			settings: row.workspace_settings,
-			created_at: row.created_at,
-			updated_at: row.updated_at,
-		}, {
-			role: row.workspace_role,
-			permissions: row.permissions,
-		}));
-	} catch {
+		const query = postgrestQuery({ user_id: `eq.${userId}`, select: MEMBER_WORKSPACES_SELECT });
+		const rows = await baasRest(config, fetchImpl, `osionos_workspace_members?${query}`);
+		const entries = memberRowsToEntries(Array.isArray(rows) ? rows : [], userId, excludeIds);
+		if (entries) return entries;
+		console.warn('[osionos-bridge] member workspaces unavailable: rows of another user');
+		return [];
+	} catch (error) {
+		console.warn(`[osionos-bridge] member workspaces unavailable: ${error?.status ?? 'error'}`);
 		return [];
 	}
 }

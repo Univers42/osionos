@@ -80,8 +80,8 @@ describe('env-admin sign-in order', () => {
 		const { claims } = await signIn(stub, { email: 'boss@example.com' });
 		const kinds = stub.kinds();
 		assert.deepEqual(kinds.slice(0, 4), ['persist', 'patch-admin', 'get-admin', 'ensure']);
-		// The only step that changes with the member read: today ids then the RPC, later one embed.
-		assert.deepEqual(kinds.slice(4), ['members-ids', 'rpc-list']);
+		// The only step that changed with the member read: ids then the RPC became one embed.
+		assert.deepEqual(kinds.slice(4), ['embed']);
 		assert.equal(claims.isAdmin, true);
 		assert.equal(claims.roles[ADMIN_WORKSPACE_ID], 'admin');
 	});
