@@ -721,10 +721,10 @@ async function markChannelRead(deps, session, request, channelId, response, conf
 
 /**
  * Build the /api/chat dispatcher: `await handler(url, request, response)` →
- * true when handled. deps: { config, verifySession, fetchImpl?, env? }.
+ * true when handled. deps: { config, verifySession, fetchImpl?, env?, unfurler? }.
  */
-export function createChatHandler({ config, verifySession, fetchImpl = fetch, env = process.env }) {
-	const deps = { fetchImpl, env };
+export function createChatHandler({ config, verifySession, fetchImpl = fetch, env = process.env, unfurler }) {
+	const deps = { fetchImpl, env, unfurler };
 	return async function handleChatRoute(url, request, response, requestConfig = config) {
 		const pathname = url.pathname;
 		if (!pathname.startsWith('/api/chat/')) return false;

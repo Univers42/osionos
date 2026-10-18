@@ -22,15 +22,12 @@
  */
 
 import { createHash } from 'node:crypto';
-import { lookup as dnsLookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
 import { httpError, rest, safeText, sendJson } from './bridge-social-core.mjs';
 import { extFromMime, storageGet, storageObjectKey, storagePut, typeFromMime, ensureChatBucket } from './bridge-storage-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { admitUnfurl, defaultUnfurler } from './bridge-unfurl-core.mjs';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
-const LINK_PREVIEW_BYTES = 512 * 1024;
-const LINK_PREVIEW_TIMEOUT_MS = 6_000;
 const MEDIA_TYPES = new Set(['image', 'video', 'audio', 'file', 'url']);
 const META_TEXT_KEYS = ['title', 'description', 'image'];
 const META_INT_CAPS = { width: 16384, height: 16384, durationMs: 86_400_000 };
@@ -170,82 +167,16 @@ export async function handleGallery(deps, session, url, channelId, response, con
 	const media = (Array.isArray(rows) ? rows : []).map(attachmentEntry);
 	return sendJson(response, 200, { ok: true, media }, config);
 }
-
-/** Reject loopback/private/link-local hosts (SSRF guard) before a server fetch. */
-export async function assertPublicHttpUrl(rawUrl) {
-	let parsed;
-	try {
-		parsed = new URL(rawUrl);
-	} catch {
-		throw httpError('A valid http(s) URL is required.', 422);
-	}
-	if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw httpError('Only http(s) URLs are allowed.', 422);
-	const host = parsed.hostname.toLowerCase();
-	if (host === 'localhost' || host.endsWith('.internal') || host.endsWith('.local')) throw httpError('Host is not allowed.', 422);
-	const candidates = isIP(host) ? [host] : (await dnsLookup(host, { all: true }).catch(() => [])).map((entry) => entry.address);
-	if (candidates.length === 0) throw httpError('Host could not be resolved.', 422);
-	for (const ip of candidates) {
-		if (isPrivateAddress(ip)) throw httpError('Host resolves to a private address.', 422);
-	}
-	return parsed;
-}
-
-function isPrivateAddress(ip) {
-	const v4 = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
-	const p = v4.split('.').map(Number);
-	if (p.length === 4 && p.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) {
-		return p[0] === 127 || p[0] === 10 || p[0] === 0 || (p[0] === 169 && p[1] === 254)
-			|| (p[0] === 172 && p[1] >= 16 && p[1] <= 31) || (p[0] === 192 && p[1] === 168);
-	}
-	// IPv6: block loopback (::1), link-local (fe80::/10) and unique-local (fc00::/7);
-	// global unicast (2000::/3, e.g. 2606:...) is allowed.
-	const v6 = ip.toLowerCase();
-	return v6 === '::1' || v6 === '::' || v6.startsWith('fe8') || v6.startsWith('fe9')
-		|| v6.startsWith('fea') || v6.startsWith('feb') || v6.startsWith('fc') || v6.startsWith('fd');
-}
-
-function metaTag(html, ...names) {
-	for (const name of names) {
-		const re = new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]*content=["']([^"']*)["']`, 'i');
-		const alt = new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${name}["']`, 'i');
-		const m = re.exec(html) ?? alt.exec(html);
-		if (m && m[1]) return safeText(m[1], 500);
-	}
-	return '';
-}
-
-/** POST /api/chat/link-preview {url} — SSRF-guarded OG/title scrape. */
+/**
+ * POST /api/chat/link-preview {url}: title/description/image of a link. The
+ * fetch, SSRF guard and cache are the shared unfurler (bridge-unfurl-core.mjs);
+ * the response keeps its pre-embed shape.
+ */
 export async function handleLinkPreview(deps, session, payload, response, config) {
-	void session;
-	const parsed = await assertPublicHttpUrl(safeText(payload.url, 2048));
-	const upstream = await deps.fetchImpl(parsed.toString(), {
-		method: 'GET',
-		headers: { Accept: 'text/html,application/xhtml+xml', 'User-Agent': 'osionos-link-preview/1.0' },
-		redirect: 'follow',
-		signal: AbortSignal.timeout(LINK_PREVIEW_TIMEOUT_MS),
-	}).catch(() => null);
-	if (!upstream || !upstream.ok) throw httpError('Could not fetch the link.', 502);
-	const reader = upstream.body?.getReader?.();
-	let html = '';
-	if (reader) {
-		const decoder = new TextDecoder();
-		for (;;) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			html += decoder.decode(value, { stream: true });
-			if (html.length >= LINK_PREVIEW_BYTES) { await reader.cancel(); break; }
-		}
-	} else {
-		html = (await upstream.text().catch(() => '')).slice(0, LINK_PREVIEW_BYTES);
-	}
-	const titleTag = /<title[^>]*>([^<]{0,500})<\/title>/i.exec(html);
+	admitUnfurl(session.userId);
+	const embed = await (deps.unfurler ?? defaultUnfurler).resolve(typeof payload?.url === 'string' ? payload.url : '');
 	return sendJson(response, 200, {
 		ok: true,
-		preview: {
-			title: metaTag(html, 'og:title', 'twitter:title') || safeText(titleTag?.[1], 300),
-			description: metaTag(html, 'og:description', 'twitter:description', 'description'),
-			image: metaTag(html, 'og:image', 'twitter:image'),
-			url: parsed.toString(),
-		},
+		preview: { title: embed.title, description: embed.description, image: embed.image ?? '', url: embed.url },
 	}, config);
 }
