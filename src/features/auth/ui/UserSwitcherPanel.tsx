@@ -257,8 +257,9 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
                   type="button"
                   onClick={(event) => {
                     event.stopPropagation();
-                    logoutUser(p.id);
+                    void logoutUser(p.id);
                   }}
+                  title="Sign out of all devices"
                   className="ml-auto h-[var(--osio-control-h-xs)] shrink-0 rounded-[var(--osio-radius-sm)] px-1.5 text-xs font-medium text-[var(--osio-danger)] hover:bg-[var(--osio-danger-subtle-bg-hover)]"
                 >
                   Log out
@@ -274,8 +275,8 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
         <button type="button" onClick={() => setAuthOpen(true)} data-tone="muted" className="osio-menu-item">
           Add another account
         </button>
-        <button type="button" onClick={() => activeId && logoutUser(activeId)} data-tone="muted" className="osio-menu-item">
-          Log out
+        <button type="button" onClick={() => { if (activeId) void logoutUser(activeId); }} data-tone="muted" className="osio-menu-item">
+          Sign out of all devices
         </button>
       </footer>
       </div>
