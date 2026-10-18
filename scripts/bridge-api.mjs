@@ -45,6 +45,7 @@ import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
 import { createSocialHandler } from './bridge-social.mjs';
 import { assertPublicHttpUrl } from './bridge-chat-media.mjs';
+import { createRequestMeter } from './bridge-perf.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -4008,7 +4009,8 @@ export function createBridgeServer(options = {}) {
 	const config = options.config ?? configFromEnv();
 	const handoffStore = options.handoffStore ?? new Map();
 	const replayStore = options.replayStore ?? new Map();
-	const fetchImpl = options.fetchImpl ?? fetch;
+	const meter = createRequestMeter({ enabled: options.perf ?? process.env.OSIONOS_BRIDGE_PERF === '1', baasUrl: config.baasUrl, log: options.perfLog });
+	const fetchImpl = meter.wrapFetch(options.fetchImpl ?? fetch);
 	const spawnImpl = options.spawnImpl ?? spawn;
 	// Comments and publish reach a page through the same read rule as GET /api/pages/:id.
 	const verifyPageAccess = (request, pageId, permission) => readablePageAccess(request, pageId, permission, config, fetchImpl);
@@ -4038,12 +4040,14 @@ export function createBridgeServer(options = {}) {
 		realtimeToken: createRealtimeTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 	};
 	const server = createServer(async (request, response) => {
-		let responseConfig = requestOriginConfig(config, request);
-		try {
-			await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl, spawnImpl, social });
-		} catch (error) {
-			if (!response.headersSent) errorJson(response, error, responseConfig);
-		}
+		await meter.track(request, response, async () => {
+			let responseConfig = requestOriginConfig(config, request);
+			try {
+				await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl, spawnImpl, social });
+			} catch (error) {
+				if (!response.headersSent) errorJson(response, error, responseConfig);
+			}
+		});
 	});
 	// The sandbox relays run in ide-server.mjs (one process per sandbox daemon); the
 	// bridge does no WebSocket work (realtime is Kong), so every upgrade is refused.
