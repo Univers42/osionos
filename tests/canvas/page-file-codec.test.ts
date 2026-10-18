@@ -25,6 +25,7 @@ import {
 } from "../../src/features/page-file/model/pageFileCodec.ts";
 import { metaFromPage, patchFromMeta } from "../../src/features/page-file/model/pageFileMeta.ts";
 import { withoutLegacyUpdated } from "../../src/features/page-file/model/frontMatter.ts";
+import { linkBlock } from "./link-block-fixtures.ts";
 import { META_PAGE, MARKDOWN_PROBES, OVERLAY_PROBES, blockFieldNames, corpus, insertAtTop, page, viaMarkdown } from "./page-file-codec-fixtures.ts";
 
 const write = (source: PageEntry): string => pageToFile(source);
@@ -195,6 +196,24 @@ test("every Block field is markdown, overlay or known-lossy (self-check)", () =>
   }
   assert.ok(names.includes("placeholderText"), "the known-lossy key is in Block");
   assert.deepEqual(KNOWN_LOSSY_KEYS, ["placeholderText"]);
+});
+
+test("a snapshot over the 64 KB cap is dropped on decode and the URL stays", () => {
+  const oversized = { ...linkBlock("bookmark").embed, padding: "x".repeat(70 * 1024) };
+  const source: PageEntry = { _id: "p", workspaceId: "w", content: [linkBlock("bookmark", { embed: oversized as never }), linkBlock("embed")] };
+  const done = fileToPage(pageToFile(source));
+  assert.equal(done.content[0].embed, undefined);
+  assert.equal(done.content[0].content, source.content[0].content);
+  assert.deepEqual(done.content[1].embed, source.content[1].embed);
+});
+
+test("a hand-edited fence with hostile snapshot URLs decodes with them blanked", () => {
+  const hostile = { ...linkBlock("embed").embed, image: "javascript:alert(1)", player: { src: "data:text/html,x", aspect: "16/9" } };
+  const text = "```osiembed\n" + JSON.stringify({ content: "https://a.io/x", embed: hostile, embedHeight: "tall" }) + "\n```\n";
+  const [block] = fileToPage(text).content;
+  assert.equal(block.embed?.image, "");
+  assert.equal(block.embed?.player, null);
+  assert.equal("embedHeight" in block, false);
 });
 
 test("the .omd name helpers", () => {

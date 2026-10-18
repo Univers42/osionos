@@ -37,6 +37,7 @@ export function blocksHaveHeavyContent(blocks: Block[] | undefined): boolean {
     block.type === "graph_view" ||
     block.type === "draw" ||
     block.type === "whiteboard" ||
+    block.type === "embed" ||
     blocksHaveHeavyContent(block.children)
   )));
 }

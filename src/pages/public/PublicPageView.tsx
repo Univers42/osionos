@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import React from "react";
+import { ReadOnlyEmbedModeContext } from "@/entities/block";
 import { IconValueView } from "@/shared/ui";
 import { PageBlocksRenderer } from "@/widgets/page-renderer";
 import { usePublicPage } from "./usePublicPage";
@@ -35,7 +36,10 @@ export const PublicPageView: React.FC = () => {
               {page.icon && <IconValueView value={page.icon} size={32} />}
               <h1 className="text-3xl font-bold leading-tight">{page.title}</h1>
             </header>
-            <PageBlocksRenderer blocks={page.content} />
+            {/* The reader opened this page on purpose, so embeds may frame live. */}
+            <ReadOnlyEmbedModeContext.Provider value="live">
+              <PageBlocksRenderer blocks={page.content} />
+            </ReadOnlyEmbedModeContext.Provider>
             <footer className="mt-16 border-t border-[var(--osio-border-default)] pt-4 text-xs text-[var(--osio-fg-subtle)]">
               Published with osionos
             </footer>

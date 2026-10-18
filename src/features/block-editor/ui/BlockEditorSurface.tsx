@@ -1182,6 +1182,8 @@ function isMediaHandleBlock(type: Block["type"]): boolean {
 		case "graph_view":
 		case "draw":
 		case "whiteboard":
+		case "embed":
+		case "bookmark":
 			return true;
 		default:
 			return false;
@@ -1209,7 +1211,9 @@ function getBlockSpacing(type: Block["type"]): { pt: string; pb: string; handleT
 		case "database_full_page":
 		case "graph_view":
 		case "draw":
-		case "whiteboard": return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
+		case "whiteboard":
+		case "embed":
+		case "bookmark":  return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
 		// Boxed blocks: medium.
 		case "callout":
 		case "quote":     return { pt: "pt-2",   pb: "pb-1",   handleTop: "top-3" };
@@ -1381,7 +1385,9 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		block.type === "database_full_page" ||
 		block.type === "graph_view" ||
 		block.type === "draw" ||
-		block.type === "whiteboard";
+		block.type === "whiteboard" ||
+		block.type === "embed" ||
+		block.type === "bookmark";
 	const shellChrome = isEmbedBlock ? "" : "rounded-md";
 
 	return (
