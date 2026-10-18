@@ -197,6 +197,9 @@ export function configFromEnv(env = process.env) {
 		},
 		// Account-level administrators. These emails are promoted to is_admin at
 		// login (sticky in the DB, so the flag survives later env changes).
+		// Off unless explicitly set: the Claude CLI route runs a child with
+		// bypassPermissions. Caveat: never set this on a public deployment.
+		agentClaudeEnabled: env.OSIONOS_AGENT_CLAUDE === '1',
 		adminEmails: (env.OSIONOS_ADMIN_EMAILS ?? 'dev.pro.photo@gmail.com')
 			.split(',').map((value) => value.trim().toLowerCase()).filter(Boolean),
 	};
@@ -2017,7 +2020,26 @@ function emitClaudeEvent(response, event) {
 	return finalResult;
 }
 
-async function handleClaudeAgentStream(request, response, config) {
+// Caveat: this allowlist is not a security boundary. Under bypassPermissions the
+// child runs as the same uid and can read /proc/<ppid>/environ, so the bridge's
+// secrets stay reachable. OSIONOS_AGENT_CLAUDE must never be set on a public
+// deployment; the allowlist only keeps secrets out of the child's own env dump.
+export function claudeChildEnv(env) {
+	return Object.fromEntries(Object.entries(env).filter(([key]) => (
+		key === 'PATH' || key === 'HOME' || key === 'LANG' || key.startsWith('ANTHROPIC_')
+	)));
+}
+
+// 404 hides the route entirely when the flag is off, even from admins and
+// even before any session check, so a public build exposes nothing to probe.
+function requireClaudeAgentAdmin(request, config) {
+	if (!config.agentClaudeEnabled) throw Object.assign(new Error('Not found.'), { status: 404 });
+	const session = verifyAppSessionToken(bearerToken(request), config);
+	if (!session.isAdmin) throw Object.assign(new Error('Administrator access is required.'), { status: 403 });
+}
+
+async function handleClaudeAgentStream(request, response, config, spawnImpl = spawn) {
+	requireClaudeAgentAdmin(request, config);
 	const payload = sanitizeClaudeRequest(await readJson(request));
 	response.writeHead(200, {
 		'content-type': 'text/event-stream; charset=utf-8',
@@ -2034,9 +2056,9 @@ async function handleClaudeAgentStream(request, response, config) {
 		allowedTools: payload.allowedTools,
 	});
 
-	const child = spawn(process.env.CLAUDE_BIN ?? 'claude', buildClaudeArgs(payload), {
+	const child = spawnImpl(process.env.CLAUDE_BIN ?? 'claude', buildClaudeArgs(payload), {
 		cwd: resolve(APP_ROOT, '../../..'),
-		env: process.env,
+		env: claudeChildEnv(process.env),
 		stdio: ['ignore', 'pipe', 'pipe'],
 	});
 	let buffer = '';
@@ -3839,10 +3861,6 @@ async function handleBridgePost(url, request, response, config, handoffStore, re
 		await handleAutomationWebhook(request, response, config, fetchImpl);
 		return true;
 	}
-	if (url.pathname === '/api/agent/claude/stream') {
-		await handleClaudeAgentStream(request, response, config);
-		return true;
-	}
 	if (url.pathname === '/api/media/unsplash/download') {
 		admitMediaRequest(request, config, 'media-download', MEDIA_DOWNLOAD_LIMIT);
 		const body = await readJson(request, MEDIA_DOWNLOAD_BODY_LIMIT_BYTES);
@@ -3887,6 +3905,10 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.feed(url, request, response, context.config)) return;
 	if (await context.social.social(url, request, response, context.config)) return;
 	if (await context.social.collab(url, request, response, context.config)) return;
+	if (request.method === 'POST' && url.pathname === '/api/agent/claude/stream') {
+		await handleClaudeAgentStream(request, response, context.config, context.spawnImpl);
+		return;
+	}
 	if (request.method === 'GET' && await handleWorkspaceGet(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'GET' && await handlePagesGet(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'GET' && await handleBridgeGet(url, request, response, context.config, context.fetchImpl)) return;
@@ -3914,6 +3936,7 @@ export function createBridgeServer(options = {}) {
 	const handoffStore = options.handoffStore ?? new Map();
 	const replayStore = options.replayStore ?? new Map();
 	const fetchImpl = options.fetchImpl ?? fetch;
+	const spawnImpl = options.spawnImpl ?? spawn;
 	// Comments and publish reach a page through the same read rule as GET /api/pages/:id.
 	const verifyPageAccess = (request, pageId, permission) => readablePageAccess(request, pageId, permission, config, fetchImpl);
 	// Standalone workstream handlers, created once. rtc keeps the sibling
@@ -3943,7 +3966,7 @@ export function createBridgeServer(options = {}) {
 	const server = createServer(async (request, response) => {
 		let responseConfig = requestOriginConfig(config, request);
 		try {
-			await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl, social });
+			await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl, spawnImpl, social });
 		} catch (error) {
 			if (!response.headersSent) errorJson(response, error, responseConfig);
 		}
