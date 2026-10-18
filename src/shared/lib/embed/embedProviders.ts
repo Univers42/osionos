@@ -53,8 +53,9 @@ const RULES: Record<string, Rule> = {
   "figma.com": figma, "gist.github.com": gist, "twitter.com": tweet, "x.com": tweet,
   "reddit.com": reddit, "giphy.com": giphy, "val.town": valTown,
   "forms.microsoft.com": msForms, "forms.office.com": msForms,
-  "stackblitz.com": stackblitz, "simplepdf.eu": passThrough("SimplePDF"),
-  "link.excalidraw.com": passThrough("Excalidraw"), "excalidraw.com": passThrough("Excalidraw"),
+  "stackblitz.com": stackblitz, "simplepdf.eu": passThrough("SimplePDF", "simplepdf.eu"),
+  "link.excalidraw.com": passThrough("Excalidraw", "link.excalidraw.com"),
+  "excalidraw.com": passThrough("Excalidraw", "excalidraw.com"),
   "loom.com": loom, "open.spotify.com": spotify, "soundcloud.com": soundcloud,
   "dailymotion.com": dailymotion, "dai.ly": dailymotion, "tiktok.com": tiktok,
   "streamable.com": streamable, "twitch.tv": twitch, "facebook.com": facebook,
@@ -69,9 +70,18 @@ function applyRule(allowedHost: string, parts: UrlParts): ProviderEmbed | null {
   return RULES[allowedHost]?.(parts) ?? null;
 }
 
+/** A link written with a scheme is read the way the browser reads it before the table
+ *  looks at it: `https://evil.example\\@www.youtube.com/` is evil.example to a browser
+ *  (and to the Open link) but a YouTube link to a hand-rolled split. Null when the
+ *  scheme'd text is not a usable http(s) URL. A bare `youtu.be/abc` has no scheme and
+ *  keeps the hand-rolled split. */
+function normalizedSource(source: string): string {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(source.trim()) ? safeHttpUrl(source) : source;
+}
+
 /** The provider's player for a pasted link or embed snippet, else null. */
 export function resolveProviderEmbed(rawUrl: string): ProviderEmbed | null {
-  const parts = splitUrl(embedSrcOf(rawUrl));
+  const parts = splitUrl(normalizedSource(embedSrcOf(rawUrl)));
   const allowedHost = parts === null ? null : providerHostOf(parts.host);
   if (parts === null || allowedHost === null) return null;
   const embed = applyRule(allowedHost, parts);

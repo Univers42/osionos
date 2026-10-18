@@ -89,7 +89,9 @@ test("html: an unsafe stored URL is inert escaped text", () => {
 });
 
 test("html: a URL on a refused/unsafe frame degrades to the link only", () => {
-  const out = html(linkBlock("embed", { embed: { ...SNAPSHOT, frameable: false } }));
+  // A validated player is framed whatever the page's own framing policy says; the
+  // policy only decides for the page itself, so only a snapshot without a player degrades.
+  const out = html(linkBlock("embed", { embed: { ...SNAPSHOT, player: null, frameable: false } }));
   assert.equal(out.includes("<iframe"), false);
   assert.match(out, /<a href=/);
 });

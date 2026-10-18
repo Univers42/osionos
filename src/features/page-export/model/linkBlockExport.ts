@@ -23,6 +23,7 @@ import {
   EMBED_REFERRER_POLICY, GENERIC_ALLOW, PROVIDER_ALLOW, THIRD_PARTY_SANDBOX, clampEmbedHeight, safeAspect,
 } from "@/shared/lib/embed/embedPolicy";
 import { appForbiddenOrigins, displayHost, safeHttpUrl } from "@/shared/lib/embed/embedUrlGuard";
+import { escapeLinkLabel } from "@/shared/lib/embed/linkLabel";
 import { chooseEmbedView } from "@/shared/ui/embed/model/chooseEmbedView";
 
 import { escapeHtml } from "./htmlEscape";
@@ -51,7 +52,7 @@ const oneLine = (value: string): string => value.replace(/\s+/g, " ").trim();
 export function linkBlockMarkdown(block: Block): string {
   const { href, title } = linkTarget(block);
   if (href === "") return oneLine(block.content ?? "");
-  const label = (title || href).replace(/[[\]\\]/g, "\\$&");
+  const label = escapeLinkLabel(title || href);
   return `[${label}](${href.replaceAll("(", "%28").replaceAll(")", "%29")})`;
 }
 

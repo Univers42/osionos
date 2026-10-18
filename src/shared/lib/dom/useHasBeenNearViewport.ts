@@ -13,8 +13,8 @@
 import { useEffect, useState, type RefObject } from "react";
 
 /** True once the element has come within 200px of the viewport, and stays true.
- *  A frame is mounted only then: its stall timer starts at mount, and a frame the
- *  browser has deliberately not loaded yet (offscreen, `loading="lazy"`) would
+ *  Gate any child that starts work at mount (a frame with a load-stall timer, an app
+ *  embed) on it: a child the browser deliberately defers while offscreen would
  *  otherwise be reported as not responding.
  *
  *  Caveat: without IntersectionObserver (old webviews, node) it answers true at

@@ -63,7 +63,7 @@ export const googleDocs: Rule = (parts) => {
 };
 
 export const googleCalendar: Rule = (parts) =>
-  parts.path.includes("/embed") ? page("Google Calendar", asGiven(parts), 800, 600) : null;
+  parts.host === "calendar.google.com" && parts.path.includes("/embed") ? page("Google Calendar", asGiven(parts), 800, 600) : null;
 
 export const googleMaps: Rule = (parts) =>
   (parts.host === "google.com" || parts.host === "maps.google.com") && parts.path.startsWith("/maps/embed")
@@ -71,7 +71,7 @@ export const googleMaps: Rule = (parts) =>
 
 export const figma: Rule = (parts) => {
   const square = (src: string): ProviderEmbed => page("Figma", src, 550, 550);
-  if (parts.host === "embed.figma.com" || parts.path === "/embed") {
+  if (parts.host === "embed.figma.com" || (parts.host === "figma.com" && parts.path === "/embed")) {
     // Already an embed: resolving it again must not wrap it in another one.
     const hasUrl = queryValue(parts.query, "url") !== undefined;
     return hasUrl || parts.host === "embed.figma.com" ? square(asGiven(parts)) : null;
@@ -118,13 +118,17 @@ export const giphy: Rule = (parts) => {
   return isId(id) ? page("GIPHY", `https://giphy.com/embed/${id}`, 480, 360) : null;
 };
 
+// Only `/v/<name>` (a val's page) and `/embed/<name>` (what it resolves to) on val.town
+// itself. Everything else on *.val.town, such as `someone.web.val.town`, is a page the
+// val's author wrote and is not framed with the provider's permissions.
 export const valTown: Rule = (parts) => {
-  const [v, name] = parts.segments;
-  const src = parts.segments.length === 2 && v === "v" && isName(name) ? `https://val.town/embed/${name}` : asGiven(parts);
-  return page("val.town", src);
+  const [kind, name] = parts.segments;
+  const isValPath = parts.segments.length === 2 && (kind === "v" || kind === "embed") && isName(name);
+  return parts.host === "val.town" && isValPath ? page("val.town", `https://val.town/embed/${name}`) : null;
 };
 
 export const msForms: Rule = (parts) => {
+  if (parts.host !== "forms.microsoft.com" && parts.host !== "forms.office.com") return null;
   const base = asGiven(parts);
   const src = queryValue(parts.query, "embed") === "true" ? base : `${base}${parts.query === "" ? "?" : "&"}embed=true`;
   return page("Microsoft Forms", src);

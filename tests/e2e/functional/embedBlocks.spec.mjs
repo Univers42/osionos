@@ -180,6 +180,58 @@ test.describe("embed and bookmark blocks", () => {
     await expect(page.getByText("javascript:alert(1)").first()).toBeVisible();
   });
 
+  test("hostile fields inside a well-formed snapshot never reach an iframe, link or image", async ({ page, baseURL }) => {
+    const wellFormed = (id, content, fields) => ({
+      id, type: "embed", content,
+      embed: {
+        url: content, kind: "video", provider: null, title: "x", description: "", siteName: "x",
+        image: "", favicon: "", player: null, media: null, frameable: true,
+        resolvedAt: "2026-10-18T12:00:00.000Z", ...fields,
+      },
+    });
+    await seedPage(page, baseURL, [
+      wellFormed("w1", "https://example.com/a", { player: { src: "javascript:alert(1)", aspect: "16/9" } }),
+      wellFormed("w2", "https://example.com/b", { player: { src: `${baseURL}/hostile-same-origin`, aspect: "16/9" } }),
+      wellFormed("w3", "https://example.com/c", { image: "javascript:alert(2)", kind: "link", player: null }),
+      wellFormed("w4", "https://example.com/d", { favicon: "data:text/html,x", kind: "link", player: null }),
+      { id: "m1", type: "paragraph", content: '[google.com](https://google.com@evil.example/ "osio:mention") [ok](https://example.org/ "osio:mention")' },
+    ]);
+    await expect(page.locator('[data-block-type="embed"]').first()).toBeVisible();
+    const offenders = await page.evaluate((origin) => {
+      const bad = [];
+      for (const frame of document.querySelectorAll("iframe")) {
+        const src = frame.getAttribute("src") ?? "";
+        if (/^(javascript|data|blob):/i.test(src) || src.startsWith(origin) || src.includes("hostile-same-origin")) bad.push(`iframe:${src}`);
+      }
+      for (const img of document.querySelectorAll('[data-block-type] img[src]')) {
+        const src = img.getAttribute("src");
+        if (!/^https?:/i.test(src)) bad.push(`img:${src}`);
+      }
+      for (const a of document.querySelectorAll("a[href]")) {
+        if (a.getAttribute("href").includes("evil.example")) bad.push(`a:${a.getAttribute("href")}`);
+      }
+      return bad;
+    }, baseURL);
+    expect(offenders).toEqual([]);
+    await expect(page.getByText("google.com").first()).toBeVisible();
+  });
+
+  test("a bookmark card names the host it opens, not the site name the page claims", async ({ page, baseURL }) => {
+    await seedPage(page, baseURL, [{
+      id: "b1", type: "bookmark", content: "https://evil.example/login",
+      embed: {
+        url: "https://evil.example/login", kind: "link", provider: null, title: "Sign in", description: "",
+        siteName: "google.com", image: "", favicon: "", player: null, media: null, frameable: null,
+        resolvedAt: "2026-10-18T12:00:00.000Z",
+      },
+    }]);
+    const card = linkBlock(page).locator('a[href="https://evil.example/login"]').first();
+    await expect(card).toBeAttached();
+    const text = (await card.innerText()).toLowerCase();
+    expect(text.indexOf("evil.example")).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf("evil.example")).toBeLessThan(text.indexOf("google.com"));
+  });
+
   test("a generic embed's resize grip commits one height that survives a reload", async ({ page, baseURL }) => {
     await seedPage(page, baseURL, [{ id: "e1", type: "embed", content: "https://example.com/app" }]);
     const grip = page.getByRole("separator", { name: "Resize embed" });

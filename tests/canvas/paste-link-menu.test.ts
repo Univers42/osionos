@@ -26,7 +26,8 @@ import {
   mentionLinkSource,
   withMentionTitle,
 } from "../../src/features/block-editor/model/pasteLinkMenu.ts";
-import { applySnapshot } from "../../src/features/block-editor/model/linkSnapshotApply.ts";
+import { parseInline } from "../../packages/markdown-engine/markdown/parserInline.ts";
+import { applySnapshot, commitSnapshot } from "../../src/features/block-editor/model/linkSnapshotApply.ts";
 import { SNAPSHOT } from "./link-block-fixtures.ts";
 
 const URL_A = "https://example.com/a";
@@ -43,10 +44,10 @@ test("the menu offers URL, Mention, Bookmark, Embed in that order", () => {
   assert.deepEqual(PASTE_CHOICES.map((entry) => entry.choice), ["url", "mention", "bookmark", "embed"]);
 });
 
-test("defaultPasteChoice: Embed for a provider URL, URL for any other page", () => {
-  assert.equal(defaultPasteChoice(YOUTUBE), "embed");
-  assert.equal(defaultPasteChoice(URL_A), "url");
-  assert.equal(defaultPasteChoice("https://example.com/watch?v=dQw4w9WgXcQ"), "url");
+test("defaultPasteChoice: Embed for a provider URL, URL for any other page", async () => {
+  assert.equal(await defaultPasteChoice(YOUTUBE), "embed");
+  assert.equal(await defaultPasteChoice(URL_A), "url");
+  assert.equal(await defaultPasteChoice("https://example.com/watch?v=dQw4w9WgXcQ"), "url");
 });
 
 test("insertPastedLink replaces the selection with [host](url) and reports its range", () => {
@@ -143,10 +144,21 @@ test("withMentionTitle swaps the link text for the resolved title, once", () => 
 });
 
 test("cleanMentionTitle cannot break the link syntax", () => {
-  assert.equal(cleanMentionTitle("a [b]\n c", URL_A), "a b c");
+  assert.equal(cleanMentionTitle("a [b]\n c", URL_A), "a \\[b\\] c");
   assert.equal(cleanMentionTitle("   ", URL_A), "example.com");
   assert.equal(cleanMentionTitle("x".repeat(500), URL_A).length, 120);
-  assert.equal(mentionLinkSource("]( evil", URL_A), `[( evil](${URL_A} "osio:mention")`);
+  assert.equal(mentionLinkSource("]( evil", URL_A), `[\\]( evil](${URL_A} "osio:mention")`);
+});
+
+test("cleanMentionTitle escapes backslashes, so a trailing one cannot swallow the closing bracket", () => {
+  assert.equal(cleanMentionTitle("C:\\Temp\\", URL_A), "C:\\\\Temp\\\\");
+  const source = mentionLinkSource("dir\\", URL_A);
+  assert.equal(source, `[dir\\\\](${URL_A} "osio:mention")`);
+  const [link] = parseInline(source);
+  assert.equal(link.type, "link");
+  assert.equal((link as { href: string }).href, URL_A, "the link still closes at its own bracket");
+  const unescaped = parseInline(mentionLinkSource("a [b] \\", URL_A)).flatMap((node) => ("children" in node ? node.children : []));
+  assert.equal(unescaped.map((node) => ("value" in node ? node.value : "")).join(""), "a [b] \\", "the parser unescapes what the escaper wrote");
 });
 
 test("applySnapshot titles a mention and stores a block snapshot, only while they still match", () => {
@@ -174,7 +186,7 @@ test("C18: no choice, default or edit in the model touches the network", async (
   try {
     for (const url of [URL_A, YOUTUBE]) {
       const { block, context } = pasted("see  now", url, 4);
-      defaultPasteChoice(url);
+      await defaultPasteChoice(url);
       for (const entry of PASTE_CHOICES) applyPasteChoice(entry.choice, block, context);
     }
     await new Promise((resolve) => setImmediate(resolve));
@@ -191,4 +203,35 @@ test("C18: only the attach hook resolves, and the paste hook never imports the r
   const read = (name: string) => readFileSync(new URL(`../../src/features/block-editor/model/${name}`, import.meta.url), "utf8");
   assert.doesNotMatch(read("usePasteLinkMenu.ts"), /resolveLinkSnapshot|resolveEmbed|\.\/linkSnapshot"/);
   assert.match(read("useLinkSnapshotAttach.ts"), /resolveLinkSnapshot\(requestedUrl\(request\)\)/);
+});
+
+test("applySnapshot returns the very same block when the mention already carries the title", () => {
+  const { block, context } = pasted("see  now", URL_A, 4);
+  const mentionBlock = applyPasteChoice("mention", block, context)?.block as Block;
+  const snapshot = { ...SNAPSHOT, title: "Example Domain" };
+  const request = { kind: "mention", blockId: "p1", context } as const;
+  const once = applySnapshot([mentionBlock], request, snapshot);
+  const twice = applySnapshot(once, request, snapshot);
+  assert.equal(twice, once, "same title again: no new tree, so the editor does not re-render");
+  const sameAsHost = applySnapshot([mentionBlock], request, { ...SNAPSHOT, title: "example.com" });
+  assert.equal(sameAsHost[0], mentionBlock, "a title equal to the host leaves the block untouched");
+});
+
+test("commitSnapshot applies to the tree as it is now, not the one captured at request time", () => {
+  const request = { kind: "block", blockId: "e1", url: URL_A } as const;
+  const fresh: Block[] = [{ id: "e1", type: "embed", content: URL_A }, { id: "x", type: "paragraph", content: "typed after" }];
+  const writes: Block[][] = [];
+  commitSnapshot(() => fresh, (blocks) => writes.push(blocks), request, SNAPSHOT);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0][1].content, "typed after", "later edits survive the late write");
+  assert.deepEqual(writes[0][0].embed, SNAPSHOT);
+});
+
+test("commitSnapshot writes nothing when the block is gone or already holds something else", () => {
+  const request = { kind: "block", blockId: "e1", url: URL_A } as const;
+  const writes: Block[][] = [];
+  const write = (blocks: Block[]) => writes.push(blocks);
+  commitSnapshot(() => [{ id: "x", type: "paragraph", content: "kept" }], write, request, SNAPSHOT);
+  commitSnapshot(() => [{ id: "e1", type: "embed", content: "https://other.example/" }], write, request, SNAPSHOT);
+  assert.deepEqual(writes, []);
 });

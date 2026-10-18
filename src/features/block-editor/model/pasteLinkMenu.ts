@@ -17,7 +17,7 @@
 
 import type { Block, BlockType } from "@/entities/block";
 import { createLinkBlock, type LinkBlockType } from "@/entities/block/model/linkBlocks";
-import { resolveProviderEmbed } from "@/shared/lib/embed/embedProviders";
+import { escapeLinkLabel } from "@/shared/lib/embed/linkLabel";
 import { LINK_MENTION_TITLE } from "@osionos/markdown-engine/markdown/linkMention";
 import { bareUrlToLinkSource, hostnameFromUrl } from "@osionos/markdown-engine/markdown/urlSugar";
 
@@ -73,15 +73,19 @@ export function insertPastedLink(
   };
 }
 
-/** Embed when a provider recognises the URL, else the plain link. */
-export function defaultPasteChoice(url: string): PasteChoice {
+/** Embed when a provider recognises the URL, else the plain link. The provider table is
+ *  imported on demand so it stays out of the editor's warm chunk until a link is pasted. */
+export async function defaultPasteChoice(url: string): Promise<PasteChoice> {
+  const { resolveProviderEmbed } = await import("@/shared/lib/embed/embedProviders");
   return resolveProviderEmbed(url) === null ? "url" : "embed";
 }
 
-/** A mention's link text: one line, no brackets (they would end the link), bounded. */
+/** A mention's link text: one line, bounded, with brackets and backslashes escaped so it
+ *  cannot end the link or break the markdown around it. Truncation comes before escaping
+ *  so an escape pair is never cut in half. */
 export function cleanMentionTitle(title: string, url: string): string {
-  const cleaned = title.replaceAll(/[[\]\r\n\t]+/g, " ").replaceAll(/\s+/g, " ").trim().slice(0, MAX_MENTION_TITLE);
-  return cleaned === "" ? hostnameFromUrl(url) : cleaned;
+  const cleaned = title.replaceAll(/\s+/g, " ").trim().slice(0, MAX_MENTION_TITLE);
+  return escapeLinkLabel(cleaned === "" ? hostnameFromUrl(url) : cleaned);
 }
 
 export function mentionLinkSource(title: string, url: string): string {

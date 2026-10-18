@@ -85,8 +85,9 @@ function providerView(embed: ProviderEmbed, info: EmbedInfo, input: EmbedViewInp
 function snapshotView(info: EmbedInfo, input: EmbedViewInput): EmbedView | null {
   const mediaKind = info.media === null ? null : mediaKindOfMime(info.media.mime);
   if (info.media !== null && mediaKind !== null) return { kind: "media", mediaKind, src: info.media.src };
-  if (info.frameable === false) return { kind: "card", info, reason: "refused" };
-  if (info.player === null) return null;
+  // The page's own X-Frame-Options says nothing about a player hosted elsewhere, so
+  // `frameable: false` only counts when there is no separate player to frame.
+  if (info.player === null) return info.frameable === false ? { kind: "card", info, reason: "refused" } : null;
   const src = frameableEmbedUrl(info.player.src, input.forbiddenOrigins);
   if (src === "") return { kind: "card", info, reason: "unsafe-frame" };
   return { kind: "frame", src, policy: "generic", aspect: safeAspect(info.player.aspect) };
@@ -105,7 +106,7 @@ export function chooseEmbedView(input: EmbedViewInput): EmbedView {
   const directKind = mediaKindOfUrl(href);
   if (directKind !== null) return { kind: "media", mediaKind: directKind, src: href };
   // Chromium does not load a PDF into a sandboxed frame (observed offline: the frame stays
-  // empty, tests/e2e/functional/embedBlocks.spec.mjs C20) and the sandbox is not relaxed
+  // empty; see the embedBlocks e2e spec) and the sandbox is not relaxed
   // for it, so a .pdf is a card with Open rather than a blank box.
   if (PDF_PATH.test(new URL(href).pathname)) return { kind: "card", info, reason: "pdf" };
   const fromSnapshot = snapshotView(info, input);

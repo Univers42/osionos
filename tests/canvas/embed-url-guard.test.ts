@@ -11,11 +11,13 @@
 /* ************************************************************************** */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
   appForbiddenOrigins,
   displayHost,
+  forbiddenOriginsFrom,
   frameableEmbedUrl,
   safeHttpUrl,
 } from "../../src/shared/lib/embed/embedUrlGuard.ts";
@@ -72,6 +74,50 @@ test("frameableEmbedUrl refuses the app's own origins, including default-port sp
 
 test("appForbiddenOrigins is an empty list outside a browser (no location, no env)", () => {
   assert.deepEqual(appForbiddenOrigins(), []);
+});
+
+test("forbiddenOriginsFrom keeps only http(s) origins, strips trailing dots and deduplicates", () => {
+  const origins = forbiddenOriginsFrom([
+    "https://osionos.app/",
+    "https://osionos.app./x",
+    "HTTPS://OSIONOS.APP:443",
+    "http://localhost:5173/a",
+    "ftp://files.example/",
+    "",
+    undefined,
+    42,
+  ]);
+  assert.deepEqual(origins, ["https://osionos.app", "http://localhost:5173"]);
+});
+
+test("a trailing-dot host is still the app's own origin, and sibling first-party origins are refused", () => {
+  const forbidden = forbiddenOriginsFrom([
+    "https://osionos.app",
+    "https://whiteboard.example",
+    "https://ide.example:8443",
+    "https://mail.example",
+    "https://calendar.example",
+    "https://prismatica.example",
+  ]);
+  for (const url of [
+    "https://osionos.app./",
+    "https://osionos.app../x",
+    "https://whiteboard.example/board/1",
+    "https://ide.example:8443/",
+    "https://mail.example./inbox",
+    "https://calendar.example/",
+    "https://prismatica.example/app",
+  ]) {
+    assert.equal(frameableEmbedUrl(url, forbidden), "", url);
+  }
+  assert.equal(frameableEmbedUrl("https://ide.example:9000/", forbidden), "https://ide.example:9000/", "another port is another origin");
+});
+
+test("every sibling first-party env key feeds appForbiddenOrigins", () => {
+  const source = readFileSync(new URL("../../src/shared/lib/embed/embedUrlGuard.ts", import.meta.url), "utf8");
+  for (const key of ["VITE_WHITEBOARD_APP_URL", "VITE_OSIONOS_IDE_URL", "VITE_MAIL_APP_URL", "VITE_CALENDAR_APP_URL", "VITE_PRISMATICA_URL"]) {
+    assert.match(source, new RegExp(key), key);
+  }
 });
 
 test("displayHost shows the punycode host of what is actually framed, www stripped", () => {

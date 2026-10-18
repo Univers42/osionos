@@ -14,6 +14,7 @@ import { lazy, Profiler, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { MotionConfig } from "motion/react";
 import App from "./App.tsx";
+import { installLinkFaviconFallback } from "@/shared/lib/embed/linkFaviconFallback";
 
 // Public published-page view (/p/:token) — a standalone read-only render mounted
 // BEFORE the app + its auth so an unauthenticated visitor never boots the editor.
@@ -47,6 +48,8 @@ globalThis.addEventListener("vite:preloadError", () => {
     globalThis.location.reload();
   }
 });
+
+installLinkFaviconFallback();
 
 const root = document.getElementById("root");
 if (root) {

@@ -44,6 +44,9 @@ export const LinkUrlForm: React.FC<LinkUrlFormProps> = ({ placeholder, submitLab
     try {
       const message = await onSubmit(value);
       if (typeof message === "string") setError(message);
+    } catch {
+      // The dialog stays open on a thrown submit; say so instead of failing silently.
+      setError("Could not add this link. Check the address and try again.");
     } finally {
       setIsBusy(false);
     }

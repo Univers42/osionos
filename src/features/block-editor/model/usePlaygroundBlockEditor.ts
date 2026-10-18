@@ -71,6 +71,7 @@ import {
 } from "./playgroundBlockEditor.helpers";import { inlineIconInsertText } from "./inlineIconInsert";
 import { matchInternalCopy } from "./blockClipboard";
 import { useBlockContextMenu } from "./useBlockContextMenu";
+import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 import { insertPastedLink, isPasteMenuBlock } from "./pasteLinkMenu";
 import { useLinkSnapshotAttach } from "./useLinkSnapshotAttach";
 import { usePasteLinkMenu } from "./usePasteLinkMenu";
@@ -208,6 +209,12 @@ function findChildrenForParent(
 
 function normalizeEditorSource(source: PlaygroundBlockEditorSource): NormalizedEditorSource {
   return typeof source === "string" ? { kind: "page", pageId: source } : source;
+}
+
+/** The block element the paste landed in; null for a synthetic event with no DOM target. */
+function pastedBlockElement(event: React.ClipboardEvent): HTMLElement | null {
+  const target = event.target;
+  return target instanceof Element ? target.closest<HTMLElement>("[data-block-id]") : null;
 }
 
 function editorSourceKey(source: NormalizedEditorSource): string {
@@ -701,19 +708,31 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   );
 
   const readCommittedContent = useCallback(() => flushPendingDrafts("structural"), [flushPendingDrafts]);
-  const attachLinkSnapshot = useLinkSnapshotAttach(readCommittedContent, replaceContent);
+
+  // The page as the store holds it now. contentRef stops following the store once this
+  // editor unmounts, so a write that lands after the user left the page (a link lookup
+  // finishing) must start from here or it would overwrite the page with a frozen copy.
+  const readStoreContent = useCallback(
+    () => selectEditorContent(usePageStore.getState().pageById(pageId)?.content, source),
+    [pageId, source],
+  );
+  const readFreshCommittedContent = useCallback(() => {
+    flushAllBlockDraftsForSource(sourceKey, "structural");
+    return readStoreContent();
+  }, [sourceKey, readStoreContent]);
+  const attachLinkSnapshot = useLinkSnapshotAttach(readFreshCommittedContent, replaceContent);
 
   const updateBlock = useCallback(
     (_pid: string, blockId: string, updates: Partial<Block>) => {
-      updatePageContent(pageId, updateBlockInEditorTree(contentRef.current, blockId, (block) => ({
-        ...block,
-        ...updates,
-      })));
+      const base = readStoreContent();
+      const next = updateBlockInEditorTree(base, blockId, (block) => ({ ...block, ...updates }));
+      if (next === base) return;
+      updatePageContent(pageId, next);
       if (typeof updates.content === "string") {
         rebaseBlockDraft(sourceKey, blockId, updates.content);
       }
     },
-    [pageId, sourceKey, updatePageContent],
+    [pageId, sourceKey, readStoreContent, updatePageContent],
   );
 
   const insertBlock = useCallback(
@@ -1641,14 +1660,14 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         const pasted = insertPastedLink(content, raw, resolvePasteSelectionOffsets(e, content));
         updateBlock(pageId, blockId, { content: pasted.content });
         focusBlock(blockId, true);
-        if (isPasteMenuBlock(currentBlock)) offerPasteMenu(blockId, pasted.context);
+        if (isPasteMenuBlock(currentBlock)) offerPasteMenu(blockId, pasted.context, pastedBlockElement(e));
         return;
       }
 
       const markdown = raw.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
       if (!markdown.trim() || !isBlockStructuredMarkdown(markdown)) return;
 
-      const parsed = parseMarkdownToBlocks(markdown);
+      const parsed = sanitizeLinkBlockFields(parseMarkdownToBlocks(markdown));
       if (parsed.length === 0) return;
 
       e.preventDefault();

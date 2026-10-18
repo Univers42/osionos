@@ -12,7 +12,7 @@
 
 
 // State and actions of the paste menu. The menu opens right after a bare URL was pasted
-// as a link; nothing is fetched until a choice is made (C18).
+// as a link; nothing is fetched until a choice is made.
 
 import { useCallback, useRef, useState } from "react";
 import type { Block } from "@/entities/block";
@@ -37,10 +37,15 @@ interface UsePasteLinkMenuOptions {
   caretPosition: (blockId: string) => PasteMenuState["position"];
 }
 
-/** The menu hangs under the pasted link itself (not the caret, which sits at the block end). */
-function positionUnderLink(blockId: string, url: string, fallback: PasteMenuState["position"]) {
-  const block = document.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(blockId)}"]`);
-  const anchors = Array.from(block?.querySelectorAll<HTMLAnchorElement>("a.editor-link") ?? []);
+/** The menu hangs under the pasted link itself (not the caret, which sits at the block end).
+ *  `blockElement` is the block under the paste event: a document-wide lookup by id would
+ *  also match the same page open in another pane. */
+function positionUnderLink(
+  blockElement: HTMLElement | null,
+  url: string,
+  fallback: PasteMenuState["position"],
+) {
+  const anchors = Array.from(blockElement?.querySelectorAll<HTMLAnchorElement>("a.editor-link") ?? []);
   const link = anchors.find((anchor) => anchor.getAttribute("href") === url);
   if (!link) return fallback;
   const box = link.getBoundingClientRect();
@@ -52,26 +57,40 @@ export function usePasteLinkMenu(options: Readonly<UsePasteLinkMenuOptions>) {
   const [pasteMenu, setPasteMenu] = useState<PasteMenuState | null>(null);
   const openRef = useRef<PasteMenuState | null>(null);
 
+  const pendingOffer = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+  const offerToken = useRef(0);
+
   const dismissPasteMenu = useCallback(() => {
+    offerToken.current += 1;
+    if (pendingOffer.current !== null) globalThis.clearTimeout(pendingOffer.current);
+    pendingOffer.current = null;
     openRef.current = null;
     setPasteMenu(null);
   }, []);
 
   // Deferred one tick: the pasted link is rendered by the re-render that follows the paste.
+  // A dismiss (or a newer paste) during the tick or the provider lookup cancels the offer.
   const offerPasteMenu = useCallback(
-    (blockId: string, context: PasteLinkContext) => {
-      globalThis.setTimeout(() => {
-        const state: PasteMenuState = {
-          blockId,
-          context,
-          initialChoice: defaultPasteChoice(context.url),
-          position: positionUnderLink(blockId, context.url, caretPosition(blockId)),
-        };
-        openRef.current = state;
-        setPasteMenu(state);
+    (blockId: string, context: PasteLinkContext, blockElement: HTMLElement | null = null) => {
+      dismissPasteMenu();
+      const token = offerToken.current;
+      pendingOffer.current = globalThis.setTimeout(() => {
+        pendingOffer.current = null;
+        void defaultPasteChoice(context.url).then((initialChoice) => {
+          if (token !== offerToken.current) return;
+          const anchor = blockElement?.isConnected ? blockElement : null;
+          const state: PasteMenuState = {
+            blockId,
+            context,
+            initialChoice,
+            position: positionUnderLink(anchor, context.url, caretPosition(blockId)),
+          };
+          openRef.current = state;
+          setPasteMenu(state);
+        });
       }, 0);
     },
-    [caretPosition],
+    [caretPosition, dismissPasteMenu],
   );
 
   const choosePaste = useCallback(

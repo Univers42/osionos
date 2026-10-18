@@ -77,8 +77,19 @@ test("hostile snapshot players are never framed", () => {
   if (same.kind === "card") assert.equal(same.reason, "unsafe-frame");
 });
 
-test("frameable:false on the snapshot is a refused card, even with a player", () => {
+test("frameable:false on the page does not veto a validated player hosted elsewhere", () => {
   const view = choose("https://news.example/story", snapshot({ frameable: false, player: { src: "https://player.example/x", aspect: "16/9" } }));
+  assert.deepEqual(view, { kind: "frame", src: "https://player.example/x", policy: "generic", aspect: "16/9" });
+});
+
+test("frameable:false with a same-origin player is still never framed", () => {
+  const view = choose("https://news.example/story", snapshot({ frameable: false, player: { src: "https://app.example/x", aspect: "16/9" } }));
+  assert.equal(view.kind, "card");
+  if (view.kind === "card") assert.equal(view.reason, "unsafe-frame");
+});
+
+test("frameable:false with no player is a refused card", () => {
+  const view = choose("https://news.example/story", snapshot({ frameable: false }));
   assert.equal(view.kind, "card");
   if (view.kind === "card") assert.equal(view.reason, "refused");
 });

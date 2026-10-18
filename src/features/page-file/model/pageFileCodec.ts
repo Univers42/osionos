@@ -18,7 +18,7 @@ import { serializeBlocksToMarkdown } from "@/services/page-actions/pageMarkdownS
 import { parseMarkdownToBlocks } from "@osionos/markdown-engine/markdown/shortcuts";
 import { reconcileBlocks } from "@/features/raw-mode/model/reconcileBlocks";
 
-import { EXTRA_BLOCK_KEYS, applyOverlay, collectOverlay } from "./blockOverlay";
+import { EXTRA_BLOCK_KEYS, SCOPED_OVERLAY_KEYS, applyOverlay, collectOverlay } from "./blockOverlay";
 import { joinFrontMatter, splitFrontMatter } from "./frontMatter";
 import { metaFromPage, patchFromMeta } from "./pageFileMeta";
 import { kindOfPage } from "./pagePaths";
@@ -51,6 +51,7 @@ import {
  *     mediaAspect  deferMount  collectionRef  recordRef  fieldBind
  *     headingLevel (markdown keeps it on a toggle only; quote/callout lose it)
  *     tableConfig (markdown keeps only the column alignments)
+ *     embed on a video/audio/file block (its tag cannot hold it; see SCOPED_BLOCK_KEYS)
  *
  * Ponytail: `fileName`, `headingLevel` and `tableConfig` are partly in Markdown
  * too (`<object title>`, `##>`, the table separator row), and the overlay wins,
@@ -104,7 +105,7 @@ export function pageToFile(page: PageEntry): string {
   const content = page.content ?? [];
   if (content.length === 0) return joinFrontMatter({ ...meta }, "");
   return joinFrontMatter(
-    { ...meta, blocks: collectOverlay(content, OVERLAY_KEYS) },
+    { ...meta, blocks: collectOverlay(content, [...OVERLAY_KEYS, ...SCOPED_OVERLAY_KEYS]) },
     serializeBlocksToMarkdown(content, { keepEmptyParagraphs: true }),
   );
 }

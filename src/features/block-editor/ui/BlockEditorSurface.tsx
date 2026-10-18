@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus } from "lucide-react";
@@ -24,6 +24,7 @@ import {
 	ROOT_BLOCK_VIRTUALIZATION_THRESHOLD,
 } from "@/entities/block/model/blockVirtualization";
 import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
+import { ReadOnlyEmbedModeContext } from "@/entities/block/ui/readOnlyEmbedMode";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { parseSlashQuery } from "@/features/slash-commands/model/slashMenuCatalog";
 import { resolveColorName } from "@osionos/ui/molecules/IconPicker/ColorSwatches";
@@ -34,7 +35,6 @@ import {
 import { BlockContextMenu } from "./BlockContextMenu";
 import { PageSelectorMenu } from "./PageSelectorMenu";
 import { PasteLinkMenu } from "./PasteLinkMenu";
-import { installLinkFaviconFallback } from "../model/linkFaviconFallback";
 import { EmojiPicker } from "@/shared/ui";
 import { ColorMenu } from "./ColorMenu";
 import { getBlockSurfaceStyle } from "../model/blockColors";
@@ -47,6 +47,7 @@ import { useCrossTextSelection } from "../model/useCrossTextSelection";
 import { useBlockSelection, selectIdsForSurface } from "../model/blockSelectionStore";
 import { useEditorCommandBus, type EditorHandle } from "../model/editorCommandBus";
 import { isTextEntryTarget } from "../model/marqueeGeometry";
+import { EditorSurfaceIdContext } from "../model/editorSurfaceId";
 import { requestLinkDialog } from "../model/linkDialogRequests";
 import { expandSelectionWithDescendants, removeBlocksFromTree } from "@/entities/block/model/blockTreeUtils";
 import { isBlockSelectEnabled } from "@/shared/config/featureFlags";
@@ -347,7 +348,7 @@ function getVirtualFocusBlockId(event: Event): string | null {
 	return typeof detail?.blockId === "string" ? detail.blockId : null;
 }
 
-export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
+const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	pageId,
 	source,
 	locked = false,
@@ -356,6 +357,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	emptyPlaceholder = "Click here to start writing...",
 	renderBlockEditor,
 }) => {
+	const surfaceId = useContext(EditorSurfaceIdContext);
 	const {
 		slashMenu,
 		setSlashMenu,
@@ -468,8 +470,6 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	useEffect(() => {
 		editorHandleRef.current = editorHandle;
 	}, [editorHandle]);
-
-	useEffect(() => installLinkFaviconFallback(), []);
 
 	const { menu: pageMenuState, sections: pageMenuSections, open: openPageMenu, close: closePageMenu } = usePageContextMenu(sourceKey);
 
@@ -792,7 +792,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 						const currentBlocks = flushPendingDrafts("shortcut");
 						blocksRef.current = currentBlocks;
 						if (item.kind === "link-block") {
-							handleSlashMediaSelect(item.blockType, "", currentBlocks, (id) => requestLinkDialog(id, item.hintId));
+							handleSlashMediaSelect(item.blockType, "", currentBlocks, (id) => requestLinkDialog(surfaceId, id, item.hintId));
 							return;
 						}
 						if (item.kind === "turn-into") {
@@ -1853,3 +1853,14 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
 		</div>
 	);
 };
+
+/** Every block this surface renders, editable or locked, belongs to a page the viewer
+ *  opened on purpose, so embeds play. Hover previews and other `static` surfaces never
+ *  mount this component. */
+export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = (props) => (
+	<EditorSurfaceIdContext.Provider value={useId()}>
+		<ReadOnlyEmbedModeContext.Provider value="live">
+			<BlockEditorSurfaceBody {...props} />
+		</ReadOnlyEmbedModeContext.Provider>
+	</EditorSurfaceIdContext.Provider>
+);

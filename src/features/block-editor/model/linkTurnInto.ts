@@ -16,6 +16,7 @@
 
 import type { Block } from "@/entities/block";
 import { isLinkBlockType, type LinkBlockType } from "@/entities/block/model/linkBlocks";
+import { parseEmbedSnapshot } from "@/shared/lib/embed/embedInfo";
 import { findLinks } from "@/components/blocks/linkSourceEdit";
 import { safeHttpUrl } from "@/shared/lib/embed/embedUrlGuard";
 import { cleanMentionTitle } from "./pasteLinkMenu";
@@ -56,7 +57,7 @@ export function linkTurnIntoOptions(block: Block): LinkTurnOption[] {
 
 function linkParagraph(block: Block): Block {
   const url = block.content ?? "";
-  const title = cleanMentionTitle(block.embed?.title ?? "", url);
+  const title = cleanMentionTitle(parseEmbedSnapshot(block.embed)?.title ?? "", url);
   const next: Block = { ...block, type: "paragraph", content: `[${title}](${url})` };
   delete next.embed;
   delete next.embedHeight;
