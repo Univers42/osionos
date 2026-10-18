@@ -22,7 +22,7 @@ import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
 import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
 import { publishRealtime } from './bridge-social-core.mjs';
-import { readBaasJson } from './bridge-baas-body.mjs';
+import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
@@ -100,10 +100,6 @@ const PAGE_JSON_BODY_LIMIT_BYTES = 6 * 1024 * 1024;
 const DEFAULT_UNSPLASH_PER_PAGE = 12;
 const MAX_UNSPLASH_PER_PAGE = 30;
 const TRANSLATION_FETCH_TIMEOUT_MS = 6_000;
-// Caveat: sized for a cold TLS relay + Tailscale Funnel hop, not for a healthy link. Measured live
-// 2026-10-18: the first 2 of 12 REST calls after idle took 3743 ms and 3501 ms, the rest 199-734 ms,
-// so the old 2_500 aborted every cold call. The cost: a dead BaaS now takes up to 8 s to fail each call.
-const BAAS_FETCH_TIMEOUT_MS = 8_000;
 // The multi-engine graph overview pages tens of thousands of rows — needs headroom.
 const GRAPH_FETCH_TIMEOUT_MS = 20_000;
 const MAX_CLAUDE_TOOL_RESULT_TEXT = 120_000;
@@ -1444,34 +1440,53 @@ export function createUserSession(payload, config, persisted = null, now = Date.
 	};
 }
 
+// One embed instead of ids-then-RPC: the FK hint is the one the page reads use (workspace_id).
+const MEMBER_WORKSPACES_SELECT = 'user_id,workspace_id,role,permissions,workspace:osionos_workspaces!workspace_id(id,owner_id,name,slug,settings,created_at,updated_at)';
+
+function updatedAtStamp(entry) {
+	const stamp = Date.parse(entry.updatedAt);
+	return Number.isNaN(stamp) ? Number.NEGATIVE_INFINITY : stamp;
+}
+
 /**
- * Org/teamspace workspaces for session enrichment — RPC-backed ONLY (no
- * fallback synthesis: a workspace appears here iff an osionos_workspace_members
- * row exists). Best-effort: any failure yields [] and the handoff proceeds.
+ * The session entries of an anchored members read, as the list RPC answered them: a workspace the
+ * row cannot name is dropped, so is a non-UUID id or an excluded one, newest updated_at first.
+ * Returns null when any row is not the user's: the anchor did not apply, and a row nobody can
+ * vouch for would put another tenant's workspace into the token.
  */
-async function memberWorkspaceEntries(userId, excludeIds, config, fetchImpl) {
+function memberRowsToEntries(rows, userId, excludeIds) {
+	if (rows.some((row) => !sameId(row?.user_id, userId))) return null;
+	return rows
+		.filter((row) => row.workspace && sameId(row.workspace.id, row.workspace_id))
+		.filter((row) => UUID_REGEX.test(String(row.workspace_id)) && !excludeIds.includes(String(row.workspace_id)))
+		.map((row) => workspaceRowToEntry(row.workspace, { role: row.role, permissions: row.permissions }))
+		.sort((left, right) => Math.sign(updatedAtStamp(right) - updatedAtStamp(left)) || 0);
+}
+
+/**
+ * Org/teamspace workspaces for session enrichment: a workspace appears here iff an
+ * osionos_workspace_members row exists (no fallback synthesis). Best-effort: any failure
+ * yields [] and the handoff proceeds, but never silently, because a WAF refusing this query
+ * would otherwise mint private-only tokens with no error anywhere.
+ * Caveat: sort ties keep the order PostgREST answered, where the list RPC left them unspecified.
+ */
+export async function memberWorkspaceEntries(userId, excludeIds, config, fetchImpl) {
+	if (!config.serviceKey || !config.baasUrl) return [];
 	try {
-		const ids = (await memberWorkspaceIds(userId, config, fetchImpl)).filter((id) => !excludeIds.includes(id));
-		if (ids.length === 0) return [];
-		const rows = await baasRest(config, fetchImpl, 'rpc/osionos_bridge_list_workspaces', {
-			method: 'POST',
-			body: { p_user_id: userId, p_workspace_ids: ids },
-		});
-		return (Array.isArray(rows) ? rows : []).map((row) => workspaceRowToEntry({
-			id: row.workspace_id,
-			owner_id: row.owner_id,
-			name: row.workspace_name,
-			slug: row.workspace_slug,
-			settings: row.workspace_settings,
-			created_at: row.created_at,
-			updated_at: row.updated_at,
-		}, {
-			role: row.workspace_role,
-			permissions: row.permissions,
-		}));
-	} catch {
+		const query = postgrestQuery({ user_id: `eq.${userId}`, select: MEMBER_WORKSPACES_SELECT });
+		const rows = await baasRest(config, fetchImpl, `osionos_workspace_members?${query}`);
+		const entries = memberRowsToEntries(Array.isArray(rows) ? rows : [], userId, excludeIds);
+		if (entries) return entries;
+		console.warn('[osionos-bridge] member workspaces unavailable: rows of another user');
+		return [];
+	} catch (error) {
+		console.warn(`[osionos-bridge] member workspaces unavailable: ${error?.status ?? 'error'}`);
 		return [];
 	}
+}
+
+function isEnvAdminEmail(payload, config) {
+	return payload.emailVerified === true && config.adminEmails.includes(String(payload.email ?? '').toLowerCase());
 }
 
 /**
@@ -1486,8 +1501,7 @@ async function memberWorkspaceEntries(userId, excludeIds, config, fetchImpl) {
  * admin address someone already registered.
  */
 async function resolveAdminFlag(payload, config, fetchImpl) {
-	const isAdminEmail = payload.emailVerified === true
-		&& config.adminEmails.includes(String(payload.email ?? '').toLowerCase());
+	const isAdminEmail = isEnvAdminEmail(payload, config);
 	if (!config.serviceKey || !config.baasUrl) return isAdminEmail;
 	const hash = encodeURIComponent(emailHash(payload.email, config));
 	try {
@@ -1542,13 +1556,53 @@ async function persistIdentityForHandoff(payload, config, fetchImpl) {
 	throw Object.assign(new Error('Sign-in could not reach the workspace service; try again.'), { status: 503 });
 }
 
-export async function createBridgeHandoff({ payload, config, handoffStore, now = Date.now(), fetchImpl = fetch }) {
-	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
+function privateWorkspaceIdOf(payload, persisted) {
+	return persisted?.workspaceId ?? uuidFromHash(`osionos-workspace:${payload.provider}:${payload.subject}`);
+}
+
+/** Today's order: persist, admin flag, admin membership, member workspaces. Env admins keep it. */
+async function readClaimsInOrder(payload, config, fetchImpl) {
 	const persisted = await persistIdentityForHandoff(payload, config, fetchImpl);
 	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
 	if (isAdmin) await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
-	const privateWorkspaceId = persisted?.workspaceId ?? uuidFromHash(`osionos-workspace:${payload.provider}:${payload.subject}`);
-	const memberWorkspaces = await memberWorkspaceEntries(payload.subject, [privateWorkspaceId], config, fetchImpl);
+	const memberWorkspaces = await memberWorkspaceEntries(payload.subject, [privateWorkspaceIdOf(payload, persisted)], config, fetchImpl);
+	return { persisted, isAdmin, memberWorkspaces };
+}
+
+/**
+ * Persist, the admin-flag read and the member-workspace read have no input from each other, so
+ * they run together. allSettled, never "start all, await one by one": a branch that rejects while
+ * an earlier await is pending is an unhandled rejection, and Node 22 exits on it.
+ * Persist failing is still the 503 (retried once inside persistIdentityForHandoff, no handoff);
+ * a rejected read degrades as it always did (no admin, no extras).
+ * A flag that comes back true re-runs today's tail: ensure unconditionally, then the member read
+ * again, and the first read is discarded (the ensure upsert resets the admin row's role).
+ * Caveat: the flag read can run before persist rewrites email_hash, so a DB-recorded admin whose
+ * email changed signs in with is_admin false for one session. That fails closed; the next sign-in
+ * corrects it. Nothing here can widen a claim.
+ */
+async function readClaimsConcurrently(payload, config, fetchImpl) {
+	const [persistence, adminRead, memberRead] = await Promise.allSettled([
+		persistIdentityForHandoff(payload, config, fetchImpl),
+		resolveAdminFlag(payload, config, fetchImpl),
+		memberWorkspaceEntries(payload.subject, [], config, fetchImpl),
+	]);
+	if (persistence.status === 'rejected') throw persistence.reason;
+	const persisted = persistence.value;
+	const isAdmin = adminRead.status === 'fulfilled' && adminRead.value === true;
+	if (isAdmin) {
+		await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
+		const excludeIds = [privateWorkspaceIdOf(payload, persisted)];
+		return { persisted, isAdmin, memberWorkspaces: await memberWorkspaceEntries(payload.subject, excludeIds, config, fetchImpl) };
+	}
+	// The private workspace is still in this read; createUserSession drops it from the extras.
+	return { persisted, isAdmin, memberWorkspaces: memberRead.status === 'fulfilled' ? memberRead.value : [] };
+}
+
+export async function createBridgeHandoff({ payload, config, handoffStore, now = Date.now(), fetchImpl = fetch }) {
+	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
+	const readClaims = isEnvAdminEmail(payload, config) ? readClaimsInOrder : readClaimsConcurrently;
+	const { persisted, isAdmin, memberWorkspaces } = await readClaims(payload, config, fetchImpl);
 	const bridgeSession = createUserSession(payload, config, persisted, now, memberWorkspaces, isAdmin);
 	const token = randomToken();
 	const expiresAt = now + config.handoffTtlMs;

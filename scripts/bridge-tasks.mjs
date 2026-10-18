@@ -67,10 +67,22 @@ async function scanDueReminders(config, fetchImpl) {
 
 // ponytail: one global 15-min scan (unref'd so it never blocks tests/shutdown).
 // A per-user cron beats this only past ~thousands of open dated tasks.
+// A rejection here is unhandled and Node 22 exits on it, taking every route down
+// (pushToUser's first rest() is not caught). A scan can also outlast the interval on a
+// slow link, and two overlapping scans read "no reminder sent" and notify twice.
 let reminderTimer = null;
+let isScanRunning = false;
+function tickReminderScan(config, fetchImpl) {
+	if (isScanRunning) return;
+	isScanRunning = true;
+	scanDueReminders(config, fetchImpl)
+		.catch((error) => console.warn(`[osionos-bridge] reminder scan failed (status ${error?.status ?? 'unknown'})`))
+		.finally(() => { isScanRunning = false; });
+}
+
 function startReminderScan(config, fetchImpl, env) {
 	if (reminderTimer || env.OSIONOS_TASK_REMINDERS === '0') return;
-	reminderTimer = setInterval(() => { void scanDueReminders(config, fetchImpl); }, 15 * 60 * 1000);
+	reminderTimer = setInterval(() => tickReminderScan(config, fetchImpl), 15 * 60 * 1000);
 	if (reminderTimer.unref) reminderTimer.unref();
 }
 
