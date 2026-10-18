@@ -54,6 +54,8 @@ async function userTopicFor(deps, session, body, config) {
 }
 
 async function resolveTopic(deps, session, body, config) {
+	// A JSON `null`, number or array parses fine but has no `kind`; reading it threw a TypeError.
+	if (body === null || typeof body !== 'object' || Array.isArray(body)) throw forbidden();
 	if (body.kind === 'chat') return chatTopicFor(deps, session, body, config);
 	if (body.kind === 'user') return userTopicFor(deps, session, body, config);
 	throw forbidden();
