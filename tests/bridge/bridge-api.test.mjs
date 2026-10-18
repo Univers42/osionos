@@ -189,7 +189,11 @@ function createMockBaasFetch() {
 				return new Response(null, { status: 204 });
 			}
 
-			return jsonResponse(selectedRows(pages, ids, workspaceFilter));
+			const rows = selectedRows(pages, ids, workspaceFilter);
+			// A page read that asks for the caller's member row gets it under `workspace`.
+			return jsonResponse(parsed.searchParams.get('select')?.includes('osionos_workspace_members')
+				? rows.map((row) => ({ ...row, workspace: { members: [ownerMember] } }))
+				: rows);
 		},
 	};
 }

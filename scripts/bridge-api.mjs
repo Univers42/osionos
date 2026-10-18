@@ -959,6 +959,28 @@ async function fetchPageRow(pageId, config, fetchImpl) {
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
+/**
+ * A page row together with the caller's own row in its workspace's members, in ONE statement
+ * (pages -> workspace -> members, the member embed filtered to `userId`): the permission and
+ * the page are read from one snapshot, and a non-owner read is one BaaS call. The member is
+ * found by user_id, never by position: should the nested filter ever not apply, the array
+ * holds every member and the first of them is not the caller. `row` has the embed removed.
+ */
+async function fetchPageRowWithMember(pageId, userId, config, fetchImpl) {
+	const id = requireUuid(pageId, 'pageId');
+	const query = postgrestQuery({
+		id: `eq.${id}`,
+		select: '*,workspace:osionos_workspaces!workspace_id(members:osionos_workspace_members!workspace_id(user_id,role,permissions))',
+		'workspace.members.user_id': `eq.${userId}`,
+		limit: '1',
+	});
+	const rows = await baasRest(config, fetchImpl, `osionos_pages?${query}`);
+	if (!Array.isArray(rows) || !rows[0]) return { row: null, member: null };
+	const { workspace, ...row } = rows[0];
+	const members = Array.isArray(workspace?.members) ? workspace.members : [];
+	return { row, member: members.find((candidate) => sameId(candidate?.user_id, userId)) ?? null };
+}
+
 async function fetchPageRowIfUuid(pageId, config, fetchImpl) {
 	if (!UUID_REGEX.test(pageId)) return null;
 	return fetchPageRow(pageId, config, fetchImpl);
@@ -992,6 +1014,10 @@ async function fetchPageConfigRow(pageId, userId, config, fetchImpl) {
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
+function pageOwnerContext(token, row) {
+	return { ...token, workspaceId: row.workspace_id, role: 'owner', permissions: ['create', 'read', 'update', 'delete'] };
+}
+
 /**
  * A page's OWNER may always access it, even when the workspace-membership gate
  * would deny — e.g. a record-note that landed in a read-only seed workspace the
@@ -1001,9 +1027,7 @@ async function fetchPageConfigRow(pageId, userId, config, fetchImpl) {
  */
 async function ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl = fetch) {
 	const token = verifyAppSessionToken(bearerToken(request), config);
-	if (row && sameId(row.owner_id, token.userId)) {
-		return { ...token, workspaceId: row.workspace_id, role: 'owner', permissions: ['create', 'read', 'update', 'delete'] };
-	}
+	if (row && sameId(row.owner_id, token.userId)) return pageOwnerContext(token, row);
 	return requireWorkspaceAccess(request, row.workspace_id, permission, config, fetchImpl);
 }
 
@@ -1042,11 +1066,12 @@ export function canWritePageRow(row, userId, member, permission) {
  * Readability is decided before the permission gate for that reason: a viewer asking
  * for 'update' on a private page must not get a 403 confirming that it exists.
  */
-async function readablePageAccess(request, pageId, permission, config, fetchImpl) {
+export async function readablePageAccess(request, pageId, permission, config, fetchImpl) {
 	const token = verifyAppSessionToken(bearerToken(request), config);
-	const row = requireReadablePage(await fetchPageRow(pageId, config, fetchImpl), token.userId);
-	const authContext = await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl);
-	return { authContext, row };
+	const { row: found, member } = await fetchPageRowWithMember(pageId, token.userId, config, fetchImpl);
+	const row = requireReadablePage(found, token.userId);
+	if (sameId(row.owner_id, token.userId)) return { authContext: pageOwnerContext(token, row), row };
+	return { authContext: workspaceAccessContext(token, requireUuid(row.workspace_id, 'workspaceId'), member, permission), row };
 }
 
 /** The one answer for every parent a page may not be nested under, whatever the reason. */
