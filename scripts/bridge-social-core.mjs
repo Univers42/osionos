@@ -27,11 +27,10 @@
  * one authenticated socket instead: bridge-realtime-socket.mjs.
  */
 
-import { readBaasJson } from './bridge-baas-body.mjs';
+import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { realtimeSocketPublisher } from './bridge-realtime-socket.mjs';
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const REST_TIMEOUT_MS = 2_500;
 const PUBLISH_TIMEOUT_MS = 1_500;
 const DEFAULT_BODY_LIMIT = 16_384;
 
@@ -100,7 +99,7 @@ export async function rest(config, fetchImpl, path, { method = 'GET', body, pref
 		method,
 		headers,
 		body: body === undefined ? undefined : JSON.stringify(body),
-		signal: AbortSignal.timeout(REST_TIMEOUT_MS),
+		signal: AbortSignal.timeout(BAAS_FETCH_TIMEOUT_MS),
 	});
 	if (!response.ok) {
 		const status = response.status === 401 || response.status === 403 ? 403 : (response.status === 404 ? 404 : 502);

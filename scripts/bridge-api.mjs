@@ -22,7 +22,7 @@ import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
 import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
 import { publishRealtime } from './bridge-social-core.mjs';
-import { readBaasJson } from './bridge-baas-body.mjs';
+import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
@@ -100,10 +100,6 @@ const PAGE_JSON_BODY_LIMIT_BYTES = 6 * 1024 * 1024;
 const DEFAULT_UNSPLASH_PER_PAGE = 12;
 const MAX_UNSPLASH_PER_PAGE = 30;
 const TRANSLATION_FETCH_TIMEOUT_MS = 6_000;
-// Caveat: sized for a cold TLS relay + Tailscale Funnel hop, not for a healthy link. Measured live
-// 2026-10-18: the first 2 of 12 REST calls after idle took 3743 ms and 3501 ms, the rest 199-734 ms,
-// so the old 2_500 aborted every cold call. The cost: a dead BaaS now takes up to 8 s to fail each call.
-const BAAS_FETCH_TIMEOUT_MS = 8_000;
 // The multi-engine graph overview pages tens of thousands of rows — needs headroom.
 const GRAPH_FETCH_TIMEOUT_MS = 20_000;
 const MAX_CLAUDE_TOOL_RESULT_TEXT = 120_000;
