@@ -56,4 +56,18 @@ describe('marketplace header template', () => {
 			assert.deepEqual([shared.status, shared.body], [200, { template }]);
 		});
 	});
+
+	it('refuses a non-member the template of a shared page, like the page itself', async () => {
+		const world = teamWorld({ memberRole: 'viewer' });
+		world.osionos_workspace_members = world.osionos_workspace_members.filter((row) => row.user_id !== IDS.userB);
+		const mock = createPostgrestMock(world);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			assert.equal((await send(base, TEMPLATE_PATH, asA, write(IDS.sharedA))).status, 200);
+			const page = await send(base, `/api/pages/${IDS.sharedA}`, asB);
+			const denied = await send(base, `${TEMPLATE_PATH}?databaseId=${IDS.sharedA}`, asB);
+			assert.ok([403, 404].includes(denied.status), denied.text);
+			assert.equal(denied.status, page.status);
+			assert.equal(JSON.stringify(denied.body).includes('cover'), false);
+		});
+	});
 });
