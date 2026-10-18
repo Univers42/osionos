@@ -35,6 +35,7 @@ import {
 	safeText,
 	sendJson,
 } from './bridge-social-core.mjs';
+import { requireChannelAccess } from './bridge-chat.mjs';
 
 function communityEntry(row, role = null) {
 	return {
@@ -109,6 +110,8 @@ async function addCommunityChannel(deps, session, request, communityId, response
 	if (!member || (member.role !== 'owner' && member.role !== 'admin')) throw httpError('Only an owner or admin can add channels.', 403);
 	const payload = await readJsonBody(request);
 	const channelId = requireUuid(payload.channelId, 'channelId');
+	// G6 F4: getCommunity shows every linked channel's metadata to all members.
+	await requireChannelAccess(config, deps.fetchImpl, session.userId, channelId);
 	await rest(config, deps.fetchImpl, 'osionos_community_channels?on_conflict=community_id,channel_id', {
 		method: 'POST',
 		body: { community_id: communityId, channel_id: channelId },

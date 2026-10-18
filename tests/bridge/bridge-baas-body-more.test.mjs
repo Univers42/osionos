@@ -119,8 +119,7 @@ describe('the LiveKit room lookup answers 502, never "not a member", on a broken
 	});
 
 	it('still reads a membership row when the body is JSON', async () => {
-		const row = Response.json([{ role: 'editor', permissions: ['read'] }]);
-		assert.deepEqual(await rtcJoin(() => row), { workspaceId: IDS.team, role: 'editor', permissions: ['read'] });
+		assert.deepEqual(await rtcJoin(() => Response.json([{ role: 'editor', permissions: ['read'] }])), { workspaceId: IDS.team, role: 'editor', permissions: ['read'] });
 	});
 });
 

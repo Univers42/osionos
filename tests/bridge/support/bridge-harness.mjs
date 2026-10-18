@@ -187,8 +187,8 @@ export function sessionHeaders(config, userId, homeWorkspaceId, memberWorkspaceI
 	return { authorization: `Bearer ${session.session.accessToken}`, 'content-type': 'application/json' };
 }
 
-export async function withBridge(config, fetchImpl, run) {
-	const server = createBridgeServer({ config, fetchImpl });
+export async function withBridge(config, fetchImpl, run, serverOptions = {}) {
+	const server = createBridgeServer({ config, fetchImpl, ...serverOptions });
 	await new Promise((done) => server.listen(0, '127.0.0.1', done));
 	try {
 		return await run(`http://127.0.0.1:${server.address().port}`);

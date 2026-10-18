@@ -16,7 +16,9 @@
  *     perms: createPermsHandler({ verifySession, requireWorkspaceAccess, fetchImpl })
  *     if (await social.perms(url, request, response, config)) return;
  *
- * Every route needs an app session (Authorization: Bearer <osionos_v1 token>).
+ * Every route needs an app session (Authorization: Bearer <osionos_v1 token>). The five engine
+ * reads below (people, roles, policies, bundle, decide) also need `?workspaceId=` of a workspace
+ * the caller can read: 422 without it, 403 on a workspace they are not in.
  *   GET    /api/perms/people        → agency roster (.agency-people.env rows)
  *   GET    /api/perms/roles         → { roles:[{id,name,description,metadata}] }
  *   GET    /api/perms/policies      → { policies:[…incl. id] }
@@ -58,6 +60,7 @@ const PUBLIC_ERRORS = {
 	400: ['perms_bad_request', 'The request is invalid.'],
 	401: ['unauthorized', 'Sign in to manage permissions.'],
 	403: ['forbidden', 'You do not have permission to do that.'],
+	422: ['workspace_required', 'Name the workspace this request is for.'],
 	404: ['not_found', 'Not found.'],
 	413: ['payload_too_large', 'The request body is too large.'],
 	500: ['perms_internal_error', 'Something went wrong on the bridge.'],
@@ -155,6 +158,11 @@ export function createPermsHandler({
 		try {
 			const session = verifySession(bearerToken(request), requestConfig);
 			const ctx = { url, request, response, requestConfig, session, method, tail };
+			if (isEngineRead(method, tail)) {
+				const workspaceId = url.searchParams.get('workspaceId');
+				if (!workspaceId) return fail(response, 422);
+				await requireWorkspaceAccess(request, workspaceId, 'read', requestConfig, fetchImpl);
+			}
 			const handled = await (routeEngine(ctx, { engine, reply, fail, settings }) ?? rules(ctx));
 			return handled ?? fail(response, 404);
 		} catch (error) {
@@ -163,6 +171,14 @@ export function createPermsHandler({
 			return fail(response, status);
 		}
 	};
+}
+
+const ENGINE_READ_TAILS = new Set(['people', 'roles', 'policies', 'bundle']);
+
+/** G6 F6: the roster/engine reads and decide answer with the bridge's service identity,
+ *  so each is scoped to a workspace the caller can read (`?workspaceId=`), not just a session. */
+function isEngineRead(method, tail) {
+	return (method === 'GET' && ENGINE_READ_TAILS.has(tail)) || (method === 'POST' && tail === 'decide');
 }
 
 /** Engine + roster routes; undefined when `tail` is not one of them. */

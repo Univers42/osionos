@@ -575,7 +575,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
               {activeTab === 'public_pages' && <PublicPagesPanel />}
               {activeTab === 'library' && <LibraryPanel />}
               {activeTab === 'teamspaces' && <TeamspacesPanel workspaceName={activeWorkspace?.name} />}
-              {activeTab === 'permissions' && <PermissionsPanel />}
+              {activeTab === 'permissions' && <PermissionsPanel workspaceId={activeWorkspace?._id} />}
               {activeTab === 'billing' && <BillingPanel workspaceId={activeWorkspace?._id} />}
               {activeTab === 'plans' && <PlansPanel workspaceId={activeWorkspace?._id} />}
             </div>

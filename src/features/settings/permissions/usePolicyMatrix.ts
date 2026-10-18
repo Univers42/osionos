@@ -35,7 +35,7 @@ export interface PolicyMatrix {
   refresh: () => Promise<void>;
 }
 
-export function usePolicyMatrix(): PolicyMatrix {
+export function usePolicyMatrix(workspaceId: string | undefined): PolicyMatrix {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,10 +44,15 @@ export function usePolicyMatrix(): PolicyMatrix {
   const [policies, setPolicies] = useState<EnginePolicyRow[]>([]);
 
   const refresh = useCallback(async () => {
+    if (!workspaceId) {
+      setError('Open a workspace to manage its permissions.');
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const [roleRows, policyRows, roster] = await Promise.all([fetchRoles(), fetchPolicies(), fetchPeople()]);
+      const [roleRows, policyRows, roster] = await Promise.all([fetchRoles(workspaceId), fetchPolicies(workspaceId), fetchPeople(workspaceId)]);
       setRoles(roleRows);
       setPolicies(policyRows);
       setPeople(roster);
@@ -56,7 +61,7 @@ export function usePolicyMatrix(): PolicyMatrix {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -67,6 +72,7 @@ export function usePolicyMatrix(): PolicyMatrix {
   );
 
   const cycleCell = useCallback(async (roleId: string, resource: string) => {
+    if (!workspaceId) return;
     const cell = cellState(policies, roleId, resource);
     const target = nextLevel(cell.level);
     setSaving(true);
@@ -76,16 +82,17 @@ export function usePolicyMatrix(): PolicyMatrix {
       if (target !== 'none' && target !== 'deny') {
         await createPolicy(payloadForCell(roleId, resource, target, cell.policy?.conditions ?? null));
       }
-      setPolicies(await fetchPolicies());
+      setPolicies(await fetchPolicies(workspaceId));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not update the policy.');
     } finally {
       setSaving(false);
     }
-  }, [policies]);
+  }, [policies, workspaceId]);
 
   const saveCellConditions = useCallback(async (roleId: string, resource: string, conditions: Record<string, unknown>) => {
     const cell = cellState(policies, roleId, resource);
+    if (!workspaceId) return;
     if (!cell.policy) { setError('No policy on this cell yet — click the cell to grant a level first.'); return; }
     setSaving(true);
     setError(null);
@@ -100,13 +107,13 @@ export function usePolicyMatrix(): PolicyMatrix {
         priority: cell.policy.priority,
         conditions,
       });
-      setPolicies(await fetchPolicies());
+      setPolicies(await fetchPolicies(workspaceId));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save conditions.');
     } finally {
       setSaving(false);
     }
-  }, [policies]);
+  }, [policies, workspaceId]);
 
   return { loading, saving, error, roles, people, policies, resources, cellFor, cycleCell, saveCellConditions, refresh };
 }

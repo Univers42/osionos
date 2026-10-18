@@ -14,6 +14,7 @@
  *  All paths are bridge-relative under /api/perms/* (scripts/bridge-perms.mjs). */
 
 import { api, getActivePageJwt } from '@/shared/api/client';
+import { permsPathFor } from './permsPath';
 import type { ShareAccessRule, SharePerson } from './types';
 
 interface PeopleResponse { people: SharePerson[] }
@@ -26,8 +27,8 @@ export function permsBearer(): string | undefined {
 }
 
 /** Workspace roster (people directory served by the bridge). */
-export async function fetchPeople(): Promise<SharePerson[]> {
-  const body = await api.get<PeopleResponse>('/api/perms/people', permsBearer());
+export async function fetchPeople(workspaceId: string): Promise<SharePerson[]> {
+  const body = await api.get<PeopleResponse>(permsPathFor('/api/perms/people', workspaceId), permsBearer());
   return body.people ?? [];
 }
 
