@@ -77,9 +77,10 @@ test("the socket starts with the minted token and re-mints on every drop", async
 });
 
 test("no socket opens when the first mint fails", async () => {
-  const { created } = harness([null]);
+  const { created, handle } = harness([null]);
   await tick();
   assert.equal(created.length, 0);
+  handle.stop(); // the failed mint keeps retrying until stopped
 });
 
 test("stop before the mint resolves never opens a socket; stop after closes it", async () => {
@@ -92,4 +93,65 @@ test("stop before the mint resolves never opens a socket; stop after closes it",
   await tick();
   late.handle.stop();
   assert.equal(late.log.stopped, 1);
+});
+
+function retryHarness(tokens: Array<string | null>) {
+  const created: LiveSocketOptions[] = [];
+  const log = { stopped: 0, delays: [] as number[] };
+  const pending: Array<() => void> = [];
+  const queue = [...tokens];
+  const handle = openMintedSocket({
+    url: "ws://x",
+    topic: "chat:w:c",
+    onEvent: () => undefined,
+    fetchToken: async () => queue.shift() ?? null,
+    createSocket: (options) => {
+      created.push(options);
+      return { start: () => undefined, stop: () => { log.stopped += 1; } };
+    },
+    schedule: (run, ms) => { log.delays.push(ms); pending.push(run); return () => { pending.length = 0; }; },
+  });
+  const fire = async () => { pending.shift()?.(); await tick(); };
+  return { created, log, handle, fire, pending };
+}
+
+test("a failed first mint is retried with a growing, capped delay until it succeeds", async () => {
+  const { created, log, fire } = retryHarness([null, null, null, null, null, null, null, null, "t1"]);
+  await tick();
+  for (let attempt = 0; attempt < 8; attempt += 1) await fire();
+  assert.equal(created.length, 1, "the socket opens once a mint finally works");
+  assert.equal(created[0].token, "t1");
+  assert.deepEqual(log.delays, [2000, 4000, 8000, 16000, 32000, 60000, 60000, 60000]);
+});
+
+test("a permanent auth failure re-mints and opens a fresh socket", async () => {
+  const { created, log, fire } = retryHarness(["t1", "t2"]);
+  await tick();
+  created[0].onPermanentFailure?.("auth failed");
+  assert.equal(log.stopped, 1, "the dead socket is released");
+  await fire();
+  assert.equal(created.length, 2);
+  assert.equal(created[1].token, "t2");
+});
+
+test("a live subscription resets the backoff", async () => {
+  const { created, log, fire } = retryHarness(["t1", null, "t3"]);
+  await tick();
+  created[0].onUp?.();
+  created[0].onPermanentFailure?.("auth failed");
+  await fire();
+  await fire();
+  assert.deepEqual(log.delays, [2000, 4000]);
+  created[1].onUp?.();
+  created[1].onPermanentFailure?.("auth failed");
+  assert.equal(log.delays.at(-1), 2000);
+});
+
+test("stop cancels a pending retry", async () => {
+  const { created, handle, fire, pending } = retryHarness([null, "t1"]);
+  await tick();
+  assert.equal(pending.length, 1);
+  handle.stop();
+  await fire();
+  assert.equal(created.length, 0);
 });
