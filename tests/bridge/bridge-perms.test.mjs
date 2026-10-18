@@ -147,26 +147,38 @@ test("engine-policy writes need an admin; the engine is never called otherwise",
   assert.equal(admin.upstream[0].init.headers["X-Service-Token"], "svc-token");
 });
 
-test("reads for any signed-in user are proxied", async () => {
-  const { call, upstream } = setup();
-  for (const path of ["/api/perms/roles", "/api/perms/policies", "/api/perms/bundle"]) {
-    assert.equal((await call("GET", path)).status, 200, path);
+test("reads for a member of the workspace they name are proxied", async () => {
+  const { call, upstream } = setup({ access: { [WS_A]: ["read"] } });
+  for (const path of ["/api/perms/roles", "/api/perms/policies", "/api/perms/bundle", "/api/perms/people"]) {
+    assert.equal((await call("GET", `${path}?workspaceId=${WS_A}`)).status, 200, path);
   }
-  assert.equal((await call("POST", "/api/perms/decide", { body: { action: "read" } })).status, 200);
+  assert.equal((await call("POST", `/api/perms/decide?workspaceId=${WS_A}`, { body: { action: "read" } })).status, 200);
   assert.equal(upstream.length, 4);
 });
 
+// G6 F6: these routes answer with the bridge's service identity, so naming a workspace and
+// being able to read it is the only way in.
+test("engine reads and decide need a workspace the caller can read, and never reach the engine otherwise", async () => {
+  const { call, upstream } = setup({ access: { [WS_A]: ["read"] } });
+  const engineReads = [["GET", "/api/perms/people"], ["GET", "/api/perms/roles"], ["GET", "/api/perms/policies"], ["GET", "/api/perms/bundle"], ["POST", "/api/perms/decide"]];
+  for (const [method, path] of engineReads) {
+    assert.equal((await call(method, path, { body: {} })).status, 422, `${method} ${path} without a workspaceId`);
+    assert.equal((await call(method, `${path}?workspaceId=${WS_B}`, { body: {} })).status, 403, `${method} ${path} on a foreign workspace`);
+  }
+  assert.equal(upstream.length, 0);
+});
+
 test("an unreachable engine is a 502 without the error text", async () => {
-  const { call } = setup({ upstreamDown: true });
-  const res = await call("GET", "/api/perms/roles");
+  const { call } = setup({ upstreamDown: true, access: { [WS_A]: ["read"] } });
+  const res = await call("GET", `/api/perms/roles?workspaceId=${WS_A}`);
   assert.equal(res.status, 502);
   assert.doesNotMatch(JSON.stringify(res.body), /ECONNREFUSED|10\.0\.0\.7/);
 });
 
 test("an engine that refuses the bridge's own credentials is a 503, never the caller's 401", async () => {
   for (const upstreamStatus of [401, 403]) {
-    const { call } = setup({ upstreamStatus });
-    const res = await call("GET", "/api/perms/roles");
+    const { call } = setup({ upstreamStatus, access: { [WS_A]: ["read"] } });
+    const res = await call("GET", `/api/perms/roles?workspaceId=${WS_A}`);
     assert.equal(res.status, 503, `upstream ${upstreamStatus}`);
     assert.doesNotMatch(JSON.stringify(res.body), /request_id|kong/i);
   }
@@ -175,8 +187,8 @@ test("an engine that refuses the bridge's own credentials is a 503, never the ca
 test("engine validation errors pass through; engine crashes are a 502", async () => {
   const invalid = setup({ isAdmin: true, upstreamStatus: 422 });
   assert.equal((await invalid.call("POST", "/api/perms/policies", { body: {} })).status, 422);
-  const crashed = setup({ upstreamStatus: 500 });
-  const res = await crashed.call("GET", "/api/perms/bundle");
+  const crashed = setup({ upstreamStatus: 500, access: { [WS_A]: ["read"] } });
+  const res = await crashed.call("GET", `/api/perms/bundle?workspaceId=${WS_A}`);
   assert.equal(res.status, 502);
   assert.doesNotMatch(JSON.stringify(res.body), /request_id/);
 });
@@ -231,12 +243,12 @@ test("replacing a rule keeps its stored id", async () => {
 });
 
 test("a roster path that is a directory (docker-created) means no roster", async () => {
-  const { call } = setup({ people: "dir" });
-  const res = await call("GET", "/api/perms/people");
+  const { call } = setup({ people: "dir", access: { [WS_A]: ["read"] } });
+  const res = await call("GET", `/api/perms/people?workspaceId=${WS_A}`);
   assert.equal(res.status, 200);
   assert.deepEqual(res.body.people, []);
-  const withFile = setup({ people: "file" });
-  assert.equal((await withFile.call("GET", "/api/perms/people")).body.people[0].email, "a@b.c");
+  const withFile = setup({ people: "file", access: { [WS_A]: ["read"] } });
+  assert.equal((await withFile.call("GET", `/api/perms/people?workspaceId=${WS_A}`)).body.people[0].email, "a@b.c");
 });
 
 test("a malformed body is a generic 400", async () => {
@@ -249,8 +261,8 @@ test("a malformed body is a generic 400", async () => {
 // then "Missing verified identity envelope"). With the copies blank the proxy uses the
 // bridge's own service identity — the key every other BaaS call of the bridge uses.
 test("a blank PERMS_SERVICE_APIKEY uses the bridge's own service key", async () => {
-  const { call, upstream } = setup({ serviceApikey: "" });
-  assert.equal((await call("GET", "/api/perms/roles")).status, 200);
+  const { call, upstream } = setup({ serviceApikey: "", access: { [WS_A]: ["read"] } });
+  assert.equal((await call("GET", `/api/perms/roles?workspaceId=${WS_A}`)).status, 200);
   assert.equal(upstream[0].init.headers.apikey, CONFIG.serviceKey);
 });
 
