@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { Block } from "@/entities/block";
+import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 import type { PageEntry } from "@/entities/page";
 import { codeBlockOf } from "@/features/ide/model/codeFile";
 import { serializeBlocksToMarkdown } from "@/services/page-actions/pageMarkdownSerialize";
@@ -41,7 +42,7 @@ import {
  *
  *   MARKDOWN (parsed back from the body)     id/type/content/children structural
  *     checked  language  asset  mediaAlt  widthRatio  color (callout icon)
- *     drawHeight  boardSlug  whiteboardHeight  buttonLabel/Href/Variant  tableData
+ *     drawHeight  boardSlug  whiteboardHeight  embed  embedHeight  buttonLabel/Href/Variant  tableData
  *     databaseId  viewId  recordLimit
  *     layoutMode  layoutRole  layoutConfig  layoutCells  schemaVersion
  *   OVERLAY (front-matter `blocks`)          everything else in EXTRA_BLOCK_KEYS
@@ -59,7 +60,7 @@ import {
 export const MARKDOWN_KEYS: readonly string[] = Object.freeze([
   "id", "type", "content", "children",
   "checked", "language", "asset", "mediaAlt", "widthRatio",
-  "color", "drawHeight", "boardSlug", "whiteboardHeight", "buttonLabel", "buttonHref", "buttonVariant",
+  "color", "drawHeight", "boardSlug", "whiteboardHeight", "embed", "embedHeight", "buttonLabel", "buttonHref", "buttonVariant",
   "tableData", "databaseId", "viewId", "recordLimit",
   "layoutMode", "layoutRole", "layoutConfig", "layoutCells", "schemaVersion",
 ]);
@@ -141,7 +142,7 @@ function blocksOf(body: string, overlay: BlockOverlay | undefined, existing?: Pa
 /** A parser crash must not eat a hand-edited file: one paragraph holds the body. */
 function parseBody(body: string): Block[] {
   try {
-    return parseMarkdownToBlocks(body, { keepEmptyParagraphs: true });
+    return sanitizeLinkBlockFields(parseMarkdownToBlocks(body, { keepEmptyParagraphs: true }));
   } catch {
     return [{ id: crypto.randomUUID(), type: "paragraph", content: body }];
   }
