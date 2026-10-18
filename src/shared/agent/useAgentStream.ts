@@ -19,7 +19,10 @@
  */
 
 import { parseSseBlock } from '@osionos/http-gate';
+import { getActivePageJwt } from '@/shared/api/client';
 import { useSseStream, type StreamMessage } from '@osionos/http-gate/react';
+
+import { bearerFetch } from './bearerFetch';
 
 export { parseSseBlock };
 export type { StreamEventHandler, StreamPayload } from '@osionos/http-gate';
@@ -35,6 +38,8 @@ interface UseAgentStreamOptions {
 }
 
 const DEFAULT_ENDPOINT = '/api/agent/chat';
+// Module-level so the hook's `send` keeps one identity across renders.
+const authedFetch = bearerFetch((input, init) => fetch(input, init), getActivePageJwt);
 const DEFAULT_BRIDGE = (
   (import.meta.env as Record<string, string>)['VITE_OSIONOS_BRIDGE_URL']
   ?? (import.meta.env as Record<string, string>)['VITE_API_URL']
@@ -55,5 +60,6 @@ export function useAgentStream(options: UseAgentStreamOptions = {}) {
   return useSseStream({
     endpoint: options.endpoint ?? DEFAULT_ENDPOINT,
     origins: bridgeOrigins(options.bridgeUrls),
+    fetchImpl: authedFetch,
   });
 }

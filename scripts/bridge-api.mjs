@@ -26,6 +26,7 @@ import { readBaasJson } from './bridge-baas-body.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
+import { createRealtimeTokenHandler } from './bridge-realtime-token.mjs';
 import { createIdeTokenHandler } from './bridge-ide-token.mjs';
 import { createConnectorHandler } from './bridge-connector.mjs';
 import { createOAuthHandler } from './bridge-oauth.mjs';
@@ -87,7 +88,7 @@ const EMAIL_DOMAIN_LABEL = '(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)';
 const EMAIL_REGEX = new RegExp(String.raw`^${EMAIL_LOCAL_PART}@(?>${EMAIL_DOMAIN_LABEL}\.)+[A-Za-z]{2,63}$`.replace('(?>', '(?:'));
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const APP_SESSION_TOKEN_VERSION = 'osionos_v1';
-const BRIDGE_FIELDS = new Set(['provider', 'subject', 'email', 'name', 'jti']);
+const BRIDGE_FIELDS = new Set(['provider', 'subject', 'email', 'name', 'jti', 'emailVerified']);
 const SENSITIVE_FIELD_PATTERN = /password|pass|secret|service|role|key|jwt|token|cookie|consent|birth|city|address|phone|profile|metadata|database|connection/i;
 const DEFAULT_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
 const DEFAULT_HANDOFF_TTL_MS = 90 * 1000;
@@ -197,6 +198,9 @@ export function configFromEnv(env = process.env) {
 		},
 		// Account-level administrators. These emails are promoted to is_admin at
 		// login (sticky in the DB, so the flag survives later env changes).
+		// Off unless explicitly set: the Claude CLI route runs a child with
+		// bypassPermissions. Caveat: never set this on a public deployment.
+		agentClaudeEnabled: env.OSIONOS_AGENT_CLAUDE === '1',
 		adminEmails: (env.OSIONOS_ADMIN_EMAILS ?? 'dev.pro.photo@gmail.com')
 			.split(',').map((value) => value.trim().toLowerCase()).filter(Boolean),
 	};
@@ -374,7 +378,14 @@ export function validateBridgePayload(payload) {
 	if (!UUID_REGEX.test(subject)) throw Object.assign(new Error('Bridge subject must be a Prismatica UUID.'), { status: 422 });
 	if (!EMAIL_REGEX.test(email)) throw Object.assign(new Error('Bridge email is invalid.'), { status: 422 });
 	if (!UUID_REGEX.test(jti)) throw Object.assign(new Error('Bridge jti must be a UUID.'), { status: 422 });
-	return { provider, subject, email, name, jti };
+	const normalized = { provider, subject, email, name, jti };
+	// Present only when the gateway sent it: the HMAC is over this copy, so an
+	// old gateway that signs without the field must still verify.
+	if (hasOwn(payload, 'emailVerified')) {
+		if (typeof payload.emailVerified !== 'boolean') throw Object.assign(new Error('Bridge emailVerified must be a boolean.'), { status: 422 });
+		normalized.emailVerified = payload.emailVerified;
+	}
+	return normalized;
 }
 
 function pruneExpiringMap(map, now) {
@@ -1383,9 +1394,15 @@ async function memberWorkspaceEntries(userId, excludeIds, config, fetchImpl) {
  * emails (sticky — only ever sets true) and reads the PERSISTED flag back, so
  * admin status survives later removal of OSIONOS_ADMIN_EMAILS. Fail-safe: any
  * error degrades to the env-only answer (never throws, never blocks login).
+ *
+ * Promotion needs payload.emailVerified === true: an address nobody proved they
+ * own must not become admin by registering it. Caveat: accounts created while
+ * baas autoconfirm was on all carry email_confirmed_at, so this does not undo an
+ * admin address someone already registered.
  */
 async function resolveAdminFlag(payload, config, fetchImpl) {
-	const isAdminEmail = config.adminEmails.includes(String(payload.email ?? '').toLowerCase());
+	const isAdminEmail = payload.emailVerified === true
+		&& config.adminEmails.includes(String(payload.email ?? '').toLowerCase());
 	if (!config.serviceKey || !config.baasUrl) return isAdminEmail;
 	const hash = encodeURIComponent(emailHash(payload.email, config));
 	try {
@@ -2017,7 +2034,26 @@ function emitClaudeEvent(response, event) {
 	return finalResult;
 }
 
-async function handleClaudeAgentStream(request, response, config) {
+// Caveat: this allowlist is not a security boundary. Under bypassPermissions the
+// child runs as the same uid and can read /proc/<ppid>/environ, so the bridge's
+// secrets stay reachable. OSIONOS_AGENT_CLAUDE must never be set on a public
+// deployment; the allowlist only keeps secrets out of the child's own env dump.
+export function claudeChildEnv(env) {
+	return Object.fromEntries(Object.entries(env).filter(([key]) => (
+		key === 'PATH' || key === 'HOME' || key === 'LANG' || key.startsWith('ANTHROPIC_')
+	)));
+}
+
+// 404 hides the route entirely when the flag is off, even from admins and
+// even before any session check, so a public build exposes nothing to probe.
+function requireClaudeAgentAdmin(request, config) {
+	if (!config.agentClaudeEnabled) throw Object.assign(new Error('Not found.'), { status: 404 });
+	const session = verifyAppSessionToken(bearerToken(request), config);
+	if (!session.isAdmin) throw Object.assign(new Error('Administrator access is required.'), { status: 403 });
+}
+
+async function handleClaudeAgentStream(request, response, config, spawnImpl = spawn) {
+	requireClaudeAgentAdmin(request, config);
 	const payload = sanitizeClaudeRequest(await readJson(request));
 	response.writeHead(200, {
 		'content-type': 'text/event-stream; charset=utf-8',
@@ -2034,9 +2070,9 @@ async function handleClaudeAgentStream(request, response, config) {
 		allowedTools: payload.allowedTools,
 	});
 
-	const child = spawn(process.env.CLAUDE_BIN ?? 'claude', buildClaudeArgs(payload), {
+	const child = spawnImpl(process.env.CLAUDE_BIN ?? 'claude', buildClaudeArgs(payload), {
 		cwd: resolve(APP_ROOT, '../../..'),
-		env: process.env,
+		env: claudeChildEnv(process.env),
 		stdio: ['ignore', 'pipe', 'pipe'],
 	});
 	let buffer = '';
@@ -2487,26 +2523,31 @@ async function handleMarketplacePatch(url, request, response, config, fetchImpl)
 
 /** Read the shared (per-database) header template a designer saved (stored under the system user). */
 async function handleMarketplaceTemplateRead(url, request, response, config, fetchImpl) {
-	verifyAppSessionToken(bearerToken(request), config);
 	const databaseId = requireUuid(url.searchParams.get('databaseId'), 'databaseId');
+	// G6 F1: the template is shared per database, so only who may read that page (the GET
+	// /api/pages/:id gate, workspace membership included) sees it — `shared` alone is not enough.
+	await readablePageAccess(request, databaseId, 'read', config, fetchImpl);
 	const row = await fetchPageConfigRow(databaseId, MARKETPLACE_SYSTEM_USER, config, fetchImpl);
 	const cfg = row?.config && typeof row.config === 'object' ? row.config : {};
 	json(response, 200, { template: cfg.headerTemplate ?? null }, config);
 	return true;
 }
 
-/** Save a shared (per-database) header template — any authenticated user, for v1 (gate to owner/admin later). */
+/** Save a shared (per-database) header template — whoever may update the database page. */
 async function handleMarketplaceTemplateWrite(request, response, config, fetchImpl) {
 	verifyAppSessionToken(bearerToken(request), config);
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const databaseId = requireUuid(payload.databaseId, 'databaseId');
 	const template = safeJsonObject(payload.template, 'template');
-	const dbRow = await fetchPageRow(databaseId, config, fetchImpl);
+	// G6 F1: requirePageScopeAccess answers an unreadable page with a fallback scope and
+	// no row; a write keyed on a page id must have the row, so that case is a 404.
+	const { row: dbRow } = await requirePageScopeAccess(request, databaseId, payload, 'update', config, fetchImpl);
+	if (!dbRow) throw Object.assign(new Error('Page not found.'), { status: 404 });
 	await baasRest(config, fetchImpl, 'osionos_page_configurations?on_conflict=user_id,page_id', {
 		method: 'POST',
 		body: {
 			page_id: databaseId,
-			workspace_id: dbRow?.workspace_id || MARKETPLACE_WORKSPACE_ID,
+			workspace_id: dbRow.workspace_id,
 			user_id: MARKETPLACE_SYSTEM_USER,
 			config: { headerTemplate: template },
 			updated_at: new Date().toISOString(),
@@ -2648,6 +2689,19 @@ async function accessibleMountIds(request, config, fetchImpl) {
 	return new Set(mounts.map((row) => row && row.db_id).filter(Boolean));
 }
 
+// Hyphens and dots stay (Mongo-style names: og-notes, a.b); `.`, `..` and a leading dot do not.
+const QUERY_ROUTER_TABLE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,119}$/;
+
+/**
+ * G6 F3: `table` comes from the URL but the mount ACL only vouches for `dbId`, so a segment
+ * that decodes to path separators or `..` could address another upstream path. Only
+ * identifier-shaped names pass (422 otherwise), and the name is encoded anyway.
+ */
+export function queryRouterTablePath(dbId, table) {
+	if (!QUERY_ROUTER_TABLE.test(table)) throw Object.assign(new Error('table is not a valid table name.'), { status: 422 });
+	return `/${dbId}/tables/${encodeURIComponent(table)}`;
+}
+
 /** Fetch one record via the query-router (engine-aware pk column). */
 async function fetchRecordRow(dbId, table, pk, engine, config, fetchImpl) {
 	const pkColumn = pkColumnForEngine(engine);
@@ -2655,7 +2709,7 @@ async function fetchRecordRow(dbId, table, pk, engine, config, fetchImpl) {
 	// non-numeric pk (e.g. mongo `evt-000001`) stays a string. Sending "1234" as a
 	// string to an int column makes the data-plane 409 on the type mismatch.
 	const pkValue = /^\d+$/.test(pk) ? Number(pk) : pk;
-	const result = await baasQueryPost(config, fetchImpl, `/${dbId}/tables/${table}`, {
+	const result = await baasQueryPost(config, fetchImpl, queryRouterTablePath(dbId, table), {
 		op: 'get',
 		filter: { [pkColumn]: pkValue },
 	});
@@ -2905,7 +2959,7 @@ async function handleDatabaseRows(match, request, response, config, fetchImpl) {
 	// redundant `resource` (and legacy `values`) the live-DB write client tags onto
 	// update/delete/upsert ops — strip them so writes don't silently 400 and vanish.
 	const { resource: _resource, values: _values, ...opBody } = safe;
-	const { status, body } = await baasQueryPassthrough(config, fetchImpl, `/${dbId}/tables/${table}`, { ...opBody, op });
+	const { status, body } = await baasQueryPassthrough(config, fetchImpl, queryRouterTablePath(dbId, table), { ...opBody, op });
 	json(response, status || 502, body ?? { rows: [], affected_rows: 0 }, config);
 	return true;
 }
@@ -3115,11 +3169,10 @@ async function handleWorkspaceGet(url, request, response, config, fetchImpl) {
 	const match = /^\/api\/workspaces\/([^/]+)$/.exec(url.pathname);
 	if (!match) return false;
 	const workspaceId = requireUuid(decodeURIComponent(match[1]), 'workspaceId');
-	const authContext = verifyAppSessionToken(bearerToken(request), config);
-	if (!authContext.workspaceIds.includes(workspaceId)) {
-		throw Object.assign(new Error('App session is not scoped to this workspace.'), { status: 403 });
-	}
-	const workspaces = await listSessionWorkspaces(authContext, config, fetchImpl);
+	// G6 F10: live membership like every other workspace route, so a member who joined after
+	// the token was minted is not turned away by the token's frozen workspace list.
+	const authContext = await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
+	const workspaces = await listSessionWorkspaces({ ...authContext, workspaceIds: [workspaceId] }, config, fetchImpl);
 	const workspace = workspaces.find((item) => item._id === workspaceId || item.id === workspaceId);
 	if (!workspace) throw Object.assign(new Error('Workspace not found.'), { status: 404 });
 	json(response, 200, workspace, config);
@@ -3752,10 +3805,24 @@ function bridgeTokenFromRedirect(redirectUrl) {
 	return new URLSearchParams(redirectUrl.slice(hashIndex + 1)).get('bridge_token') ?? '';
 }
 
-async function gatewayCall(fetchImpl, config, path, { headers = {}, body = '{}' } = {}) {
+// Appended, never replaced: the gateway rate-limits per client IP, and without
+// this every app sign-in arrives from the bridge's own address and shares one bucket.
+// Caveat: the incoming x-forwarded-for is client-controlled; how many trailing hops
+// the gateway trusts is its own setting, not decided here.
+function forwardedForHeader(request) {
+	const incoming = String(request.headers['x-forwarded-for'] ?? '').trim();
+	return [incoming, request.socket?.remoteAddress ?? ''].filter(Boolean).join(', ');
+}
+
+async function gatewayCall(fetchImpl, config, path, { headers = {}, body = '{}', forwardedFor = '' } = {}) {
 	const res = await fetchWithTimeout(fetchImpl, `${config.gatewayUrl}${path}`, {
 		method: 'POST',
-		headers: { 'content-type': 'application/json', accept: 'application/json', ...headers },
+		headers: {
+			'content-type': 'application/json',
+			accept: 'application/json',
+			...(forwardedFor ? { 'x-forwarded-for': forwardedFor } : {}),
+			...headers,
+		},
 		body,
 	}, 12000);
 	const data = await res.json().catch(() => ({}));
@@ -3773,23 +3840,27 @@ async function handleAuthProxy(url, request, response, config, handoffStore, fet
 	const password = safeText(payload.password, 512);
 	if (!email || !password) throw Object.assign(new Error('Email and password are required.'), { status: 422 });
 	const turnstileToken = 'localhost-turnstile-token';
+	const forwardedFor = forwardedForHeader(request);
 
 	if (url.pathname === '/api/auth/register') {
 		const rawName = safeText(payload.username ?? payload.name ?? email.split('@')[0], 64);
 		const username = (rawName.replace(/[^\w.-]/g, '') || `user${Date.now()}`).slice(0, 32);
 		const { res: rRes, data: rData } = await gatewayCall(fetchImpl, config, '/api/auth/register', {
 			body: JSON.stringify({ email, password, turnstileToken, profile: { username, confirmPassword: password } }),
+			forwardedFor,
 		});
 		if (!rRes.ok) { json(response, rRes.status || 422, { message: rData.message || 'Registration failed.' }, config); return; }
 	}
 
 	const { res: lRes, data: lData } = await gatewayCall(fetchImpl, config, '/api/auth/login', {
 		body: JSON.stringify({ email, password, turnstileToken }),
+		forwardedFor,
 	});
 	if (!lRes.ok || !lData.access_token) { json(response, lRes.status || 401, { message: lData.message || 'Invalid credentials.' }, config); return; }
 
 	const { res: sRes, data: sData } = await gatewayCall(fetchImpl, config, '/api/auth/osionos-session', {
 		headers: { authorization: `Bearer ${lData.access_token}` },
+		forwardedFor,
 	});
 	const bridgeToken = bridgeTokenFromRedirect(sData.redirectUrl);
 	if (!sRes.ok || !bridgeToken) { json(response, 502, { message: sData.message || 'Could not establish the app session.' }, config); return; }
@@ -3839,10 +3910,6 @@ async function handleBridgePost(url, request, response, config, handoffStore, re
 		await handleAutomationWebhook(request, response, config, fetchImpl);
 		return true;
 	}
-	if (url.pathname === '/api/agent/claude/stream') {
-		await handleClaudeAgentStream(request, response, config);
-		return true;
-	}
 	if (url.pathname === '/api/media/unsplash/download') {
 		admitMediaRequest(request, config, 'media-download', MEDIA_DOWNLOAD_LIMIT);
 		const body = await readJson(request, MEDIA_DOWNLOAD_BODY_LIMIT_BYTES);
@@ -3887,6 +3954,11 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.feed(url, request, response, context.config)) return;
 	if (await context.social.social(url, request, response, context.config)) return;
 	if (await context.social.collab(url, request, response, context.config)) return;
+	if (await context.social.realtimeToken(url, request, response, context.config)) return;
+	if (request.method === 'POST' && url.pathname === '/api/agent/claude/stream') {
+		await handleClaudeAgentStream(request, response, context.config, context.spawnImpl);
+		return;
+	}
 	if (request.method === 'GET' && await handleWorkspaceGet(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'GET' && await handlePagesGet(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'GET' && await handleBridgeGet(url, request, response, context.config, context.fetchImpl)) return;
@@ -3914,6 +3986,7 @@ export function createBridgeServer(options = {}) {
 	const handoffStore = options.handoffStore ?? new Map();
 	const replayStore = options.replayStore ?? new Map();
 	const fetchImpl = options.fetchImpl ?? fetch;
+	const spawnImpl = options.spawnImpl ?? spawn;
 	// Comments and publish reach a page through the same read rule as GET /api/pages/:id.
 	const verifyPageAccess = (request, pageId, permission) => readablePageAccess(request, pageId, permission, config, fetchImpl);
 	// Standalone workstream handlers, created once. rtc keeps the sibling
@@ -3939,11 +4012,12 @@ export function createBridgeServer(options = {}) {
 		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		realtimeToken: createRealtimeTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 	};
 	const server = createServer(async (request, response) => {
 		let responseConfig = requestOriginConfig(config, request);
 		try {
-			await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl, social });
+			await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl, spawnImpl, social });
 		} catch (error) {
 			if (!response.headersSent) errorJson(response, error, responseConfig);
 		}

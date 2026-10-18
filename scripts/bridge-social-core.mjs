@@ -283,6 +283,12 @@ export function parseMentions(content) {
 	return [...handles];
 }
 
+/** The caller's unguessable inbox key, or null before their identity row has one. */
+export async function notifyTokenFor(config, fetchImpl, userId) {
+	const rows = await rest(config, fetchImpl, `osionos_bridge_identities?user_id=eq.${userId}&select=notify_token&limit=1`);
+	return Array.isArray(rows) && rows[0]?.notify_token ? rows[0].notify_token : null;
+}
+
 /** Per-user realtime inbox topic, keyed by the unguessable notify_token. */
 export function userTopic(notifyToken) {
 	return `user:${notifyToken}`;

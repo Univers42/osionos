@@ -120,7 +120,7 @@ async function fetchChannel(config, fetchImpl, channelId) {
 }
 
 /** dm/private → channel membership; public text/voice/video → workspace membership. */
-async function requireChannelAccess(config, fetchImpl, userId, channelId) {
+export async function requireChannelAccess(config, fetchImpl, userId, channelId) {
 	const channel = await fetchChannel(config, fetchImpl, channelId);
 	const memberRows = await rest(
 		config,
@@ -154,7 +154,7 @@ async function fetchMessageForAuthor(config, fetchImpl, userId, messageId) {
 	return row;
 }
 
-function chatTopic(channel) {
+export function chatTopic(channel) {
 	return `chat:${channel.workspace_id}:${channel.id}`;
 }
 

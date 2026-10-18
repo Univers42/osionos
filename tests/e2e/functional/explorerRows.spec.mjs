@@ -48,8 +48,13 @@ test("a file row and a page row share height, radius, indent, type and colour", 
   test.setTimeout(120_000);
   await bootExplorer(page);
   await visitTwoPages(page);
-  // Getting Started is idle in both lists; Project Roadmap is the open page in both.
-  expect(await read(treeRow(page, "Getting Started"), ROW_LOOK)).toEqual(await read(pageRow(page, "Getting Started"), ROW_LOOK));
+  // Getting Started is idle in both lists; Project Roadmap is the open page in both. A tree
+  // page sits one step inside its Private section, whose row starts at the page row's gutter.
+  const look = ROW_LOOK.filter((name) => name !== "paddingLeft");
+  expect(await read(treeRow(page, "Getting Started"), look)).toEqual(await read(pageRow(page, "Getting Started"), look));
+  const [section, tree, kit] = [await read(treeRow(page, "Private"), ["paddingLeft"]), await read(treeRow(page, "Getting Started"), ["paddingLeft"]), await read(pageRow(page, "Getting Started"), ["paddingLeft"])];
+  expect(section.paddingLeft).toBe(kit.paddingLeft);
+  expect(parseFloat(tree.paddingLeft) - parseFloat(section.paddingLeft)).toBe(12);
   const open = ["backgroundColor", "color"];
   expect(await read(treeRow(page, "Project Roadmap"), open)).toEqual(await read(pageRow(page, "Project Roadmap"), open));
   expect((await read(treeRow(page, "Project Roadmap"), ["backgroundColor"])).backgroundColor).toBe(await tokenValue(page, "background-color", "--osio-bg-muted"));
@@ -74,8 +79,10 @@ test("nesting indents by the page row's step, from the page row's gutter", async
   await treeRow(page, "perf-folder").click();
   const child = treeRow(page, "file-0000.ts");
   await expect(child).toBeVisible();
-  const [folder, nested, kit] = [await read(treeRow(page, "perf-folder"), ["paddingLeft"]), await read(child, ["paddingLeft"]), await read(pageRow(page, "Getting Started"), ["paddingLeft"])];
-  expect(folder.paddingLeft).toBe(kit.paddingLeft);
+  // The seeded folder lands inside the Private section, the one root-level row.
+  const [section, folder, nested, kit] = [await read(treeRow(page, "Private"), ["paddingLeft"]), await read(treeRow(page, "perf-folder"), ["paddingLeft"]), await read(child, ["paddingLeft"]), await read(pageRow(page, "Getting Started"), ["paddingLeft"])];
+  expect(section.paddingLeft).toBe(kit.paddingLeft);
+  expect(parseFloat(folder.paddingLeft) - parseFloat(section.paddingLeft)).toBe(12);
   expect(parseFloat(nested.paddingLeft) - parseFloat(folder.paddingLeft)).toBe(12);
 });
 

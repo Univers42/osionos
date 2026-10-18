@@ -18,7 +18,7 @@
  * WRITTEN by emitNotifications (bridge-social-core) from the chat plane.
  */
 
-import { UUID_REGEX, bearerToken, httpError, readJsonBody, rest, sendJson } from './bridge-social-core.mjs';
+import { UUID_REGEX, bearerToken, httpError, notifyTokenFor, readJsonBody, rest, sendJson } from './bridge-social-core.mjs';
 
 function notificationEntry(row) {
 	return {
@@ -37,8 +37,7 @@ async function listNotifications(deps, session, url, response, config) {
 }
 
 async function notificationsInbox(deps, session, response, config) {
-	const idRows = await rest(config, deps.fetchImpl, `osionos_bridge_identities?user_id=eq.${session.userId}&select=notify_token&limit=1`);
-	const notifyToken = Array.isArray(idRows) && idRows[0]?.notify_token ? idRows[0].notify_token : null;
+	const notifyToken = await notifyTokenFor(config, deps.fetchImpl, session.userId);
 	const unreadRows = await rest(config, deps.fetchImpl, `osionos_notifications?user_id=eq.${session.userId}&read_at=is.null&select=id`);
 	return sendJson(response, 200, { ok: true, notifyToken, unread: Array.isArray(unreadRows) ? unreadRows.length : 0 }, config);
 }

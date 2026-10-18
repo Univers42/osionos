@@ -40,12 +40,14 @@
  * ABAC: `authorizeRtcJoin` is THE single authorization hook. A UUID channelId
  * resolves its workspace from osionos_channels (fail closed); a non-UUID channelId
  * keeps the requested/session workspace. Then an osionos_workspace_members row is
- * required. The chat workstream tightens it to per-channel membership by
- * replacing that one function — handler and token shape stay untouched.
+ * required, and for a UUID channelId the chat module's channel gate too (dm and
+ * private channels need an osionos_channel_members row). Handler and token shape
+ * stay untouched.
  */
 
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readBaasJson } from './bridge-baas-body.mjs';
+import { requireChannelAccess } from './bridge-chat.mjs';
 
 const MAX_TOKEN_TTL_SECONDS = 6 * 60 * 60; // LiveKit grants are capped at 6h here
 const DEFAULT_TOKEN_TTL_SECONDS = 60 * 60;
@@ -146,8 +148,7 @@ async function baasRestGet(config, fetchImpl, path) {
  * channelId keeps the requested/session workspace. Then an
  * osionos_workspace_members row is REQUIRED for the user. Returns
  * `{ workspaceId, role, permissions }` or throws 403/404.
- * Ponytail: membership is per WORKSPACE, not per private channel — a member
- * of a workspace can join the call of every channel in it, private ones included.
+ * G6 F2: a UUID channelId must also pass requireChannelAccess, the gate chat uses.
  */
 export async function authorizeRtcJoin({ userId, channelId, workspaceId, config, fetchImpl = fetch }) {
 	let targetWorkspaceId = UUID_SHAPE.test(String(workspaceId ?? '')) ? String(workspaceId) : '';
@@ -165,6 +166,7 @@ export async function authorizeRtcJoin({ userId, channelId, workspaceId, config,
 	);
 	const member = Array.isArray(members) ? members[0] : null;
 	if (!member) throw httpError('You are not a member of this channel’s workspace.', 403);
+	if (UUID_SHAPE.test(String(channelId ?? ''))) await requireChannelAccess(config, fetchImpl, userId, channelId);
 	return {
 		workspaceId: targetWorkspaceId,
 		role: safeText(member.role, 16),

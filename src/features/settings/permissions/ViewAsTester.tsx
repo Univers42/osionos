@@ -16,6 +16,7 @@ import { Dropdown } from '@/shared/ui';
 import { decide, type DecideResponse, type SharePerson } from '@/features/share';
 
 interface ViewAsTesterProps {
+  workspaceId: string;
   people: SharePerson[];
   resources: string[];
 }
@@ -24,7 +25,7 @@ const ACTIONS = ['list', 'create', 'update', 'delete'] as const;
 
 /** "View as" tester: pick a roster person + resource + action, ask the live
  *  /permissions/decide endpoint, render allow/deny + the field mask. */
-export const ViewAsTester: React.FC<ViewAsTesterProps> = ({ people, resources }) => {
+export const ViewAsTester: React.FC<ViewAsTesterProps> = ({ workspaceId, people, resources }) => {
   const [personId, setPersonId] = useState('');
   const [resource, setResource] = useState('');
   const [action, setAction] = useState<string>('list');
@@ -37,7 +38,7 @@ export const ViewAsTester: React.FC<ViewAsTesterProps> = ({ people, resources })
     setPending(true);
     setError(null);
     try {
-      setResult(await decide({ user: { id: personId }, resource_type: 'table', resource_name: resource, op: action }));
+      setResult(await decide(workspaceId, { user: { id: personId }, resource_type: 'table', resource_name: resource, op: action }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Decision call failed.');
       setResult(null);
