@@ -87,7 +87,7 @@ function breakTable(mock, table, mode, { onlyCursorChunk = false } = {}) {
 }
 
 describe('a cut or garbled BaaS body is an error, never an empty list', () => {
-	it('answers 502, never an empty list, when the page-table body stops mid-array', async () => {
+	it('answers 502, never an empty list, when the list-statement body stops mid-array', async () => {
 		const mock = breakTable(createPostgrestMock(worldOf([seedPage(0)])), 'osionos_workspace_members', 'cut');
 		await withBridge(config, mock.fetchImpl, async (base) => {
 			const listed = await send(base, `/api/pages/all?workspaceId=${IDS.team}`, asTeamOwner);
@@ -96,7 +96,7 @@ describe('a cut or garbled BaaS body is an error, never an empty list', () => {
 		});
 	});
 
-	it('answers 502 when the page-table body is not valid JSON', async () => {
+	it('answers 502 when the list-statement body is not valid JSON', async () => {
 		const mock = breakTable(createPostgrestMock(worldOf([seedPage(0)])), 'osionos_workspace_members', 'garbled');
 		await withBridge(config, mock.fetchImpl, async (base) => {
 			const listed = await send(base, `/api/pages/all?workspaceId=${IDS.team}`, asTeamOwner);

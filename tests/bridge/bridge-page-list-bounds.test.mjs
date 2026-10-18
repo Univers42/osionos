@@ -78,7 +78,7 @@ const scanReads = (mock) => pageReads(mock).filter((call) => !call.params.has('s
 /** Ids in the order the chunk scan walks them: raw string order, like Postgres' uuid order. */
 const idOrder = (pages) => pages.map((page) => page.id).sort();
 
-/** `ORDER BY updated_at DESC, id ASC`, nulls first as Postgres orders a DESC column. */
+/** `updated_at DESC`, nulls first as Postgres orders a DESC column; ties by id ASC is the stub's stable sort, production promises no order among equal updated_at. */
 function expectedPageOrder(pages) {
 	return [...pages]
 		.sort((left, right) => {
@@ -310,7 +310,7 @@ describe('the /api/pages/all hydrate keeps one request', () => {
 			assert.equal(reads[0].params.get('order'), 'updated_at.desc');
 			assert.equal(reads[0].params.get('select').includes('content'), false);
 			// The single request asks PostgREST for updated_at.desc and the embed stub applies it,
-			// so the list comes back in that order (nulls first, ties in seed order = id ascending).
+			// so the list comes back in that order (nulls first, ties in seed order = id ascending, the stub's stable sort; production does not promise it).
 			assert.equal(listed.body.length, 450);
 			assert.deepEqual(listed.body.map((entry) => entry._id), expectedPageOrder(pages));
 		});

@@ -18,6 +18,10 @@
 // is ignored (insertion order); wfts is a substring match over title+content, not stemming.
 // Unknown operators throw, so a new query shape fails the test instead of silently
 // matching every row.
+// Ponytail: every GET whose `select` contains an embed goes to the strict embed stub
+// (embed-postgrest.mjs), which honours `updated_at.desc` and throws on any other order.
+// Every mock world gets a synthesized `osionos_workspaces {id}` row, so a "workspace row
+// missing" case cannot be written through this harness.
 
 import { randomUUID } from 'node:crypto';
 import { isEmbedRead, readEmbed } from './embed-postgrest.mjs';
