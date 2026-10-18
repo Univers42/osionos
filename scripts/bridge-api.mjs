@@ -2523,26 +2523,31 @@ async function handleMarketplacePatch(url, request, response, config, fetchImpl)
 
 /** Read the shared (per-database) header template a designer saved (stored under the system user). */
 async function handleMarketplaceTemplateRead(url, request, response, config, fetchImpl) {
-	verifyAppSessionToken(bearerToken(request), config);
+	const { userId } = verifyAppSessionToken(bearerToken(request), config);
 	const databaseId = requireUuid(url.searchParams.get('databaseId'), 'databaseId');
+	// G6 F1: the template is shared per database, so only a reader of that page sees it.
+	requireReadablePage(await fetchPageRow(databaseId, config, fetchImpl), userId);
 	const row = await fetchPageConfigRow(databaseId, MARKETPLACE_SYSTEM_USER, config, fetchImpl);
 	const cfg = row?.config && typeof row.config === 'object' ? row.config : {};
 	json(response, 200, { template: cfg.headerTemplate ?? null }, config);
 	return true;
 }
 
-/** Save a shared (per-database) header template — any authenticated user, for v1 (gate to owner/admin later). */
+/** Save a shared (per-database) header template — whoever may update the database page. */
 async function handleMarketplaceTemplateWrite(request, response, config, fetchImpl) {
 	verifyAppSessionToken(bearerToken(request), config);
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const databaseId = requireUuid(payload.databaseId, 'databaseId');
 	const template = safeJsonObject(payload.template, 'template');
-	const dbRow = await fetchPageRow(databaseId, config, fetchImpl);
+	// G6 F1: requirePageScopeAccess answers an unreadable page with a fallback scope and
+	// no row; a write keyed on a page id must have the row, so that case is a 404.
+	const { row: dbRow } = await requirePageScopeAccess(request, databaseId, payload, 'update', config, fetchImpl);
+	if (!dbRow) throw Object.assign(new Error('Page not found.'), { status: 404 });
 	await baasRest(config, fetchImpl, 'osionos_page_configurations?on_conflict=user_id,page_id', {
 		method: 'POST',
 		body: {
 			page_id: databaseId,
-			workspace_id: dbRow?.workspace_id || MARKETPLACE_WORKSPACE_ID,
+			workspace_id: dbRow.workspace_id,
 			user_id: MARKETPLACE_SYSTEM_USER,
 			config: { headerTemplate: template },
 			updated_at: new Date().toISOString(),
