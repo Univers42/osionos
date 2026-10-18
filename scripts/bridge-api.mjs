@@ -2690,7 +2690,7 @@ async function accessibleMountIds(request, config, fetchImpl) {
 }
 
 // Hyphens and dots stay (Mongo-style names: og-notes, a.b); `.`, `..` and a leading dot do not.
-const QUERY_ROUTER_TABLE = /^(?!\.{1,2}$)[A-Za-z0-9_][A-Za-z0-9_.-]{0,119}$/;
+const QUERY_ROUTER_TABLE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,119}$/;
 
 /**
  * G6 F3: `table` comes from the URL but the mount ACL only vouches for `dbId`, so a segment
