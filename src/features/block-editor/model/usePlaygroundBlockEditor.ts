@@ -19,7 +19,7 @@ import React, {
   useCallback,
 } from "react";
 import { usePageStore } from "@/store/usePageStore";
-import { bareUrlToLinkSource, isSingleBareUrl } from "@osionos/markdown-engine";
+import { isSingleBareUrl } from "@osionos/markdown-engine";
 import { detectBlockType, parseMarkdownToBlocks } from "@osionos/markdown-engine/blocks";
 import {
   getInlineEditorSelectionOffsets,
@@ -71,6 +71,9 @@ import {
 } from "./playgroundBlockEditor.helpers";import { inlineIconInsertText } from "./inlineIconInsert";
 import { matchInternalCopy } from "./blockClipboard";
 import { useBlockContextMenu } from "./useBlockContextMenu";
+import { insertPastedLink, isPasteMenuBlock } from "./pasteLinkMenu";
+import { useLinkSnapshotAttach } from "./useLinkSnapshotAttach";
+import { usePasteLinkMenu } from "./usePasteLinkMenu";
 import {
   commitEditableBlockText,
   focusEditableBlock,
@@ -696,6 +699,9 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     (blocks: Block[]) => updatePageContent(pageId, blocks),
     [pageId, updatePageContent],
   );
+
+  const readCommittedContent = useCallback(() => flushPendingDrafts("structural"), [flushPendingDrafts]);
+  const attachLinkSnapshot = useLinkSnapshotAttach(readCommittedContent, replaceContent);
 
   const updateBlock = useCallback(
     (_pid: string, blockId: string, updates: Partial<Block>) => {
@@ -1594,6 +1600,15 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     [focusBlock, slashMenu, pageSelector, emojiMenu],
   );
 
+  const { pasteMenu, offerPasteMenu, choosePaste, dismissPasteMenu } = usePasteLinkMenu({
+    readContent: readCommittedContent,
+    writeContent: replaceContent,
+    pushUndoSnapshot: pushSnapshot,
+    focusBlock,
+    attachSnapshot: attachLinkSnapshot,
+    caretPosition: getCaretRect,
+  });
+
   const handlePaste = useCallback(
     (e: React.ClipboardEvent, blockId: string) => {
       flushPendingBlockDraft(blockId, "structural");
@@ -1618,16 +1633,15 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         return;
       }
 
-      // A pasted bare URL becomes a blue `[hostname](url)` link, not pure URL text.
+      // A pasted bare URL becomes a blue `[hostname](url)` link, not pure URL text, and
+      // the paste menu offers Mention / Bookmark / Embed (no network until a pick).
       if (isSingleBareUrl(raw)) {
         e.preventDefault();
         const content = currentBlock.content ?? "";
-        const offsets = resolvePasteSelectionOffsets(e, content);
-        const lo = Math.max(0, Math.min(offsets.start, offsets.end, content.length));
-        const hi = Math.max(lo, Math.min(Math.max(offsets.start, offsets.end), content.length));
-        const next = content.slice(0, lo) + bareUrlToLinkSource(raw) + content.slice(hi);
-        updateBlock(pageId, blockId, { content: next });
+        const pasted = insertPastedLink(content, raw, resolvePasteSelectionOffsets(e, content));
+        updateBlock(pageId, blockId, { content: pasted.content });
         focusBlock(blockId, true);
+        if (isPasteMenuBlock(currentBlock)) offerPasteMenu(blockId, pasted.context);
         return;
       }
 
@@ -1644,7 +1658,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       updatePageContent(pageId, replaceBlockInEditorTree(contentRef.current, blockId, replacement));
       focusBlock(parsed.at(-1)?.id ?? replacement.at(-1)?.id ?? blockId, true);
     },
-    [flushPendingBlockDraft, pageId, updatePageContent, updateBlock, focusBlock],
+    [flushPendingBlockDraft, pageId, updatePageContent, updateBlock, focusBlock, offerPasteMenu],
   );
 
   const handleContainerEnter = useCallback(
@@ -2005,6 +2019,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     sourceKey,
     updatePageContent: updatePageContentWithHistory,
     focusBlock,
+    attachLinkSnapshot,
   });
 
   /** Handle slash-command selection. */
@@ -2172,6 +2187,9 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     emojiMenu,
     setEmojiMenu,
     handleEmojiSelect,
+    pasteMenu,
+    choosePaste,
+    dismissPasteMenu,
     colorMenu,
     setColorMenu,
     handleColorSelect,

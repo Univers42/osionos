@@ -31,7 +31,7 @@ import { frameableEmbedUrl, safeHttpUrl } from "@/shared/lib/embed/embedUrlGuard
 
 export type MediaKind = "video" | "audio" | "image";
 export type FramePolicy = "provider" | "generic";
-export type CardReason = "refused" | "unsafe-frame";
+export type CardReason = "refused" | "unsafe-frame" | "pdf";
 
 export type EmbedView =
   | { kind: "facade"; embed: ProviderEmbed; title: string; thumb: string; aspect: string }
@@ -51,6 +51,8 @@ const EXTENSION_KINDS: Record<string, MediaKind> = {
   mp3: "audio", wav: "audio", ogg: "audio", m4a: "audio", flac: "audio", aac: "audio",
   png: "image", jpg: "image", jpeg: "image", gif: "image", webp: "image", avif: "image", svg: "image",
 };
+
+const PDF_PATH = /\.pdf$/i;
 
 function mediaKindOfUrl(href: string): MediaKind | null {
   const extension = /\.([a-z0-9]{2,5})$/i.exec(new URL(href).pathname)?.[1]?.toLowerCase();
@@ -102,6 +104,10 @@ export function chooseEmbedView(input: EmbedViewInput): EmbedView {
   }
   const directKind = mediaKindOfUrl(href);
   if (directKind !== null) return { kind: "media", mediaKind: directKind, src: href };
+  // Chromium does not load a PDF into a sandboxed frame (observed offline: the frame stays
+  // empty, tests/e2e/functional/embedBlocks.spec.mjs C20) and the sandbox is not relaxed
+  // for it, so a .pdf is a card with Open rather than a blank box.
+  if (PDF_PATH.test(new URL(href).pathname)) return { kind: "card", info, reason: "pdf" };
   const fromSnapshot = snapshotView(info, input);
   if (fromSnapshot !== null) return fromSnapshot;
   const src = frameableEmbedUrl(href, input.forbiddenOrigins);

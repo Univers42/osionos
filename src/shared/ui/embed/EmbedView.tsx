@@ -30,9 +30,11 @@ export interface EmbedViewProps {
   onShowAsBookmark?: () => void;
   /** False while a parent drags a resize grip. */
   interactive?: boolean;
+  /** Rendered inside a framed page's box (a resize grip); other views ignore it. */
+  frameOverlay?: React.ReactNode;
 }
 
-const REASON_NOTE = { refused: "This site doesn't allow embedding", "unsafe-frame": "This link can't be embedded here" };
+const REASON_NOTE = { refused: "This site doesn't allow embedding", "unsafe-frame": "This link can't be embedded here", pdf: "PDFs open in their own tab" };
 
 const MEDIA = "block max-w-full rounded-md";
 
@@ -44,7 +46,7 @@ function renderMedia(view: Extract<EmbedViewModel, { kind: "media" }>): React.Re
 
 /** Whatever `chooseEmbedView` decides a link is: player, framed page, media file,
  *  bookmark card or plain text. Iframes mount once the block is near the viewport. */
-export const EmbedView: React.FC<EmbedViewProps> = ({ url, snapshot, height, onShowAsBookmark, interactive = true }) => {
+export const EmbedView: React.FC<EmbedViewProps> = ({ url, snapshot, height, onShowAsBookmark, interactive = true, frameOverlay }) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const isNear = useHasBeenNearViewport(rootRef);
   const view = useMemo(
@@ -95,7 +97,9 @@ export const EmbedView: React.FC<EmbedViewProps> = ({ url, snapshot, height, onS
             aspect={view.aspect}
             interactive={interactive}
             isActive={isNear}
-          />
+          >
+            {frameOverlay}
+          </WebEmbedFrame>
           <EmbedFooter
             framedSrc={view.src}
             openUrl={url}

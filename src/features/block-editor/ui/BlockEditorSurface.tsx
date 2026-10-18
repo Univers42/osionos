@@ -33,6 +33,8 @@ import {
 } from "@/features/block-editor/model/usePlaygroundBlockEditor";
 import { BlockContextMenu } from "./BlockContextMenu";
 import { PageSelectorMenu } from "./PageSelectorMenu";
+import { PasteLinkMenu } from "./PasteLinkMenu";
+import { installLinkFaviconFallback } from "../model/linkFaviconFallback";
 import { EmojiPicker } from "@/shared/ui";
 import { ColorMenu } from "./ColorMenu";
 import { getBlockSurfaceStyle } from "../model/blockColors";
@@ -45,6 +47,7 @@ import { useCrossTextSelection } from "../model/useCrossTextSelection";
 import { useBlockSelection, selectIdsForSurface } from "../model/blockSelectionStore";
 import { useEditorCommandBus, type EditorHandle } from "../model/editorCommandBus";
 import { isTextEntryTarget } from "../model/marqueeGeometry";
+import { requestLinkDialog } from "../model/linkDialogRequests";
 import { expandSelectionWithDescendants, removeBlocksFromTree } from "@/entities/block/model/blockTreeUtils";
 import { isBlockSelectEnabled } from "@/shared/config/featureFlags";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
@@ -361,6 +364,9 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		emojiMenu,
 		setEmojiMenu,
 		handleEmojiSelect,
+		pasteMenu,
+		choosePaste,
+		dismissPasteMenu,
 		colorMenu,
 		setColorMenu,
 		handleColorSelect,
@@ -462,6 +468,8 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	useEffect(() => {
 		editorHandleRef.current = editorHandle;
 	}, [editorHandle]);
+
+	useEffect(() => installLinkFaviconFallback(), []);
 
 	const { menu: pageMenuState, sections: pageMenuSections, open: openPageMenu, close: closePageMenu } = usePageContextMenu(sourceKey);
 
@@ -783,6 +791,10 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 					onSelect={(item) => {
 						const currentBlocks = flushPendingDrafts("shortcut");
 						blocksRef.current = currentBlocks;
+						if (item.kind === "link-block") {
+							handleSlashMediaSelect(item.blockType, "", currentBlocks, (id) => requestLinkDialog(id, item.hintId));
+							return;
+						}
 						if (item.kind === "turn-into") {
 							handleSlashTurnIntoSelect(item.blockType, currentBlocks, {
 								calloutIcon: item.calloutIcon,
@@ -888,6 +900,15 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 					position={colorMenu.position}
 					onPick={handleColorSelect}
 					onClose={() => setColorMenu(null)}
+				/>
+			) : null}
+
+			{pasteMenu ? (
+				<PasteLinkMenu
+					position={pasteMenu.position}
+					initialChoice={pasteMenu.initialChoice}
+					onChoose={choosePaste}
+					onDismiss={dismissPasteMenu}
 				/>
 			) : null}
 

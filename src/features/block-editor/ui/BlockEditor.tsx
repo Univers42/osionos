@@ -56,10 +56,10 @@ import { LegacyDrawNotice } from "@/features/whiteboard/ui/LegacyDrawNotice";
 import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
 
-// Interim editor surface for embed/bookmark: the read-only view keeps these types out of
-// EditableContent (they are void blocks, not text) until their editor component lands.
-const ReadOnlyLinkBlock = lazy(() =>
-  import("@/entities/block/ui/ReadOnlyLinkBlock").then((m) => ({ default: m.ReadOnlyLinkBlock })),
+// embed/bookmark are void blocks (their content is a URL, not text), so they never reach
+// EditableContent. Lazy, like the whiteboard: the frame and card code stays off the warm chunk.
+const LinkBlockEditor = lazy(() =>
+  import("./LinkBlockEditor").then((m) => ({ default: m.LinkBlockEditor })),
 );
 
 // The inline whiteboard (iframe of the drawnosaurus board) — lazy, same boundary.
@@ -1085,11 +1085,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     case "embed":
     case "bookmark":
       return (
-        <div tabIndex={-1} aria-label={`${block.type} block`} className="relative my-0">
-          <Suspense fallback={null}>
-            <ReadOnlyLinkBlock block={block} />
-          </Suspense>
-        </div>
+        <Suspense fallback={null}>
+          <LinkBlockEditor
+            block={block}
+            onKeyDown={onKeyDown}
+            onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)}
+          />
+        </Suspense>
       );
 
     case "home_views":
