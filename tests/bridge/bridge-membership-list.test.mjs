@@ -178,6 +178,29 @@ describe('list: the anchor cross-check', () => {
 		});
 	});
 
+	it('two anchor rows, the caller\'s own first, are a 403: the user filter did not apply', async () => {
+		const world = membershipWorld();
+		const pages = world.osionos_pages.filter((page) => page.workspace_id === IDS.team);
+		const failWhen = (call) => (call.table === 'osionos_workspace_members' ? { status: 200, body: [memberRow(pages), ownerRow(pages)] } : null);
+		await inMembershipWorld(world, { failWhen }, async (base) => {
+			for (const route of [TEAM_ALL, TEAM_LIST]) {
+				const denied = await send(base, route, asB());
+				assert.equal(denied.status, 403);
+				assertNoPageIds(denied, world);
+			}
+		});
+	});
+
+	it('the caller\'s own anchor row without its workspace embed is a 403', async () => {
+		const world = membershipWorld();
+		const failWhen = (call) => (call.table === 'osionos_workspace_members' ? { status: 200, body: [{ ...memberRow([]), workspace: null }] } : null);
+		await inMembershipWorld(world, { failWhen }, async (base) => {
+			const denied = await send(base, TEAM_ALL, asB());
+			assert.equal(denied.status, 403);
+			assertNoPageIds(denied, world);
+		});
+	});
+
 	for (const [label, row] of [
 		['another user', { ...ownerRow([]), user_id: IDS.userA }],
 		['another workspace', { ...memberRow([]), workspace_id: OTHER_WORKSPACE }],
