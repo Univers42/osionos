@@ -226,7 +226,9 @@ async function embedDirectory(deps, session, response, config) {
  * osionos_pages (live-DB rows) render as "Untitled".
  */
 async function listProfileShares(deps, session, userId, response, config) {
-	const shares = await rest(config, deps.fetchImpl, `osionos_feed_shares?user_id=eq.${userId}&target=eq.profile&select=page_id,created_at&order=created_at.desc&limit=60`);
+	// in.(profile), not eq.profile: the baas WAF (CRS 930120) reads ".profile" as an OS-file read and
+	// 403s the whole request (measured 2026-10-18 on baas: same query without the filter, 200).
+	const shares = await rest(config, deps.fetchImpl, `osionos_feed_shares?user_id=eq.${userId}&target=in.(profile)&select=page_id,created_at&order=created_at.desc&limit=60`);
 	const list = Array.isArray(shares) ? shares : [];
 	const pageIds = [...new Set(list.map((row) => row.page_id).filter((id) => UUID_REGEX.test(String(id))))];
 	const pagesById = new Map();
