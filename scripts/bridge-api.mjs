@@ -46,6 +46,7 @@ import { createRtcTokenHandler } from './bridge-rtc.mjs';
 import { createSocialHandler } from './bridge-social.mjs';
 import { assertPublicHttpUrl } from './bridge-chat-media.mjs';
 import { createRequestMeter } from './bridge-perf.mjs';
+import { createBaasTransport } from './bridge-baas-transport.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -4010,7 +4011,11 @@ export function createBridgeServer(options = {}) {
 	const handoffStore = options.handoffStore ?? new Map();
 	const replayStore = options.replayStore ?? new Map();
 	const meter = createRequestMeter({ enabled: options.perf ?? process.env.OSIONOS_BRIDGE_PERF === '1', baasUrl: config.baasUrl, log: options.perfLog });
-	const fetchImpl = meter.wrapFetch(options.fetchImpl ?? fetch);
+	// Opt-in: proven only on the Funnel link path. Injected fetches (tests) never get one.
+	const transport = !options.fetchImpl && process.env.OSIONOS_BAAS_KEEPALIVE === '1'
+		? (options.createTransport ?? createBaasTransport)({ baasUrl: config.baasUrl })
+		: null;
+	const fetchImpl = meter.wrapFetch(options.fetchImpl ?? transport?.fetch ?? fetch);
 	const spawnImpl = options.spawnImpl ?? spawn;
 	// Comments and publish reach a page through the same read rule as GET /api/pages/:id.
 	const verifyPageAccess = (request, pageId, permission) => readablePageAccess(request, pageId, permission, config, fetchImpl);
@@ -4052,6 +4057,7 @@ export function createBridgeServer(options = {}) {
 	// The sandbox relays run in ide-server.mjs (one process per sandbox daemon); the
 	// bridge does no WebSocket work (realtime is Kong), so every upgrade is refused.
 	server.on('upgrade', (_request, socket) => socket.destroy());
+	server.on('close', () => transport?.close());
 	return server;
 }
 
