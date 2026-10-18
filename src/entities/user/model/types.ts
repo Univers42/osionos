@@ -67,7 +67,10 @@ export interface UserStore {
     mode: "login" | "signup",
     name?: string,
   ) => Promise<boolean>;
-  logoutUser: (userId: string) => void;
+  /** Signs the persona out of every device (bridge), then locally whatever the bridge said. */
+  logoutUser: (userId: string) => Promise<unknown>;
+  /** The bridge refused this token as signed out: drop the session that owns it. */
+  handleSessionRevoked: (token: string) => void;
   refreshWorkspaces: (userId: string) => Promise<void>;
   createWorkspace: (name: string, slug: string) => Promise<Workspace | null>;
   renameWorkspace: (workspaceId: string, name: string, icon?: string) => void;

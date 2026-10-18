@@ -25,6 +25,7 @@
  */
 
 import { ApiError, createHttpClient } from '@osionos/http-gate';
+import { revocationAwareFetch } from './sessionRevocation';
 
 export { ApiError };
 export type { ApiErrorBody } from '@osionos/http-gate';
@@ -65,9 +66,15 @@ export function getActivePageJwt(): string | null {
   });
 }
 
+/** Tells the user store a bridge call came back 401 session_revoked, so it drops the session that owned the token. */
+function reportRevokedSession(token: string): void {
+  userStore((state) => (state.handleSessionRevoked as ((token: string) => void) | undefined)?.(token));
+}
+
 /** Thin fetch wrapper exposing typed GET/POST/PATCH/DELETE helpers. */
 export const api = createHttpClient({
   baseUrl: API_BASE,
   maxConcurrent: 6,
+  fetchImpl: revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
   missingBaseUrlMessage: 'VITE_API_URL is not configured.',
 });
