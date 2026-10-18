@@ -10,8 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { whiteboardAppUrl } from "@/shared/config/whiteboardApp";
+import { calendarAppUrl, mailAppUrl, whiteboardAppUrl } from "@/shared/config/appUrls";
 import { boardUrl } from "@/features/whiteboard/model/whiteboardClient";
+import { pruneUnrestorableTabs } from "./layoutSanitize";
 import { genId, type LayoutNode, type PaneNode, type WorkspaceTab } from "./layoutTree";
 
 /** Synthetic page ids for the always-available Home / Trash / Console tabs. */
@@ -54,20 +55,16 @@ function wipeLegacyLayouts(): void {
   }
 }
 
-// import.meta.env is undefined outside Vite (node tests) — guard the module-scope read.
-const VITE_ENV = ((import.meta as { env?: Record<string, string> }).env ?? {}) as Record<string, string>;
-const MAIL_APP_URL = (VITE_ENV["VITE_MAIL_APP_URL"] ?? "http://localhost:3002").trim();
-const CALENDAR_APP_URL = (VITE_ENV["VITE_CALENDAR_APP_URL"] ?? "http://localhost:3003").trim();
-
+/** The whiteboard URL is resolved in `appUrls` with every other embedded app. */
 export { whiteboardAppUrl };
 
 /** Mail / Calendar open as in-app iframe tabs (stable id → focus, not duplicate). */
 export function mailTab(): WorkspaceTab {
-  return { tabId: genId("tab"), pageId: MAIL_TAB_ID, workspaceId: "", kind: "embed", title: "Mail", icon: "icon:mail", url: MAIL_APP_URL };
+  return { tabId: genId("tab"), pageId: MAIL_TAB_ID, workspaceId: "", kind: "embed", title: "Mail", icon: "icon:mail", url: mailAppUrl() };
 }
 
 export function calendarTab(): WorkspaceTab {
-  return { tabId: genId("tab"), pageId: CALENDAR_TAB_ID, workspaceId: "", kind: "embed", title: "Calendar", icon: "icon:calendar", url: CALENDAR_APP_URL };
+  return { tabId: genId("tab"), pageId: CALENDAR_TAB_ID, workspaceId: "", kind: "embed", title: "Calendar", icon: "icon:calendar", url: calendarAppUrl() };
 }
 
 export function homeTab(): WorkspaceTab {
@@ -174,7 +171,7 @@ export function loadLayout(scope: string): { root: LayoutNode; activePaneId: str
     if (!raw) return freshLayout();
     const parsed = JSON.parse(raw) as { root?: LayoutNode; activePaneId?: string };
     if (!parsed?.root || !parsed.activePaneId) return freshLayout();
-    return { root: migrateLegacyTabs(parsed.root), activePaneId: parsed.activePaneId };
+    return { root: pruneUnrestorableTabs(migrateLegacyTabs(parsed.root)), activePaneId: parsed.activePaneId };
   } catch {
     return freshLayout();
   }

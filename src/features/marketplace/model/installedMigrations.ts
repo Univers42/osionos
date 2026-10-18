@@ -1,3 +1,4 @@
+import { whiteboardAppUrl } from "@/shared/config/appUrls";
 import type { InstalledMap } from "./useInstalledApps";
 
 /** Catalog values the retired `osionos.draw` entry is rewritten to. They mirror the
@@ -9,9 +10,10 @@ const RETIRED_TO_WHITEBOARD = {
   to: "osionos.whiteboard",
   title: "Whiteboard",
   icon: "icon:pen-tool",
-  launchKind: "embed",
-  launchUrl: "https://localhost:3007",
-} as const;
+  launchKind: "embed" as const,
+  // Native app: never loaded, but a literal loopback here would ship in every build.
+  launchUrl: whiteboardAppUrl(),
+};
 
 /** Move a user's installed `osionos.draw` to `osionos.whiteboard`, keeping the choices they
  *  made (`active`, `autoUpdate`, `installedAt`). When both exist the whiteboard entry wins

@@ -27,6 +27,7 @@ import {
   Store,
   type LucideIcon,
 } from "lucide-react";
+import { calendarAppUrl, mailAppUrl } from "@/shared/config/appUrls";
 import type { ActivePanel } from "@/shared/config/uiStore";
 import type { CommandId } from "@/features/automations/model/types";
 import { isWhiteboardReady } from "@/features/whiteboard/model/whiteboardAvailability";
@@ -103,14 +104,15 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
     label: "Apps",
     items: [
       { id: "marketplace", label: "Marketplace", Icon: Store, action: { kind: "panel", panel: "marketplace" } },
-      { id: "mail", label: "Mail", Icon: Mail, action: { kind: "tab", app: "mail" } },
-      { id: "calendar", label: "Calendar", Icon: CalendarRange, action: { kind: "tab", app: "calendar" } },
+      { id: "mail", label: "Mail", Icon: Mail, action: { kind: "tab", app: "mail" }, isAvailable: () => mailAppUrl() !== "" },
+      { id: "calendar", label: "Calendar", Icon: CalendarRange, action: { kind: "tab", app: "calendar" }, isAvailable: () => calendarAppUrl() !== "" },
       { id: "whiteboard", label: "Whiteboard", Icon: PenTool, action: { kind: "tab", app: "whiteboard" }, isAvailable: isWhiteboardReady },
     ],
   },
 ];
 
-/** The items of a group the user can reach right now. */
+/** The items of a group the user can reach right now: a public build never offers a
+ *  Mail/Calendar icon whose URL is blank, which would open a dead iframe. */
 export function visibleRailItems(group: RailGroup): readonly RailItem[] {
   return group.items.filter((item) => item.isAvailable?.() ?? true);
 }

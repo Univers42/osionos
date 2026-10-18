@@ -78,7 +78,7 @@ export const MarketplaceAppEditor: React.FC<Props> = ({ app, onClose, onSaved })
         <label className={LABEL}>Short description<input className={FIELD} value={f.description} onChange={(e) => set("description", e.target.value)} /></label>
         <div className="grid grid-cols-2 gap-3">
           <label className={LABEL}>Website<input className={FIELD} value={f.website} onChange={(e) => set("website", e.target.value)} placeholder="https://…" /></label>
-          <label className={LABEL}>Launch URL (embed)<input className={FIELD} value={f.launchUrl} onChange={(e) => set("launchUrl", e.target.value)} placeholder="https://localhost:3002" /></label>
+          <label className={LABEL}>Launch URL (embed)<input className={FIELD} value={f.launchUrl} onChange={(e) => set("launchUrl", e.target.value)} placeholder="https://app.example.com" /></label>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <label className={LABEL}>Version<input className={FIELD} value={f.version} onChange={(e) => set("version", e.target.value)} /></label>

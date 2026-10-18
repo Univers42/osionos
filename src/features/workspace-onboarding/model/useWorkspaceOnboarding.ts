@@ -14,6 +14,7 @@ import { create } from "zustand";
 import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { calendarAppUrl } from "@/shared/config/appUrls";
 import { calendarTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { STARTER_KITS, type WorkspaceIntent } from "./starterKits";
 
@@ -54,7 +55,7 @@ export async function createWorkspaceWithIntent(intent: WorkspaceIntent): Promis
     const jwt = useUserStore.getState().activeSession()?.accessToken ?? "";
     usePageStore.getState().clearWorkspace(workspace._id);
     const first = await seedStarterPages(intent, workspace._id, jwt);
-    if (kit.withCalendar) useWorkspaceLayout.getState().openTab(calendarTab());
+    if (kit.withCalendar && calendarAppUrl() !== "") useWorkspaceLayout.getState().openTab(calendarTab());
     if (first) usePageStore.getState().openPage({ id: first.id, workspaceId: workspace._id, kind: "page", title: first.title });
     return true;
   } finally {

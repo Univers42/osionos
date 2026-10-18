@@ -98,7 +98,10 @@ const PAGE_JSON_BODY_LIMIT_BYTES = 6 * 1024 * 1024;
 const DEFAULT_UNSPLASH_PER_PAGE = 12;
 const MAX_UNSPLASH_PER_PAGE = 30;
 const TRANSLATION_FETCH_TIMEOUT_MS = 6_000;
-const BAAS_FETCH_TIMEOUT_MS = 2_500;
+// Caveat: sized for a cold TLS relay + Tailscale Funnel hop, not for a healthy link. Measured live
+// 2026-10-18: the first 2 of 12 REST calls after idle took 3743 ms and 3501 ms, the rest 199-734 ms,
+// so the old 2_500 aborted every cold call. The cost: a dead BaaS now takes up to 8 s to fail each call.
+const BAAS_FETCH_TIMEOUT_MS = 8_000;
 // The multi-engine graph overview pages tens of thousands of rows — needs headroom.
 const GRAPH_FETCH_TIMEOUT_MS = 20_000;
 const MAX_CLAUDE_TOOL_RESULT_TEXT = 120_000;
@@ -1281,9 +1284,12 @@ function idChunks(ids) {
  * this call keeps its own failure shape — a non-2xx is answered above, and
  * `BaaS bridge persistence failed with …` must not change.
  */
+export function isBaasPersistenceEnabled(config) {
+	return config.persistence === 'baas' || (config.persistence === 'auto' && Boolean(config.serviceKey && config.baasUrl));
+}
+
 export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) {
-	const persistenceEnabled = config.persistence === 'baas' || (config.persistence === 'auto' && config.serviceKey && config.baasUrl);
-	if (!persistenceEnabled) return null;
+	if (!isBaasPersistenceEnabled(config)) return null;
 	const response = await fetchWithTimeout(fetchImpl, `${config.baasUrl}/rest/v1/rpc/osionos_bridge_upsert_workspace`, {
 		method: 'POST',
 		headers: {
@@ -1434,15 +1440,32 @@ async function ensureAdminWorkspaceMembership(userId, config, fetchImpl) {
 	}
 }
 
+/**
+ * With BaaS persistence on, a session must carry the workspace BaaS holds: the hash-derived
+ * id of a skipped upsert names no row, so every page route would 403 for the session's 30 days.
+ * One retry because a cold link is the usual cause (see BAAS_FETCH_TIMEOUT_MS); then a 503 the
+ * user can act on. Persistence off (local dev) keeps the hash fallback. `requireBaas` needs no
+ * branch of its own: enabled persistence never falls back.
+ */
+async function persistIdentityForHandoff(payload, config, fetchImpl) {
+	if (!isBaasPersistenceEnabled(config)) return null;
+	let lastError;
+	for (let attempt = 0; attempt < 2; attempt++) {
+		try {
+			const persisted = await persistBridgeIdentity(payload, config, fetchImpl);
+			if (persisted?.workspaceId) return persisted;
+			lastError = new Error('BaaS bridge persistence returned no workspace.');
+		} catch (error) {
+			lastError = error;
+		}
+	}
+	console.warn(`[osionos-bridge] BaaS persistence failed twice: ${lastError instanceof Error ? lastError.message : 'unknown error'}`);
+	throw Object.assign(new Error('Sign-in could not reach the workspace service; try again.'), { status: 503 });
+}
+
 export async function createBridgeHandoff({ payload, config, handoffStore, now = Date.now(), fetchImpl = fetch }) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
-	let persisted = null;
-	try {
-		persisted = await persistBridgeIdentity(payload, config, fetchImpl);
-	} catch (error) {
-		if (config.requireBaas) throw error;
-		console.warn(`[osionos-bridge] BaaS persistence skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
-	}
+	const persisted = await persistIdentityForHandoff(payload, config, fetchImpl);
 	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
 	if (isAdmin) await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
 	const privateWorkspaceId = persisted?.workspaceId ?? uuidFromHash(`osionos-workspace:${payload.provider}:${payload.subject}`);

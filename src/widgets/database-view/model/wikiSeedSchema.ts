@@ -77,7 +77,7 @@ export const wikiMilestonesSchema: DatabaseSchema = {
     },
     "ms-brief": {
       id: "ms-brief", name: "Brief", type: "button",
-      buttonConfig: { label: "Open brief", action: "open_url", url: "https://localhost:3001/" },
+      buttonConfig: { label: "Open brief", action: "open_url", url: "/" },
     },
   },
 };
@@ -128,7 +128,7 @@ export const wikiFilesSchema: DatabaseSchema = {
     },
     "wf-open": {
       id: "wf-open", name: "Open", type: "button",
-      buttonConfig: { label: "Open", action: "open_url", url: "https://localhost:3001/" },
+      buttonConfig: { label: "Open", action: "open_url", url: "/" },
     },
   },
 };
