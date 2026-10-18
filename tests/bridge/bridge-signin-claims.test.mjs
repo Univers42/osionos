@@ -91,40 +91,48 @@ const BASELINES = [
 	{
 		name: 'a new user',
 		seed: () => ({}),
-		expected: { workspaceIds: [PRIVATE_ID], isAdmin: false },
+		sequential: { workspaceIds: [PRIVATE_ID], isAdmin: false },
 	},
 	{
 		name: 'a returning user',
 		seed: () => ({ ...sharedWorld(), osionos_workspace_members: [member(PRIVATE_ID, 'owner', ALL_PERMISSIONS), member(ORG, 'editor', ['read', 'update'])] }),
-		expected: { workspaceIds: [PRIVATE_ID, ORG], isAdmin: false },
+		sequential: { workspaceIds: [PRIVATE_ID, ORG], isAdmin: false },
 	},
 	{
 		name: 'a DB-recorded admin signing in with an unverified env email',
 		email: 'boss@example.com',
 		emailVerified: false,
 		seed: () => ({ identities: [identity('boss@example.com', true)], osionos_workspaces: [home(), workspaceRow(ADMIN_WORKSPACE_ID, OTHER_USER, 'Admin', '2026-10-02T00:00:00.000Z')] }),
-		expected: { workspaceIds: [PRIVATE_ID, ADMIN_WORKSPACE_ID], isAdmin: true },
+		sequential: { workspaceIds: [PRIVATE_ID, ADMIN_WORKSPACE_ID], isAdmin: true },
 	},
 	{
 		name: 'a DB-recorded admin whose email changed',
 		email: 'new@example.com',
 		options: { persistCommitsAfterReads: true },
 		seed: () => ({ identities: [identity('old@example.com', true)], osionos_workspaces: [home(), workspaceRow(ADMIN_WORKSPACE_ID, OTHER_USER, 'Admin', '2026-10-02T00:00:00.000Z')] }),
-		expected: { workspaceIds: [PRIVATE_ID, ADMIN_WORKSPACE_ID], isAdmin: true },
+		sequential: { workspaceIds: [PRIVATE_ID, ADMIN_WORKSPACE_ID], isAdmin: true },
+		// The one documented difference: the flag read runs before persist rewrites email_hash.
+		// It fails closed for one session (the next sign-in reads the new hash).
+		parallel: { workspaceIds: [PRIVATE_ID], isAdmin: false },
 	},
 	{
 		name: 'a user with 3 shared workspaces',
 		seed: sharedWorld,
-		expected: { workspaceIds: [PRIVATE_ID, TEAM, VIEWER, ORG], isAdmin: false },
+		sequential: { workspaceIds: [PRIVATE_ID, TEAM, VIEWER, ORG], isAdmin: false },
 	},
 ];
 
-describe('sequential claim baselines', () => {
+const isSubset = (small, big) => small.every((id) => big.includes(id));
+
+describe('claims against the sequential baselines', () => {
 	for (const fixture of BASELINES) {
-		it(`${fixture.name}: workspace_ids and is_admin`, async () => {
+		it(`${fixture.name}: never more than the sequential claims, equal unless documented`, async () => {
 			const stub = createSigninStub(fixture.seed(), fixture.options);
 			const { claims } = await signIn(stub, { email: fixture.email ?? EMAIL, emailVerified: fixture.emailVerified ?? true, config: signinConfig() });
-			assert.deepEqual({ workspaceIds: claims.raw.workspace_ids, isAdmin: claims.isAdmin }, fixture.expected);
+			const minted = { workspaceIds: claims.raw.workspace_ids, isAdmin: claims.isAdmin };
+			assert.ok(isSubset(minted.workspaceIds, fixture.sequential.workspaceIds), 'workspace_ids is a subset of the sequential claims');
+			assert.ok(!minted.isAdmin || fixture.sequential.isAdmin, 'is_admin(parallel) implies is_admin(sequential)');
+			assert.deepEqual(minted, fixture.parallel ?? fixture.sequential);
 		});
 	}
 });

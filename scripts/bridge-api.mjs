@@ -1485,6 +1485,10 @@ export async function memberWorkspaceEntries(userId, excludeIds, config, fetchIm
 	}
 }
 
+function isEnvAdminEmail(payload, config) {
+	return payload.emailVerified === true && config.adminEmails.includes(String(payload.email ?? '').toLowerCase());
+}
+
 /**
  * Resolve the account-level admin flag for a login. Promotes configured admin
  * emails (sticky — only ever sets true) and reads the PERSISTED flag back, so
@@ -1497,8 +1501,7 @@ export async function memberWorkspaceEntries(userId, excludeIds, config, fetchIm
  * admin address someone already registered.
  */
 async function resolveAdminFlag(payload, config, fetchImpl) {
-	const isAdminEmail = payload.emailVerified === true
-		&& config.adminEmails.includes(String(payload.email ?? '').toLowerCase());
+	const isAdminEmail = isEnvAdminEmail(payload, config);
 	if (!config.serviceKey || !config.baasUrl) return isAdminEmail;
 	const hash = encodeURIComponent(emailHash(payload.email, config));
 	try {
@@ -1553,13 +1556,53 @@ async function persistIdentityForHandoff(payload, config, fetchImpl) {
 	throw Object.assign(new Error('Sign-in could not reach the workspace service; try again.'), { status: 503 });
 }
 
-export async function createBridgeHandoff({ payload, config, handoffStore, now = Date.now(), fetchImpl = fetch }) {
-	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
+function privateWorkspaceIdOf(payload, persisted) {
+	return persisted?.workspaceId ?? uuidFromHash(`osionos-workspace:${payload.provider}:${payload.subject}`);
+}
+
+/** Today's order: persist, admin flag, admin membership, member workspaces. Env admins keep it. */
+async function readClaimsInOrder(payload, config, fetchImpl) {
 	const persisted = await persistIdentityForHandoff(payload, config, fetchImpl);
 	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
 	if (isAdmin) await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
-	const privateWorkspaceId = persisted?.workspaceId ?? uuidFromHash(`osionos-workspace:${payload.provider}:${payload.subject}`);
-	const memberWorkspaces = await memberWorkspaceEntries(payload.subject, [privateWorkspaceId], config, fetchImpl);
+	const memberWorkspaces = await memberWorkspaceEntries(payload.subject, [privateWorkspaceIdOf(payload, persisted)], config, fetchImpl);
+	return { persisted, isAdmin, memberWorkspaces };
+}
+
+/**
+ * Persist, the admin-flag read and the member-workspace read have no input from each other, so
+ * they run together. allSettled, never "start all, await one by one": a branch that rejects while
+ * an earlier await is pending is an unhandled rejection, and Node 22 exits on it.
+ * Persist failing is still the 503 (retried once inside persistIdentityForHandoff, no handoff);
+ * a rejected read degrades as it always did (no admin, no extras).
+ * A flag that comes back true re-runs today's tail: ensure unconditionally, then the member read
+ * again, and the first read is discarded (the ensure upsert resets the admin row's role).
+ * Caveat: the flag read can run before persist rewrites email_hash, so a DB-recorded admin whose
+ * email changed signs in with is_admin false for one session. That fails closed; the next sign-in
+ * corrects it. Nothing here can widen a claim.
+ */
+async function readClaimsConcurrently(payload, config, fetchImpl) {
+	const [persistence, adminRead, memberRead] = await Promise.allSettled([
+		persistIdentityForHandoff(payload, config, fetchImpl),
+		resolveAdminFlag(payload, config, fetchImpl),
+		memberWorkspaceEntries(payload.subject, [], config, fetchImpl),
+	]);
+	if (persistence.status === 'rejected') throw persistence.reason;
+	const persisted = persistence.value;
+	const isAdmin = adminRead.status === 'fulfilled' && adminRead.value === true;
+	if (isAdmin) {
+		await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
+		const excludeIds = [privateWorkspaceIdOf(payload, persisted)];
+		return { persisted, isAdmin, memberWorkspaces: await memberWorkspaceEntries(payload.subject, excludeIds, config, fetchImpl) };
+	}
+	// The private workspace is still in this read; createUserSession drops it from the extras.
+	return { persisted, isAdmin, memberWorkspaces: memberRead.status === 'fulfilled' ? memberRead.value : [] };
+}
+
+export async function createBridgeHandoff({ payload, config, handoffStore, now = Date.now(), fetchImpl = fetch }) {
+	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
+	const readClaims = isEnvAdminEmail(payload, config) ? readClaimsInOrder : readClaimsConcurrently;
+	const { persisted, isAdmin, memberWorkspaces } = await readClaims(payload, config, fetchImpl);
 	const bridgeSession = createUserSession(payload, config, persisted, now, memberWorkspaces, isAdmin);
 	const token = randomToken();
 	const expiresAt = now + config.handoffTtlMs;
