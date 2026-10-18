@@ -36,6 +36,8 @@ export interface WebEmbedFrameProps {
   interactive?: boolean;
   /** False renders only the sized, empty box (not near the viewport yet). */
   isActive?: boolean;
+  /** Drawn over the frame's box, e.g. a resize grip anchored to its bottom edge. */
+  children?: React.ReactNode;
 }
 
 /** The one third-party iframe. Third-party only: first-party apps use
@@ -43,7 +45,7 @@ export interface WebEmbedFrameProps {
  *  validates its own `src` because it is the last line before the browser: a caller
  *  that forgot to is not able to frame the app's own origin or a `javascript:` URL. */
 export const WebEmbedFrame: React.FC<WebEmbedFrameProps> = ({
-  src, title, policy, height, aspect, interactive = true, isActive = true,
+  src, title, policy, height, aspect, interactive = true, isActive = true, children,
 }) => {
   const safeSrc = frameableEmbedUrl(src, appForbiddenOrigins());
   if (safeSrc === "") return <span className="break-all text-sm text-[var(--osio-fg-muted)]">{src}</span>;
@@ -64,6 +66,7 @@ export const WebEmbedFrame: React.FC<WebEmbedFrameProps> = ({
           className="absolute inset-0 h-full w-full border-0"
         />
       ) : null}
+      {children}
     </div>
   );
 };

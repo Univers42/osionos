@@ -13,10 +13,13 @@
 import { useCallback } from "react";
 
 import {
+  createLinkBlock,
   createMediaBlock,
+  isLinkBlockType,
   type Block,
   type BlockType,
   type LayoutMode,
+  type LinkBlockType,
   type MediaBlockType,
   findBlockInTree,
 } from "@/entities/block";
@@ -292,7 +295,7 @@ export function useSlashSelect({
   );
 
   const handleSlashMediaSelect = useCallback(
-    (mediaType: MediaBlockType, asset: string, content: Block[]) => {
+    (mediaType: MediaBlockType | LinkBlockType, asset: string, content: Block[], onTarget?: (blockId: string) => void) => {
       if (!slashMenu) return;
       const { blockId } = slashMenu;
 
@@ -309,18 +312,18 @@ export function useSlashSelect({
       }
 
       if (!block || cleanContent.trim().length > 0) {
-        const newBlock = createMediaBlock(mediaType, asset);
+        const newBlock = isLinkBlockType(mediaType) ? createLinkBlock(mediaType, asset) : createMediaBlock(mediaType, asset);
         insertBlock(pageId, blockId, newBlock);
+        onTarget?.(newBlock.id);
         focusBlock(newBlock.id);
         return;
       }
 
       changeBlockType(pageId, blockId, mediaType);
-      updateBlock(pageId, blockId, {
-        content: "",
-        asset,
-        placeholderText: undefined,
-      });
+      updateBlock(pageId, blockId, isLinkBlockType(mediaType)
+        ? { content: asset, placeholderText: undefined }
+        : { content: "", asset, placeholderText: undefined });
+      onTarget?.(blockId);
       focusBlock(blockId);
     },
     [

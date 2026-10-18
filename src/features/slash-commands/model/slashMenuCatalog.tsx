@@ -17,6 +17,8 @@ import {
   COLLECTION_SLASH_SECTION_LABELS,
 } from "@/shared/ui/assets/collectionSlashItems";
 import type { BlockType, MediaBlockType } from "@/entities/block";
+import { EMBED_SLASH_COMMANDS } from "./embedSlashCommands";
+import { EMBEDS_SECTION_ID } from "./embedSlashEntries";
 import type {
   SlashCreatePageCommand,
   SlashCommand,
@@ -87,11 +89,13 @@ const TURN_INTO_BLOCK_TYPES = new Set<BlockType>([
 
 const EXTRA_SECTION_LABELS: Record<string, string> = {
   "turn-into": "Turn into",
+  [EMBEDS_SECTION_ID]: "Embeds",
 };
 
 const SECTION_ORDER = [
   "basic",
   "media",
+  EMBEDS_SECTION_ID,
   "turn-into",
   "database",
   "layout",
@@ -351,6 +355,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   ...CREATE_PAGE_COMMAND,
   ...BASE_SLASH_COMMANDS,
   ...LOCAL_SLASH_COMMANDS,
+  ...EMBED_SLASH_COMMANDS,
   ...TURN_INTO_COMMANDS,
 ];
 
