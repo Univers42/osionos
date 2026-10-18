@@ -203,12 +203,10 @@ async function listJoinRequests(deps, session, workspaceId, response, config) {
 
 /** GET /api/workspaces/:id/members — owner OR member may read the roster. */
 async function listWorkspaceMembers(deps, session, workspaceId, response, config) {
-	const workspace = await fetchWorkspace(config, deps.fetchImpl, workspaceId);
-	if (!workspace) throw httpError('Workspace not found.', 404);
+	// G6 F9: decide membership before the roster is read, not from the roster itself.
+	await requireSpaceMembership(config, deps.fetchImpl, session.userId, workspaceId);
 	const rows = await rest(config, deps.fetchImpl, `osionos_workspace_members?workspace_id=eq.${workspaceId}&select=user_id,role&order=role.asc`);
 	const list = Array.isArray(rows) ? rows : [];
-	const isMember = list.some((row) => row.user_id === session.userId);
-	if (workspace.owner_id !== session.userId && !isMember) throw httpError('You are not a member of this workspace.', 403);
 	const identities = await identitySummaries(config, deps.fetchImpl, list.map((row) => row.user_id));
 	const members = list.map((row) => ({
 		userId: row.user_id,

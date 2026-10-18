@@ -3168,11 +3168,10 @@ async function handleWorkspaceGet(url, request, response, config, fetchImpl) {
 	const match = /^\/api\/workspaces\/([^/]+)$/.exec(url.pathname);
 	if (!match) return false;
 	const workspaceId = requireUuid(decodeURIComponent(match[1]), 'workspaceId');
-	const authContext = verifyAppSessionToken(bearerToken(request), config);
-	if (!authContext.workspaceIds.includes(workspaceId)) {
-		throw Object.assign(new Error('App session is not scoped to this workspace.'), { status: 403 });
-	}
-	const workspaces = await listSessionWorkspaces(authContext, config, fetchImpl);
+	// G6 F10: live membership like every other workspace route, so a member who joined after
+	// the token was minted is not turned away by the token's frozen workspace list.
+	const authContext = await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
+	const workspaces = await listSessionWorkspaces({ ...authContext, workspaceIds: [workspaceId] }, config, fetchImpl);
 	const workspace = workspaces.find((item) => item._id === workspaceId || item.id === workspaceId);
 	if (!workspace) throw Object.assign(new Error('Workspace not found.'), { status: 404 });
 	json(response, 200, workspace, config);
