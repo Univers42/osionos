@@ -11,11 +11,14 @@
 /* ************************************************************************** */
 
 import { create } from 'zustand';
+import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { api } from '@/shared/api/client';
 import type { UserSession, UserStore, Workspace } from '@/entities/user';
 import {
   INITIAL_PERSONAS,
   ALLOW_OFFLINE_MODE,
+  API_BASE,
+  isBridgeAppToken,
   REQUIRE_BRIDGE_SESSION,
   isPortalMode,
   type BridgeSessionImport,
@@ -31,6 +34,13 @@ import {
   seededWorkspaceSession,
   signupPersona,
 } from '@/features/auth/model/userStore.helpers';
+import {
+  REVOKED_NOTICE,
+  requestBridgeLogout,
+  signOutEverywhere,
+  type BridgeLogoutOutcome,
+  type LogoutNotice,
+} from '@/features/auth/model/bridgeLogout';
 import { selectActivatedSessions } from '@/features/auth/model/sessionSelect';
 
 export type { StaticPersona, Workspace } from '@/entities/user';
@@ -355,6 +365,24 @@ async function resolveInitialState() {
   return connectedOrOfflineState(personas);
 }
 
+/** Drop one persona locally: persisted session, persisted persona, and the active-account fallback. */
+function signedOutState(state: UserStore, userId: string): Partial<UserStore> {
+  clearPersistedBridgeSession(userId);
+  const sessions = { ...state.sessions };
+  delete sessions[userId];
+  const personas = state.personas.filter((persona) => persona.id !== userId || persona.persistInSessions);
+  savePersistedPersonas(personas.filter((persona) => persona.id !== userId));
+  const nextActiveUserId = state.activeUserId === userId
+    ? Object.keys(sessions)[0] ?? ''
+    : state.activeUserId;
+  savePersistedWorkspaces(sessions);
+  savePersistedContext({ activeUserId: nextActiveUserId, activeWorkspaceByUser: state.activeWorkspaceByUser });
+  return { sessions, personas, activeUserId: nextActiveUserId };
+}
+
+const clearLocalSession = (userId: string) => useUserStore.setState((state) => signedOutState(state, userId));
+const pushNotice = (notice: LogoutNotice) => useToastStore.getState().push(notice);
+
 /** Zustand store managing multi-user authentication and workspace access. */
 export const useUserStore = create<UserStore>((set, get) => ({
   personas:     isPortalMode() ? [] : uniquePersonas([...INITIAL_PERSONAS.map(p => ({ ...p })), ...readPersistedPersonas()]),
@@ -469,20 +497,19 @@ export const useUserStore = create<UserStore>((set, get) => ({
     return true;
   },
 
-  logoutUser: (userId: string) => {
-    set((state) => {
-      clearPersistedBridgeSession(userId);
-      const sessions = { ...state.sessions };
-      delete sessions[userId];
-      const personas = state.personas.filter((persona) => persona.id !== userId || persona.persistInSessions);
-      savePersistedPersonas(personas.filter((persona) => persona.id !== userId));
-      const nextActiveUserId = state.activeUserId === userId
-        ? Object.keys(sessions)[0] ?? ''
-        : state.activeUserId;
-      savePersistedWorkspaces(sessions);
-      savePersistedContext({ activeUserId: nextActiveUserId, activeWorkspaceByUser: state.activeWorkspaceByUser });
-      return { sessions, personas, activeUserId: nextActiveUserId };
-    });
+  logoutUser: (userId: string) => signOutEverywhere(userId, get().sessions, {
+    request: (token) => (API_BASE && isBridgeAppToken(token)
+      ? requestBridgeLogout(API_BASE, token)
+      : Promise.resolve<BridgeLogoutOutcome>({ kind: 'not_applicable' })),
+    clearLocal: clearLocalSession,
+    notify: pushNotice,
+  }),
+
+  handleSessionRevoked: (token: string) => {
+    const revoked = Object.values(get().sessions).find((session) => session.accessToken === token);
+    if (!revoked) return;
+    clearLocalSession(revoked.userId);
+    pushNotice(REVOKED_NOTICE);
   },
 
   refreshWorkspaces: async (userId: string) => {

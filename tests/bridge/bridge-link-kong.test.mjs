@@ -15,6 +15,7 @@ const dbId = '06f1603f-662e-4120-a62d-e605e23c2fe9';
 const otherDbId = 'bd63e1f9-6ef5-433f-8134-017a3711fc17';
 
 const baseEnv = {
+	OSIONOS_SESSION_CUTOFFS: 'off',
 	OSIONOS_APP_URL: 'http://localhost:3001',
 	OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
 	OSIONOS_BAAS_URL: 'http://baas.local',

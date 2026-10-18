@@ -47,8 +47,8 @@ export const IDS = {
 };
 export const SECRET = 'A-SECRET-7f3c';
 
-function jsonResponse(value, status = 200) {
-	return new Response(value === undefined ? null : JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
+function jsonResponse(value, status = 200, headers = {}) {
+	return new Response(value === undefined ? null : JSON.stringify(value), { status, headers: { 'content-type': 'application/json', ...headers } });
 }
 
 function sameText(value, text) {
@@ -81,8 +81,9 @@ function readRows(rows, params) {
 	// `id.asc` (a keyset scan) sorts by id before the limit; the comparison is the raw
 	// string order `gt.` uses, so the cursor and the page order agree the way Postgres' uuid
 	// order does. Every other `order` stays ignored, as before.
-	const ordered = params.get('order') === 'id.asc'
-		? [...found].sort((left, right) => String(left.id).toLowerCase() < String(right.id).toLowerCase() ? -1 : String(left.id).toLowerCase() > String(right.id).toLowerCase() ? 1 : 0)
+	const orderKey = { 'id.asc': 'id', 'user_id.asc': 'user_id' }[params.get('order')];
+	const ordered = orderKey
+		? [...found].sort((left, right) => String(left[orderKey]).toLowerCase() < String(right[orderKey]).toLowerCase() ? -1 : String(left[orderKey]).toLowerCase() > String(right[orderKey]).toLowerCase() ? 1 : 0)
 		: found;
 	return params.has('limit') ? ordered.slice(0, Number(params.get('limit'))) : ordered;
 }
@@ -177,7 +178,15 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 				throw error;
 			}
 		}
-		if (method === 'GET') return jsonResponse(readRows(table(name), parsed.searchParams));
+		if (method === 'GET') {
+			const rows = readRows(table(name), parsed.searchParams);
+			// PostgREST answers Content-Range `first-last/total` (or `*/0`) when asked for count=exact; the total
+			// ignores `limit`, so it is counted with the limit and the keyset cursor lifted.
+			const counted = new URLSearchParams([...parsed.searchParams].filter(([key]) => key !== 'limit' && key !== 'user_id'));
+			const total = matchingRows(table(name), counted).length;
+			const range = rows.length === 0 ? '*/0' : `0-${rows.length - 1}/${total}`;
+			return jsonResponse(rows, 200, prefer.includes('count=exact') ? { 'content-range': range } : {});
+		}
 		const written = writeRows(table(name), method, parsed.searchParams, body, prefer);
 		if (!written) return jsonResponse({ code: '23505', message: 'duplicate key' }, 409);
 		return prefer.includes('return=representation') ? jsonResponse(written, method === 'POST' ? 201 : 200) : new Response(null, { status: 204 });
@@ -185,8 +194,11 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 	return { fetchImpl, calls, outbound, stubErrors, rows: table, page: (id) => table('osionos_pages').find((row) => row.id === id) };
 }
 
-export function harnessConfig() {
+// Revocation enforcement is off unless a test asks for it ({ sessionCutoffs: 'on' }): with it on, every
+// request answers 503 until the poller's first load, which unrelated route tests must not wait for.
+export function harnessConfig({ sessionCutoffs = 'off' } = {}) {
 	return configFromEnv({
+		OSIONOS_SESSION_CUTOFFS: sessionCutoffs,
 		OSIONOS_APP_URL: 'http://localhost:3001',
 		OSIONOS_BRIDGE_SHARED_SECRET: 'test-bridge-secret-that-is-long-enough',
 		OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',

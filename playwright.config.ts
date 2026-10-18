@@ -123,7 +123,9 @@ export default defineConfig({
     reuseExistingServer,
     env: {
       ...process.env,
-      VITE_API_URL: "",
+      // Empty = offline build. tests/e2e/functional/sign-out-everywhere.spec.ts needs a bridge
+      // origin (it stubs every /api call), so it runs only when this is set to the baseURL.
+      VITE_API_URL: process.env.PLAYWRIGHT_API_URL ?? "",
       VITE_ALLOW_OFFLINE_MODE: "true",
       VITE_REQUIRE_BRIDGE_SESSION: "false",
     },

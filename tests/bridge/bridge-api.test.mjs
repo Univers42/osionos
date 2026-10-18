@@ -52,6 +52,7 @@ const childPageId = 'bb44cf14-84df-4f08-8b02-97dc84727744';
 
 function testConfig() {
 	return configFromEnv({
+		OSIONOS_SESSION_CUTOFFS: 'off',
 		OSIONOS_APP_URL: 'http://localhost:3001',
 		OSIONOS_BRIDGE_SHARED_SECRET: secret,
 		OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
@@ -61,6 +62,7 @@ function testConfig() {
 
 function testBaasConfig() {
 	return configFromEnv({
+		OSIONOS_SESSION_CUTOFFS: 'off',
 		OSIONOS_APP_URL: 'http://localhost:3001',
 		OSIONOS_BRIDGE_SHARED_SECRET: secret,
 		OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
@@ -322,6 +324,7 @@ describe('osionos bridge receiver', () => {
 	it('persists only hashed identity data through the BaaS RPC', async () => {
 		let requestBody = null;
 		const config = configFromEnv({
+			OSIONOS_SESSION_CUTOFFS: 'off',
 			OSIONOS_BAAS_URL: 'http://baas.local',
 			OSIONOS_BRIDGE_SHARED_SECRET: secret,
 			OSIONOS_BRIDGE_EMAIL_HASH_SALT: 'test-email-hash-salt',
@@ -349,6 +352,7 @@ describe('osionos bridge receiver', () => {
 	it('does not persist handoffs when the app session secret is missing', async () => {
 		let fetchCalled = false;
 		const config = configFromEnv({
+			OSIONOS_SESSION_CUTOFFS: 'off',
 			OSIONOS_BRIDGE_SHARED_SECRET: secret,
 			OSIONOS_BRIDGE_PERSISTENCE: 'baas',
 			KONG_SERVICE_API_KEY: 'service-role-test-key',

@@ -651,7 +651,7 @@ const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) 
   async function handleDeleteAccount() {
     await postAccountAction('/api/account/request-deletion', {});
     recordSettingsAction('account_request_deletion', { userId });
-    logoutUser(userId);
+    await logoutUser(userId);
     toast({ kind: 'success', title: 'Account scheduled for deletion in 30 days. Cancel anytime in Settings.' });
     globalThis.location.assign('/');
   }
