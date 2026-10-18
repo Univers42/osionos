@@ -75,10 +75,20 @@ async function workspaceRole(config, fetchImpl, userId, env) {
 	return { role: (orgRow ?? memberships[0])?.role ?? null, workspaceId: (orgRow ?? memberships[0])?.workspace_id ?? null };
 }
 
-async function getProfile(deps, userId, response, config) {
+async function getProfile(deps, session, userId, response, config) {
 	const row = await identityRow(config, deps.fetchImpl, userId);
 	if (!row) throw httpError('Profile not found.', 404);
 	const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
+	// G6 F5: the directory opt-out and blocks hold when a profile is addressed by id too;
+	// the user themselves always gets the full card.
+	if (userId !== session.userId && (row.directory_opt_out === true || (await blockedViewerBy(config, deps.fetchImpl, session.userId)).has(userId))) {
+		return sendJson(response, 200, {
+			ok: true,
+			userId,
+			name: row.display_name ?? 'Member',
+			avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
+		}, config);
+	}
 	const { role, workspaceId } = await workspaceRole(config, deps.fetchImpl, userId, deps.env);
 	const fields = profile.fields && typeof profile.fields === 'object' && !Array.isArray(profile.fields) ? profile.fields : {};
 	return sendJson(response, 200, {
@@ -252,7 +262,7 @@ export function createProfileHandler({ config, verifySession, fetchImpl = fetch,
 			}
 			const profileMatch = /^\/api\/profile\/([0-9a-f-]{36})$/i.exec(pathname);
 			if (profileMatch && method === 'GET') {
-				return await getProfile(deps, requireUuid(profileMatch[1], 'userId'), response, requestConfig);
+				return await getProfile(deps, session, requireUuid(profileMatch[1], 'userId'), response, requestConfig);
 			}
 			if (UUID_REGEX.test(pathname.slice('/api/profile/'.length))) {
 				throw httpError(`Method ${method} is not supported here.`, 405);

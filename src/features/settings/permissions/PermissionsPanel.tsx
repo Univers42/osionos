@@ -27,8 +27,8 @@ const SectionTitle: React.FC<{ title: string; anchor: string; children?: React.R
 
 /** Settings → Permissions: Linux-chmod-style role × resource matrix over the
  *  live permission-engine, with condition/mask editors and a "View as" tester. */
-export const PermissionsPanel: React.FC = () => {
-  const matrix = usePolicyMatrix();
+export const PermissionsPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId }) => {
+  const matrix = usePolicyMatrix(workspaceId);
   const [inspectRoleId, setInspectRoleId] = useState('');
   const [inspectResource, setInspectResource] = useState('');
 
@@ -110,7 +110,7 @@ export const PermissionsPanel: React.FC = () => {
       <section className="space-y-4">
         <SectionTitle title="View as" anchor="view-as" />
         <p className="text-sm text-[var(--osio-fg-muted)]">Simulate a person from the roster against the live decision endpoint.</p>
-        <ViewAsTester people={matrix.people} resources={matrix.resources} />
+        <ViewAsTester workspaceId={workspaceId ?? ''} people={matrix.people} resources={matrix.resources} />
       </section>
     </div>
   );
