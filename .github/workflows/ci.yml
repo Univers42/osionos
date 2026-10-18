@@ -148,6 +148,12 @@ jobs:
         if: matrix.scope == 'root'
         run: make test-canvas
 
+      # The bridge holds the service-role key; its SSRF guard (tests/bridge/bridge-unfurl-*)
+      # and the Dockerfile closure check must fail the build, not only a developer's run.
+      - name: Bridge tests
+        if: matrix.scope == 'root'
+        run: make test-bridge
+
       - name: SonarQube scan
         if: matrix.scope == 'root' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         env:

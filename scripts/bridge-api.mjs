@@ -45,9 +45,11 @@ import { createPermsHandler } from './bridge-perms.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
 import { createSocialHandler } from './bridge-social.mjs';
-import { assertPublicHttpUrl } from './bridge-chat-media.mjs';
 import { createRequestMeter } from './bridge-perf.mjs';
 import { createBaasTransport } from './bridge-baas-transport.mjs';
+import { createEmbedHandler } from './bridge-embed.mjs';
+import { defaultUnfurler } from './bridge-unfurl-core.mjs';
+import { parseTargetUrl } from './bridge-unfurl-net.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -4058,25 +4060,22 @@ async function handleAuthProxy(url, request, response, config, handoffStore, fet
 }
 
 // Database automations deliver webhooks server-side: the browser can't reach
-// arbitrary hosts (CORS) and the bridge must not become an SSRF proxy — HTTPS
-// only, public hosts only, 5s cap, response body discarded.
-async function handleAutomationWebhook(request, response, config, fetchImpl) {
+// arbitrary hosts (CORS) and the bridge must not become an SSRF proxy. HTTPS
+// only, no redirects, 5s cap, response body discarded; the connection goes
+// through the shared guard in bridge-unfurl-net.mjs (public addresses, ports
+// 80/443 only).
+async function handleAutomationWebhook(request, response, config, unfurler = defaultUnfurler) {
 	verifyAppSessionToken(bearerToken(request), config);
 	const payload = await readJson(request);
-	const rawUrl = safeText(payload.url, 2048);
-	const parsed = await assertPublicHttpUrl(rawUrl);
-	if (parsed.protocol !== 'https:') {
+	const target = parseTargetUrl(safeText(payload.url, 2048));
+	if (target.protocol !== 'https:') {
 		throw Object.assign(new Error('Automation webhooks must use https.'), { status: 422 });
 	}
-	let status = 0;
+	let status;
 	try {
-		const res = await fetchWithTimeout(fetchImpl, parsed.href, {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify(payload.payload ?? {}),
-		}, 5000);
-		status = res.status;
-	} catch {
+		status = await unfurler.postJson(target.href, payload.payload ?? {});
+	} catch (error) {
+		if (error?.status === 422) throw error;
 		json(response, 502, { ok: false, message: 'Webhook endpoint did not respond.' }, config);
 		return;
 	}
@@ -4136,7 +4135,7 @@ async function handleBridgePost(url, request, response, config, handoffStore, re
 		return true;
 	}
 	if (url.pathname === '/api/automations/webhook') {
-		await handleAutomationWebhook(request, response, config, fetchImpl);
+		await handleAutomationWebhook(request, response, config);
 		return true;
 	}
 	if (url.pathname === '/api/media/unsplash/download') {
@@ -4175,6 +4174,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.notify(url, request, response, context.config)) return;
 	if (await context.social.push(url, request, response, context.config)) return;
 	if (await context.social.media(url, request, response, context.config)) return;
+	if (await context.social.embed(url, request, response, context.config)) return;
 	if (await context.social.tasks(url, request, response, context.config)) return;
 	if (await context.social.comments(url, request, response, context.config)) return;
 	if (await context.social.publicPages(url, request, response, context.config)) return;
@@ -4242,6 +4242,7 @@ export function createBridgeServer(options = {}) {
 		notify: createNotifyHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		push: createPushHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		embed: createEmbedHandler({ config, verifySession: verifyAppSessionToken }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 			comments: createCommentsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
 			publicPages: createPublicHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
