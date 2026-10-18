@@ -16,10 +16,10 @@ import type { Block } from "@/entities/block";
 import { parseEmbedSnapshot } from "@/shared/lib/embed/embedInfo";
 import { resolveProviderEmbed } from "@/shared/lib/embed/embedProviders";
 import { safeHttpUrl } from "@/shared/lib/embed/embedUrlGuard";
-import { EmbedView } from "@/shared/ui/embed/EmbedView";
+import { ModeAwareEmbedView } from "./ModeAwareEmbedView";
 
 /** A video/audio/file block whose link is a provider page: the facade or frame of
- *  `EmbedView` instead of a <video>/<audio> that cannot play it. Anything else renders
+ *  `EmbedView` instead of a <video>/<audio> that cannot play it (a card on `static` surfaces). Anything else renders
  *  `fallback`, the block's ordinary direct-file preview. */
 export const ProviderMediaEmbed: React.FC<{ block: Block; url: string; fallback: React.ReactNode }> = ({
   block,
@@ -29,5 +29,5 @@ export const ProviderMediaEmbed: React.FC<{ block: Block; url: string; fallback:
   const snapshot = useMemo(() => parseEmbedSnapshot(block.embed), [block.embed]);
   const href = safeHttpUrl(url);
   if (href === "" || resolveProviderEmbed(href) === null) return <>{fallback}</>;
-  return <EmbedView url={href} snapshot={snapshot} />;
+  return <ModeAwareEmbedView url={href} snapshot={snapshot} />;
 };

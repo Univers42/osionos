@@ -10,12 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState } from "react";
 
 import type { Block } from "@/entities/block";
 import { embedHintById, type EmbedHint } from "@/shared/lib/embed/embedHints";
 
 import { resolveLinkSnapshot } from "./linkSnapshot";
+import { EditorSurfaceIdContext } from "./editorSurfaceId";
 import { peekLinkDialogRequest, takeLinkDialogRequest } from "./linkDialogRequests";
 
 /** State and commits behind an embed/bookmark block: the dialog (opened by a click or by a
@@ -24,14 +25,15 @@ import { peekLinkDialogRequest, takeLinkDialogRequest } from "./linkDialogReques
 export function useLinkBlockActions(block: Block, onUpdateBlock: (updates: Partial<Block>) => void) {
   // Peeked at first render and cleared in the effect below: a StrictMode double render
   // must still see the request.
-  const [initialRequest] = useState(() => peekLinkDialogRequest(block.id));
+  const surfaceId = useContext(EditorSurfaceIdContext);
+  const [initialRequest] = useState(() => peekLinkDialogRequest(surfaceId, block.id));
   const [isDialogOpen, setIsDialogOpen] = useState(initialRequest !== null);
   const [hint, setHint] = useState<EmbedHint | undefined>(() => embedHintById(initialRequest?.hintId));
   const [resolvingUrl, setResolvingUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    takeLinkDialogRequest(block.id);
-  }, [block.id]);
+    takeLinkDialogRequest(surfaceId, block.id);
+  }, [surfaceId, block.id]);
 
   const openDialog = useCallback(() => setIsDialogOpen(true), []);
   const closeDialog = useCallback(() => {
@@ -39,8 +41,10 @@ export function useLinkBlockActions(block: Block, onUpdateBlock: (updates: Parti
     setHint(undefined);
   }, []);
 
-  /** One update with the URL and its snapshot, so one undo step undoes both. A failed
-   *  lookup still commits the URL (the view then degrades to a host card). */
+  /** One update with the URL and its snapshot, so they never land apart. A failed lookup
+   *  still commits the URL (the view then degrades to a host card). The write is keyed on
+   *  the block and applied to the page as it is when the lookup returns, so a lookup that
+   *  outlives the editor cannot overwrite newer edits (and is dropped if the block is gone). */
   const commitUrl = useCallback(
     async (url: string) => {
       setResolvingUrl(url);
@@ -50,8 +54,11 @@ export function useLinkBlockActions(block: Block, onUpdateBlock: (updates: Parti
       } catch {
         embed = undefined;
       }
-      onUpdateBlock({ content: url, embed, embedHeight: undefined });
-      setResolvingUrl(null);
+      try {
+        onUpdateBlock({ content: url, embed, embedHeight: undefined });
+      } finally {
+        setResolvingUrl(null);
+      }
     },
     [onUpdateBlock],
   );

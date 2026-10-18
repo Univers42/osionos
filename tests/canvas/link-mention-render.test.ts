@@ -12,6 +12,7 @@
 
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { serializeInlineNodes } from "../../packages/markdown-engine/inlineAst.ts";
@@ -62,4 +63,17 @@ test("a mention title cannot inject markup", () => {
 
 test("raw-source reveal keeps the marker so the link can be edited as markdown", () => {
   assert.equal(html(MENTION, { renderLinkAsSource: true }), MENTION.replace(/"/g, "&quot;"));
+});
+
+test("a mention whose href carries credentials or a non-http scheme is plain text, not a chip", () => {
+  for (const href of ["https://google.com@evil.example/", "https://u:p@example.com/", "javascript:alert(1)", "mailto:a@b.co"]) {
+    const out = html(`[google.com](${href} "osio:mention")`);
+    assert.equal(out, "google.com", href);
+  }
+  assert.match(html('[google.com](https://google.com/ "osio:mention")'), /<a /, "a verifiable mention is still a chip");
+});
+
+test("the React renderer applies the same unverifiable-mention guard", () => {
+  const source = readFileSync(new URL("../../packages/markdown-engine/markdown/renderers/reactHelpers.tsx", import.meta.url), "utf8");
+  assert.match(source, /isMention && mentionHost\(href\) === ""/);
 });

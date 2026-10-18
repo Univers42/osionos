@@ -14,8 +14,8 @@
  * Link unfurling: URL in, `EmbedInfo` out. Owns the cache, the process-wide
  * concurrency limit and the per-user rate bucket; the network guard lives in
  * bridge-unfurl-net.mjs and the HTML/oEmbed parsing in bridge-unfurl-parse.mjs.
- * Deliberately has NO provider table: the client resolves known providers first
- * and only asks the bridge for the generic path.
+ * The only provider table is the oEmbed endpoint list in bridge-unfurl-oembed.mjs;
+ * the client resolves players itself and asks the bridge for titles and images.
  *
  * Resolution order: direct media by Content-Type, then oEmbed discovery, then
  * og:video / twitter:player, then Open Graph / <title>.
@@ -34,6 +34,7 @@ import {
 	safeFetch,
 	unfurlError,
 } from './bridge-unfurl-net.mjs';
+import { oembedEndpointFor } from './bridge-unfurl-oembed.mjs';
 import {
 	composeEmbedInfo,
 	contentTypeOf,
@@ -88,7 +89,20 @@ async function fetchOembed(href, ctx) {
 	}
 }
 
+const NO_PAGE = Object.freeze({ title: '', description: '', siteName: '', image: null, player: null });
+
+// Known providers first: their pages are unscannable (see bridge-unfurl-oembed.mjs).
+// A null answer falls through to the ordinary page fetch.
+async function fetchKnownOembed(url, ctx) {
+	const endpoint = oembedEndpointFor(url);
+	const oembed = endpoint ? await fetchOembed(endpoint, ctx) : null;
+	if (!oembed) return null;
+	return composeEmbedInfo(url.href, { ...NO_PAGE, favicon: `${url.origin}/favicon.ico` }, oembed, null);
+}
+
 async function fetchEmbed(url, ctx) {
+	const known = await fetchKnownOembed(url, ctx);
+	if (known) return known;
 	const page = await safeFetch(url.href, {
 		headers: { accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1' },
 		wantBody: (status, headers) => isSuccess(status) && HTML_TYPES.has(contentTypeOf(headers)),

@@ -10,14 +10,14 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useMemo } from "react";
+import React, { useMemo } from "react";
 import { Bookmark, Globe } from "lucide-react";
 
 import type { Block } from "@/entities/block";
 import { useHeightResizeGrip } from "@/shared/lib/dom/useHeightResizeGrip";
 import { linkPlaceholderText } from "@/shared/lib/embed/embedHints";
 import { parseEmbedSnapshot } from "@/shared/lib/embed/embedInfo";
-import { clampEmbedHeight } from "@/shared/lib/embed/embedPolicy";
+import { MAX_EMBED_HEIGHT, MIN_EMBED_HEIGHT, clampEmbedHeight } from "@/shared/lib/embed/embedPolicy";
 import { appForbiddenOrigins, safeHttpUrl } from "@/shared/lib/embed/embedUrlGuard";
 import { EmbedView } from "@/shared/ui/embed/EmbedView";
 import { LinkCard, type LinkCardData } from "@/shared/ui/embed/LinkCard";
@@ -33,8 +33,6 @@ interface LinkBlockEditorProps {
   onUpdateBlock: (updates: Partial<Block>) => void;
 }
 
-const MIN_FRAME_HEIGHT = 120;
-const MAX_FRAME_HEIGHT = 1600;
 const STATUS_ROW =
   "flex w-full items-center gap-3 rounded-[var(--osio-radius-panel)] bg-[var(--osio-bg-subtle)] px-3 py-3 text-sm text-[var(--osio-fg-muted)]";
 
@@ -58,12 +56,11 @@ export const LinkBlockEditor: React.FC<LinkBlockEditorProps> = ({ block, onKeyDo
   const frameHeight = clampEmbedHeight(block.embedHeight);
   const { isDragging, gripProps } = useHeightResizeGrip({
     height: frameHeight,
-    min: MIN_FRAME_HEIGHT,
-    max: MAX_FRAME_HEIGHT,
+    min: MIN_EMBED_HEIGHT,
+    max: MAX_EMBED_HEIGHT,
     resolveTarget: resolveFrameBox,
     onCommit: (embedHeight) => onUpdateBlock({ embedHeight }),
   });
-  const showAsBookmark = useCallback(() => actions.convertTo("bookmark"), [actions]);
   const hasLink = url.trim() !== "";
 
   const onWrapperKeyDown = (event: React.KeyboardEvent) => {
@@ -103,7 +100,6 @@ export const LinkBlockEditor: React.FC<LinkBlockEditorProps> = ({ block, onKeyDo
         snapshot={snapshot}
         height={isResizable ? frameHeight : undefined}
         interactive={!isDragging}
-        onShowAsBookmark={showAsBookmark}
         frameOverlay={
           isResizable ? (
             <div

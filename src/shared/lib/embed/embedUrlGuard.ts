@@ -41,9 +41,12 @@ export function safeHttpUrl(raw: string): string {
   return url.href.length > MAX_URL_LENGTH ? "" : url.href;
 }
 
+/** scheme://host[:port] with a trailing dot stripped from the host: `https://osionos.app./`
+ *  is the same server as `https://osionos.app/` but a different `URL.origin`. */
 function originOf(href: string): string {
   try {
-    return new URL(href).origin;
+    const url = new URL(href);
+    return `${url.protocol}//${url.hostname.replace(/\.+$/, "")}${url.port === "" ? "" : `:${url.port}`}`;
   } catch {
     return "";
   }
@@ -61,21 +64,32 @@ export function frameableEmbedUrl(raw: string, forbiddenOrigins: readonly string
 
 type ViteMeta = { env?: Record<string, string | boolean | undefined> };
 
-/** The page's own origin plus the API and BaaS origins when configured.
- *  Caveat: only origins known at build/run time; a second hostname that proxies
- *  to the same backend is not recognised. Empty list outside a browser. */
-export function appForbiddenOrigins(): string[] {
-  const env = (import.meta as ViteMeta).env ?? {};
-  const candidates: unknown[] = [
-    (globalThis as { location?: { origin?: unknown } }).location?.origin,
-    env["VITE_API_URL"],
-    env["VITE_BAAS_URL"],
-  ];
+// Sibling first-party apps (whiteboard, IDE, mail, calendar, ...) run with their own
+// credentials and are not meant to be framed by a page block either.
+const FIRST_PARTY_ENV_KEYS = [
+  "VITE_API_URL", "VITE_BAAS_URL", "VITE_BAAS_CONSOLE_URL", "VITE_OSIONOS_BRIDGE_URL",
+  "VITE_WHITEBOARD_APP_URL", "VITE_OSIONOS_IDE_URL", "VITE_MAIL_APP_URL",
+  "VITE_CALENDAR_APP_URL", "VITE_PRISMATICA_URL",
+] as const;
+
+/** The http(s) origins among `candidates`, deduplicated; anything else is dropped. */
+export function forbiddenOriginsFrom(candidates: readonly unknown[]): string[] {
   const origins = candidates
     .filter((value): value is string => typeof value === "string")
     .map((value) => originOf(value.trim()))
     .filter((origin) => origin.startsWith("http"));
   return [...new Set(origins)];
+}
+
+/** The page's own origin plus the API, BaaS and sibling-app origins when configured.
+ *  Caveat: only origins known at build/run time; a second hostname that proxies
+ *  to the same backend is not recognised. Empty list outside a browser. */
+export function appForbiddenOrigins(): string[] {
+  const env = (import.meta as ViteMeta).env ?? {};
+  return forbiddenOriginsFrom([
+    (globalThis as { location?: { origin?: unknown } }).location?.origin,
+    ...FIRST_PARTY_ENV_KEYS.map((key) => env[key]),
+  ]);
 }
 
 /** The ASCII (punycode) hostname of the URL actually framed, `www.` stripped,

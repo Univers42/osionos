@@ -18,7 +18,7 @@ import { EMBED_HINTS, embedHintById, linkInputPlaceholder, linkPlaceholderText }
 import { resolveProviderEmbed } from "../../src/shared/lib/embed/embedProviders.ts";
 import { chooseEmbedView } from "../../src/shared/ui/embed/model/chooseEmbedView.ts";
 import { EMBED_SLASH_ENTRIES, EMBEDS_SECTION_ID } from "../../src/features/slash-commands/model/embedSlashEntries.ts";
-import { requestLinkDialog, takeLinkDialogRequest } from "../../src/features/block-editor/model/linkDialogRequests.ts";
+import { peekLinkDialogRequest, requestLinkDialog, takeLinkDialogRequest } from "../../src/features/block-editor/model/linkDialogRequests.ts";
 import { mayBeProviderLink } from "../../src/entities/block/model/mediaProviderLinks.ts";
 
 const byId = (id: string) => EMBED_SLASH_ENTRIES.find((entry) => entry.id === id);
@@ -87,13 +87,14 @@ test("the catalog gets embed and bookmark from one source only", () => {
   assert.doesNotMatch(supported, /'(embed|bookmark)'/);
 });
 
-test("a dialog request is one-shot and keyed by block id", () => {
-  assert.equal(takeLinkDialogRequest("blk-1"), null);
-  requestLinkDialog("blk-1", "youtube");
-  requestLinkDialog("blk-2");
-  assert.deepEqual(takeLinkDialogRequest("blk-1"), { hintId: "youtube" });
-  assert.equal(takeLinkDialogRequest("blk-1"), null);
-  assert.deepEqual(takeLinkDialogRequest("blk-2"), { hintId: undefined });
+test("a dialog request is one-shot and keyed by surface and block id", () => {
+  assert.equal(takeLinkDialogRequest("s1", "blk-1"), null);
+  requestLinkDialog("s1", "blk-1", "youtube");
+  requestLinkDialog("s1", "blk-2");
+  assert.equal(peekLinkDialogRequest("s2", "blk-1"), null, "the same page in another pane must not see it");
+  assert.deepEqual(takeLinkDialogRequest("s1", "blk-1"), { hintId: "youtube" });
+  assert.equal(takeLinkDialogRequest("s1", "blk-1"), null);
+  assert.deepEqual(takeLinkDialogRequest("s1", "blk-2"), { hintId: undefined });
 });
 
 test("only http(s) video/audio/file links that are not bare media files may be provider pages", () => {

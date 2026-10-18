@@ -184,8 +184,10 @@ test("ids that could build another URL are refused", () => {
     "https://docs.google.com/document/d/e/",
   ];
   for (const url of hostile) assert.equal(resolveProviderEmbed(url), null, url);
-  // Trailing path segments are ignored, never carried into the player URL.
-  assert.equal(resolveProviderEmbed("https://youtu.be/abc/../x?v=1")?.src, "https://www.youtube-nocookie.com/embed/abc");
+  // The URL is normalised the way a browser would first: `/abc/../x` is `/x`, the page
+  // the real site would serve, and trailing segments are never carried into the player URL.
+  assert.equal(resolveProviderEmbed("https://youtu.be/abc/../x?v=1")?.src, "https://www.youtube-nocookie.com/embed/x");
+  assert.equal(resolveProviderEmbed("https://youtu.be/abc/def?v=1")?.src, "https://www.youtube-nocookie.com/embed/abc");
   assert.equal(resolveProviderEmbed("https://vimeo.com/123/..%2F..")?.src, "https://player.vimeo.com/video/123");
 });
 

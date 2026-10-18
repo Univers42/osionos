@@ -128,7 +128,7 @@ export const twitch: Rule = (parts) => {
 function facebookPlugin(parts: UrlParts): ProviderEmbed | null {
   // Already the embed endpoint: kept, so a resolved link resolves to itself.
   const href = queryValue(parts.query, "href");
-  if (href === undefined || parts.segments.length !== 2) return null;
+  if (parts.host !== "facebook.com" || href === undefined || parts.segments.length !== 2) return null;
   if (parts.segments[1] === "video.php") return video("Facebook", asGiven(parts));
   if (parts.segments[1] !== "post.php") return null;
   return page("Facebook", `https://www.facebook.com/plugins/post.php?href=${href}`, 500, 600);

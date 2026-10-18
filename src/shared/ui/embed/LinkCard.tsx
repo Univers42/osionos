@@ -46,8 +46,13 @@ export const LinkCard: React.FC<{ data: LinkCardData }> = ({ data }) => {
           <Favicon favicon={data.favicon} pageUrl={href} />
         </span>
         <span className="min-w-0 flex-1">
+          {/* The host is derived from the URL being opened; the snapshot's siteName is
+              page-supplied and could claim another site, so it only follows the host. */}
           <span className="block truncate text-xs uppercase tracking-wide text-[var(--osio-fg-subtle)]">
-            {data.siteName || displayHost(href)}
+            {displayHost(href)}
+            {data.siteName && data.siteName !== displayHost(href) ? (
+              <span className="normal-case tracking-normal"> · {data.siteName}</span>
+            ) : null}
           </span>
           <span
             className={`mt-0.5 block truncate text-sm ${title === "" ? "font-medium text-[var(--osio-accent-text)]" : "font-semibold text-[var(--osio-fg-default)]"}`}

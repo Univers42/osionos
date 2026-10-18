@@ -13,7 +13,7 @@
 /**
  * Code, whiteboard and map providers. Those whose ordinary pages already frame
  * (StackBlitz, Excalidraw, SimplePDF, OpenStreetMap's export page, val.town)
- * pass through as written. Ported from drawnosaurus `scene/embed.rs`.
+ * pass through as written, on their own host only. Ported from drawnosaurus `scene/embed.rs`.
  */
 
 import { type ProviderEmbed, page } from "./embedKit";
@@ -57,7 +57,7 @@ export const desmos: Rule = (parts) => {
   if (length === 2 && kind === "calculator" && isId(id)) {
     return page("Desmos", `https://www.desmos.com/calculator/${id}?embed`, 560, 400);
   }
-  const bare = length === 1 && ["calculator", "geometry", "scientific", "3d"].includes(kind);
+  const bare = parts.host === "desmos.com" && length === 1 && ["calculator", "geometry", "scientific", "3d"].includes(kind);
   return bare ? page("Desmos", asGiven(parts), 560, 400) : null;
 };
 
@@ -68,12 +68,16 @@ export const miro: Rule = (parts) => {
 };
 
 export const stackblitz: Rule = (parts) => {
+  if (parts.host !== "stackblitz.com") return null;
   const base = asGiven(parts);
   const src = queryValue(parts.query, "embed") !== undefined ? base : `${base}${parts.query === "" ? "?" : "&"}embed=1`;
   return page("StackBlitz", src, 800, 560);
 };
 
-export const passThrough = (provider: string): Rule => (parts) => page(provider, asGiven(parts));
+/** Frames the link as written, but only on `host` itself: a subdomain of an allow-listed
+ *  domain can be user content (`x.excalidraw.com`) and must not inherit the provider. */
+export const passThrough = (provider: string, host: string): Rule => (parts) =>
+  parts.host === host ? page(provider, asGiven(parts)) : null;
 
 export const openStreetMap: Rule = (parts) =>
-  parts.path === "/export/embed.html" ? page("OpenStreetMap", asGiven(parts), 600, 450) : null;
+  parts.host === "openstreetmap.org" && parts.path === "/export/embed.html" ? page("OpenStreetMap", asGiven(parts), 600, 450) : null;

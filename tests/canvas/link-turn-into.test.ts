@@ -99,3 +99,13 @@ test("updateBlockInTree and insertBlockAfterInTree reach nested blocks and leave
   assert.deepEqual(insertBlockAfterInTree(tree, "kid", added)[0].children?.map((b) => b.id), ["kid", "new"]);
   assert.equal(insertBlockAfterInTree(tree, "missing", added), tree);
 });
+
+test("Turn into Link does not throw on a hand-written embed whose title is not a string", () => {
+  const hostile = { id: "h", type: "embed", content: "https://a.io", embed: { title: 5 } } as unknown as Block;
+  const result = turnLinkBlockInto(hostile, "link");
+  assert.notEqual(result, null);
+  assert.equal(result?.block.type, "paragraph");
+  assert.match(result?.block.content ?? "", /^\[[^\]]*\]\(https:\/\/a\.io\/?\)$/);
+  const wellFormedButTyped = { ...hostile, embed: { ...SNAPSHOT, title: 5 } } as unknown as Block;
+  assert.doesNotThrow(() => turnLinkBlockInto(wellFormedButTyped, "link"));
+});

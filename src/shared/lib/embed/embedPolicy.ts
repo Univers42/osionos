@@ -36,8 +36,8 @@ export const GENERIC_ALLOW = "fullscreen; picture-in-picture";
 export const EMBED_REFERRER_POLICY = "strict-origin-when-cross-origin";
 
 export const DEFAULT_EMBED_HEIGHT = 480;
-const MIN_EMBED_HEIGHT = 120;
-const MAX_EMBED_HEIGHT = 1600;
+export const MIN_EMBED_HEIGHT = 120;
+export const MAX_EMBED_HEIGHT = 1600;
 export const DEFAULT_EMBED_ASPECT = "16/9";
 const MAX_ASPECT_SIDE = 4000;
 

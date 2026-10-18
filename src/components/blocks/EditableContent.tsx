@@ -38,6 +38,7 @@ import {
   ColorPickerBoard,
   type ColorPickerPreset,
 } from "@univers42/ui-collection";
+import { shiftOffsetsForTextChange } from "@/shared/lib/editor-input/caretShift";
 import { parseInlineMarkdown } from "@osionos/markdown-engine";
 import { sanitizeUrl } from "@osionos/markdown-engine/renderCore";
 import {
@@ -863,9 +864,15 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         const savedOffsets = isFocused.current
           ? getInlineEditorSelectionOffsets(root)
           : null;
+        const previousText = root.textContent ?? "";
         root.innerHTML = nextHtml;
         if (savedOffsets) {
-          setInlineEditorSelectionOffsets(root, savedOffsets);
+          // The rewrite may change the visible text before the caret (a mention's
+          // hostname becoming its title); keep the caret after that text, not inside it.
+          setInlineEditorSelectionOffsets(
+            root,
+            shiftOffsetsForTextChange(savedOffsets, previousText, root.textContent ?? ""),
+          );
         }
       }
     },

@@ -53,15 +53,18 @@ type Settled = { info: EmbedInfo; cacheable: boolean };
 
 /** Caveat: keyed by URL only (not user or transport), evicts oldest-first
  *  (FIFO, not LRU), and lives for the page session, so a changed page or a
- *  recovered bridge is not seen until reload. Degraded results are not cached. */
+ *  recovered bridge is not seen until reload. A bridge failure for a URL no provider
+ *  recognises is not cached (the next resolve retries); for a provider URL the result is
+ *  cached even when the enrichment timed out, because the player works without it. */
 const cache = new Map<string, Promise<EmbedInfo>>();
 
 export function clearEmbedCache(): void {
   cache.clear();
 }
 
-/** A pasted `youtu.be/x` has no scheme; add one unless it already carries one. */
-function normalizeInput(raw: string): string {
+/** A pasted `youtu.be/x` has no scheme; add one unless it already carries one (a real
+ *  scheme such as `javascript:` is left for `safeHttpUrl` to refuse). "" when unsafe. */
+export function normalizeInput(raw: string): string {
   const trimmed = raw.trim();
   if (trimmed.startsWith("//") || /^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return safeHttpUrl(trimmed);
   return safeHttpUrl(`https://${trimmed}`);

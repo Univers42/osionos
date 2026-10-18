@@ -10,28 +10,24 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useContext, useMemo } from "react";
+import React, { useMemo } from "react";
 
 import type { Block } from "@/entities/block";
-import { appForbiddenOrigins, clampEmbedHeight, parseEmbedSnapshot } from "@/shared/lib/embed";
-import { EmbedView } from "@/shared/ui/embed/EmbedView";
+import { clampEmbedHeight, parseEmbedSnapshot } from "@/shared/lib/embed";
 import { LinkCard, type LinkCardData } from "@/shared/ui/embed/LinkCard";
-import { chooseEmbedView } from "@/shared/ui/embed/model/chooseEmbedView";
 
-import { ReadOnlyEmbedModeContext } from "./readOnlyEmbedMode";
+import { ModeAwareEmbedView } from "./ModeAwareEmbedView";
 
 /** Read-only `embed` / `bookmark`. `content` is the URL and `block.embed` is untrusted
  *  block JSON, so both are re-validated here on every render (chooseEmbedView, LinkCard,
- *  parseEmbedSnapshot). In `static` mode a view that would mount a frame is a card instead. */
+ *  parseEmbedSnapshot). */
 export const ReadOnlyLinkBlock: React.FC<{ block: Block }> = ({ block }) => {
-  const mode = useContext(ReadOnlyEmbedModeContext);
   const url = block.content ?? "";
   const snapshot = useMemo(() => parseEmbedSnapshot(block.embed), [block.embed]);
-  const card: LinkCardData = snapshot === null ? { url } : { ...snapshot, url };
-  if (block.type === "bookmark") return <LinkCard data={card} />;
-  if (mode === "static" && chooseEmbedView({ url, snapshot, forbiddenOrigins: appForbiddenOrigins() }).kind === "frame") {
+  if (block.type === "bookmark") {
+    const card: LinkCardData = snapshot === null ? { url } : { ...snapshot, url };
     return <LinkCard data={card} />;
   }
   const height = block.embedHeight === undefined ? undefined : clampEmbedHeight(block.embedHeight);
-  return <EmbedView url={url} snapshot={snapshot} height={height} />;
+  return <ModeAwareEmbedView url={url} snapshot={snapshot} height={height} />;
 };

@@ -19,3 +19,9 @@ import { createContext } from "react";
 export type ReadOnlyEmbedMode = "static" | "live";
 
 export const ReadOnlyEmbedModeContext = createContext<ReadOnlyEmbedMode>("static");
+
+/** Whether `view` may be rendered as chosen: a live frame needs a `live` surface, while a
+ *  facade, media element or card is safe on both. */
+export function allowsView(mode: ReadOnlyEmbedMode, view: { kind: string }): boolean {
+  return mode === "live" || view.kind !== "frame";
+}

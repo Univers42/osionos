@@ -18,6 +18,9 @@ import { PASTE_CHOICES, type PasteChoice } from "../model/pasteLinkMenu";
 const MENU_MARGIN = 8;
 const MENU_GAP = 6;
 const MENU_WIDTH = 256;
+// Caveat: an estimate of the rendered height (header + four rows), used only to decide
+// whether the menu flips above the link. A larger root font size or a wrapped
+// description makes the real menu taller, so it can overlap the viewport edge by a few px.
 const MENU_HEIGHT = 176;
 
 interface PasteLinkMenuProps {
@@ -89,6 +92,11 @@ export const PasteLinkMenu: React.FC<PasteLinkMenuProps> = ({ position, initialC
       style={style}
     >
       <p className="osio-menu-label">Paste as</p>
+      {/* Focus stays in the editor, so aria-activedescendant has no focused element to live
+          on; the active row is announced through this polite live region instead. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {`${PASTE_CHOICES[activeIndex].label}, ${PASTE_CHOICES[activeIndex].description}, ${activeIndex + 1} of ${PASTE_CHOICES.length}`}
+      </p>
       {PASTE_CHOICES.map((entry, index) => (
         <button
           key={entry.choice}
@@ -96,6 +104,7 @@ export const PasteLinkMenu: React.FC<PasteLinkMenuProps> = ({ position, initialC
           role="menuitem"
           className="osio-menu-item"
           data-choice={entry.choice}
+          aria-current={index === activeIndex ? "true" : undefined}
           data-active={index === activeIndex}
           onMouseDown={(event) => event.preventDefault()}
           onMouseEnter={() => setActiveIndex(index)}
