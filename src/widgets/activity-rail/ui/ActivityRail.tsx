@@ -23,6 +23,7 @@ import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
 import { mailTab, calendarTab, whiteboardTab, profileTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useUnreadStore } from "@/store/chat/useUnreadStore";
 import { useInstalledApps } from "@/features/marketplace/model/useInstalledApps";
+import { isListableApp } from "@/features/marketplace/model/launchPolicy";
 import { installedTab, railInstalledApps } from "@/features/marketplace/model/installedAppLauncher";
 import { RailIcon } from "./RailIcon";
 import { RailHomeButton } from "./RailHomeButton";
@@ -61,7 +62,10 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
   const inviteCount = useIncomingInviteCount();
 
   useEffect(() => useInstalledApps.getState().load(), []);
-  const installedApps = useMemo(() => railInstalledApps(installedMap), [installedMap]);
+  const installedApps = useMemo(
+    () => railInstalledApps(installedMap).filter((entry) => isListableApp(entry.identifier, entry.launchUrl)),
+    [installedMap],
+  );
 
   const runItem = useCallback(
     (item: RailItem) => {

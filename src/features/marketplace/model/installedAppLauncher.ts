@@ -37,6 +37,11 @@ const NATIVE_APP_TABS: Record<string, () => WorkspaceTab> = {
   "osionos.draw": whiteboardTab,
 };
 
+/** Native apps render in-app; their catalogue launch URL is never loaded. */
+export function isNativeApp(identifier: string): boolean {
+  return identifier in NATIVE_APP_TABS;
+}
+
 /** Build the workspace tab that activates an installed app. Native apps (Whiteboard)
  *  open their stable-id tab; everything else opens as an embed iframe at its
  *  launch URL. */

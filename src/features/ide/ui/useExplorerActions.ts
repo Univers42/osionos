@@ -13,6 +13,7 @@
 import React from "react";
 
 import { fileKindOf } from "../model/explorerRows";
+import { nameForNewFile } from "../model/newFileName";
 import { describeError, type useExplorerTree } from "../model/useExplorerTree";
 import type { WorkspaceFileOps } from "../model/workspaceFileOps";
 import { baseName, joinRel, validateName } from "../model/workspacePath";
@@ -52,10 +53,11 @@ export function useExplorerActions({ ops, tree, onOpen }: Params) {
     setPending(null);
     void run("create", name, async () => {
       // Validated here, not just in ops: "a/b" would otherwise create a nested path from a name field.
-      const rel = joinRel(parent, validateName(name));
-      if (kind === "dir") return ops.createDir(rel);
+      const valid = validateName(name);
+      if (kind === "dir") return ops.createDir(joinRel(parent, valid));
+      const rel = joinRel(parent, nameForNewFile(valid));
       await ops.createFile(rel);
-      onOpen(rel, fileKindOf(name));
+      onOpen(rel, fileKindOf(rel));
     });
   };
 

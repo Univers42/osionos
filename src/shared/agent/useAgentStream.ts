@@ -19,6 +19,7 @@
  */
 
 import { parseSseBlock } from '@osionos/http-gate';
+import { IS_DEV } from '@/shared/config/appUrls';
 import { getActivePageJwt } from '@/shared/api/client';
 import { useSseStream, type StreamMessage } from '@osionos/http-gate/react';
 
@@ -48,7 +49,7 @@ const DEFAULT_BRIDGE = (
 
 function bridgeOrigins(override?: string[]): string[] {
   if (override?.length) return override;
-  return DEFAULT_BRIDGE ? [DEFAULT_BRIDGE] : ['http://localhost:4000'];
+  return DEFAULT_BRIDGE ? [DEFAULT_BRIDGE] : IS_DEV ? ['http://localhost:4000'] : [];
 }
 
 /**

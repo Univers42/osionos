@@ -87,3 +87,14 @@ export async function resolve(specifier, context, nextResolve) {
 function hasKnownExtension(specifier) {
   return [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".json"].some((extension) => specifier.endsWith(extension));
 }
+
+// Node has no `import.meta.env`, so appUrls.ts would resolve every embedded-app URL to ""
+// (its production answer) and suites that exercise a configured app would see it hidden.
+// Give that one module the env object Vite's dev server would: DEV on, nothing set.
+const APP_URLS_MODULE = new URL("../../src/shared/config/appUrls.ts", import.meta.url).href;
+
+export async function load(url, context, nextLoad) {
+  const loaded = await nextLoad(url, context);
+  if (url !== APP_URLS_MODULE || loaded.source == null) return loaded;
+  return { ...loaded, source: `import.meta.env ??= { DEV: true };\n${loaded.source}` };
+}

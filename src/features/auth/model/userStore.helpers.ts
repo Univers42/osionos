@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { IS_DEV } from '@/shared/config/appUrls';
 import { api } from '@/shared/api/client';
 import seedUsers from '@/data/seedUsers.json';
 import type { StaticPersona, UserSession, Workspace } from '@/entities/user';
@@ -34,7 +35,7 @@ export const API_BASE: string = ((import.meta.env as Record<string, string>)['VI
 const TEST_MODE = (import.meta.env as Record<string, string>)['MODE'] === 'test';
 export const REQUIRE_BRIDGE_SESSION = ((import.meta.env as Record<string, string>)['VITE_REQUIRE_BRIDGE_SESSION'] ?? (TEST_MODE ? 'false' : 'true')) !== 'false';
 export const ALLOW_OFFLINE_MODE = ((import.meta.env as Record<string, string>)['VITE_ALLOW_OFFLINE_MODE'] ?? (TEST_MODE ? 'true' : 'false')) === 'true';
-export const PRISMATICA_URL = ((import.meta.env as Record<string, string>)['VITE_PRISMATICA_URL'] ?? 'http://localhost:4322').trim();
+export const PRISMATICA_URL = ((import.meta.env as Record<string, string>)['VITE_PRISMATICA_URL'] ?? (IS_DEV ? 'http://localhost:4322' : '')).trim();
 export const AUTH_MODE = ((import.meta.env as Record<string, string>)['VITE_AUTH_MODE'] ?? '').trim();
 /** Portal mode: the app shows its own login/sign-up portal (no mock, no website redirect). */
 export function isPortalMode(): boolean { return AUTH_MODE === 'portal'; }
