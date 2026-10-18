@@ -57,6 +57,12 @@ function isOnline(lastSeenAt, now = Date.now()) {
 	return Number.isFinite(seen) && now - seen < PRESENCE_WINDOW_MS;
 }
 
+/** G6 F5: ids are compared as strings (block set, self check), so a UUID is lower-cased at the
+ *  boundary; otherwise `/api/profile/<UPPERCASE>` walks past the block list. */
+function profileUserId(value) {
+	return requireUuid(value, 'userId').toLowerCase();
+}
+
 async function identityRow(config, fetchImpl, userId) {
 	const rows = await rest(
 		config,
@@ -258,11 +264,11 @@ export function createProfileHandler({ config, verifySession, fetchImpl = fetch,
 			if (pathname === '/api/profile/heartbeat' && method === 'POST') return await heartbeat(deps, session, response, requestConfig);
 			const sharesMatch = /^\/api\/profile\/([0-9a-f-]{36})\/shares$/i.exec(pathname);
 			if (sharesMatch && method === 'GET') {
-				return await listProfileShares(deps, session, requireUuid(sharesMatch[1], 'userId'), response, requestConfig);
+				return await listProfileShares(deps, session, profileUserId(sharesMatch[1]), response, requestConfig);
 			}
 			const profileMatch = /^\/api\/profile\/([0-9a-f-]{36})$/i.exec(pathname);
 			if (profileMatch && method === 'GET') {
-				return await getProfile(deps, session, requireUuid(profileMatch[1], 'userId'), response, requestConfig);
+				return await getProfile(deps, session, profileUserId(profileMatch[1]), response, requestConfig);
 			}
 			if (UUID_REGEX.test(pathname.slice('/api/profile/'.length))) {
 				throw httpError(`Method ${method} is not supported here.`, 405);

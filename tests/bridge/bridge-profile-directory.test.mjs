@@ -73,4 +73,14 @@ describe('GET /api/profile/:userId', () => {
 			assert.equal(body.workspaceId, IDS.team);
 		});
 	});
+
+	it('cannot be walked around by upper-casing the id', async () => {
+		const blocks = [{ blocker_id: IDS.userA, blocked_id: IDS.userB }];
+		await withBridge(config, world({ blocks }), async (base) => {
+			const lower = await profileOf(base, asB);
+			const upper = await send(base, `/api/profile/${IDS.userA.toUpperCase()}`, asB);
+			assert.deepEqual(Object.keys(upper.body).sort(), ['avatar', 'name', 'ok', 'userId']);
+			assert.deepEqual(upper.body, lower.body);
+		});
+	});
 });

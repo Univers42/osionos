@@ -73,31 +73,66 @@ interface MintedSocketDeps {
   onEvent: (frame: LiveRealtimeEventFrame) => void;
   fetchToken: TopicTokenFetcher;
   createSocket: (options: LiveSocketOptions) => StoppableSocket;
+  /** Runs `run` after `ms`; returns the canceller. Injectable for tests. */
+  schedule?: (run: () => void, ms: number) => () => void;
 }
 
+const RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 32_000, 60_000];
+
+const defaultSchedule = (run: () => void, ms: number): (() => void) => {
+  const id = setTimeout(run, ms);
+  return () => clearTimeout(id);
+};
+
+/**
+ * Keeps one topic live: mint, open, and start over (with a fresh mint) whenever the first mint
+ * fails or the socket gives up on a token it can no longer renew.
+ *
+ * Caveat: the delay doubles from 2 s to a 60 s ceiling and resets once a subscription is
+ * acknowledged, but the retries never stop on their own, so a topic the bridge keeps refusing
+ * (the user left the channel) costs one mint a minute until the last listener unsubscribes.
+ */
 export function openMintedSocket(deps: MintedSocketDeps): { stop: () => void } {
+  const schedule = deps.schedule ?? defaultSchedule;
   let stopped = false;
   let socket: StoppableSocket | null = null;
+  let cancelRetry: (() => void) | null = null;
   let token = '';
+  let failures = 0;
   const refresh = async (): Promise<boolean> => {
     const next = await deps.fetchToken(deps.topic);
     if (next) token = next;
     return next !== null;
   };
-  void refresh().then((minted) => {
-    if (stopped || !minted) return;
+  const retryLater = () => {
+    const delay = RETRY_DELAYS_MS[Math.min(failures, RETRY_DELAYS_MS.length - 1)];
+    failures += 1;
+    cancelRetry = schedule(() => { void open(); }, delay);
+  };
+  const open = async (): Promise<void> => {
+    const minted = await refresh();
+    if (stopped) return;
+    if (!minted) { retryLater(); return; }
     socket = deps.createSocket({
       url: deps.url,
       topic: deps.topic,
       onEvent: deps.onEvent,
       get token() { return token; },
+      onUp: () => { failures = 0; },
       onDown: () => { void refresh(); },
+      onPermanentFailure: () => {
+        socket?.stop();
+        socket = null;
+        if (!stopped) retryLater();
+      },
     });
     socket.start();
-  });
+  };
+  void open();
   return {
     stop: () => {
       stopped = true;
+      cancelRetry?.();
       socket?.stop();
     },
   };
