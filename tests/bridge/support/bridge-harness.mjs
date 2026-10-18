@@ -20,6 +20,7 @@
 // matching every row.
 
 import { randomUUID } from 'node:crypto';
+import { isEmbedRead, readEmbed } from './embed-postgrest.mjs';
 import { configFromEnv, createBridgeServer, createUserSession, validateBridgePayload } from '../../../scripts/bridge-api.mjs';
 
 const BAAS_URL = 'http://baas.local';
@@ -132,7 +133,15 @@ function workspaceMemberRpc(body, table) {
 export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => null, realWorkspaceRpc = false } = {}) {
 	const tables = new Map(Object.entries(seed).map(([name, rows]) => [name, rows.map((row) => structuredClone(row))]));
 	const table = (name) => tables.get(name) ?? tables.set(name, []).get(name);
+	// The FKs of osionos_workspace_members / osionos_pages guarantee their workspace exists, so a
+	// seed that names a workspace without a row gets one; a seeded workspace row is left as is.
+	for (const name of ['osionos_workspace_members', 'osionos_pages']) {
+		for (const row of table(name)) {
+			if (row.workspace_id && !table('osionos_workspaces').some((workspace) => sameText(workspace.id, row.workspace_id))) table('osionos_workspaces').push({ id: row.workspace_id });
+		}
+	}
 	const calls = [];
+	const stubErrors = [];
 	const outbound = [];
 	async function fetchImpl(url, init = {}) {
 		const parsed = new URL(String(url));
@@ -156,12 +165,20 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		if (name === 'rpc/osionos_bridge_list_workspaces') {
 			return jsonResponse(realWorkspaceRpc ? workspaceMemberRpc(body, table) : workspaceRpc(body));
 		}
+		if (method === 'GET' && isEmbedRead(parsed.searchParams)) {
+			try {
+				return jsonResponse(readEmbed(name, parsed.searchParams, table));
+			} catch (error) {
+				stubErrors.push(error.message);
+				throw error;
+			}
+		}
 		if (method === 'GET') return jsonResponse(readRows(table(name), parsed.searchParams));
 		const written = writeRows(table(name), method, parsed.searchParams, body, prefer);
 		if (!written) return jsonResponse({ code: '23505', message: 'duplicate key' }, 409);
 		return prefer.includes('return=representation') ? jsonResponse(written, method === 'POST' ? 201 : 200) : new Response(null, { status: 204 });
 	}
-	return { fetchImpl, calls, outbound, rows: table, page: (id) => table('osionos_pages').find((row) => row.id === id) };
+	return { fetchImpl, calls, outbound, stubErrors, rows: table, page: (id) => table('osionos_pages').find((row) => row.id === id) };
 }
 
 export function harnessConfig() {

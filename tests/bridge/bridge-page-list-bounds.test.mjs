@@ -57,7 +57,22 @@ function worldOf(pages, links = []) {
 	return world;
 }
 
-const pageReads = (mock) => mock.calls.filter((call) => call.table === 'osionos_pages');
+/**
+ * A members-anchored page read (the list paths) seen as the page read it carries: the nested
+ * `workspace.pages.` params become the page params and the select is the pages' own.
+ */
+function pageReadOf(call) {
+	const params = new URLSearchParams();
+	for (const [key, value] of call.params) {
+		if (key.startsWith('workspace.pages.')) params.set(key.slice('workspace.pages.'.length), value);
+	}
+	params.set('select', /osionos_pages!workspace_id\((.*)\)\)$/.exec(call.params.get('select'))[1]);
+	return { table: 'osionos_pages', params };
+}
+
+const pageReads = (mock) => mock.calls
+	.filter((call) => call.table === 'osionos_pages' || (call.table === 'osionos_workspace_members' && call.params.get('select').includes('osionos_pages!')))
+	.map((call) => (call.table === 'osionos_pages' ? call : pageReadOf(call)));
 const scanReads = (mock) => pageReads(mock).filter((call) => !call.params.has('search_doc'));
 
 /** Ids in the order the chunk scan walks them: raw string order, like Postgres' uuid order. */
@@ -294,10 +309,10 @@ describe('the /api/pages/all hydrate keeps one request', () => {
 			assert.equal(reads[0].params.has('id'), false);
 			assert.equal(reads[0].params.get('order'), 'updated_at.desc');
 			assert.equal(reads[0].params.get('select').includes('content'), false);
-			// The single request asks PostgREST for updated_at.desc; the mock answers in seed
-			// order, so that is the order this path can be pinned to.
+			// The single request asks PostgREST for updated_at.desc and the embed stub applies it,
+			// so the list comes back in that order (nulls first, ties in seed order = id ascending).
 			assert.equal(listed.body.length, 450);
-			assert.deepEqual(listed.body.map((entry) => entry._id), pages.map((page) => page.id));
+			assert.deepEqual(listed.body.map((entry) => entry._id), expectedPageOrder(pages));
 		});
 	});
 });

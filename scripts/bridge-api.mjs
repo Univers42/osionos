@@ -919,35 +919,37 @@ async function sessionWorkspaceMember(userId, workspaceId, config, fetchImpl) {
 	return row ? { role: row.workspace_role, permissions: row.permissions } : null;
 }
 
-export async function requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl = fetch) {
-	const normalizedWorkspaceId = requireUuid(workspaceId, 'workspaceId');
-	const authContext = verifyAppSessionToken(bearerToken(request), config);
-	if (!authContext.workspaceIds.includes(normalizedWorkspaceId)) {
-		// Org/teamspace membership lives in osionos_workspace_members — the app
-		// token only carries the user's PRIVATE workspace. Consult the members
-		// table (like /api/chat does) before rejecting; deny on any miss.
-		const member = await workspaceMemberRow(authContext.userId, normalizedWorkspaceId, config, fetchImpl).catch(() => null);
-		if (!member || !memberHasPermission(member, normalizePermission(permission))) {
-			throw Object.assign(new Error('App session is not scoped to this workspace.'), { status: 403 });
-		}
-		return {
-			...authContext,
-			workspaceId: normalizedWorkspaceId,
-			role: safeText(member.role, 16),
-			permissions: Array.isArray(member.permissions) ? member.permissions.filter((item) => typeof item === 'string') : [],
-		};
-	}
-	const member = await sessionWorkspaceMember(authContext.userId, normalizedWorkspaceId, config, fetchImpl);
-	const requiredPermission = normalizePermission(permission);
-	if (!memberHasPermission(member, requiredPermission)) {
-		throw Object.assign(new Error('Workspace permission denied.'), { status: 403 });
+/**
+ * The decision half of requireWorkspaceAccess, given the caller's members row (null when
+ * they have none): refuses with the message of the branch the workspace is reached by, or
+ * returns the access context. A workspace the app token lists is a "permission denied", one
+ * it does not list is "not scoped" — whoever read the row, so the statements that read it
+ * together with the pages answer the same words.
+ */
+function workspaceAccessContext(authContext, workspaceId, member, permission) {
+	if (!member || !memberHasPermission(member, normalizePermission(permission))) {
+		const isTokenWorkspace = authContext.workspaceIds.includes(workspaceId);
+		throw Object.assign(new Error(isTokenWorkspace ? 'Workspace permission denied.' : 'App session is not scoped to this workspace.'), { status: 403 });
 	}
 	return {
 		...authContext,
-		workspaceId: normalizedWorkspaceId,
+		workspaceId,
 		role: safeText(member.role, 16),
 		permissions: Array.isArray(member.permissions) ? member.permissions.filter((item) => typeof item === 'string') : [],
 	};
+}
+
+export async function requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl = fetch) {
+	const normalizedWorkspaceId = requireUuid(workspaceId, 'workspaceId');
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
+	// A workspace the token lists is asked of the RPC (an unreadable answer is a 503); any
+	// other is asked of the members table (an unreadable answer is a miss: deny on any miss).
+	// Org/teamspace membership lives in osionos_workspace_members — the app token only
+	// carries the user's PRIVATE workspace.
+	const member = authContext.workspaceIds.includes(normalizedWorkspaceId)
+		? await sessionWorkspaceMember(authContext.userId, normalizedWorkspaceId, config, fetchImpl)
+		: await workspaceMemberRow(authContext.userId, normalizedWorkspaceId, config, fetchImpl).catch(() => null);
+	return workspaceAccessContext(authContext, normalizedWorkspaceId, member, permission);
 }
 
 async function fetchPageRow(pageId, config, fetchImpl) {
@@ -1153,16 +1155,23 @@ const PAGE_LIST_CHUNK = 200;
 // can exceed the cap by up to one chunk (too low by at most that chunk).
 const PAGE_LIST_MAX_BYTES = 16 * 1024 * 1024;
 
-/** One page read. `select` is explicit at every call site: `'*'` and the metadata list cost
- *  very different amounts, and only the caller knows which shape this read has to answer. */
-async function listPageRows(workspaceId, config, fetchImpl, filters = {}, select, { order = 'updated_at.desc', limit, idCursor } = {}) {
-	const query = postgrestQuery({
-		workspace_id: `eq.${workspaceId}`,
+/** The page filters a list can carry, as PostgREST params of the `osionos_pages` being read. */
+function pageFilterParams(filters, idCursor) {
+	return {
 		database_id: nullablePostgrestFilter(filters.databaseId),
 		parent_page_id: nullablePostgrestFilter(filters.parentPageId, (value) => requireUuid(value, 'parentPageId')),
 		surface: filters.surface ? `eq.${filters.surface}` : undefined,
 		archived_at: nullablePostgrestFilter(filters.archivedAt),
 		id: idCursor ? `gt.${idCursor}` : undefined,
+	};
+}
+
+/** One page read. `select` is explicit at every call site: `'*'` and the metadata list cost
+ *  very different amounts, and only the caller knows which shape this read has to answer. */
+async function listPageRows(workspaceId, config, fetchImpl, filters = {}, select, { order = 'updated_at.desc', limit, idCursor } = {}) {
+	const query = postgrestQuery({
+		workspace_id: `eq.${workspaceId}`,
+		...pageFilterParams(filters, idCursor),
 		select,
 		order,
 		limit: limit === undefined ? undefined : String(limit),
@@ -1178,13 +1187,18 @@ async function listPageRows(workspaceId, config, fetchImpl, filters = {}, select
  * it answers 413 rather than a truncated list.
  */
 async function listPageRowsInChunks(workspaceId, config, fetchImpl, filters, select) {
+	return walkPageChunks((cursor) => listPageRows(workspaceId, config, fetchImpl, filters, select, { order: 'id.asc', limit: PAGE_LIST_CHUNK, idCursor: cursor }));
+}
+
+/** The keyset walk behind every chunked read: `readChunk(cursor)` answers the next PAGE_LIST_CHUNK rows after `cursor` in `id.asc` order. */
+async function walkPageChunks(readChunk) {
 	// Ponytail: each chunk is its own snapshot — a page created or edited mid-scan can be missed or seen twice; fine for this list, never for the /api/pages/all hydrate.
 	// Ponytail: one chunk is at most PAGE_LIST_CHUNK x the largest row (268 MB at today's largest page); the byte cap bounds the total, not one chunk.
 	const rows = [];
 	let bytes = 0;
 	let cursor;
 	for (;;) {
-		const chunk = await listPageRows(workspaceId, config, fetchImpl, filters, select, { order: 'id.asc', limit: PAGE_LIST_CHUNK, idCursor: cursor });
+		const chunk = await readChunk(cursor);
 		bytes += Buffer.byteLength(JSON.stringify(chunk));
 		if (bytes > PAGE_LIST_MAX_BYTES) {
 			throw Object.assign(new Error(`Reading this workspace's pages reached ${bytes} bytes, over the ${PAGE_LIST_MAX_BYTES}-byte page-read cap. `
@@ -1205,6 +1219,44 @@ async function listPageRowsInChunks(workspaceId, config, fetchImpl, filters, sel
 		if (rightUpdated === null) return 1;
 		return String(leftUpdated) > String(rightUpdated) ? -1 : 1;
 	});
+}
+
+/**
+ * The single anchor row of a members-anchored read: the one row for (userId, workspaceId),
+ * or null. The statement filters on both, so anything else — no row, two rows, a row for
+ * someone else — means the filter did not apply, and a row nobody can vouch for is no
+ * membership. Compared here because the decision on it is the only authorization in front
+ * of the pages that came back with it.
+ */
+function singleAnchorRow(rows, userId, workspaceId) {
+	if (!Array.isArray(rows) || rows.length !== 1) return null;
+	const [row] = rows;
+	return sameId(row?.user_id, userId) && sameId(row?.workspace_id, workspaceId) ? row : null;
+}
+
+/**
+ * One page-list read that also proves membership: the caller's members row for the workspace
+ * with the workspace's pages embedded under it, in ONE statement (one SELECT, one snapshot),
+ * so a membership change is seen by the very next request and nothing is read between the
+ * check and the read. No row, a row that is not exactly (userId, workspaceId), or a row
+ * without 'read' is the same 403 requireWorkspaceAccess answers. Only handlePageList reads
+ * through here; the search and graph reads keep listPageRows.
+ * `read`: { filters, select, order, limit, idCursor } of the page read, as listPageRows takes them.
+ */
+async function listMemberPageRows(token, workspaceId, read, config, fetchImpl) {
+	const nested = (params) => Object.fromEntries(Object.entries(params).map(([key, value]) => [`workspace.pages.${key}`, value]));
+	const query = postgrestQuery({
+		user_id: `eq.${token.userId}`,
+		workspace_id: `eq.${workspaceId}`,
+		select: `user_id,workspace_id,role,permissions,workspace:osionos_workspaces!workspace_id(pages:osionos_pages!workspace_id(${read.select}))`,
+		...nested({ ...pageFilterParams(read.filters, read.idCursor), order: read.order, limit: read.limit === undefined ? undefined : String(read.limit) }),
+		// Two rows, not one: a second row is how a dropped user_id filter shows itself.
+		limit: '2',
+	});
+	const anchor = singleAnchorRow(await baasRest(config, fetchImpl, `osionos_workspace_members?${query}`), token.userId, workspaceId);
+	const pages = anchor?.workspace?.pages;
+	workspaceAccessContext(token, workspaceId, Array.isArray(pages) ? anchor : null, 'read');
+	return pages;
 }
 
 async function listWorkspacePageRefs(workspaceId, config, fetchImpl) {
@@ -2172,7 +2224,7 @@ function pageSubresourceIdFromPath(pathname, subresource) {
 
 async function handlePageList(url, request, response, config, fetchImpl) {
 	const workspaceId = requireUuid(url.searchParams.get('workspaceId'), 'workspaceId');
-	const { userId } = await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
+	const token = verifyAppSessionToken(bearerToken(request), config);
 	const isFullList = url.pathname === '/api/pages/all';
 	const filters = isFullList ? {} : {
 		databaseId: url.searchParams.has('databaseId')
@@ -2186,11 +2238,22 @@ async function handlePageList(url, request, response, config, fetchImpl) {
 	// Only the bulk /api/pages/all hydrate goes metadata-only (content loads lazily
 	// on page open); the filtered single-list path keeps '*' so nothing regresses, read in
 	// chunks so a workspace of thousands of pages is never one response.
-	const rows = isFullList
-		? await listPageRows(workspaceId, config, fetchImpl, filters, PAGE_LIST_SELECT)
-		: await listPageRowsInChunks(workspaceId, config, fetchImpl, filters, '*');
-	json(response, 200, pageRowsToEntries(readablePageRows(rows, userId)), config);
+	const select = isFullList ? PAGE_LIST_SELECT : '*';
+	const rows = await readListedPages(token, workspaceId, { isFullList, filters, select }, config, fetchImpl);
+	json(response, 200, pageRowsToEntries(readablePageRows(rows, token.userId)), config);
 	return true;
+}
+
+/**
+ * The page rows a list answers once the caller's 'read' on the workspace is proven: every
+ * statement carries its own proof (listMemberPageRows), each chunk of the chunked list
+ * included, so a membership lost mid-walk is a 403 and never a short list.
+ */
+function readListedPages(token, workspaceId, { isFullList, filters, select }, config, fetchImpl) {
+	const readFrom = (window) => listMemberPageRows(token, workspaceId, { filters, select, ...window }, config, fetchImpl);
+	return isFullList
+		? readFrom({ order: 'updated_at.desc' })
+		: walkPageChunks((cursor) => readFrom({ order: 'id.asc', limit: PAGE_LIST_CHUNK, idCursor: cursor }));
 }
 
 const PAGE_SEARCH_MAX = 25;

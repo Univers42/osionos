@@ -154,6 +154,11 @@ function createMockBaasFetch() {
 					updated_at: '2026-01-01T00:00:00.000Z',
 				}]);
 			}
+			const ownerMember = { user_id: subject, workspace_id: workspaceId, role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] };
+			// The members-anchored list statement: the caller's members row with the workspace's pages under it.
+			if (table === 'osionos_workspace_members') {
+				return jsonResponse([{ ...ownerMember, workspace: { pages: selectedRows(pages, [], `eq.${workspaceId}`) } }]);
+			}
 			if (table !== 'osionos_pages') return jsonResponse({ message: 'not found' }, 404);
 
 			const method = init.method ?? 'GET';

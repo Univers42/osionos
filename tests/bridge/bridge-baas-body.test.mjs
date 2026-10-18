@@ -76,7 +76,9 @@ function breakTable(mock, table, mode, { onlyCursorChunk = false } = {}) {
 	const fetchImpl = async (url, init = {}) => {
 		const target = String(url);
 		if ((init.method ?? 'GET') === 'GET' && target.includes(`/rest/v1/${table}?`)) {
-			const isLaterChunk = new URL(target).searchParams.get('id')?.startsWith('gt.') ?? false;
+			// The page list reads its pages under the caller's members row, so its cursor is the nested one.
+			const params = new URL(target).searchParams;
+			const isLaterChunk = (params.get('id') ?? params.get('workspace.pages.id'))?.startsWith('gt.') ?? false;
 			if (!onlyCursorChunk || isLaterChunk) return brokenResponse(mode);
 		}
 		return inner(url, init);
@@ -86,7 +88,7 @@ function breakTable(mock, table, mode, { onlyCursorChunk = false } = {}) {
 
 describe('a cut or garbled BaaS body is an error, never an empty list', () => {
 	it('answers 502, never an empty list, when the page-table body stops mid-array', async () => {
-		const mock = breakTable(createPostgrestMock(worldOf([seedPage(0)])), 'osionos_pages', 'cut');
+		const mock = breakTable(createPostgrestMock(worldOf([seedPage(0)])), 'osionos_workspace_members', 'cut');
 		await withBridge(config, mock.fetchImpl, async (base) => {
 			const listed = await send(base, `/api/pages/all?workspaceId=${IDS.team}`, asTeamOwner);
 			assert.equal(listed.status, 502, listed.text);
@@ -95,7 +97,7 @@ describe('a cut or garbled BaaS body is an error, never an empty list', () => {
 	});
 
 	it('answers 502 when the page-table body is not valid JSON', async () => {
-		const mock = breakTable(createPostgrestMock(worldOf([seedPage(0)])), 'osionos_pages', 'garbled');
+		const mock = breakTable(createPostgrestMock(worldOf([seedPage(0)])), 'osionos_workspace_members', 'garbled');
 		await withBridge(config, mock.fetchImpl, async (base) => {
 			const listed = await send(base, `/api/pages/all?workspaceId=${IDS.team}`, asTeamOwner);
 			assert.equal(listed.status, 502, listed.text);
@@ -105,7 +107,7 @@ describe('a cut or garbled BaaS body is an error, never an empty list', () => {
 
 	it('answers 502, never a partial list, when a later chunk body stops mid-array', async () => {
 		const pages = Array.from({ length: 250 }, (unused, index) => seedPage(index));
-		const mock = breakTable(createPostgrestMock(worldOf(pages)), 'osionos_pages', 'cut', { onlyCursorChunk: true });
+		const mock = breakTable(createPostgrestMock(worldOf(pages)), 'osionos_workspace_members', 'cut', { onlyCursorChunk: true });
 		await withBridge(config, mock.fetchImpl, async (base) => {
 			const listed = await send(base, `/api/pages?workspaceId=${IDS.team}`, asTeamOwner);
 			assert.equal(listed.status, 502, listed.text);
