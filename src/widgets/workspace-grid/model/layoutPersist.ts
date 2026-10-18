@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { calendarAppUrl, mailAppUrl, whiteboardAppUrl } from "@/shared/config/appUrls";
+import { pruneUnrestorableTabs } from "./layoutSanitize";
 import { genId, type LayoutNode, type PaneNode, type WorkspaceTab } from "./layoutTree";
 
 /** Synthetic page ids for the always-available Home / Trash / Console tabs. */
@@ -53,27 +55,13 @@ function wipeLegacyLayouts(): void {
   }
 }
 
-// import.meta.env is undefined outside Vite (node tests) — guard the module-scope read.
-const VITE_ENV = ((import.meta as { env?: Record<string, string> }).env ?? {}) as Record<string, string>;
-const MAIL_APP_URL = (VITE_ENV["VITE_MAIL_APP_URL"] ?? "http://localhost:3002").trim();
-const CALENDAR_APP_URL = (VITE_ENV["VITE_CALENDAR_APP_URL"] ?? "http://localhost:3003").trim();
-const WHITEBOARD_APP_URL = (VITE_ENV["VITE_WHITEBOARD_APP_URL"] ?? "https://localhost:3007").trim();
-
-/** The configured Whiteboard origin, or "" when the build blanked it. `??` above keeps an
- *  explicit empty value (only an ABSENT var falls back), so setting
- *  `VITE_WHITEBOARD_APP_URL=` is how a build opts out of the tab entirely — the menu reads
- *  this so a tab that provably cannot load is never offered. */
-export function whiteboardAppUrl(): string {
-  return WHITEBOARD_APP_URL;
-}
-
 /** Mail / Calendar open as in-app iframe tabs (stable id → focus, not duplicate). */
 export function mailTab(): WorkspaceTab {
-  return { tabId: genId("tab"), pageId: MAIL_TAB_ID, workspaceId: "", kind: "embed", title: "Mail", icon: "icon:mail", url: MAIL_APP_URL };
+  return { tabId: genId("tab"), pageId: MAIL_TAB_ID, workspaceId: "", kind: "embed", title: "Mail", icon: "icon:mail", url: mailAppUrl() };
 }
 
 export function calendarTab(): WorkspaceTab {
-  return { tabId: genId("tab"), pageId: CALENDAR_TAB_ID, workspaceId: "", kind: "embed", title: "Calendar", icon: "icon:calendar", url: CALENDAR_APP_URL };
+  return { tabId: genId("tab"), pageId: CALENDAR_TAB_ID, workspaceId: "", kind: "embed", title: "Calendar", icon: "icon:calendar", url: calendarAppUrl() };
 }
 
 export function homeTab(): WorkspaceTab {
@@ -99,7 +87,7 @@ export function drawTab(): WorkspaceTab {
  *  board: a board's identity is its slug, and osionos deliberately stores no slugs, so a
  *  deep link here would go stale the moment a board is renamed or removed. */
 export function whiteboardTab(): WorkspaceTab {
-  return { tabId: genId("tab"), pageId: WHITEBOARD_TAB_ID, workspaceId: "", kind: "embed", title: "Whiteboard", icon: "icon:pen-tool", url: WHITEBOARD_APP_URL };
+  return { tabId: genId("tab"), pageId: WHITEBOARD_TAB_ID, workspaceId: "", kind: "embed", title: "Whiteboard", icon: "icon:pen-tool", url: whiteboardAppUrl() };
 }
 
 /** A live external-database table tab (`baas:<dbId>:<table>` id). pageId == the
@@ -164,7 +152,7 @@ export function loadLayout(scope: string): { root: LayoutNode; activePaneId: str
     if (!raw) return freshLayout();
     const parsed = JSON.parse(raw) as { root?: LayoutNode; activePaneId?: string };
     if (!parsed?.root || !parsed.activePaneId) return freshLayout();
-    return { root: parsed.root, activePaneId: parsed.activePaneId };
+    return { root: pruneUnrestorableTabs(parsed.root), activePaneId: parsed.activePaneId };
   } catch {
     return freshLayout();
   }

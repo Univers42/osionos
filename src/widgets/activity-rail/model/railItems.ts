@@ -26,6 +26,7 @@ import {
   Store,
   type LucideIcon,
 } from "lucide-react";
+import { calendarAppUrl, mailAppUrl } from "@/shared/config/appUrls";
 import type { ActivePanel } from "@/shared/config/uiStore";
 import type { CommandId } from "@/features/automations/model/types";
 
@@ -100,3 +101,10 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
     ],
   },
 ];
+
+/** Panel items always show; an embedded-app item shows only when its URL is configured,
+ *  so a public build never offers a Mail/Calendar icon that opens a dead iframe. */
+export function isRailItemAvailable(item: RailItem): boolean {
+  if (item.action.kind === "panel") return true;
+  return (item.action.app === "mail" ? mailAppUrl() : calendarAppUrl()) !== "";
+}

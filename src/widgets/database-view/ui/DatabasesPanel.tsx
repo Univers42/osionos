@@ -154,7 +154,7 @@ export const DatabasesPanel: React.FC = () => {
             <p className="text-xs text-[var(--osio-fg-subtle)]">
               Live databases aren&apos;t configured — the app has no bridge URL. Set{" "}
               <code className="text-[var(--osio-fg-muted)]">VITE_API_URL</code> (the osionos bridge,
-              e.g. <code className="text-[var(--osio-fg-muted)]">https://localhost:4000</code>) and rebuild.
+              e.g. <code className="text-[var(--osio-fg-muted)]">https://bridge.example.com</code>) and rebuild.
             </p>
           </div>
         ) : status === "error" ? (

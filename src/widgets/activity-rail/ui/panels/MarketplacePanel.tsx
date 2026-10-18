@@ -17,6 +17,7 @@ import type { PageEntry } from "@/entities/page";
 import { useMarketplaceApps, createApp } from "@/features/marketplace/model/useMarketplaceApps";
 import { useInstalledApps } from "@/features/marketplace/model/useInstalledApps";
 import { readAppMeta } from "@/features/marketplace/model/appMeta";
+import { isListableApp } from "@/features/marketplace/model/launchPolicy";
 import { MarketplaceAppRow } from "@/features/marketplace/ui/MarketplaceAppRow";
 import { MarketplaceDetailModal } from "@/features/marketplace/ui/MarketplaceDetailModal";
 import { MarketplaceAppEditor } from "@/features/marketplace/ui/MarketplaceAppEditor";
@@ -46,6 +47,7 @@ export const MarketplacePanel: React.FC = () => {
     const rec: typeof apps = [];
     for (const a of apps) {
       const m = readAppMeta(a);
+      if (m.published && !isListableApp(m.identifier, m.launchUrl)) continue;
       if (q && ![a.title, m.company, m.description].some((s) => s.toLowerCase().includes(q))) continue;
       if (!m.published) dft.push(a);
       else if (install.isInstalled(m.identifier)) inApp.push(a);

@@ -22,11 +22,12 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import { mailTab, calendarTab, profileTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useUnreadStore } from "@/store/chat/useUnreadStore";
 import { useInstalledApps } from "@/features/marketplace/model/useInstalledApps";
+import { isListableApp } from "@/features/marketplace/model/launchPolicy";
 import { installedTab } from "@/features/marketplace/model/installedAppLauncher";
 import { RailIcon } from "./RailIcon";
 import { RailHomeButton } from "./RailHomeButton";
 import { prefetchPanel } from "./panelLoaders";
-import { RAIL_GROUPS, type RailItem } from "../model/railItems";
+import { RAIL_GROUPS, isRailItemAvailable, type RailItem } from "../model/railItems";
 import { useConnectionNotifications, useIncomingInviteCount } from "@/widgets/notifications/model/useConnectionNotifications";
 
 interface Props {
@@ -55,7 +56,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
 
   useEffect(() => useInstalledApps.getState().load(), []);
   const installedApps = useMemo(
-    () => Object.values(installedMap).filter((e) => e.active),
+    () => Object.values(installedMap).filter((e) => e.active && isListableApp(e.identifier, e.launchUrl)),
     [installedMap],
   );
 
@@ -104,7 +105,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
       {RAIL_GROUPS.map((group) => (
         <React.Fragment key={group.id}>
           <Separator />
-          {group.items.map((item) => {
+          {group.items.filter(isRailItemAvailable).map((item) => {
             const panel = item.action.kind === "panel" ? item.action.panel : null;
             return (
               <RailIcon
